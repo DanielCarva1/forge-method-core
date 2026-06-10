@@ -12,9 +12,20 @@ if [[ ! -d "$source_dir" ]]; then
 fi
 
 mkdir -p "$target_root"
+case "$(cd "$target_root" && pwd)/forge-method" in
+  "$(cd "$target_root" && pwd)"/*) ;;
+  *)
+    echo "Refusing to install outside skill directory: $target_dir" >&2
+    exit 1
+    ;;
+esac
+if [[ -e "$target_dir" ]]; then
+  chmod -R u+w "$target_dir" 2>/dev/null || true
+fi
 rm -rf "$target_dir"
 cp -R "$source_dir" "$target_dir"
 
 echo "Installed Codex skill: $target_dir"
 echo 'Use in Codex: $forge-method'
-
+echo "Verify: bash $target_dir/forge-method.sh --help"
+echo "Start: ask Codex to run Forge Method in your project workspace."

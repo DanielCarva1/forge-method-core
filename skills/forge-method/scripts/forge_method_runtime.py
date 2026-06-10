@@ -16,7 +16,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.16.0"
+RUNTIME_VERSION = "1.17.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -4146,15 +4146,191 @@ def cmd_handoff(args: argparse.Namespace) -> int:
 def cmd_doctor(args: argparse.Namespace) -> int:
     root = resolve_root(args.root)
     state_root, _ = load_state_or_none(root)
-    print(f"Workspace: {root}")
-    print(f"Runtime repo: {'yes' if is_runtime_repo(root) else 'no'}")
-    print(f"Project state root: {state_root if state_root else '<none>'}")
+    audit_errors = audit_project(state_root) if state_root else []
+    payload = {
+        "workspace": str(root),
+        "runtime_repo": is_runtime_repo(root),
+        "project_state_root": str(state_root) if state_root else None,
+        "audit": {
+            "passed": not audit_errors if state_root else None,
+            "errors": audit_errors,
+        },
+        "toolchain": collect_toolchain(),
+        "verification": verification_recommendation(args.mode, args.touches or []),
+    }
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2))
+        return 0
+    print("Forge Method Doctor")
+    print(f"Workspace: {payload['workspace']}")
+    print(f"Runtime repo: {'yes' if payload['runtime_repo'] else 'no'}")
+    print(f"Project state root: {payload['project_state_root'] or '<none>'}")
     if state_root:
-        errors = audit_project(state_root)
-        print(f"Audit: {'passed' if not errors else 'failed'}")
-        for error in errors:
+        print(f"Audit: {'passed' if not audit_errors else 'failed'}")
+        for error in audit_errors:
             print(f"- {error}")
+    toolchain = payload["toolchain"]
+    python = toolchain["python"]
+    print("Toolchain:")
+    print(f"- Python current: {python['current']['version']} at {python['current']['path']}")
+    print(f"- Python command: {python['command_status']}")
+    print(f"- Git: {toolchain['git']['status']}")
+    print(f"- GitHub CLI: {toolchain['github_cli']['status']}")
+    print(f"- WSL: {toolchain['wsl']['status']}")
+    verification = payload["verification"]
+    validation = verification["validation"]
+    print("Verification:")
+    print(f"- Development validation: {validation['development']}")
+    for command in verification["development_commands"]["windows"]:
+        print(f"  - {command}")
+    print(f"- Release validation: {validation['release']}")
+    for command in verification["release_commands"]["windows"]:
+        print(f"  - {command}")
+    print(f"- Reason: {validation['reason']}")
     return 0
+
+
+def run_probe(command: list[str], timeout: float = 3.0) -> dict[str, Any]:
+    try:
+        result = subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+        )
+        output = " ".join(decode_probe_output(result.stdout + b"\n" + result.stderr).split())
+        return {
+            "ok": result.returncode == 0,
+            "returncode": result.returncode,
+            "summary": output[:240],
+        }
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return {
+            "ok": False,
+            "returncode": None,
+            "summary": str(exc)[:240],
+        }
+
+
+def decode_probe_output(raw: bytes) -> str:
+    if not raw:
+        return ""
+    sample = raw[:80]
+    if sample.count(b"\x00") > len(sample) // 4:
+        return raw.decode("utf-16-le", errors="replace").replace("\x00", "")
+    return raw.decode("utf-8", errors="replace").replace("\x00", "")
+
+
+def probe_command(name: str, version_args: list[str]) -> dict[str, Any]:
+    path = shutil.which(name)
+    if not path:
+        return {"available": False, "path": None, "status": "missing"}
+    probe = run_probe([path, *version_args])
+    summary = probe["summary"] or ("available" if probe["ok"] else "installed but version check failed")
+    return {
+        "available": True,
+        "path": path,
+        "version_ok": probe["ok"],
+        "status": summary,
+    }
+
+
+def codex_python_candidates() -> list[Path]:
+    home = Path.home()
+    return [
+        home / ".cache" / "codex-runtimes" / "codex-primary-runtime" / "dependencies" / "python" / "python.exe",
+        home / ".cache" / "codex-runtimes" / "codex-primary-runtime" / "dependencies" / "python" / "bin" / "python",
+    ]
+
+
+def collect_python_toolchain() -> dict[str, Any]:
+    commands = []
+    for name in ["python", "python3", "py"]:
+        path = shutil.which(name)
+        commands.append({"name": name, "available": bool(path), "path": path})
+    bundled = [{"path": str(path), "available": path.exists()} for path in codex_python_candidates()]
+    command_available = any(item["available"] for item in commands)
+    bundled_available = any(item["available"] for item in bundled)
+    if command_available:
+        status = "available on PATH"
+    elif bundled_available:
+        status = "available through Codex bundled runtime"
+    else:
+        status = "missing command; current interpreter can still run this helper"
+    return {
+        "current": {
+            "path": sys.executable,
+            "version": sys.version.split()[0],
+        },
+        "commands": commands,
+        "bundled_candidates": bundled,
+        "command_status": status,
+    }
+
+
+def collect_wsl_toolchain() -> dict[str, Any]:
+    path = shutil.which("wsl")
+    if not path:
+        return {"available": False, "path": None, "has_distribution": False, "status": "missing"}
+    status_probe = run_probe([path, "--status"], timeout=4.0)
+    list_probe = run_probe([path, "--list", "--verbose"], timeout=4.0)
+    has_distribution = list_probe["ok"]
+    if has_distribution:
+        status = "available with registered distribution"
+    elif "no distributions" in list_probe["summary"].lower() or "não tem distribui" in list_probe["summary"].lower():
+        status = "available but no Linux distribution is installed"
+    else:
+        status = "available; distribution check did not pass"
+    return {
+        "available": True,
+        "path": path,
+        "has_distribution": has_distribution,
+        "status": status,
+        "status_probe": status_probe,
+        "list_probe": list_probe,
+    }
+
+
+def collect_toolchain() -> dict[str, Any]:
+    return {
+        "python": collect_python_toolchain(),
+        "git": probe_command("git", ["--version"]),
+        "github_cli": probe_command("gh", ["--version"]),
+        "wsl": collect_wsl_toolchain(),
+    }
+
+
+def verification_commands_for_profile(profile: str, touches: list[str]) -> dict[str, list[str]]:
+    windows: list[str] = []
+    posix: list[str] = []
+    if profile == "fast":
+        windows.append("powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1")
+        posix.append("bash scripts/verify-fast.sh")
+    elif profile == "targeted-smoke":
+        windows.append("powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1")
+        posix.append("bash scripts/verify-fast.sh")
+        touched = set(touches)
+        if touched & {"runtime", "workflow", "state"}:
+            windows.append("powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-runtime.ps1")
+            posix.append("bash scripts/smoke-runtime.sh")
+        if touched & {"install", "package"}:
+            windows.append("powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-install.ps1")
+            posix.append("bash scripts/smoke-install.sh")
+    else:
+        windows.append("powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-all.ps1")
+        posix.append("bash scripts/verify-all.sh")
+    return {"windows": windows, "posix": posix}
+
+
+def verification_recommendation(mode: str, touches: list[str]) -> dict[str, Any]:
+    validation = release_validation_tier(mode, touches)
+    return {
+        "mode": mode,
+        "touches": touches,
+        "validation": validation,
+        "development_commands": verification_commands_for_profile(validation["development"], touches),
+        "release_commands": verification_commands_for_profile(validation["release"], touches),
+    }
 
 
 def parse_semver(value: str) -> tuple[int, int, int]:
@@ -4807,8 +4983,11 @@ def build_parser() -> argparse.ArgumentParser:
     handoff.add_argument("--next-action")
     handoff.set_defaults(func=cmd_handoff)
 
-    doctor = sub.add_parser("doctor", help="inspect runtime/project detection")
+    doctor = sub.add_parser("doctor", help="inspect runtime/project detection and local toolchain readiness")
     doctor.add_argument("--root", default=".")
+    doctor.add_argument("--mode", choices=["story", "batch", "hotfix", "breaking"], default="batch")
+    doctor.add_argument("--touches", action="append", choices=["docs", "runtime", "workflow", "state", "install", "package"])
+    doctor.add_argument("--json", action="store_true")
     doctor.set_defaults(func=cmd_doctor)
 
     return parser

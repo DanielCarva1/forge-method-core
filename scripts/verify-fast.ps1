@@ -23,6 +23,10 @@ function Resolve-Python {
       return $command.Source
     }
   }
+  $codexPython = Join-Path $HOME ".cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+  if (Test-Path -LiteralPath $codexPython) {
+    return $codexPython
+  }
   throw "Python not found. Set PYTHON to a Python executable."
 }
 

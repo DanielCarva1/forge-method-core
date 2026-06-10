@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 installer="$repo_root/install.sh"
 installed_runtime="$HOME/.agents/skills/forge-method/scripts/forge_method_runtime.py"
+installed_launcher="$HOME/.agents/skills/forge-method/forge-method.sh"
 tmp="${TMPDIR:-/tmp}/forge-method-install-smoke"
 example_tmp="${TMPDIR:-/tmp}/forge-method-install-example-smoke"
 project_parent_tmp="${TMPDIR:-/tmp}/forge-method-install-project-smoke"
@@ -23,6 +24,7 @@ mkdir -p "$tmp"
 mkdir -p "$project_parent_tmp"
 
 "$python_bin" "$installed_runtime" --help
+bash "$installed_launcher" --help
 "$python_bin" "$installed_runtime" module list
 "$python_bin" "$installed_runtime" agent list
 "$python_bin" "$installed_runtime" agent validate

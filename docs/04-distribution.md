@@ -6,9 +6,47 @@ A friend should be able to clone the repo, install the runtime, open Codex, and 
 
 ## Distribution Levels
 
-### Level 1: User Skill Install
+### Level 1: Codex Plugin
 
-This is the current working path.
+This is the primary product shape.
+
+The repo already contains:
+
+```txt
+.codex-plugin/plugin.json
+skills/
+scripts/
+assets/
+```
+
+This is the package shape for a Codex plugin. The plugin manifest validates with the Codex plugin-creator validator.
+
+When installed through a plugin-backed flow, the user should choose Forge Method Core in Codex, then start from the plugin prompt or skill:
+
+```txt
+$forge-method
+Start Forge Method in this workspace.
+```
+
+The current validated manifest exposes `defaultPrompt` as:
+
+```txt
+Start Forge Method in this workspace.
+```
+
+Acceptance:
+
+- `.codex-plugin/plugin.json` validates.
+- all skills have valid front matter.
+- local plugin installer copies the package to `~/plugins/forge-method-core`.
+- local plugin installer writes the personal marketplace entry for `forge-method-core`.
+- the plugin default prompt starts the method without requiring internal architecture knowledge.
+- the installed skill can run preflight and project creation from file-backed state.
+- marketplace metadata can point at this package without changing the runtime surface.
+
+### Level 2: User Skill Install
+
+This is the fallback local install path when a plugin-backed install is not available.
 
 Windows:
 
@@ -44,33 +82,26 @@ Then the user invokes:
 $forge-method
 ```
 
-Acceptance:
+The installed skill also includes launchers that resolve Python automatically:
+
+```powershell
+& "$HOME\.agents\skills\forge-method\forge-method.ps1" start --root <workspace>
+```
+
+```bash
+bash ~/.agents/skills/forge-method/forge-method.sh start --root <workspace>
+```
+
+Fallback acceptance:
 
 - `SKILL.md` is installed.
 - workflow references are installed.
 - runtime script is installed.
+- runtime launcher is installed.
 - helper script responds to `--help`.
+- launcher responds to `--help`.
 - helper script resolves preflight with `preflight --root <workspace>`.
 - helper script resolves startup with `start --root <workspace>`.
-
-### Level 2: Codex Plugin
-
-The repo already contains:
-
-```txt
-.codex-plugin/plugin.json
-skills/
-scripts/
-assets/
-```
-
-This is the package shape for a Codex plugin. The plugin manifest validates with the Codex plugin-creator validator.
-
-Acceptance:
-
-- `.codex-plugin/plugin.json` validates.
-- all skills have valid front matter.
-- plugin can be shared or installed through a marketplace-backed flow later.
 
 ### Level 3: Project Template
 
@@ -114,6 +145,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1
 ```powershell
 .\install.ps1
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py --help
+& "$HOME\.agents\skills\forge-method\forge-method.ps1" --help
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py preflight --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py start --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py example list
@@ -154,6 +186,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1
 ```bash
 bash install.sh
 python ~/.agents/skills/forge-method/scripts/forge_method_runtime.py --help
+bash ~/.agents/skills/forge-method/forge-method.sh --help
 bash scripts/smoke-runtime.sh
 bash scripts/smoke-install.sh
 ```
@@ -176,5 +209,5 @@ Do not create a tag or GitHub release for every small story when the work is alr
 
 ## What Still Needs Productization
 
-- marketplace-backed plugin flow
+- marketplace listing/publication metadata
 - GitHub PR workflow

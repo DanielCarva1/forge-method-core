@@ -34,6 +34,14 @@ Before offering, run the preflight helper so project choices and context files c
 
 ## Runtime Helper
 
+Prefer the installed launcher when it is available:
+
+```powershell
+& "$HOME\.agents\skills\forge-method\forge-method.ps1" preflight --root .
+& "$HOME\.agents\skills\forge-method\forge-method.ps1" start --root .
+& "$HOME\.agents\skills\forge-method\forge-method.ps1" doctor --root . --touches runtime
+```
+
 When useful, run the helper script:
 
 ```powershell
@@ -72,6 +80,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" gate --root . --require-evals
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" release plan --root . --mode batch --touches runtime
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" release check --root . --mode batch --touches runtime
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" doctor --root . --touches runtime
 ```
 
 When using the skill from a plugin checkout instead of user install, run the script from this skill directory.
@@ -102,6 +111,7 @@ When using the skill from a plugin checkout instead of user install, run the scr
 - Ready/release: read `references/workflow-ready-release.md`.
 - Evolve an existing project: read `references/workflow-evolve-project.md`.
 - Recover after context reset: read `references/workflow-context-recovery.md`.
+- Diagnose local setup or verification tier: run `doctor --root . --touches <area>` before changing environment.
 - If no workflow matches, report current state and ask one concise routing question.
 
 ## Completion Standard

@@ -137,9 +137,9 @@ A project can enter ready/operate only when:
 - release evidence is written
 - state is updated to `5-ready-operate`
 
-## V1 Hardening Backlog
+## Remaining Productization
 
-- CI that runs unit tests and smoke tests
-- richer artifact index
-- workflow generator
-- cross-platform installer
+- public marketplace listing
+- signed release artifacts
+- broader real-project fixtures
+- richer visual onboarding

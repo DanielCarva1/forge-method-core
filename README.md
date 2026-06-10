@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.16.0`.
+Current runtime version: `1.17.0`.
 
 ## Current Shape
 
@@ -33,7 +33,25 @@ install.sh                         User-skill installer for macOS/Linux
 
 ## Local Skill Install
 
-For a simple install without a plugin marketplace on Windows:
+Forge Method Core is packaged as a Codex plugin. For a local plugin install on Windows:
+
+```powershell
+git clone https://github.com/DanielCarva1/forge-method-core.git
+cd forge-method-core
+powershell -ExecutionPolicy Bypass -File .\scripts\install-plugin-local.ps1
+```
+
+On macOS/Linux:
+
+```bash
+git clone https://github.com/DanielCarva1/forge-method-core.git
+cd forge-method-core
+bash scripts/install-plugin-local.sh
+```
+
+That copies the plugin source to `~/plugins/forge-method-core` and creates or updates the personal Codex marketplace file. After that, open Codex plugins and select Forge Method Core.
+
+For a fallback skill-only install on Windows:
 
 ```powershell
 git clone <repo-url>
@@ -41,7 +59,7 @@ cd forge-method-core
 .\install.ps1
 ```
 
-On macOS/Linux:
+Fallback skill-only install on macOS/Linux:
 
 ```bash
 git clone <repo-url>
@@ -62,6 +80,22 @@ $forge-method
 ```
 
 or by asking Codex to start Forge Method in a workspace.
+
+Installed helper launchers are also copied with the skill:
+
+```powershell
+& "$HOME\.agents\skills\forge-method\forge-method.ps1" preflight --root .
+& "$HOME\.agents\skills\forge-method\forge-method.ps1" start --root .
+& "$HOME\.agents\skills\forge-method\forge-method.ps1" doctor --root . --touches runtime
+```
+
+```bash
+bash ~/.agents/skills/forge-method/forge-method.sh preflight --root .
+bash ~/.agents/skills/forge-method/forge-method.sh start --root .
+bash ~/.agents/skills/forge-method/forge-method.sh doctor --root . --touches runtime
+```
+
+The launchers resolve `$PYTHON`, then common Python commands.
 
 ## Runtime Commands
 
@@ -92,6 +126,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artif
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" gate --root . --require-evals
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" release plan --root . --mode batch --touches runtime
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" release check --root . --mode batch --touches runtime
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" doctor --root . --touches runtime
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module recommend --objective "build a web app"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" agent recommend --root .
@@ -109,6 +144,8 @@ Use `preflight --root . --json` before broad context loading. It resolves whethe
 
 Use `context recover --compact` for handoff under a tight context budget. It preserves state, resume guidance, read order, and commands before optional sections.
 
+Use `doctor --root . --touches runtime` when a local setup feels slow or uncertain. It reports project/runtime detection, Python/Git/GitHub CLI/WSL readiness, and the recommended development and release verification commands for the touched area.
+
 ## Smoke Tests
 
 Use fast verification during normal development:
@@ -122,6 +159,8 @@ bash scripts/verify-fast.sh
 ```
 
 On Windows, the shell scripts require a registered WSL distribution. If WSL exists but no distro is installed, use the PowerShell scripts.
+
+The PowerShell scripts use `$env:PYTHON`, then `python`/`python3`/`py`.
 
 Run targeted smokes when the touched area needs them:
 
@@ -151,11 +190,13 @@ Use full verification before publishing a release, after install/package changes
 
 The complete proposal is in:
 
+- `docs/00-quickstart.md`
 - `docs/01-product-proposal.md`
 - `docs/02-runtime-architecture.md`
 - `docs/03-v1-roadmap.md`
 - `docs/05-v1-operating-model.md`
 - `docs/06-runtime-improvement-backlog.md`
+- `docs/07-v1-readiness-audit.md`
 
 ## Example
 

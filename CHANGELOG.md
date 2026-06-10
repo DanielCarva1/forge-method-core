@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 1.17.0
+
+Forge Method Core v1.17 hardens onboarding, operational readiness, and release maturity:
+
+- expand `doctor` into an operational readiness report for project/runtime detection, toolchain status, and verification tier guidance
+- add installed runtime launchers for Windows and POSIX shells so users do not need to know the runtime script path
+- add a direct quickstart and v1 readiness audit so installation, startup, recovery, build, ready, and release maturity are explicit
+- clarify installer next steps and add glossary terms for assisted production runtime, readiness audit, and operational readiness
+- update v1 roadmap/backlog language so delivered capabilities are not still listed as future work
+- reposition distribution docs around Codex plugin-first install, with manual skill install as the local fallback
+- add local plugin marketplace installers and smoke coverage for plugin-first distribution
+
 ## 1.16.0
 
 Forge Method Core v1.16 adds route-safe resume and compact handoff recovery:

@@ -1,0 +1,131 @@
+# Quickstart
+
+This guide is the shortest path from a fresh clone to a working Forge Method project.
+
+## Prerequisites
+
+- Codex
+- Git
+- Python 3.12 or newer available as `python`, `python3`, or `py` in a new terminal
+
+## Install
+
+Preferred path: install Forge Method Core as a Codex plugin.
+
+Windows:
+
+```powershell
+git clone https://github.com/DanielCarva1/forge-method-core.git
+cd forge-method-core
+powershell -ExecutionPolicy Bypass -File .\scripts\install-plugin-local.ps1
+```
+
+macOS/Linux:
+
+```bash
+git clone https://github.com/DanielCarva1/forge-method-core.git
+cd forge-method-core
+bash scripts/install-plugin-local.sh
+```
+
+Then open Codex plugins, select Forge Method Core, and start from the plugin prompt or skill:
+
+```txt
+$forge-method
+Start Forge Method in this workspace.
+```
+
+Fallback skill-only install:
+
+Windows:
+
+```powershell
+git clone https://github.com/DanielCarva1/forge-method-core.git
+cd forge-method-core
+.\install.ps1
+```
+
+macOS/Linux:
+
+```bash
+git clone https://github.com/DanielCarva1/forge-method-core.git
+cd forge-method-core
+bash install.sh
+```
+
+## Verify Install
+
+Windows:
+
+```powershell
+& "$HOME\.agents\skills\forge-method\forge-method.ps1" --help
+& "$HOME\.agents\skills\forge-method\forge-method.ps1" doctor --root . --touches runtime
+```
+
+macOS/Linux:
+
+```bash
+bash ~/.agents/skills/forge-method/forge-method.sh --help
+bash ~/.agents/skills/forge-method/forge-method.sh doctor --root . --touches runtime
+```
+
+## Start A Project
+
+Open the folder where projects should live, then ask Codex:
+
+```txt
+$forge-method
+Start Forge Method in this workspace.
+```
+
+Forge Method should run preflight first. It will detect one of these routes:
+
+- existing method project
+- parent folder with known projects
+- runtime repository
+- empty workspace
+
+If the workspace is empty, Codex should ask whether to create a new project, show module choices, then scaffold durable project state after the project name is known.
+
+## Expected First Files
+
+A created project gets:
+
+```txt
+AGENTS.md
+.forge-method/state.yaml
+.forge-method/projects.yaml
+.forge-method/sprint.yaml
+.forge-method/ledger.ndjson
+.forge-method/stories/
+.forge-method/artifacts/
+.forge-method/context/
+.forge-method/evidence/
+```
+
+## Daily Loop
+
+Use the skill, not chat memory, to resume:
+
+```txt
+$forge-method
+Resume this project from file state.
+```
+
+The agent should run `preflight --root .`, then `resume --root .`, and continue from durable state.
+
+## Release Loop
+
+During development:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1
+```
+
+Before publishing:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-all.ps1
+```
+
+Use `release plan` and `release check` to choose version cadence and verify the local release package before tagging.

@@ -108,9 +108,13 @@
 - release readiness check
 - signed releases
 - versioned changelog
-- plugin marketplace packaging
+- local plugin marketplace installer
+- public marketplace listing
 
-## Candidate V1.16 Batch
+## Candidate V1.17 Batch
 
-- make preflight the default skill entrypoint before broad context loading
-- add smoke coverage for resume guidance in installed skill path
+- package operational readiness diagnostics and verification tier guidance
+- add direct quickstart and v1 readiness audit
+- add installed launchers for shorter helper invocation
+- harden installer replacement of existing skill files
+- keep product-surface scan clean before release

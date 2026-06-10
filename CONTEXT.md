@@ -12,6 +12,10 @@ The user-facing method invoked from Codex through the `$forge-method` skill. It 
 
 A state-machine system that turns intent into artifacts, implementation, validation, release, and future evolution.
 
+## Assisted Production Runtime
+
+A runtime mature enough for real projects with an agent/operator in the loop. It must be installable, recoverable after context loss, auditable from files, and release-validated, but it does not imply marketplace-polished one-click distribution.
+
 ## Start Route
 
 The deterministic entry route that resolves whether the current workspace is an existing method project, the runtime repo, or a folder that can create or contain method projects.
@@ -128,9 +132,17 @@ A version published for one completed story when the project is intentionally de
 
 A non-publishing readiness check for a release batch. It verifies local version metadata, changelog readiness, manifest alignment, runtime version alignment when present, and git cleanliness when the folder is a checkout.
 
+## Readiness Audit
+
+A documented maturity check that maps install, start, project creation, durable state, context recovery, autonomous build, ready phase, distribution, and product-surface requirements to concrete evidence.
+
 ## Quality Gate
 
 A deterministic verification command that runs project audit, artifact verification, workflow validation, and local evals before a project advances or is declared ready.
+
+## Operational Readiness
+
+The local environment and package state needed to work efficiently: toolchain status, route detection, audit status, and the recommended verification tier for the touched area.
 
 ## Validation Tier
 

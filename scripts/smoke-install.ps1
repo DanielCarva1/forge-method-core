@@ -23,6 +23,10 @@ function Resolve-Python {
       return $command.Source
     }
   }
+  $codexPython = Join-Path $HOME ".cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+  if (Test-Path -LiteralPath $codexPython) {
+    return $codexPython
+  }
   throw "Python not found. Set PYTHON to a Python executable."
 }
 
@@ -30,6 +34,7 @@ $pythonExe = Resolve-Python
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $installer = Join-Path $repoRoot "install.ps1"
 $installedRuntime = Join-Path $HOME ".agents\skills\forge-method\scripts\forge_method_runtime.py"
+$installedLauncher = Join-Path $HOME ".agents\skills\forge-method\forge-method.ps1"
 $tmp = Join-Path $env:TEMP "forge-method-install-smoke"
 $exampleTmp = Join-Path $env:TEMP "forge-method-install-example-smoke"
 $projectParentTmp = Join-Path $env:TEMP "forge-method-install-project-smoke"
@@ -42,6 +47,9 @@ if ($LASTEXITCODE -ne 0) {
 
 if (-not (Test-Path -LiteralPath $installedRuntime)) {
   throw "Installed runtime helper not found: $installedRuntime"
+}
+if (-not (Test-Path -LiteralPath $installedLauncher)) {
+  throw "Installed runtime launcher not found: $installedLauncher"
 }
 
 if (Test-Path -LiteralPath $tmp) {
@@ -58,6 +66,7 @@ New-Item -ItemType Directory -Path $tmp | Out-Null
 New-Item -ItemType Directory -Path $projectParentTmp | Out-Null
 
 Run $pythonExe $installedRuntime --help
+Run powershell -ExecutionPolicy Bypass -File $installedLauncher --help
 Run $pythonExe $installedRuntime module list
 Run $pythonExe $installedRuntime agent list
 Run $pythonExe $installedRuntime agent validate

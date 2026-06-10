@@ -23,6 +23,10 @@ function Resolve-Python {
       return $command.Source
     }
   }
+  $codexPython = Join-Path $HOME ".cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+  if (Test-Path -LiteralPath $codexPython) {
+    return $codexPython
+  }
   throw "Python not found. Set PYTHON to a Python executable."
 }
 
@@ -36,6 +40,10 @@ if ($LASTEXITCODE -ne 0) {
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1
 if ($LASTEXITCODE -ne 0) {
   throw "smoke-install.ps1 failed"
+}
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-local.ps1
+if ($LASTEXITCODE -ne 0) {
+  throw "smoke-plugin-local.ps1 failed"
 }
 Run $pythonExe skills\forge-method\scripts\forge_method_runtime.py workflow validate
 

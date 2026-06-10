@@ -188,7 +188,7 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(snapshot["runtime_version"], "1.16.0")
+            self.assertEqual(snapshot["runtime_version"], "1.17.0")
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
@@ -639,6 +639,40 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotEqual(blocked.returncode, 0)
             self.assertIn("FAIL changelog_release_items", blocked.stdout)
 
+    def test_doctor_reports_toolchain_and_validation_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Doctor Project", "--root", str(root))
+
+            payload = json.loads(
+                run_cmd(
+                    "doctor",
+                    "--root",
+                    str(root),
+                    "--touches",
+                    "runtime",
+                    "--json",
+                ).stdout
+            )
+            text = run_cmd("doctor", "--root", str(root), "--touches", "runtime").stdout
+
+            self.assertEqual(payload["project_state_root"], str(root.resolve()))
+            self.assertTrue(payload["audit"]["passed"])
+            self.assertIn("toolchain", payload)
+            self.assertIn("python", payload["toolchain"])
+            self.assertEqual(payload["verification"]["validation"]["development"], "targeted-smoke")
+            self.assertIn(
+                "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-runtime.ps1",
+                payload["verification"]["development_commands"]["windows"],
+            )
+            self.assertIn(
+                "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-all.ps1",
+                payload["verification"]["release_commands"]["windows"],
+            )
+            self.assertIn("Forge Method Doctor", text)
+            self.assertIn("Python current:", text)
+            self.assertIn("Development validation: targeted-smoke", text)
+
     def test_artifact_is_indexed_and_added_to_context_pack(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -685,7 +719,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("facilitator", agents)
         self.assertIn("quality-reviewer", agents)
         self.assertIn("Agent profile validation passed.", agent_validation)
-        self.assertEqual(version.strip(), "1.16.0")
+        self.assertEqual(version.strip(), "1.17.0")
 
     def test_context_plan_selects_relevant_files_and_updates_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -728,7 +762,7 @@ class RuntimeTests(unittest.TestCase):
             selected_paths = [item["path"] for item in plan["selected"]]
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(plan["runtime_version"], "1.16.0")
+            self.assertEqual(plan["runtime_version"], "1.17.0")
             self.assertEqual(plan["state"]["phase"], "4-build-verify")
             self.assertIn(".forge-method/state.yaml", selected_paths)
             self.assertIn(".forge-method/sprint.yaml", selected_paths)
