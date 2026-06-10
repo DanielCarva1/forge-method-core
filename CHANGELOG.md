@@ -8,6 +8,7 @@ Forge Method Core v1.2 improves the first-run and resume experience:
 - existing project detection from nested folders
 - known project listing from a parent workspace
 - runtime repo protection during startup
+- CI uses Node 24-compatible actions and an explicit Windows runner image
 - tests covering start/resume routing without creating accidental project state
 
 ## 1.1.0
