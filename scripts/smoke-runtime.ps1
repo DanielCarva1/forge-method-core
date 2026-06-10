@@ -53,6 +53,7 @@ Run $pythonExe $runtime module create --root $tmp --id smoke-module --title "Smo
 Run $pythonExe $runtime workflow validate --root $tmp
 Run $pythonExe $runtime eval run --root $tmp
 Run $pythonExe $runtime checkpoint --root $tmp --title "Smoke checkpoint" --summary "Runtime smoke reached generated workflow and eval checks." --decision "Checkpoint memory is available." --check "eval run passed" --touched ".forge-method/workflows/workflow-smoke-flow.md" --next-action "continue smoke runtime verification"
+Run $pythonExe $runtime context recover --root $tmp --max-chars 1200
 Run $pythonExe $runtime status --root $tmp
 Run $pythonExe $runtime next --root $tmp
 Run $pythonExe $runtime transition --root $tmp --phase 1-discovery --status discovery-ready --workflow discover-intent

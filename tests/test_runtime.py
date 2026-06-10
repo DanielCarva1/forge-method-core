@@ -173,7 +173,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("core-runtime", modules)
         self.assertIn("software-builder", modules)
         self.assertIn("Workflow validation passed.", validation)
-        self.assertEqual(version.strip(), "1.7.0")
+        self.assertEqual(version.strip(), "1.8.0")
 
     def test_example_list_and_create_seed_project(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -500,6 +500,36 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Latest Checkpoint", pack.read_text(encoding="utf-8"))
             self.assertIn("Use checkpoint memory before reading old chat.", pack.read_text(encoding="utf-8"))
             self.assertIn("continue with context memory hardening", status)
+
+    def test_context_recover_writes_resume_brief_with_failure_signals(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            run_cmd(
+                "checkpoint",
+                "--root",
+                str(root),
+                "--title",
+                "After failed check",
+                "--summary",
+                "A check failed and must be visible after context reset.",
+                "--failed-check",
+                "unit test failed: expected route",
+                "--touched",
+                "skills/forge-method/scripts/forge_method_runtime.py",
+                "--next-action",
+                "fix failed route check",
+            )
+            recovery = run_cmd("context", "recover", "--root", str(root)).stdout.strip()
+            pack = root / ".forge-method" / "context" / "current-pack.md"
+            recovery_text = Path(recovery).read_text(encoding="utf-8")
+            pack_text = pack.read_text(encoding="utf-8")
+
+            self.assertIn("unit test failed: expected route", recovery_text)
+            self.assertIn("skills/forge-method/scripts/forge_method_runtime.py", recovery_text)
+            self.assertIn("Resume Commands", recovery_text)
+            self.assertIn("Recovery Signals", pack_text)
+            self.assertIn("unit test failed: expected route", pack_text)
 
 
 if __name__ == "__main__":

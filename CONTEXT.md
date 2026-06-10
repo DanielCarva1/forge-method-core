@@ -40,6 +40,10 @@ Files under `.forge-method/evidence/` plus ledger events proving that work was c
 
 A compact recovery artifact under `.forge-method/context/` containing only the current state, active story, next action, and recent evidence needed to resume work.
 
+## Recovery Brief
+
+A focused resume artifact under `.forge-method/context/recovery.md`. It lists read order, resume commands, current state, recent checkpoints, failed checks, touched files, and recent artifacts for a new agent context.
+
 ## Checkpoint
 
 A structured progress memory written during long-running work. It captures summary, decisions, checks, touched files, artifacts, and next action without requiring chat replay.

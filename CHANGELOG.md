@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.8.0
+
+Forge Method Core v1.8 improves context recovery:
+
+- new `context recover` helper writes `.forge-method/context/recovery.md`
+- recovery briefs include read order, resume commands, state, checkpoints, failed checks, touched files, and recent artifacts
+- context packs now include recovery signals from recent checkpoints
+- direct and installed runtime smokes cover recovery brief generation
+- tests prove failed checks and touched files survive context reset through files
+
 ## 1.7.0
 
 Forge Method Core v1.7 adds runnable examples for packaged modules:

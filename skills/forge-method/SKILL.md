@@ -51,6 +51,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workf
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval run
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval add --kind artifact-exists --id <id> --target <path> --query "<objective check>"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" checkpoint --summary "<progress memory>"
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context recover --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" gate --root . --require-evals
 ```

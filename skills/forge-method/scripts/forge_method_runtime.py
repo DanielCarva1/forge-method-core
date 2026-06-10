@@ -15,7 +15,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.7.0"
+RUNTIME_VERSION = "1.8.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -865,6 +865,53 @@ def write_checkpoint(
     return rel
 
 
+def recent_checkpoint_paths(root: Path, *, limit: int = 5) -> list[Path]:
+    checkpoints = method_dir(root) / "checkpoints"
+    if not checkpoints.exists():
+        return []
+    return sorted(checkpoints.glob("*.md"))[-limit:]
+
+
+def markdown_section_items(text: str, heading: str) -> list[str]:
+    items: list[str] = []
+    in_section = False
+    target = f"## {heading}"
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if line == target:
+            in_section = True
+            continue
+        if in_section and line.startswith("## "):
+            break
+        if not in_section or not line.startswith("- "):
+            continue
+        item = line[2:].strip()
+        if item and item.lower() != "none":
+            items.append(item)
+    return items
+
+
+def checkpoint_section_items(root: Path, heading: str, *, checkpoint_limit: int = 5, item_limit: int = 12) -> list[str]:
+    seen: set[str] = set()
+    values: list[str] = []
+    for path in recent_checkpoint_paths(root, limit=checkpoint_limit):
+        for item in markdown_section_items(path.read_text(encoding="utf-8"), heading):
+            if item in seen:
+                continue
+            seen.add(item)
+            values.append(item)
+            if len(values) >= item_limit:
+                return values
+    return values
+
+
+def append_markdown_items(lines: list[str], values: list[str]) -> None:
+    if values:
+        lines.extend(f"- {value}" for value in values)
+    else:
+        lines.append("- none")
+
+
 def link_artifact_to_story(root: Path, artifact_path: str, story_id: str) -> None:
     story = load_story(root, story_id)
     target, rel = project_path(root, artifact_path)
@@ -1542,6 +1589,8 @@ def build_context_pack_text(root: Path, state: dict[str, str]) -> str:
     story = load_story(root, state["active_story"]) if state.get("active_story") else None
     evidence_paths = sorted((method_dir(root) / "evidence").glob("*.md"))[-5:]
     summaries = artifact_summaries(root)
+    failed_checks = checkpoint_section_items(root, "Failed Checks")
+    touched_files = checkpoint_section_items(root, "Touched Files")
     lines = [
         "# Forge Method Context Pack",
         "",
@@ -1563,6 +1612,10 @@ def build_context_pack_text(root: Path, state: dict[str, str]) -> str:
         lines.extend(checkpoint_text.splitlines())
     else:
         lines.append("- none")
+    lines.extend(["", "## Recovery Signals", "", "### Failed Checks", ""])
+    append_markdown_items(lines, failed_checks)
+    lines.extend(["", "### Touched Files", ""])
+    append_markdown_items(lines, touched_files)
     if story:
         lines.extend(
             [
@@ -1605,6 +1658,71 @@ def build_context_pack_text(root: Path, state: dict[str, str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def build_recovery_brief_text(root: Path, state: dict[str, str], *, checkpoint_limit: int = 5) -> str:
+    failed_checks = checkpoint_section_items(root, "Failed Checks", checkpoint_limit=checkpoint_limit)
+    touched_files = checkpoint_section_items(root, "Touched Files", checkpoint_limit=checkpoint_limit)
+    checkpoints = recent_checkpoint_paths(root, limit=checkpoint_limit)
+    active_story = state.get("active_story", "")
+    read_order = [
+        state_path(root).relative_to(root).as_posix(),
+        (method_dir(root) / SPRINT_FILE).relative_to(root).as_posix(),
+    ]
+    latest = latest_checkpoint_path(root)
+    current_pack = method_dir(root) / "context" / "current-pack.md"
+    if latest.exists():
+        read_order.append(latest.relative_to(root).as_posix())
+    if current_pack.exists():
+        read_order.append(current_pack.relative_to(root).as_posix())
+    if active_story:
+        read_order.append(story_path(root, active_story).relative_to(root).as_posix())
+    if artifact_index_path(root).exists():
+        read_order.append(artifact_index_path(root).relative_to(root).as_posix())
+
+    runtime = command_hint_value(Path(__file__).resolve())
+    root_hint = command_hint_value(root)
+    lines = [
+        "# Forge Method Recovery Brief",
+        "",
+        "## State",
+        "",
+        f"- project: {state.get('project', '')}",
+        f"- phase: {state.get('phase', '')}",
+        f"- status: {state.get('status', '')}",
+        f"- workflow: {state.get('active_workflow', '')}",
+        f"- active_story: {active_story or '<none>'}",
+        f"- readiness: {state.get('readiness', '')}",
+        f"- human_input_required: {state.get('human_input_required', '')}",
+        f"- next_action: {state.get('next_action', '')}",
+        "",
+        "## Read Order",
+        "",
+    ]
+    append_markdown_items(lines, read_order)
+    lines.extend(["", "## Resume Commands", "", "```powershell"])
+    lines.extend(
+        [
+            f"python {runtime} start --root {root_hint}",
+            f"python {runtime} status --root {root_hint}",
+            f"python {runtime} context pack --root {root_hint}",
+            f"python {runtime} gate --root {root_hint} --require-evals",
+        ]
+    )
+    lines.extend(["```", "", "## Recent Checkpoints", ""])
+    append_markdown_items(lines, [path.relative_to(root).as_posix() for path in checkpoints])
+    lines.extend(["", "## Failed Checks", ""])
+    append_markdown_items(lines, failed_checks)
+    lines.extend(["", "## Touched Files", ""])
+    append_markdown_items(lines, touched_files)
+    lines.extend(["", "## Recent Artifacts", ""])
+    artifacts = recent_artifacts(root)
+    if artifacts:
+        for artifact in artifacts:
+            lines.append(f"- {artifact.get('path')} [{artifact.get('status', 'active')}/{artifact.get('lifecycle', 'durable')}]")
+    else:
+        lines.append("- none")
+    return "\n".join(lines) + "\n"
+
+
 def write_context_pack(root: Path, state: dict[str, str], *, out: Path, max_chars: int) -> Path:
     if not out.is_absolute():
         out = root / out
@@ -1618,10 +1736,45 @@ def write_context_pack(root: Path, state: dict[str, str], *, out: Path, max_char
     return out
 
 
+def write_recovery_brief(
+    root: Path,
+    state: dict[str, str],
+    *,
+    out: Path,
+    max_chars: int,
+    checkpoint_limit: int,
+) -> Path:
+    if not out.is_absolute():
+        out = root / out
+    out.parent.mkdir(parents=True, exist_ok=True)
+    text = build_recovery_brief_text(root, state, checkpoint_limit=checkpoint_limit)
+    if max_chars and len(text) > max_chars:
+        footer = "\n\n[recovery-brief truncated to max_chars]\n"
+        text = text[: max(0, max_chars - len(footer))].rstrip() + footer
+    out.write_text(text, encoding="utf-8")
+    append_ledger(root, "recovery_brief.written", {"path": out.relative_to(root).as_posix()})
+    return out
+
+
 def cmd_context_pack(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     out = Path(args.out) if args.out else method_dir(root) / "context" / "current-pack.md"
     out = write_context_pack(root, state, out=out, max_chars=args.max_chars)
+    print(out)
+    return 0
+
+
+def cmd_context_recover(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    write_context_pack(root, state, out=method_dir(root) / "context" / "current-pack.md", max_chars=args.max_chars)
+    out = Path(args.out) if args.out else method_dir(root) / "context" / "recovery.md"
+    out = write_recovery_brief(
+        root,
+        state,
+        out=out,
+        max_chars=args.max_chars,
+        checkpoint_limit=args.checkpoints,
+    )
     print(out)
     return 0
 
@@ -2160,6 +2313,12 @@ def build_parser() -> argparse.ArgumentParser:
     context_pack.add_argument("--out")
     context_pack.add_argument("--max-chars", type=int, default=8000)
     context_pack.set_defaults(func=cmd_context_pack)
+    context_recover = context_sub.add_parser("recover", help="write a focused recovery brief")
+    context_recover.add_argument("--root", default=".")
+    context_recover.add_argument("--out")
+    context_recover.add_argument("--max-chars", type=int, default=8000)
+    context_recover.add_argument("--checkpoints", type=int, default=5)
+    context_recover.set_defaults(func=cmd_context_recover)
 
     audit = sub.add_parser("audit", help="validate project state")
     audit.add_argument("--root", default=".")

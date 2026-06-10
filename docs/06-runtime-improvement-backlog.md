@@ -33,10 +33,15 @@
 ### Context Continuity
 
 - context pack generation
+- recovery brief generation
 - handoff generation
 - checkpoint generation
 - active story tracking
 - recent evidence tracking
+- checkpoint memory in context packs
+- artifact summaries in context packs
+- failing command summaries in context packs
+- touched file summaries in context packs
 
 ### Artifact System
 
@@ -55,17 +60,12 @@
 - user skill installer
 - install smoke test
 - runtime smoke test
-- unit tests
-- CI workflow
-- example projects per module
-
-## V1 Hardening
-
-### Cross-Platform Installers
-
 - macOS installer
 - Linux installer
 - shell smoke tests
+- unit tests
+- CI workflow
+- example projects per module
 
 ### Module Packs
 
@@ -76,12 +76,7 @@
 - test architect module
 - launch/operate module
 
-### Context Pack Builder
-
-- include checkpoint memory
-- include artifact summaries
-- include failing command summaries
-- include touched file summaries
+## V1 Hardening
 
 ### Release Quality
 
