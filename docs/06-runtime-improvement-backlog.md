@@ -36,6 +36,7 @@
 ### Context Continuity
 
 - context pack generation
+- context load plan generation
 - recovery brief generation
 - handoff generation
 - state-routed agent profile recommendations

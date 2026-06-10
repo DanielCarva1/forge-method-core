@@ -15,7 +15,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.11.0"
+RUNTIME_VERSION = "1.12.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -1341,6 +1341,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     context_dir = method_dir(root) / "context"
     current_pack = context_dir / "current-pack.md"
     recovery = context_dir / "recovery.md"
+    load_plan = context_dir / "load-plan.json"
     latest_checkpoint = latest_checkpoint_path(root)
     return {
         "runtime": RUNTIME_NAME,
@@ -1384,6 +1385,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
         "context": {
             "current_pack": current_pack.relative_to(root).as_posix() if current_pack.exists() else "",
             "recovery_brief": recovery.relative_to(root).as_posix() if recovery.exists() else "",
+            "load_plan": load_plan.relative_to(root).as_posix() if load_plan.exists() else "",
             "latest_checkpoint": latest_checkpoint.relative_to(root).as_posix() if latest_checkpoint.exists() else "",
         },
         "recent_artifacts": recent_artifacts(root, limit=5),
@@ -2030,6 +2032,242 @@ def cmd_workflow_create(args: argparse.Namespace) -> int:
     return 0
 
 
+def context_item_path(root: Path, path: Path) -> tuple[str, str]:
+    resolved = path.resolve()
+    try:
+        return "project", resolved.relative_to(root.resolve()).as_posix()
+    except ValueError:
+        pass
+    try:
+        return "packaged", "skill:" + resolved.relative_to(SKILL_DIR.resolve()).as_posix()
+    except ValueError:
+        return "external", str(resolved)
+
+
+def context_file_size(path: Path) -> int:
+    if not path.exists() or not path.is_file():
+        return 0
+    try:
+        return len(path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError:
+        return int(path.stat().st_size)
+
+
+def add_context_candidate(
+    candidates: list[dict[str, Any]],
+    seen: set[str],
+    root: Path,
+    path: Path,
+    *,
+    reason: str,
+    priority: int,
+    required: bool = False,
+    section: str = "project",
+) -> None:
+    if not path.exists() or not path.is_file():
+        return
+    location, display_path = context_item_path(root, path)
+    key = f"{location}:{display_path}"
+    if key in seen:
+        return
+    seen.add(key)
+    candidates.append(
+        {
+            "path": display_path,
+            "location": location,
+            "section": section,
+            "reason": reason,
+            "priority": priority,
+            "required": required,
+            "estimated_chars": context_file_size(path),
+        }
+    )
+
+
+def build_context_load_plan(root: Path, state: dict[str, str], *, max_chars: int) -> dict[str, Any]:
+    candidates: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    next_story = select_next_story(root)
+    active_story_id = state.get("active_story", "")
+
+    add_context_candidate(
+        candidates,
+        seen,
+        root,
+        state_path(root),
+        reason="authoritative phase, status, workflow, and next action",
+        priority=100,
+        required=True,
+        section="state",
+    )
+    add_context_candidate(
+        candidates,
+        seen,
+        root,
+        method_dir(root) / SPRINT_FILE,
+        reason="story counts and active story pointer",
+        priority=96,
+        required=True,
+        section="state",
+    )
+
+    workflow_path = workflow_path_by_id(root, state.get("active_workflow", ""))
+    if workflow_path:
+        add_context_candidate(
+            candidates,
+            seen,
+            root,
+            workflow_path,
+            reason="active workflow state machine",
+            priority=92,
+            required=True,
+            section="workflow",
+        )
+
+    latest = latest_checkpoint_path(root)
+    add_context_candidate(
+        candidates,
+        seen,
+        root,
+        latest,
+        reason="latest durable progress memory",
+        priority=88,
+        required=False,
+        section="memory",
+    )
+
+    story_for_context = active_story_id or (next_story or {}).get("id", "")
+    story: dict[str, str] | None = None
+    if story_for_context:
+        story = load_story(root, story_for_context)
+        add_context_candidate(
+            candidates,
+            seen,
+            root,
+            story_path(root, story_for_context),
+            reason="active or next executable story",
+            priority=86,
+            required=bool(active_story_id),
+            section="story",
+        )
+
+    for item in open_required_inputs(root):
+        add_context_candidate(
+            candidates,
+            seen,
+            root,
+            human_input_path(root, item.get("id", "")),
+            reason="open required human decision",
+            priority=84,
+            required=True,
+            section="human-input",
+        )
+
+    recommended_ids = recommended_agent_ids(state, next_story, audit_project(root))
+    for index, profile_id in enumerate(recommended_ids):
+        match = agent_profile_by_id(root, profile_id)
+        if not match:
+            continue
+        _, path = match
+        add_context_candidate(
+            candidates,
+            seen,
+            root,
+            path,
+            reason=f"recommended agent profile for current state: {profile_id}",
+            priority=80 - index,
+            required=False,
+            section="agent-profile",
+        )
+
+    add_context_candidate(
+        candidates,
+        seen,
+        root,
+        artifact_index_path(root),
+        reason="artifact provenance and lifecycle index",
+        priority=76,
+        required=False,
+        section="artifact",
+    )
+
+    if story:
+        for artifact in split_list(story.get("artifacts")):
+            add_context_candidate(
+                candidates,
+                seen,
+                root,
+                root / artifact,
+                reason=f"artifact linked to story {story.get('id', '')}",
+                priority=72,
+                required=False,
+                section="artifact",
+            )
+
+    evidence_paths = sorted((method_dir(root) / "evidence").glob("*.md"))[-3:]
+    for offset, path in enumerate(reversed(evidence_paths)):
+        add_context_candidate(
+            candidates,
+            seen,
+            root,
+            path,
+            reason="recent validation or release evidence",
+            priority=68 - offset,
+            required=False,
+            section="evidence",
+        )
+
+    candidates.sort(key=lambda item: (-int(item["priority"]), item["path"]))
+    selected: list[dict[str, Any]] = []
+    deferred: list[dict[str, Any]] = []
+    selected_chars = 0
+    for item in candidates:
+        item_chars = int(item.get("estimated_chars", 0))
+        if item.get("required") or not max_chars or selected_chars + item_chars <= max_chars:
+            selected.append(item)
+            selected_chars += item_chars
+        else:
+            deferred.append(item)
+
+    required_chars = sum(int(item.get("estimated_chars", 0)) for item in candidates if item.get("required"))
+    return {
+        "runtime": RUNTIME_NAME,
+        "runtime_version": RUNTIME_VERSION,
+        "generated_at": utc_now(),
+        "root": str(root),
+        "budget_chars": max_chars,
+        "estimated_selected_chars": selected_chars,
+        "estimated_required_chars": required_chars,
+        "over_budget": bool(max_chars and required_chars > max_chars),
+        "state": {
+            "project": state.get("project", ""),
+            "phase": state.get("phase", ""),
+            "status": state.get("status", ""),
+            "workflow": state.get("active_workflow", ""),
+            "active_story": active_story_id,
+            "next_action": state.get("next_action", ""),
+        },
+        "rules": [
+            "load selected items in order",
+            "prefer selected files over conversation memory",
+            "do not load deferred files unless the current task explicitly needs them",
+            "after meaningful progress, write checkpoint or evidence before ending",
+        ],
+        "selected": selected,
+        "deferred": deferred,
+    }
+
+
+def write_context_load_plan(root: Path, state: dict[str, str], *, out: Path, max_chars: int) -> Path:
+    if not out.is_absolute():
+        out = root / out
+    out.parent.mkdir(parents=True, exist_ok=True)
+    plan = build_context_load_plan(root, state, max_chars=max_chars)
+    out.write_text(json.dumps(plan, ensure_ascii=True, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    append_ledger(root, "context_load_plan.written", {"path": out.relative_to(root).as_posix()})
+    return out
+
+
 def build_context_pack_text(root: Path, state: dict[str, str]) -> str:
     story = load_story(root, state["active_story"]) if state.get("active_story") else None
     evidence_paths = sorted((method_dir(root) / "evidence").glob("*.md"))[-5:]
@@ -2130,8 +2368,11 @@ def build_recovery_brief_text(root: Path, state: dict[str, str], *, checkpoint_l
     ]
     latest = latest_checkpoint_path(root)
     current_pack = method_dir(root) / "context" / "current-pack.md"
+    load_plan = method_dir(root) / "context" / "load-plan.json"
     if latest.exists():
         read_order.append(latest.relative_to(root).as_posix())
+    if load_plan.exists():
+        read_order.append(load_plan.relative_to(root).as_posix())
     if current_pack.exists():
         read_order.append(current_pack.relative_to(root).as_posix())
     if active_story:
@@ -2164,6 +2405,7 @@ def build_recovery_brief_text(root: Path, state: dict[str, str], *, checkpoint_l
         [
             f"python {runtime} start --root {root_hint}",
             f"python {runtime} status --root {root_hint}",
+            f"python {runtime} context plan --root {root_hint}",
             f"python {runtime} context pack --root {root_hint}",
             f"python {runtime} gate --root {root_hint} --require-evals",
         ]
@@ -2240,8 +2482,20 @@ def cmd_context_pack(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_context_plan(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    out = Path(args.out) if args.out else method_dir(root) / "context" / "load-plan.json"
+    out = write_context_load_plan(root, state, out=out, max_chars=args.max_chars)
+    if args.json:
+        print(out.read_text(encoding="utf-8").rstrip())
+    else:
+        print(out)
+    return 0
+
+
 def cmd_context_recover(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
+    write_context_load_plan(root, state, out=method_dir(root) / "context" / "load-plan.json", max_chars=args.max_chars)
     write_context_pack(root, state, out=method_dir(root) / "context" / "current-pack.md", max_chars=args.max_chars)
     out = Path(args.out) if args.out else method_dir(root) / "context" / "recovery.md"
     out = write_recovery_brief(
@@ -2847,6 +3101,12 @@ def build_parser() -> argparse.ArgumentParser:
     context_pack.add_argument("--out")
     context_pack.add_argument("--max-chars", type=int, default=8000)
     context_pack.set_defaults(func=cmd_context_pack)
+    context_plan = context_sub.add_parser("plan", help="write a machine-readable context load plan")
+    context_plan.add_argument("--root", default=".")
+    context_plan.add_argument("--out")
+    context_plan.add_argument("--max-chars", type=int, default=12000)
+    context_plan.add_argument("--json", action="store_true")
+    context_plan.set_defaults(func=cmd_context_plan)
     context_recover = context_sub.add_parser("recover", help="write a focused recovery brief")
     context_recover.add_argument("--root", default=".")
     context_recover.add_argument("--out")

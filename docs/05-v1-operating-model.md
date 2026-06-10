@@ -85,6 +85,8 @@ The agent should not load all project documentation. It should build a compact c
 
 Context packs must stay bounded. If a pack exceeds the configured character budget, it is truncated and the next run should regenerate a more selective artifact or handoff.
 
+The agent should prefer the machine-readable context load plan before reading files. The load plan ranks selected files by current state and defers lower-priority files when the budget is full.
+
 ## Checkpoint Rule
 
 After a meaningful work block, the agent should write a checkpoint with the decisions, checks, touched files, artifacts, and next action needed for a future session. A checkpoint is durable memory; it is not a transcript.

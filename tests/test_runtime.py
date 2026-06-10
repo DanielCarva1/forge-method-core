@@ -111,7 +111,7 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(snapshot["runtime_version"], "1.11.0")
+            self.assertEqual(snapshot["runtime_version"], "1.12.0")
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
@@ -309,7 +309,57 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("facilitator", agents)
         self.assertIn("quality-reviewer", agents)
         self.assertIn("Agent profile validation passed.", agent_validation)
-        self.assertEqual(version.strip(), "1.11.0")
+        self.assertEqual(version.strip(), "1.12.0")
+
+    def test_context_plan_selects_relevant_files_and_updates_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            for phase in ["1-discovery", "2-specification", "3-plan"]:
+                run_cmd("transition", "--root", str(root), "--phase", phase)
+            run_cmd("transition", "--root", str(root), "--phase", "4-build-verify", "--workflow", "build-story")
+            artifact = run_cmd(
+                "artifact",
+                "add",
+                "--root",
+                str(root),
+                "--kind",
+                "spec",
+                "--title",
+                "Example spec",
+                "--summary",
+                "Artifact summary.",
+                "--path",
+                ".forge-method/artifacts/spec.md",
+            ).stdout.strip()
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-1",
+                "--title",
+                "Build thing",
+                "--acceptance",
+                "thing works",
+            )
+            run_cmd("artifact", "link-story", "--root", str(root), "--path", artifact, "--story", "story-1")
+            run_cmd("story", "start", "--root", str(root), "--id", "story-1")
+
+            plan_path = Path(run_cmd("context", "plan", "--root", str(root), "--max-chars", "1200").stdout.strip())
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+            selected_paths = [item["path"] for item in plan["selected"]]
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+
+            self.assertEqual(plan["runtime_version"], "1.12.0")
+            self.assertEqual(plan["state"]["phase"], "4-build-verify")
+            self.assertIn(".forge-method/state.yaml", selected_paths)
+            self.assertIn(".forge-method/sprint.yaml", selected_paths)
+            self.assertIn(".forge-method/stories/story-1.yaml", selected_paths)
+            self.assertIn("skill:references/workflow-build-story.md", selected_paths)
+            self.assertIn(".forge-method/context/load-plan.json", snapshot["context"]["load_plan"])
+            self.assertLessEqual(plan["estimated_selected_chars"], plan["budget_chars"] + plan["estimated_required_chars"])
 
     def test_agent_recommendations_follow_runtime_state(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -48,6 +48,10 @@ Files under `.forge-method/evidence/` plus ledger events proving that work was c
 
 A compact recovery artifact under `.forge-method/context/` containing only the current state, active story, next action, and recent evidence needed to resume work.
 
+## Context Load Plan
+
+A machine-readable recovery artifact under `.forge-method/context/load-plan.json`. It ranks the files an agent should load now, with reason, priority, estimated size, and deferred items when the context budget is full.
+
 ## Recovery Brief
 
 A focused resume artifact under `.forge-method/context/recovery.md`. It lists read order, resume commands, current state, recent checkpoints, failed checks, touched files, and recent artifacts for a new agent context.

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.12.0
+
+Forge Method Core v1.12 adds plan-aware context loading:
+
+- new `context plan` helper writes `.forge-method/context/load-plan.json`
+- load plans rank state, sprint, workflow, story, human input, agent profiles, artifacts, and evidence by priority
+- load plans enforce a character budget and defer lower-priority files instead of loading everything
+- recovery briefs include the load plan in read order and resume commands
+- snapshots expose the load plan path when present
+
 ## 1.11.0
 
 Forge Method Core v1.11 adds state-routed agent profiles:

@@ -35,6 +35,7 @@ mkdir -p "$tmp"
 "$python_bin" "$installed_runtime" workflow create --root "$tmp" --id install-flow --title "Install Flow" --trigger "installed runtime available" --input "installed runtime" --step "validate installed runtime" --output "install proof" --done "install proof exists" --blocked "runtime missing" --handoff "preserve install result" --eval-query "prove install flow"
 "$python_bin" "$installed_runtime" eval run --root "$tmp"
 "$python_bin" "$installed_runtime" checkpoint --root "$tmp" --title "Install checkpoint" --summary "Installed runtime can persist checkpoint memory." --check "install eval passed" --next-action "continue install smoke"
+"$python_bin" "$installed_runtime" context plan --root "$tmp" --max-chars 1200
 "$python_bin" "$installed_runtime" context recover --root "$tmp" --max-chars 1200
 "$python_bin" "$installed_runtime" transition --root "$tmp" --phase 1-discovery --status discovery-ready --workflow discover-intent
 "$python_bin" "$installed_runtime" input add --root "$tmp" --id install-audience --prompt "Who is the install smoke audience?" --reason "Install smoke needs durable input coverage."

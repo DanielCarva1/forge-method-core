@@ -125,6 +125,7 @@ python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py agent r
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py input add --root <temp-folder> --id audience --prompt "Who is this for?"
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py input answer --root <temp-folder> --id audience --answer "Smoke users"
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py checkpoint --root <temp-folder> --summary "Progress memory"
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py context plan --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py context recover --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py artifact verify --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py gate --root <temp-folder>

@@ -57,6 +57,7 @@ Run $pythonExe $runtime module create --root $tmp --id smoke-module --title "Smo
 Run $pythonExe $runtime workflow validate --root $tmp
 Run $pythonExe $runtime eval run --root $tmp
 Run $pythonExe $runtime checkpoint --root $tmp --title "Smoke checkpoint" --summary "Runtime smoke reached generated workflow and eval checks." --decision "Checkpoint memory is available." --check "eval run passed" --touched ".forge-method/workflows/workflow-smoke-flow.md" --next-action "continue smoke runtime verification"
+Run $pythonExe $runtime context plan --root $tmp --max-chars 1200
 Run $pythonExe $runtime context recover --root $tmp --max-chars 1200
 Run $pythonExe $runtime status --root $tmp
 Run $pythonExe $runtime next --root $tmp
@@ -75,6 +76,7 @@ Run $pythonExe $runtime artifact link-story --root $tmp --path ".forge-method/ar
 Run $pythonExe $runtime story start --root $tmp --id story-1
 Run $pythonExe $runtime story review --root $tmp --id story-1
 Run $pythonExe $runtime story done --root $tmp --id story-1 --summary "Runtime loop completed in smoke test." --check "smoke-runtime.ps1"
+Run $pythonExe $runtime context plan --root $tmp --max-chars 1200
 Run $pythonExe $runtime context pack --root $tmp --max-chars 1200
 Run $pythonExe $runtime artifact list --root $tmp
 Run $pythonExe $runtime artifact verify --root $tmp

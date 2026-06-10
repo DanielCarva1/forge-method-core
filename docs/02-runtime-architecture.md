@@ -26,6 +26,7 @@ Every project using the runtime gets:
   artifacts/
   checkpoints/
   context/
+    load-plan.json
   evals/
   evidence/
   handoffs/
@@ -156,6 +157,8 @@ It should build a context pack from:
 - last evidence entry
 
 This follows the same practical lesson as repo-map based coding agents: context must be selected, not dumped.
+
+The machine-readable load plan is the preferred recovery entrypoint. It ranks files by current state, reason, priority, and budget so a new agent can load only the selected sources before acting.
 
 ## Agent Profile Strategy
 

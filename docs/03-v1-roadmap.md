@@ -55,6 +55,7 @@ artifact capture/verify
 evidence add
 checkpoint
 context pack
+context plan
 context recover
 module list/show/create
 agent list/show/recommend/validate
@@ -106,6 +107,13 @@ A context pack must include:
 - active story acceptance criteria
 - recent evidence paths
 - recommended agent profiles
+
+A context load plan must include:
+
+- selected files in priority order
+- reason for each file
+- estimated character budget
+- deferred files when the budget is full
 
 ## Release Standard
 
