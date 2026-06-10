@@ -54,7 +54,6 @@
 
 ### Artifact System
 
-- artifact-to-story linking
 - artifact freshness checks
 
 ### Module Packs
@@ -71,12 +70,9 @@
 - include artifact summaries
 - include failing command summaries
 - include touched file summaries
-- enforce max pack size
 
 ### Workflow Generator
 
-- generate new workflow state machines
-- validate required sections
 - create trigger tests
 - create artifact tests
 

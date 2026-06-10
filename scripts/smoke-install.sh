@@ -21,6 +21,8 @@ mkdir -p "$tmp"
 "$python_bin" "$installed_runtime" module list
 "$python_bin" "$installed_runtime" workflow validate
 "$python_bin" "$installed_runtime" init --project install-smoke --root "$tmp"
+"$python_bin" "$installed_runtime" workflow create --root "$tmp" --id install-flow --title "Install Flow" --trigger "installed runtime available" --input "installed runtime" --step "validate installed runtime" --output "install proof" --done "install proof exists" --blocked "runtime missing" --handoff "preserve install result" --eval-query "prove install flow"
+"$python_bin" "$installed_runtime" eval run --root "$tmp"
 "$python_bin" "$installed_runtime" transition --root "$tmp" --phase 1-discovery --status discovery-ready --workflow discover-intent
 "$python_bin" "$installed_runtime" story add --root "$tmp" --id install-story --title "Installed runtime works" --acceptance "installed helper can write durable state"
 "$python_bin" "$installed_runtime" status --root "$tmp"
@@ -28,4 +30,3 @@ mkdir -p "$tmp"
 "$python_bin" "$installed_runtime" audit --root "$tmp"
 
 echo "Install smoke test passed: $tmp"
-

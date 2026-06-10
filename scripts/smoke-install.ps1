@@ -37,6 +37,8 @@ Run python $installedRuntime --help
 Run python $installedRuntime module list
 Run python $installedRuntime workflow validate
 Run python $installedRuntime init --project install-smoke --root $tmp
+Run python $installedRuntime workflow create --root $tmp --id install-flow --title "Install Flow" --trigger "installed runtime available" --input "installed runtime" --step "validate installed runtime" --output "install proof" --done "install proof exists" --blocked "runtime missing" --handoff "preserve install result" --eval-query "prove install flow"
+Run python $installedRuntime eval run --root $tmp
 Run python $installedRuntime transition --root $tmp --phase 1-discovery --status discovery-ready --workflow discover-intent
 Run python $installedRuntime story add --root $tmp --id install-story --title "Installed runtime works" --acceptance "installed helper can write durable state"
 Run python $installedRuntime status --root $tmp

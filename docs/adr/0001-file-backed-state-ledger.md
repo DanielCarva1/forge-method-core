@@ -16,8 +16,12 @@ Project state is stored in `.forge-method/` using small files:
 - `projects.yaml` for identity and registry metadata
 - `sprint.yaml` for sprint summary
 - `stories/*.yaml` for executable work
+- `artifacts/*.md` for generated product, planning, and release materials
+- `evals/*.yaml` for local workflow checks
+- `workflows/*.md` and `modules/*.yaml` for project-specific method extensions
 - `evidence/*.md` for proof of completion
 - `context/*.md` for recovery packs
+- `handoffs/*.md` for continuation notes
 - `ledger.ndjson` for append-only runtime events
 
 ## Consequences
@@ -25,4 +29,3 @@ Project state is stored in `.forge-method/` using small files:
 - Agents can recover by reading files instead of replaying chat history.
 - Users can inspect and edit state without specialized infrastructure.
 - The runtime must validate transitions and evidence because files are easy to mutate.
-

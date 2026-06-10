@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.0
+
+Forge Method Core v1.1 adds agent-facing hardening for project evolution:
+
+- project workflow generation with state-machine validation
+- project module generation
+- local routing eval creation, listing, and execution
+- artifact-to-story linking with audit coverage
+- context pack size limits for controlled handoffs
+- broader Windows and Linux smoke coverage for generated workflows and evals
+
 ## 1.0.0
 
 Forge Method Core v1 establishes the first complete runtime foundation:
@@ -15,4 +26,3 @@ Forge Method Core v1 establishes the first complete runtime foundation:
 - Windows and macOS/Linux installers
 - Windows and Linux CI verification
 - local `verify-all` scripts
-

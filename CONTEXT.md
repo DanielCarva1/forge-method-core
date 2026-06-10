@@ -32,9 +32,17 @@ Files under `.forge-method/evidence/` plus ledger events proving that work was c
 
 A compact recovery artifact under `.forge-method/context/` containing only the current state, active story, next action, and recent evidence needed to resume work.
 
+## Eval
+
+A small local check under `.forge-method/evals/` that proves a workflow target exists, validates structurally, and matches the expected route for a query.
+
 ## Story
 
 A bounded executable unit of work with acceptance criteria, status, optional checks, and required evidence before `done`.
+
+## Artifact Link
+
+A durable relationship between an artifact and a story. Linked artifacts are checked during audit so story context does not silently disappear.
 
 ## Ready Gate
 
@@ -43,4 +51,3 @@ The transition into `5-ready-operate`. It requires audit success, no active impl
 ## Agent-Facing Workflow
 
 A compact Markdown state machine loaded only when the current runtime state requires it.
-

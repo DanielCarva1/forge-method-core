@@ -15,7 +15,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.0.0"
+RUNTIME_VERSION = "1.1.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -178,8 +178,10 @@ def ensure_dirs(root: Path) -> Path:
     for name in [
         "artifacts",
         "context",
+        "evals",
         "evidence",
         "handoffs",
+        "modules",
         "stories",
         "workflows",
     ]:
@@ -347,11 +349,31 @@ def module_manifest_paths(root: Path | None = None) -> list[Path]:
     return paths
 
 
-def reference_workflow_paths() -> list[Path]:
+def reference_workflow_paths(root: Path | None = None) -> list[Path]:
+    paths: list[Path] = []
     refs = SKILL_DIR / "references"
-    if not refs.exists():
-        return []
-    return sorted(refs.glob("workflow-*.md"))
+    if refs.exists():
+        paths.extend(sorted(refs.glob("workflow-*.md")))
+    if root is not None:
+        project_workflows = method_dir(root) / "workflows"
+        if project_workflows.exists():
+            paths.extend(sorted(project_workflows.glob("workflow-*.md")))
+    return paths
+
+
+def workflow_id_from_path(path: Path) -> str:
+    stem = path.stem
+    if stem.startswith("workflow-"):
+        return stem.removeprefix("workflow-")
+    return stem
+
+
+def workflow_path_by_id(root: Path | None, workflow_id: str) -> Path | None:
+    normalized = slugify(workflow_id)
+    for path in reference_workflow_paths(root):
+        if workflow_id_from_path(path) == normalized:
+            return path
+    return None
 
 
 def validate_workflow_file(path: Path) -> list[str]:
@@ -365,6 +387,57 @@ def validate_workflow_file(path: Path) -> list[str]:
     if len(text.splitlines()) > 120:
         errors.append(f"{path.name}: too long for an agent-facing workflow")
     return errors
+
+
+def workflow_text(
+    *,
+    workflow_id: str,
+    title: str,
+    triggers: list[str],
+    inputs: list[str],
+    steps: list[str],
+    outputs: list[str],
+    done_when: list[str],
+    blocked_when: list[str],
+    handoff: list[str],
+) -> str:
+    def section(name: str, values: list[str]) -> list[str]:
+        lines = [f"{name}:"]
+        lines.extend(f"  - {value}" for value in values)
+        return lines
+
+    lines = [
+        f"# workflow: {slugify(workflow_id)}",
+        "",
+        f"title: {title}",
+        "",
+        *section("trigger", triggers or ["state requires this workflow"]),
+        "",
+        *section("inputs", inputs or ["current state"]),
+        "",
+        *section("steps", steps or ["inspect state", "perform scoped work", "update state"]),
+        "",
+        *section("outputs", outputs or ["updated artifact or state"]),
+        "",
+        *section("done_when", done_when or ["output exists", "state is updated", "next action is known"]),
+        "",
+        *section("blocked_when", blocked_when or ["required input is missing", "state is contradictory"]),
+        "",
+        *section("handoff", handoff or ["preserve current state, outputs, blockers, and next action"]),
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def eval_path(root: Path, eval_id: str) -> Path:
+    return method_dir(root) / "evals" / f"{slugify(eval_id)}.yaml"
+
+
+def list_evals(root: Path) -> list[dict[str, str]]:
+    evals_dir = method_dir(root) / "evals"
+    if not evals_dir.exists():
+        return []
+    return [read_flat_yaml(path) for path in sorted(evals_dir.glob("*.yaml"))]
 
 
 def write_evidence(root: Path, *, kind: str, title: str, summary: str, story_id: str = "", checks: list[str] | None = None) -> str:
@@ -401,6 +474,29 @@ def write_artifact(root: Path, *, kind: str, title: str, summary: str, path: str
     append_artifact_index(root, {"kind": kind, "title": title, "path": rel, "summary": summary.strip()})
     append_ledger(root, "artifact.added", {"kind": kind, "path": rel})
     return rel
+
+
+def link_artifact_to_story(root: Path, artifact_path: str, story_id: str) -> None:
+    story = load_story(root, story_id)
+    target = root / artifact_path
+    if not target.exists():
+        raise SystemExit(f"Artifact path does not exist: {artifact_path}")
+    artifacts = split_list(story.get("artifacts"))
+    if artifact_path not in artifacts:
+        artifacts.append(artifact_path)
+    story["artifacts"] = join_list(artifacts)
+    save_story(root, story)
+    append_artifact_index(
+        root,
+        {
+            "kind": "story-link",
+            "title": f"{artifact_path} -> {story_id}",
+            "path": artifact_path,
+            "story": story_id,
+            "summary": "Artifact linked to story.",
+        },
+    )
+    append_ledger(root, "artifact.linked_to_story", {"path": artifact_path, "story": story_id})
 
 
 def validate_phase_transition(current: str, target: str, *, force: bool = False) -> None:
@@ -444,6 +540,9 @@ def audit_project(root: Path) -> list[str]:
             errors.append(f"{story.get('id')}: done story has no evidence")
         if status in {"ready", "in_progress", "review"} and not story.get("acceptance_criteria"):
             errors.append(f"{story.get('id')}: executable story has no acceptance criteria")
+        for artifact in split_list(story.get("artifacts")):
+            if not (root / artifact).exists():
+                errors.append(f"{story.get('id')}: linked artifact missing: {artifact}")
     return errors
 
 
@@ -703,6 +802,13 @@ def cmd_artifact_add(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_artifact_link_story(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    link_artifact_to_story(root, args.path, args.story)
+    print(f"Linked {args.path} -> {args.story}")
+    return 0
+
+
 def cmd_artifact_list(args: argparse.Namespace) -> int:
     root, _ = load_state_or_fail(resolve_root(args.root))
     artifacts = recent_artifacts(root, limit=args.limit)
@@ -741,9 +847,30 @@ def cmd_module_show(args: argparse.Namespace) -> int:
     raise SystemExit(f"Module not found: {args.id}")
 
 
+def cmd_module_create(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    module_id = slugify(args.id)
+    path = method_dir(root) / "modules" / f"{module_id}.yaml"
+    if path.exists() and not args.force:
+        raise SystemExit(f"Module already exists: {module_id}")
+    values = {
+        "id": module_id,
+        "title": args.title,
+        "purpose": args.purpose,
+        "phase_span": join_list(args.phase_span or []),
+        "workflows": join_list(args.workflow or []),
+    }
+    write_flat_yaml(path, values, header="Forge Method module")
+    append_ledger(root, "module.created", {"id": module_id, "path": path.relative_to(root).as_posix()})
+    print(path.relative_to(root).as_posix())
+    return 0
+
+
 def cmd_workflow_list(args: argparse.Namespace) -> int:
-    for path in reference_workflow_paths():
-        print(path.name)
+    root, _ = load_state_or_none(resolve_root(args.root))
+    for path in reference_workflow_paths(root):
+        location = "project" if root and method_dir(root) in path.parents else "packaged"
+        print(f"{workflow_id_from_path(path)}\t{location}\t{path.name}")
     return 0
 
 
@@ -751,7 +878,8 @@ def cmd_workflow_validate(args: argparse.Namespace) -> int:
     if args.path:
         paths = [Path(args.path)]
     else:
-        paths = reference_workflow_paths()
+        root, _ = load_state_or_none(resolve_root(args.root))
+        paths = reference_workflow_paths(root)
     errors: list[str] = []
     for path in paths:
         errors.extend(validate_workflow_file(path))
@@ -761,6 +889,46 @@ def cmd_workflow_validate(args: argparse.Namespace) -> int:
             print(f"- {error}")
         return 1
     print("Workflow validation passed.")
+    return 0
+
+
+def cmd_workflow_create(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    workflow_id = slugify(args.id)
+    path = method_dir(root) / "workflows" / f"workflow-{workflow_id}.md"
+    if path.exists() and not args.force:
+        raise SystemExit(f"Workflow already exists: {workflow_id}")
+    text = workflow_text(
+        workflow_id=workflow_id,
+        title=args.title,
+        triggers=args.trigger or [],
+        inputs=args.input or [],
+        steps=args.step or [],
+        outputs=args.output or [],
+        done_when=args.done or [],
+        blocked_when=args.blocked or [],
+        handoff=args.handoff or [],
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    errors = validate_workflow_file(path)
+    if errors:
+        path.unlink(missing_ok=True)
+        raise SystemExit("Generated workflow is invalid: " + "; ".join(errors))
+    append_ledger(root, "workflow.created", {"id": workflow_id, "path": path.relative_to(root).as_posix()})
+    if args.eval_query:
+        eval_id = f"{workflow_id}-routing"
+        values = {
+            "id": eval_id,
+            "kind": "workflow-routing",
+            "target": workflow_id,
+            "query": args.eval_query,
+            "expected": workflow_id,
+            "status": "pending",
+        }
+        write_flat_yaml(eval_path(root, eval_id), values, header="Forge Method eval")
+        append_ledger(root, "eval.added", {"id": eval_id, "target": workflow_id})
+    print(path.relative_to(root).as_posix())
     return 0
 
 
@@ -809,9 +977,76 @@ def cmd_context_pack(args: argparse.Namespace) -> int:
     if not out.is_absolute():
         out = root / out
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    text = "\n".join(lines) + "\n"
+    if args.max_chars and len(text) > args.max_chars:
+        footer = "\n\n[context-pack truncated to max_chars]\n"
+        text = text[: max(0, args.max_chars - len(footer))].rstrip() + footer
+    out.write_text(text, encoding="utf-8")
     append_ledger(root, "context_pack.written", {"path": out.relative_to(root).as_posix()})
     print(out)
+    return 0
+
+
+def cmd_eval_add(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    eval_id = slugify(args.id)
+    if workflow_path_by_id(root, args.target) is None:
+        raise SystemExit(f"Target workflow not found: {args.target}")
+    values = {
+        "id": eval_id,
+        "kind": args.kind,
+        "target": slugify(args.target),
+        "query": args.query,
+        "expected": args.expected or slugify(args.target),
+        "status": "pending",
+    }
+    write_flat_yaml(eval_path(root, eval_id), values, header="Forge Method eval")
+    append_ledger(root, "eval.added", {"id": eval_id, "target": values["target"]})
+    print(eval_path(root, eval_id).relative_to(root).as_posix())
+    return 0
+
+
+def cmd_eval_list(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    evals = list_evals(root)
+    if not evals:
+        print("No evals.")
+        return 0
+    for item in evals:
+        print(f"{item.get('id')}\t{item.get('kind')}\t{item.get('target')}\t{item.get('status')}")
+    return 0
+
+
+def cmd_eval_run(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    evals = list_evals(root)
+    failures: list[str] = []
+    for item in evals:
+        eval_id = item.get("id", "")
+        target = item.get("target", "")
+        expected = item.get("expected", target)
+        query = item.get("query", "")
+        workflow_path = workflow_path_by_id(root, target)
+        errors = validate_workflow_file(workflow_path) if workflow_path else [f"target workflow not found: {target}"]
+        if not query:
+            errors.append("query is empty")
+        if expected != target:
+            errors.append(f"expected workflow {expected} does not match target {target}")
+        item["status"] = "failed" if errors else "passed"
+        item["last_run_at"] = utc_now()
+        item["last_error"] = join_list(errors)
+        write_flat_yaml(eval_path(root, eval_id), item, header="Forge Method eval")
+        if errors:
+            failures.append(f"{eval_id}: {', '.join(errors)}")
+        else:
+            print(f"PASS {eval_id}")
+    append_ledger(root, "eval.run", {"count": len(evals), "failures": len(failures)})
+    if failures:
+        print("Eval run failed:")
+        for failure in failures:
+            print(f"- {failure}")
+        return 1
+    print(f"Eval run passed: {len(evals)} eval(s)")
     return 0
 
 
@@ -1007,14 +1242,39 @@ def build_parser() -> argparse.ArgumentParser:
     module_show.add_argument("--root", default=".")
     module_show.add_argument("--id", required=True)
     module_show.set_defaults(func=cmd_module_show)
+    module_create = module_sub.add_parser("create", help="create a project module manifest")
+    module_create.add_argument("--root", default=".")
+    module_create.add_argument("--id", required=True)
+    module_create.add_argument("--title", required=True)
+    module_create.add_argument("--purpose", required=True)
+    module_create.add_argument("--phase-span", action="append")
+    module_create.add_argument("--workflow", action="append")
+    module_create.add_argument("--force", action="store_true")
+    module_create.set_defaults(func=cmd_module_create)
 
     workflow = sub.add_parser("workflow", help="inspect and validate workflow references")
     workflow_sub = workflow.add_subparsers(dest="workflow_command", required=True)
     workflow_list = workflow_sub.add_parser("list", help="list packaged workflows")
+    workflow_list.add_argument("--root", default=".")
     workflow_list.set_defaults(func=cmd_workflow_list)
-    workflow_validate = workflow_sub.add_parser("validate", help="validate packaged workflows")
+    workflow_validate = workflow_sub.add_parser("validate", help="validate workflow references")
+    workflow_validate.add_argument("--root", default=".")
     workflow_validate.add_argument("--path")
     workflow_validate.set_defaults(func=cmd_workflow_validate)
+    workflow_create = workflow_sub.add_parser("create", help="create a project workflow state machine")
+    workflow_create.add_argument("--root", default=".")
+    workflow_create.add_argument("--id", required=True)
+    workflow_create.add_argument("--title", required=True)
+    workflow_create.add_argument("--trigger", action="append")
+    workflow_create.add_argument("--input", action="append")
+    workflow_create.add_argument("--step", action="append")
+    workflow_create.add_argument("--output", action="append")
+    workflow_create.add_argument("--done", action="append")
+    workflow_create.add_argument("--blocked", action="append")
+    workflow_create.add_argument("--handoff", action="append")
+    workflow_create.add_argument("--eval-query")
+    workflow_create.add_argument("--force", action="store_true")
+    workflow_create.set_defaults(func=cmd_workflow_create)
 
     artifact = sub.add_parser("artifact", help="manage artifacts")
     artifact_sub = artifact.add_subparsers(dest="artifact_command", required=True)
@@ -1030,12 +1290,35 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_list.add_argument("--root", default=".")
     artifact_list.add_argument("--limit", type=int, default=20)
     artifact_list.set_defaults(func=cmd_artifact_list)
+    artifact_link = artifact_sub.add_parser("link-story", help="link an artifact to a story")
+    artifact_link.add_argument("--root", default=".")
+    artifact_link.add_argument("--path", required=True)
+    artifact_link.add_argument("--story", required=True)
+    artifact_link.set_defaults(func=cmd_artifact_link_story)
+
+    eval_cmd = sub.add_parser("eval", help="manage local runtime evals")
+    eval_sub = eval_cmd.add_subparsers(dest="eval_command", required=True)
+    eval_add = eval_sub.add_parser("add", help="add a routing eval")
+    eval_add.add_argument("--root", default=".")
+    eval_add.add_argument("--id", required=True)
+    eval_add.add_argument("--kind", default="workflow-routing")
+    eval_add.add_argument("--target", required=True)
+    eval_add.add_argument("--query", required=True)
+    eval_add.add_argument("--expected")
+    eval_add.set_defaults(func=cmd_eval_add)
+    eval_list = eval_sub.add_parser("list", help="list evals")
+    eval_list.add_argument("--root", default=".")
+    eval_list.set_defaults(func=cmd_eval_list)
+    eval_run = eval_sub.add_parser("run", help="run evals")
+    eval_run.add_argument("--root", default=".")
+    eval_run.set_defaults(func=cmd_eval_run)
 
     context = sub.add_parser("context", help="context pack operations")
     context_sub = context.add_subparsers(dest="context_command", required=True)
     context_pack = context_sub.add_parser("pack", help="write a compact context pack")
     context_pack.add_argument("--root", default=".")
     context_pack.add_argument("--out")
+    context_pack.add_argument("--max-chars", type=int, default=8000)
     context_pack.set_defaults(func=cmd_context_pack)
 
     audit = sub.add_parser("audit", help="validate project state")

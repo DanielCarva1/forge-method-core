@@ -42,6 +42,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow validate
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval run
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
 ```
 

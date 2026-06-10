@@ -39,10 +39,12 @@ next
 transition
 story add/list/start/review/done/block
 artifact add/list
+artifact link-story
 evidence add
 context pack
-module list/show
-workflow list/validate
+module list/show/create
+workflow list/validate/create
+eval add/list/run
 audit
 ready
 handoff
