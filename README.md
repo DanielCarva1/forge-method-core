@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.8.0`.
+Current runtime version: `1.9.0`.
 
 ## Current Shape
 
@@ -71,6 +71,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" start
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init --project my-project
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" version
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" snapshot --root . --pretty
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" checkpoint --summary "What changed and what to do next"

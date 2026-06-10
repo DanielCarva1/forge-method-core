@@ -15,7 +15,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.8.0"
+RUNTIME_VERSION = "1.9.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -1078,6 +1078,104 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def story_summary(story: dict[str, str] | None) -> dict[str, str] | None:
+    if not story:
+        return None
+    return {
+        "id": story.get("id", ""),
+        "title": story.get("title", ""),
+        "status": story.get("status", ""),
+        "phase": story.get("phase", ""),
+        "acceptance_criteria": story.get("acceptance_criteria", ""),
+        "checks": story.get("checks", ""),
+        "evidence": story.get("evidence", ""),
+        "blocker": story.get("blocker", ""),
+    }
+
+
+def route_recommendation(state: dict[str, str], next_story: dict[str, str] | None, audit_errors: list[str]) -> str:
+    if state.get("human_input_required") == "true":
+        return "wait_for_human_input"
+    if audit_errors:
+        return "repair_project_state"
+    if state.get("readiness") == "ready" or state.get("phase") == "5-ready-operate":
+        return "operate_or_evolve"
+    if next_story and state.get("phase") == "4-build-verify":
+        status = next_story.get("status", "")
+        if status in {"ready", "planned"}:
+            return "start_next_story"
+        if status == "in_progress":
+            return "continue_active_story"
+        if status == "review":
+            return "review_active_story"
+        if status == "blocked":
+            return "resolve_story_blocker"
+    return "continue_current_workflow"
+
+
+def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
+    sprint = read_flat_yaml(method_dir(root) / SPRINT_FILE)
+    stories = list_stories(root)
+    next_story = select_next_story(root)
+    audit_errors = audit_project(root)
+    artifact_errors, artifact_warnings = artifact_findings(root)
+    evals = list_evals(root)
+    eval_counts: dict[str, int] = {"total": len(evals), "passed": 0, "failed": 0, "pending": 0}
+    for item in evals:
+        status = item.get("status", "pending")
+        eval_counts[status] = eval_counts.get(status, 0) + 1
+    story_counts = {status: 0 for status in STORY_STATUSES}
+    for story in stories:
+        status = story.get("status", "planned")
+        story_counts[status] = story_counts.get(status, 0) + 1
+    context_dir = method_dir(root) / "context"
+    current_pack = context_dir / "current-pack.md"
+    recovery = context_dir / "recovery.md"
+    latest_checkpoint = latest_checkpoint_path(root)
+    return {
+        "runtime": RUNTIME_NAME,
+        "runtime_version": RUNTIME_VERSION,
+        "root": str(root),
+        "state": state,
+        "sprint": sprint,
+        "stories": {
+            "total": len(stories),
+            "counts": story_counts,
+            "next": story_summary(next_story),
+        },
+        "route": {
+            "recommendation": route_recommendation(state, next_story, audit_errors),
+            "next_action": state.get("next_action", ""),
+            "human_input_required": state.get("human_input_required", "false"),
+        },
+        "quality": {
+            "audit": {
+                "passed": not audit_errors,
+                "errors": audit_errors,
+            },
+            "artifacts": {
+                "errors": artifact_errors,
+                "warnings": artifact_warnings,
+            },
+            "evals": eval_counts,
+        },
+        "context": {
+            "current_pack": current_pack.relative_to(root).as_posix() if current_pack.exists() else "",
+            "recovery_brief": recovery.relative_to(root).as_posix() if recovery.exists() else "",
+            "latest_checkpoint": latest_checkpoint.relative_to(root).as_posix() if latest_checkpoint.exists() else "",
+        },
+        "recent_artifacts": recent_artifacts(root, limit=5),
+    }
+
+
+def cmd_snapshot(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    snapshot = build_snapshot(root, state)
+    indent = 2 if args.pretty else None
+    print(json.dumps(snapshot, ensure_ascii=True, sort_keys=True, indent=indent))
+    return 0
+
+
 def cmd_next(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     phase = state.get("phase", "0-route")
@@ -2110,6 +2208,11 @@ def build_parser() -> argparse.ArgumentParser:
     status = sub.add_parser("status", help="print current runtime state")
     status.add_argument("--root", default=".")
     status.set_defaults(func=cmd_status)
+
+    snapshot = sub.add_parser("snapshot", help="print machine-readable project state")
+    snapshot.add_argument("--root", default=".")
+    snapshot.add_argument("--pretty", action="store_true")
+    snapshot.set_defaults(func=cmd_snapshot)
 
     next_cmd = sub.add_parser("next", help="print next recommended action")
     next_cmd.add_argument("--root", default=".")

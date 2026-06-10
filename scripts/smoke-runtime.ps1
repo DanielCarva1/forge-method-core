@@ -43,6 +43,7 @@ New-Item -ItemType Directory -Path $tmp | Out-Null
 
 Run $pythonExe $runtime init --project smoke-test --root $tmp
 Run $pythonExe $runtime start --root $tmp
+Run $pythonExe $runtime snapshot --root $tmp
 Run $pythonExe $runtime module list --root $tmp
 Run $pythonExe $runtime example list --root $tmp
 Run $pythonExe $runtime example create --root $exampleTmp --module software-builder

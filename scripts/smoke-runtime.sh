@@ -13,6 +13,7 @@ mkdir -p "$tmp"
 
 "$python_bin" "$runtime" init --project smoke-test --root "$tmp"
 "$python_bin" "$runtime" start --root "$tmp"
+"$python_bin" "$runtime" snapshot --root "$tmp"
 "$python_bin" "$runtime" module list --root "$tmp"
 "$python_bin" "$runtime" example list --root "$tmp"
 "$python_bin" "$runtime" example create --root "$example_tmp" --module software-builder

@@ -16,6 +16,10 @@ A state-machine system that turns intent into artifacts, implementation, validat
 
 The deterministic entry route that resolves whether the current workspace is an existing method project, the runtime repo, or a folder that can create or contain method projects.
 
+## Runtime Snapshot
+
+A machine-readable JSON summary of current project state, sprint counts, next story, route recommendation, quality findings, context paths, and recent artifacts.
+
 ## Method Project
 
 A project initialized with `.forge-method/` state. A method project may be software, product, creative, game, automation, or runtime-module work.

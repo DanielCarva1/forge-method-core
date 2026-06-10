@@ -9,6 +9,7 @@
 - start route with known project listing
 - runtime-vs-project doctor command
 - status command that does not infer from chat history
+- runtime snapshot for machine-readable agent routing
 
 ### Durable State Engine
 

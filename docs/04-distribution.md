@@ -119,6 +119,7 @@ python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py example
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py gate --root <example-folder> --require-evals
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py init --project smoke-test --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py start --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py snapshot --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py checkpoint --root <temp-folder> --summary "Progress memory"
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py context recover --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py artifact verify --root <temp-folder>

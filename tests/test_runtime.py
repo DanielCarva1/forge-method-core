@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 import tempfile
@@ -87,6 +88,58 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Invalid phase transition", result.stderr + result.stdout)
 
+    def test_snapshot_reports_machine_readable_next_story(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            run_cmd("transition", "--root", str(root), "--phase", "1-discovery")
+            run_cmd("transition", "--root", str(root), "--phase", "2-specification")
+            run_cmd("transition", "--root", str(root), "--phase", "3-plan")
+            run_cmd("transition", "--root", str(root), "--phase", "4-build-verify")
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-1",
+                "--title",
+                "Build thing",
+                "--acceptance",
+                "thing works",
+            )
+
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+
+            self.assertEqual(snapshot["runtime_version"], "1.9.0")
+            self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
+            self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
+            self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
+            self.assertTrue(snapshot["quality"]["audit"]["passed"])
+
+    def test_snapshot_does_not_start_story_before_build_phase(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-1",
+                "--title",
+                "Build thing",
+                "--acceptance",
+                "thing works",
+            )
+
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+
+            self.assertEqual(snapshot["state"]["phase"], "0-route")
+            self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
+            self.assertEqual(snapshot["route"]["recommendation"], "continue_current_workflow")
+
     def test_done_story_requires_evidence_or_summary(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -173,7 +226,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("core-runtime", modules)
         self.assertIn("software-builder", modules)
         self.assertIn("Workflow validation passed.", validation)
-        self.assertEqual(version.strip(), "1.8.0")
+        self.assertEqual(version.strip(), "1.9.0")
 
     def test_example_list_and_create_seed_project(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -42,6 +42,7 @@ Delivered surfaces:
 init
 start
 status
+snapshot
 next
 transition
 story add/list/start/review/done/block
@@ -51,6 +52,7 @@ artifact capture/verify
 evidence add
 checkpoint
 context pack
+context recover
 module list/show/create
 workflow list/validate/create
 eval add/list/run

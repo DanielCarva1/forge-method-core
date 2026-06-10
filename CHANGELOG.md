@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.0
+
+Forge Method Core v1.9 adds a machine-readable runtime snapshot:
+
+- new `snapshot` helper emits deterministic JSON for agents and automation
+- snapshot includes state, sprint counts, next story, route recommendation, quality findings, context paths, and recent artifacts
+- tests prove a build-phase project exposes the next ready story without parsing human text
+- direct and installed runtime smokes exercise snapshot output
+
 ## 1.8.0
 
 Forge Method Core v1.8 improves context recovery:
