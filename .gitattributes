@@ -6,3 +6,4 @@
 *.yml text eol=lf
 *.json text eol=lf
 *.ndjson text eol=lf
+*.toml text eol=lf
