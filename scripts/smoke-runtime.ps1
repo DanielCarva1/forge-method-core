@@ -84,6 +84,9 @@ Run $pythonExe $runtime artifact capture --root $tmp --path ".forge-method/artif
 Run $pythonExe $runtime artifact link-story --root $tmp --path ".forge-method/artifacts/smoke-spec.md" --story story-1
 Run $pythonExe $runtime story start --root $tmp --id story-1
 Run $pythonExe $runtime story review --root $tmp --id story-1
+Run $pythonExe $runtime review add --root $tmp --id smoke-review-proof --story story-1 --title "Smoke review proof" --severity medium --summary "Smoke review finding must be durable and resolved."
+Run $pythonExe $runtime review list --root $tmp --status open
+Run $pythonExe $runtime review resolve --root $tmp --id smoke-review-proof --resolution "Smoke review finding resolved before completion."
 Run $pythonExe $runtime story done --root $tmp --id story-1 --summary "Runtime loop completed in smoke test." --check "smoke-runtime.ps1"
 Run $pythonExe $runtime context plan --root $tmp --max-chars 1200
 Run $pythonExe $runtime context pack --root $tmp --max-chars 1200

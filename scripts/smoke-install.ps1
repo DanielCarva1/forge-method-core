@@ -82,6 +82,9 @@ Run $pythonExe $installedRuntime transition --root $tmp --phase 1-discovery --st
 Run $pythonExe $installedRuntime input add --root $tmp --id install-audience --prompt "Who is the install smoke audience?" --reason "Install smoke needs durable input coverage."
 Run $pythonExe $installedRuntime input answer --root $tmp --id install-audience --answer "Install smoke users" --next-action "continue install smoke"
 Run $pythonExe $installedRuntime story add --root $tmp --id install-story --title "Installed runtime works" --acceptance "installed helper can write durable state"
+Run $pythonExe $installedRuntime review add --root $tmp --id install-review-proof --story install-story --title "Installed review proof" --severity low --summary "Installed runtime can store review findings."
+Run $pythonExe $installedRuntime review list --root $tmp --status open
+Run $pythonExe $installedRuntime review resolve --root $tmp --id install-review-proof --resolution "Installed review finding resolved."
 Run $pythonExe $installedRuntime artifact verify --root $tmp
 Run $pythonExe $installedRuntime gate --root $tmp --require-evals --summary "Installed runtime quality gate passed."
 Run $pythonExe $installedRuntime status --root $tmp

@@ -34,6 +34,7 @@ Delivered surfaces:
 - `.forge-method/handoffs/`
 - `.forge-method/agents/`
 - `.forge-method/inputs/`
+- `.forge-method/reviews/`
 - `.forge-method/workflows/`
 - `.forge-method/modules/`
 - `.forge-method/ledger.ndjson`
@@ -50,6 +51,7 @@ transition
 project list/create
 story add/list/start/review/done/block
 input add/list/answer/defer
+review add/list/resolve/waive
 artifact add/list
 artifact link-story
 artifact capture/verify

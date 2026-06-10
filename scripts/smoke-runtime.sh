@@ -51,6 +51,9 @@ mkdir -p "$project_parent_tmp"
 "$python_bin" "$runtime" artifact link-story --root "$tmp" --path ".forge-method/artifacts/smoke-spec.md" --story story-1
 "$python_bin" "$runtime" story start --root "$tmp" --id story-1
 "$python_bin" "$runtime" story review --root "$tmp" --id story-1
+"$python_bin" "$runtime" review add --root "$tmp" --id smoke-review-proof --story story-1 --title "Smoke review proof" --severity medium --summary "Smoke review finding must be durable and resolved."
+"$python_bin" "$runtime" review list --root "$tmp" --status open
+"$python_bin" "$runtime" review resolve --root "$tmp" --id smoke-review-proof --resolution "Smoke review finding resolved before completion."
 "$python_bin" "$runtime" story done --root "$tmp" --id story-1 --summary "Runtime loop completed in smoke test." --check "smoke-runtime.sh"
 "$python_bin" "$runtime" context plan --root "$tmp" --max-chars 1200
 "$python_bin" "$runtime" context pack --root "$tmp" --max-chars 1200

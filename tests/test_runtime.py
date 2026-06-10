@@ -111,7 +111,7 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(snapshot["runtime_version"], "1.13.0")
+            self.assertEqual(snapshot["runtime_version"], "1.14.0")
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
@@ -243,6 +243,87 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Done stories require", result.stderr + result.stdout)
 
+    def test_review_findings_block_done_until_resolved(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
+                run_cmd("transition", "--root", str(root), "--phase", phase, "--force")
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-1",
+                "--title",
+                "Build thing",
+                "--acceptance",
+                "thing works",
+            )
+            run_cmd("story", "start", "--root", str(root), "--id", "story-1")
+            run_cmd("story", "review", "--root", str(root), "--id", "story-1")
+            run_cmd(
+                "review",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "missing-proof",
+                "--story",
+                "story-1",
+                "--title",
+                "Missing proof",
+                "--severity",
+                "high",
+                "--summary",
+                "The review needs proof before completion.",
+            )
+
+            blocked = run_cmd(
+                "story",
+                "done",
+                "--root",
+                str(root),
+                "--id",
+                "story-1",
+                "--summary",
+                "Done.",
+                check=False,
+            )
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+            plan = json.loads(run_cmd("context", "plan", "--root", str(root), "--json").stdout)
+            pack_path = Path(run_cmd("context", "pack", "--root", str(root)).stdout.strip())
+            pack_text = pack_path.read_text(encoding="utf-8")
+
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertIn("Open review findings", blocked.stderr + blocked.stdout)
+            self.assertEqual(snapshot["route"]["recommendation"], "resolve_review_findings")
+            self.assertEqual(snapshot["review_findings"]["counts"]["open"], 1)
+            self.assertEqual(snapshot["review_findings"]["open"][0]["id"], "missing-proof")
+            self.assertIn(".forge-method/reviews/missing-proof.yaml", [item["path"] for item in plan["selected"]])
+            self.assertIn("Open Review Findings", pack_text)
+            self.assertIn("missing-proof", pack_text)
+
+            run_cmd(
+                "review",
+                "resolve",
+                "--root",
+                str(root),
+                "--id",
+                "missing-proof",
+                "--resolution",
+                "Proof added through review.",
+            )
+            done = run_cmd("story", "done", "--root", str(root), "--id", "story-1", "--summary", "Done.")
+            resolved = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+
+            self.assertIn("Story done: story-1", done.stdout)
+            self.assertEqual(resolved["review_findings"]["counts"]["open"], 0)
+            self.assertEqual(resolved["review_findings"]["counts"]["resolved"], 1)
+            self.assertIn("missing-proof", run_cmd("review", "list", "--root", str(root), "--status", "resolved").stdout)
+            self.assertIn("Audit passed.", run_cmd("audit", "--root", str(root)).stdout)
+
     def test_ready_gate_writes_release_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -309,7 +390,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("facilitator", agents)
         self.assertIn("quality-reviewer", agents)
         self.assertIn("Agent profile validation passed.", agent_validation)
-        self.assertEqual(version.strip(), "1.13.0")
+        self.assertEqual(version.strip(), "1.14.0")
 
     def test_context_plan_selects_relevant_files_and_updates_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -352,7 +433,7 @@ class RuntimeTests(unittest.TestCase):
             selected_paths = [item["path"] for item in plan["selected"]]
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(plan["runtime_version"], "1.13.0")
+            self.assertEqual(plan["runtime_version"], "1.14.0")
             self.assertEqual(plan["state"]["phase"], "4-build-verify")
             self.assertIn(".forge-method/state.yaml", selected_paths)
             self.assertIn(".forge-method/sprint.yaml", selected_paths)

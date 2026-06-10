@@ -20,10 +20,12 @@ steps:
   4. implement the smallest correct change
   5. run required checks
   6. perform code review
-  7. repair failures or review findings
-  8. write evidence
-  9. update sprint status
-  10. delete ephemeral task docs only after evidence is recorded
+  7. record review findings with `review add`
+  8. repair failures or review findings
+  9. resolve or waive review findings
+  10. write evidence
+  11. update sprint status
+  12. delete ephemeral task docs only after evidence is recorded
 
 outputs:
   - code changes
@@ -35,7 +37,7 @@ outputs:
 done_when:
   - all acceptance criteria are satisfied
   - required checks pass or documented exceptions are accepted
-  - code review has no blocking findings
+  - linked review findings are resolved or waived
   - evidence is written
   - sprint status is updated
 
@@ -50,4 +52,3 @@ handoff:
   - preserve exact next action
   - preserve failing command and output summary if blocked
   - preserve touched files and evidence path
-

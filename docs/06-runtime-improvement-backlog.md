@@ -18,6 +18,7 @@
 - project registry
 - sprint summary
 - durable human input requests
+- durable review findings
 - story files
 - evidence files
 - append-only runtime ledger
@@ -28,6 +29,7 @@
 
 - story add/list/start/review/done/block
 - input add/list/answer/defer
+- review add/list/resolve/waive
 - required evidence for done stories
 - check recording
 - audit command
@@ -41,6 +43,7 @@
 - recovery brief generation
 - handoff generation
 - state-routed agent profile recommendations
+- open review findings in recovery context
 - checkpoint generation
 - active story tracking
 - recent evidence tracking

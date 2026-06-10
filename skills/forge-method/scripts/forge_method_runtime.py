@@ -15,7 +15,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.13.0"
+RUNTIME_VERSION = "1.14.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -59,6 +59,19 @@ HUMAN_INPUT_STATUSES = [
     "open",
     "answered",
     "deferred",
+]
+
+REVIEW_FINDING_STATUSES = [
+    "open",
+    "resolved",
+    "waived",
+]
+
+REVIEW_FINDING_SEVERITIES = [
+    "critical",
+    "high",
+    "medium",
+    "low",
 ]
 
 STORY_TRANSITIONS = {
@@ -230,6 +243,7 @@ def ensure_dirs(root: Path) -> Path:
         "agents",
         "inputs",
         "modules",
+        "reviews",
         "stories",
         "workflows",
     ]:
@@ -1174,8 +1188,23 @@ def audit_project(root: Path) -> list[str]:
         errors.append("state is waiting-human-input but no open required human input exists")
     active_story = state.get("active_story", "")
     story_ids = {story.get("id", "") for story in list_stories(root)}
+    stories_by_id = {story.get("id", ""): story for story in list_stories(root)}
     if active_story and active_story not in story_ids:
         errors.append(f"active story does not exist: {active_story}")
+    for finding in list_review_findings(root):
+        finding_id = finding.get("id", "")
+        story_id = finding.get("story", "")
+        status = finding.get("status", "")
+        severity = finding.get("severity", "")
+        if status not in REVIEW_FINDING_STATUSES:
+            errors.append(f"{finding_id}: invalid review finding status {status}")
+        if severity not in REVIEW_FINDING_SEVERITIES:
+            errors.append(f"{finding_id}: invalid review finding severity {severity}")
+        story = stories_by_id.get(story_id)
+        if not story:
+            errors.append(f"{finding_id}: review finding story does not exist: {story_id}")
+        elif status == "open" and story.get("status") == "done":
+            errors.append(f"{story_id}: done story has open review finding: {finding_id}")
     for story in list_stories(root):
         status = story.get("status", "")
         if status not in STORY_STATUSES:
@@ -1299,7 +1328,77 @@ def story_summary(story: dict[str, str] | None) -> dict[str, str] | None:
     }
 
 
-def route_recommendation(state: dict[str, str], next_story: dict[str, str] | None, audit_errors: list[str]) -> str:
+def review_finding_path(root: Path, finding_id: str) -> Path:
+    return method_dir(root) / "reviews" / f"{slugify(finding_id)}.yaml"
+
+
+def load_review_finding(root: Path, finding_id: str) -> dict[str, str]:
+    path = review_finding_path(root, finding_id)
+    if not path.exists():
+        raise SystemExit(f"Review finding not found: {finding_id}")
+    return read_flat_yaml(path)
+
+
+def save_review_finding(root: Path, finding: dict[str, Any]) -> None:
+    finding_id = finding.get("id")
+    if not finding_id:
+        raise SystemExit("Review finding must have an id.")
+    write_flat_yaml(review_finding_path(root, str(finding_id)), finding, header="Forge Method review finding")
+
+
+def list_review_findings(
+    root: Path,
+    *,
+    story_id: str | None = None,
+    status: str | None = None,
+) -> list[dict[str, str]]:
+    reviews_dir = method_dir(root) / "reviews"
+    if not reviews_dir.exists():
+        return []
+    story_filter = slugify(story_id) if story_id else ""
+    findings = [read_flat_yaml(path) for path in sorted(reviews_dir.glob("*.yaml"))]
+    items = [item for item in findings if item.get("id")]
+    if story_filter:
+        items = [item for item in items if item.get("story") == story_filter]
+    if status:
+        items = [item for item in items if item.get("status") == status]
+    return items
+
+
+def open_review_findings(root: Path, story_id: str | None = None) -> list[dict[str, str]]:
+    return list_review_findings(root, story_id=story_id, status="open")
+
+
+def review_finding_summary(finding: dict[str, str] | None) -> dict[str, str] | None:
+    if not finding:
+        return None
+    return {
+        "id": finding.get("id", ""),
+        "story": finding.get("story", ""),
+        "title": finding.get("title", ""),
+        "status": finding.get("status", ""),
+        "severity": finding.get("severity", ""),
+        "summary": finding.get("summary", ""),
+        "source": finding.get("source", ""),
+        "resolution": finding.get("resolution", ""),
+        "evidence": finding.get("evidence", ""),
+    }
+
+
+def review_finding_counts(findings: list[dict[str, str]]) -> dict[str, int]:
+    counts = {status: 0 for status in REVIEW_FINDING_STATUSES}
+    for finding in findings:
+        status = finding.get("status", "open")
+        counts[status] = counts.get(status, 0) + 1
+    return counts
+
+
+def route_recommendation(
+    state: dict[str, str],
+    next_story: dict[str, str] | None,
+    audit_errors: list[str],
+    review_findings: list[dict[str, str]] | None = None,
+) -> str:
     if state.get("human_input_required") == "true":
         return "wait_for_human_input"
     if audit_errors:
@@ -1313,6 +1412,9 @@ def route_recommendation(state: dict[str, str], next_story: dict[str, str] | Non
         if status == "in_progress":
             return "continue_active_story"
         if status == "review":
+            story_id = next_story.get("id", "")
+            if any(item.get("story") == story_id and item.get("status") == "open" for item in review_findings or []):
+                return "resolve_review_findings"
             return "review_active_story"
         if status == "blocked":
             return "resolve_story_blocker"
@@ -1326,6 +1428,8 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     inputs = list_human_inputs(root)
     open_inputs = [item for item in inputs if item.get("status") == "open"]
     required_inputs = open_required_inputs(root)
+    review_findings = list_review_findings(root)
+    open_findings = [item for item in review_findings if item.get("status") == "open"]
     audit_errors = audit_project(root)
     artifact_errors, artifact_warnings = artifact_findings(root)
     agent_errors = agent_profile_validation_errors(root)
@@ -1355,7 +1459,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
             "next": story_summary(next_story),
         },
         "route": {
-            "recommendation": route_recommendation(state, next_story, audit_errors),
+            "recommendation": route_recommendation(state, next_story, audit_errors, review_findings),
             "next_action": state.get("next_action", ""),
             "human_input_required": state.get("human_input_required", "false"),
         },
@@ -1363,6 +1467,11 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
             "total": len(inputs),
             "open": [human_input_summary(item) for item in open_inputs],
             "required_open": [human_input_summary(item) for item in required_inputs],
+        },
+        "review_findings": {
+            "total": len(review_findings),
+            "counts": review_finding_counts(review_findings),
+            "open": [review_finding_summary(item) for item in open_findings],
         },
         "quality": {
             "audit": {
@@ -1525,6 +1634,10 @@ def cmd_story_review(args: argparse.Namespace) -> int:
 def cmd_story_done(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     story = load_story(root, args.id)
+    open_findings = open_review_findings(root, story.get("id", ""))
+    if open_findings and not args.force:
+        ids = ", ".join(item.get("id", "") for item in open_findings)
+        raise SystemExit(f"Open review findings must be resolved or waived before done: {ids}")
     evidence = args.evidence
     checks = args.check or []
     if not evidence:
@@ -1558,6 +1671,77 @@ def cmd_story_block(args: argparse.Namespace) -> int:
     state["next_action"] = f"resolve blocker for story {story['id']}: {args.reason}"
     write_state(root, state)
     print(f"Story blocked: {story['id']}")
+    return 0
+
+
+def cmd_review_add(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    story_id = slugify(args.story)
+    load_story(root, story_id)
+    finding_id = slugify(args.id or f"{story_id}-{args.title}")
+    path = review_finding_path(root, finding_id)
+    if path.exists() and not args.force:
+        raise SystemExit(f"Review finding already exists: {finding_id}")
+    finding = {
+        "id": finding_id,
+        "story": story_id,
+        "title": args.title,
+        "severity": args.severity,
+        "status": "open",
+        "summary": args.summary,
+        "source": args.source or "",
+        "resolution": "",
+        "evidence": "",
+        "created_at": utc_now(),
+        "resolved_at": "",
+    }
+    save_review_finding(root, finding)
+    append_ledger(root, "review_finding.added", {"id": finding_id, "story": story_id, "severity": args.severity})
+    print(f"Review finding added: {finding_id}")
+    return 0
+
+
+def cmd_review_list(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    findings = list_review_findings(root, story_id=args.story, status=args.status)
+    if not findings:
+        print("No review findings.")
+        return 0
+    for finding in findings:
+        print(
+            f"{finding.get('id')}\t{finding.get('status')}\t{finding.get('severity')}\t"
+            f"{finding.get('story')}\t{finding.get('title')}"
+        )
+    return 0
+
+
+def cmd_review_resolve(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    finding = load_review_finding(root, args.id)
+    evidence = ""
+    if args.evidence:
+        evidence_path, evidence = project_path(root, args.evidence)
+        if not evidence_path.exists():
+            raise SystemExit(f"Review evidence not found: {args.evidence}")
+    finding["status"] = "resolved"
+    finding["resolution"] = args.resolution
+    finding["evidence"] = evidence
+    finding["resolved_at"] = utc_now()
+    save_review_finding(root, finding)
+    append_ledger(root, "review_finding.resolved", {"id": finding.get("id"), "story": finding.get("story")})
+    print(f"Review finding resolved: {finding.get('id')}")
+    return 0
+
+
+def cmd_review_waive(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    finding = load_review_finding(root, args.id)
+    finding["status"] = "waived"
+    finding["resolution"] = args.reason
+    finding["resolved_at"] = utc_now()
+    save_review_finding(root, finding)
+    append_ledger(root, "review_finding.waived", {"id": finding.get("id"), "story": finding.get("story")})
+    print(f"Review finding waived: {finding.get('id')}")
     return 0
 
 
@@ -2338,6 +2522,19 @@ def build_context_load_plan(root: Path, state: dict[str, str], *, max_chars: int
             section="human-input",
         )
 
+    for item in open_review_findings(root):
+        finding_story = item.get("story", "")
+        add_context_candidate(
+            candidates,
+            seen,
+            root,
+            review_finding_path(root, item.get("id", "")),
+            reason=f"open review finding for story {finding_story}",
+            priority=83,
+            required=bool(active_story_id and finding_story == active_story_id),
+            section="review-finding",
+        )
+
     recommended_ids = recommended_agent_ids(state, next_story, audit_project(root))
     for index, profile_id in enumerate(recommended_ids):
         match = agent_profile_by_id(root, profile_id)
@@ -2483,6 +2680,16 @@ def build_context_pack_text(root: Path, state: dict[str, str]) -> str:
             lines.append(f"- {item.get('id')} [required={required}]: {item.get('prompt')}")
     else:
         lines.append("- none")
+    lines.extend(["", "## Open Review Findings", ""])
+    open_findings = open_review_findings(root)
+    if open_findings:
+        for item in open_findings:
+            lines.append(
+                f"- {item.get('id')} [{item.get('severity')}] "
+                f"story={item.get('story')}: {item.get('title')} - {item.get('summary')}"
+            )
+    else:
+        lines.append("- none")
     lines.extend(["", "## Recommended Agent Profiles", ""])
     recommendations = recommended_agent_profiles(root, state, select_next_story(root), audit_project(root))
     if recommendations:
@@ -2552,6 +2759,10 @@ def build_recovery_brief_text(root: Path, state: dict[str, str], *, checkpoint_l
         read_order.append(current_pack.relative_to(root).as_posix())
     if active_story:
         read_order.append(story_path(root, active_story).relative_to(root).as_posix())
+    for item in open_review_findings(root):
+        path = review_finding_path(root, item.get("id", ""))
+        if path.exists():
+            read_order.append(path.relative_to(root).as_posix())
     if artifact_index_path(root).exists():
         read_order.append(artifact_index_path(root).relative_to(root).as_posix())
 
@@ -2597,6 +2808,16 @@ def build_recovery_brief_text(root: Path, state: dict[str, str], *, checkpoint_l
         for item in open_inputs:
             required = item.get("required", "true")
             lines.append(f"- {item.get('id')} [required={required}]: {item.get('prompt')}")
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Open Review Findings", ""])
+    open_findings = open_review_findings(root)
+    if open_findings:
+        for item in open_findings:
+            lines.append(
+                f"- {item.get('id')} [{item.get('severity')}] "
+                f"story={item.get('story')}: {item.get('title')} - {item.get('summary')}"
+            )
     else:
         lines.append("- none")
     lines.extend(["", "## Recommended Agent Profiles", ""])
@@ -3084,6 +3305,35 @@ def build_parser() -> argparse.ArgumentParser:
     story_block.add_argument("--reason", required=True)
     story_block.add_argument("--force", action="store_true")
     story_block.set_defaults(func=cmd_story_block)
+
+    review = sub.add_parser("review", help="manage durable review findings")
+    review_sub = review.add_subparsers(dest="review_command", required=True)
+    review_add = review_sub.add_parser("add", help="add a review finding")
+    review_add.add_argument("--root", default=".")
+    review_add.add_argument("--id")
+    review_add.add_argument("--story", required=True)
+    review_add.add_argument("--title", required=True)
+    review_add.add_argument("--severity", choices=REVIEW_FINDING_SEVERITIES, default="medium")
+    review_add.add_argument("--summary", required=True)
+    review_add.add_argument("--source")
+    review_add.add_argument("--force", action="store_true")
+    review_add.set_defaults(func=cmd_review_add)
+    review_list = review_sub.add_parser("list", help="list review findings")
+    review_list.add_argument("--root", default=".")
+    review_list.add_argument("--story")
+    review_list.add_argument("--status", choices=REVIEW_FINDING_STATUSES)
+    review_list.set_defaults(func=cmd_review_list)
+    review_resolve = review_sub.add_parser("resolve", help="resolve a review finding")
+    review_resolve.add_argument("--root", default=".")
+    review_resolve.add_argument("--id", required=True)
+    review_resolve.add_argument("--resolution", required=True)
+    review_resolve.add_argument("--evidence")
+    review_resolve.set_defaults(func=cmd_review_resolve)
+    review_waive = review_sub.add_parser("waive", help="waive a review finding")
+    review_waive.add_argument("--root", default=".")
+    review_waive.add_argument("--id", required=True)
+    review_waive.add_argument("--reason", required=True)
+    review_waive.set_defaults(func=cmd_review_waive)
 
     input_cmd = sub.add_parser("input", help="manage durable human input")
     input_sub = input_cmd.add_subparsers(dest="input_command", required=True)

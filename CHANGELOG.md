@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.14.0
+
+Forge Method Core v1.14 adds durable review findings:
+
+- new `review add/list/resolve/waive` helper commands store review findings under `.forge-method/reviews/`
+- open review findings are included in snapshots, context packs, recovery briefs, and context load plans
+- `story done` refuses completion while linked review findings remain open
+- audit and quality gate fail when a done story still has an open review finding
+- direct and installed smokes exercise review finding creation and resolution
+
 ## 1.13.0
 
 Forge Method Core v1.13 adds real project scaffolding:

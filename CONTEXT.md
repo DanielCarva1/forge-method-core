@@ -24,6 +24,10 @@ A machine-readable JSON summary of current project state, sprint counts, next st
 
 A durable request for user judgment under `.forge-method/inputs/`. Required open human input sets `human_input_required` and blocks autonomous progression until answered or deferred.
 
+## Review Finding
+
+A durable review issue under `.forge-method/reviews/`. Open findings are tied to one story, appear in context recovery, and must be resolved or waived before the story can be marked `done`.
+
 ## Method Project
 
 A project initialized with `.forge-method/` state. A method project may be software, product, creative, game, automation, or runtime-module work.

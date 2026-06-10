@@ -24,6 +24,7 @@ intent -> discovery -> specification -> planning -> build/verify -> ready/operat
   handoffs/               continuation notes after large work blocks
   agents/                 project-local agent profiles when packaged profiles are not enough
   inputs/                 durable human input requests and answers
+  reviews/                durable review findings tied to stories
   ledger.ndjson           append-only runtime event stream
 ```
 
@@ -70,6 +71,10 @@ When the user chooses a new project, the agent should use project creation so st
 
 Human input must be requested as durable state when it blocks the project route, discovery, specification, or a risky decision. Required open input sets `human_input_required`. The agent may continue autonomous work only after the input is answered, deferred, or marked non-required.
 
+## Review Finding Rule
+
+Review findings must be stored as durable state when review discovers a defect, missing proof, incomplete acceptance coverage, or risky exception. A story cannot be marked `done` while a linked finding is open. Findings may be resolved with a short resolution or waived with an explicit reason.
+
 ## Context Rule
 
 The agent should not load all project documentation. It should build a compact context pack from:
@@ -80,6 +85,7 @@ The agent should not load all project documentation. It should build a compact c
 - latest checkpoint
 - relevant artifacts
 - recent evidence
+- open review findings
 - failing checks
 - recommended agent profiles
 - next action

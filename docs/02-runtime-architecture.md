@@ -32,6 +32,7 @@ Every project using the runtime gets:
   handoffs/
   agents/
   modules/
+  reviews/
   workflows/
 ```
 
@@ -152,6 +153,7 @@ It should build a context pack from:
 - active story/spec
 - latest checkpoint
 - artifact index
+- open review findings
 - relevant repo map
 - failing checks
 - last evidence entry
@@ -182,6 +184,6 @@ Validation evidence can include:
 - browser checks
 - screenshots
 - CI results
-- code review findings
+- durable review findings
 
 The runtime should not mark work done without evidence.
