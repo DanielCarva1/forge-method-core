@@ -69,6 +69,8 @@ When the user chooses a new project, the agent should use project creation so st
 
 The agent should run preflight before broad reading. Preflight is read-only: it may compute the selected context files and next commands, but it must not write state, checkpoint, ledger, or context artifacts.
 
+After preflight resolves an existing project, the agent should use resume guidance to choose the next safe action. Resume guidance is also read-only and must prefer durable inputs, review findings, story state, audit results, and readiness state over chat memory.
+
 ## Human Input Rule
 
 Human input must be requested as durable state when it blocks the project route, discovery, specification, or a risky decision. Required open input sets `human_input_required`. The agent may continue autonomous work only after the input is answered, deferred, or marked non-required.

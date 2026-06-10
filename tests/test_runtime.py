@@ -87,9 +87,11 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Forge Method Preflight", text)
             self.assertIn("Route: existing-method-project", text)
             self.assertIn("Read first:", text)
+            self.assertIn("Resume:", text)
             self.assertEqual(payload["route"], "existing-method-project")
             self.assertEqual(payload["project_root"], str(root.resolve()))
             self.assertEqual(payload["status"]["project"], "Example Project")
+            self.assertEqual(payload["status"]["resume"]["action"], "continue_current_workflow")
             self.assertIn(".forge-method/state.yaml", selected_paths)
             self.assertIn(".forge-method/sprint.yaml", selected_paths)
             self.assertFalse((root / ".forge-method" / "context" / "load-plan.json").exists())
@@ -190,6 +192,8 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
+            self.assertEqual(snapshot["resume"]["action"], "start_next_story")
+            self.assertTrue(snapshot["resume"]["autonomous"])
             self.assertTrue(snapshot["quality"]["audit"]["passed"])
 
     def test_snapshot_does_not_start_story_before_build_phase(self) -> None:
@@ -259,7 +263,11 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Next story: story-1 [review] Build thing", brief)
             self.assertIn("Open review findings: 1", brief)
             self.assertIn("status-review-proof", brief)
+            self.assertIn("Resume: resolve_review_findings", brief)
             self.assertEqual(payload["route"]["recommendation"], "resolve_review_findings")
+            self.assertEqual(payload["resume"]["action"], "resolve_review_findings")
+            self.assertTrue(payload["resume"]["autonomous"])
+            self.assertEqual(payload["resume"]["target"]["id"], "status-review-proof")
             self.assertEqual(payload["stories"]["next"]["id"], "story-1")
             self.assertEqual(payload["open_review_findings"][0]["id"], "status-review-proof")
 
@@ -283,10 +291,18 @@ class RuntimeTests(unittest.TestCase):
 
             blocked = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
             next_text = run_cmd("next", "--root", str(root)).stdout
+            resume = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
+            resume_text = run_cmd("resume", "--root", str(root)).stdout
 
             self.assertEqual(blocked["state"]["human_input_required"], "true")
             self.assertEqual(blocked["route"]["recommendation"], "wait_for_human_input")
+            self.assertEqual(blocked["resume"]["action"], "answer_required_input")
             self.assertEqual(blocked["human_inputs"]["required_open"][0]["id"], "target-user")
+            self.assertEqual(resume["action"], "answer_required_input")
+            self.assertFalse(resume["autonomous"])
+            self.assertEqual(resume["target"]["id"], "target-user")
+            self.assertIn("input list", resume["next_command"])
+            self.assertIn("Action: answer_required_input", resume_text)
             self.assertIn("answer human input target-user", next_text)
             self.assertIn("Audit passed.", run_cmd("audit", "--root", str(root)).stdout)
 
@@ -522,6 +538,15 @@ class RuntimeTests(unittest.TestCase):
             )
             run_cmd("story", "start", "--root", str(root), "--id", "story-1")
             run_cmd("story", "done", "--root", str(root), "--id", "story-1", "--summary", "Done.")
+            resume = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
+            resume_text = run_cmd("resume", "--root", str(root)).stdout
+
+            self.assertEqual(resume["action"], "run_ready_gate")
+            self.assertTrue(resume["autonomous"])
+            self.assertIn("gate", resume["commands"][0]["name"])
+            self.assertIn("ready", resume["commands"][1]["name"])
+            self.assertIn("Action: run_ready_gate", resume_text)
+
             run_cmd("ready", "--root", str(root), "--summary", "Ready.")
 
             status = run_cmd("status", "--root", str(root)).stdout

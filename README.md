@@ -78,6 +78,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" statu
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status --root . --brief
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" snapshot --root . --pretty
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" resume --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" input list --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" review list --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story export --root .

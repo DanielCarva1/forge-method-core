@@ -121,6 +121,7 @@ python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py example
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py gate --root <example-folder> --require-evals
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py init --project smoke-test --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py preflight --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py resume --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py start --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py project create --root <parent-folder> --name generated-project --module software-builder
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py project create --root <parent-folder> --name generated-project --module auto --objective "build a web app"
@@ -142,6 +143,7 @@ python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py release
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py release check --root <repo-folder> --mode batch --touches runtime
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py status --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py status --root <temp-folder> --brief
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py resume --root <temp-folder> --json
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py next --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py audit --root <temp-folder>
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1

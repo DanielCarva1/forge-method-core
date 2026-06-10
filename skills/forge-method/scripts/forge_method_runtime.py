@@ -389,6 +389,7 @@ def build_status_brief(root: Path, state: dict[str, str]) -> dict[str, Any]:
             "error_count": len(audit_errors),
             "errors": audit_errors[:5],
         },
+        "resume": snapshot["resume"],
         "recommended_agents": [
             item.get("id", "")
             for item in snapshot["agents"]["recommended"]
@@ -410,6 +411,10 @@ def print_status_brief(root: Path, state: dict[str, str]) -> None:
     print(f"Readiness: {brief['readiness']}")
     print(f"Route: {route.get('recommendation', '')}")
     print(f"Next action: {route.get('next_action', '')}")
+    resume = brief.get("resume", {})
+    if resume:
+        print(f"Resume: {resume.get('action', '')} ({'autonomous' if resume.get('autonomous') else 'human-gated'})")
+        print(f"Resume summary: {resume.get('summary', '')}")
     print(
         "Stories: "
         f"ready={story_counts.get('ready', 0)} "
@@ -576,6 +581,10 @@ def print_preflight(payload: dict[str, Any]) -> None:
         print(f"State: {status.get('phase', '')} / {status.get('status', '')} / {status.get('workflow', '')}")
         print(f"Recommendation: {route.get('recommendation', '')}")
         print(f"Next action: {route.get('next_action', '')}")
+        resume = status.get("resume", {})
+        if resume:
+            print(f"Resume: {resume.get('action', '')} ({'autonomous' if resume.get('autonomous') else 'human-gated'})")
+            print(f"Resume summary: {resume.get('summary', '')}")
         if story:
             print(f"Next story: {story.get('id')} [{story.get('status')}] {story.get('title')}")
         else:
@@ -1810,10 +1819,13 @@ def route_recommendation(
 ) -> str:
     if state.get("human_input_required") == "true":
         return "wait_for_human_input"
-    if audit_errors:
-        return "repair_project_state"
     if state.get("readiness") == "ready" or state.get("phase") == "5-ready-operate":
         return "operate_or_evolve"
+    if review_findings and any(item.get("status") == "open" for item in review_findings):
+        if not audit_errors or all("open review finding" in error for error in audit_errors):
+            return "resolve_review_findings"
+    if audit_errors:
+        return "repair_project_state"
     if next_story and state.get("phase") == "4-build-verify":
         status = next_story.get("status", "")
         if status in {"ready", "planned"}:
@@ -1822,12 +1834,232 @@ def route_recommendation(
             return "continue_active_story"
         if status == "review":
             story_id = next_story.get("id", "")
-            if any(item.get("story") == story_id and item.get("status") == "open" for item in review_findings or []):
-                return "resolve_review_findings"
             return "review_active_story"
         if status == "blocked":
             return "resolve_story_blocker"
     return "continue_current_workflow"
+
+
+def method_relative_path(root: Path, path: Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def resume_payload(
+    *,
+    action: str,
+    summary: str,
+    autonomous: bool,
+    commands: list[dict[str, str]],
+    target: dict[str, str] | None = None,
+    read: list[str] | None = None,
+    done_when: list[str] | None = None,
+    blocked_when: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "action": action,
+        "summary": summary,
+        "autonomous": autonomous,
+        "target": target or {},
+        "read": read or [],
+        "commands": commands,
+        "next_command": commands[0]["command"] if commands else "",
+        "done_when": done_when or [],
+        "blocked_when": blocked_when or [],
+    }
+
+
+def build_resume_guidance(
+    root: Path,
+    state: dict[str, str],
+    next_story: dict[str, str] | None,
+    audit_errors: list[str],
+    required_inputs: list[dict[str, str]],
+    open_findings: list[dict[str, str]],
+    story_counts: dict[str, int],
+) -> dict[str, Any]:
+    base_read = [
+        method_relative_path(root, state_path(root)),
+        method_relative_path(root, method_dir(root) / SPRINT_FILE),
+    ]
+    if required_inputs:
+        item = required_inputs[0]
+        input_id = item.get("id", "")
+        return resume_payload(
+            action="answer_required_input",
+            summary=f"Wait for required human input: {item.get('prompt', '')}",
+            autonomous=False,
+            target=human_input_summary(item) or {},
+            read=[*base_read, method_relative_path(root, human_input_path(root, input_id))],
+            commands=[
+                preflight_command("input-list", "input", "list", "--root", root, "--status", "open"),
+                preflight_command("input-answer", "input", "answer", "--root", root, "--id", input_id, "--answer", "<answer>"),
+            ],
+            done_when=[f"human input {input_id} is answered or deferred"],
+            blocked_when=["the answer changes project scope, risk, budget, or acceptance criteria"],
+        )
+
+    if state.get("readiness") == "ready" or state.get("phase") == "5-ready-operate":
+        return resume_payload(
+            action="operate_or_evolve",
+            summary="Project is ready for use; operate it or route a new evolution request.",
+            autonomous=False,
+            target={"phase": state.get("phase", ""), "readiness": state.get("readiness", "")},
+            read=base_read,
+            commands=[
+                preflight_command("status", "status", "--root", root, "--brief"),
+                preflight_command("snapshot", "snapshot", "--root", root, "--pretty"),
+            ],
+            done_when=["user asks for support, operation, or a new evolution objective"],
+            blocked_when=["no operation or evolution request is present"],
+        )
+
+    review_findings_clear_audit = bool(open_findings) and (
+        not audit_errors or all("open review finding" in error for error in audit_errors)
+    )
+    if open_findings and review_findings_clear_audit:
+        finding = open_findings[0]
+        finding_id = finding.get("id", "")
+        story_id = finding.get("story", "")
+        read = [*base_read, method_relative_path(root, review_finding_path(root, finding_id))]
+        if story_id:
+            read.append(method_relative_path(root, story_path(root, story_id)))
+        return resume_payload(
+            action="resolve_review_findings",
+            summary=f"Resolve open review finding {finding_id} before completing story {story_id}.",
+            autonomous=True,
+            target=review_finding_summary(finding) or {},
+            read=read,
+            commands=[
+                preflight_command("review-list", "review", "list", "--root", root, "--status", "open"),
+                preflight_command("context-plan", "context", "plan", "--root", root, "--json"),
+                preflight_command("review-resolve", "review", "resolve", "--root", root, "--id", finding_id, "--resolution", "<resolution>"),
+            ],
+            done_when=[f"review finding {finding_id} is resolved or waived with evidence"],
+            blocked_when=["finding requires product judgment or acceptance criteria change"],
+        )
+
+    if audit_errors:
+        return resume_payload(
+            action="repair_project_state",
+            summary=f"Repair project state before continuing: {audit_errors[0]}",
+            autonomous=True,
+            target={"error_count": str(len(audit_errors)), "first_error": audit_errors[0]},
+            read=base_read,
+            commands=[
+                preflight_command("audit", "audit", "--root", root),
+                preflight_command("status", "status", "--root", root, "--brief"),
+            ],
+            done_when=["audit passes"],
+            blocked_when=["state repair would delete user work or change project intent"],
+        )
+
+    if state.get("phase") == "4-build-verify":
+        if next_story:
+            story_id = next_story.get("id", "")
+            status = next_story.get("status", "")
+            story_read = [*base_read, method_relative_path(root, story_path(root, story_id))]
+            if status in {"ready", "planned"}:
+                return resume_payload(
+                    action="start_next_story",
+                    summary=f"Start next story {story_id}: {next_story.get('title', '')}",
+                    autonomous=True,
+                    target=story_summary(next_story) or {},
+                    read=story_read,
+                    commands=[
+                        preflight_command("story-start", "story", "start", "--root", root, "--id", story_id),
+                        preflight_command("context-plan", "context", "plan", "--root", root, "--json"),
+                    ],
+                    done_when=[f"story {story_id} moves to in_progress and implementation work begins"],
+                    blocked_when=["story lacks acceptance criteria or conflicts with current project state"],
+                )
+            if status == "in_progress":
+                return resume_payload(
+                    action="continue_active_story",
+                    summary=f"Continue active story {story_id}: {next_story.get('title', '')}",
+                    autonomous=True,
+                    target=story_summary(next_story) or {},
+                    read=story_read,
+                    commands=[
+                        preflight_command("context-plan", "context", "plan", "--root", root, "--json"),
+                        preflight_command("status", "status", "--root", root, "--brief"),
+                    ],
+                    done_when=[f"story {story_id} reaches review or done with evidence"],
+                    blocked_when=["implementation needs missing external credentials, user decision, or unavailable dependency"],
+                )
+            if status == "review":
+                return resume_payload(
+                    action="review_active_story",
+                    summary=f"Review active story {story_id}: {next_story.get('title', '')}",
+                    autonomous=True,
+                    target=story_summary(next_story) or {},
+                    read=story_read,
+                    commands=[
+                        preflight_command("review-list", "review", "list", "--root", root, "--story", story_id),
+                        preflight_command("gate", "gate", "--root", root, "--require-evals"),
+                    ],
+                    done_when=[f"story {story_id} is marked done or durable findings are created"],
+                    blocked_when=["review finds a product decision or acceptance gap"],
+                )
+            if status == "blocked":
+                return resume_payload(
+                    action="resolve_story_blocker",
+                    summary=f"Resolve blocker on story {story_id}: {next_story.get('blocker', '')}",
+                    autonomous=False,
+                    target=story_summary(next_story) or {},
+                    read=story_read,
+                    commands=[
+                        preflight_command("story-list", "story", "list", "--root", root),
+                        preflight_command("status", "status", "--root", root, "--brief"),
+                    ],
+                    done_when=[f"story {story_id} returns to ready or in_progress"],
+                    blocked_when=["blocker requires human decision or unavailable external dependency"],
+                )
+
+        unfinished = sum(story_counts.get(status, 0) for status in ["planned", "ready", "in_progress", "review", "blocked"])
+        if story_counts.get("done", 0) > 0 and unfinished == 0:
+            return resume_payload(
+                action="run_ready_gate",
+                summary="All implementation stories are done; run the quality gate and move to ready when it passes.",
+                autonomous=True,
+                target={"done_stories": str(story_counts.get("done", 0))},
+                read=base_read,
+                commands=[
+                    preflight_command("gate", "gate", "--root", root, "--require-evals", "--summary", "<gate summary>"),
+                    preflight_command("ready", "ready", "--root", root, "--summary", "<ready summary>", "--check", "quality gate"),
+                ],
+                done_when=["quality gate passes", "project phase is 5-ready-operate", "readiness is ready"],
+                blocked_when=["gate fails or release evidence is incomplete"],
+            )
+        return resume_payload(
+            action="plan_next_story",
+            summary="Build phase has no executable story; plan or import the next story batch.",
+            autonomous=False,
+            target={"phase": state.get("phase", "")},
+            read=base_read,
+            commands=[
+                preflight_command("story-list", "story", "list", "--root", root),
+                preflight_command("story-import", "story", "import", "--root", root, "--file", "<backlog.json>"),
+            ],
+            done_when=["at least one ready or planned story exists"],
+            blocked_when=["project owner has not chosen the next build objective"],
+        )
+
+    return resume_payload(
+        action="continue_current_workflow",
+        summary=state.get("next_action") or NEXT_BY_PHASE.get(state.get("phase", ""), "inspect state and choose next workflow"),
+        autonomous=True,
+        target={"phase": state.get("phase", ""), "workflow": state.get("active_workflow", "")},
+        read=base_read,
+        commands=[
+            preflight_command("context-plan", "context", "plan", "--root", root, "--json"),
+            preflight_command("next", "next", "--root", root),
+        ],
+        done_when=["workflow done_when conditions are satisfied and state advances"],
+        blocked_when=["workflow requires durable human input"],
+    )
 
 
 def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
@@ -1851,6 +2083,15 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     for story in stories:
         status = story.get("status", "planned")
         story_counts[status] = story_counts.get(status, 0) + 1
+    resume = build_resume_guidance(
+        root,
+        state,
+        next_story,
+        audit_errors,
+        required_inputs,
+        open_findings,
+        story_counts,
+    )
     context_dir = method_dir(root) / "context"
     current_pack = context_dir / "current-pack.md"
     recovery = context_dir / "recovery.md"
@@ -1872,6 +2113,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
             "next_action": state.get("next_action", ""),
             "human_input_required": state.get("human_input_required", "false"),
         },
+        "resume": resume,
         "human_inputs": {
             "total": len(inputs),
             "open": [human_input_summary(item) for item in open_inputs],
@@ -1932,6 +2174,55 @@ def cmd_next(args: argparse.Namespace) -> int:
             print(f"{NEXT_BY_PHASE[phase]}: {story.get('id')} - {story.get('title')}")
             return 0
     print(state.get("next_action") or NEXT_BY_PHASE.get(phase, "inspect state and choose a valid workflow"))
+    return 0
+
+
+def print_resume_guidance(root: Path, resume: dict[str, Any]) -> None:
+    print("Forge Method Resume")
+    print(f"Workspace: {root}")
+    print(f"Action: {resume.get('action', '')}")
+    print(f"Autonomous: {'yes' if resume.get('autonomous') else 'no'}")
+    print(f"Summary: {resume.get('summary', '')}")
+    target = resume.get("target", {})
+    if target:
+        print("Target:")
+        for key, value in target.items():
+            if value not in {"", None} and value != []:
+                print(f"- {key}: {value}")
+    read = resume.get("read", [])
+    print("Read:")
+    if read:
+        for item in read:
+            print(f"- {item}")
+    else:
+        print("- <none>")
+    print("Commands:")
+    for item in resume.get("commands", []):
+        print(f"- {item.get('name')}: {item.get('command')}")
+    done_when = resume.get("done_when", [])
+    print("Done when:")
+    if done_when:
+        for item in done_when:
+            print(f"- {item}")
+    else:
+        print("- <not specified>")
+    blocked_when = resume.get("blocked_when", [])
+    print("Blocked when:")
+    if blocked_when:
+        for item in blocked_when:
+            print(f"- {item}")
+    else:
+        print("- <not specified>")
+
+
+def cmd_resume(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    snapshot = build_snapshot(root, state)
+    resume = snapshot["resume"]
+    if args.json:
+        print(json.dumps(resume, ensure_ascii=True, sort_keys=True, indent=2))
+    else:
+        print_resume_guidance(root, resume)
     return 0
 
 
@@ -4016,6 +4307,11 @@ def build_parser() -> argparse.ArgumentParser:
     next_cmd = sub.add_parser("next", help="print next recommended action")
     next_cmd.add_argument("--root", default=".")
     next_cmd.set_defaults(func=cmd_next)
+
+    resume = sub.add_parser("resume", help="print structured resume guidance for the current project state")
+    resume.add_argument("--root", default=".")
+    resume.add_argument("--json", action="store_true")
+    resume.set_defaults(func=cmd_resume)
 
     transition = sub.add_parser("transition", help="update phase/status/workflow")
     transition.add_argument("--root", default=".")

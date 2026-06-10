@@ -28,6 +28,10 @@ A machine-readable JSON summary of current project state, sprint counts, next st
 
 A compact status summary for humans and agents. It highlights route recommendation, next action, next story, open required input, open review findings, audit status, recommended agents, and context load plan without dumping the full snapshot.
 
+## Resume Guidance
+
+A structured, non-mutating decision for the next safe action. It identifies the action, target, whether it can proceed autonomously, minimal files to read, commands to run, done conditions, and blocking conditions.
+
 ## Human Input
 
 A durable request for user judgment under `.forge-method/inputs/`. Required open human input sets `human_input_required` and blocks autonomous progression until answered or deferred.

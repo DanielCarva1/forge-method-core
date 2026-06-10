@@ -49,6 +49,7 @@ New-Item -ItemType Directory -Path $projectParentTmp | Out-Null
 
 Run $pythonExe $runtime init --project smoke-test --root $tmp
 Run $pythonExe $runtime preflight --root $tmp
+Run $pythonExe $runtime resume --root $tmp
 Run $pythonExe $runtime start --root $tmp
 Run $pythonExe $runtime snapshot --root $tmp
 Run $pythonExe $runtime module list --root $tmp
@@ -71,6 +72,7 @@ Run $pythonExe $runtime checkpoint --root $tmp --title "Smoke checkpoint" --summ
 Run $pythonExe $runtime context plan --root $tmp --max-chars 1200
 Run $pythonExe $runtime context recover --root $tmp --max-chars 1200
 Run $pythonExe $runtime status --root $tmp
+Run $pythonExe $runtime resume --root $tmp --json
 Run $pythonExe $runtime next --root $tmp
 Run $pythonExe $runtime transition --root $tmp --phase 1-discovery --status discovery-ready --workflow discover-intent
 Run $pythonExe $runtime input add --root $tmp --id smoke-audience --prompt "Who is the target audience?" --reason "Discovery needs an audience before specification."

@@ -38,6 +38,7 @@ mkdir -p "$project_parent_tmp"
 "$python_bin" "$installed_runtime" start --root "$tmp"
 "$python_bin" "$installed_runtime" init --project install-smoke --root "$tmp"
 "$python_bin" "$installed_runtime" preflight --root "$tmp"
+"$python_bin" "$installed_runtime" resume --root "$tmp"
 "$python_bin" "$installed_runtime" start --root "$tmp"
 "$python_bin" "$installed_runtime" snapshot --root "$tmp"
 "$python_bin" "$installed_runtime" agent recommend --root "$tmp"
@@ -46,6 +47,7 @@ mkdir -p "$project_parent_tmp"
 "$python_bin" "$installed_runtime" checkpoint --root "$tmp" --title "Install checkpoint" --summary "Installed runtime can persist checkpoint memory." --check "install eval passed" --next-action "continue install smoke"
 "$python_bin" "$installed_runtime" context plan --root "$tmp" --max-chars 1200
 "$python_bin" "$installed_runtime" context recover --root "$tmp" --max-chars 1200
+"$python_bin" "$installed_runtime" resume --root "$tmp" --json
 "$python_bin" "$installed_runtime" transition --root "$tmp" --phase 1-discovery --status discovery-ready --workflow discover-intent
 "$python_bin" "$installed_runtime" input add --root "$tmp" --id install-audience --prompt "Who is the install smoke audience?" --reason "Install smoke needs durable input coverage."
 "$python_bin" "$installed_runtime" input answer --root "$tmp" --id install-audience --answer "Install smoke users" --next-action "continue install smoke"

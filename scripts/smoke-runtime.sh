@@ -16,6 +16,7 @@ mkdir -p "$project_parent_tmp"
 
 "$python_bin" "$runtime" init --project smoke-test --root "$tmp"
 "$python_bin" "$runtime" preflight --root "$tmp"
+"$python_bin" "$runtime" resume --root "$tmp"
 "$python_bin" "$runtime" start --root "$tmp"
 "$python_bin" "$runtime" snapshot --root "$tmp"
 "$python_bin" "$runtime" module list --root "$tmp"
@@ -38,6 +39,7 @@ mkdir -p "$project_parent_tmp"
 "$python_bin" "$runtime" context plan --root "$tmp" --max-chars 1200
 "$python_bin" "$runtime" context recover --root "$tmp" --max-chars 1200
 "$python_bin" "$runtime" status --root "$tmp"
+"$python_bin" "$runtime" resume --root "$tmp" --json
 "$python_bin" "$runtime" next --root "$tmp"
 "$python_bin" "$runtime" transition --root "$tmp" --phase 1-discovery --status discovery-ready --workflow discover-intent
 "$python_bin" "$runtime" input add --root "$tmp" --id smoke-audience --prompt "Who is the target audience?" --reason "Discovery needs an audience before specification."

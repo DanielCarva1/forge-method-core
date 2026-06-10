@@ -5,6 +5,7 @@
 - add non-mutating `preflight` to resolve runtime repo vs method project vs project parent folder before acting
 - include selected context files and recommended helper commands in preflight JSON/text output
 - document preflight as the first agent step before broad context loading
+- add structured `resume` guidance for required input, review findings, stories, ready gate, and operation routes
 
 ## 1.15.0
 

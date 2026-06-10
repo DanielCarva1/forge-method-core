@@ -48,6 +48,7 @@ start
 status
 snapshot
 next
+resume
 transition
 project list/create
 story add/list/export/import/start/review/done/block
@@ -121,6 +122,8 @@ A context load plan must include:
 - deferred files when the budget is full
 
 A preflight must resolve project identity before the agent reads broad context. It must identify existing project state, runtime repo state, known child projects, required user choice, selected context files, and the next helper commands without writing state.
+
+Resume guidance must choose the next safe action from project files: required input, audit repair, review findings, active story, next story, ready gate, operation, or current workflow continuation.
 
 ## Release Standard
 

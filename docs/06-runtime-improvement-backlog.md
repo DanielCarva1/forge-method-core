@@ -43,6 +43,7 @@
 - context load plan generation
 - recovery brief generation
 - handoff generation
+- structured resume guidance
 - state-routed agent profile recommendations
 - open review findings in recovery context
 - checkpoint generation
@@ -111,6 +112,5 @@
 ## Candidate V1.16 Batch
 
 - make preflight the default skill entrypoint before broad context loading
-- add resume guidance that chooses between required input, review findings, active story, next story, and ready gate
 - keep context recovery outputs compact enough for agent handoff
-- add smoke coverage for preflight in installed skill path
+- add smoke coverage for resume guidance in installed skill path
