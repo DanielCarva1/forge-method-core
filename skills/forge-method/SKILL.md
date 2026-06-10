@@ -30,13 +30,15 @@ Look for:
 ```
 
 If missing, offer to initialize the workspace.
-Before offering, run the start helper so project choices come from disk rather than chat memory.
+Before offering, run the preflight helper so project choices and context files come from disk rather than chat memory.
 
 ## Runtime Helper
 
 When useful, run the helper script:
 
 ```powershell
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" preflight --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" preflight --root . --json
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" start --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project list --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project create --root . --name <name> --module <module-id>

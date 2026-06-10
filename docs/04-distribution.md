@@ -50,6 +50,7 @@ Acceptance:
 - workflow references are installed.
 - runtime script is installed.
 - helper script responds to `--help`.
+- helper script resolves preflight with `preflight --root <workspace>`.
 - helper script resolves startup with `start --root <workspace>`.
 
 ### Level 2: Codex Plugin
@@ -113,11 +114,13 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1
 ```powershell
 .\install.ps1
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py --help
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py preflight --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py start --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py example list
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py example create --root <example-folder> --module software-builder
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py gate --root <example-folder> --require-evals
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py init --project smoke-test --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py preflight --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py start --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py project create --root <parent-folder> --name generated-project --module software-builder
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py project create --root <parent-folder> --name generated-project --module auto --objective "build a web app"

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- add non-mutating `preflight` to resolve runtime repo vs method project vs project parent folder before acting
+- include selected context files and recommended helper commands in preflight JSON/text output
+- document preflight as the first agent step before broad context loading
+
 ## 1.15.0
 
 Forge Method Core v1.15 adds release batching and operational planning:

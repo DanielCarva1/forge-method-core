@@ -7,6 +7,7 @@
 - runtime repo detection through `.codex-plugin/plugin.json`
 - method project detection through `.forge-method/state.yaml`
 - start route with known project listing
+- non-mutating preflight route and context check
 - normal project scaffolding from packaged modules
 - runtime-vs-project doctor command
 - status command that does not infer from chat history
@@ -101,15 +102,15 @@
 ### Release Quality
 
 - release batch policy
+- release planning command
+- release readiness check
 - signed releases
 - versioned changelog
 - plugin marketplace packaging
 
-## Candidate V1.15 Batch
+## Candidate V1.16 Batch
 
-- release planning command that separates version choice from publishing
-- release readiness check that stays non-publishing
-- compact operator-facing status summary for existing projects
-- project-local backlog import/export for larger story groups
-- clearer module selection guidance during project creation
-- objective-based module recommendation and auto selection
+- make preflight the default skill entrypoint before broad context loading
+- add resume guidance that chooses between required input, review findings, active story, next story, and ready gate
+- keep context recovery outputs compact enough for agent handoff
+- add smoke coverage for preflight in installed skill path

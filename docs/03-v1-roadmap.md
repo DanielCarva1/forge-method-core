@@ -43,6 +43,7 @@ Delivered surfaces:
 
 ```powershell
 init
+preflight
 start
 status
 snapshot
@@ -118,6 +119,8 @@ A context load plan must include:
 - reason for each file
 - estimated character budget
 - deferred files when the budget is full
+
+A preflight must resolve project identity before the agent reads broad context. It must identify existing project state, runtime repo state, known child projects, required user choice, selected context files, and the next helper commands without writing state.
 
 ## Release Standard
 

@@ -234,6 +234,14 @@ def is_runtime_repo(root: Path) -> bool:
     return payload.get("name") == RUNTIME_REPO_NAME
 
 
+def find_runtime_repo_root(start: Path) -> Path | None:
+    current = start.resolve()
+    for candidate in [current, *current.parents]:
+        if is_runtime_repo(candidate):
+            return candidate
+    return None
+
+
 def ensure_dirs(root: Path) -> Path:
     fm = method_dir(root)
     for name in [
@@ -281,7 +289,7 @@ def load_state_or_none(root: Path) -> tuple[Path | None, dict[str, str]]:
 def load_state_or_fail(root: Path) -> tuple[Path, dict[str, str]]:
     state_root, state = load_state_or_none(root)
     if state_root is None:
-        if is_runtime_repo(root):
+        if find_runtime_repo_root(root):
             raise SystemExit("Runtime repo detected. No project state found here.")
         raise SystemExit("No .forge-method/state.yaml found. Run init first.")
     return state_root, state
@@ -328,6 +336,17 @@ def display_path(path: Path, *, base: Path) -> str:
 def command_hint_value(value: str | Path) -> str:
     text = str(value).replace('"', '\\"')
     return f'"{text}"'
+
+
+def command_hint_part(value: str | Path | int) -> str:
+    if isinstance(value, Path):
+        return command_hint_value(value)
+    text = str(value)
+    if not text:
+        return command_hint_value(text)
+    if any(char.isspace() for char in text) or any(char in text for char in '<>"'):
+        return command_hint_value(text)
+    return text
 
 
 def print_state_summary(state: dict[str, str]) -> None:
@@ -421,6 +440,190 @@ def print_status_brief(root: Path, state: dict[str, str]) -> None:
     context = brief["context"]
     if context.get("load_plan"):
         print(f"Context load plan: {context.get('load_plan')}")
+
+
+def project_route_summary(project_root: Path, *, base: Path) -> dict[str, str]:
+    state = read_flat_yaml(state_path(project_root))
+    return {
+        "root": str(project_root),
+        "path": display_path(project_root, base=base),
+        "project": state.get("project", project_root.name),
+        "module": state.get("module", ""),
+        "phase": state.get("phase", ""),
+        "status": state.get("status", ""),
+        "workflow": state.get("active_workflow", ""),
+        "next_action": state.get("next_action", ""),
+    }
+
+
+def preflight_command(name: str, *parts: str | Path | int) -> dict[str, str]:
+    command_parts: list[str] = [
+        command_hint_value(sys.executable),
+        command_hint_value(Path(__file__).resolve()),
+    ]
+    command_parts.extend(command_hint_part(part) for part in parts)
+    return {"name": name, "command": " ".join(command_parts)}
+
+
+def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: str = "") -> dict[str, Any]:
+    state_root, state = load_state_or_none(root)
+    runtime_root = find_runtime_repo_root(root)
+    runtime_repo = runtime_root is not None
+    if state_root:
+        status = build_status_brief(state_root, state)
+        context_plan = build_context_load_plan(state_root, state, max_chars=max_chars)
+        commands = [
+            preflight_command("status", "status", "--root", state_root, "--brief"),
+            preflight_command("context-plan", "context", "plan", "--root", state_root, "--json", "--max-chars", max_chars),
+            preflight_command("next", "next", "--root", state_root),
+        ]
+        route = status["route"].get("recommendation", "")
+        next_story = status["stories"].get("next") or {}
+        if route == "wait_for_human_input":
+            commands.append(preflight_command("human-input", "input", "list", "--root", state_root))
+        elif route == "resolve_review_findings":
+            commands.append(preflight_command("review-findings", "review", "list", "--root", state_root))
+        elif route == "start_next_story" and next_story.get("id"):
+            commands.append(preflight_command("start-story", "story", "start", "--root", state_root, "--id", next_story["id"]))
+        return {
+            "runtime": RUNTIME_NAME,
+            "runtime_version": RUNTIME_VERSION,
+            "generated_at": utc_now(),
+            "workspace": str(root),
+            "route": "existing-method-project",
+            "runtime_repo": runtime_repo,
+            "runtime_root": str(runtime_root) if runtime_root else "",
+            "project_root": str(state_root),
+            "project_path": display_path(state_root, base=root),
+            "decision_required": bool(status.get("open_required_input")),
+            "question": "",
+            "status": status,
+            "context_load_plan": context_plan,
+            "commands": commands,
+            "rules": [
+                "treat project_root as the authoritative working directory",
+                "load context_load_plan.selected before reading broader docs",
+                "do not infer phase or project identity from chat history",
+                "write evidence, checkpoint, or state before marking progress done",
+            ],
+        }
+
+    projects = [] if runtime_repo else [
+        project_route_summary(project, base=root)
+        for project in discover_project_roots(root, max_depth=scan_depth)
+    ]
+    if runtime_repo:
+        route = "runtime-repo"
+        question = "Which project folder should be opened or created outside the runtime repo?"
+    elif projects:
+        route = "workspace-with-projects"
+        question = "Which existing project should be opened, or should a new project be created?"
+    else:
+        route = "empty-workspace"
+        question = "Create a new method project in this workspace?"
+
+    module_choices = project_creation_module_choices(None, objective, limit=5)
+    create_root: str | Path = "<parent-folder-outside-runtime-repo>" if runtime_repo else root
+    list_root: str | Path = create_root if runtime_repo else root
+    commands = [
+        preflight_command("project-list", "project", "list", "--root", list_root, "--scan-depth", scan_depth),
+        preflight_command(
+            "project-create",
+            "project",
+            "create",
+            "--root",
+            create_root,
+            "--name",
+            "<name>",
+            "--module",
+            "auto",
+            "--objective",
+            objective or "<objective>",
+        ),
+    ]
+    return {
+        "runtime": RUNTIME_NAME,
+        "runtime_version": RUNTIME_VERSION,
+        "generated_at": utc_now(),
+        "workspace": str(root),
+        "route": route,
+        "runtime_repo": runtime_repo,
+        "runtime_root": str(runtime_root) if runtime_root else "",
+        "project_state": "missing",
+        "decision_required": True,
+        "question": question,
+        "known_projects": projects,
+        "module_choices": module_choices,
+        "commands": commands,
+        "rules": [
+            "do not initialize project state in the runtime repo unless explicitly intentional",
+            "ask the user to choose an existing project or name a new one",
+            "use module auto-selection only after the objective is known",
+        ],
+    }
+
+
+def print_preflight(payload: dict[str, Any]) -> None:
+    print("Forge Method Preflight")
+    print(f"Workspace: {payload['workspace']}")
+    print(f"Route: {payload['route']}")
+    if payload.get("route") == "existing-method-project":
+        status = payload["status"]
+        route = status["route"]
+        story = status["stories"].get("next") or {}
+        print(f"Project root: {payload['project_root']}")
+        print(f"Project: {status.get('project', '')}")
+        print(f"State: {status.get('phase', '')} / {status.get('status', '')} / {status.get('workflow', '')}")
+        print(f"Recommendation: {route.get('recommendation', '')}")
+        print(f"Next action: {route.get('next_action', '')}")
+        if story:
+            print(f"Next story: {story.get('id')} [{story.get('status')}] {story.get('title')}")
+        else:
+            print("Next story: <none>")
+        if status.get("open_required_input"):
+            item = status["open_required_input"]
+            print(f"Open required input: {item.get('id')} - {item.get('prompt')}")
+        else:
+            print("Open required input: <none>")
+        print(f"Open review findings: {len(status.get('open_review_findings', []))}")
+        audit = status["audit"]
+        print(f"Audit: {'passed' if audit['passed'] else 'failed'}")
+        for error in audit["errors"][:3]:
+            print(f"- {error}")
+        plan = payload["context_load_plan"]
+        print(
+            "Context budget: "
+            f"{plan.get('estimated_selected_chars', 0)}/{plan.get('budget_chars', 0)} chars selected"
+        )
+        print("Read first:")
+        for item in plan.get("selected", [])[:8]:
+            print(f"- {item.get('path')} [{item.get('section')}]: {item.get('reason')}")
+        if not plan.get("selected"):
+            print("- <none>")
+    else:
+        print(f"Runtime repo: {'yes' if payload.get('runtime_repo') else 'no'}")
+        if payload.get("runtime_root"):
+            print(f"Runtime root: {payload.get('runtime_root')}")
+        print(f"Project state: {payload.get('project_state', 'missing')}")
+        projects = payload.get("known_projects", [])
+        if projects:
+            print("Known projects:")
+            for index, project in enumerate(projects, start=1):
+                print(
+                    f"{index}. {project.get('project')}\t"
+                    f"{project.get('phase')}\t"
+                    f"{project.get('status')}\t"
+                    f"{project.get('path')}"
+                )
+        else:
+            print("Known projects: none")
+        print(f"Question: {payload.get('question', '')}")
+        print("Module choices:")
+        for item in payload.get("module_choices", []):
+            print(f"- {item.get('id')}: {item.get('purpose')}")
+    print("Commands:")
+    for item in payload.get("commands", []):
+        print(f"- {item.get('name')}: {item.get('command')}")
 
 
 def write_state(root: Path, state: dict[str, Any]) -> None:
@@ -839,6 +1042,27 @@ def recommended_modules(root: Path | None, objective: str, *, limit: int = 5) ->
         for item in scored:
             item["reason"] = "no strong objective match; choose by purpose"
     return scored[:limit]
+
+
+def project_creation_module_choices(root: Path | None, objective: str, *, limit: int = 5) -> list[dict[str, Any]]:
+    choices = recommended_modules(root, objective, limit=20)
+    if objective:
+        choices = [
+            item for item in choices
+            if item.get("id") != "core-runtime" or int(item.get("score", 0)) > 0
+        ]
+    else:
+        preferred_order = {
+            "software-builder": 0,
+            "creative-studio": 1,
+            "game-studio": 2,
+            "runtime-builder": 3,
+            "test-architect": 4,
+            "launch-ops": 5,
+        }
+        choices = [item for item in choices if item.get("id") in preferred_order]
+        choices.sort(key=lambda item: (preferred_order.get(str(item.get("id", "")), 99), str(item.get("id", ""))))
+    return choices[:limit]
 
 
 def agent_profile_paths(root: Path | None = None) -> list[Path]:
@@ -1411,9 +1635,21 @@ def cmd_start(args: argparse.Namespace) -> int:
             print(f"- {error}")
         return 0
 
-    runtime_repo = is_runtime_repo(root)
+    runtime_root = find_runtime_repo_root(root)
+    runtime_repo = runtime_root is not None
     print(f"Runtime repo: {'yes' if runtime_repo else 'no'}")
+    if runtime_root:
+        print(f"Runtime root: {runtime_root}")
     print("Project state: missing")
+    if runtime_repo:
+        print("Known projects: not scanned inside runtime repo")
+        print("Question: Which project folder should be opened or created outside the runtime repo?")
+        print("Module choices:")
+        for item in project_creation_module_choices(None, "", limit=5):
+            print(f"- {item.get('id')}: {item.get('purpose')}")
+        print("Next: do not initialize project state in the runtime repo unless explicitly intentional.")
+        return 0
+
     projects = discover_project_roots(root, max_depth=args.scan_depth)
     if projects:
         print("Known projects:")
@@ -1426,24 +1662,15 @@ def cmd_start(args: argparse.Namespace) -> int:
             print(f"{index}. {label}\t{phase}\t{status}\t{rel}")
         print("Question: Which known project should be opened, or should a new project be created?")
         print("Module choices for a new project:")
-        for item in recommended_modules(None, "", limit=5):
+        for item in project_creation_module_choices(None, "", limit=5):
             print(f"- {item.get('id')}: {item.get('purpose')}")
         print("Next: wait for the user's project choice, then run status in that project root or create a scaffolded project.")
-        return 0
-
-    if runtime_repo:
-        print("Known projects: none")
-        print("Question: Which project folder should be opened or created outside the runtime repo?")
-        print("Module choices:")
-        for item in recommended_modules(None, "", limit=5):
-            print(f"- {item.get('id')}: {item.get('purpose')}")
-        print("Next: do not initialize project state in the runtime repo unless explicitly intentional.")
         return 0
 
     print("Known projects: none")
     print("Question: Create a new method project in this workspace?")
     print("Module choices:")
-    for item in recommended_modules(None, "", limit=5):
+    for item in project_creation_module_choices(None, "", limit=5):
         print(f"- {item.get('id')}: {item.get('purpose')}")
     print(
         "Create command: "
@@ -1455,12 +1682,28 @@ def cmd_start(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_preflight(args: argparse.Namespace) -> int:
+    root = resolve_root(args.root)
+    payload = build_preflight(
+        root,
+        scan_depth=args.scan_depth,
+        max_chars=args.max_chars,
+        objective=args.objective or "",
+    )
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2))
+    else:
+        print_preflight(payload)
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     root = resolve_root(args.root)
     state_root, state = load_state_or_none(root)
     if state_root is None:
-        if is_runtime_repo(root):
-            print(f"Runtime repo: {root}")
+        runtime_root = find_runtime_repo_root(root)
+        if runtime_root:
+            print(f"Runtime repo: {runtime_root}")
             print("Project state: not initialized here")
             print("Next: open a project folder or initialize a child project outside the runtime root")
             return 0
@@ -3740,6 +3983,14 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--root", default=".")
     start.add_argument("--scan-depth", type=int, default=2)
     start.set_defaults(func=cmd_start)
+
+    preflight = sub.add_parser("preflight", help="resolve route, project identity, and context to load before acting")
+    preflight.add_argument("--root", default=".")
+    preflight.add_argument("--scan-depth", type=int, default=2)
+    preflight.add_argument("--max-chars", type=int, default=12000)
+    preflight.add_argument("--objective")
+    preflight.add_argument("--json", action="store_true")
+    preflight.set_defaults(func=cmd_preflight)
 
     init = sub.add_parser("init", help="initialize .forge-method state")
     init.add_argument("--project", required=True)

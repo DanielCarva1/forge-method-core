@@ -66,10 +66,13 @@ Run $pythonExe $installedRuntime example create --root $exampleTmp --module soft
 Run $pythonExe $installedRuntime gate --root $exampleTmp --require-evals
 Run $pythonExe $installedRuntime project create --root $projectParentTmp --name "Installed Generated" --module software-builder --objective "Verify installed project scaffolding."
 Run $pythonExe $installedRuntime project list --root $projectParentTmp
+Run $pythonExe $installedRuntime preflight --root $projectParentTmp
 Run $pythonExe $installedRuntime gate --root $generatedProjectTmp --require-evals
 Run $pythonExe $installedRuntime workflow validate
+Run $pythonExe $installedRuntime preflight --root $tmp
 Run $pythonExe $installedRuntime start --root $tmp
 Run $pythonExe $installedRuntime init --project install-smoke --root $tmp
+Run $pythonExe $installedRuntime preflight --root $tmp
 Run $pythonExe $installedRuntime start --root $tmp
 Run $pythonExe $installedRuntime snapshot --root $tmp
 Run $pythonExe $installedRuntime agent recommend --root $tmp

@@ -68,6 +68,7 @@ or by asking Codex to start Forge Method in a workspace.
 The skill can ask Codex to run:
 
 ```powershell
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" preflight --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" start --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project create --root . --name my-project --module software-builder
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project list --root .
@@ -101,6 +102,8 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval 
 ```
 
 The script creates `.forge-method/` in the target project and keeps state out of the chat transcript.
+
+Use `preflight --root . --json` before broad context loading. It resolves whether the folder is an existing method project, a runtime repo, a parent folder with known projects, or an empty workspace, then returns the first files and commands an agent should use.
 
 ## Smoke Tests
 

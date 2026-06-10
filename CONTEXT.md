@@ -16,6 +16,10 @@ A state-machine system that turns intent into artifacts, implementation, validat
 
 The deterministic entry route that resolves whether the current workspace is an existing method project, the runtime repo, or a folder that can create or contain method projects.
 
+## Preflight
+
+A non-mutating route and context check. It identifies project identity, known project choices, required human choice, first files to read, and next helper commands before the agent loads broad context or starts work.
+
 ## Runtime Snapshot
 
 A machine-readable JSON summary of current project state, sprint counts, next story, route recommendation, quality findings, context paths, and recent artifacts.

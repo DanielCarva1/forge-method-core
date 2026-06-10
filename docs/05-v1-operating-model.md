@@ -67,6 +67,8 @@ Before declaring a project ready, the agent should run the quality gate. The gat
 Starting the method is a routing operation, not implementation work. The agent must resolve whether the current folder already has project state, whether it is the runtime repo, and which known project roots exist before asking the user to choose or create a project.
 When the user chooses a new project, the agent should use project creation so state, kickoff story, brief, eval, checkpoint, and context load plan are created together.
 
+The agent should run preflight before broad reading. Preflight is read-only: it may compute the selected context files and next commands, but it must not write state, checkpoint, ledger, or context artifacts.
+
 ## Human Input Rule
 
 Human input must be requested as durable state when it blocks the project route, discovery, specification, or a risky decision. Required open input sets `human_input_required`. The agent may continue autonomous work only after the input is answered, deferred, or marked non-required.
@@ -92,7 +94,7 @@ The agent should not load all project documentation. It should build a compact c
 
 Context packs must stay bounded. If a pack exceeds the configured character budget, it is truncated and the next run should regenerate a more selective artifact or handoff.
 
-The agent should prefer the machine-readable context load plan before reading files. The load plan ranks selected files by current state and defers lower-priority files when the budget is full.
+The agent should prefer the machine-readable preflight and context load plan before reading files. The load plan ranks selected files by current state and defers lower-priority files when the budget is full.
 
 ## Checkpoint Rule
 

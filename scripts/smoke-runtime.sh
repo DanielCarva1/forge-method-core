@@ -15,6 +15,7 @@ mkdir -p "$tmp"
 mkdir -p "$project_parent_tmp"
 
 "$python_bin" "$runtime" init --project smoke-test --root "$tmp"
+"$python_bin" "$runtime" preflight --root "$tmp"
 "$python_bin" "$runtime" start --root "$tmp"
 "$python_bin" "$runtime" snapshot --root "$tmp"
 "$python_bin" "$runtime" module list --root "$tmp"
@@ -26,6 +27,7 @@ mkdir -p "$project_parent_tmp"
 "$python_bin" "$runtime" gate --root "$example_tmp" --require-evals
 "$python_bin" "$runtime" project create --root "$project_parent_tmp" --name "Generated Smoke" --module software-builder --objective "Verify project scaffolding."
 "$python_bin" "$runtime" project list --root "$project_parent_tmp"
+"$python_bin" "$runtime" preflight --root "$project_parent_tmp"
 "$python_bin" "$runtime" gate --root "$project_parent_tmp/generated-smoke" --require-evals
 "$python_bin" "$runtime" workflow validate
 "$python_bin" "$runtime" workflow create --root "$tmp" --id smoke-flow --title "Smoke Flow" --trigger "state.status == smoke" --input "smoke input" --step "perform smoke step" --output "smoke output" --done "smoke output exists" --blocked "smoke input missing" --handoff "preserve smoke result" --eval-query "run smoke flow"

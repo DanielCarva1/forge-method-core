@@ -73,6 +73,81 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Question: Which known project should be opened", output)
             self.assertFalse((parent / ".forge-method").exists())
 
+    def test_preflight_resolves_project_identity_and_context_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            child = root / "src" / "feature"
+            child.mkdir(parents=True)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+
+            text = run_cmd("preflight", "--root", str(child)).stdout
+            payload = json.loads(run_cmd("preflight", "--root", str(child), "--json").stdout)
+            selected_paths = [item["path"] for item in payload["context_load_plan"]["selected"]]
+
+            self.assertIn("Forge Method Preflight", text)
+            self.assertIn("Route: existing-method-project", text)
+            self.assertIn("Read first:", text)
+            self.assertEqual(payload["route"], "existing-method-project")
+            self.assertEqual(payload["project_root"], str(root.resolve()))
+            self.assertEqual(payload["status"]["project"], "Example Project")
+            self.assertIn(".forge-method/state.yaml", selected_paths)
+            self.assertIn(".forge-method/sprint.yaml", selected_paths)
+            self.assertFalse((root / ".forge-method" / "context" / "load-plan.json").exists())
+
+    def test_preflight_lists_known_projects_and_requires_choice(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            parent = Path(raw)
+            project = parent / "client-project"
+            project.mkdir()
+            run_cmd("init", "--project", "Client Project", "--root", str(project))
+
+            text = run_cmd("preflight", "--root", str(parent), "--objective", "build a web product").stdout
+            payload = json.loads(
+                run_cmd("preflight", "--root", str(parent), "--objective", "build a web product", "--json").stdout
+            )
+
+            self.assertIn("Route: workspace-with-projects", text)
+            self.assertIn("Question: Which existing project should be opened", text)
+            self.assertEqual(payload["route"], "workspace-with-projects")
+            self.assertTrue(payload["decision_required"])
+            self.assertEqual(payload["known_projects"][0]["project"], "Client Project")
+            self.assertEqual(payload["known_projects"][0]["path"], "client-project")
+            self.assertEqual(payload["module_choices"][0]["id"], "software-builder")
+            self.assertFalse((parent / ".forge-method").exists())
+
+    def test_preflight_detects_runtime_repo_without_project_state(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            manifest_dir = root / ".codex-plugin"
+            manifest_dir.mkdir()
+            (manifest_dir / "plugin.json").write_text(json.dumps({"name": "forge-method-core"}), encoding="utf-8")
+            nested = root / "docs"
+            nested.mkdir()
+            example = root / "examples" / "sample"
+            example.mkdir(parents=True)
+            run_cmd("init", "--project", "Packaged Example", "--root", str(example))
+
+            text = run_cmd("preflight", "--root", str(root)).stdout
+            payload = json.loads(run_cmd("preflight", "--root", str(root), "--json").stdout)
+            nested_payload = json.loads(run_cmd("preflight", "--root", str(nested), "--json").stdout)
+            start = run_cmd("start", "--root", str(root)).stdout
+            status = run_cmd("status", "--root", str(nested)).stdout
+
+            self.assertIn("Route: runtime-repo", text)
+            self.assertIn("outside the runtime repo", text)
+            self.assertEqual(payload["route"], "runtime-repo")
+            self.assertTrue(payload["runtime_repo"])
+            self.assertEqual(payload["runtime_root"], str(root.resolve()))
+            self.assertEqual(payload["known_projects"], [])
+            self.assertEqual(payload["module_choices"][0]["id"], "software-builder")
+            self.assertTrue(payload["decision_required"])
+            self.assertIn("<parent-folder-outside-runtime-repo>", payload["commands"][0]["command"])
+            self.assertEqual(nested_payload["route"], "runtime-repo")
+            self.assertEqual(nested_payload["runtime_root"], str(root.resolve()))
+            self.assertIn("Known projects: not scanned inside runtime repo", start)
+            self.assertIn(f"Runtime repo: {root.resolve()}", status)
+            self.assertFalse((root / ".forge-method").exists())
+
     def test_invalid_phase_transition_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
