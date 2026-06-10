@@ -1,11 +1,14 @@
 # Forge Method state
 runtime: "forge-method"
-runtime_version: "0.1.0"
+runtime_version: "1.0.0"
 project: ""
-mode: "software-builder"
+project_id: ""
+mode: "creation-runtime"
+module: "software-builder"
 phase: "0-route"
 status: "initialized"
 active_workflow: "start-runtime"
+active_story: ""
 human_input_required: "false"
-next_action: "confirm project intent and move to discovery"
-
+readiness: "not_ready"
+next_action: "resolve project route and confirm whether this is a new or existing project"

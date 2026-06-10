@@ -1,8 +1,8 @@
 # Forge Method Core
 
-Forge Method is a Codex-native framework for "the thing that creates things": a state-machine runtime for product, software, creative, and game workflows.
+Forge Method is a Codex-native creation runtime: a state-machine system for turning intent into artifacts, implementation, validation, release, and future evolution.
 
-It is inspired by BMAD, but designed for Codex primitives:
+It is built around Codex primitives:
 
 - skills for compact workflow loading
 - plugins for distribution
@@ -11,7 +11,7 @@ It is inspired by BMAD, but designed for Codex primitives:
 - subagents for focused review, QA, research, architecture, and creative roles
 - evidence logs for implementation and validation
 
-This repository is intentionally a working prototype, not just a document.
+This repository is the core runtime and distribution package.
 
 ## Current Shape
 
@@ -58,6 +58,7 @@ The skill can ask Codex to run:
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init --project my-project
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
 ```
 
 The script creates `.forge-method/` in the target project and keeps state out of the chat transcript.
@@ -77,8 +78,8 @@ The complete proposal is in:
 
 - `docs/01-product-proposal.md`
 - `docs/02-runtime-architecture.md`
-- `docs/03-mvp-roadmap.md`
-- `docs/05-bmad-family-comparison.md`
+- `docs/03-v1-roadmap.md`
+- `docs/05-v1-operating-model.md`
 - `docs/06-runtime-improvement-backlog.md`
 
 ## Example

@@ -1,0 +1,3 @@
+{"event": "project.initialized", "payload": {"project": "hello-method", "project_id": "hello-method"}, "ts": "2026-06-10T04:48:58+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "1-discovery", "status": "discovery-ready"}, "ts": "2026-06-10T04:48:59+00:00"}
+{"event": "story.added", "payload": {"id": "hello-story", "status": "ready"}, "ts": "2026-06-10T04:48:59+00:00"}

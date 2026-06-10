@@ -81,15 +81,19 @@ my-project/
   AGENTS.md
   .forge-method/
     state.yaml
+    projects.yaml
     sprint.yaml
+    ledger.ndjson
+    stories/
+    artifacts/
+    context/
     evidence/
     handoffs/
-    ephemeral/
 ```
 
 ## Current Verified Commands
 
-From this prototype:
+From this repository:
 
 ```powershell
 .\install.ps1
@@ -97,6 +101,7 @@ python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py --help
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py init --project smoke-test --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py status --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py next --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py audit --root <temp-folder>
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1
 ```
@@ -107,6 +112,4 @@ powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1
 - repository smoke test in CI
 - module packs
 - marketplace-backed plugin flow
-- better context pack builder
-- sprint/story parser
 - GitHub PR workflow

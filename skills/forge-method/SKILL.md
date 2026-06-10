@@ -1,6 +1,6 @@
 ---
 name: forge-method
-description: Start or resume a Codex-native state-machine runtime for product, software, creative, game, and builder workflows. Use when the user asks to start Forge Method, create a project using the method, resume a method project, inspect phase/status, run a story loop, or design workflows in a BMAD-like but Codex-native framework.
+description: Start or resume a Codex-native state-machine runtime for product, software, creative, game, and builder workflows. Use when the user asks to start Forge Method, create a project using the method, resume a method project, inspect phase/status, run a story loop, or design a new workflow/module for agentic creation.
 ---
 
 # Forge Method
@@ -38,6 +38,9 @@ When useful, run the helper script:
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init --project <name>
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
 ```
 
 When using the skill from a plugin checkout instead of user install, run the script from this skill directory.
@@ -57,10 +60,16 @@ When using the skill from a plugin checkout instead of user install, run the scr
 ## Workflow Selection
 
 - Start/resume project: read `references/workflow-start.md`.
+- Discovery: read `references/workflow-discover-intent.md`.
+- Specification: read `references/workflow-write-spec.md`.
+- Planning: read `references/workflow-plan-sprint.md`.
 - Build a story: read `references/workflow-build-story.md`.
 - Creative/domain ideation: read `references/workflow-creative-session.md`.
 - Game project path: read `references/workflow-game-project.md`.
 - Create method modules/skills/workflows: read `references/workflow-runtime-builder.md`.
+- Ready/release: read `references/workflow-ready-release.md`.
+- Evolve an existing project: read `references/workflow-evolve-project.md`.
+- Recover after context reset: read `references/workflow-context-recovery.md`.
 - If no workflow matches, report current state and ask one concise routing question.
 
 ## Completion Standard

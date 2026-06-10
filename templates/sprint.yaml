@@ -1,4 +1,10 @@
 # Forge Method sprint state
 active_story: ""
-stories: []
-
+story_count: "0"
+planned_count: "0"
+ready_count: "0"
+in_progress_count: "0"
+review_count: "0"
+done_count: "0"
+blocked_count: "0"
+deferred_count: "0"

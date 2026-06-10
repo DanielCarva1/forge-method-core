@@ -1,0 +1,10 @@
+# Forge Method story
+updated_at: "2026-06-10T04:48:59+00:00"
+id: "hello-story"
+title: "Confirm durable project state"
+status: "ready"
+phase: "1-discovery"
+acceptance_criteria: "status command reconstructs state from files"
+evidence: ""
+checks: ""
+blocker: ""

@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python -m unittest discover -s tests
+      - name: Runtime smoke
+        shell: pwsh
+        run: .\scripts\smoke-runtime.ps1
+      - name: Install smoke
+        shell: pwsh
+        run: .\scripts\smoke-install.ps1

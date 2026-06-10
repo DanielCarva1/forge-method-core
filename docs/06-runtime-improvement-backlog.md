@@ -1,157 +1,88 @@
-# Runtime Improvement Backlog
+# Runtime Backlog
 
-This backlog translates the BMAD comparison into concrete work for Forge Method Core.
+## Delivered In V1
 
-## P0: Runtime Identity And Routing
+### Runtime Identity And Routing
 
-Problem:
+- runtime repo detection through `.codex-plugin/plugin.json`
+- method project detection through `.forge-method/state.yaml`
+- runtime-vs-project doctor command
+- status command that does not infer from chat history
 
-The agent must never confuse the runtime repo with a project created by the runtime.
+### Durable State Engine
 
-Deliverables:
-
-- detect runtime repo through `.codex-plugin/plugin.json`
-- detect method project through `.forge-method/state.yaml`
-- detect nested child project states
-- ask a single routing question when ambiguous
-- write route decision into state
-
-Acceptance:
-
-- Running the method inside the runtime repo reports `runtime-development`.
-- Running it inside a child project reports that project state.
-- Ambiguous state blocks with one clear question.
-
-## P0: Durable State Engine
-
-Problem:
-
-Conversation memory is not a reliable source of project truth.
-
-Deliverables:
-
-- stronger state schema
+- state schema version
 - project registry
-- sprint/story schema
-- evidence ledger
-- state transition validator
+- sprint summary
+- story files
+- evidence files
+- append-only runtime ledger
+- phase transition validation
+- story transition validation
 
-Acceptance:
+### Build And Verify Loop
 
-- invalid phase transitions are rejected
-- current status can be reconstructed after context reset
-- all done states have evidence
+- story add/list/start/review/done/block
+- required evidence for done stories
+- check recording
+- audit command
+- ready gate command
 
-## P0: Build-Story Loop
+### Context Continuity
 
-Problem:
+- context pack generation
+- handoff generation
+- active story tracking
+- recent evidence tracking
 
-Autonomous development needs a bounded loop.
+### Distribution
 
-Deliverables:
+- plugin manifest
+- user skill installer
+- install smoke test
+- runtime smoke test
+- unit tests
+- CI workflow
 
-- ready story selector
-- scoped context pack
-- implementation step
-- check runner
-- review pass
-- repair loop
-- evidence writer
+## V1 Hardening
 
-Acceptance:
+### Cross-Platform Installers
 
-- one ready story can be completed without reading unrelated docs
-- failed checks keep the story in progress or blocked
-- done requires acceptance criteria and evidence
+- macOS installer
+- Linux installer
+- shell smoke tests
 
-## P1: BMAD-Core-Compatible Planning Spine
+### Artifact System
 
-Deliverables:
+- artifact-to-story linking
+- artifact freshness checks
 
-- discovery workflow
-- specification workflow
-- planning workflow
-- sprint initialization workflow
-- ready/operate workflow
+### Module Packs
 
-Acceptance:
+- software builder module
+- creative studio module
+- game studio module
+- runtime builder module
+- test architect module
+- launch/operate module
 
-- a project can move from idea to ready without custom commands for each step
-- phase 5 exists and is reachable
+### Context Pack Builder
 
-## P1: Creative Studio Module
+- include artifact summaries
+- include failing command summaries
+- include touched file summaries
+- enforce max pack size
 
-Deliverables:
+### Workflow Generator
 
-- brainstorming workflow
-- design-thinking workflow
-- innovation workflow
-- storytelling workflow
-- presentation workflow
+- generate new workflow state machines
+- validate required sections
+- create trigger tests
+- create artifact tests
 
-Acceptance:
+### Release Quality
 
-- creative outputs are captured as artifacts
-- selected ideas can feed specification
-- unselected brainstorm docs can be marked ephemeral
-
-## P1: Game Studio Module
-
-Deliverables:
-
-- game prototype workflow
-- game brief workflow
-- GDD workflow
-- engine architecture workflow
-- vertical slice workflow
-
-Acceptance:
-
-- game work preserves game-specific artifacts before becoming generic implementation
-- engine choice becomes an adapter, not a fork of the method
-
-## P1: Runtime Builder Module
-
-Deliverables:
-
-- create skill workflow
-- create workflow state-machine workflow
-- create module workflow
-- create plugin package workflow
-- eval discovery workflow
-
-Acceptance:
-
-- a new module can be generated as a Codex skill pack
-- generated skill validates
-- generated plugin validates
-- trigger and artifact eval specs are created
-
-## P2: Context Pack Builder
-
-Deliverables:
-
-- artifact index
-- repo map
-- active story context pack
-- recent evidence summary
-- failing check summary
-
-Acceptance:
-
-- implementation workflows load selected context, not whole docs
-- context pack size is bounded and visible
-
-## P2: Distribution Hardening
-
-Deliverables:
-
-- Windows installer
-- macOS/Linux installer
-- plugin marketplace instructions
-- GitHub Actions smoke test
-- example project
-
-Acceptance:
-
-- a friend can clone, install, invoke the skill, initialize a project, and run status
+- signed releases
+- versioned changelog
+- plugin marketplace packaging
+- example projects per module

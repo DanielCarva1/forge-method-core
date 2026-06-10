@@ -1,0 +1,46 @@
+# Context Glossary
+
+## Forge Method Core
+
+The repository and distributable runtime package. It contains the plugin manifest, skill, workflow references, helper scripts, templates, tests, and documentation.
+
+## Forge Method
+
+The user-facing method invoked from Codex through the `$forge-method` skill. It is the operating experience, not the repository name.
+
+## Creation Runtime
+
+A state-machine system that turns intent into artifacts, implementation, validation, release, and future evolution.
+
+## Method Project
+
+A project initialized with `.forge-method/` state. A method project may be software, product, creative, game, automation, or runtime-module work.
+
+## Runtime Repo
+
+The Forge Method Core repository itself. The runtime repo must not be confused with a method project created by the runtime.
+
+## State Ledger
+
+The durable source of project truth: `state.yaml`, `projects.yaml`, `sprint.yaml`, story files, and `ledger.ndjson`.
+
+## Evidence Ledger
+
+Files under `.forge-method/evidence/` plus ledger events proving that work was completed, checks ran, or a release gate passed.
+
+## Context Pack
+
+A compact recovery artifact under `.forge-method/context/` containing only the current state, active story, next action, and recent evidence needed to resume work.
+
+## Story
+
+A bounded executable unit of work with acceptance criteria, status, optional checks, and required evidence before `done`.
+
+## Ready Gate
+
+The transition into `5-ready-operate`. It requires audit success, no active implementation/review stories, release evidence, and readiness state.
+
+## Agent-Facing Workflow
+
+A compact Markdown state machine loaded only when the current runtime state requires it.
+

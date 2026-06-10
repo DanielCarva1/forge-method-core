@@ -21,10 +21,12 @@ Every project using the runtime gets:
   state.yaml
   projects.yaml
   sprint.yaml
-  artifact-index.yaml
+  ledger.ndjson
+  stories/
+  artifacts/
+  context/
   evidence/
   handoffs/
-  ephemeral/
   workflows/
 ```
 
@@ -169,4 +171,3 @@ Validation evidence can include:
 - code review findings
 
 The runtime should not mark work done without evidence.
-
