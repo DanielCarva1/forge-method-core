@@ -163,6 +163,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue((root / artifact).exists())
             self.assertIn("Example spec", index.read_text(encoding="utf-8"))
             self.assertIn("Example spec", pack.read_text(encoding="utf-8"))
+            self.assertIn("Artifact summary.", pack.read_text(encoding="utf-8"))
 
     def test_packaged_modules_and_workflows_validate(self) -> None:
         modules = run_cmd("module", "list").stdout
@@ -172,7 +173,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("core-runtime", modules)
         self.assertIn("software-builder", modules)
         self.assertIn("Workflow validation passed.", validation)
-        self.assertEqual(version.strip(), "1.2.0")
+        self.assertEqual(version.strip(), "1.3.0")
 
     def test_workflow_module_and_eval_generation(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -282,6 +283,55 @@ class RuntimeTests(unittest.TestCase):
             pack = root / ".forge-method" / "context" / "current-pack.md"
 
             self.assertLessEqual(len(pack.read_text(encoding="utf-8")), 400)
+
+    def test_checkpoint_updates_memory_and_context_pack(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            artifact = run_cmd(
+                "artifact",
+                "add",
+                "--root",
+                str(root),
+                "--kind",
+                "plan",
+                "--title",
+                "Recovery plan",
+                "--summary",
+                "Use checkpoint memory before reading old chat.",
+            ).stdout.strip()
+            checkpoint = run_cmd(
+                "checkpoint",
+                "--root",
+                str(root),
+                "--title",
+                "After routing work",
+                "--summary",
+                "Start route is implemented and verified.",
+                "--decision",
+                "Use durable checkpoints instead of conversation replay.",
+                "--check",
+                "unit tests passed",
+                "--failed-check",
+                "none",
+                "--touched",
+                "skills/forge-method/scripts/forge_method_runtime.py",
+                "--artifact",
+                artifact,
+                "--next-action",
+                "continue with context memory hardening",
+            ).stdout.strip()
+            latest = root / ".forge-method" / "context" / "latest-checkpoint.md"
+            pack = root / ".forge-method" / "context" / "current-pack.md"
+            status = run_cmd("status", "--root", str(root)).stdout
+
+            self.assertTrue((root / checkpoint).exists())
+            self.assertTrue(latest.exists())
+            self.assertTrue(pack.exists())
+            self.assertIn("Use durable checkpoints", latest.read_text(encoding="utf-8"))
+            self.assertIn("Latest Checkpoint", pack.read_text(encoding="utf-8"))
+            self.assertIn("Use checkpoint memory before reading old chat.", pack.read_text(encoding="utf-8"))
+            self.assertIn("continue with context memory hardening", status)
 
 
 if __name__ == "__main__":

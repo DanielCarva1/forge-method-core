@@ -17,6 +17,7 @@ Project state is stored in `.forge-method/` using small files:
 - `sprint.yaml` for sprint summary
 - `stories/*.yaml` for executable work
 - `artifacts/*.md` for generated product, planning, and release materials
+- `checkpoints/*.md` for structured progress memory
 - `evals/*.yaml` for local workflow checks
 - `workflows/*.md` and `modules/*.yaml` for project-specific method extensions
 - `evidence/*.md` for proof of completion

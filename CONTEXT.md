@@ -36,6 +36,10 @@ Files under `.forge-method/evidence/` plus ledger events proving that work was c
 
 A compact recovery artifact under `.forge-method/context/` containing only the current state, active story, next action, and recent evidence needed to resume work.
 
+## Checkpoint
+
+A structured progress memory written during long-running work. It captures summary, decisions, checks, touched files, artifacts, and next action without requiring chat replay.
+
 ## Eval
 
 A small local check under `.forge-method/evals/` that proves a workflow target exists, validates structurally, and matches the expected route for a query.

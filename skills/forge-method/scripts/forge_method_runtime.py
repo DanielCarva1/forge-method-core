@@ -15,7 +15,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.2.0"
+RUNTIME_VERSION = "1.3.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -192,6 +192,7 @@ def ensure_dirs(root: Path) -> Path:
     fm = method_dir(root)
     for name in [
         "artifacts",
+        "checkpoints",
         "context",
         "evals",
         "evidence",
@@ -378,6 +379,15 @@ def artifact_index_path(root: Path) -> Path:
     return method_dir(root) / "artifacts" / "index.ndjson"
 
 
+def checkpoint_file(root: Path, title: str) -> Path:
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return method_dir(root) / "checkpoints" / f"{stamp}-{slugify(title)[:48]}.md"
+
+
+def latest_checkpoint_path(root: Path) -> Path:
+    return method_dir(root) / "context" / "latest-checkpoint.md"
+
+
 def artifact_file(root: Path, kind: str, title: str) -> Path:
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
     return method_dir(root) / "artifacts" / f"{stamp}-{slugify(kind)}-{slugify(title)[:48]}.md"
@@ -391,7 +401,7 @@ def append_artifact_index(root: Path, entry: dict[str, Any]) -> None:
         handle.write(json.dumps(payload, ensure_ascii=True, sort_keys=True) + "\n")
 
 
-def recent_artifacts(root: Path, limit: int = 5) -> list[dict[str, Any]]:
+def artifact_index_entries(root: Path) -> list[dict[str, Any]]:
     index_path = artifact_index_path(root)
     if not index_path.exists():
         return []
@@ -403,7 +413,21 @@ def recent_artifacts(root: Path, limit: int = 5) -> list[dict[str, Any]]:
             entries.append(json.loads(line))
         except json.JSONDecodeError:
             continue
-    return entries[-limit:]
+    return entries
+
+
+def recent_artifacts(root: Path, limit: int = 5) -> list[dict[str, Any]]:
+    return artifact_index_entries(root)[-limit:]
+
+
+def artifact_summaries(root: Path) -> dict[str, str]:
+    summaries: dict[str, str] = {}
+    for entry in artifact_index_entries(root):
+        path = str(entry.get("path", ""))
+        summary = str(entry.get("summary", ""))
+        if path and summary and entry.get("kind") != "story-link":
+            summaries[path] = summary
+    return summaries
 
 
 def module_manifest_paths(root: Path | None = None) -> list[Path]:
@@ -542,6 +566,59 @@ def write_artifact(root: Path, *, kind: str, title: str, summary: str, path: str
     rel = artifact_path.relative_to(root).as_posix()
     append_artifact_index(root, {"kind": kind, "title": title, "path": rel, "summary": summary.strip()})
     append_ledger(root, "artifact.added", {"kind": kind, "path": rel})
+    return rel
+
+
+def append_markdown_list(lines: list[str], title: str, values: list[str]) -> None:
+    lines.extend(["", f"## {title}", ""])
+    if values:
+        lines.extend(f"- {value}" for value in values)
+    else:
+        lines.append("- none")
+
+
+def write_checkpoint(
+    root: Path,
+    state: dict[str, str],
+    *,
+    title: str,
+    summary: str,
+    decisions: list[str],
+    checks: list[str],
+    failed_checks: list[str],
+    touched: list[str],
+    artifacts: list[str],
+    next_action: str,
+) -> str:
+    path = checkpoint_file(root, title)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        f"# {title}",
+        "",
+        f"- created_at: {utc_now()}",
+        f"- project: {state.get('project', '')}",
+        f"- phase: {state.get('phase', '')}",
+        f"- status: {state.get('status', '')}",
+        f"- workflow: {state.get('active_workflow', '')}",
+        f"- active_story: {state.get('active_story', '') or '<none>'}",
+        "",
+        "## Summary",
+        "",
+        summary.strip(),
+    ]
+    append_markdown_list(lines, "Decisions", decisions)
+    append_markdown_list(lines, "Checks", checks)
+    append_markdown_list(lines, "Failed Checks", failed_checks)
+    append_markdown_list(lines, "Touched Files", touched)
+    append_markdown_list(lines, "Artifacts", artifacts)
+    lines.extend(["", "## Next Action", "", next_action.strip()])
+    text = "\n".join(lines).rstrip() + "\n"
+    path.write_text(text, encoding="utf-8")
+    latest = latest_checkpoint_path(root)
+    latest.parent.mkdir(parents=True, exist_ok=True)
+    latest.write_text(text, encoding="utf-8")
+    rel = path.relative_to(root).as_posix()
+    append_ledger(root, "checkpoint.written", {"path": rel, "latest": latest.relative_to(root).as_posix()})
     return rel
 
 
@@ -1045,10 +1122,10 @@ def cmd_workflow_create(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_context_pack(args: argparse.Namespace) -> int:
-    root, state = load_state_or_fail(resolve_root(args.root))
+def build_context_pack_text(root: Path, state: dict[str, str]) -> str:
     story = load_story(root, state["active_story"]) if state.get("active_story") else None
     evidence_paths = sorted((method_dir(root) / "evidence").glob("*.md"))[-5:]
+    summaries = artifact_summaries(root)
     lines = [
         "# Forge Method Context Pack",
         "",
@@ -1061,6 +1138,15 @@ def cmd_context_pack(args: argparse.Namespace) -> int:
         f"- active_story: {state.get('active_story', '') or '<none>'}",
         f"- next_action: {state.get('next_action', '')}",
     ]
+    latest = latest_checkpoint_path(root)
+    lines.extend(["", "## Latest Checkpoint", ""])
+    if latest.exists():
+        checkpoint_text = latest.read_text(encoding="utf-8").strip()
+        if len(checkpoint_text) > 1800:
+            checkpoint_text = checkpoint_text[:1770].rstrip() + "\n[checkpoint truncated]"
+        lines.extend(checkpoint_text.splitlines())
+    else:
+        lines.append("- none")
     if story:
         lines.extend(
             [
@@ -1073,6 +1159,13 @@ def cmd_context_pack(args: argparse.Namespace) -> int:
                 f"- acceptance_criteria: {story.get('acceptance_criteria')}",
             ]
         )
+        linked_artifacts = split_list(story.get("artifacts"))
+        if linked_artifacts:
+            lines.extend(["", "### Linked Artifacts", ""])
+            for artifact in linked_artifacts:
+                summary = summaries.get(artifact, "")
+                suffix = f" - {summary}" if summary else ""
+                lines.append(f"- {artifact}{suffix}")
     lines.extend(["", "## Recent Evidence", ""])
     if evidence_paths:
         for path in evidence_paths:
@@ -1083,20 +1176,56 @@ def cmd_context_pack(args: argparse.Namespace) -> int:
     artifacts = recent_artifacts(root)
     if artifacts:
         for artifact in artifacts:
-            lines.append(f"- {artifact.get('kind')}: {artifact.get('path')} - {artifact.get('title')}")
+            summary = artifact.get("summary", "")
+            suffix = f" - {summary}" if summary else ""
+            lines.append(f"- {artifact.get('kind')}: {artifact.get('path')} - {artifact.get('title')}{suffix}")
     else:
         lines.append("- none")
-    out = Path(args.out) if args.out else method_dir(root) / "context" / "current-pack.md"
+    return "\n".join(lines) + "\n"
+
+
+def write_context_pack(root: Path, state: dict[str, str], *, out: Path, max_chars: int) -> Path:
     if not out.is_absolute():
         out = root / out
     out.parent.mkdir(parents=True, exist_ok=True)
-    text = "\n".join(lines) + "\n"
-    if args.max_chars and len(text) > args.max_chars:
+    text = build_context_pack_text(root, state)
+    if max_chars and len(text) > max_chars:
         footer = "\n\n[context-pack truncated to max_chars]\n"
-        text = text[: max(0, args.max_chars - len(footer))].rstrip() + footer
+        text = text[: max(0, max_chars - len(footer))].rstrip() + footer
     out.write_text(text, encoding="utf-8")
     append_ledger(root, "context_pack.written", {"path": out.relative_to(root).as_posix()})
+    return out
+
+
+def cmd_context_pack(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    out = Path(args.out) if args.out else method_dir(root) / "context" / "current-pack.md"
+    out = write_context_pack(root, state, out=out, max_chars=args.max_chars)
     print(out)
+    return 0
+
+
+def cmd_checkpoint(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    next_action = args.next_action or state.get("next_action", "")
+    rel = write_checkpoint(
+        root,
+        state,
+        title=args.title,
+        summary=args.summary,
+        decisions=args.decision or [],
+        checks=args.check or [],
+        failed_checks=args.failed_check or [],
+        touched=args.touched or [],
+        artifacts=args.artifact or [],
+        next_action=next_action,
+    )
+    if next_action:
+        state["next_action"] = next_action
+        write_state(root, state)
+    if not args.no_context_pack:
+        write_context_pack(root, state, out=method_dir(root) / "context" / "current-pack.md", max_chars=args.max_chars)
+    print(rel)
     return 0
 
 
@@ -1430,6 +1559,20 @@ def build_parser() -> argparse.ArgumentParser:
     eval_run = eval_sub.add_parser("run", help="run evals")
     eval_run.add_argument("--root", default=".")
     eval_run.set_defaults(func=cmd_eval_run)
+
+    checkpoint = sub.add_parser("checkpoint", help="write durable progress memory")
+    checkpoint.add_argument("--root", default=".")
+    checkpoint.add_argument("--title", default="Checkpoint")
+    checkpoint.add_argument("--summary", required=True)
+    checkpoint.add_argument("--decision", action="append")
+    checkpoint.add_argument("--check", action="append")
+    checkpoint.add_argument("--failed-check", action="append")
+    checkpoint.add_argument("--touched", action="append")
+    checkpoint.add_argument("--artifact", action="append")
+    checkpoint.add_argument("--next-action")
+    checkpoint.add_argument("--max-chars", type=int, default=8000)
+    checkpoint.add_argument("--no-context-pack", action="store_true")
+    checkpoint.set_defaults(func=cmd_checkpoint)
 
     context = sub.add_parser("context", help="context pack operations")
     context_sub = context.add_subparsers(dest="context_command", required=True)

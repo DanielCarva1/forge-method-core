@@ -24,9 +24,12 @@ Every project using the runtime gets:
   ledger.ndjson
   stories/
   artifacts/
+  checkpoints/
   context/
+  evals/
   evidence/
   handoffs/
+  modules/
   workflows/
 ```
 
@@ -126,7 +129,6 @@ Every workflow loaded by an agent should fit this structure:
 
 trigger:
 inputs:
-state:
 steps:
 outputs:
 done_when:
@@ -145,6 +147,7 @@ It should build a context pack from:
 - current state
 - active workflow
 - active story/spec
+- latest checkpoint
 - artifact index
 - relevant repo map
 - failing checks

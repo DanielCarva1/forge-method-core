@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.2.0`.
+Current runtime version: `1.3.0`.
 
 ## Current Shape
 
@@ -73,6 +73,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" versi
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" checkpoint --summary "What changed and what to do next"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow validate
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow create --root . --id custom-flow --title "Custom Flow"

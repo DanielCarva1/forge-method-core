@@ -18,6 +18,7 @@ intent -> discovery -> specification -> planning -> build/verify -> ready/operat
   stories/                one state file per story
   evidence/               proof that work happened and checks ran
   artifacts/              generated specs, briefs, plans, and release notes
+  checkpoints/            structured progress memory for long-running work
   context/                compact context packs for future sessions
   evals/                  local checks for workflow routing and structure
   handoffs/               continuation notes after large work blocks
@@ -65,12 +66,17 @@ The agent should not load all project documentation. It should build a compact c
 - current state
 - active workflow
 - active story
+- latest checkpoint
 - relevant artifacts
 - recent evidence
 - failing checks
 - next action
 
 Context packs must stay bounded. If a pack exceeds the configured character budget, it is truncated and the next run should regenerate a more selective artifact or handoff.
+
+## Checkpoint Rule
+
+After a meaningful work block, the agent should write a checkpoint with the decisions, checks, touched files, artifacts, and next action needed for a future session. A checkpoint is durable memory; it is not a transcript.
 
 ## Generation Rule
 

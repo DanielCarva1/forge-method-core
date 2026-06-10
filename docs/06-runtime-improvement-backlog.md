@@ -33,6 +33,7 @@
 
 - context pack generation
 - handoff generation
+- checkpoint generation
 - active story tracking
 - recent evidence tracking
 
@@ -68,6 +69,7 @@
 
 ### Context Pack Builder
 
+- include checkpoint memory
 - include artifact summaries
 - include failing command summaries
 - include touched file summaries

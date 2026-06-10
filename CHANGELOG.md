@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0
+
+Forge Method Core v1.3 improves context recovery and long-running work:
+
+- durable `checkpoint` command for structured progress memory
+- latest checkpoint mirror under `.forge-method/context/latest-checkpoint.md`
+- context packs include the latest checkpoint
+- context packs include artifact summaries and linked story artifact summaries
+- checkpoint smoke coverage across direct runtime and installed runtime paths
+
 ## 1.2.0
 
 Forge Method Core v1.2 improves the first-run and resume experience:

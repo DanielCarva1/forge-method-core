@@ -25,6 +25,7 @@ Look for:
 ```txt
 .forge-method/state.yaml
 .forge-method/sprint.yaml
+.forge-method/context/latest-checkpoint.md
 .forge-method/artifacts/index.ndjson
 ```
 
@@ -45,6 +46,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artif
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow validate
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval run
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" checkpoint --summary "<progress memory>"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
 ```
 
@@ -81,3 +83,4 @@ When using the skill from a plugin checkout instead of user install, run the scr
 ## Completion Standard
 
 Never mark a workflow done because the agent "feels" done. Mark done only when the workflow `done_when` conditions are satisfied and evidence is written.
+After meaningful progress, write a checkpoint so future sessions can resume without replaying the chat.

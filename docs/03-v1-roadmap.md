@@ -27,6 +27,7 @@ Delivered surfaces:
 - `.forge-method/sprint.yaml`
 - `.forge-method/stories/`
 - `.forge-method/artifacts/`
+- `.forge-method/checkpoints/`
 - `.forge-method/evidence/`
 - `.forge-method/context/`
 - `.forge-method/evals/`
@@ -47,6 +48,7 @@ story add/list/start/review/done/block
 artifact add/list
 artifact link-story
 evidence add
+checkpoint
 context pack
 module list/show/create
 workflow list/validate/create
