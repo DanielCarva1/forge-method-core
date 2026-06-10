@@ -10,10 +10,20 @@ A friend should be able to clone the repo, install the runtime, open Codex, and 
 
 This is the current working path.
 
+Windows:
+
 ```powershell
 git clone <repo-url>
 cd forge-method-core
 .\install.ps1
+```
+
+macOS/Linux:
+
+```bash
+git clone <repo-url>
+cd forge-method-core
+bash install.sh
 ```
 
 The installer copies:
@@ -106,10 +116,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1
 ```
 
+```bash
+bash install.sh
+python ~/.agents/skills/forge-method/scripts/forge_method_runtime.py --help
+bash scripts/smoke-runtime.sh
+bash scripts/smoke-install.sh
+```
+
 ## What Still Needs Productization
 
-- macOS/Linux installer
-- repository smoke test in CI
-- module packs
 - marketplace-backed plugin flow
 - GitHub PR workflow

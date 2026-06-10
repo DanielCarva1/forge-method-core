@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  windows-test:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,3 +22,16 @@ jobs:
       - name: Install smoke
         shell: pwsh
         run: .\scripts\smoke-install.ps1
+  linux-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python -m unittest discover -s tests
+      - name: Runtime smoke
+        run: bash scripts/smoke-runtime.sh
+      - name: Install smoke
+        run: bash scripts/smoke-install.sh

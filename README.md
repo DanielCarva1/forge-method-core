@@ -24,17 +24,26 @@ skills/forge-method/scripts/       Deterministic runtime helpers
 docs/                              Product and architecture proposal
 templates/                         Project state templates
 examples/                          Minimal initialized project example
-install.ps1                        Simple user-skill installer for Windows
+install.ps1                        User-skill installer for Windows
+install.sh                         User-skill installer for macOS/Linux
 ```
 
 ## Local Skill Install
 
-For a simple install without a plugin marketplace:
+For a simple install without a plugin marketplace on Windows:
 
 ```powershell
 git clone <repo-url>
 cd forge-method-core
 .\install.ps1
+```
+
+On macOS/Linux:
+
+```bash
+git clone <repo-url>
+cd forge-method-core
+bash install.sh
 ```
 
 That copies the skill to:
@@ -73,6 +82,11 @@ From the repository root:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1
+```
+
+```bash
+bash scripts/smoke-runtime.sh
+bash scripts/smoke-install.sh
 ```
 
 ## Product Direction
