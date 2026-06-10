@@ -87,6 +87,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" checkpoint --summary "What changed and what to do next"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context plan --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context recover --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context recover --root . --compact
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact verify --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" gate --root . --require-evals
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" release plan --root . --mode batch --touches runtime
@@ -105,6 +106,8 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval 
 The script creates `.forge-method/` in the target project and keeps state out of the chat transcript.
 
 Use `preflight --root . --json` before broad context loading. It resolves whether the folder is an existing method project, a runtime repo, a parent folder with known projects, or an empty workspace, then returns the first files and commands an agent should use.
+
+Use `context recover --compact` for handoff under a tight context budget. It preserves state, resume guidance, read order, and commands before optional sections.
 
 ## Smoke Tests
 

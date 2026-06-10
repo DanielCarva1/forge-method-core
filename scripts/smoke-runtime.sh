@@ -38,6 +38,7 @@ mkdir -p "$project_parent_tmp"
 "$python_bin" "$runtime" checkpoint --root "$tmp" --title "Smoke checkpoint" --summary "Runtime smoke reached generated workflow and eval checks." --decision "Checkpoint memory is available." --check "eval run passed" --touched ".forge-method/workflows/workflow-smoke-flow.md" --next-action "continue smoke runtime verification"
 "$python_bin" "$runtime" context plan --root "$tmp" --max-chars 1200
 "$python_bin" "$runtime" context recover --root "$tmp" --max-chars 1200
+"$python_bin" "$runtime" context recover --root "$tmp" --compact --max-chars 1400
 "$python_bin" "$runtime" status --root "$tmp"
 "$python_bin" "$runtime" resume --root "$tmp" --json
 "$python_bin" "$runtime" next --root "$tmp"

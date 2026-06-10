@@ -70,7 +70,7 @@ Files under `.forge-method/evidence/` plus ledger events proving that work was c
 
 ## Context Pack
 
-A compact recovery artifact under `.forge-method/context/` containing only the current state, active story, next action, and recent evidence needed to resume work.
+A bounded project context artifact under `.forge-method/context/current-pack.md`. It contains current state, active story, next action, recent evidence, artifacts, review findings, and recovery signals for normal continuation.
 
 ## Context Load Plan
 
@@ -79,6 +79,10 @@ A machine-readable recovery artifact under `.forge-method/context/load-plan.json
 ## Recovery Brief
 
 A focused resume artifact under `.forge-method/context/recovery.md`. It lists read order, resume commands, current state, recent checkpoints, failed checks, touched files, and recent artifacts for a new agent context.
+
+## Compact Recovery
+
+A budget-preserving handoff artifact under `.forge-method/context/recovery-compact.md`. It keeps state, resume guidance, read order, commands, done conditions, and blocking conditions ahead of optional history.
 
 ## Checkpoint
 

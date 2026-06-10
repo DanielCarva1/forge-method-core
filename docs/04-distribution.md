@@ -135,6 +135,7 @@ python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py input a
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py checkpoint --root <temp-folder> --summary "Progress memory"
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py context plan --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py context recover --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py context recover --root <temp-folder> --compact
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py artifact verify --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py story export --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py story import --root <temp-folder> --file backlog.json

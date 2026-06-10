@@ -62,6 +62,7 @@ checkpoint
 context pack
 context plan
 context recover
+context recover --compact
 module list/recommend/show/create
 agent list/show/recommend/validate
 workflow list/validate/create
@@ -124,6 +125,8 @@ A context load plan must include:
 A preflight must resolve project identity before the agent reads broad context. It must identify existing project state, runtime repo state, known child projects, required user choice, selected context files, and the next helper commands without writing state.
 
 Resume guidance must choose the next safe action from project files: required input, audit repair, review findings, active story, next story, ready gate, operation, or current workflow continuation.
+
+Compact recovery must preserve state, resume guidance, read order, commands, done conditions, and blocking conditions before optional history.
 
 ## Release Standard
 

@@ -71,6 +71,7 @@ Run $pythonExe $runtime eval run --root $tmp
 Run $pythonExe $runtime checkpoint --root $tmp --title "Smoke checkpoint" --summary "Runtime smoke reached generated workflow and eval checks." --decision "Checkpoint memory is available." --check "eval run passed" --touched ".forge-method/workflows/workflow-smoke-flow.md" --next-action "continue smoke runtime verification"
 Run $pythonExe $runtime context plan --root $tmp --max-chars 1200
 Run $pythonExe $runtime context recover --root $tmp --max-chars 1200
+Run $pythonExe $runtime context recover --root $tmp --compact --max-chars 1400
 Run $pythonExe $runtime status --root $tmp
 Run $pythonExe $runtime resume --root $tmp --json
 Run $pythonExe $runtime next --root $tmp

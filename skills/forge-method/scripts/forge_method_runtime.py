@@ -2095,6 +2095,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     context_dir = method_dir(root) / "context"
     current_pack = context_dir / "current-pack.md"
     recovery = context_dir / "recovery.md"
+    compact_recovery = context_dir / "recovery-compact.md"
     load_plan = context_dir / "load-plan.json"
     latest_checkpoint = latest_checkpoint_path(root)
     return {
@@ -2145,6 +2146,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
         "context": {
             "current_pack": current_pack.relative_to(root).as_posix() if current_pack.exists() else "",
             "recovery_brief": recovery.relative_to(root).as_posix() if recovery.exists() else "",
+            "compact_recovery": compact_recovery.relative_to(root).as_posix() if compact_recovery.exists() else "",
             "load_plan": load_plan.relative_to(root).as_posix() if load_plan.exists() else "",
             "latest_checkpoint": latest_checkpoint.relative_to(root).as_posix() if latest_checkpoint.exists() else "",
         },
@@ -3656,6 +3658,119 @@ def build_recovery_brief_text(root: Path, state: dict[str, str], *, checkpoint_l
     return "\n".join(lines) + "\n"
 
 
+def markdown_section(title: str, body: list[str]) -> str:
+    return "\n".join([f"## {title}", "", *body]).rstrip() + "\n"
+
+
+def append_compact_section(sections: list[str], title: str, body: list[str], *, max_items: int | None = None) -> None:
+    items = body[:max_items] if max_items is not None else body
+    if not items:
+        items = ["- none"]
+    sections.append(markdown_section(title, items))
+
+
+def compact_command_summary(command: dict[str, str]) -> str:
+    text = command.get("command", "")
+    script_name = Path(__file__).name
+    marker = f"{script_name}\" "
+    if marker in text:
+        text = text.split(marker, 1)[1]
+    return f"- {command.get('name')}: {text}"
+
+
+def build_compact_recovery_brief_text(
+    root: Path,
+    state: dict[str, str],
+    *,
+    checkpoint_limit: int = 3,
+    max_chars: int = 4000,
+) -> str:
+    snapshot = build_snapshot(root, state)
+    resume = snapshot["resume"]
+    context_plan = build_context_load_plan(root, state, max_chars=max(1200, max_chars // 2 if max_chars else 2000))
+    selected = context_plan.get("selected", [])
+    checkpoints = recent_checkpoint_paths(root, limit=checkpoint_limit)
+    failed_checks = checkpoint_section_items(root, "Failed Checks", checkpoint_limit=checkpoint_limit)
+    touched_files = checkpoint_section_items(root, "Touched Files", checkpoint_limit=checkpoint_limit)
+
+    command_section = markdown_section(
+        "Commands",
+        [compact_command_summary(item) for item in resume.get("commands", [])[:6]] or ["- none"],
+    )
+    sections: list[str] = [
+        "# Forge Method Compact Recovery",
+        "",
+        markdown_section(
+            "State",
+            [
+                f"- project: {state.get('project', '')}",
+                f"- phase: {state.get('phase', '')}",
+                f"- status: {state.get('status', '')}",
+                f"- workflow: {state.get('active_workflow', '')}",
+                f"- active_story: {state.get('active_story', '') or '<none>'}",
+                f"- readiness: {state.get('readiness', '')}",
+                f"- next_action: {state.get('next_action', '')}",
+            ],
+        ),
+        markdown_section(
+            "Resume",
+            [
+                f"- action: {resume.get('action', '')}",
+                f"- autonomous: {'true' if resume.get('autonomous') else 'false'}",
+                f"- summary: {resume.get('summary', '')}",
+                f"- next_command: {resume.get('next_command', '')}",
+            ],
+        ),
+        command_section,
+    ]
+    append_compact_section(sections, "Read First", [f"- {item}" for item in resume.get("read", [])], max_items=8)
+    append_compact_section(
+        sections,
+        "Context Selection",
+        [
+            f"- {item.get('path')} [{item.get('section')}]: {item.get('reason')}"
+            for item in selected[:8]
+        ],
+    )
+    append_compact_section(sections, "Done When", [f"- {item}" for item in resume.get("done_when", [])], max_items=5)
+    append_compact_section(sections, "Blocked When", [f"- {item}" for item in resume.get("blocked_when", [])], max_items=5)
+    append_compact_section(
+        sections,
+        "Open Human Inputs",
+        [
+            f"- {item.get('id')} [required={item.get('required', 'true')}]: {item.get('prompt')}"
+            for item in snapshot["human_inputs"]["open"][:3]
+        ],
+    )
+    append_compact_section(
+        sections,
+        "Open Review Findings",
+        [
+            f"- {item.get('id')} [{item.get('severity')}] story={item.get('story')}: {item.get('title')}"
+            for item in snapshot["review_findings"]["open"][:3]
+        ],
+    )
+    append_compact_section(sections, "Recent Checkpoints", [f"- {path.relative_to(root).as_posix()}" for path in checkpoints], max_items=3)
+    append_compact_section(sections, "Failed Checks", [f"- {item}" for item in failed_checks], max_items=5)
+    append_compact_section(sections, "Touched Files", [f"- {item}" for item in touched_files], max_items=8)
+
+    text = "\n".join(sections).rstrip() + "\n"
+    if max_chars and len(text) > max_chars:
+        required_sections = sections[:5]
+        optional_sections = sections[5:]
+        footer = "\n[compact-recovery omitted lower-priority sections to fit max_chars]\n"
+        text = "\n".join(required_sections).rstrip() + "\n"
+        for section in optional_sections:
+            candidate = text.rstrip() + "\n\n" + section.rstrip() + "\n"
+            if len(candidate) + len(footer) <= max_chars:
+                text = candidate
+        if len(text) + len(footer) <= max_chars:
+            text = text.rstrip() + "\n" + footer
+        elif len(text) > max_chars:
+            text = text[: max(0, max_chars - len(footer))].rstrip() + footer
+    return text
+
+
 def write_context_pack(root: Path, state: dict[str, str], *, out: Path, max_chars: int) -> Path:
     if not out.is_absolute():
         out = root / out
@@ -3676,11 +3791,20 @@ def write_recovery_brief(
     out: Path,
     max_chars: int,
     checkpoint_limit: int,
+    compact: bool = False,
 ) -> Path:
     if not out.is_absolute():
         out = root / out
     out.parent.mkdir(parents=True, exist_ok=True)
-    text = build_recovery_brief_text(root, state, checkpoint_limit=checkpoint_limit)
+    if compact:
+        text = build_compact_recovery_brief_text(
+            root,
+            state,
+            checkpoint_limit=checkpoint_limit,
+            max_chars=max_chars,
+        )
+    else:
+        text = build_recovery_brief_text(root, state, checkpoint_limit=checkpoint_limit)
     if max_chars and len(text) > max_chars:
         footer = "\n\n[recovery-brief truncated to max_chars]\n"
         text = text[: max(0, max_chars - len(footer))].rstrip() + footer
@@ -3712,13 +3836,15 @@ def cmd_context_recover(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     write_context_load_plan(root, state, out=method_dir(root) / "context" / "load-plan.json", max_chars=args.max_chars)
     write_context_pack(root, state, out=method_dir(root) / "context" / "current-pack.md", max_chars=args.max_chars)
-    out = Path(args.out) if args.out else method_dir(root) / "context" / "recovery.md"
+    default_name = "recovery-compact.md" if args.compact else "recovery.md"
+    out = Path(args.out) if args.out else method_dir(root) / "context" / default_name
     out = write_recovery_brief(
         root,
         state,
         out=out,
         max_chars=args.max_chars,
         checkpoint_limit=args.checkpoints,
+        compact=args.compact,
     )
     print(out)
     return 0
@@ -4635,6 +4761,7 @@ def build_parser() -> argparse.ArgumentParser:
     context_recover.add_argument("--out")
     context_recover.add_argument("--max-chars", type=int, default=8000)
     context_recover.add_argument("--checkpoints", type=int, default=5)
+    context_recover.add_argument("--compact", action="store_true")
     context_recover.set_defaults(func=cmd_context_recover)
 
     audit = sub.add_parser("audit", help="validate project state")

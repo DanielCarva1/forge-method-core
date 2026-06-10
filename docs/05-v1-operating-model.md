@@ -98,6 +98,8 @@ Context packs must stay bounded. If a pack exceeds the configured character budg
 
 The agent should prefer the machine-readable preflight and context load plan before reading files. The load plan ranks selected files by current state and defers lower-priority files when the budget is full.
 
+For handoff under a tight budget, the agent should write compact recovery. Compact recovery keeps state, resume guidance, read order, commands, done conditions, and blocking conditions before optional history so a new context does not lose the next safe action.
+
 ## Checkpoint Rule
 
 After a meaningful work block, the agent should write a checkpoint with the decisions, checks, touched files, artifacts, and next action needed for a future session. A checkpoint is durable memory; it is not a transcript.

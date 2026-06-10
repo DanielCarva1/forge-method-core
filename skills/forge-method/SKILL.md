@@ -67,6 +67,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval 
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" checkpoint --summary "<progress memory>"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context plan --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context recover --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context recover --root . --compact
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" gate --root . --require-evals
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" release plan --root . --mode batch --touches runtime

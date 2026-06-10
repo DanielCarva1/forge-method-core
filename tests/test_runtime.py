@@ -1192,6 +1192,41 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Recovery Signals", pack_text)
             self.assertIn("unit test failed: expected route", pack_text)
 
+    def test_compact_context_recover_preserves_resume_under_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
+                run_cmd("transition", "--root", str(root), "--phase", phase, "--force")
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-1",
+                "--title",
+                "Build thing",
+                "--acceptance",
+                "thing works",
+            )
+
+            recovery = run_cmd("context", "recover", "--root", str(root), "--compact", "--max-chars", "1400").stdout.strip()
+            recovery_path = Path(recovery)
+            text = recovery_path.read_text(encoding="utf-8")
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+
+            self.assertEqual(recovery_path.name, "recovery-compact.md")
+            self.assertLessEqual(len(text), 1400)
+            self.assertIn("# Forge Method Compact Recovery", text)
+            self.assertIn("## State", text)
+            self.assertIn("## Resume", text)
+            self.assertIn("- action: start_next_story", text)
+            self.assertIn("## Read First", text)
+            self.assertIn("## Commands", text)
+            self.assertIn("story start", text)
+            self.assertEqual(snapshot["context"]["compact_recovery"], ".forge-method/context/recovery-compact.md")
+
 
 if __name__ == "__main__":
     unittest.main()

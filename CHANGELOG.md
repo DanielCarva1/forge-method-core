@@ -6,6 +6,7 @@
 - include selected context files and recommended helper commands in preflight JSON/text output
 - document preflight as the first agent step before broad context loading
 - add structured `resume` guidance for required input, review findings, stories, ready gate, and operation routes
+- add `context recover --compact` for budget-preserving handoff briefs
 
 ## 1.15.0
 
