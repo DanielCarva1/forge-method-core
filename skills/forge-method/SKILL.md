@@ -45,6 +45,8 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact verify
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example create --root <path> --module <module-id>
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow validate
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval run
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval add --kind artifact-exists --id <id> --target <path> --query "<objective check>"

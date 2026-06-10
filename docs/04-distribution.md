@@ -114,6 +114,9 @@ From this repository:
 .\install.ps1
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py --help
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py start --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py example list
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py example create --root <example-folder> --module software-builder
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py gate --root <example-folder> --require-evals
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py init --project smoke-test --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py start --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py checkpoint --root <temp-folder> --summary "Progress memory"

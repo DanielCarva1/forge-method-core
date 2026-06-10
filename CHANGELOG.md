@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.7.0
+
+Forge Method Core v1.7 adds runnable examples for packaged modules:
+
+- new `example list` helper for inspecting modules that can seed example projects
+- new `example create` helper that initializes a project from a module
+- seeded examples include state, sprint, story, artifact, artifact eval, checkpoint, context pack, and project guidance
+- direct and installed runtime smokes prove example projects pass the quality gate with required evals
+- PowerShell verification scripts now respect `PYTHON` or resolve an available Python command before running checks
+
 ## 1.6.0
 
 Forge Method Core v1.6 strengthens local eval coverage:

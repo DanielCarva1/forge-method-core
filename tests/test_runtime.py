@@ -173,7 +173,37 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("core-runtime", modules)
         self.assertIn("software-builder", modules)
         self.assertIn("Workflow validation passed.", validation)
-        self.assertEqual(version.strip(), "1.6.0")
+        self.assertEqual(version.strip(), "1.7.0")
+
+    def test_example_list_and_create_seed_project(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw) / "software-example"
+            examples = run_cmd("example", "list").stdout
+            create = run_cmd(
+                "example",
+                "create",
+                "--root",
+                str(root),
+                "--module",
+                "software-builder",
+            ).stdout
+
+            state = root / ".forge-method" / "state.yaml"
+            story = root / ".forge-method" / "stories" / "example-start.yaml"
+            artifact = root / ".forge-method" / "artifacts" / "example-brief.md"
+            context_pack = root / ".forge-method" / "context" / "current-pack.md"
+            readme = root / "README.md"
+            gate = run_cmd("gate", "--root", str(root), "--require-evals").stdout
+
+            self.assertIn("software-builder", examples)
+            self.assertIn("Example created:", create)
+            self.assertIn('module: "software-builder"', state.read_text(encoding="utf-8"))
+            self.assertIn('status: "ready"', story.read_text(encoding="utf-8"))
+            self.assertTrue(artifact.exists())
+            self.assertTrue(context_pack.exists())
+            self.assertIn("software-builder", readme.read_text(encoding="utf-8"))
+            self.assertIn("Gate passed.", gate)
+            self.assertIn("Evals: 1/1 passed", gate)
 
     def test_workflow_module_and_eval_generation(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

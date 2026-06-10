@@ -20,6 +20,10 @@ The deterministic entry route that resolves whether the current workspace is an 
 
 A project initialized with `.forge-method/` state. A method project may be software, product, creative, game, automation, or runtime-module work.
 
+## Example Project
+
+A runnable method project seeded from a packaged module. It exists to prove the module can initialize state, stories, artifacts, evals, checkpoint memory, and quality gates before users adapt the module to real work.
+
 ## Runtime Repo
 
 The Forge Method Core repository itself. The runtime repo must not be confused with a method project created by the runtime.

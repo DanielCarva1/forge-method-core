@@ -57,6 +57,7 @@
 - runtime smoke test
 - unit tests
 - CI workflow
+- example projects per module
 
 ## V1 Hardening
 
@@ -87,4 +88,3 @@
 - signed releases
 - versioned changelog
 - plugin marketplace packaging
-- example projects per module

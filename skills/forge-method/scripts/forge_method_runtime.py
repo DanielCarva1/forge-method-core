@@ -15,7 +15,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.6.0"
+RUNTIME_VERSION = "1.7.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -314,6 +314,61 @@ def write_state(root: Path, state: dict[str, Any]) -> None:
     write_flat_yaml(state_path(root), state, header="Forge Method state")
 
 
+def initialize_project_state(
+    root: Path,
+    *,
+    project: str,
+    mode: str,
+    module: str,
+    force: bool = False,
+    allow_runtime_state: bool = False,
+    no_project_guidance: bool = False,
+) -> tuple[dict[str, str], Path, list[str]]:
+    if is_runtime_repo(root) and not allow_runtime_state:
+        raise SystemExit("Refusing to initialize project state in the runtime repo. Use --allow-runtime-state if intentional.")
+    fm = ensure_dirs(root)
+    path = state_path(root)
+    if path.exists() and not force:
+        raise FileExistsError(str(path))
+
+    project_id = slugify(project)
+    state = {
+        "schema_version": "1",
+        "runtime": RUNTIME_NAME,
+        "runtime_version": RUNTIME_VERSION,
+        "project": project,
+        "project_id": project_id,
+        "mode": mode,
+        "module": module,
+        "phase": "0-route",
+        "status": "route-ready",
+        "active_workflow": "start-runtime",
+        "active_story": "",
+        "human_input_required": "false",
+        "readiness": "not_ready",
+        "next_action": NEXT_BY_PHASE["0-route"],
+    }
+    write_state(root, state)
+    write_flat_yaml(
+        fm / PROJECTS_FILE,
+        {
+            "project": project,
+            "project_id": project_id,
+            "root": str(root),
+            "runtime_repo": "false",
+        },
+        header="Forge Method project registry",
+    )
+    update_sprint(root)
+    copied_guidance = [] if no_project_guidance else copy_project_guidance(root, force=force)
+    append_ledger(
+        root,
+        "project.initialized",
+        {"project": project, "project_id": project_id, "guidance": copied_guidance},
+    )
+    return state, path, copied_guidance
+
+
 def ledger_path(root: Path) -> Path:
     return method_dir(root) / LEDGER_FILE
 
@@ -515,6 +570,28 @@ def module_manifest_paths(root: Path | None = None) -> list[Path]:
         if project_modules.exists():
             paths.extend(sorted(project_modules.glob("*.yaml")))
     return paths
+
+
+def module_manifests(root: Path | None = None) -> list[tuple[dict[str, str], Path]]:
+    manifests: list[tuple[dict[str, str], Path]] = []
+    seen: set[str] = set()
+    for path in module_manifest_paths(root):
+        module = read_flat_yaml(path)
+        module_id = module.get("id", path.stem)
+        if module_id in seen:
+            continue
+        module.setdefault("id", module_id)
+        seen.add(module_id)
+        manifests.append((module, path))
+    return manifests
+
+
+def module_manifest_by_id(root: Path | None, module_id: str) -> tuple[dict[str, str], Path] | None:
+    normalized = slugify(module_id)
+    for module, path in module_manifests(root):
+        if module.get("id") == normalized:
+            return module, path
+    return None
 
 
 def reference_workflow_paths(root: Path | None = None) -> list[Path]:
@@ -862,50 +939,21 @@ def audit_project(root: Path) -> list[str]:
 
 def cmd_init(args: argparse.Namespace) -> int:
     root = resolve_root(args.root)
-    if is_runtime_repo(root) and not args.allow_runtime_state:
-        raise SystemExit("Refusing to initialize project state in the runtime repo. Use --allow-runtime-state if intentional.")
-    fm = ensure_dirs(root)
-    path = state_path(root)
-    if path.exists() and not args.force:
+    try:
+        state, path, copied_guidance = initialize_project_state(
+            root,
+            project=args.project,
+            mode=args.mode,
+            module=args.module,
+            force=args.force,
+            allow_runtime_state=args.allow_runtime_state,
+            no_project_guidance=args.no_project_guidance,
+        )
+    except FileExistsError as exc:
+        path = Path(str(exc))
         print(f"State already exists: {path}")
         print("Use --force to replace it.")
         return 2
-
-    project_id = slugify(args.project)
-    state = {
-        "schema_version": "1",
-        "runtime": RUNTIME_NAME,
-        "runtime_version": RUNTIME_VERSION,
-        "project": args.project,
-        "project_id": project_id,
-        "mode": args.mode,
-        "module": args.module,
-        "phase": "0-route",
-        "status": "route-ready",
-        "active_workflow": "start-runtime",
-        "active_story": "",
-        "human_input_required": "false",
-        "readiness": "not_ready",
-        "next_action": NEXT_BY_PHASE["0-route"],
-    }
-    write_state(root, state)
-    write_flat_yaml(
-        fm / PROJECTS_FILE,
-        {
-            "project": args.project,
-            "project_id": project_id,
-            "root": str(root),
-            "runtime_repo": "false",
-        },
-        header="Forge Method project registry",
-    )
-    update_sprint(root)
-    copied_guidance = [] if args.no_project_guidance else copy_project_guidance(root, force=args.force)
-    append_ledger(
-        root,
-        "project.initialized",
-        {"project": args.project, "project_id": project_id, "guidance": copied_guidance},
-    )
     print(f"Initialized Forge Method project: {args.project}")
     print(f"State: {path}")
     if copied_guidance:
@@ -1225,28 +1273,22 @@ def cmd_artifact_list(args: argparse.Namespace) -> int:
 
 def cmd_module_list(args: argparse.Namespace) -> int:
     root, _ = load_state_or_none(resolve_root(args.root))
-    manifests = module_manifest_paths(root)
+    manifests = module_manifests(root)
     if not manifests:
         print("No modules.")
         return 0
-    seen: set[str] = set()
-    for path in manifests:
-        module = read_flat_yaml(path)
-        module_id = module.get("id", path.stem)
-        if module_id in seen:
-            continue
-        seen.add(module_id)
-        print(f"{module_id}\t{module.get('title', '')}\t{module.get('phase_span', '')}")
+    for module, _ in manifests:
+        print(f"{module.get('id', '')}\t{module.get('title', '')}\t{module.get('phase_span', '')}")
     return 0
 
 
 def cmd_module_show(args: argparse.Namespace) -> int:
     root, _ = load_state_or_none(resolve_root(args.root))
-    for path in module_manifest_paths(root):
-        module = read_flat_yaml(path)
-        if module.get("id", path.stem) == args.id:
-            print(path.read_text(encoding="utf-8"))
-            return 0
+    match = module_manifest_by_id(root, args.id)
+    if match:
+        _, path = match
+        print(path.read_text(encoding="utf-8"))
+        return 0
     raise SystemExit(f"Module not found: {args.id}")
 
 
@@ -1266,6 +1308,161 @@ def cmd_module_create(args: argparse.Namespace) -> int:
     write_flat_yaml(path, values, header="Forge Method module")
     append_ledger(root, "module.created", {"id": module_id, "path": path.relative_to(root).as_posix()})
     print(path.relative_to(root).as_posix())
+    return 0
+
+
+def cmd_example_list(args: argparse.Namespace) -> int:
+    root = resolve_root(args.root)
+    manifests = module_manifests(root)
+    if not manifests:
+        print("No example modules.")
+        return 0
+    for module, _ in manifests:
+        print(f"{module.get('id', '')}\t{module.get('title', '')}\t{module.get('purpose', '')}")
+    return 0
+
+
+def cmd_example_create(args: argparse.Namespace) -> int:
+    root = resolve_root(args.root)
+    if root.exists() and not root.is_dir():
+        raise SystemExit(f"Example root must be a directory: {root}")
+    if root.exists() and any(root.iterdir()) and not state_path(root).exists() and not args.force:
+        raise SystemExit(f"Example root is not empty: {root}. Use --force if this is intentional.")
+
+    module_id = slugify(args.module)
+    match = module_manifest_by_id(root, module_id)
+    if not match:
+        raise SystemExit(f"Module not found: {args.module}")
+    module, _ = match
+
+    title = module.get("title", module_id)
+    purpose = module.get("purpose", "Start a Forge Method project from this module.")
+    workflows = split_list(module.get("workflows"))
+    phases = [phase for phase in split_list(module.get("phase_span")) if phase in PHASES]
+    first_phase = phases[0] if phases else "1-discovery"
+    first_workflow = workflows[0] if workflows else "start-runtime"
+    project = args.project or f"{title} Example"
+
+    try:
+        state, path, copied_guidance = initialize_project_state(
+            root,
+            project=project,
+            mode=args.mode,
+            module=module_id,
+            force=args.force,
+            allow_runtime_state=False,
+            no_project_guidance=args.no_project_guidance,
+        )
+    except FileExistsError as exc:
+        raise SystemExit(f"State already exists: {exc}. Use --force to replace it.") from exc
+
+    state["phase"] = first_phase
+    state["status"] = "example-seeded"
+    state["active_workflow"] = first_workflow
+    state["human_input_required"] = "false"
+    state["next_action"] = f"review the seeded {module_id} story, then run the quality gate"
+    write_state(root, state)
+
+    story_id = "example-start"
+    story = {
+        "id": story_id,
+        "title": f"Run {title} example loop",
+        "status": "ready",
+        "phase": first_phase,
+        "acceptance_criteria": join_list(
+            [
+                f"project state identifies module {module_id}",
+                "example brief artifact exists",
+                "quality gate passes with required evals",
+            ]
+        ),
+        "evidence": "",
+        "checks": "gate --require-evals",
+        "blocker": "",
+    }
+    save_story(root, story)
+    update_sprint(root)
+
+    brief_rel = ".forge-method/artifacts/example-brief.md"
+    brief_path = root / brief_rel
+    if args.force and brief_path.exists() and brief_path.is_file():
+        brief_path.unlink()
+    summary = (
+        f"Module: {module_id}. Purpose: {purpose} "
+        f"Starting phase: {first_phase}. Starting workflow: {first_workflow}. "
+        f"Workflow set: {join_list(workflows) or 'none'}."
+    )
+    artifact = write_artifact(
+        root,
+        kind="brief",
+        title=f"{title} example brief",
+        summary=summary,
+        path=brief_rel,
+        lifecycle="durable",
+    )
+    link_artifact_to_story(root, artifact, story_id)
+    eval_path_rel = write_artifact_eval(root, artifact, title=f"{title} example brief", summary=summary)
+    checkpoint = write_checkpoint(
+        root,
+        state,
+        title="Example seed",
+        summary=f"Seeded a runnable example project from module {module_id}.",
+        decisions=[f"Use packaged module {module_id} as the initial route."],
+        checks=["gate --require-evals"],
+        failed_checks=[],
+        touched=[STATE_FILE, SPRINT_FILE, "README.md", story_path(root, story_id).relative_to(root).as_posix(), artifact],
+        artifacts=[artifact],
+        next_action=state["next_action"],
+    )
+    write_context_pack(root, state, out=method_dir(root) / "context" / "current-pack.md", max_chars=args.max_chars)
+    readme = root / "README.md"
+    if args.force or not readme.exists():
+        readme.write_text(
+            "\n".join(
+                [
+                    f"# {project}",
+                    "",
+                    f"Module: `{module_id}`",
+                    "",
+                    "Use the installed Forge Method runtime helper to inspect this project:",
+                    "",
+                    "```powershell",
+                    "python \"$HOME\\.agents\\skills\\forge-method\\scripts\\forge_method_runtime.py\" status --root .",
+                    "python \"$HOME\\.agents\\skills\\forge-method\\scripts\\forge_method_runtime.py\" gate --root . --require-evals",
+                    "```",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    append_ledger(
+        root,
+        "example.created",
+        {
+            "module": module_id,
+            "story": story_id,
+            "artifact": artifact,
+            "eval": eval_path_rel,
+            "checkpoint": checkpoint,
+        },
+    )
+
+    print(f"Example created: {project}")
+    print(f"Root: {root}")
+    print(f"State: {path}")
+    print(f"Module: {module_id}")
+    print(f"Story: {story_id}")
+    print(f"Artifact: {artifact}")
+    print(f"Eval: {eval_path_rel}")
+    print(f"Checkpoint: {checkpoint}")
+    if copied_guidance:
+        print(f"Project guidance: {', '.join(copied_guidance)}")
+    print(
+        "Gate command: "
+        f"{command_hint_value(sys.executable)} "
+        f"{command_hint_value(Path(__file__).resolve())} "
+        f"gate --root {command_hint_value(root)} --require-evals"
+    )
     return 0
 
 
@@ -1848,6 +2045,21 @@ def build_parser() -> argparse.ArgumentParser:
     module_create.add_argument("--workflow", action="append")
     module_create.add_argument("--force", action="store_true")
     module_create.set_defaults(func=cmd_module_create)
+
+    example = sub.add_parser("example", help="create runnable example projects from modules")
+    example_sub = example.add_subparsers(dest="example_command", required=True)
+    example_list = example_sub.add_parser("list", help="list example modules")
+    example_list.add_argument("--root", default=".")
+    example_list.set_defaults(func=cmd_example_list)
+    example_create = example_sub.add_parser("create", help="seed a runnable example project")
+    example_create.add_argument("--root", required=True)
+    example_create.add_argument("--module", required=True)
+    example_create.add_argument("--project")
+    example_create.add_argument("--mode", default="creation-runtime")
+    example_create.add_argument("--force", action="store_true")
+    example_create.add_argument("--no-project-guidance", action="store_true")
+    example_create.add_argument("--max-chars", type=int, default=8000)
+    example_create.set_defaults(func=cmd_example_create)
 
     workflow = sub.add_parser("workflow", help="inspect and validate workflow references")
     workflow_sub = workflow.add_subparsers(dest="workflow_command", required=True)

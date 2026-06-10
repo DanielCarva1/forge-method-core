@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.6.0`.
+Current runtime version: `1.7.0`.
 
 ## Current Shape
 
@@ -25,7 +25,7 @@ skills/forge-method/references/    Compact state-machine workflows
 skills/forge-method/scripts/       Deterministic runtime helpers
 docs/                              Product and architecture proposal
 templates/                         Project state templates
-examples/                          Minimal initialized project example
+examples/                          Minimal initialized project example and example notes
 install.ps1                        User-skill installer for Windows
 install.sh                         User-skill installer for macOS/Linux
 ```
@@ -77,6 +77,8 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" check
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact verify --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" gate --root . --require-evals
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example create --root ./software-example --module software-builder
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow validate
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow create --root . --id custom-flow --title "Custom Flow"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval run --root .
@@ -122,3 +124,11 @@ The complete proposal is in:
 ## Example
 
 See `examples/hello-method` for a minimal initialized project with `.forge-method/state.yaml`.
+
+To create a runnable seed project from any packaged module:
+
+```powershell
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example create --root ./software-example --module software-builder
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" gate --root ./software-example --require-evals
+```

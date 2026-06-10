@@ -13,10 +13,25 @@ function Run {
   }
 }
 
+function Resolve-Python {
+  if ($env:PYTHON) {
+    return $env:PYTHON
+  }
+  foreach ($candidate in @("python", "python3", "py")) {
+    $command = Get-Command $candidate -ErrorAction SilentlyContinue
+    if ($command) {
+      return $command.Source
+    }
+  }
+  throw "Python not found. Set PYTHON to a Python executable."
+}
+
+$pythonExe = Resolve-Python
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $installer = Join-Path $repoRoot "install.ps1"
 $installedRuntime = Join-Path $HOME ".agents\skills\forge-method\scripts\forge_method_runtime.py"
 $tmp = Join-Path $env:TEMP "forge-method-install-smoke"
+$exampleTmp = Join-Path $env:TEMP "forge-method-install-example-smoke"
 
 powershell -ExecutionPolicy Bypass -File $installer
 if ($LASTEXITCODE -ne 0) {
@@ -30,24 +45,30 @@ if (-not (Test-Path -LiteralPath $installedRuntime)) {
 if (Test-Path -LiteralPath $tmp) {
   Remove-Item -LiteralPath $tmp -Recurse -Force
 }
+if (Test-Path -LiteralPath $exampleTmp) {
+  Remove-Item -LiteralPath $exampleTmp -Recurse -Force
+}
 
 New-Item -ItemType Directory -Path $tmp | Out-Null
 
-Run python $installedRuntime --help
-Run python $installedRuntime module list
-Run python $installedRuntime workflow validate
-Run python $installedRuntime start --root $tmp
-Run python $installedRuntime init --project install-smoke --root $tmp
-Run python $installedRuntime start --root $tmp
-Run python $installedRuntime workflow create --root $tmp --id install-flow --title "Install Flow" --trigger "installed runtime available" --input "installed runtime" --step "validate installed runtime" --output "install proof" --done "install proof exists" --blocked "runtime missing" --handoff "preserve install result" --eval-query "prove install flow"
-Run python $installedRuntime eval run --root $tmp
-Run python $installedRuntime checkpoint --root $tmp --title "Install checkpoint" --summary "Installed runtime can persist checkpoint memory." --check "install eval passed" --next-action "continue install smoke"
-Run python $installedRuntime transition --root $tmp --phase 1-discovery --status discovery-ready --workflow discover-intent
-Run python $installedRuntime story add --root $tmp --id install-story --title "Installed runtime works" --acceptance "installed helper can write durable state"
-Run python $installedRuntime artifact verify --root $tmp
-Run python $installedRuntime gate --root $tmp --require-evals --summary "Installed runtime quality gate passed."
-Run python $installedRuntime status --root $tmp
-Run python $installedRuntime next --root $tmp
-Run python $installedRuntime audit --root $tmp
+Run $pythonExe $installedRuntime --help
+Run $pythonExe $installedRuntime module list
+Run $pythonExe $installedRuntime example list
+Run $pythonExe $installedRuntime example create --root $exampleTmp --module software-builder
+Run $pythonExe $installedRuntime gate --root $exampleTmp --require-evals
+Run $pythonExe $installedRuntime workflow validate
+Run $pythonExe $installedRuntime start --root $tmp
+Run $pythonExe $installedRuntime init --project install-smoke --root $tmp
+Run $pythonExe $installedRuntime start --root $tmp
+Run $pythonExe $installedRuntime workflow create --root $tmp --id install-flow --title "Install Flow" --trigger "installed runtime available" --input "installed runtime" --step "validate installed runtime" --output "install proof" --done "install proof exists" --blocked "runtime missing" --handoff "preserve install result" --eval-query "prove install flow"
+Run $pythonExe $installedRuntime eval run --root $tmp
+Run $pythonExe $installedRuntime checkpoint --root $tmp --title "Install checkpoint" --summary "Installed runtime can persist checkpoint memory." --check "install eval passed" --next-action "continue install smoke"
+Run $pythonExe $installedRuntime transition --root $tmp --phase 1-discovery --status discovery-ready --workflow discover-intent
+Run $pythonExe $installedRuntime story add --root $tmp --id install-story --title "Installed runtime works" --acceptance "installed helper can write durable state"
+Run $pythonExe $installedRuntime artifact verify --root $tmp
+Run $pythonExe $installedRuntime gate --root $tmp --require-evals --summary "Installed runtime quality gate passed."
+Run $pythonExe $installedRuntime status --root $tmp
+Run $pythonExe $installedRuntime next --root $tmp
+Run $pythonExe $installedRuntime audit --root $tmp
 
 Write-Host "Install smoke test passed: $tmp"
