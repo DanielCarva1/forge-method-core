@@ -15,7 +15,7 @@ Forge Method is a state-machine runtime. Do not infer runtime state from chat hi
 4. Prefer state files and evidence over conversation memory.
 5. Ask for human input only when the workflow marks it required.
 6. For implementation work, run checks and update evidence before marking done.
-7. Temporary task docs may be deleted only after their result is captured in state, sprint, or evidence.
+7. Temporary task docs may be deleted only after `artifact capture` records their result in state, story, evidence, or checkpoint.
 8. Do not create extra slash commands as product surface unless explicitly requested.
 
 ## Source Of Truth
@@ -43,6 +43,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init --project <name>
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact verify
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow validate
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval run

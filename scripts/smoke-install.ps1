@@ -44,6 +44,7 @@ Run python $installedRuntime eval run --root $tmp
 Run python $installedRuntime checkpoint --root $tmp --title "Install checkpoint" --summary "Installed runtime can persist checkpoint memory." --check "install eval passed" --next-action "continue install smoke"
 Run python $installedRuntime transition --root $tmp --phase 1-discovery --status discovery-ready --workflow discover-intent
 Run python $installedRuntime story add --root $tmp --id install-story --title "Installed runtime works" --acceptance "installed helper can write durable state"
+Run python $installedRuntime artifact verify --root $tmp
 Run python $installedRuntime status --root $tmp
 Run python $installedRuntime next --root $tmp
 Run python $installedRuntime audit --root $tmp

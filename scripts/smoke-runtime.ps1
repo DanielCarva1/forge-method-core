@@ -40,12 +40,15 @@ Run python $runtime artifact add --root $tmp --kind spec --title "Smoke specific
 Run python $runtime transition --root $tmp --phase 3-plan --status planning-ready --workflow plan-sprint
 Run python $runtime transition --root $tmp --phase 4-build-verify --status build-ready --workflow build-story
 Run python $runtime story add --root $tmp --id story-1 --title "Prove runtime loop" --acceptance "status can be reconstructed from files" --acceptance "done stories require evidence"
+Run python $runtime artifact add --root $tmp --kind task --title "Ephemeral task" --summary "Temporary task docs can be captured and deleted." --path ".forge-method/artifacts/ephemeral-task.md" --lifecycle ephemeral --story story-1
+Run python $runtime artifact capture --root $tmp --path ".forge-method/artifacts/ephemeral-task.md" --story story-1 --summary "Ephemeral task result captured in story state." --delete
 Run python $runtime artifact link-story --root $tmp --path ".forge-method/artifacts/smoke-spec.md" --story story-1
 Run python $runtime story start --root $tmp --id story-1
 Run python $runtime story review --root $tmp --id story-1
 Run python $runtime story done --root $tmp --id story-1 --summary "Runtime loop completed in smoke test." --check "smoke-runtime.ps1"
 Run python $runtime context pack --root $tmp --max-chars 1200
 Run python $runtime artifact list --root $tmp
+Run python $runtime artifact verify --root $tmp
 Run python $runtime audit --root $tmp
 Run python $runtime ready --root $tmp --summary "Smoke project is ready." --check audit
 Run python $runtime status --root $tmp

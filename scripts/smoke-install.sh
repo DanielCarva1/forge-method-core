@@ -28,6 +28,7 @@ mkdir -p "$tmp"
 "$python_bin" "$installed_runtime" checkpoint --root "$tmp" --title "Install checkpoint" --summary "Installed runtime can persist checkpoint memory." --check "install eval passed" --next-action "continue install smoke"
 "$python_bin" "$installed_runtime" transition --root "$tmp" --phase 1-discovery --status discovery-ready --workflow discover-intent
 "$python_bin" "$installed_runtime" story add --root "$tmp" --id install-story --title "Installed runtime works" --acceptance "installed helper can write durable state"
+"$python_bin" "$installed_runtime" artifact verify --root "$tmp"
 "$python_bin" "$installed_runtime" status --root "$tmp"
 "$python_bin" "$installed_runtime" next --root "$tmp"
 "$python_bin" "$installed_runtime" audit --root "$tmp"

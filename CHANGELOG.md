@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.0
+
+Forge Method Core v1.4 improves artifact governance:
+
+- artifact lifecycle metadata for durable and ephemeral artifacts
+- `artifact capture` for preserving results before deleting temporary task docs
+- `artifact verify` for missing artifact and stale summary checks
+- project audit fails on missing active artifacts but permits captured ephemeral artifacts
+- context packs and artifact listings expose artifact status and lifecycle
+
 ## 1.3.0
 
 Forge Method Core v1.3 improves context recovery and long-running work:

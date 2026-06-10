@@ -37,6 +37,11 @@
 - active story tracking
 - recent evidence tracking
 
+### Artifact System
+
+- artifact freshness checks
+- ephemeral artifact capture
+
 ### Distribution
 
 - plugin manifest
@@ -53,10 +58,6 @@
 - macOS installer
 - Linux installer
 - shell smoke tests
-
-### Artifact System
-
-- artifact freshness checks
 
 ### Module Packs
 

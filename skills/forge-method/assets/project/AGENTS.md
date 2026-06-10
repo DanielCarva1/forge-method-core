@@ -23,3 +23,4 @@ Before marking work done:
 - update runtime state
 
 Agent-facing workflow docs should stay compact state machines.
+Temporary task artifacts can be removed only after their result is captured with `artifact capture`.

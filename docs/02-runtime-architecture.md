@@ -34,6 +34,7 @@ Every project using the runtime gets:
 ```
 
 The runtime itself is always separate from projects created by the runtime.
+Durable artifacts stay readable while referenced. Ephemeral artifacts may be deleted only after their result is captured in the artifact index and any relevant story/evidence/checkpoint.
 
 ## Phase Model
 

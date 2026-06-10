@@ -15,7 +15,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.3.0"
+RUNTIME_VERSION = "1.4.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -64,6 +64,8 @@ STORY_TRANSITIONS = {
     "deferred": {"planned", "ready"},
     "done": set(),
 }
+
+ARTIFACT_LIFECYCLES = ["durable", "ephemeral"]
 
 WORKFLOW_REQUIRED_SECTIONS = [
     "trigger:",
@@ -159,6 +161,18 @@ def write_flat_yaml(path: Path, values: dict[str, Any], *, header: str) -> None:
 
 def resolve_root(raw_root: str) -> Path:
     return Path(raw_root).expanduser().resolve()
+
+
+def project_path(root: Path, raw_path: str) -> tuple[Path, str]:
+    candidate = Path(raw_path).expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    resolved = candidate.resolve()
+    try:
+        rel = resolved.relative_to(root.resolve()).as_posix()
+    except ValueError as exc:
+        raise SystemExit(f"Path must stay inside project root: {raw_path}") from exc
+    return resolved, rel
 
 
 def method_dir(root: Path) -> Path:
@@ -420,14 +434,74 @@ def recent_artifacts(root: Path, limit: int = 5) -> list[dict[str, Any]]:
     return artifact_index_entries(root)[-limit:]
 
 
-def artifact_summaries(root: Path) -> dict[str, str]:
-    summaries: dict[str, str] = {}
+def artifact_states(root: Path) -> dict[str, dict[str, Any]]:
+    states: dict[str, dict[str, Any]] = {}
     for entry in artifact_index_entries(root):
         path = str(entry.get("path", ""))
-        summary = str(entry.get("summary", ""))
-        if path and summary and entry.get("kind") != "story-link":
+        if not path:
+            continue
+        current = states.setdefault(path, {"path": path, "status": "active", "lifecycle": "durable"})
+        kind = entry.get("kind")
+        if kind == "story-link":
+            stories = split_list(str(current.get("stories", "")))
+            story = str(entry.get("story", ""))
+            if story and story not in stories:
+                stories.append(story)
+            current["stories"] = join_list(stories)
+            current["last_linked_at"] = entry.get("ts", "")
+            continue
+        current.update({key: value for key, value in entry.items() if value not in {"", None}})
+        current.setdefault("status", "active")
+        current.setdefault("lifecycle", "durable")
+    return states
+
+
+def artifact_state(root: Path, path: str) -> dict[str, Any]:
+    return artifact_states(root).get(path, {"path": path, "status": "unknown", "lifecycle": "durable"})
+
+
+def artifact_missing_allowed(root: Path, path: str) -> bool:
+    return artifact_state(root, path).get("status") == "captured"
+
+
+def artifact_summaries(root: Path) -> dict[str, str]:
+    summaries: dict[str, str] = {}
+    for path, state in artifact_states(root).items():
+        summary = str(state.get("summary", ""))
+        if summary:
             summaries[path] = summary
     return summaries
+
+
+def parse_timestamp(value: str) -> dt.datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+    return parsed.astimezone(dt.timezone.utc)
+
+
+def artifact_findings(root: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    for path, state in artifact_states(root).items():
+        status = str(state.get("status", "active"))
+        if status == "captured":
+            continue
+        target = root / path
+        if not target.exists():
+            errors.append(f"missing active artifact: {path}")
+            continue
+        indexed_at = parse_timestamp(str(state.get("ts", "")))
+        if indexed_at:
+            modified_at = dt.datetime.fromtimestamp(target.stat().st_mtime, tz=dt.timezone.utc)
+            if modified_at > indexed_at + dt.timedelta(seconds=1):
+                warnings.append(f"artifact summary may be stale: {path}")
+    return errors, warnings
 
 
 def module_manifest_paths(root: Path | None = None) -> list[Path]:
@@ -552,20 +626,75 @@ def write_evidence(root: Path, *, kind: str, title: str, summary: str, story_id:
     return rel
 
 
-def write_artifact(root: Path, *, kind: str, title: str, summary: str, path: str = "") -> str:
+def write_artifact(
+    root: Path,
+    *,
+    kind: str,
+    title: str,
+    summary: str,
+    path: str = "",
+    lifecycle: str = "durable",
+) -> str:
     if path:
-        artifact_path = Path(path)
-        if not artifact_path.is_absolute():
-            artifact_path = root / artifact_path
+        artifact_path, rel = project_path(root, path)
         artifact_path.parent.mkdir(parents=True, exist_ok=True)
         if not artifact_path.exists():
             artifact_path.write_text(f"# {title}\n\n{summary.strip()}\n", encoding="utf-8")
     else:
         artifact_path = artifact_file(root, kind, title)
         artifact_path.write_text(f"# {title}\n\n{summary.strip()}\n", encoding="utf-8")
-    rel = artifact_path.relative_to(root).as_posix()
-    append_artifact_index(root, {"kind": kind, "title": title, "path": rel, "summary": summary.strip()})
-    append_ledger(root, "artifact.added", {"kind": kind, "path": rel})
+        rel = artifact_path.relative_to(root).as_posix()
+    append_artifact_index(
+        root,
+        {
+            "kind": kind,
+            "title": title,
+            "path": rel,
+            "summary": summary.strip(),
+            "lifecycle": lifecycle,
+            "status": "active",
+        },
+    )
+    append_ledger(root, "artifact.added", {"kind": kind, "path": rel, "lifecycle": lifecycle})
+    return rel
+
+
+def capture_artifact(
+    root: Path,
+    *,
+    path: str,
+    summary: str,
+    story_id: str = "",
+    evidence: str = "",
+    delete: bool = False,
+) -> str:
+    artifact_path, rel = project_path(root, path)
+    if story_id:
+        story = load_story(root, story_id)
+        artifacts = split_list(story.get("artifacts"))
+        if rel not in artifacts:
+            artifacts.append(rel)
+            story["artifacts"] = join_list(artifacts)
+            save_story(root, story)
+    if delete and artifact_path.exists():
+        if artifact_path.is_dir():
+            raise SystemExit(f"Refusing to delete artifact directory: {rel}")
+        artifact_path.unlink()
+    append_artifact_index(
+        root,
+        {
+            "kind": "artifact-capture",
+            "title": f"Captured {rel}",
+            "path": rel,
+            "summary": summary.strip(),
+            "story": story_id,
+            "evidence": evidence,
+            "lifecycle": "ephemeral",
+            "status": "captured",
+            "deleted": "true" if delete else "false",
+        },
+    )
+    append_ledger(root, "artifact.captured", {"path": rel, "story": story_id, "deleted": delete})
     return rel
 
 
@@ -624,25 +753,25 @@ def write_checkpoint(
 
 def link_artifact_to_story(root: Path, artifact_path: str, story_id: str) -> None:
     story = load_story(root, story_id)
-    target = root / artifact_path
+    target, rel = project_path(root, artifact_path)
     if not target.exists():
-        raise SystemExit(f"Artifact path does not exist: {artifact_path}")
+        raise SystemExit(f"Artifact path does not exist: {rel}")
     artifacts = split_list(story.get("artifacts"))
-    if artifact_path not in artifacts:
-        artifacts.append(artifact_path)
+    if rel not in artifacts:
+        artifacts.append(rel)
     story["artifacts"] = join_list(artifacts)
     save_story(root, story)
     append_artifact_index(
         root,
         {
             "kind": "story-link",
-            "title": f"{artifact_path} -> {story_id}",
-            "path": artifact_path,
+            "title": f"{rel} -> {story_id}",
+            "path": rel,
             "story": story_id,
             "summary": "Artifact linked to story.",
         },
     )
-    append_ledger(root, "artifact.linked_to_story", {"path": artifact_path, "story": story_id})
+    append_ledger(root, "artifact.linked_to_story", {"path": rel, "story": story_id})
 
 
 def validate_phase_transition(current: str, target: str, *, force: bool = False) -> None:
@@ -670,6 +799,8 @@ def audit_project(root: Path) -> list[str]:
     state = read_flat_yaml(state_path(root))
     if not state:
         return ["missing .forge-method/state.yaml"]
+    artifact_errors, _ = artifact_findings(root)
+    errors.extend(artifact_errors)
     if state.get("runtime") != RUNTIME_NAME:
         errors.append("state.runtime is not forge-method")
     if state.get("phase") not in PHASES:
@@ -687,7 +818,7 @@ def audit_project(root: Path) -> list[str]:
         if status in {"ready", "in_progress", "review"} and not story.get("acceptance_criteria"):
             errors.append(f"{story.get('id')}: executable story has no acceptance criteria")
         for artifact in split_list(story.get("artifacts")):
-            if not (root / artifact).exists():
+            if not (root / artifact).exists() and not artifact_missing_allowed(root, artifact):
                 errors.append(f"{story.get('id')}: linked artifact missing: {artifact}")
     return errors
 
@@ -987,8 +1118,48 @@ def cmd_evidence_add(args: argparse.Namespace) -> int:
 
 def cmd_artifact_add(args: argparse.Namespace) -> int:
     root, _ = load_state_or_fail(resolve_root(args.root))
-    rel = write_artifact(root, kind=args.kind, title=args.title, summary=args.summary, path=args.path or "")
+    rel = write_artifact(
+        root,
+        kind=args.kind,
+        title=args.title,
+        summary=args.summary,
+        path=args.path or "",
+        lifecycle=args.lifecycle,
+    )
+    if args.story:
+        link_artifact_to_story(root, rel, args.story)
     print(rel)
+    return 0
+
+
+def cmd_artifact_capture(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    rel = capture_artifact(
+        root,
+        path=args.path,
+        summary=args.summary,
+        story_id=args.story or "",
+        evidence=args.evidence or "",
+        delete=args.delete,
+    )
+    print(f"Captured: {rel}")
+    return 0
+
+
+def cmd_artifact_verify(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    errors, warnings = artifact_findings(root)
+    if errors:
+        print("Artifact verification failed:")
+        for error in errors:
+            print(f"- {error}")
+    if warnings:
+        print("Artifact verification warnings:")
+        for warning in warnings:
+            print(f"- {warning}")
+    if errors or (args.strict and warnings):
+        return 1
+    print("Artifact verification passed.")
     return 0
 
 
@@ -1006,7 +1177,10 @@ def cmd_artifact_list(args: argparse.Namespace) -> int:
         print("No artifacts.")
         return 0
     for artifact in artifacts:
-        print(f"{artifact.get('kind')}\t{artifact.get('path')}\t{artifact.get('title')}")
+        print(
+            f"{artifact.get('kind')}\t{artifact.get('status', 'active')}\t"
+            f"{artifact.get('lifecycle', 'durable')}\t{artifact.get('path')}\t{artifact.get('title')}"
+        )
     return 0
 
 
@@ -1178,7 +1352,12 @@ def build_context_pack_text(root: Path, state: dict[str, str]) -> str:
         for artifact in artifacts:
             summary = artifact.get("summary", "")
             suffix = f" - {summary}" if summary else ""
-            lines.append(f"- {artifact.get('kind')}: {artifact.get('path')} - {artifact.get('title')}{suffix}")
+            status = artifact.get("status", "active")
+            lifecycle = artifact.get("lifecycle", "durable")
+            lines.append(
+                f"- {artifact.get('kind')} [{status}/{lifecycle}]: "
+                f"{artifact.get('path')} - {artifact.get('title')}{suffix}"
+            )
     else:
         lines.append("- none")
     return "\n".join(lines) + "\n"
@@ -1531,7 +1710,23 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_add.add_argument("--title", required=True)
     artifact_add.add_argument("--summary", required=True)
     artifact_add.add_argument("--path")
+    artifact_add.add_argument("--lifecycle", choices=ARTIFACT_LIFECYCLES, default="durable")
+    artifact_add.add_argument("--story")
     artifact_add.set_defaults(func=cmd_artifact_add)
+
+    artifact_capture = artifact_sub.add_parser("capture", help="capture an artifact result and optionally delete it")
+    artifact_capture.add_argument("--root", default=".")
+    artifact_capture.add_argument("--path", required=True)
+    artifact_capture.add_argument("--summary", required=True)
+    artifact_capture.add_argument("--story")
+    artifact_capture.add_argument("--evidence")
+    artifact_capture.add_argument("--delete", action="store_true")
+    artifact_capture.set_defaults(func=cmd_artifact_capture)
+
+    artifact_verify = artifact_sub.add_parser("verify", help="verify artifact files and summaries")
+    artifact_verify.add_argument("--root", default=".")
+    artifact_verify.add_argument("--strict", action="store_true")
+    artifact_verify.set_defaults(func=cmd_artifact_verify)
 
     artifact_list = artifact_sub.add_parser("list", help="list recent artifacts")
     artifact_list.add_argument("--root", default=".")

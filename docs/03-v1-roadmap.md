@@ -47,6 +47,7 @@ transition
 story add/list/start/review/done/block
 artifact add/list
 artifact link-story
+artifact capture/verify
 evidence add
 checkpoint
 context pack

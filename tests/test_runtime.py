@@ -173,7 +173,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("core-runtime", modules)
         self.assertIn("software-builder", modules)
         self.assertIn("Workflow validation passed.", validation)
-        self.assertEqual(version.strip(), "1.3.0")
+        self.assertEqual(version.strip(), "1.4.0")
 
     def test_workflow_module_and_eval_generation(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -262,6 +262,85 @@ class RuntimeTests(unittest.TestCase):
 
             self.assertIn(artifact, story_file.read_text(encoding="utf-8"))
             self.assertIn("Audit passed.", run_cmd("audit", "--root", str(root)).stdout)
+
+    def test_missing_active_artifact_fails_verification_and_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            artifact = run_cmd(
+                "artifact",
+                "add",
+                "--root",
+                str(root),
+                "--kind",
+                "plan",
+                "--title",
+                "Active plan",
+                "--summary",
+                "This active artifact must remain available.",
+            ).stdout.strip()
+            (root / artifact).unlink()
+
+            verify = run_cmd("artifact", "verify", "--root", str(root), check=False)
+            audit = run_cmd("audit", "--root", str(root), check=False)
+
+            self.assertNotEqual(verify.returncode, 0)
+            self.assertIn("missing active artifact", verify.stdout)
+            self.assertNotEqual(audit.returncode, 0)
+            self.assertIn("missing active artifact", audit.stdout)
+
+    def test_ephemeral_artifact_can_be_captured_and_deleted(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-1",
+                "--title",
+                "Use ephemeral plan",
+                "--acceptance",
+                "captured result is enough to resume",
+            )
+            artifact = run_cmd(
+                "artifact",
+                "add",
+                "--root",
+                str(root),
+                "--kind",
+                "task",
+                "--title",
+                "Temporary agent task",
+                "--summary",
+                "Do this once, then capture the result.",
+                "--lifecycle",
+                "ephemeral",
+                "--story",
+                "story-1",
+            ).stdout.strip()
+            capture = run_cmd(
+                "artifact",
+                "capture",
+                "--root",
+                str(root),
+                "--path",
+                artifact,
+                "--story",
+                "story-1",
+                "--summary",
+                "The temporary task was captured into story state.",
+                "--delete",
+            ).stdout
+            pack = run_cmd("context", "pack", "--root", str(root)).stdout.strip()
+
+            self.assertIn("Captured:", capture)
+            self.assertFalse((root / artifact).exists())
+            self.assertIn("Artifact verification passed.", run_cmd("artifact", "verify", "--root", str(root)).stdout)
+            self.assertIn("Audit passed.", run_cmd("audit", "--root", str(root)).stdout)
+            self.assertIn("captured/ephemeral", (Path(pack)).read_text(encoding="utf-8"))
 
     def test_context_pack_respects_max_chars(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

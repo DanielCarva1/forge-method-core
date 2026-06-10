@@ -52,6 +52,10 @@ A bounded executable unit of work with acceptance criteria, status, optional che
 
 A durable relationship between an artifact and a story. Linked artifacts are checked during audit so story context does not silently disappear.
 
+## Artifact Lifecycle
+
+The state of a project artifact. Durable artifacts must remain available. Ephemeral artifacts may be deleted only after their result is captured in the artifact index, story, evidence, or checkpoint.
+
 ## Ready Gate
 
 The transition into `5-ready-operate`. It requires audit success, no active implementation/review stories, release evidence, and readiness state.
