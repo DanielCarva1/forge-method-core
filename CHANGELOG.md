@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.16.0
+
+Forge Method Core v1.16 adds route-safe resume and compact handoff recovery:
+
 - add non-mutating `preflight` to resolve runtime repo vs method project vs project parent folder before acting
 - include selected context files and recommended helper commands in preflight JSON/text output
 - document preflight as the first agent step before broad context loading
