@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+## 1.15.0
+
+Forge Method Core v1.15 adds release batching and operational planning:
+
+- add fast verification scripts for normal development without install smokes
+- document release batching so small stories do not become separate published versions
+- add `release plan` to suggest story, batch, hotfix, or breaking version cadence without publishing
+- add `release check` to validate local release readiness without publishing
+- add `status --brief` and `status --json` for compact operational state summaries
+- add `story export/import` for JSON story backlog batches
+- add module recommendation and `project create --module auto` for objective-based project setup
+
 ## 1.14.0
 
 Forge Method Core v1.14 adds durable review findings:

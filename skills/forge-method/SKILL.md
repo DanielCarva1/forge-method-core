@@ -41,15 +41,19 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" start
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project list --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project create --root . --name <name> --module <module-id>
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status --root . --brief
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" snapshot --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" input list --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" review list --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init --project <name>
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story export --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story import --root . --file backlog.json
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact verify
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module recommend --objective "<project objective>"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" agent recommend --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example create --root <path> --module <module-id>
@@ -61,6 +65,8 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" conte
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context recover --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" gate --root . --require-evals
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" release plan --root . --mode batch --touches runtime
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" release check --root . --mode batch --touches runtime
 ```
 
 When using the skill from a plugin checkout instead of user install, run the script from this skill directory.

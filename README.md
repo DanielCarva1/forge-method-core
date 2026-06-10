@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.14.0`.
+Current runtime version: `1.15.0`.
 
 ## Current Shape
 
@@ -74,17 +74,23 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" proje
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init --project my-project
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" version
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status --root . --brief
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" snapshot --root . --pretty
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" input list --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" review list --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story export --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story import --root . --file backlog.json
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" checkpoint --summary "What changed and what to do next"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context plan --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context recover --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact verify --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" gate --root . --require-evals
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" release plan --root . --mode batch --touches runtime
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" release check --root . --mode batch --touches runtime
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module recommend --objective "build a web app"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" agent recommend --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example create --root ./software-example --module software-builder
@@ -98,7 +104,19 @@ The script creates `.forge-method/` in the target project and keeps state out of
 
 ## Smoke Tests
 
-From the repository root:
+Use fast verification during normal development:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1
+```
+
+```bash
+bash scripts/verify-fast.sh
+```
+
+On Windows, the shell scripts require a registered WSL distribution. If WSL exists but no distro is installed, use the PowerShell scripts.
+
+Run targeted smokes when the touched area needs them:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1
@@ -119,6 +137,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify-all.ps1
 ```bash
 bash scripts/verify-all.sh
 ```
+
+Use full verification before publishing a release, after install/package changes, or after broad runtime changes. Story-by-story versioning is valid when the product is intentionally delivered one story at a time. When several completed stories already form one coherent product increment, batch them into a larger release.
 
 ## Product Direction
 
@@ -146,5 +166,6 @@ To create a normal method project from a packaged module:
 
 ```powershell
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project create --root . --name "My Project" --module software-builder
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project create --root . --name "My Project" --module auto --objective "build a web app"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project list --root .
 ```

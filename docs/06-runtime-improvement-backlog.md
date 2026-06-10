@@ -69,6 +69,7 @@
 - user skill installer
 - install smoke test
 - runtime smoke test
+- fast verification scripts
 - macOS installer
 - Linux installer
 - shell smoke tests
@@ -99,6 +100,16 @@
 
 ### Release Quality
 
+- release batch policy
 - signed releases
 - versioned changelog
 - plugin marketplace packaging
+
+## Candidate V1.15 Batch
+
+- release planning command that separates version choice from publishing
+- release readiness check that stays non-publishing
+- compact operator-facing status summary for existing projects
+- project-local backlog import/export for larger story groups
+- clearer module selection guidance during project creation
+- objective-based module recommendation and auto selection

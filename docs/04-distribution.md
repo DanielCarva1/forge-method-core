@@ -104,6 +104,12 @@ my-project/
 
 From this repository:
 
+During normal development:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1
+```
+
 ```powershell
 .\install.ps1
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py --help
@@ -114,7 +120,9 @@ python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py gate --
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py init --project smoke-test --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py start --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py project create --root <parent-folder> --name generated-project --module software-builder
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py project create --root <parent-folder> --name generated-project --module auto --objective "build a web app"
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py project list --root <parent-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py module recommend --objective "build a web app"
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py snapshot --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py agent list --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py agent recommend --root <temp-folder>
@@ -124,8 +132,13 @@ python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py checkpo
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py context plan --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py context recover --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py artifact verify --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py story export --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py story import --root <temp-folder> --file backlog.json
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py gate --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py release plan --root <repo-or-project-folder> --mode batch --touches runtime
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py release check --root <repo-folder> --mode batch --touches runtime
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py status --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py status --root <temp-folder> --brief
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py next --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py audit --root <temp-folder>
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1
@@ -138,6 +151,22 @@ python ~/.agents/skills/forge-method/scripts/forge_method_runtime.py --help
 bash scripts/smoke-runtime.sh
 bash scripts/smoke-install.sh
 ```
+
+On Windows, shell verification requires a registered WSL distribution. WSL version 2 without a distro is not enough to run `bash`; use the PowerShell verification scripts in that environment.
+
+## Release And Validation Policy
+
+Development changes should be grouped according to delivery mode. If the project is being delivered one story at a time, each story may have its own version. If several completed stories already form a coherent product increment, ship them as one batch. A batch should ship when it changes a meaningful product capability, public command surface, installation behavior, or user-facing workflow.
+
+Validation tiers:
+
+- fast: unit tests, workflow validation, and agent profile validation during normal development
+- targeted smoke: runtime smoke after workflow/state-transition changes; install smoke after install or packaging changes
+- full: both platform verifiers, plugin/skill validation, CI, and clean install proof before a published release
+
+Use `release plan` before publishing to choose story, batch, hotfix, or breaking cadence and to confirm the validation tier. Use `release check` after the batch is ready to verify local release readiness before full verification. Both commands are intentionally non-publishing; neither creates a tag nor a GitHub release.
+
+Do not create a tag or GitHub release for every small story when the work is already being accumulated as a package. Use patch releases for urgent fixes, story releases for intentional story-by-story delivery, minor releases for grouped backward-compatible capabilities, and major releases only for incompatible public surface changes.
 
 ## What Still Needs Productization
 

@@ -8,6 +8,7 @@ import datetime as dt
 import json
 import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -15,7 +16,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.14.0"
+RUNTIME_VERSION = "1.15.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -130,6 +131,8 @@ NEXT_BY_PHASE = {
     "5-ready-operate": "use, support, observe, and maintain the ready product",
     "6-evolve": "start the next version cycle from feedback, defects, or new intent",
 }
+
+SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
 def utc_now() -> str:
@@ -336,6 +339,88 @@ def print_state_summary(state: dict[str, str]) -> None:
     print(f"Human input required: {state.get('human_input_required', 'unknown')}")
     print(f"Readiness: {state.get('readiness', 'unknown')}")
     print(f"Next: {state.get('next_action', NEXT_BY_PHASE.get(state.get('phase', ''), 'inspect state'))}")
+
+
+def build_status_brief(root: Path, state: dict[str, str]) -> dict[str, Any]:
+    snapshot = build_snapshot(root, state)
+    next_story = snapshot["stories"]["next"] or {}
+    required_inputs = snapshot["human_inputs"]["required_open"]
+    open_findings = snapshot["review_findings"]["open"]
+    audit_errors = snapshot["quality"]["audit"]["errors"]
+    return {
+        "runtime": snapshot["runtime"],
+        "runtime_version": snapshot["runtime_version"],
+        "root": snapshot["root"],
+        "project": state.get("project", ""),
+        "phase": state.get("phase", ""),
+        "status": state.get("status", ""),
+        "workflow": state.get("active_workflow", ""),
+        "active_story": state.get("active_story", ""),
+        "readiness": state.get("readiness", ""),
+        "route": snapshot["route"],
+        "stories": {
+            "total": snapshot["stories"]["total"],
+            "counts": snapshot["stories"]["counts"],
+            "next": next_story,
+        },
+        "open_required_input": required_inputs[0] if required_inputs else None,
+        "open_review_findings": open_findings[:5],
+        "audit": {
+            "passed": snapshot["quality"]["audit"]["passed"],
+            "error_count": len(audit_errors),
+            "errors": audit_errors[:5],
+        },
+        "recommended_agents": [
+            item.get("id", "")
+            for item in snapshot["agents"]["recommended"]
+            if item.get("id")
+        ],
+        "context": snapshot["context"],
+    }
+
+
+def print_status_brief(root: Path, state: dict[str, str]) -> None:
+    brief = build_status_brief(root, state)
+    story_counts = brief["stories"]["counts"]
+    next_story = brief["stories"]["next"]
+    route = brief["route"]
+    print("Forge Method Status")
+    print(f"Workspace: {brief['root']}")
+    print(f"Project: {brief['project']}")
+    print(f"State: {brief['phase']} / {brief['status']} / {brief['workflow']}")
+    print(f"Readiness: {brief['readiness']}")
+    print(f"Route: {route.get('recommendation', '')}")
+    print(f"Next action: {route.get('next_action', '')}")
+    print(
+        "Stories: "
+        f"ready={story_counts.get('ready', 0)} "
+        f"in_progress={story_counts.get('in_progress', 0)} "
+        f"review={story_counts.get('review', 0)} "
+        f"blocked={story_counts.get('blocked', 0)} "
+        f"done={story_counts.get('done', 0)}"
+    )
+    if next_story:
+        print(f"Next story: {next_story.get('id')} [{next_story.get('status')}] {next_story.get('title')}")
+    else:
+        print("Next story: <none>")
+    open_input = brief["open_required_input"]
+    if open_input:
+        print(f"Open required input: {open_input.get('id')} - {open_input.get('prompt')}")
+    else:
+        print("Open required input: <none>")
+    open_findings = brief["open_review_findings"]
+    print(f"Open review findings: {len(open_findings)}")
+    for item in open_findings[:3]:
+        print(f"- {item.get('id')} [{item.get('severity')}] story={item.get('story')}: {item.get('title')}")
+    audit = brief["audit"]
+    print(f"Audit: {'passed' if audit['passed'] else 'failed'}")
+    for error in audit["errors"][:3]:
+        print(f"- {error}")
+    agents = brief["recommended_agents"]
+    print(f"Recommended agents: {', '.join(agents) if agents else '<none>'}")
+    context = brief["context"]
+    if context.get("load_plan"):
+        print(f"Context load plan: {context.get('load_plan')}")
 
 
 def write_state(root: Path, state: dict[str, Any]) -> None:
@@ -688,6 +773,72 @@ def module_manifest_by_id(root: Path | None, module_id: str) -> tuple[dict[str, 
         if module.get("id") == normalized:
             return module, path
     return None
+
+
+def module_summary(module: dict[str, str], *, score: int | None = None, reason: str = "") -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "id": module.get("id", ""),
+        "title": module.get("title", ""),
+        "purpose": module.get("purpose", ""),
+        "phase_span": module.get("phase_span", ""),
+        "workflows": module.get("workflows", ""),
+    }
+    if score is not None:
+        summary["score"] = score
+    if reason:
+        summary["reason"] = reason
+    return summary
+
+
+def objective_tokens(value: str) -> set[str]:
+    tokens = set(re.findall(r"[a-z0-9]+", value.lower()))
+    return {token for token in tokens if len(token) > 2}
+
+
+def score_module_for_objective(module: dict[str, str], objective: str) -> tuple[int, str]:
+    tokens = objective_tokens(objective)
+    if not tokens:
+        return 0, "no objective supplied"
+    searchable = " ".join(
+        [
+            module.get("id", ""),
+            module.get("title", ""),
+            module.get("purpose", ""),
+            module.get("phase_span", ""),
+            module.get("workflows", ""),
+        ]
+    ).lower()
+    matches = sorted(token for token in tokens if token in searchable)
+    score = len(matches)
+    if module.get("id") == "software-builder" and any(token in tokens for token in {"app", "api", "code", "software", "web"}):
+        score += 2
+        matches.append("software")
+    if module.get("id") == "game-studio" and any(token in tokens for token in {"game", "play", "prototype"}):
+        score += 2
+        matches.append("game")
+    if module.get("id") == "creative-studio" and any(token in tokens for token in {"brand", "creative", "content", "story"}):
+        score += 2
+        matches.append("creative")
+    if module.get("id") == "launch-ops" and any(token in tokens for token in {"launch", "release", "operate", "ops"}):
+        score += 2
+        matches.append("operate")
+    if module.get("id") == "runtime-builder" and any(token in tokens for token in {"runtime", "workflow", "module", "agent"}):
+        score += 2
+        matches.append("runtime")
+    reason = f"matched: {', '.join(dict.fromkeys(matches))}" if matches else "fallback option"
+    return score, reason
+
+
+def recommended_modules(root: Path | None, objective: str, *, limit: int = 5) -> list[dict[str, Any]]:
+    scored: list[dict[str, Any]] = []
+    for module, _ in module_manifests(root):
+        score, reason = score_module_for_objective(module, objective)
+        scored.append(module_summary(module, score=score, reason=reason))
+    scored.sort(key=lambda item: (-int(item.get("score", 0)), item.get("id", "")))
+    if objective and scored and int(scored[0].get("score", 0)) == 0:
+        for item in scored:
+            item["reason"] = "no strong objective match; choose by purpose"
+    return scored[:limit]
 
 
 def agent_profile_paths(root: Path | None = None) -> list[Path]:
@@ -1274,17 +1425,26 @@ def cmd_start(args: argparse.Namespace) -> int:
             rel = display_path(project_root, base=root)
             print(f"{index}. {label}\t{phase}\t{status}\t{rel}")
         print("Question: Which known project should be opened, or should a new project be created?")
+        print("Module choices for a new project:")
+        for item in recommended_modules(None, "", limit=5):
+            print(f"- {item.get('id')}: {item.get('purpose')}")
         print("Next: wait for the user's project choice, then run status in that project root or create a scaffolded project.")
         return 0
 
     if runtime_repo:
         print("Known projects: none")
         print("Question: Which project folder should be opened or created outside the runtime repo?")
+        print("Module choices:")
+        for item in recommended_modules(None, "", limit=5):
+            print(f"- {item.get('id')}: {item.get('purpose')}")
         print("Next: do not initialize project state in the runtime repo unless explicitly intentional.")
         return 0
 
     print("Known projects: none")
     print("Question: Create a new method project in this workspace?")
+    print("Module choices:")
+    for item in recommended_modules(None, "", limit=5):
+        print(f"- {item.get('id')}: {item.get('purpose')}")
     print(
         "Create command: "
         f"{command_hint_value(sys.executable)} "
@@ -1308,6 +1468,12 @@ def cmd_status(args: argparse.Namespace) -> int:
         print("Project state: missing")
         print("Next: run init")
         return 1
+    if args.json:
+        print(json.dumps(build_status_brief(state_root, state), ensure_ascii=True, sort_keys=True, indent=2))
+        return 0
+    if args.brief:
+        print_status_brief(state_root, state)
+        return 0
     print(f"Workspace: {state_root}")
     print_state_summary(state)
     return 0
@@ -1582,6 +1748,98 @@ def cmd_story_list(args: argparse.Namespace) -> int:
         return 0
     for story in stories:
         print(f"{story.get('id')}\t{story.get('status')}\t{story.get('title')}")
+    return 0
+
+
+def story_export_item(story: dict[str, str]) -> dict[str, Any]:
+    return {
+        "id": story.get("id", ""),
+        "title": story.get("title", ""),
+        "status": story.get("status", "ready"),
+        "phase": story.get("phase", ""),
+        "acceptance_criteria": split_list(story.get("acceptance_criteria")),
+        "checks": split_list(story.get("checks")),
+        "evidence": split_list(story.get("evidence")),
+        "artifacts": split_list(story.get("artifacts")),
+        "blocker": story.get("blocker", ""),
+    }
+
+
+def normalize_story_import_item(item: dict[str, Any], state: dict[str, str]) -> dict[str, Any]:
+    title = str(item.get("title", "")).strip()
+    if not title:
+        raise SystemExit("Imported stories require a title.")
+    story_id = slugify(str(item.get("id") or title))
+    status = str(item.get("status") or "ready")
+    if status not in STORY_STATUSES:
+        raise SystemExit(f"{story_id}: invalid imported story status {status}")
+
+    def list_field(name: str) -> str:
+        value = item.get(name, [])
+        if isinstance(value, list):
+            return join_list([str(part) for part in value])
+        return str(value or "")
+
+    return {
+        "id": story_id,
+        "title": title,
+        "status": status,
+        "phase": str(item.get("phase") or state.get("phase", "0-route")),
+        "acceptance_criteria": list_field("acceptance_criteria"),
+        "evidence": list_field("evidence"),
+        "checks": list_field("checks"),
+        "artifacts": list_field("artifacts"),
+        "blocker": str(item.get("blocker") or ""),
+    }
+
+
+def cmd_story_export(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    stories = list_stories(root)
+    if args.status:
+        stories = [story for story in stories if story.get("status") == args.status]
+    payload = {
+        "runtime": RUNTIME_NAME,
+        "runtime_version": RUNTIME_VERSION,
+        "generated_at": utc_now(),
+        "project": state.get("project", ""),
+        "story_count": len(stories),
+        "stories": [story_export_item(story) for story in stories],
+    }
+    text = json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2) + "\n"
+    if args.out:
+        out, rel = project_path(root, args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text, encoding="utf-8")
+        append_ledger(root, "story.backlog_exported", {"path": rel, "stories": len(stories)})
+        print(rel)
+        return 0
+    print(text.rstrip())
+    return 0
+
+
+def cmd_story_import(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    source, rel = project_path(root, args.file)
+    if not source.exists():
+        raise SystemExit(f"Story import file not found: {args.file}")
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    raw_stories = payload.get("stories") if isinstance(payload, dict) else payload
+    if not isinstance(raw_stories, list):
+        raise SystemExit("Story import file must contain a list or an object with a stories list.")
+    imported = 0
+    for raw_item in raw_stories:
+        if not isinstance(raw_item, dict):
+            raise SystemExit("Imported story entries must be objects.")
+        story = normalize_story_import_item(raw_item, state)
+        path = story_path(root, story["id"])
+        if path.exists() and not args.force:
+            raise SystemExit(f"Story already exists: {story['id']}")
+        save_story(root, story)
+        imported += 1
+    update_sprint(root)
+    append_ledger(root, "story.backlog_imported", {"path": rel, "stories": imported})
+    print(f"Stories imported: {imported}")
     return 0
 
 
@@ -1906,8 +2164,28 @@ def cmd_module_list(args: argparse.Namespace) -> int:
     if not manifests:
         print("No modules.")
         return 0
+    if args.json:
+        print(json.dumps({"modules": [module_summary(module) for module, _ in manifests]}, ensure_ascii=True, sort_keys=True, indent=2))
+        return 0
     for module, _ in manifests:
-        print(f"{module.get('id', '')}\t{module.get('title', '')}\t{module.get('phase_span', '')}")
+        print(f"{module.get('id', '')}\t{module.get('title', '')}\t{module.get('phase_span', '')}\t{module.get('purpose', '')}")
+    return 0
+
+
+def cmd_module_recommend(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_none(resolve_root(args.root))
+    recommendations = recommended_modules(root, args.objective or "", limit=args.limit)
+    if args.json:
+        print(json.dumps({"recommended": recommendations}, ensure_ascii=True, sort_keys=True, indent=2))
+        return 0
+    if not recommendations:
+        print("No modules.")
+        return 0
+    for item in recommendations:
+        print(
+            f"{item.get('id')}\t{item.get('score', 0)}\t"
+            f"{item.get('title')}\t{item.get('reason')}\t{item.get('purpose')}"
+        )
     return 0
 
 
@@ -1978,6 +2256,13 @@ def cmd_project_create(args: argparse.Namespace) -> int:
     project_root.mkdir(parents=True, exist_ok=True)
 
     module_id = slugify(args.module)
+    if module_id == "auto":
+        if not args.objective:
+            raise SystemExit("--module auto requires --objective.")
+        recommendations = recommended_modules(parent if state_path(parent).exists() else None, args.objective, limit=1)
+        if not recommendations:
+            raise SystemExit("No modules available for automatic selection.")
+        module_id = str(recommendations[0]["id"])
     match = module_manifest_by_id(parent if state_path(parent).exists() else None, module_id)
     if not match:
         match = module_manifest_by_id(None, module_id)
@@ -3212,6 +3497,233 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return 0
 
 
+def parse_semver(value: str) -> tuple[int, int, int]:
+    match = SEMVER_RE.match(value.strip())
+    if not match:
+        raise SystemExit(f"Expected semantic version X.Y.Z, got: {value}")
+    return int(match.group(1)), int(match.group(2)), int(match.group(3))
+
+
+def bump_semver(value: str, mode: str) -> str:
+    major, minor, patch = parse_semver(value)
+    if mode == "hotfix":
+        return f"{major}.{minor}.{patch + 1}"
+    if mode in {"story", "batch"}:
+        return f"{major}.{minor + 1}.0"
+    if mode == "breaking":
+        return f"{major + 1}.0.0"
+    raise SystemExit(f"Invalid release mode: {mode}")
+
+
+def current_version_for_release_plan(root: Path, explicit: str | None) -> str:
+    if explicit:
+        parse_semver(explicit)
+        return explicit
+    version_file = root / "VERSION"
+    if version_file.exists():
+        value = version_file.read_text(encoding="utf-8").strip()
+        parse_semver(value)
+        return value
+    state_root, state = load_state_or_none(root)
+    if state_root and state.get("runtime_version"):
+        parse_semver(state["runtime_version"])
+        return state["runtime_version"]
+    return RUNTIME_VERSION
+
+
+def release_validation_tier(mode: str, touches: list[str]) -> dict[str, str]:
+    touched = set(touches)
+    if mode == "breaking" or "install" in touched or "package" in touched:
+        return {
+            "development": "targeted-smoke",
+            "release": "full",
+            "reason": "public surface or distribution changed",
+        }
+    if "runtime" in touched or "workflow" in touched or "state" in touched:
+        return {
+            "development": "targeted-smoke",
+            "release": "full",
+            "reason": "runtime behavior or state transitions changed",
+        }
+    return {
+        "development": "fast",
+        "release": "full",
+        "reason": "normal development can stay fast; publishing still needs full verification",
+    }
+
+
+def cmd_release_plan(args: argparse.Namespace) -> int:
+    root = resolve_root(args.root)
+    current = current_version_for_release_plan(root, args.current_version)
+    suggested = bump_semver(current, args.mode)
+    validation = release_validation_tier(args.mode, args.touches or [])
+    plan = {
+        "runtime": RUNTIME_NAME,
+        "current_version": current,
+        "suggested_version": suggested,
+        "mode": args.mode,
+        "touches": args.touches or [],
+        "validation": validation,
+        "publish": {
+            "create_tag": False,
+            "create_release": False,
+            "rule": "plan only; tag and release after the batch is complete and full verification passes",
+        },
+    }
+    if args.json:
+        print(json.dumps(plan, ensure_ascii=True, sort_keys=True, indent=2))
+        return 0
+    print("Release plan")
+    print(f"Current version: {current}")
+    print(f"Suggested version: {suggested}")
+    print(f"Mode: {args.mode}")
+    print(f"Development validation: {validation['development']}")
+    print(f"Release validation: {validation['release']}")
+    print(f"Reason: {validation['reason']}")
+    print("Publish: no tag or release from this command")
+    return 0
+
+
+def changelog_section_items(path: Path, heading: str) -> list[str]:
+    if not path.exists():
+        return []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    in_section = False
+    items: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            if in_section:
+                break
+            in_section = stripped == heading
+            continue
+        if in_section and stripped.startswith("- "):
+            items.append(stripped[2:].strip())
+    return items
+
+
+def changelog_unreleased_items(path: Path) -> list[str]:
+    return changelog_section_items(path, "## Unreleased")
+
+
+def runtime_version_in_file(path: Path) -> str:
+    if not path.exists():
+        return ""
+    match = re.search(r'^RUNTIME_VERSION\s*=\s*"([^"]+)"', path.read_text(encoding="utf-8"), re.MULTILINE)
+    return match.group(1) if match else ""
+
+
+def plugin_manifest_version(path: Path) -> str:
+    if not path.exists():
+        return ""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return ""
+    return str(payload.get("version", ""))
+
+
+def git_clean_state(root: Path) -> tuple[bool | None, str]:
+    if not (root / ".git").exists():
+        return None, "not a git checkout"
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "status", "--porcelain"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+    except OSError as exc:
+        return None, f"git unavailable: {exc}"
+    if result.returncode != 0:
+        return None, result.stderr.strip() or "git status failed"
+    dirty_lines = [line for line in result.stdout.splitlines() if line.strip()]
+    if dirty_lines:
+        return False, f"{len(dirty_lines)} changed path(s)"
+    return True, "clean"
+
+
+def release_check_payload(root: Path, *, mode: str, touches: list[str], current_version: str | None) -> dict[str, Any]:
+    current = current_version_for_release_plan(root, current_version)
+    suggested = bump_semver(current, mode)
+    validation = release_validation_tier(mode, touches)
+    checks: list[dict[str, Any]] = []
+
+    def add_check(name: str, passed: bool, detail: str, *, required: bool = True) -> None:
+        checks.append({"name": name, "passed": passed, "required": required, "detail": detail})
+
+    version_file = root / "VERSION"
+    add_check("version_file", version_file.exists(), "VERSION exists" if version_file.exists() else "VERSION missing")
+    if version_file.exists():
+        add_check(
+            "version_file_matches_current",
+            version_file.read_text(encoding="utf-8").strip() == current,
+            f"VERSION is {version_file.read_text(encoding='utf-8').strip()}",
+        )
+
+    plugin_version = plugin_manifest_version(root / ".codex-plugin" / "plugin.json")
+    if plugin_version:
+        add_check("plugin_version_matches_current", plugin_version == current, f"plugin version is {plugin_version}")
+
+    runtime_version = runtime_version_in_file(root / "skills" / "forge-method" / "scripts" / "forge_method_runtime.py")
+    if runtime_version:
+        add_check("runtime_version_matches_current", runtime_version == current, f"runtime version is {runtime_version}")
+
+    changelog = root / "CHANGELOG.md"
+    unreleased = changelog_unreleased_items(changelog)
+    current_release_items = changelog_section_items(changelog, f"## {current}")
+    add_check("changelog_exists", changelog.exists(), "CHANGELOG.md exists" if changelog.exists() else "CHANGELOG.md missing")
+    add_check(
+        "changelog_release_items",
+        bool(unreleased or current_release_items),
+        f"{len(unreleased)} unreleased item(s), {len(current_release_items)} current release item(s)",
+    )
+
+    git_clean, git_detail = git_clean_state(root)
+    if git_clean is not None:
+        add_check("git_clean", git_clean, git_detail)
+
+    ready = all(item["passed"] for item in checks if item["required"])
+    return {
+        "runtime": RUNTIME_NAME,
+        "current_version": current,
+        "suggested_version": suggested,
+        "mode": mode,
+        "touches": touches,
+        "validation": validation,
+        "checks": checks,
+        "ready": ready,
+        "publish": {
+            "create_tag": False,
+            "create_release": False,
+            "rule": "check only; publish after full verification passes",
+        },
+    }
+
+
+def cmd_release_check(args: argparse.Namespace) -> int:
+    root = resolve_root(args.root)
+    payload = release_check_payload(
+        root,
+        mode=args.mode,
+        touches=args.touches or [],
+        current_version=args.current_version,
+    )
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2))
+    else:
+        print("Release check")
+        print(f"Current version: {payload['current_version']}")
+        print(f"Suggested version: {payload['suggested_version']}")
+        print(f"Ready: {'yes' if payload['ready'] else 'no'}")
+        for item in payload["checks"]:
+            marker = "PASS" if item["passed"] else "FAIL"
+            print(f"{marker} {item['name']}: {item['detail']}")
+        print("Publish: no tag or release from this command")
+    return 0 if payload["ready"] else 1
+
+
 def cmd_version(args: argparse.Namespace) -> int:
     print(RUNTIME_VERSION)
     return 0
@@ -3241,6 +3753,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     status = sub.add_parser("status", help="print current runtime state")
     status.add_argument("--root", default=".")
+    status.add_argument("--brief", action="store_true")
+    status.add_argument("--json", action="store_true")
     status.set_defaults(func=cmd_status)
 
     snapshot = sub.add_parser("snapshot", help="print machine-readable project state")
@@ -3277,6 +3791,18 @@ def build_parser() -> argparse.ArgumentParser:
     story_list = story_sub.add_parser("list", help="list stories")
     story_list.add_argument("--root", default=".")
     story_list.set_defaults(func=cmd_story_list)
+
+    story_export = story_sub.add_parser("export", help="export stories as JSON")
+    story_export.add_argument("--root", default=".")
+    story_export.add_argument("--status", choices=STORY_STATUSES)
+    story_export.add_argument("--out")
+    story_export.set_defaults(func=cmd_story_export)
+
+    story_import = story_sub.add_parser("import", help="import stories from JSON")
+    story_import.add_argument("--root", default=".")
+    story_import.add_argument("--file", required=True)
+    story_import.add_argument("--force", action="store_true")
+    story_import.set_defaults(func=cmd_story_import)
 
     story_start = story_sub.add_parser("start", help="start a story")
     story_start.add_argument("--root", default=".")
@@ -3380,7 +3906,14 @@ def build_parser() -> argparse.ArgumentParser:
     module_sub = module.add_subparsers(dest="module_command", required=True)
     module_list = module_sub.add_parser("list", help="list modules")
     module_list.add_argument("--root", default=".")
+    module_list.add_argument("--json", action="store_true")
     module_list.set_defaults(func=cmd_module_list)
+    module_recommend = module_sub.add_parser("recommend", help="recommend modules for an objective")
+    module_recommend.add_argument("--root", default=".")
+    module_recommend.add_argument("--objective")
+    module_recommend.add_argument("--limit", type=int, default=5)
+    module_recommend.add_argument("--json", action="store_true")
+    module_recommend.set_defaults(func=cmd_module_recommend)
     module_show = module_sub.add_parser("show", help="show a module manifest")
     module_show.add_argument("--root", default=".")
     module_show.add_argument("--id", required=True)
@@ -3576,6 +4109,23 @@ def build_parser() -> argparse.ArgumentParser:
     ready.add_argument("--check", action="append")
     ready.add_argument("--force", action="store_true")
     ready.set_defaults(func=cmd_ready)
+
+    release = sub.add_parser("release", help="plan release version and validation")
+    release_sub = release.add_subparsers(dest="release_command", required=True)
+    release_plan = release_sub.add_parser("plan", help="plan version bump and validation tier without publishing")
+    release_plan.add_argument("--root", default=".")
+    release_plan.add_argument("--mode", choices=["story", "batch", "hotfix", "breaking"], default="batch")
+    release_plan.add_argument("--touches", action="append", choices=["docs", "runtime", "workflow", "state", "install", "package"])
+    release_plan.add_argument("--current-version")
+    release_plan.add_argument("--json", action="store_true")
+    release_plan.set_defaults(func=cmd_release_plan)
+    release_check = release_sub.add_parser("check", help="check release readiness without publishing")
+    release_check.add_argument("--root", default=".")
+    release_check.add_argument("--mode", choices=["story", "batch", "hotfix", "breaking"], default="batch")
+    release_check.add_argument("--touches", action="append", choices=["docs", "runtime", "workflow", "state", "install", "package"])
+    release_check.add_argument("--current-version")
+    release_check.add_argument("--json", action="store_true")
+    release_check.set_defaults(func=cmd_release_check)
 
     handoff = sub.add_parser("handoff", help="write a continuation handoff")
     handoff.add_argument("--root", default=".")

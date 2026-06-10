@@ -49,7 +49,7 @@ snapshot
 next
 transition
 project list/create
-story add/list/start/review/done/block
+story add/list/export/import/start/review/done/block
 input add/list/answer/defer
 review add/list/resolve/waive
 artifact add/list
@@ -60,7 +60,7 @@ checkpoint
 context pack
 context plan
 context recover
-module list/show/create
+module list/recommend/show/create
 agent list/show/recommend/validate
 workflow list/validate/create
 eval add/list/run
@@ -68,6 +68,7 @@ eval kinds: workflow-routing, workflow-trigger, artifact-exists
 audit
 gate
 ready
+release plan/check
 handoff
 doctor
 ```

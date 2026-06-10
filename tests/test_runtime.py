@@ -111,7 +111,7 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(snapshot["runtime_version"], "1.14.0")
+            self.assertEqual(snapshot["runtime_version"], "1.15.0")
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
@@ -139,6 +139,54 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(snapshot["state"]["phase"], "0-route")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "continue_current_workflow")
+
+    def test_status_brief_surfaces_actionable_runtime_state(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
+                run_cmd("transition", "--root", str(root), "--phase", phase, "--force")
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-1",
+                "--title",
+                "Build thing",
+                "--acceptance",
+                "thing works",
+            )
+            run_cmd("story", "start", "--root", str(root), "--id", "story-1")
+            run_cmd("story", "review", "--root", str(root), "--id", "story-1")
+            run_cmd(
+                "review",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "status-review-proof",
+                "--story",
+                "story-1",
+                "--title",
+                "Status review proof",
+                "--severity",
+                "medium",
+                "--summary",
+                "Status should surface open review findings.",
+            )
+
+            brief = run_cmd("status", "--root", str(root), "--brief").stdout
+            payload = json.loads(run_cmd("status", "--root", str(root), "--json").stdout)
+
+            self.assertIn("Route: resolve_review_findings", brief)
+            self.assertIn("Next story: story-1 [review] Build thing", brief)
+            self.assertIn("Open review findings: 1", brief)
+            self.assertIn("status-review-proof", brief)
+            self.assertEqual(payload["route"]["recommendation"], "resolve_review_findings")
+            self.assertEqual(payload["stories"]["next"]["id"], "story-1")
+            self.assertEqual(payload["open_review_findings"][0]["id"], "status-review-proof")
 
     def test_human_input_blocks_and_releases_runtime_state(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -216,6 +264,61 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(snapshot["human_inputs"]["required_open"], [])
             self.assertEqual(snapshot["route"]["recommendation"], "resolve_story_blocker")
             self.assertIn("Audit passed.", run_cmd("audit", "--root", str(root)).stdout)
+
+    def test_story_backlog_export_and_import_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw) / "source"
+            target = Path(raw) / "target"
+            root.mkdir()
+            target.mkdir()
+            run_cmd("init", "--project", "Source Project", "--root", str(root))
+            run_cmd("init", "--project", "Target Project", "--root", str(target))
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-a",
+                "--title",
+                "Story A",
+                "--acceptance",
+                "A works",
+            )
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-b",
+                "--title",
+                "Story B",
+                "--acceptance",
+                "B works",
+                "--status",
+                "planned",
+            )
+
+            exported = json.loads(run_cmd("story", "export", "--root", str(root)).stdout)
+            export_path = root / ".forge-method" / "artifacts" / "backlog.json"
+            out = run_cmd("story", "export", "--root", str(root), "--out", ".forge-method/artifacts/backlog.json").stdout
+            target_import = target / "backlog.json"
+            target_import.write_text(json.dumps(exported), encoding="utf-8")
+
+            imported = run_cmd("story", "import", "--root", str(target), "--file", "backlog.json").stdout
+            duplicate = run_cmd("story", "import", "--root", str(target), "--file", "backlog.json", check=False)
+            target_snapshot = json.loads(run_cmd("snapshot", "--root", str(target)).stdout)
+
+            self.assertEqual(exported["story_count"], 2)
+            self.assertTrue(export_path.exists())
+            self.assertIn(".forge-method/artifacts/backlog.json", out)
+            self.assertIn("Stories imported: 2", imported)
+            self.assertNotEqual(duplicate.returncode, 0)
+            self.assertIn("Story already exists: story-a", duplicate.stderr + duplicate.stdout)
+            self.assertEqual(target_snapshot["stories"]["counts"]["ready"], 1)
+            self.assertEqual(target_snapshot["stories"]["counts"]["planned"], 1)
+            self.assertIn("story-a", run_cmd("story", "list", "--root", str(target)).stdout)
 
     def test_done_story_requires_evidence_or_summary(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -350,6 +453,92 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Phase: 5-ready-operate", status)
             self.assertIn("Readiness: ready", status)
 
+    def test_release_plan_suggests_version_without_publishing(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "VERSION").write_text("1.14.0\n", encoding="utf-8")
+
+            batch = json.loads(
+                run_cmd(
+                    "release",
+                    "plan",
+                    "--root",
+                    str(root),
+                    "--mode",
+                    "batch",
+                    "--touches",
+                    "runtime",
+                    "--json",
+                ).stdout
+            )
+            hotfix = json.loads(
+                run_cmd(
+                    "release",
+                    "plan",
+                    "--root",
+                    str(root),
+                    "--mode",
+                    "hotfix",
+                    "--current-version",
+                    "1.14.0",
+                    "--json",
+                ).stdout
+            )
+            story = run_cmd(
+                "release",
+                "plan",
+                "--root",
+                str(root),
+                "--mode",
+                "story",
+                "--touches",
+                "docs",
+            ).stdout
+
+            self.assertEqual(batch["suggested_version"], "1.15.0")
+            self.assertEqual(batch["validation"]["development"], "targeted-smoke")
+            self.assertFalse(batch["publish"]["create_release"])
+            self.assertEqual(hotfix["suggested_version"], "1.14.1")
+            self.assertIn("Suggested version: 1.15.0", story)
+            self.assertIn("Publish: no tag or release", story)
+
+    def test_release_check_validates_local_release_readiness(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "VERSION").write_text("1.14.0\n", encoding="utf-8")
+            (root / "CHANGELOG.md").write_text(
+                "# Changelog\n\n## Unreleased\n\n- add useful release checks\n\n## 1.14.0\n",
+                encoding="utf-8",
+            )
+            manifest_dir = root / ".codex-plugin"
+            manifest_dir.mkdir()
+            (manifest_dir / "plugin.json").write_text(
+                json.dumps({"name": "forge-method-core", "version": "1.14.0"}),
+                encoding="utf-8",
+            )
+
+            ready = json.loads(
+                run_cmd(
+                    "release",
+                    "check",
+                    "--root",
+                    str(root),
+                    "--mode",
+                    "batch",
+                    "--touches",
+                    "docs",
+                    "--json",
+                ).stdout
+            )
+            (root / "CHANGELOG.md").write_text("# Changelog\n\n## Unreleased\n\n## 1.14.0\n", encoding="utf-8")
+            blocked = run_cmd("release", "check", "--root", str(root), "--mode", "batch", check=False)
+
+            self.assertTrue(ready["ready"])
+            self.assertEqual(ready["suggested_version"], "1.15.0")
+            self.assertFalse(ready["publish"]["create_release"])
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertIn("FAIL changelog_release_items", blocked.stdout)
+
     def test_artifact_is_indexed_and_added_to_context_pack(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -378,11 +567,17 @@ class RuntimeTests(unittest.TestCase):
 
     def test_packaged_modules_and_workflows_validate(self) -> None:
         modules = run_cmd("module", "list").stdout
+        modules_json = json.loads(run_cmd("module", "list", "--json").stdout)
+        module_recommendation = json.loads(
+            run_cmd("module", "recommend", "--objective", "build a web app with an API", "--json").stdout
+        )
         validation = run_cmd("workflow", "validate").stdout
         version = run_cmd("version").stdout
 
         self.assertIn("core-runtime", modules)
         self.assertIn("software-builder", modules)
+        self.assertTrue(modules_json["modules"])
+        self.assertEqual(module_recommendation["recommended"][0]["id"], "software-builder")
         self.assertIn("Workflow validation passed.", validation)
         agents = run_cmd("agent", "list").stdout
         agent_validation = run_cmd("agent", "validate").stdout
@@ -390,7 +585,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("facilitator", agents)
         self.assertIn("quality-reviewer", agents)
         self.assertIn("Agent profile validation passed.", agent_validation)
-        self.assertEqual(version.strip(), "1.14.0")
+        self.assertEqual(version.strip(), "1.15.0")
 
     def test_context_plan_selects_relevant_files_and_updates_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -433,7 +628,7 @@ class RuntimeTests(unittest.TestCase):
             selected_paths = [item["path"] for item in plan["selected"]]
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(plan["runtime_version"], "1.14.0")
+            self.assertEqual(plan["runtime_version"], "1.15.0")
             self.assertEqual(plan["state"]["phase"], "4-build-verify")
             self.assertIn(".forge-method/state.yaml", selected_paths)
             self.assertIn(".forge-method/sprint.yaml", selected_paths)
@@ -550,6 +745,26 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("night-watch", project_list)
             self.assertIn("Gate passed.", gate)
             self.assertIn("Evals: 1/1 passed", gate)
+
+    def test_project_create_auto_selects_module_from_objective(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            parent = Path(raw)
+            run_cmd(
+                "project",
+                "create",
+                "--root",
+                str(parent),
+                "--name",
+                "Game Idea",
+                "--module",
+                "auto",
+                "--objective",
+                "prototype a game with play loops",
+            )
+            root = parent / "game-idea"
+            state = (root / ".forge-method" / "state.yaml").read_text(encoding="utf-8")
+
+            self.assertIn('module: "game-studio"', state)
 
     def test_workflow_module_and_eval_generation(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
