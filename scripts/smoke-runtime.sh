@@ -36,6 +36,7 @@ mkdir -p "$tmp"
 "$python_bin" "$runtime" artifact list --root "$tmp"
 "$python_bin" "$runtime" artifact verify --root "$tmp"
 "$python_bin" "$runtime" audit --root "$tmp"
+"$python_bin" "$runtime" gate --root "$tmp" --require-evals --summary "Runtime smoke quality gate passed." --context-pack --max-chars 1200
 "$python_bin" "$runtime" ready --root "$tmp" --summary "Smoke project is ready." --check audit
 "$python_bin" "$runtime" status --root "$tmp"
 

@@ -55,6 +55,7 @@ module list/show/create
 workflow list/validate/create
 eval add/list/run
 audit
+gate
 ready
 handoff
 doctor

@@ -173,7 +173,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("core-runtime", modules)
         self.assertIn("software-builder", modules)
         self.assertIn("Workflow validation passed.", validation)
-        self.assertEqual(version.strip(), "1.4.0")
+        self.assertEqual(version.strip(), "1.5.0")
 
     def test_workflow_module_and_eval_generation(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -283,11 +283,14 @@ class RuntimeTests(unittest.TestCase):
 
             verify = run_cmd("artifact", "verify", "--root", str(root), check=False)
             audit = run_cmd("audit", "--root", str(root), check=False)
+            gate = run_cmd("gate", "--root", str(root), check=False)
 
             self.assertNotEqual(verify.returncode, 0)
             self.assertIn("missing active artifact", verify.stdout)
             self.assertNotEqual(audit.returncode, 0)
             self.assertIn("missing active artifact", audit.stdout)
+            self.assertNotEqual(gate.returncode, 0)
+            self.assertIn("Gate failed:", gate.stdout)
 
     def test_ephemeral_artifact_can_be_captured_and_deleted(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -341,6 +344,58 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Artifact verification passed.", run_cmd("artifact", "verify", "--root", str(root)).stdout)
             self.assertIn("Audit passed.", run_cmd("audit", "--root", str(root)).stdout)
             self.assertIn("captured/ephemeral", (Path(pack)).read_text(encoding="utf-8"))
+
+    def test_gate_requires_evals_and_writes_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+
+            missing = run_cmd("gate", "--root", str(root), "--require-evals", check=False)
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn("eval: no evals configured", missing.stdout)
+
+            run_cmd(
+                "workflow",
+                "create",
+                "--root",
+                str(root),
+                "--id",
+                "gate-flow",
+                "--title",
+                "Gate Flow",
+                "--trigger",
+                "quality gate requested",
+                "--input",
+                "project state",
+                "--step",
+                "run objective checks",
+                "--output",
+                "gate evidence",
+                "--done",
+                "gate passes",
+                "--blocked",
+                "required checks fail",
+                "--handoff",
+                "preserve failures and next action",
+                "--eval-query",
+                "run quality gate",
+            )
+            passed = run_cmd(
+                "gate",
+                "--root",
+                str(root),
+                "--require-evals",
+                "--summary",
+                "Quality gate passed.",
+                "--context-pack",
+            ).stdout
+            evidence_files = list((root / ".forge-method" / "evidence").glob("*gate*.md"))
+
+            self.assertIn("Gate passed.", passed)
+            self.assertIn("Evals: 1/1 passed", passed)
+            self.assertIn("Evidence:", passed)
+            self.assertTrue(evidence_files)
+            self.assertTrue((root / ".forge-method" / "context" / "current-pack.md").exists())
 
     def test_context_pack_respects_max_chars(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

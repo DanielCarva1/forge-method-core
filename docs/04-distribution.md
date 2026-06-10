@@ -118,6 +118,7 @@ python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py init --
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py start --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py checkpoint --root <temp-folder> --summary "Progress memory"
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py artifact verify --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py gate --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py status --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py next --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py audit --root <temp-folder>

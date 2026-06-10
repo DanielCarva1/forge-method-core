@@ -29,6 +29,7 @@ mkdir -p "$tmp"
 "$python_bin" "$installed_runtime" transition --root "$tmp" --phase 1-discovery --status discovery-ready --workflow discover-intent
 "$python_bin" "$installed_runtime" story add --root "$tmp" --id install-story --title "Installed runtime works" --acceptance "installed helper can write durable state"
 "$python_bin" "$installed_runtime" artifact verify --root "$tmp"
+"$python_bin" "$installed_runtime" gate --root "$tmp" --require-evals --summary "Installed runtime quality gate passed."
 "$python_bin" "$installed_runtime" status --root "$tmp"
 "$python_bin" "$installed_runtime" next --root "$tmp"
 "$python_bin" "$installed_runtime" audit --root "$tmp"

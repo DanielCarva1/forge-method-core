@@ -15,7 +15,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.4.0"
+RUNTIME_VERSION = "1.5.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -1438,9 +1438,9 @@ def cmd_eval_list(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_eval_run(args: argparse.Namespace) -> int:
-    root, _ = load_state_or_fail(resolve_root(args.root))
+def run_eval_items(root: Path) -> tuple[list[str], list[str]]:
     evals = list_evals(root)
+    passed: list[str] = []
     failures: list[str] = []
     for item in evals:
         eval_id = item.get("id", "")
@@ -1460,15 +1460,30 @@ def cmd_eval_run(args: argparse.Namespace) -> int:
         if errors:
             failures.append(f"{eval_id}: {', '.join(errors)}")
         else:
-            print(f"PASS {eval_id}")
+            passed.append(eval_id)
     append_ledger(root, "eval.run", {"count": len(evals), "failures": len(failures)})
+    return passed, failures
+
+
+def cmd_eval_run(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    passed, failures = run_eval_items(root)
+    for eval_id in passed:
+        print(f"PASS {eval_id}")
     if failures:
         print("Eval run failed:")
         for failure in failures:
             print(f"- {failure}")
         return 1
-    print(f"Eval run passed: {len(evals)} eval(s)")
+    print(f"Eval run passed: {len(passed)} eval(s)")
     return 0
+
+
+def workflow_validation_errors(root: Path | None = None) -> list[str]:
+    errors: list[str] = []
+    for path in reference_workflow_paths(root):
+        errors.extend(validate_workflow_file(path))
+    return errors
 
 
 def cmd_audit(args: argparse.Namespace) -> int:
@@ -1481,6 +1496,92 @@ def cmd_audit(args: argparse.Namespace) -> int:
         return 1
     print("Audit passed.")
     return 0
+
+
+def cmd_gate(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    audit_errors = [
+        error
+        for error in audit_project(root)
+        if not error.startswith("missing active artifact:")
+    ]
+    if audit_errors:
+        errors.extend(f"audit: {error}" for error in audit_errors)
+
+    artifact_errors, artifact_warnings = artifact_findings(root)
+    if artifact_errors:
+        errors.extend(f"artifact: {error}" for error in artifact_errors)
+    if artifact_warnings:
+        warnings.extend(f"artifact: {warning}" for warning in artifact_warnings)
+
+    workflow_errors = workflow_validation_errors(root)
+    if workflow_errors:
+        errors.extend(f"workflow: {error}" for error in workflow_errors)
+
+    eval_count = len(list_evals(root))
+    passed_evals, eval_failures = run_eval_items(root)
+    if args.require_evals and eval_count == 0:
+        errors.append("eval: no evals configured")
+    if eval_failures:
+        errors.extend(f"eval: {failure}" for failure in eval_failures)
+
+    strict_failures = warnings if args.strict else []
+    passed = not errors and not strict_failures
+    append_ledger(
+        root,
+        "gate.run",
+        {
+            "passed": passed,
+            "errors": len(errors),
+            "warnings": len(warnings),
+            "evals": eval_count,
+        },
+    )
+
+    if passed:
+        print("Gate passed.")
+        print(f"Audit: passed")
+        print(f"Artifacts: passed")
+        print(f"Workflows: passed")
+        print(f"Evals: {len(passed_evals)}/{eval_count} passed")
+        if warnings:
+            print("Warnings:")
+            for warning in warnings:
+                print(f"- {warning}")
+        if args.summary:
+            evidence = write_evidence(
+                root,
+                kind="gate",
+                title="Quality gate",
+                summary=args.summary,
+                checks=[
+                    "audit",
+                    "artifact verify",
+                    "workflow validate",
+                    "eval run",
+                ],
+            )
+            print(f"Evidence: {evidence}")
+        if args.context_pack:
+            out = write_context_pack(root, state, out=method_dir(root) / "context" / "current-pack.md", max_chars=args.max_chars)
+            print(f"Context pack: {out}")
+        return 0
+
+    print("Gate failed:")
+    for error in errors:
+        print(f"- {error}")
+    if strict_failures:
+        print("Strict warning failures:")
+        for warning in strict_failures:
+            print(f"- {warning}")
+    elif warnings:
+        print("Warnings:")
+        for warning in warnings:
+            print(f"- {warning}")
+    return 1
 
 
 def cmd_ready(args: argparse.Namespace) -> int:
@@ -1780,6 +1881,15 @@ def build_parser() -> argparse.ArgumentParser:
     audit = sub.add_parser("audit", help="validate project state")
     audit.add_argument("--root", default=".")
     audit.set_defaults(func=cmd_audit)
+
+    gate = sub.add_parser("gate", help="run project quality gate")
+    gate.add_argument("--root", default=".")
+    gate.add_argument("--strict", action="store_true")
+    gate.add_argument("--require-evals", action="store_true")
+    gate.add_argument("--summary")
+    gate.add_argument("--context-pack", action="store_true")
+    gate.add_argument("--max-chars", type=int, default=8000)
+    gate.set_defaults(func=cmd_gate)
 
     ready = sub.add_parser("ready", help="mark project ready for use")
     ready.add_argument("--root", default=".")

@@ -49,6 +49,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workf
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval run
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" checkpoint --summary "<progress memory>"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" gate --root . --require-evals
 ```
 
 When using the skill from a plugin checkout instead of user install, run the script from this skill directory.
@@ -85,3 +86,4 @@ When using the skill from a plugin checkout instead of user install, run the scr
 
 Never mark a workflow done because the agent "feels" done. Mark done only when the workflow `done_when` conditions are satisfied and evidence is written.
 After meaningful progress, write a checkpoint so future sessions can resume without replaying the chat.
+Before ready/release, run the quality gate and preserve the result as evidence when it passes.

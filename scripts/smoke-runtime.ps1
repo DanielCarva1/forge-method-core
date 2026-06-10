@@ -50,6 +50,7 @@ Run python $runtime context pack --root $tmp --max-chars 1200
 Run python $runtime artifact list --root $tmp
 Run python $runtime artifact verify --root $tmp
 Run python $runtime audit --root $tmp
+Run python $runtime gate --root $tmp --require-evals --summary "Runtime smoke quality gate passed." --context-pack --max-chars 1200
 Run python $runtime ready --root $tmp --summary "Smoke project is ready." --check audit
 Run python $runtime status --root $tmp
 

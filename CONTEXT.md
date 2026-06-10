@@ -60,6 +60,10 @@ The state of a project artifact. Durable artifacts must remain available. Epheme
 
 The transition into `5-ready-operate`. It requires audit success, no active implementation/review stories, release evidence, and readiness state.
 
+## Quality Gate
+
+A deterministic verification command that runs project audit, artifact verification, workflow validation, and local evals before a project advances or is declared ready.
+
 ## Agent-Facing Workflow
 
 A compact Markdown state machine loaded only when the current runtime state requires it.

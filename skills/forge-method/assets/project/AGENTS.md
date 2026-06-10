@@ -21,6 +21,7 @@ Before marking work done:
 - write a checkpoint for meaningful progress
 - update story status
 - update runtime state
+- run the quality gate before ready/release
 
 Agent-facing workflow docs should stay compact state machines.
 Temporary task artifacts can be removed only after their result is captured with `artifact capture`.

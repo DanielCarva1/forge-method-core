@@ -27,6 +27,7 @@
 - required evidence for done stories
 - check recording
 - audit command
+- quality gate command
 - ready gate command
 
 ### Context Continuity

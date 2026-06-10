@@ -55,6 +55,10 @@ A task is complete only when:
 - state is updated
 - next action is known
 
+## Quality Gate Rule
+
+Before declaring a project ready, the agent should run the quality gate. The gate combines project audit, artifact verification, workflow validation, and local evals so the agent does not accidentally skip a required check.
+
 ## Start Rule
 
 Starting the method is a routing operation, not implementation work. The agent must resolve whether the current folder already has project state, whether it is the runtime repo, and which known project roots exist before asking the user to choose or create a project.

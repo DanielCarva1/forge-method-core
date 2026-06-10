@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.5.0
+
+Forge Method Core v1.5 adds a unified project quality gate:
+
+- `gate` runs project audit, artifact verification, workflow validation, and local evals together
+- `--require-evals` prevents a project from passing without configured eval coverage
+- `--strict` can promote artifact freshness warnings to failures
+- passing gates can write evidence and refresh the current context pack
+- direct and installed runtime smokes run the gate before ready/release
+
 ## 1.4.0
 
 Forge Method Core v1.4 improves artifact governance:
