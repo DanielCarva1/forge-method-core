@@ -33,10 +33,14 @@ class RuntimeTests(unittest.TestCase):
             state = root / ".forge-method" / "state.yaml"
             sprint = root / ".forge-method" / "sprint.yaml"
             ledger = root / ".forge-method" / "ledger.ndjson"
+            guidance = root / "AGENTS.md"
+            verifier = root / ".codex" / "agents" / "forge-verifier.toml"
 
             self.assertTrue(state.exists())
             self.assertTrue(sprint.exists())
             self.assertTrue(ledger.exists())
+            self.assertTrue(guidance.exists())
+            self.assertTrue(verifier.exists())
             self.assertIn('runtime: "forge-method"', state.read_text(encoding="utf-8"))
             self.assertIn('"event": "project.initialized"', ledger.read_text(encoding="utf-8"))
 

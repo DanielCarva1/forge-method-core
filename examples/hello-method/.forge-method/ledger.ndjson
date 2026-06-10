@@ -1,3 +1,3 @@
-{"event": "project.initialized", "payload": {"project": "hello-method", "project_id": "hello-method"}, "ts": "2026-06-10T04:48:58+00:00"}
-{"event": "state.transitioned", "payload": {"phase": "1-discovery", "status": "discovery-ready"}, "ts": "2026-06-10T04:48:59+00:00"}
-{"event": "story.added", "payload": {"id": "hello-story", "status": "ready"}, "ts": "2026-06-10T04:48:59+00:00"}
+{"event": "project.initialized", "payload": {"guidance": ["AGENTS.md", ".codex/agents/forge-planner.toml", ".codex/agents/forge-researcher.toml", ".codex/agents/forge-verifier.toml", ".codex/agents/forge-worker.toml"], "project": "hello-method", "project_id": "hello-method"}, "ts": "2026-06-10T05:07:53+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "1-discovery", "status": "discovery-ready"}, "ts": "2026-06-10T05:07:53+00:00"}
+{"event": "story.added", "payload": {"id": "hello-story", "status": "ready"}, "ts": "2026-06-10T05:07:53+00:00"}

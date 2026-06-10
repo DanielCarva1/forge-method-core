@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
 RUNTIME_VERSION = "1.0.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
+PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
 STATE_DIR = ".forge-method"
 STATE_FILE = "state.yaml"
@@ -183,6 +185,23 @@ def ensure_dirs(root: Path) -> Path:
     ]:
         (fm / name).mkdir(parents=True, exist_ok=True)
     return fm
+
+
+def copy_project_guidance(root: Path, *, force: bool = False) -> list[str]:
+    copied: list[str] = []
+    if not PROJECT_TEMPLATE_DIR.exists():
+        return copied
+    for source in PROJECT_TEMPLATE_DIR.rglob("*"):
+        if source.is_dir():
+            continue
+        rel = source.relative_to(PROJECT_TEMPLATE_DIR)
+        target = root / rel
+        if target.exists() and not force:
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        copied.append(target.relative_to(root).as_posix())
+    return copied
 
 
 def load_state_or_none(root: Path) -> tuple[Path | None, dict[str, str]]:
@@ -468,9 +487,16 @@ def cmd_init(args: argparse.Namespace) -> int:
         header="Forge Method project registry",
     )
     update_sprint(root)
-    append_ledger(root, "project.initialized", {"project": args.project, "project_id": project_id})
+    copied_guidance = [] if args.no_project_guidance else copy_project_guidance(root, force=args.force)
+    append_ledger(
+        root,
+        "project.initialized",
+        {"project": args.project, "project_id": project_id, "guidance": copied_guidance},
+    )
     print(f"Initialized Forge Method project: {args.project}")
     print(f"State: {path}")
+    if copied_guidance:
+        print(f"Project guidance: {', '.join(copied_guidance)}")
     print(f"Next: {state['next_action']}")
     return 0
 
@@ -888,6 +914,7 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--module", default="software-builder")
     init.add_argument("--force", action="store_true")
     init.add_argument("--allow-runtime-state", action="store_true")
+    init.add_argument("--no-project-guidance", action="store_true")
     init.set_defaults(func=cmd_init)
 
     status = sub.add_parser("status", help="print current runtime state")
