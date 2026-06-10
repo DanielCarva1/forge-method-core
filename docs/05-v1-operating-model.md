@@ -54,6 +54,10 @@ A task is complete only when:
 - state is updated
 - next action is known
 
+## Start Rule
+
+Starting the method is a routing operation, not implementation work. The agent must resolve whether the current folder already has project state, whether it is the runtime repo, and which known project roots exist before asking the user to choose or create a project.
+
 ## Context Rule
 
 The agent should not load all project documentation. It should build a compact context pack from:

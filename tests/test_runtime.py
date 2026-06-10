@@ -44,6 +44,34 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn('runtime: "forge-method"', state.read_text(encoding="utf-8"))
             self.assertIn('"event": "project.initialized"', ledger.read_text(encoding="utf-8"))
 
+    def test_start_routes_existing_project_from_child_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            child = root / "src" / "feature"
+            child.mkdir(parents=True)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+
+            output = run_cmd("start", "--root", str(child)).stdout
+
+            self.assertIn("Route: existing-method-project", output)
+            self.assertIn("Project: Example Project", output)
+            self.assertIn("Audit: passed", output)
+
+    def test_start_lists_known_projects_without_initializing_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            parent = Path(raw)
+            project = parent / "client-project"
+            project.mkdir()
+            run_cmd("init", "--project", "Client Project", "--root", str(project))
+
+            output = run_cmd("start", "--root", str(parent)).stdout
+
+            self.assertIn("Project state: missing", output)
+            self.assertIn("Known projects:", output)
+            self.assertIn("Client Project", output)
+            self.assertIn("Question: Which known project should be opened", output)
+            self.assertFalse((parent / ".forge-method").exists())
+
     def test_invalid_phase_transition_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -144,7 +172,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("core-runtime", modules)
         self.assertIn("software-builder", modules)
         self.assertIn("Workflow validation passed.", validation)
-        self.assertEqual(version.strip(), "1.1.0")
+        self.assertEqual(version.strip(), "1.2.0")
 
     def test_workflow_module_and_eval_generation(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

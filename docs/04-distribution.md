@@ -50,6 +50,7 @@ Acceptance:
 - workflow references are installed.
 - runtime script is installed.
 - helper script responds to `--help`.
+- helper script resolves startup with `start --root <workspace>`.
 
 ### Level 2: Codex Plugin
 
@@ -97,8 +98,11 @@ my-project/
     stories/
     artifacts/
     context/
+    evals/
     evidence/
     handoffs/
+    modules/
+    workflows/
 ```
 
 ## Current Verified Commands
@@ -108,7 +112,9 @@ From this repository:
 ```powershell
 .\install.ps1
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py --help
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py start --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py init --project smoke-test --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py start --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py status --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py next --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py audit --root <temp-folder>

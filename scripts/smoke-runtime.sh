@@ -10,6 +10,7 @@ rm -rf "$tmp"
 mkdir -p "$tmp"
 
 "$python_bin" "$runtime" init --project smoke-test --root "$tmp"
+"$python_bin" "$runtime" start --root "$tmp"
 "$python_bin" "$runtime" module list --root "$tmp"
 "$python_bin" "$runtime" workflow validate
 "$python_bin" "$runtime" workflow create --root "$tmp" --id smoke-flow --title "Smoke Flow" --trigger "state.status == smoke" --input "smoke input" --step "perform smoke step" --output "smoke output" --done "smoke output exists" --blocked "smoke input missing" --handoff "preserve smoke result" --eval-query "run smoke flow"

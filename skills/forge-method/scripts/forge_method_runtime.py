@@ -15,7 +15,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.1.0"
+RUNTIME_VERSION = "1.2.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -74,6 +74,21 @@ WORKFLOW_REQUIRED_SECTIONS = [
     "blocked_when:",
     "handoff:",
 ]
+
+SCAN_SKIP_DIRS = {
+    ".git",
+    ".hg",
+    ".svn",
+    ".next",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    ".venv",
+}
 
 NEXT_BY_PHASE = {
     "0-route": "resolve project route and confirm whether this is a new or existing project",
@@ -220,6 +235,60 @@ def load_state_or_fail(root: Path) -> tuple[Path, dict[str, str]]:
             raise SystemExit("Runtime repo detected. No project state found here.")
         raise SystemExit("No .forge-method/state.yaml found. Run init first.")
     return state_root, state
+
+
+def discover_project_roots(root: Path, *, max_depth: int = 2) -> list[Path]:
+    root = root.resolve()
+    max_depth = max(0, min(max_depth, 5))
+    found: list[Path] = []
+    queue: list[tuple[Path, int]] = [(root, 0)]
+    seen: set[Path] = set()
+    while queue:
+        current, depth = queue.pop(0)
+        if current in seen:
+            continue
+        seen.add(current)
+        if state_path(current).exists():
+            found.append(current)
+            continue
+        if depth >= max_depth:
+            continue
+        try:
+            children = sorted(current.iterdir(), key=lambda path: path.name.lower())
+        except OSError:
+            continue
+        for child in children:
+            if not child.is_dir():
+                continue
+            if child.is_symlink():
+                continue
+            if child.name in SCAN_SKIP_DIRS:
+                continue
+            queue.append((child, depth + 1))
+    return found
+
+
+def display_path(path: Path, *, base: Path) -> str:
+    try:
+        return path.relative_to(base).as_posix() or "."
+    except ValueError:
+        return str(path)
+
+
+def command_hint_value(value: str | Path) -> str:
+    text = str(value).replace('"', '\\"')
+    return f'"{text}"'
+
+
+def print_state_summary(state: dict[str, str]) -> None:
+    print(f"Project: {state.get('project', '<unknown>')}")
+    print(f"Phase: {state.get('phase', '<unknown>')}")
+    print(f"Status: {state.get('status', '<unknown>')}")
+    print(f"Workflow: {state.get('active_workflow', '<none>')}")
+    print(f"Active story: {state.get('active_story', '') or '<none>'}")
+    print(f"Human input required: {state.get('human_input_required', 'unknown')}")
+    print(f"Readiness: {state.get('readiness', 'unknown')}")
+    print(f"Next: {state.get('next_action', NEXT_BY_PHASE.get(state.get('phase', ''), 'inspect state'))}")
 
 
 def write_state(root: Path, state: dict[str, Any]) -> None:
@@ -600,6 +669,57 @@ def cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_start(args: argparse.Namespace) -> int:
+    root = resolve_root(args.root)
+    state_root, state = load_state_or_none(root)
+    print("Forge Method Start")
+    print(f"Workspace: {root}")
+
+    if state_root:
+        print("Route: existing-method-project")
+        print(f"Project root: {state_root}")
+        print_state_summary(state)
+        errors = audit_project(state_root)
+        print(f"Audit: {'passed' if not errors else 'failed'}")
+        for error in errors:
+            print(f"- {error}")
+        return 0
+
+    runtime_repo = is_runtime_repo(root)
+    print(f"Runtime repo: {'yes' if runtime_repo else 'no'}")
+    print("Project state: missing")
+    projects = discover_project_roots(root, max_depth=args.scan_depth)
+    if projects:
+        print("Known projects:")
+        for index, project_root in enumerate(projects, start=1):
+            project_state = read_flat_yaml(state_path(project_root))
+            label = project_state.get("project", project_root.name)
+            phase = project_state.get("phase", "<unknown>")
+            status = project_state.get("status", "<unknown>")
+            rel = display_path(project_root, base=root)
+            print(f"{index}. {label}\t{phase}\t{status}\t{rel}")
+        print("Question: Which known project should be opened, or should a new project be created?")
+        print("Next: wait for the user's project choice, then run status in that project root or init a new project.")
+        return 0
+
+    if runtime_repo:
+        print("Known projects: none")
+        print("Question: Which project folder should be opened or created outside the runtime repo?")
+        print("Next: do not initialize project state in the runtime repo unless explicitly intentional.")
+        return 0
+
+    print("Known projects: none")
+    print("Question: Create a new method project in this workspace?")
+    print(
+        "Create command: "
+        f"{command_hint_value(sys.executable)} "
+        f"{command_hint_value(Path(__file__).resolve())} "
+        f"init --project <name> --root {command_hint_value(root)}"
+    )
+    print("Next: wait for the project name, then initialize durable state.")
+    return 0
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     root = resolve_root(args.root)
     state_root, state = load_state_or_none(root)
@@ -614,14 +734,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         print("Next: run init")
         return 1
     print(f"Workspace: {state_root}")
-    print(f"Project: {state.get('project', '<unknown>')}")
-    print(f"Phase: {state.get('phase', '<unknown>')}")
-    print(f"Status: {state.get('status', '<unknown>')}")
-    print(f"Workflow: {state.get('active_workflow', '<none>')}")
-    print(f"Active story: {state.get('active_story', '') or '<none>'}")
-    print(f"Human input required: {state.get('human_input_required', 'unknown')}")
-    print(f"Readiness: {state.get('readiness', 'unknown')}")
-    print(f"Next: {state.get('next_action', '<unknown>')}")
+    print_state_summary(state)
     return 0
 
 
@@ -1149,6 +1262,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     version = sub.add_parser("version", help="print runtime version")
     version.set_defaults(func=cmd_version)
+
+    start = sub.add_parser("start", help="resolve project route and next action")
+    start.add_argument("--root", default=".")
+    start.add_argument("--scan-depth", type=int, default=2)
+    start.set_defaults(func=cmd_start)
 
     init = sub.add_parser("init", help="initialize .forge-method state")
     init.add_argument("--project", required=True)

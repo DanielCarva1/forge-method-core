@@ -20,7 +20,9 @@ mkdir -p "$tmp"
 "$python_bin" "$installed_runtime" --help
 "$python_bin" "$installed_runtime" module list
 "$python_bin" "$installed_runtime" workflow validate
+"$python_bin" "$installed_runtime" start --root "$tmp"
 "$python_bin" "$installed_runtime" init --project install-smoke --root "$tmp"
+"$python_bin" "$installed_runtime" start --root "$tmp"
 "$python_bin" "$installed_runtime" workflow create --root "$tmp" --id install-flow --title "Install Flow" --trigger "installed runtime available" --input "installed runtime" --step "validate installed runtime" --output "install proof" --done "install proof exists" --blocked "runtime missing" --handoff "preserve install result" --eval-query "prove install flow"
 "$python_bin" "$installed_runtime" eval run --root "$tmp"
 "$python_bin" "$installed_runtime" transition --root "$tmp" --phase 1-discovery --status discovery-ready --workflow discover-intent

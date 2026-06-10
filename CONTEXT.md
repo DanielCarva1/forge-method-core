@@ -12,6 +12,10 @@ The user-facing method invoked from Codex through the `$forge-method` skill. It 
 
 A state-machine system that turns intent into artifacts, implementation, validation, release, and future evolution.
 
+## Start Route
+
+The deterministic entry route that resolves whether the current workspace is an existing method project, the runtime repo, or a folder that can create or contain method projects.
+
 ## Method Project
 
 A project initialized with `.forge-method/` state. A method project may be software, product, creative, game, automation, or runtime-module work.

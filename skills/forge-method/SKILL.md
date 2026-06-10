@@ -25,16 +25,18 @@ Look for:
 ```txt
 .forge-method/state.yaml
 .forge-method/sprint.yaml
-.forge-method/artifact-index.yaml
+.forge-method/artifacts/index.ndjson
 ```
 
 If missing, offer to initialize the workspace.
+Before offering, run the start helper so project choices come from disk rather than chat memory.
 
 ## Runtime Helper
 
 When useful, run the helper script:
 
 ```powershell
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" start --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init --project <name>

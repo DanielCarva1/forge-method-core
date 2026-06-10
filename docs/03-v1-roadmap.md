@@ -26,14 +26,20 @@ Delivered surfaces:
 - `.forge-method/projects.yaml`
 - `.forge-method/sprint.yaml`
 - `.forge-method/stories/`
+- `.forge-method/artifacts/`
 - `.forge-method/evidence/`
 - `.forge-method/context/`
+- `.forge-method/evals/`
+- `.forge-method/handoffs/`
+- `.forge-method/workflows/`
+- `.forge-method/modules/`
 - `.forge-method/ledger.ndjson`
 
 ## Required Commands
 
 ```powershell
 init
+start
 status
 next
 transition

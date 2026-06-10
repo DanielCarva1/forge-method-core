@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0
+
+Forge Method Core v1.2 improves the first-run and resume experience:
+
+- deterministic `start` helper for project routing
+- existing project detection from nested folders
+- known project listing from a parent workspace
+- runtime repo protection during startup
+- tests covering start/resume routing without creating accidental project state
+
 ## 1.1.0
 
 Forge Method Core v1.1 adds agent-facing hardening for project evolution:

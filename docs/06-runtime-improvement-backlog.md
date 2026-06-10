@@ -6,6 +6,7 @@
 
 - runtime repo detection through `.codex-plugin/plugin.json`
 - method project detection through `.forge-method/state.yaml`
+- start route with known project listing
 - runtime-vs-project doctor command
 - status command that does not infer from chat history
 

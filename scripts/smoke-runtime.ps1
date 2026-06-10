@@ -24,6 +24,7 @@ if (Test-Path -LiteralPath $tmp) {
 New-Item -ItemType Directory -Path $tmp | Out-Null
 
 Run python $runtime init --project smoke-test --root $tmp
+Run python $runtime start --root $tmp
 Run python $runtime module list --root $tmp
 Run python $runtime workflow validate
 Run python $runtime workflow create --root $tmp --id smoke-flow --title "Smoke Flow" --trigger "state.status == smoke" --input "smoke input" --step "perform smoke step" --output "smoke output" --done "smoke output exists" --blocked "smoke input missing" --handoff "preserve smoke result" --eval-query "run smoke flow"
