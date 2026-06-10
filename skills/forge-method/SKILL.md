@@ -40,6 +40,8 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init --project <name>
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow validate
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
 ```
 
@@ -63,6 +65,7 @@ When using the skill from a plugin checkout instead of user install, run the scr
 - Discovery: read `references/workflow-discover-intent.md`.
 - Specification: read `references/workflow-write-spec.md`.
 - Planning: read `references/workflow-plan-sprint.md`.
+- Validation strategy: read `references/workflow-test-strategy.md`.
 - Build a story: read `references/workflow-build-story.md`.
 - Creative/domain ideation: read `references/workflow-creative-session.md`.
 - Game project path: read `references/workflow-game-project.md`.

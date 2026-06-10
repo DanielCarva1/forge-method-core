@@ -1,0 +1,7 @@
+# Forge Method module
+id: "creative-studio"
+title: "Creative Studio"
+purpose: "Explore creative directions, select a concrete direction, and turn it into durable artifacts."
+phase_span: "1-discovery | 2-specification | 3-plan"
+workflows: "creative-session | write-spec | plan-sprint"
+

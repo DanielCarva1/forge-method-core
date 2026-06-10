@@ -18,6 +18,7 @@ This repository is the core runtime and distribution package.
 ```txt
 .codex-plugin/plugin.json          Codex plugin manifest
 skills/forge-method/SKILL.md       Main runtime skill
+skills/forge-method/modules/        Packaged module manifests
 skills/forge-method/references/    Compact state-machine workflows
 skills/forge-method/scripts/       Deterministic runtime helpers
 docs/                              Product and architecture proposal
@@ -59,6 +60,8 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init 
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow validate
 ```
 
 The script creates `.forge-method/` in the target project and keeps state out of the chat transcript.

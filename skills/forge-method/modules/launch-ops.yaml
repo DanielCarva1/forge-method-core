@@ -1,0 +1,7 @@
+# Forge Method module
+id: "launch-ops"
+title: "Launch Ops"
+purpose: "Move a project into ready/operate, preserve release evidence, and route future evolution."
+phase_span: "4-build-verify | 5-ready-operate | 6-evolve"
+workflows: "ready-release | evolve-project | context-recovery"
+

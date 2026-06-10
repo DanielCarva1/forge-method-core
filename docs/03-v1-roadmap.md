@@ -41,6 +41,8 @@ story add/list/start/review/done/block
 artifact add/list
 evidence add
 context pack
+module list/show
+workflow list/validate
 audit
 ready
 handoff

@@ -1,0 +1,7 @@
+# Forge Method module
+id: "software-builder"
+title: "Software Builder"
+purpose: "Turn specifications into implementation stories, code changes, checks, review, and evidence."
+phase_span: "2-specification | 3-plan | 4-build-verify | 5-ready-operate"
+workflows: "write-spec | plan-sprint | build-story | ready-release"
+

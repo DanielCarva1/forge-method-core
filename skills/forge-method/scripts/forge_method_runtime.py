@@ -15,6 +15,7 @@ from typing import Any
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
 RUNTIME_VERSION = "1.0.0"
+SKILL_DIR = Path(__file__).resolve().parents[1]
 
 STATE_DIR = ".forge-method"
 STATE_FILE = "state.yaml"
@@ -61,6 +62,16 @@ STORY_TRANSITIONS = {
     "deferred": {"planned", "ready"},
     "done": set(),
 }
+
+WORKFLOW_REQUIRED_SECTIONS = [
+    "trigger:",
+    "inputs:",
+    "steps:",
+    "outputs:",
+    "done_when:",
+    "blocked_when:",
+    "handoff:",
+]
 
 NEXT_BY_PHASE = {
     "0-route": "resolve project route and confirm whether this is a new or existing project",
@@ -303,6 +314,38 @@ def recent_artifacts(root: Path, limit: int = 5) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             continue
     return entries[-limit:]
+
+
+def module_manifest_paths(root: Path | None = None) -> list[Path]:
+    paths: list[Path] = []
+    skill_modules = SKILL_DIR / "modules"
+    if skill_modules.exists():
+        paths.extend(sorted(skill_modules.glob("*.yaml")))
+    if root is not None:
+        project_modules = method_dir(root) / "modules"
+        if project_modules.exists():
+            paths.extend(sorted(project_modules.glob("*.yaml")))
+    return paths
+
+
+def reference_workflow_paths() -> list[Path]:
+    refs = SKILL_DIR / "references"
+    if not refs.exists():
+        return []
+    return sorted(refs.glob("workflow-*.md"))
+
+
+def validate_workflow_file(path: Path) -> list[str]:
+    if not path.exists():
+        return [f"missing workflow file: {path}"]
+    text = path.read_text(encoding="utf-8")
+    errors = []
+    for section in WORKFLOW_REQUIRED_SECTIONS:
+        if section not in text:
+            errors.append(f"{path.name}: missing section `{section}`")
+    if len(text.splitlines()) > 120:
+        errors.append(f"{path.name}: too long for an agent-facing workflow")
+    return errors
 
 
 def write_evidence(root: Path, *, kind: str, title: str, summary: str, story_id: str = "", checks: list[str] | None = None) -> str:
@@ -645,6 +688,56 @@ def cmd_artifact_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_module_list(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_none(resolve_root(args.root))
+    manifests = module_manifest_paths(root)
+    if not manifests:
+        print("No modules.")
+        return 0
+    seen: set[str] = set()
+    for path in manifests:
+        module = read_flat_yaml(path)
+        module_id = module.get("id", path.stem)
+        if module_id in seen:
+            continue
+        seen.add(module_id)
+        print(f"{module_id}\t{module.get('title', '')}\t{module.get('phase_span', '')}")
+    return 0
+
+
+def cmd_module_show(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_none(resolve_root(args.root))
+    for path in module_manifest_paths(root):
+        module = read_flat_yaml(path)
+        if module.get("id", path.stem) == args.id:
+            print(path.read_text(encoding="utf-8"))
+            return 0
+    raise SystemExit(f"Module not found: {args.id}")
+
+
+def cmd_workflow_list(args: argparse.Namespace) -> int:
+    for path in reference_workflow_paths():
+        print(path.name)
+    return 0
+
+
+def cmd_workflow_validate(args: argparse.Namespace) -> int:
+    if args.path:
+        paths = [Path(args.path)]
+    else:
+        paths = reference_workflow_paths()
+    errors: list[str] = []
+    for path in paths:
+        errors.extend(validate_workflow_file(path))
+    if errors:
+        print("Workflow validation failed:")
+        for error in errors:
+            print(f"- {error}")
+        return 1
+    print("Workflow validation passed.")
+    return 0
+
+
 def cmd_context_pack(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     story = load_story(root, state["active_story"]) if state.get("active_story") else None
@@ -869,6 +962,24 @@ def build_parser() -> argparse.ArgumentParser:
     evidence_add.add_argument("--story")
     evidence_add.add_argument("--check", action="append")
     evidence_add.set_defaults(func=cmd_evidence_add)
+
+    module = sub.add_parser("module", help="inspect runtime modules")
+    module_sub = module.add_subparsers(dest="module_command", required=True)
+    module_list = module_sub.add_parser("list", help="list modules")
+    module_list.add_argument("--root", default=".")
+    module_list.set_defaults(func=cmd_module_list)
+    module_show = module_sub.add_parser("show", help="show a module manifest")
+    module_show.add_argument("--root", default=".")
+    module_show.add_argument("--id", required=True)
+    module_show.set_defaults(func=cmd_module_show)
+
+    workflow = sub.add_parser("workflow", help="inspect and validate workflow references")
+    workflow_sub = workflow.add_subparsers(dest="workflow_command", required=True)
+    workflow_list = workflow_sub.add_parser("list", help="list packaged workflows")
+    workflow_list.set_defaults(func=cmd_workflow_list)
+    workflow_validate = workflow_sub.add_parser("validate", help="validate packaged workflows")
+    workflow_validate.add_argument("--path")
+    workflow_validate.set_defaults(func=cmd_workflow_validate)
 
     artifact = sub.add_parser("artifact", help="manage artifacts")
     artifact_sub = artifact.add_subparsers(dest="artifact_command", required=True)

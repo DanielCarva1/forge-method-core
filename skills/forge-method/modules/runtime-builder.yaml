@@ -1,0 +1,7 @@
+# Forge Method module
+id: "runtime-builder"
+title: "Runtime Builder"
+purpose: "Create new workflows, modules, skills, scripts, and validations for Forge Method projects."
+phase_span: "1-discovery | 2-specification | 3-plan | 4-build-verify"
+workflows: "runtime-builder | workflow-validate | build-story"
+

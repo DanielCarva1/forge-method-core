@@ -38,3 +38,5 @@ blocked_when:
   - playable target is undefined
   - required assets are unavailable
 
+handoff:
+  - preserve game brief path, engine decision, vertical slice target, and next implementation story

@@ -37,3 +37,5 @@ blocked_when:
   - trigger overlaps another module without routing rule
   - required external connector is unavailable
 
+handoff:
+  - preserve generated artifact paths, validation results, smoke/eval plan, and distribution note

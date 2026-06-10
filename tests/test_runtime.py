@@ -132,6 +132,14 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Example spec", index.read_text(encoding="utf-8"))
             self.assertIn("Example spec", pack.read_text(encoding="utf-8"))
 
+    def test_packaged_modules_and_workflows_validate(self) -> None:
+        modules = run_cmd("module", "list").stdout
+        validation = run_cmd("workflow", "validate").stdout
+
+        self.assertIn("core-runtime", modules)
+        self.assertIn("software-builder", modules)
+        self.assertIn("Workflow validation passed.", validation)
+
 
 if __name__ == "__main__":
     unittest.main()

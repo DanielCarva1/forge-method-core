@@ -1,0 +1,7 @@
+# Forge Method module
+id: "game-studio"
+title: "Game Studio"
+purpose: "Preserve game-specific concept, mechanic, prototype, design, engine, and vertical-slice decisions."
+phase_span: "1-discovery | 2-specification | 3-plan | 4-build-verify"
+workflows: "game-project | creative-session | plan-sprint | build-story"
+

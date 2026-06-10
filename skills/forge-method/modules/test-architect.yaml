@@ -1,0 +1,7 @@
+# Forge Method module
+id: "test-architect"
+title: "Test Architect"
+purpose: "Define validation strategy, risk checks, review gates, and evidence expectations."
+phase_span: "2-specification | 3-plan | 4-build-verify | 5-ready-operate"
+workflows: "test-strategy | build-story | ready-release"
+

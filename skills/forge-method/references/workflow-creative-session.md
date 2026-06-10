@@ -35,3 +35,5 @@ blocked_when:
   - user preference is required between materially different directions
   - target audience or output format is missing
 
+handoff:
+  - preserve selected direction, artifact path, rejected options summary, and next workflow
