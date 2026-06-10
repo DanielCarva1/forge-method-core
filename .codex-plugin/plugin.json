@@ -1,0 +1,23 @@
+{
+  "name": "forge-method-core",
+  "version": "0.1.0",
+  "description": "State-machine runtime for Codex-native AI-driven product, software, creative, and game workflows.",
+  "author": {
+    "name": "DanielCarva1"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Forge Method Core",
+    "shortDescription": "Run state-machine creation workflows inside Codex.",
+    "longDescription": "Forge Method Core is a Codex-native workflow framework inspired by BMAD, Spec Kit, Kiro, Aider, SWE-agent, and iterative repair loops. It keeps durable project state in files, loads compact state-machine workflows as skills, and separates runtime development from projects created with the runtime.",
+    "developerName": "DanielCarva1",
+    "category": "Productivity",
+    "capabilities": [
+      "Agent Skills",
+      "State Machines",
+      "Project Runtime",
+      "AI Driven Development"
+    ],
+    "defaultPrompt": "Start Forge Method in this workspace."
+  }
+}

@@ -1,0 +1,11 @@
+# Forge Method state
+runtime: "forge-method"
+runtime_version: "0.1.0"
+project: ""
+mode: "software-builder"
+phase: "0-route"
+status: "initialized"
+active_workflow: "start-runtime"
+human_input_required: "false"
+next_action: "confirm project intent and move to discovery"
+

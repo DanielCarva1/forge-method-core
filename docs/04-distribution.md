@@ -1,0 +1,112 @@
+# Distribution Plan
+
+## Goal
+
+A friend should be able to clone the repo, install the runtime, open Codex, and start a method project without understanding the internal architecture.
+
+## Distribution Levels
+
+### Level 1: User Skill Install
+
+This is the current working path.
+
+```powershell
+git clone <repo-url>
+cd forge-method-core
+.\install.ps1
+```
+
+The installer copies:
+
+```txt
+skills/forge-method
+```
+
+to:
+
+```txt
+%USERPROFILE%\.agents\skills\forge-method
+```
+
+Then the user invokes:
+
+```txt
+$forge-method
+```
+
+Acceptance:
+
+- `SKILL.md` is installed.
+- workflow references are installed.
+- runtime script is installed.
+- helper script responds to `--help`.
+
+### Level 2: Codex Plugin
+
+The repo already contains:
+
+```txt
+.codex-plugin/plugin.json
+skills/
+scripts/
+assets/
+```
+
+This is the package shape for a Codex plugin. The plugin manifest validates with the Codex plugin-creator validator.
+
+Acceptance:
+
+- `.codex-plugin/plugin.json` validates.
+- all skills have valid front matter.
+- plugin can be shared or installed through a marketplace-backed flow later.
+
+### Level 3: Project Template
+
+Future path:
+
+```powershell
+forge-method init my-project
+```
+
+or:
+
+```powershell
+npx forge-method init my-project
+```
+
+This would create:
+
+```txt
+my-project/
+  AGENTS.md
+  .forge-method/
+    state.yaml
+    sprint.yaml
+    evidence/
+    handoffs/
+    ephemeral/
+```
+
+## Current Verified Commands
+
+From this prototype:
+
+```powershell
+.\install.ps1
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py --help
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py init --project smoke-test --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py status --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py next --root <temp-folder>
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1
+```
+
+## What Still Needs Productization
+
+- macOS/Linux installer
+- repository smoke test in CI
+- module packs
+- marketplace-backed plugin flow
+- better context pack builder
+- sprint/story parser
+- GitHub PR workflow

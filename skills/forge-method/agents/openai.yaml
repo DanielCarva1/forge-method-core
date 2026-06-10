@@ -1,0 +1,4 @@
+interface:
+  display_name: "Forge Method"
+  short_description: "State-machine runtime for Codex-native creation workflows."
+  default_prompt: "Start Forge Method in this workspace."

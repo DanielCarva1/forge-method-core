@@ -1,0 +1,11 @@
+# Forge Method state
+updated_at: 2026-06-10T04:19:53+00:00
+runtime: "forge-method"
+runtime_version: "0.1.0"
+project: "hello-method"
+mode: "software-builder"
+phase: "0-route"
+status: "route-ready"
+active_workflow: "start-runtime"
+human_input_required: "false"
+next_action: "confirm project intent and move to discovery"
