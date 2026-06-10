@@ -28,6 +28,9 @@ mkdir -p "$tmp"
 "$python_bin" "$runtime" status --root "$tmp"
 "$python_bin" "$runtime" next --root "$tmp"
 "$python_bin" "$runtime" transition --root "$tmp" --phase 1-discovery --status discovery-ready --workflow discover-intent
+"$python_bin" "$runtime" input add --root "$tmp" --id smoke-audience --prompt "Who is the target audience?" --reason "Discovery needs an audience before specification."
+"$python_bin" "$runtime" input list --root "$tmp" --status open
+"$python_bin" "$runtime" input answer --root "$tmp" --id smoke-audience --answer "Runtime smoke users" --next-action "continue smoke discovery"
 "$python_bin" "$runtime" transition --root "$tmp" --phase 2-specification --status specification-ready --workflow write-spec
 "$python_bin" "$runtime" artifact add --root "$tmp" --kind spec --title "Smoke specification" --summary "The smoke project requires durable state, evidence, and ready gate validation." --path ".forge-method/artifacts/smoke-spec.md" --eval
 "$python_bin" "$runtime" transition --root "$tmp" --phase 3-plan --status planning-ready --workflow plan-sprint

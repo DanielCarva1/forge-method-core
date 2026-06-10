@@ -66,6 +66,8 @@ Run $pythonExe $installedRuntime eval run --root $tmp
 Run $pythonExe $installedRuntime checkpoint --root $tmp --title "Install checkpoint" --summary "Installed runtime can persist checkpoint memory." --check "install eval passed" --next-action "continue install smoke"
 Run $pythonExe $installedRuntime context recover --root $tmp --max-chars 1200
 Run $pythonExe $installedRuntime transition --root $tmp --phase 1-discovery --status discovery-ready --workflow discover-intent
+Run $pythonExe $installedRuntime input add --root $tmp --id install-audience --prompt "Who is the install smoke audience?" --reason "Install smoke needs durable input coverage."
+Run $pythonExe $installedRuntime input answer --root $tmp --id install-audience --answer "Install smoke users" --next-action "continue install smoke"
 Run $pythonExe $installedRuntime story add --root $tmp --id install-story --title "Installed runtime works" --acceptance "installed helper can write durable state"
 Run $pythonExe $installedRuntime artifact verify --root $tmp
 Run $pythonExe $installedRuntime gate --root $tmp --require-evals --summary "Installed runtime quality gate passed."

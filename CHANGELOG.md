@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.10.0
+
+Forge Method Core v1.10 adds durable human input control:
+
+- new `input add/list/answer/defer` helper for project-blocking questions
+- required open input sets `human_input_required` and routes `next` to the prompt
+- answering or deferring input recalculates whether autonomous work can continue
+- snapshots and context artifacts include open human input
+- tests prove required input blocks and releases runtime state without chat memory
+
 ## 1.9.0
 
 Forge Method Core v1.9 adds a machine-readable runtime snapshot:

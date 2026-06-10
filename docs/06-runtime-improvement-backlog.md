@@ -16,6 +16,7 @@
 - state schema version
 - project registry
 - sprint summary
+- durable human input requests
 - story files
 - evidence files
 - append-only runtime ledger
@@ -25,6 +26,7 @@
 ### Build And Verify Loop
 
 - story add/list/start/review/done/block
+- input add/list/answer/defer
 - required evidence for done stories
 - check recording
 - audit command

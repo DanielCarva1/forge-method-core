@@ -22,6 +22,7 @@ intent -> discovery -> specification -> planning -> build/verify -> ready/operat
   context/                compact context packs for future sessions
   evals/                  local checks for workflow routing and structure
   handoffs/               continuation notes after large work blocks
+  inputs/                 durable human input requests and answers
   ledger.ndjson           append-only runtime event stream
 ```
 
@@ -62,6 +63,10 @@ Before declaring a project ready, the agent should run the quality gate. The gat
 ## Start Rule
 
 Starting the method is a routing operation, not implementation work. The agent must resolve whether the current folder already has project state, whether it is the runtime repo, and which known project roots exist before asking the user to choose or create a project.
+
+## Human Input Rule
+
+Human input must be requested as durable state when it blocks the project route, discovery, specification, or a risky decision. Required open input sets `human_input_required`. The agent may continue autonomous work only after the input is answered, deferred, or marked non-required.
 
 ## Context Rule
 

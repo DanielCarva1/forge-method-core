@@ -41,6 +41,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" start
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" snapshot --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" input list --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init --project <name>
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact list

@@ -15,7 +15,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.9.0"
+RUNTIME_VERSION = "1.10.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -52,6 +52,12 @@ STORY_STATUSES = [
     "review",
     "done",
     "blocked",
+    "deferred",
+]
+
+HUMAN_INPUT_STATUSES = [
+    "open",
+    "answered",
     "deferred",
 ]
 
@@ -212,6 +218,7 @@ def ensure_dirs(root: Path) -> Path:
         "evals",
         "evidence",
         "handoffs",
+        "inputs",
         "modules",
         "stories",
         "workflows",
@@ -438,6 +445,70 @@ def select_next_story(root: Path) -> dict[str, str] | None:
             if story.get("status") == status:
                 return story
     return None
+
+
+def human_input_path(root: Path, input_id: str) -> Path:
+    return method_dir(root) / "inputs" / f"{slugify(input_id)}.yaml"
+
+
+def load_human_input(root: Path, input_id: str) -> dict[str, str]:
+    path = human_input_path(root, input_id)
+    if not path.exists():
+        raise SystemExit(f"Human input not found: {input_id}")
+    return read_flat_yaml(path)
+
+
+def save_human_input(root: Path, item: dict[str, Any]) -> None:
+    input_id = item.get("id")
+    if not input_id:
+        raise SystemExit("Human input must have an id.")
+    write_flat_yaml(human_input_path(root, str(input_id)), item, header="Forge Method human input")
+
+
+def list_human_inputs(root: Path) -> list[dict[str, str]]:
+    inputs_dir = method_dir(root) / "inputs"
+    if not inputs_dir.exists():
+        return []
+    items = [read_flat_yaml(path) for path in sorted(inputs_dir.glob("*.yaml"))]
+    return [item for item in items if item.get("id")]
+
+
+def open_required_inputs(root: Path) -> list[dict[str, str]]:
+    return [
+        item
+        for item in list_human_inputs(root)
+        if item.get("status") == "open" and item.get("required", "true") == "true"
+    ]
+
+
+def human_input_summary(item: dict[str, str] | None) -> dict[str, str] | None:
+    if not item:
+        return None
+    return {
+        "id": item.get("id", ""),
+        "prompt": item.get("prompt", ""),
+        "reason": item.get("reason", ""),
+        "status": item.get("status", ""),
+        "phase": item.get("phase", ""),
+        "required": item.get("required", ""),
+        "answer": item.get("answer", ""),
+    }
+
+
+def sync_human_input_state(root: Path, state: dict[str, str], *, next_action: str = "") -> None:
+    open_inputs = open_required_inputs(root)
+    if open_inputs:
+        first = open_inputs[0]
+        state["human_input_required"] = "true"
+        state["next_action"] = next_action or f"answer human input {first.get('id')}: {first.get('prompt')}"
+        state["status"] = "waiting-human-input"
+    else:
+        state["human_input_required"] = "false"
+        if next_action:
+            state["next_action"] = next_action
+        elif state.get("status") == "waiting-human-input" or state.get("next_action", "").startswith("answer human input "):
+            state["status"] = "input-resolved"
+            state["next_action"] = NEXT_BY_PHASE.get(state.get("phase", ""), "inspect state and choose next workflow")
 
 
 def evidence_file(root: Path, kind: str, title: str) -> Path:
@@ -966,6 +1037,8 @@ def audit_project(root: Path) -> list[str]:
         errors.append("state.runtime is not forge-method")
     if state.get("phase") not in PHASES:
         errors.append(f"invalid phase: {state.get('phase')}")
+    if open_required_inputs(root) and state.get("human_input_required") != "true":
+        errors.append("open required human input exists but state.human_input_required is not true")
     active_story = state.get("active_story", "")
     story_ids = {story.get("id", "") for story in list_stories(root)}
     if active_story and active_story not in story_ids:
@@ -1117,6 +1190,9 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     sprint = read_flat_yaml(method_dir(root) / SPRINT_FILE)
     stories = list_stories(root)
     next_story = select_next_story(root)
+    inputs = list_human_inputs(root)
+    open_inputs = [item for item in inputs if item.get("status") == "open"]
+    required_inputs = open_required_inputs(root)
     audit_errors = audit_project(root)
     artifact_errors, artifact_warnings = artifact_findings(root)
     evals = list_evals(root)
@@ -1148,6 +1224,11 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
             "next_action": state.get("next_action", ""),
             "human_input_required": state.get("human_input_required", "false"),
         },
+        "human_inputs": {
+            "total": len(inputs),
+            "open": [human_input_summary(item) for item in open_inputs],
+            "required_open": [human_input_summary(item) for item in required_inputs],
+        },
         "quality": {
             "audit": {
                 "passed": not audit_errors,
@@ -1178,6 +1259,11 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
 
 def cmd_next(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
+    open_inputs = open_required_inputs(root)
+    if open_inputs:
+        item = open_inputs[0]
+        print(f"answer human input {item.get('id')}: {item.get('prompt')}")
+        return 0
     phase = state.get("phase", "0-route")
     if phase == "4-build-verify":
         story = select_next_story(root)
@@ -1329,6 +1415,77 @@ def cmd_story_block(args: argparse.Namespace) -> int:
     state["next_action"] = f"resolve blocker for story {story['id']}: {args.reason}"
     write_state(root, state)
     print(f"Story blocked: {story['id']}")
+    return 0
+
+
+def cmd_input_add(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    input_id = slugify(args.id or args.prompt)
+    path = human_input_path(root, input_id)
+    if path.exists() and not args.force:
+        raise SystemExit(f"Human input already exists: {input_id}")
+    item = {
+        "id": input_id,
+        "prompt": args.prompt,
+        "reason": args.reason or "",
+        "status": "open",
+        "phase": args.phase or state.get("phase", ""),
+        "required": "true" if args.required else "false",
+        "answer": "",
+        "created_at": utc_now(),
+        "answered_at": "",
+        "deferred_reason": "",
+    }
+    save_human_input(root, item)
+    if args.required:
+        sync_human_input_state(root, state)
+        write_state(root, state)
+    append_ledger(root, "human_input.added", {"id": input_id, "required": args.required})
+    print(f"Human input added: {input_id}")
+    return 0
+
+
+def cmd_input_list(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    items = list_human_inputs(root)
+    if args.status:
+        items = [item for item in items if item.get("status") == args.status]
+    if not items:
+        print("No human inputs.")
+        return 0
+    for item in items:
+        required = item.get("required", "true")
+        print(f"{item.get('id')}\t{item.get('status')}\trequired={required}\t{item.get('prompt')}")
+    return 0
+
+
+def cmd_input_answer(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    item = load_human_input(root, args.id)
+    if item.get("status") == "answered" and not args.force:
+        raise SystemExit(f"Human input already answered: {args.id}")
+    item["status"] = "answered"
+    item["answer"] = args.answer
+    item["answered_at"] = utc_now()
+    item["deferred_reason"] = ""
+    save_human_input(root, item)
+    sync_human_input_state(root, state, next_action=args.next_action or "")
+    write_state(root, state)
+    append_ledger(root, "human_input.answered", {"id": item.get("id")})
+    print(f"Human input answered: {item.get('id')}")
+    return 0
+
+
+def cmd_input_defer(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    item = load_human_input(root, args.id)
+    item["status"] = "deferred"
+    item["deferred_reason"] = args.reason
+    save_human_input(root, item)
+    sync_human_input_state(root, state, next_action=args.next_action or "")
+    write_state(root, state)
+    append_ledger(root, "human_input.deferred", {"id": item.get("id"), "reason": args.reason})
+    print(f"Human input deferred: {item.get('id')}")
     return 0
 
 
@@ -1714,6 +1871,15 @@ def build_context_pack_text(root: Path, state: dict[str, str]) -> str:
     append_markdown_items(lines, failed_checks)
     lines.extend(["", "### Touched Files", ""])
     append_markdown_items(lines, touched_files)
+    lines.extend(["", "## Open Human Inputs", ""])
+    open_inputs = list_human_inputs(root)
+    open_inputs = [item for item in open_inputs if item.get("status") == "open"]
+    if open_inputs:
+        for item in open_inputs:
+            required = item.get("required", "true")
+            lines.append(f"- {item.get('id')} [required={required}]: {item.get('prompt')}")
+    else:
+        lines.append("- none")
     if story:
         lines.extend(
             [
@@ -1811,6 +1977,14 @@ def build_recovery_brief_text(root: Path, state: dict[str, str], *, checkpoint_l
     append_markdown_items(lines, failed_checks)
     lines.extend(["", "## Touched Files", ""])
     append_markdown_items(lines, touched_files)
+    lines.extend(["", "## Open Human Inputs", ""])
+    open_inputs = [item for item in list_human_inputs(root) if item.get("status") == "open"]
+    if open_inputs:
+        for item in open_inputs:
+            required = item.get("required", "true")
+            lines.append(f"- {item.get('id')} [required={required}]: {item.get('prompt')}")
+    else:
+        lines.append("- none")
     lines.extend(["", "## Recent Artifacts", ""])
     artifacts = recent_artifacts(root)
     if artifacts:
@@ -2271,6 +2445,36 @@ def build_parser() -> argparse.ArgumentParser:
     story_block.add_argument("--reason", required=True)
     story_block.add_argument("--force", action="store_true")
     story_block.set_defaults(func=cmd_story_block)
+
+    input_cmd = sub.add_parser("input", help="manage durable human input")
+    input_sub = input_cmd.add_subparsers(dest="input_command", required=True)
+    input_add = input_sub.add_parser("add", help="add a human input request")
+    input_add.add_argument("--root", default=".")
+    input_add.add_argument("--id")
+    input_add.add_argument("--prompt", required=True)
+    input_add.add_argument("--reason")
+    input_add.add_argument("--phase")
+    input_add.add_argument("--required", action="store_true", default=True)
+    input_add.add_argument("--optional", dest="required", action="store_false")
+    input_add.add_argument("--force", action="store_true")
+    input_add.set_defaults(func=cmd_input_add)
+    input_list = input_sub.add_parser("list", help="list human input requests")
+    input_list.add_argument("--root", default=".")
+    input_list.add_argument("--status", choices=HUMAN_INPUT_STATUSES)
+    input_list.set_defaults(func=cmd_input_list)
+    input_answer = input_sub.add_parser("answer", help="answer a human input request")
+    input_answer.add_argument("--root", default=".")
+    input_answer.add_argument("--id", required=True)
+    input_answer.add_argument("--answer", required=True)
+    input_answer.add_argument("--next-action")
+    input_answer.add_argument("--force", action="store_true")
+    input_answer.set_defaults(func=cmd_input_answer)
+    input_defer = input_sub.add_parser("defer", help="defer a human input request")
+    input_defer.add_argument("--root", default=".")
+    input_defer.add_argument("--id", required=True)
+    input_defer.add_argument("--reason", required=True)
+    input_defer.add_argument("--next-action")
+    input_defer.set_defaults(func=cmd_input_defer)
 
     evidence = sub.add_parser("evidence", help="write evidence")
     evidence_sub = evidence.add_subparsers(dest="evidence_command", required=True)

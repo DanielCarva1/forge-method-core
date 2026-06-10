@@ -32,6 +32,7 @@ Delivered surfaces:
 - `.forge-method/context/`
 - `.forge-method/evals/`
 - `.forge-method/handoffs/`
+- `.forge-method/inputs/`
 - `.forge-method/workflows/`
 - `.forge-method/modules/`
 - `.forge-method/ledger.ndjson`
@@ -46,6 +47,7 @@ snapshot
 next
 transition
 story add/list/start/review/done/block
+input add/list/answer/defer
 artifact add/list
 artifact link-story
 artifact capture/verify

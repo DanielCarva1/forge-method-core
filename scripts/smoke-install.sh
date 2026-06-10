@@ -34,6 +34,8 @@ mkdir -p "$tmp"
 "$python_bin" "$installed_runtime" checkpoint --root "$tmp" --title "Install checkpoint" --summary "Installed runtime can persist checkpoint memory." --check "install eval passed" --next-action "continue install smoke"
 "$python_bin" "$installed_runtime" context recover --root "$tmp" --max-chars 1200
 "$python_bin" "$installed_runtime" transition --root "$tmp" --phase 1-discovery --status discovery-ready --workflow discover-intent
+"$python_bin" "$installed_runtime" input add --root "$tmp" --id install-audience --prompt "Who is the install smoke audience?" --reason "Install smoke needs durable input coverage."
+"$python_bin" "$installed_runtime" input answer --root "$tmp" --id install-audience --answer "Install smoke users" --next-action "continue install smoke"
 "$python_bin" "$installed_runtime" story add --root "$tmp" --id install-story --title "Installed runtime works" --acceptance "installed helper can write durable state"
 "$python_bin" "$installed_runtime" artifact verify --root "$tmp"
 "$python_bin" "$installed_runtime" gate --root "$tmp" --require-evals --summary "Installed runtime quality gate passed."

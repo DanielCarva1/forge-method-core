@@ -20,6 +20,10 @@ The deterministic entry route that resolves whether the current workspace is an 
 
 A machine-readable JSON summary of current project state, sprint counts, next story, route recommendation, quality findings, context paths, and recent artifacts.
 
+## Human Input
+
+A durable request for user judgment under `.forge-method/inputs/`. Required open human input sets `human_input_required` and blocks autonomous progression until answered or deferred.
+
 ## Method Project
 
 A project initialized with `.forge-method/` state. A method project may be software, product, creative, game, automation, or runtime-module work.

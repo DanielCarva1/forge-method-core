@@ -111,7 +111,7 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(snapshot["runtime_version"], "1.9.0")
+            self.assertEqual(snapshot["runtime_version"], "1.10.0")
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
@@ -139,6 +139,53 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(snapshot["state"]["phase"], "0-route")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "continue_current_workflow")
+
+    def test_human_input_blocks_and_releases_runtime_state(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            run_cmd("transition", "--root", str(root), "--phase", "1-discovery")
+            run_cmd(
+                "input",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "target-user",
+                "--prompt",
+                "Who is the target user?",
+                "--reason",
+                "Discovery cannot choose the product route without an audience.",
+            )
+
+            blocked = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+            next_text = run_cmd("next", "--root", str(root)).stdout
+
+            self.assertEqual(blocked["state"]["human_input_required"], "true")
+            self.assertEqual(blocked["route"]["recommendation"], "wait_for_human_input")
+            self.assertEqual(blocked["human_inputs"]["required_open"][0]["id"], "target-user")
+            self.assertIn("answer human input target-user", next_text)
+            self.assertIn("Audit passed.", run_cmd("audit", "--root", str(root)).stdout)
+
+            run_cmd(
+                "input",
+                "answer",
+                "--root",
+                str(root),
+                "--id",
+                "target-user",
+                "--answer",
+                "Independent software founders",
+                "--next-action",
+                "continue discovery",
+            )
+            released = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+
+            self.assertEqual(released["state"]["human_input_required"], "false")
+            self.assertEqual(released["state"]["next_action"], "continue discovery")
+            self.assertEqual(released["human_inputs"]["required_open"], [])
+            answered = run_cmd("input", "list", "--root", str(root), "--status", "answered").stdout
+            self.assertIn("target-user", answered)
 
     def test_done_story_requires_evidence_or_summary(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -226,7 +273,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("core-runtime", modules)
         self.assertIn("software-builder", modules)
         self.assertIn("Workflow validation passed.", validation)
-        self.assertEqual(version.strip(), "1.9.0")
+        self.assertEqual(version.strip(), "1.10.0")
 
     def test_example_list_and_create_seed_project(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
