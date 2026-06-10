@@ -12,7 +12,7 @@ if (Test-Path -LiteralPath $tmp) {
 }
 New-Item -ItemType Directory -Force -Path $tmp | Out-Null
 
-powershell -ExecutionPolicy Bypass -File $installer -PluginParent $pluginParent -MarketplacePath $marketplacePath
+$output = powershell -ExecutionPolicy Bypass -File $installer -PluginParent $pluginParent -MarketplacePath $marketplacePath
 if ($LASTEXITCODE -ne 0) {
   throw "Plugin local installer failed with exit code $LASTEXITCODE"
 }
@@ -34,6 +34,9 @@ if (-not $entry) {
 }
 if ($entry.source.path -ne "./plugins/forge-method-core") {
   throw "Unexpected marketplace source path: $($entry.source.path)"
+}
+if (($output -join "`n") -notmatch [regex]::Escape("codex plugin marketplace add `"$tmp`"")) {
+  throw "Non-default marketplace registration guidance did not point at marketplace root."
 }
 
 Write-Host "Plugin local smoke passed: $pluginRoot"

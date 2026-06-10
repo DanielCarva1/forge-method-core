@@ -34,6 +34,28 @@ The current validated manifest exposes `defaultPrompt` as:
 Start Forge Method in this workspace.
 ```
 
+Local personal distribution uses:
+
+```txt
+~/.agents/plugins/marketplace.json
+~/plugins/forge-method-core
+```
+
+Repo or team distribution uses:
+
+```txt
+<marketplace-root>/.agents/plugins/marketplace.json
+<marketplace-root>/plugins/forge-method-core
+```
+
+Register a non-default marketplace root with:
+
+```powershell
+codex plugin marketplace add "<marketplace-root>"
+```
+
+Workspace sharing and public marketplace listing are separate distribution stages. A validated local plugin can be shared in a workspace through the Codex app; public directory availability requires the external publication/listing process.
+
 Acceptance:
 
 - `.codex-plugin/plugin.json` validates.

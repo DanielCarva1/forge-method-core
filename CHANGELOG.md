@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.17.1
+
+Forge Method Core v1.17.1 hardens plugin distribution paths:
+
+- compute local marketplace roots from `.agents/plugins/marketplace.json` so non-default marketplaces register the correct root
+- write plugin `source.path` relative to the marketplace root instead of assuming a fixed install parent
+- extend plugin-local smoke coverage to catch wrong marketplace registration guidance
+- document personal, repo/team, workspace-shared, and public-listing distribution boundaries
+
 ## 1.17.0
 
 Forge Method Core v1.17 hardens onboarding, operational readiness, and release maturity:

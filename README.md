@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.17.0`.
+Current runtime version: `1.17.1`.
 
 ## Current Shape
 
@@ -31,7 +31,7 @@ install.ps1                        User-skill installer for Windows
 install.sh                         User-skill installer for macOS/Linux
 ```
 
-## Local Skill Install
+## Local Plugin Install
 
 Forge Method Core is packaged as a Codex plugin. For a local plugin install on Windows:
 
@@ -49,7 +49,27 @@ cd forge-method-core
 bash scripts/install-plugin-local.sh
 ```
 
-That copies the plugin source to `~/plugins/forge-method-core` and creates or updates the personal Codex marketplace file. After that, open Codex plugins and select Forge Method Core.
+That copies the plugin source to `~/plugins/forge-method-core` and creates or updates the personal Codex marketplace file at `~/.agents/plugins/marketplace.json`. After that, restart Codex, open Plugins, select Forge Method Core, and start a new thread.
+
+For repo or team distribution, put the marketplace at:
+
+```txt
+<marketplace-root>/.agents/plugins/marketplace.json
+```
+
+and keep the plugin under:
+
+```txt
+<marketplace-root>/plugins/forge-method-core
+```
+
+Then register that root:
+
+```powershell
+codex plugin marketplace add "<marketplace-root>"
+```
+
+Public marketplace publication is a separate external listing process. The repository is packaged and validated for plugin distribution; public availability depends on that listing/approval step.
 
 For a fallback skill-only install on Windows:
 

@@ -8,6 +8,14 @@ The repository and distributable runtime package. It contains the plugin manifes
 
 The user-facing method invoked from Codex through the `$forge-method` skill. It is the operating experience, not the repository name.
 
+## Plugin Distribution
+
+The primary package shape for Forge Method Core. It includes `.codex-plugin/plugin.json`, skills, scripts, assets, docs, templates, and a marketplace entry so Codex can install the runtime as a reusable workflow bundle.
+
+## Marketplace Root
+
+The directory used as the base for plugin marketplace resolution. A repo or team marketplace stores its catalog at `<marketplace-root>/.agents/plugins/marketplace.json` and plugin bundles under `<marketplace-root>/plugins/`; marketplace `source.path` values are relative to this root.
+
 ## Creation Runtime
 
 A state-machine system that turns intent into artifacts, implementation, validation, release, and future evolution.

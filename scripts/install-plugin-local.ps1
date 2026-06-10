@@ -5,15 +5,34 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-if (-not $PluginParent) {
-  $PluginParent = Join-Path $HOME "plugins"
-}
 if (-not $MarketplacePath) {
   $MarketplacePath = Join-Path $HOME ".agents\plugins\marketplace.json"
 }
 
 $pluginName = "forge-method-core"
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+
+function Get-MarketplaceRoot {
+  param([Parameter(Mandatory=$true)][string]$Path)
+  $fullPath = [System.IO.Path]::GetFullPath($Path)
+  $fileName = [System.IO.Path]::GetFileName($fullPath)
+  $pluginsDir = Split-Path -Parent $fullPath
+  $agentsDir = Split-Path -Parent $pluginsDir
+  $candidateRoot = Split-Path -Parent $agentsDir
+  if (
+    $fileName -eq "marketplace.json" -and
+    (Split-Path -Leaf $pluginsDir) -eq "plugins" -and
+    (Split-Path -Leaf $agentsDir) -eq ".agents"
+  ) {
+    return $candidateRoot
+  }
+  return (Split-Path -Parent $fullPath)
+}
+
+$marketplaceRoot = Get-MarketplaceRoot -Path $MarketplacePath
+if (-not $PluginParent) {
+  $PluginParent = Join-Path $marketplaceRoot "plugins"
+}
 $target = Join-Path $PluginParent $pluginName
 
 function Assert-ChildPath {
@@ -27,6 +46,19 @@ function Assert-ChildPath {
   if (-not $childResolved.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Refusing to write outside parent directory: $Child"
   }
+}
+
+function Get-RelativeChildPath {
+  param(
+    [Parameter(Mandatory=$true)][string]$Parent,
+    [Parameter(Mandatory=$true)][string]$Child
+  )
+  $separator = [System.IO.Path]::DirectorySeparatorChar
+  $parentResolved = [System.IO.Path]::GetFullPath($Parent).TrimEnd($separator) + $separator
+  $childResolved = [System.IO.Path]::GetFullPath($Child)
+  $parentUri = New-Object System.Uri($parentResolved)
+  $childUri = New-Object System.Uri($childResolved)
+  return [System.Uri]::UnescapeDataString($parentUri.MakeRelativeUri($childUri).ToString()).Replace("\", "/")
 }
 
 function Clear-ReadOnly {
@@ -46,6 +78,7 @@ function Clear-ReadOnly {
 }
 
 Assert-ChildPath -Parent $PluginParent -Child $target
+Assert-ChildPath -Parent $marketplaceRoot -Child $target
 New-Item -ItemType Directory -Force -Path $PluginParent | Out-Null
 
 if (Test-Path -LiteralPath $target) {
@@ -78,6 +111,12 @@ foreach ($entry in $entries) {
   }
 }
 
+$relativeTarget = Get-RelativeChildPath -Parent $marketplaceRoot -Child $target
+if ($relativeTarget.StartsWith("..", [System.StringComparison]::Ordinal) -or [System.IO.Path]::IsPathRooted($relativeTarget)) {
+  throw "Plugin target must be inside the marketplace root: $target"
+}
+$sourcePath = "./$relativeTarget"
+
 $marketplaceDir = Split-Path -Parent $MarketplacePath
 New-Item -ItemType Directory -Force -Path $marketplaceDir | Out-Null
 
@@ -105,7 +144,7 @@ $entry = [pscustomobject]@{
   name = $pluginName
   source = [pscustomobject]@{
     source = "local"
-    path = "./plugins/$pluginName"
+    path = $sourcePath
   }
   policy = [pscustomobject]@{
     installation = "AVAILABLE"
@@ -125,5 +164,5 @@ $currentMarketplace = [System.IO.Path]::GetFullPath($MarketplacePath)
 if ($currentMarketplace -eq $defaultMarketplace) {
   Write-Host "Codex discovers the personal marketplace automatically. Open Codex plugins and select Forge Method Core."
 } else {
-  Write-Host "Register marketplace: codex plugin marketplace add `"$marketplaceDir`""
+  Write-Host "Register marketplace: codex plugin marketplace add `"$marketplaceRoot`""
 }
