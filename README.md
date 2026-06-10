@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.5.0`.
+Current runtime version: `1.6.0`.
 
 ## Current Shape
 
@@ -80,6 +80,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" modul
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow validate
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow create --root . --id custom-flow --title "Custom Flow"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval run --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval add --root . --kind artifact-exists --id spec-exists --target .forge-method/artifacts/spec.md --query "spec artifact exists"
 ```
 
 The script creates `.forge-method/` in the target project and keeps state out of the chat transcript.

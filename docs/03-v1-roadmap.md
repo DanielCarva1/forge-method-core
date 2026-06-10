@@ -54,6 +54,7 @@ context pack
 module list/show/create
 workflow list/validate/create
 eval add/list/run
+eval kinds: workflow-routing, workflow-trigger, artifact-exists
 audit
 gate
 ready

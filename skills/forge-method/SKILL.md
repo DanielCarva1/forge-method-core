@@ -47,6 +47,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artif
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow validate
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval run
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval add --kind artifact-exists --id <id> --target <path> --query "<objective check>"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" checkpoint --summary "<progress memory>"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" gate --root . --require-evals

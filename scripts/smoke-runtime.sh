@@ -22,7 +22,7 @@ mkdir -p "$tmp"
 "$python_bin" "$runtime" next --root "$tmp"
 "$python_bin" "$runtime" transition --root "$tmp" --phase 1-discovery --status discovery-ready --workflow discover-intent
 "$python_bin" "$runtime" transition --root "$tmp" --phase 2-specification --status specification-ready --workflow write-spec
-"$python_bin" "$runtime" artifact add --root "$tmp" --kind spec --title "Smoke specification" --summary "The smoke project requires durable state, evidence, and ready gate validation." --path ".forge-method/artifacts/smoke-spec.md"
+"$python_bin" "$runtime" artifact add --root "$tmp" --kind spec --title "Smoke specification" --summary "The smoke project requires durable state, evidence, and ready gate validation." --path ".forge-method/artifacts/smoke-spec.md" --eval
 "$python_bin" "$runtime" transition --root "$tmp" --phase 3-plan --status planning-ready --workflow plan-sprint
 "$python_bin" "$runtime" transition --root "$tmp" --phase 4-build-verify --status build-ready --workflow build-story
 "$python_bin" "$runtime" story add --root "$tmp" --id story-1 --title "Prove runtime loop" --acceptance "status can be reconstructed from files" --acceptance "done stories require evidence"

@@ -44,6 +44,10 @@ A structured progress memory written during long-running work. It captures summa
 
 A small local check under `.forge-method/evals/` that proves a workflow target exists, validates structurally, and matches the expected route for a query.
 
+## Eval Kind
+
+The objective type of a local eval. Supported kinds verify workflow routing, workflow trigger coverage, and artifact availability.
+
 ## Story
 
 A bounded executable unit of work with acceptance criteria, status, optional checks, and required evidence before `done`.

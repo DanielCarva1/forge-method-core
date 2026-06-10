@@ -173,7 +173,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("core-runtime", modules)
         self.assertIn("software-builder", modules)
         self.assertIn("Workflow validation passed.", validation)
-        self.assertEqual(version.strip(), "1.5.0")
+        self.assertEqual(version.strip(), "1.6.0")
 
     def test_workflow_module_and_eval_generation(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -227,7 +227,9 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("market-scan", run_cmd("workflow", "list", "--root", str(root)).stdout)
             self.assertIn("research", run_cmd("module", "list", "--root", str(root)).stdout)
             self.assertIn("Workflow validation passed.", run_cmd("workflow", "validate", "--root", str(root)).stdout)
-            self.assertIn("PASS market-scan-routing", run_cmd("eval", "run", "--root", str(root)).stdout)
+            eval_output = run_cmd("eval", "run", "--root", str(root)).stdout
+            self.assertIn("PASS market-scan-routing", eval_output)
+            self.assertIn("PASS market-scan-trigger", eval_output)
 
     def test_artifact_story_link_is_audited(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -323,7 +325,9 @@ class RuntimeTests(unittest.TestCase):
                 "ephemeral",
                 "--story",
                 "story-1",
+                "--eval",
             ).stdout.strip()
+            self.assertIn("PASS artifact-", run_cmd("eval", "run", "--root", str(root)).stdout)
             capture = run_cmd(
                 "artifact",
                 "capture",
@@ -392,7 +396,7 @@ class RuntimeTests(unittest.TestCase):
             evidence_files = list((root / ".forge-method" / "evidence").glob("*gate*.md"))
 
             self.assertIn("Gate passed.", passed)
-            self.assertIn("Evals: 1/1 passed", passed)
+            self.assertIn("Evals: 2/2 passed", passed)
             self.assertIn("Evidence:", passed)
             self.assertTrue(evidence_files)
             self.assertTrue((root / ".forge-method" / "context" / "current-pack.md").exists())

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.0
+
+Forge Method Core v1.6 strengthens local eval coverage:
+
+- eval kinds now include `workflow-routing`, `workflow-trigger`, and `artifact-exists`
+- generated workflows with triggers create trigger evals alongside routing evals
+- artifacts can create existence evals with `artifact add --eval`
+- the quality gate now benefits from objective workflow trigger and artifact availability checks
+- direct runtime smokes exercise artifact existence evals before ready/release
+
 ## 1.5.0
 
 Forge Method Core v1.5 adds a unified project quality gate:

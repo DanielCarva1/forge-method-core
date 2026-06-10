@@ -36,7 +36,7 @@ Run python $runtime status --root $tmp
 Run python $runtime next --root $tmp
 Run python $runtime transition --root $tmp --phase 1-discovery --status discovery-ready --workflow discover-intent
 Run python $runtime transition --root $tmp --phase 2-specification --status specification-ready --workflow write-spec
-Run python $runtime artifact add --root $tmp --kind spec --title "Smoke specification" --summary "The smoke project requires durable state, evidence, and ready gate validation." --path ".forge-method/artifacts/smoke-spec.md"
+Run python $runtime artifact add --root $tmp --kind spec --title "Smoke specification" --summary "The smoke project requires durable state, evidence, and ready gate validation." --path ".forge-method/artifacts/smoke-spec.md" --eval
 Run python $runtime transition --root $tmp --phase 3-plan --status planning-ready --workflow plan-sprint
 Run python $runtime transition --root $tmp --phase 4-build-verify --status build-ready --workflow build-story
 Run python $runtime story add --root $tmp --id story-1 --title "Prove runtime loop" --acceptance "status can be reconstructed from files" --acceptance "done stories require evidence"

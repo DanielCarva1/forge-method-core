@@ -15,7 +15,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.5.0"
+RUNTIME_VERSION = "1.6.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -66,6 +66,7 @@ STORY_TRANSITIONS = {
 }
 
 ARTIFACT_LIFECYCLES = ["durable", "ephemeral"]
+EVAL_KINDS = ["workflow-routing", "workflow-trigger", "artifact-exists"]
 
 WORKFLOW_REQUIRED_SECTIONS = [
     "trigger:",
@@ -607,6 +608,31 @@ def list_evals(root: Path) -> list[dict[str, str]]:
     return [read_flat_yaml(path) for path in sorted(evals_dir.glob("*.yaml"))]
 
 
+def write_eval(
+    root: Path,
+    *,
+    eval_id: str,
+    kind: str,
+    target: str,
+    query: str,
+    expected: str = "",
+) -> str:
+    if kind not in EVAL_KINDS:
+        raise SystemExit(f"Invalid eval kind: {kind}")
+    normalized_id = slugify(eval_id)
+    values = {
+        "id": normalized_id,
+        "kind": kind,
+        "target": target,
+        "query": query,
+        "expected": expected or target,
+        "status": "pending",
+    }
+    write_flat_yaml(eval_path(root, normalized_id), values, header="Forge Method eval")
+    append_ledger(root, "eval.added", {"id": normalized_id, "kind": kind, "target": target})
+    return eval_path(root, normalized_id).relative_to(root).as_posix()
+
+
 def write_evidence(root: Path, *, kind: str, title: str, summary: str, story_id: str = "", checks: list[str] | None = None) -> str:
     path = evidence_file(root, kind, title)
     lines = [
@@ -657,6 +683,17 @@ def write_artifact(
     )
     append_ledger(root, "artifact.added", {"kind": kind, "path": rel, "lifecycle": lifecycle})
     return rel
+
+
+def write_artifact_eval(root: Path, artifact_path: str, *, title: str, summary: str) -> str:
+    return write_eval(
+        root,
+        eval_id=f"artifact-{artifact_path}-exists",
+        kind="artifact-exists",
+        target=artifact_path,
+        query=summary or f"{title} exists",
+        expected="exists",
+    )
 
 
 def capture_artifact(
@@ -1128,6 +1165,8 @@ def cmd_artifact_add(args: argparse.Namespace) -> int:
     )
     if args.story:
         link_artifact_to_story(root, rel, args.story)
+    if args.eval:
+        write_artifact_eval(root, rel, title=args.title, summary=args.summary)
     print(rel)
     return 0
 
@@ -1281,17 +1320,23 @@ def cmd_workflow_create(args: argparse.Namespace) -> int:
         raise SystemExit("Generated workflow is invalid: " + "; ".join(errors))
     append_ledger(root, "workflow.created", {"id": workflow_id, "path": path.relative_to(root).as_posix()})
     if args.eval_query:
-        eval_id = f"{workflow_id}-routing"
-        values = {
-            "id": eval_id,
-            "kind": "workflow-routing",
-            "target": workflow_id,
-            "query": args.eval_query,
-            "expected": workflow_id,
-            "status": "pending",
-        }
-        write_flat_yaml(eval_path(root, eval_id), values, header="Forge Method eval")
-        append_ledger(root, "eval.added", {"id": eval_id, "target": workflow_id})
+        write_eval(
+            root,
+            eval_id=f"{workflow_id}-routing",
+            kind="workflow-routing",
+            target=workflow_id,
+            query=args.eval_query,
+            expected=workflow_id,
+        )
+        if args.trigger:
+            write_eval(
+                root,
+                eval_id=f"{workflow_id}-trigger",
+                kind="workflow-trigger",
+                target=workflow_id,
+                query=args.trigger[0],
+                expected=args.trigger[0],
+            )
     print(path.relative_to(root).as_posix())
     return 0
 
@@ -1410,20 +1455,24 @@ def cmd_checkpoint(args: argparse.Namespace) -> int:
 
 def cmd_eval_add(args: argparse.Namespace) -> int:
     root, _ = load_state_or_fail(resolve_root(args.root))
-    eval_id = slugify(args.id)
-    if workflow_path_by_id(root, args.target) is None:
-        raise SystemExit(f"Target workflow not found: {args.target}")
-    values = {
-        "id": eval_id,
-        "kind": args.kind,
-        "target": slugify(args.target),
-        "query": args.query,
-        "expected": args.expected or slugify(args.target),
-        "status": "pending",
-    }
-    write_flat_yaml(eval_path(root, eval_id), values, header="Forge Method eval")
-    append_ledger(root, "eval.added", {"id": eval_id, "target": values["target"]})
-    print(eval_path(root, eval_id).relative_to(root).as_posix())
+    kind = args.kind
+    if kind in {"workflow-routing", "workflow-trigger"}:
+        target = slugify(args.target)
+        if workflow_path_by_id(root, target) is None:
+            raise SystemExit(f"Target workflow not found: {args.target}")
+    elif kind == "artifact-exists":
+        _, target = project_path(root, args.target)
+    else:
+        raise SystemExit(f"Invalid eval kind: {kind}")
+    path = write_eval(
+        root,
+        eval_id=args.id,
+        kind=kind,
+        target=target,
+        query=args.query,
+        expected=args.expected or ("exists" if kind == "artifact-exists" else target),
+    )
+    print(path)
     return 0
 
 
@@ -1444,15 +1493,36 @@ def run_eval_items(root: Path) -> tuple[list[str], list[str]]:
     failures: list[str] = []
     for item in evals:
         eval_id = item.get("id", "")
+        kind = item.get("kind", "workflow-routing")
         target = item.get("target", "")
         expected = item.get("expected", target)
         query = item.get("query", "")
-        workflow_path = workflow_path_by_id(root, target)
-        errors = validate_workflow_file(workflow_path) if workflow_path else [f"target workflow not found: {target}"]
+        errors: list[str] = []
         if not query:
             errors.append("query is empty")
-        if expected != target:
-            errors.append(f"expected workflow {expected} does not match target {target}")
+        if kind == "workflow-routing":
+            workflow_path = workflow_path_by_id(root, target)
+            errors.extend(validate_workflow_file(workflow_path) if workflow_path else [f"target workflow not found: {target}"])
+            if expected != target:
+                errors.append(f"expected workflow {expected} does not match target {target}")
+        elif kind == "workflow-trigger":
+            workflow_path = workflow_path_by_id(root, target)
+            errors.extend(validate_workflow_file(workflow_path) if workflow_path else [f"target workflow not found: {target}"])
+            trigger_text = expected or query
+            if workflow_path and trigger_text not in workflow_path.read_text(encoding="utf-8"):
+                errors.append(f"trigger text not found: {trigger_text}")
+        elif kind == "artifact-exists":
+            try:
+                artifact_path, rel = project_path(root, target)
+            except SystemExit as exc:
+                errors.append(str(exc))
+            else:
+                if not artifact_path.exists() and not artifact_missing_allowed(root, rel):
+                    errors.append(f"artifact not available: {rel}")
+                if expected and expected != "exists":
+                    errors.append(f"expected artifact result must be exists: {expected}")
+        else:
+            errors.append(f"unknown eval kind: {kind}")
         item["status"] = "failed" if errors else "passed"
         item["last_run_at"] = utc_now()
         item["last_error"] = join_list(errors)
@@ -1813,6 +1883,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_add.add_argument("--path")
     artifact_add.add_argument("--lifecycle", choices=ARTIFACT_LIFECYCLES, default="durable")
     artifact_add.add_argument("--story")
+    artifact_add.add_argument("--eval", action="store_true")
     artifact_add.set_defaults(func=cmd_artifact_add)
 
     artifact_capture = artifact_sub.add_parser("capture", help="capture an artifact result and optionally delete it")
@@ -1844,7 +1915,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_add = eval_sub.add_parser("add", help="add a routing eval")
     eval_add.add_argument("--root", default=".")
     eval_add.add_argument("--id", required=True)
-    eval_add.add_argument("--kind", default="workflow-routing")
+    eval_add.add_argument("--kind", choices=EVAL_KINDS, default="workflow-routing")
     eval_add.add_argument("--target", required=True)
     eval_add.add_argument("--query", required=True)
     eval_add.add_argument("--expected")

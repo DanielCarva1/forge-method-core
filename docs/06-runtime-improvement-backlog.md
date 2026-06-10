@@ -42,6 +42,12 @@
 
 - artifact freshness checks
 - ephemeral artifact capture
+- artifact existence evals
+
+### Eval System
+
+- workflow routing evals
+- workflow trigger evals
 
 ### Distribution
 
@@ -75,11 +81,6 @@
 - include artifact summaries
 - include failing command summaries
 - include touched file summaries
-
-### Workflow Generator
-
-- create trigger tests
-- create artifact tests
 
 ### Release Quality
 
