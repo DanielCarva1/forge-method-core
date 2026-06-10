@@ -903,9 +903,17 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_version(args: argparse.Namespace) -> int:
+    print(RUNTIME_VERSION)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Forge Method helper")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    version = sub.add_parser("version", help="print runtime version")
+    version.set_defaults(func=cmd_version)
 
     init = sub.add_parser("init", help="initialize .forge-method state")
     init.add_argument("--project", required=True)

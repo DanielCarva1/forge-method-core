@@ -14,14 +14,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Unit tests
-        run: python -m unittest discover -s tests
-      - name: Runtime smoke
+      - name: Verify all
         shell: pwsh
-        run: .\scripts\smoke-runtime.ps1
-      - name: Install smoke
-        shell: pwsh
-        run: .\scripts\smoke-install.ps1
+        run: .\scripts\verify-all.ps1
   linux-test:
     runs-on: ubuntu-latest
     steps:
@@ -29,9 +24,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Unit tests
-        run: python -m unittest discover -s tests
-      - name: Runtime smoke
-        run: bash scripts/smoke-runtime.sh
-      - name: Install smoke
-        run: bash scripts/smoke-install.sh
+      - name: Verify all
+        run: bash scripts/verify-all.sh

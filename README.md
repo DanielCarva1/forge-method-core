@@ -66,6 +66,7 @@ The skill can ask Codex to run:
 
 ```powershell
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init --project my-project
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" version
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
@@ -87,6 +88,16 @@ powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1
 ```bash
 bash scripts/smoke-runtime.sh
 bash scripts/smoke-install.sh
+```
+
+Full local verification:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-all.ps1
+```
+
+```bash
+bash scripts/verify-all.sh
 ```
 
 ## Product Direction

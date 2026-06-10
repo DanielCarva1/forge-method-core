@@ -139,10 +139,12 @@ class RuntimeTests(unittest.TestCase):
     def test_packaged_modules_and_workflows_validate(self) -> None:
         modules = run_cmd("module", "list").stdout
         validation = run_cmd("workflow", "validate").stdout
+        version = run_cmd("version").stdout
 
         self.assertIn("core-runtime", modules)
         self.assertIn("software-builder", modules)
         self.assertIn("Workflow validation passed.", validation)
+        self.assertEqual(version.strip(), "1.0.0")
 
 
 if __name__ == "__main__":
