@@ -13,6 +13,8 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
+Current runtime version: `1.0.0`.
+
 ## Current Shape
 
 ```txt
