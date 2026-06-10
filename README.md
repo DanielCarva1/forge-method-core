@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.10.0`.
+Current runtime version: `1.11.0`.
 
 ## Current Shape
 
@@ -21,6 +21,7 @@ Current runtime version: `1.10.0`.
 .codex-plugin/plugin.json          Codex plugin manifest
 skills/forge-method/SKILL.md       Main runtime skill
 skills/forge-method/modules/        Packaged module manifests
+skills/forge-method/agents/          Packaged agent profiles
 skills/forge-method/references/    Compact state-machine workflows
 skills/forge-method/scripts/       Deterministic runtime helpers
 docs/                              Product and architecture proposal
@@ -80,6 +81,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" conte
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact verify --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" gate --root . --require-evals
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" agent recommend --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example create --root ./software-example --module software-builder
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow validate

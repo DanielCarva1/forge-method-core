@@ -21,6 +21,8 @@ mkdir -p "$tmp"
 
 "$python_bin" "$installed_runtime" --help
 "$python_bin" "$installed_runtime" module list
+"$python_bin" "$installed_runtime" agent list
+"$python_bin" "$installed_runtime" agent validate
 "$python_bin" "$installed_runtime" example list
 "$python_bin" "$installed_runtime" example create --root "$example_tmp" --module software-builder
 "$python_bin" "$installed_runtime" gate --root "$example_tmp" --require-evals
@@ -29,6 +31,7 @@ mkdir -p "$tmp"
 "$python_bin" "$installed_runtime" init --project install-smoke --root "$tmp"
 "$python_bin" "$installed_runtime" start --root "$tmp"
 "$python_bin" "$installed_runtime" snapshot --root "$tmp"
+"$python_bin" "$installed_runtime" agent recommend --root "$tmp"
 "$python_bin" "$installed_runtime" workflow create --root "$tmp" --id install-flow --title "Install Flow" --trigger "installed runtime available" --input "installed runtime" --step "validate installed runtime" --output "install proof" --done "install proof exists" --blocked "runtime missing" --handoff "preserve install result" --eval-query "prove install flow"
 "$python_bin" "$installed_runtime" eval run --root "$tmp"
 "$python_bin" "$installed_runtime" checkpoint --root "$tmp" --title "Install checkpoint" --summary "Installed runtime can persist checkpoint memory." --check "install eval passed" --next-action "continue install smoke"

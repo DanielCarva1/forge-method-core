@@ -120,6 +120,8 @@ python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py gate --
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py init --project smoke-test --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py start --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py snapshot --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py agent list --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py agent recommend --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py input add --root <temp-folder> --id audience --prompt "Who is this for?"
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py input answer --root <temp-folder> --id audience --answer "Smoke users"
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py checkpoint --root <temp-folder> --summary "Progress memory"

@@ -15,6 +15,9 @@ mkdir -p "$tmp"
 "$python_bin" "$runtime" start --root "$tmp"
 "$python_bin" "$runtime" snapshot --root "$tmp"
 "$python_bin" "$runtime" module list --root "$tmp"
+"$python_bin" "$runtime" agent list --root "$tmp"
+"$python_bin" "$runtime" agent validate --root "$tmp"
+"$python_bin" "$runtime" agent recommend --root "$tmp"
 "$python_bin" "$runtime" example list --root "$tmp"
 "$python_bin" "$runtime" example create --root "$example_tmp" --module software-builder
 "$python_bin" "$runtime" gate --root "$example_tmp" --require-evals

@@ -29,6 +29,7 @@ Every project using the runtime gets:
   evals/
   evidence/
   handoffs/
+  agents/
   modules/
   workflows/
 ```
@@ -155,6 +156,12 @@ It should build a context pack from:
 - last evidence entry
 
 This follows the same practical lesson as repo-map based coding agents: context must be selected, not dumped.
+
+## Agent Profile Strategy
+
+Agent profiles are compact routing manifests, not long role prompts.
+They describe when a focused agent should be used, what inputs it needs, what outputs it must produce, and what must be preserved during handoff.
+Packaged profiles live with the skill; project-specific profiles may live under `.forge-method/agents/`.
 
 ## Verification Strategy
 

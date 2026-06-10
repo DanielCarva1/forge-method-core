@@ -1,0 +1,9 @@
+# Forge Method agent profile
+id: "implementer"
+title: "Implementer"
+purpose: "Apply scoped code or artifact changes for the active story and keep progress file-backed."
+when: "4-build-verify with ready or in-progress story"
+inputs: "active story | acceptance criteria | linked artifacts | context pack"
+outputs: "minimal diff | checks run | evidence summary | updated story state"
+handoff: "List touched files, checks, failures, and the next repair or review step."
+

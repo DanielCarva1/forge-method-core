@@ -38,6 +38,7 @@
 - context pack generation
 - recovery brief generation
 - handoff generation
+- state-routed agent profile recommendations
 - checkpoint generation
 - active story tracking
 - recent evidence tracking
@@ -78,6 +79,16 @@
 - runtime builder module
 - test architect module
 - launch/operate module
+
+### Agent Profiles
+
+- facilitator profile
+- researcher profile
+- spec architect profile
+- planner profile
+- implementer profile
+- quality reviewer profile
+- operator profile
 
 ## V1 Hardening
 

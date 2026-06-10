@@ -87,3 +87,7 @@ A deterministic verification command that runs project audit, artifact verificat
 ## Agent-Facing Workflow
 
 A compact Markdown state machine loaded only when the current runtime state requires it.
+
+## Agent Profile
+
+A compact routing manifest that tells the runtime when a focused agent role is useful, which inputs it needs, which outputs it must return, and what handoff state must be preserved.

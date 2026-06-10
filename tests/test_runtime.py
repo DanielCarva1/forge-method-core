@@ -111,7 +111,7 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(snapshot["runtime_version"], "1.10.0")
+            self.assertEqual(snapshot["runtime_version"], "1.11.0")
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
@@ -182,10 +182,40 @@ class RuntimeTests(unittest.TestCase):
             released = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
             self.assertEqual(released["state"]["human_input_required"], "false")
+            self.assertEqual(released["state"]["status"], "input-resolved")
             self.assertEqual(released["state"]["next_action"], "continue discovery")
             self.assertEqual(released["human_inputs"]["required_open"], [])
             answered = run_cmd("input", "list", "--root", str(root), "--status", "answered").stdout
             self.assertIn("target-user", answered)
+
+    def test_story_block_routes_without_fake_human_input(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            run_cmd("transition", "--root", str(root), "--phase", "1-discovery")
+            run_cmd("transition", "--root", str(root), "--phase", "2-specification")
+            run_cmd("transition", "--root", str(root), "--phase", "3-plan")
+            run_cmd("transition", "--root", str(root), "--phase", "4-build-verify")
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-1",
+                "--title",
+                "Build thing",
+                "--acceptance",
+                "thing works",
+            )
+            run_cmd("story", "block", "--root", str(root), "--id", "story-1", "--reason", "dependency missing")
+
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+
+            self.assertEqual(snapshot["state"]["human_input_required"], "false")
+            self.assertEqual(snapshot["human_inputs"]["required_open"], [])
+            self.assertEqual(snapshot["route"]["recommendation"], "resolve_story_blocker")
+            self.assertIn("Audit passed.", run_cmd("audit", "--root", str(root)).stdout)
 
     def test_done_story_requires_evidence_or_summary(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -273,7 +303,57 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("core-runtime", modules)
         self.assertIn("software-builder", modules)
         self.assertIn("Workflow validation passed.", validation)
-        self.assertEqual(version.strip(), "1.10.0")
+        agents = run_cmd("agent", "list").stdout
+        agent_validation = run_cmd("agent", "validate").stdout
+
+        self.assertIn("facilitator", agents)
+        self.assertIn("quality-reviewer", agents)
+        self.assertIn("Agent profile validation passed.", agent_validation)
+        self.assertEqual(version.strip(), "1.11.0")
+
+    def test_agent_recommendations_follow_runtime_state(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+
+            route_recommendation = json.loads(
+                run_cmd("agent", "recommend", "--root", str(root), "--json").stdout
+            )
+            self.assertEqual(route_recommendation["recommended"][0]["id"], "facilitator")
+
+            run_cmd("transition", "--root", str(root), "--phase", "1-discovery")
+            run_cmd("transition", "--root", str(root), "--phase", "2-specification")
+            run_cmd("transition", "--root", str(root), "--phase", "3-plan")
+            run_cmd("transition", "--root", str(root), "--phase", "4-build-verify")
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-1",
+                "--title",
+                "Build thing",
+                "--acceptance",
+                "thing works",
+            )
+
+            build_recommendation = json.loads(
+                run_cmd("agent", "recommend", "--root", str(root), "--json").stdout
+            )
+            build_ids = [item["id"] for item in build_recommendation["recommended"]]
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+            snapshot_ids = [item["id"] for item in snapshot["agents"]["recommended"]]
+            pack = run_cmd("context", "pack", "--root", str(root)).stdout.strip()
+
+            self.assertIn("implementer", build_ids)
+            self.assertIn("quality-reviewer", build_ids)
+            self.assertEqual(snapshot_ids, build_ids)
+            self.assertIn("current-pack.md", pack)
+            self.assertIn(
+                "Recommended Agent Profiles",
+                (root / ".forge-method" / "context" / "current-pack.md").read_text(encoding="utf-8"),
+            )
 
     def test_example_list_and_create_seed_project(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

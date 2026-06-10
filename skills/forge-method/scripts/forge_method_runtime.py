@@ -15,7 +15,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.10.0"
+RUNTIME_VERSION = "1.11.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -73,6 +73,15 @@ STORY_TRANSITIONS = {
 
 ARTIFACT_LIFECYCLES = ["durable", "ephemeral"]
 EVAL_KINDS = ["workflow-routing", "workflow-trigger", "artifact-exists"]
+AGENT_PROFILE_REQUIRED_FIELDS = [
+    "id",
+    "title",
+    "purpose",
+    "when",
+    "inputs",
+    "outputs",
+    "handoff",
+]
 
 WORKFLOW_REQUIRED_SECTIONS = [
     "trigger:",
@@ -218,6 +227,7 @@ def ensure_dirs(root: Path) -> Path:
         "evals",
         "evidence",
         "handoffs",
+        "agents",
         "inputs",
         "modules",
         "stories",
@@ -504,10 +514,11 @@ def sync_human_input_state(root: Path, state: dict[str, str], *, next_action: st
         state["status"] = "waiting-human-input"
     else:
         state["human_input_required"] = "false"
+        if state.get("status") == "waiting-human-input" or state.get("next_action", "").startswith("answer human input "):
+            state["status"] = "input-resolved"
         if next_action:
             state["next_action"] = next_action
-        elif state.get("status") == "waiting-human-input" or state.get("next_action", "").startswith("answer human input "):
-            state["status"] = "input-resolved"
+        elif state.get("status") == "input-resolved":
             state["next_action"] = NEXT_BY_PHASE.get(state.get("phase", ""), "inspect state and choose next workflow")
 
 
@@ -663,6 +674,123 @@ def module_manifest_by_id(root: Path | None, module_id: str) -> tuple[dict[str, 
         if module.get("id") == normalized:
             return module, path
     return None
+
+
+def agent_profile_paths(root: Path | None = None) -> list[Path]:
+    paths: list[Path] = []
+    packaged = SKILL_DIR / "agents" / "profiles"
+    if packaged.exists():
+        paths.extend(sorted(packaged.glob("*.yaml")))
+    if root is not None:
+        project_profiles = method_dir(root) / "agents"
+        if project_profiles.exists():
+            paths.extend(sorted(project_profiles.glob("*.yaml")))
+    return paths
+
+
+def agent_profiles(root: Path | None = None) -> list[tuple[dict[str, str], Path]]:
+    profiles: list[tuple[dict[str, str], Path]] = []
+    seen: set[str] = set()
+    for path in agent_profile_paths(root):
+        profile = read_flat_yaml(path)
+        profile_id = slugify(profile.get("id", path.stem))
+        if profile_id in seen:
+            continue
+        profile["id"] = profile_id
+        seen.add(profile_id)
+        profiles.append((profile, path))
+    return profiles
+
+
+def agent_profile_by_id(root: Path | None, profile_id: str) -> tuple[dict[str, str], Path] | None:
+    normalized = slugify(profile_id)
+    for profile, path in agent_profiles(root):
+        if profile.get("id") == normalized:
+            return profile, path
+    return None
+
+
+def validate_agent_profile_file(path: Path) -> list[str]:
+    if not path.exists():
+        return [f"missing agent profile file: {path}"]
+    profile = read_flat_yaml(path)
+    errors: list[str] = []
+    for field in AGENT_PROFILE_REQUIRED_FIELDS:
+        if not profile.get(field):
+            errors.append(f"{path.name}: missing field `{field}`")
+    profile_id = profile.get("id", path.stem)
+    if profile_id and profile_id != slugify(profile_id):
+        errors.append(f"{path.name}: id must be slug-safe")
+    if len(path.read_text(encoding="utf-8").splitlines()) > 80:
+        errors.append(f"{path.name}: too long for an agent profile")
+    return errors
+
+
+def agent_profile_validation_errors(root: Path | None = None) -> list[str]:
+    errors: list[str] = []
+    for path in agent_profile_paths(root):
+        errors.extend(validate_agent_profile_file(path))
+    return errors
+
+
+def agent_profile_summary(profile: dict[str, str]) -> dict[str, str]:
+    return {
+        "id": profile.get("id", ""),
+        "title": profile.get("title", ""),
+        "purpose": profile.get("purpose", ""),
+        "when": profile.get("when", ""),
+        "inputs": profile.get("inputs", ""),
+        "outputs": profile.get("outputs", ""),
+        "handoff": profile.get("handoff", ""),
+    }
+
+
+def recommended_agent_ids(
+    state: dict[str, str],
+    next_story: dict[str, str] | None,
+    audit_errors: list[str],
+) -> list[str]:
+    if state.get("human_input_required") == "true":
+        return ["facilitator"]
+    if audit_errors:
+        return ["quality-reviewer", "planner"]
+
+    phase = state.get("phase", "0-route")
+    if phase == "0-route":
+        return ["facilitator"]
+    if phase == "1-discovery":
+        return ["facilitator", "researcher"]
+    if phase == "2-specification":
+        return ["spec-architect", "researcher"]
+    if phase == "3-plan":
+        return ["planner", "quality-reviewer"]
+    if phase == "4-build-verify":
+        status = (next_story or {}).get("status", "")
+        if status == "review":
+            return ["quality-reviewer"]
+        if status == "blocked":
+            return ["facilitator", "planner"]
+        return ["implementer", "quality-reviewer"]
+    if phase == "5-ready-operate":
+        return ["operator", "quality-reviewer"]
+    if phase == "6-evolve":
+        return ["facilitator", "planner"]
+    return ["facilitator"]
+
+
+def recommended_agent_profiles(
+    root: Path | None,
+    state: dict[str, str],
+    next_story: dict[str, str] | None,
+    audit_errors: list[str],
+) -> list[dict[str, str]]:
+    by_id = {profile.get("id", ""): profile for profile, _ in agent_profiles(root)}
+    recommendations: list[dict[str, str]] = []
+    for profile_id in recommended_agent_ids(state, next_story, audit_errors):
+        profile = by_id.get(profile_id)
+        if profile:
+            recommendations.append(agent_profile_summary(profile))
+    return recommendations
 
 
 def reference_workflow_paths(root: Path | None = None) -> list[Path]:
@@ -1037,8 +1165,13 @@ def audit_project(root: Path) -> list[str]:
         errors.append("state.runtime is not forge-method")
     if state.get("phase") not in PHASES:
         errors.append(f"invalid phase: {state.get('phase')}")
-    if open_required_inputs(root) and state.get("human_input_required") != "true":
+    required_inputs = open_required_inputs(root)
+    if required_inputs and state.get("human_input_required") != "true":
         errors.append("open required human input exists but state.human_input_required is not true")
+    if state.get("human_input_required") == "true" and not required_inputs:
+        errors.append("state.human_input_required is true but no open required human input exists")
+    if state.get("status") == "waiting-human-input" and not required_inputs:
+        errors.append("state is waiting-human-input but no open required human input exists")
     active_story = state.get("active_story", "")
     story_ids = {story.get("id", "") for story in list_stories(root)}
     if active_story and active_story not in story_ids:
@@ -1195,6 +1328,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     required_inputs = open_required_inputs(root)
     audit_errors = audit_project(root)
     artifact_errors, artifact_warnings = artifact_findings(root)
+    agent_errors = agent_profile_validation_errors(root)
     evals = list_evals(root)
     eval_counts: dict[str, int] = {"total": len(evals), "passed": 0, "failed": 0, "pending": 0}
     for item in evals:
@@ -1238,7 +1372,14 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
                 "errors": artifact_errors,
                 "warnings": artifact_warnings,
             },
+            "agents": {
+                "errors": agent_errors,
+            },
             "evals": eval_counts,
+        },
+        "agents": {
+            "available": len(agent_profiles(root)),
+            "recommended": recommended_agent_profiles(root, state, next_story, audit_errors),
         },
         "context": {
             "current_pack": current_pack.relative_to(root).as_posix() if current_pack.exists() else "",
@@ -1411,7 +1552,7 @@ def cmd_story_block(args: argparse.Namespace) -> int:
     story = set_story_status(root, args.id, "blocked", force=args.force, blocker=args.reason)
     state["status"] = "blocked"
     state["active_story"] = story["id"]
-    state["human_input_required"] = "true"
+    state["human_input_required"] = "false"
     state["next_action"] = f"resolve blocker for story {story['id']}: {args.reason}"
     write_state(root, state)
     print(f"Story blocked: {story['id']}")
@@ -1610,6 +1751,55 @@ def cmd_module_create(args: argparse.Namespace) -> int:
     write_flat_yaml(path, values, header="Forge Method module")
     append_ledger(root, "module.created", {"id": module_id, "path": path.relative_to(root).as_posix()})
     print(path.relative_to(root).as_posix())
+    return 0
+
+
+def cmd_agent_list(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_none(resolve_root(args.root))
+    profiles = agent_profiles(root)
+    if not profiles:
+        print("No agent profiles.")
+        return 0
+    for profile, _ in profiles:
+        print(f"{profile.get('id', '')}\t{profile.get('title', '')}\t{profile.get('when', '')}")
+    return 0
+
+
+def cmd_agent_show(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_none(resolve_root(args.root))
+    match = agent_profile_by_id(root, args.id)
+    if match:
+        _, path = match
+        print(path.read_text(encoding="utf-8"))
+        return 0
+    raise SystemExit(f"Agent profile not found: {args.id}")
+
+
+def cmd_agent_recommend(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    next_story = select_next_story(root)
+    audit_errors = audit_project(root)
+    recommendations = recommended_agent_profiles(root, state, next_story, audit_errors)
+    if args.json:
+        print(json.dumps({"recommended": recommendations}, ensure_ascii=True, sort_keys=True))
+        return 0
+    if not recommendations:
+        print("No agent recommendations.")
+        return 0
+    for profile in recommendations:
+        print(f"{profile.get('id', '')}\t{profile.get('title', '')}\t{profile.get('purpose', '')}")
+    return 0
+
+
+def cmd_agent_validate(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_none(resolve_root(args.root))
+    errors = agent_profile_validation_errors(root)
+    if errors:
+        print("Agent profile validation failed:")
+        for error in errors:
+            print(f"- {error}")
+        return 1
+    print("Agent profile validation passed.")
     return 0
 
 
@@ -1880,6 +2070,13 @@ def build_context_pack_text(root: Path, state: dict[str, str]) -> str:
             lines.append(f"- {item.get('id')} [required={required}]: {item.get('prompt')}")
     else:
         lines.append("- none")
+    lines.extend(["", "## Recommended Agent Profiles", ""])
+    recommendations = recommended_agent_profiles(root, state, select_next_story(root), audit_project(root))
+    if recommendations:
+        for profile in recommendations:
+            lines.append(f"- {profile.get('id')} ({profile.get('title')}): {profile.get('purpose')}")
+    else:
+        lines.append("- none")
     if story:
         lines.extend(
             [
@@ -1983,6 +2180,13 @@ def build_recovery_brief_text(root: Path, state: dict[str, str], *, checkpoint_l
         for item in open_inputs:
             required = item.get("required", "true")
             lines.append(f"- {item.get('id')} [required={required}]: {item.get('prompt')}")
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Recommended Agent Profiles", ""])
+    recommendations = recommended_agent_profiles(root, state, select_next_story(root), audit_project(root))
+    if recommendations:
+        for profile in recommendations:
+            lines.append(f"- {profile.get('id')} ({profile.get('title')}): {profile.get('purpose')}")
     else:
         lines.append("- none")
     lines.extend(["", "## Recent Artifacts", ""])
@@ -2213,6 +2417,10 @@ def cmd_gate(args: argparse.Namespace) -> int:
     if workflow_errors:
         errors.extend(f"workflow: {error}" for error in workflow_errors)
 
+    agent_errors = agent_profile_validation_errors(root)
+    if agent_errors:
+        errors.extend(f"agent: {error}" for error in agent_errors)
+
     eval_count = len(list_evals(root))
     passed_evals, eval_failures = run_eval_items(root)
     if args.require_evals and eval_count == 0:
@@ -2238,6 +2446,7 @@ def cmd_gate(args: argparse.Namespace) -> int:
         print(f"Audit: passed")
         print(f"Artifacts: passed")
         print(f"Workflows: passed")
+        print(f"Agents: passed")
         print(f"Evals: {len(passed_evals)}/{eval_count} passed")
         if warnings:
             print("Warnings:")
@@ -2253,6 +2462,7 @@ def cmd_gate(args: argparse.Namespace) -> int:
                     "audit",
                     "artifact verify",
                     "workflow validate",
+                    "agent validate",
                     "eval run",
                 ],
             )
@@ -2505,6 +2715,23 @@ def build_parser() -> argparse.ArgumentParser:
     module_create.add_argument("--workflow", action="append")
     module_create.add_argument("--force", action="store_true")
     module_create.set_defaults(func=cmd_module_create)
+
+    agent = sub.add_parser("agent", help="inspect and recommend agent profiles")
+    agent_sub = agent.add_subparsers(dest="agent_command", required=True)
+    agent_list = agent_sub.add_parser("list", help="list agent profiles")
+    agent_list.add_argument("--root", default=".")
+    agent_list.set_defaults(func=cmd_agent_list)
+    agent_show = agent_sub.add_parser("show", help="show an agent profile")
+    agent_show.add_argument("--root", default=".")
+    agent_show.add_argument("--id", required=True)
+    agent_show.set_defaults(func=cmd_agent_show)
+    agent_recommend = agent_sub.add_parser("recommend", help="recommend agent profiles from current state")
+    agent_recommend.add_argument("--root", default=".")
+    agent_recommend.add_argument("--json", action="store_true")
+    agent_recommend.set_defaults(func=cmd_agent_recommend)
+    agent_validate = agent_sub.add_parser("validate", help="validate agent profiles")
+    agent_validate.add_argument("--root", default=".")
+    agent_validate.set_defaults(func=cmd_agent_validate)
 
     example = sub.add_parser("example", help="create runnable example projects from modules")
     example_sub = example.add_subparsers(dest="example_command", required=True)

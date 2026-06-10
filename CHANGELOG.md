@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.11.0
+
+Forge Method Core v1.11 adds state-routed agent profiles:
+
+- packaged compact profiles for facilitation, research, specification, planning, implementation, quality review, and operation
+- new `agent list/show/recommend/validate` helper commands
+- snapshots, context packs, and recovery briefs include recommended profiles for the current state
+- quality gates validate packaged and project-local agent profiles
+- smokes cover agent profiles for direct and installed runtime paths
+
 ## 1.10.0
 
 Forge Method Core v1.10 adds durable human input control:

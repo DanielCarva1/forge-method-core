@@ -45,6 +45,9 @@ Run $pythonExe $runtime init --project smoke-test --root $tmp
 Run $pythonExe $runtime start --root $tmp
 Run $pythonExe $runtime snapshot --root $tmp
 Run $pythonExe $runtime module list --root $tmp
+Run $pythonExe $runtime agent list --root $tmp
+Run $pythonExe $runtime agent validate --root $tmp
+Run $pythonExe $runtime agent recommend --root $tmp
 Run $pythonExe $runtime example list --root $tmp
 Run $pythonExe $runtime example create --root $exampleTmp --module software-builder
 Run $pythonExe $runtime gate --root $exampleTmp --require-evals

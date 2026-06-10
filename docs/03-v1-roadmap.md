@@ -32,6 +32,7 @@ Delivered surfaces:
 - `.forge-method/context/`
 - `.forge-method/evals/`
 - `.forge-method/handoffs/`
+- `.forge-method/agents/`
 - `.forge-method/inputs/`
 - `.forge-method/workflows/`
 - `.forge-method/modules/`
@@ -56,6 +57,7 @@ checkpoint
 context pack
 context recover
 module list/show/create
+agent list/show/recommend/validate
 workflow list/validate/create
 eval add/list/run
 eval kinds: workflow-routing, workflow-trigger, artifact-exists
@@ -103,6 +105,7 @@ A context pack must include:
 - next action
 - active story acceptance criteria
 - recent evidence paths
+- recommended agent profiles
 
 ## Release Standard
 
@@ -119,5 +122,4 @@ A project can enter ready/operate only when:
 - richer artifact index
 - module installer
 - workflow generator
-- subagent profile templates
 - cross-platform installer

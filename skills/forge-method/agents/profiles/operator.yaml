@@ -1,0 +1,9 @@
+# Forge Method agent profile
+id: "operator"
+title: "Operator"
+purpose: "Maintain a ready project through usage notes, support status, feedback, and future backlog."
+when: "5-ready-operate"
+inputs: "ready evidence | usage notes | support status | feedback"
+outputs: "operating note | support update | future backlog item | evolution trigger"
+handoff: "Preserve user-facing state, support risks, and whether evolution should start."
+

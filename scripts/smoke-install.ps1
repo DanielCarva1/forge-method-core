@@ -53,6 +53,8 @@ New-Item -ItemType Directory -Path $tmp | Out-Null
 
 Run $pythonExe $installedRuntime --help
 Run $pythonExe $installedRuntime module list
+Run $pythonExe $installedRuntime agent list
+Run $pythonExe $installedRuntime agent validate
 Run $pythonExe $installedRuntime example list
 Run $pythonExe $installedRuntime example create --root $exampleTmp --module software-builder
 Run $pythonExe $installedRuntime gate --root $exampleTmp --require-evals
@@ -61,6 +63,7 @@ Run $pythonExe $installedRuntime start --root $tmp
 Run $pythonExe $installedRuntime init --project install-smoke --root $tmp
 Run $pythonExe $installedRuntime start --root $tmp
 Run $pythonExe $installedRuntime snapshot --root $tmp
+Run $pythonExe $installedRuntime agent recommend --root $tmp
 Run $pythonExe $installedRuntime workflow create --root $tmp --id install-flow --title "Install Flow" --trigger "installed runtime available" --input "installed runtime" --step "validate installed runtime" --output "install proof" --done "install proof exists" --blocked "runtime missing" --handoff "preserve install result" --eval-query "prove install flow"
 Run $pythonExe $installedRuntime eval run --root $tmp
 Run $pythonExe $installedRuntime checkpoint --root $tmp --title "Install checkpoint" --summary "Installed runtime can persist checkpoint memory." --check "install eval passed" --next-action "continue install smoke"
