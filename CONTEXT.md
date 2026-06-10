@@ -32,6 +32,10 @@ A project initialized with `.forge-method/` state. A method project may be softw
 
 A runnable method project seeded from a packaged module. It exists to prove the module can initialize state, stories, artifacts, evals, checkpoint memory, and quality gates before users adapt the module to real work.
 
+## Project Scaffold
+
+A normal method project created from a packaged module. It includes durable state, a kickoff story, project brief, artifact eval, checkpoint, context pack, and context load plan.
+
 ## Runtime Repo
 
 The Forge Method Core repository itself. The runtime repo must not be confused with a method project created by the runtime.

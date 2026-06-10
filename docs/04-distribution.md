@@ -73,16 +73,10 @@ Acceptance:
 
 ### Level 3: Project Template
 
-Future path:
+Current helper path:
 
 ```powershell
-forge-method init my-project
-```
-
-or:
-
-```powershell
-npx forge-method init my-project
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py project create --root <parent-folder> --name my-project --module software-builder
 ```
 
 This would create:
@@ -119,6 +113,8 @@ python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py example
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py gate --root <example-folder> --require-evals
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py init --project smoke-test --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py start --root <temp-folder>
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py project create --root <parent-folder> --name generated-project --module software-builder
+python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py project list --root <parent-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py snapshot --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py agent list --root <temp-folder>
 python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py agent recommend --root <temp-folder>

@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.12.0`.
+Current runtime version: `1.13.0`.
 
 ## Current Shape
 
@@ -69,6 +69,8 @@ The skill can ask Codex to run:
 
 ```powershell
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" start --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project create --root . --name my-project --module software-builder
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project list --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init --project my-project
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" version
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status
@@ -137,4 +139,11 @@ To create a runnable seed project from any packaged module:
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example create --root ./software-example --module software-builder
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" gate --root ./software-example --require-evals
+```
+
+To create a normal method project from a packaged module:
+
+```powershell
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project create --root . --name "My Project" --module software-builder
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project list --root .
 ```

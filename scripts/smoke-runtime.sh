@@ -5,11 +5,14 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 runtime="$repo_root/skills/forge-method/scripts/forge_method_runtime.py"
 tmp="${TMPDIR:-/tmp}/forge-method-smoke"
 example_tmp="${TMPDIR:-/tmp}/forge-method-example-smoke"
+project_parent_tmp="${TMPDIR:-/tmp}/forge-method-project-smoke"
 python_bin="${PYTHON:-python3}"
 
 rm -rf "$tmp"
 rm -rf "$example_tmp"
+rm -rf "$project_parent_tmp"
 mkdir -p "$tmp"
+mkdir -p "$project_parent_tmp"
 
 "$python_bin" "$runtime" init --project smoke-test --root "$tmp"
 "$python_bin" "$runtime" start --root "$tmp"
@@ -21,6 +24,9 @@ mkdir -p "$tmp"
 "$python_bin" "$runtime" example list --root "$tmp"
 "$python_bin" "$runtime" example create --root "$example_tmp" --module software-builder
 "$python_bin" "$runtime" gate --root "$example_tmp" --require-evals
+"$python_bin" "$runtime" project create --root "$project_parent_tmp" --name "Generated Smoke" --module software-builder --objective "Verify project scaffolding."
+"$python_bin" "$runtime" project list --root "$project_parent_tmp"
+"$python_bin" "$runtime" gate --root "$project_parent_tmp/generated-smoke" --require-evals
 "$python_bin" "$runtime" workflow validate
 "$python_bin" "$runtime" workflow create --root "$tmp" --id smoke-flow --title "Smoke Flow" --trigger "state.status == smoke" --input "smoke input" --step "perform smoke step" --output "smoke output" --done "smoke output exists" --blocked "smoke input missing" --handoff "preserve smoke result" --eval-query "run smoke flow"
 "$python_bin" "$runtime" module create --root "$tmp" --id smoke-module --title "Smoke Module" --purpose "Exercise project module creation." --phase-span "1-discovery" --workflow smoke-flow

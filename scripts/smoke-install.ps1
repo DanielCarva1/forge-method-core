@@ -32,6 +32,8 @@ $installer = Join-Path $repoRoot "install.ps1"
 $installedRuntime = Join-Path $HOME ".agents\skills\forge-method\scripts\forge_method_runtime.py"
 $tmp = Join-Path $env:TEMP "forge-method-install-smoke"
 $exampleTmp = Join-Path $env:TEMP "forge-method-install-example-smoke"
+$projectParentTmp = Join-Path $env:TEMP "forge-method-install-project-smoke"
+$generatedProjectTmp = Join-Path $projectParentTmp "installed-generated"
 
 powershell -ExecutionPolicy Bypass -File $installer
 if ($LASTEXITCODE -ne 0) {
@@ -48,8 +50,12 @@ if (Test-Path -LiteralPath $tmp) {
 if (Test-Path -LiteralPath $exampleTmp) {
   Remove-Item -LiteralPath $exampleTmp -Recurse -Force
 }
+if (Test-Path -LiteralPath $projectParentTmp) {
+  Remove-Item -LiteralPath $projectParentTmp -Recurse -Force
+}
 
 New-Item -ItemType Directory -Path $tmp | Out-Null
+New-Item -ItemType Directory -Path $projectParentTmp | Out-Null
 
 Run $pythonExe $installedRuntime --help
 Run $pythonExe $installedRuntime module list
@@ -58,6 +64,9 @@ Run $pythonExe $installedRuntime agent validate
 Run $pythonExe $installedRuntime example list
 Run $pythonExe $installedRuntime example create --root $exampleTmp --module software-builder
 Run $pythonExe $installedRuntime gate --root $exampleTmp --require-evals
+Run $pythonExe $installedRuntime project create --root $projectParentTmp --name "Installed Generated" --module software-builder --objective "Verify installed project scaffolding."
+Run $pythonExe $installedRuntime project list --root $projectParentTmp
+Run $pythonExe $installedRuntime gate --root $generatedProjectTmp --require-evals
 Run $pythonExe $installedRuntime workflow validate
 Run $pythonExe $installedRuntime start --root $tmp
 Run $pythonExe $installedRuntime init --project install-smoke --root $tmp

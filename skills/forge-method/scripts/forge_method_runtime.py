@@ -15,7 +15,7 @@ from typing import Any
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.12.0"
+RUNTIME_VERSION = "1.13.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -1245,7 +1245,7 @@ def cmd_start(args: argparse.Namespace) -> int:
             rel = display_path(project_root, base=root)
             print(f"{index}. {label}\t{phase}\t{status}\t{rel}")
         print("Question: Which known project should be opened, or should a new project be created?")
-        print("Next: wait for the user's project choice, then run status in that project root or init a new project.")
+        print("Next: wait for the user's project choice, then run status in that project root or create a scaffolded project.")
         return 0
 
     if runtime_repo:
@@ -1260,9 +1260,9 @@ def cmd_start(args: argparse.Namespace) -> int:
         "Create command: "
         f"{command_hint_value(sys.executable)} "
         f"{command_hint_value(Path(__file__).resolve())} "
-        f"init --project <name> --root {command_hint_value(root)}"
+        f"project create --root {command_hint_value(root)} --name <name> --module software-builder"
     )
-    print("Next: wait for the project name, then initialize durable state.")
+    print("Next: wait for the project name, then create scaffolded durable state.")
     return 0
 
 
@@ -1753,6 +1753,181 @@ def cmd_module_create(args: argparse.Namespace) -> int:
     write_flat_yaml(path, values, header="Forge Method module")
     append_ledger(root, "module.created", {"id": module_id, "path": path.relative_to(root).as_posix()})
     print(path.relative_to(root).as_posix())
+    return 0
+
+
+def resolve_new_project_root(parent: Path, raw_path: str | None, name: str) -> Path:
+    if raw_path:
+        candidate = Path(raw_path).expanduser()
+        if not candidate.is_absolute():
+            candidate = parent / candidate
+    else:
+        candidate = parent / slugify(name)
+    return candidate.resolve()
+
+
+def cmd_project_list(args: argparse.Namespace) -> int:
+    root = resolve_root(args.root)
+    projects = discover_project_roots(root, max_depth=args.scan_depth)
+    if not projects:
+        print("No method projects found.")
+        return 0
+    for project_root in projects:
+        state = read_flat_yaml(state_path(project_root))
+        print(
+            f"{display_path(project_root, base=root)}\t"
+            f"{state.get('project', project_root.name)}\t"
+            f"{state.get('module', '')}\t"
+            f"{state.get('phase', '')}\t"
+            f"{state.get('status', '')}"
+        )
+    return 0
+
+
+def cmd_project_create(args: argparse.Namespace) -> int:
+    parent = resolve_root(args.root)
+    project_root = resolve_new_project_root(parent, args.path, args.name)
+    if project_root.exists() and not project_root.is_dir():
+        raise SystemExit(f"Project root must be a directory: {project_root}")
+    if project_root.exists() and any(project_root.iterdir()) and not state_path(project_root).exists() and not args.force:
+        raise SystemExit(f"Project root is not empty: {project_root}. Use --force if this is intentional.")
+    project_root.mkdir(parents=True, exist_ok=True)
+
+    module_id = slugify(args.module)
+    match = module_manifest_by_id(parent if state_path(parent).exists() else None, module_id)
+    if not match:
+        match = module_manifest_by_id(None, module_id)
+    if not match:
+        raise SystemExit(f"Module not found: {args.module}")
+    module, _ = match
+
+    project = args.name
+    objective = args.objective or module.get("purpose", f"Create {project}.")
+    state, path, copied_guidance = initialize_project_state(
+        project_root,
+        project=project,
+        mode=args.mode,
+        module=module_id,
+        force=args.force,
+        allow_runtime_state=False,
+        no_project_guidance=args.no_project_guidance,
+    )
+    state["phase"] = "1-discovery"
+    state["status"] = "project-created"
+    state["active_workflow"] = "discover-intent"
+    state["next_action"] = NEXT_BY_PHASE["1-discovery"]
+    write_state(project_root, state)
+
+    story_id = "project-kickoff"
+    story = {
+        "id": story_id,
+        "title": "Run project kickoff",
+        "status": "ready",
+        "phase": "1-discovery",
+        "acceptance_criteria": join_list(
+            [
+                "project state identifies the selected module",
+                "project brief artifact exists",
+                "context load plan exists",
+                "quality gate passes with required evals",
+            ]
+        ),
+        "evidence": "",
+        "checks": "context plan | gate --require-evals",
+        "blocker": "",
+    }
+    save_story(project_root, story)
+    update_sprint(project_root)
+
+    workflows = split_list(module.get("workflows"))
+    brief_rel = ".forge-method/artifacts/project-brief.md"
+    summary = (
+        f"Project: {project}. Module: {module_id}. Objective: {objective} "
+        f"Module purpose: {module.get('purpose', '')}. "
+        f"Workflow set: {join_list(workflows) or 'none'}."
+    )
+    artifact = write_artifact(
+        project_root,
+        kind="brief",
+        title=f"{project} project brief",
+        summary=summary,
+        path=brief_rel,
+        lifecycle="durable",
+    )
+    link_artifact_to_story(project_root, artifact, story_id)
+    eval_path_rel = write_artifact_eval(project_root, artifact, title=f"{project} project brief", summary=summary)
+    checkpoint = write_checkpoint(
+        project_root,
+        state,
+        title="Project created",
+        summary=f"Created project from module {module_id}.",
+        decisions=[f"Use module {module_id} as the initial route."],
+        checks=["context plan", "gate --require-evals"],
+        failed_checks=[],
+        touched=[STATE_FILE, SPRINT_FILE, story_path(project_root, story_id).relative_to(project_root).as_posix(), artifact],
+        artifacts=[artifact],
+        next_action=state["next_action"],
+    )
+    load_plan = write_context_load_plan(
+        project_root,
+        state,
+        out=method_dir(project_root) / "context" / "load-plan.json",
+        max_chars=args.max_chars,
+    )
+    context_pack = write_context_pack(
+        project_root,
+        state,
+        out=method_dir(project_root) / "context" / "current-pack.md",
+        max_chars=args.max_chars,
+    )
+
+    readme = project_root / "README.md"
+    if args.force or not readme.exists():
+        readme.write_text(
+            "\n".join(
+                [
+                    f"# {project}",
+                    "",
+                    f"Module: `{module_id}`",
+                    "",
+                    "Start by inspecting runtime state and the context load plan:",
+                    "",
+                    "```powershell",
+                    "python \"$HOME\\.agents\\skills\\forge-method\\scripts\\forge_method_runtime.py\" status --root .",
+                    "python \"$HOME\\.agents\\skills\\forge-method\\scripts\\forge_method_runtime.py\" context plan --root .",
+                    "python \"$HOME\\.agents\\skills\\forge-method\\scripts\\forge_method_runtime.py\" gate --root . --require-evals",
+                    "```",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    append_ledger(
+        project_root,
+        "project.created",
+        {
+            "module": module_id,
+            "story": story_id,
+            "artifact": artifact,
+            "eval": eval_path_rel,
+            "checkpoint": checkpoint,
+            "load_plan": load_plan.relative_to(project_root).as_posix(),
+        },
+    )
+
+    print(f"Project created: {project}")
+    print(f"Root: {project_root}")
+    print(f"State: {path}")
+    print(f"Module: {module_id}")
+    print(f"Story: {story_id}")
+    print(f"Artifact: {artifact}")
+    print(f"Eval: {eval_path_rel}")
+    print(f"Checkpoint: {checkpoint}")
+    print(f"Context plan: {load_plan.relative_to(project_root).as_posix()}")
+    print(f"Context pack: {context_pack.relative_to(project_root).as_posix()}")
+    if copied_guidance:
+        print(f"Project guidance: {', '.join(copied_guidance)}")
     return 0
 
 
@@ -2969,6 +3144,24 @@ def build_parser() -> argparse.ArgumentParser:
     module_create.add_argument("--workflow", action="append")
     module_create.add_argument("--force", action="store_true")
     module_create.set_defaults(func=cmd_module_create)
+
+    project = sub.add_parser("project", help="create and list method projects")
+    project_sub = project.add_subparsers(dest="project_command", required=True)
+    project_list = project_sub.add_parser("list", help="list method projects under a folder")
+    project_list.add_argument("--root", default=".")
+    project_list.add_argument("--scan-depth", type=int, default=2)
+    project_list.set_defaults(func=cmd_project_list)
+    project_create = project_sub.add_parser("create", help="create a method project from a module")
+    project_create.add_argument("--root", default=".")
+    project_create.add_argument("--name", required=True)
+    project_create.add_argument("--module", default="software-builder")
+    project_create.add_argument("--objective")
+    project_create.add_argument("--path")
+    project_create.add_argument("--mode", default="creation-runtime")
+    project_create.add_argument("--max-chars", type=int, default=8000)
+    project_create.add_argument("--force", action="store_true")
+    project_create.add_argument("--no-project-guidance", action="store_true")
+    project_create.set_defaults(func=cmd_project_create)
 
     agent = sub.add_parser("agent", help="inspect and recommend agent profiles")
     agent_sub = agent.add_subparsers(dest="agent_command", required=True)

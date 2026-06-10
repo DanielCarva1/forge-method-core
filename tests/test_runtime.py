@@ -111,7 +111,7 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(snapshot["runtime_version"], "1.12.0")
+            self.assertEqual(snapshot["runtime_version"], "1.13.0")
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
@@ -309,7 +309,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("facilitator", agents)
         self.assertIn("quality-reviewer", agents)
         self.assertIn("Agent profile validation passed.", agent_validation)
-        self.assertEqual(version.strip(), "1.12.0")
+        self.assertEqual(version.strip(), "1.13.0")
 
     def test_context_plan_selects_relevant_files_and_updates_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -352,7 +352,7 @@ class RuntimeTests(unittest.TestCase):
             selected_paths = [item["path"] for item in plan["selected"]]
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(plan["runtime_version"], "1.12.0")
+            self.assertEqual(plan["runtime_version"], "1.13.0")
             self.assertEqual(plan["state"]["phase"], "4-build-verify")
             self.assertIn(".forge-method/state.yaml", selected_paths)
             self.assertIn(".forge-method/sprint.yaml", selected_paths)
@@ -432,6 +432,41 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue(artifact.exists())
             self.assertTrue(context_pack.exists())
             self.assertIn("software-builder", readme.read_text(encoding="utf-8"))
+            self.assertIn("Gate passed.", gate)
+            self.assertIn("Evals: 1/1 passed", gate)
+
+    def test_project_create_seeds_real_module_project(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            parent = Path(raw)
+            create = run_cmd(
+                "project",
+                "create",
+                "--root",
+                str(parent),
+                "--name",
+                "Night Watch",
+                "--module",
+                "software-builder",
+                "--objective",
+                "Create a monitoring product.",
+            ).stdout
+            root = parent / "night-watch"
+            state = root / ".forge-method" / "state.yaml"
+            story = root / ".forge-method" / "stories" / "project-kickoff.yaml"
+            artifact = root / ".forge-method" / "artifacts" / "project-brief.md"
+            load_plan = root / ".forge-method" / "context" / "load-plan.json"
+            project_list = run_cmd("project", "list", "--root", str(parent)).stdout
+            gate = run_cmd("gate", "--root", str(root), "--require-evals").stdout
+
+            self.assertIn("Project created: Night Watch", create)
+            self.assertTrue(state.exists())
+            self.assertTrue(story.exists())
+            self.assertTrue(artifact.exists())
+            self.assertTrue(load_plan.exists())
+            self.assertIn('phase: "1-discovery"', state.read_text(encoding="utf-8"))
+            self.assertIn('active_workflow: "discover-intent"', state.read_text(encoding="utf-8"))
+            self.assertIn("software-builder", artifact.read_text(encoding="utf-8"))
+            self.assertIn("night-watch", project_list)
             self.assertIn("Gate passed.", gate)
             self.assertIn("Evals: 1/1 passed", gate)
 

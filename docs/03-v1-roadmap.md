@@ -47,6 +47,7 @@ status
 snapshot
 next
 transition
+project list/create
 story add/list/start/review/done/block
 input add/list/answer/defer
 artifact add/list
@@ -128,6 +129,5 @@ A project can enter ready/operate only when:
 
 - CI that runs unit tests and smoke tests
 - richer artifact index
-- module installer
 - workflow generator
 - cross-platform installer

@@ -31,6 +31,8 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $runtime = Join-Path $repoRoot "skills\forge-method\scripts\forge_method_runtime.py"
 $tmp = Join-Path $env:TEMP "forge-method-smoke"
 $exampleTmp = Join-Path $env:TEMP "forge-method-example-smoke"
+$projectParentTmp = Join-Path $env:TEMP "forge-method-project-smoke"
+$generatedProjectTmp = Join-Path $projectParentTmp "generated-smoke"
 
 if (Test-Path -LiteralPath $tmp) {
   Remove-Item -LiteralPath $tmp -Recurse -Force
@@ -38,8 +40,12 @@ if (Test-Path -LiteralPath $tmp) {
 if (Test-Path -LiteralPath $exampleTmp) {
   Remove-Item -LiteralPath $exampleTmp -Recurse -Force
 }
+if (Test-Path -LiteralPath $projectParentTmp) {
+  Remove-Item -LiteralPath $projectParentTmp -Recurse -Force
+}
 
 New-Item -ItemType Directory -Path $tmp | Out-Null
+New-Item -ItemType Directory -Path $projectParentTmp | Out-Null
 
 Run $pythonExe $runtime init --project smoke-test --root $tmp
 Run $pythonExe $runtime start --root $tmp
@@ -51,6 +57,9 @@ Run $pythonExe $runtime agent recommend --root $tmp
 Run $pythonExe $runtime example list --root $tmp
 Run $pythonExe $runtime example create --root $exampleTmp --module software-builder
 Run $pythonExe $runtime gate --root $exampleTmp --require-evals
+Run $pythonExe $runtime project create --root $projectParentTmp --name "Generated Smoke" --module software-builder --objective "Verify project scaffolding."
+Run $pythonExe $runtime project list --root $projectParentTmp
+Run $pythonExe $runtime gate --root $generatedProjectTmp --require-evals
 Run $pythonExe $runtime workflow validate
 Run $pythonExe $runtime workflow create --root $tmp --id smoke-flow --title "Smoke Flow" --trigger "state.status == smoke" --input "smoke input" --step "perform smoke step" --output "smoke output" --done "smoke output exists" --blocked "smoke input missing" --handoff "preserve smoke result" --eval-query "run smoke flow"
 Run $pythonExe $runtime module create --root $tmp --id smoke-module --title "Smoke Module" --purpose "Exercise project module creation." --phase-span "1-discovery" --workflow smoke-flow

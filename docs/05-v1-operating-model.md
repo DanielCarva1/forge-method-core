@@ -64,6 +64,7 @@ Before declaring a project ready, the agent should run the quality gate. The gat
 ## Start Rule
 
 Starting the method is a routing operation, not implementation work. The agent must resolve whether the current folder already has project state, whether it is the runtime repo, and which known project roots exist before asking the user to choose or create a project.
+When the user chooses a new project, the agent should use project creation so state, kickoff story, brief, eval, checkpoint, and context load plan are created together.
 
 ## Human Input Rule
 

@@ -6,6 +6,7 @@ installer="$repo_root/install.sh"
 installed_runtime="$HOME/.agents/skills/forge-method/scripts/forge_method_runtime.py"
 tmp="${TMPDIR:-/tmp}/forge-method-install-smoke"
 example_tmp="${TMPDIR:-/tmp}/forge-method-install-example-smoke"
+project_parent_tmp="${TMPDIR:-/tmp}/forge-method-install-project-smoke"
 python_bin="${PYTHON:-python3}"
 
 bash "$installer"
@@ -17,7 +18,9 @@ fi
 
 rm -rf "$tmp"
 rm -rf "$example_tmp"
+rm -rf "$project_parent_tmp"
 mkdir -p "$tmp"
+mkdir -p "$project_parent_tmp"
 
 "$python_bin" "$installed_runtime" --help
 "$python_bin" "$installed_runtime" module list
@@ -26,6 +29,9 @@ mkdir -p "$tmp"
 "$python_bin" "$installed_runtime" example list
 "$python_bin" "$installed_runtime" example create --root "$example_tmp" --module software-builder
 "$python_bin" "$installed_runtime" gate --root "$example_tmp" --require-evals
+"$python_bin" "$installed_runtime" project create --root "$project_parent_tmp" --name "Installed Generated" --module software-builder --objective "Verify installed project scaffolding."
+"$python_bin" "$installed_runtime" project list --root "$project_parent_tmp"
+"$python_bin" "$installed_runtime" gate --root "$project_parent_tmp/installed-generated" --require-evals
 "$python_bin" "$installed_runtime" workflow validate
 "$python_bin" "$installed_runtime" start --root "$tmp"
 "$python_bin" "$installed_runtime" init --project install-smoke --root "$tmp"

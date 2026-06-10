@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.13.0
+
+Forge Method Core v1.13 adds real project scaffolding:
+
+- new `project create` helper creates a normal method project from a packaged module
+- new `project list` helper lists method projects under a folder
+- project creation seeds state, kickoff story, project brief, artifact eval, checkpoint, context pack, and context load plan
+- created projects start in discovery with `discover-intent` instead of remaining in route-only setup
+- tests and smokes prove generated projects pass the quality gate with required evals
+
 ## 1.12.0
 
 Forge Method Core v1.12 adds plan-aware context loading:

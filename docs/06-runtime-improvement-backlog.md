@@ -7,6 +7,7 @@
 - runtime repo detection through `.codex-plugin/plugin.json`
 - method project detection through `.forge-method/state.yaml`
 - start route with known project listing
+- normal project scaffolding from packaged modules
 - runtime-vs-project doctor command
 - status command that does not infer from chat history
 - runtime snapshot for machine-readable agent routing
