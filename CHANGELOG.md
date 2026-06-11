@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.26.2
+
+Forge Method Core v1.26.2 adds an anti-cache invocation contract:
+
+- require every `$forge-method` invocation to run the launcher before answering
+- forbid answering from stale chat state or previous initialization prompts
+- make current filesystem and launcher output authoritative
+
 ## 1.26.1
 
 Forge Method Core v1.26.1 tightens the first-run human voice:

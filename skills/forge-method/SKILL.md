@@ -11,6 +11,8 @@ Forge Method is a file-backed state-machine runtime. Do not infer project progre
 
 First resolve the directory containing this `SKILL.md`. Run the launcher from that same directory so the active plugin/skill package, self-updater, and runtime stay in sync.
 
+Every invocation of this skill must execute the launcher before answering. Do not answer from prior chat state, cached assumptions, or a previous "waiting for initialization details" message. If the user invokes Forge Method again in the same chat, rerun `preflight` and `start`; the current filesystem and launcher output are authoritative.
+
 ```powershell
 $skill = "<directory-containing-this-SKILL.md>"
 & (Join-Path $skill "forge-method.ps1") preflight --root .
