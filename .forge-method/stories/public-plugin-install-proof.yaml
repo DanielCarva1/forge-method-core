@@ -1,0 +1,11 @@
+# Forge Method story
+updated_at: "2026-06-11T04:20:30+00:00"
+id: "public-plugin-install-proof"
+title: "Refresh public install docs and prove plugin install path"
+status: "done"
+phase: "4-build-verify"
+acceptance_criteria: "README install flow matches Codex marketplace add plus Plugins UI enablement | fresh-user install simulation does not use literal local machine paths | plugin package includes skill, runtime, workflows, modules, templates, and examples"
+evidence: ".forge-method/evidence/20260611-042030-story-story-public-plugin-install-proof-done.md"
+checks: "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-install.ps1 | powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1 | powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-install.ps1 | powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1"
+artifacts: ".forge-method/artifacts/public-plugin-install-proof.md"
+blocker: ""

@@ -1,0 +1,11 @@
+# Forge Method story
+updated_at: "2026-06-11T04:17:31+00:00"
+id: "compact-workflow-docs"
+title: "Compact agent workflow docs into strict state machines"
+status: "done"
+phase: "4-build-verify"
+acceptance_criteria: "workflow references keep trigger, inputs, steps, outputs, done_when, blocked_when, and handoff | agent-facing docs avoid broad narrative and redundant method explanation | workflow validation passes"
+evidence: ".forge-method/evidence/20260611-041731-story-story-compact-workflow-docs-done.md"
+checks: "python .\\skills\\forge-method\\scripts\\forge_method_runtime.py workflow validate | python .\\skills\\forge-method\\scripts\\forge_method_runtime.py workflow validate"
+artifacts: ".forge-method/artifacts/workflow-compactness-audit.md"
+blocker: ""

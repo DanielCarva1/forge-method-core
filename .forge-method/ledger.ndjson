@@ -1,0 +1,54 @@
+{"event": "project.initialized", "payload": {"guidance": [".codex/agents/forge-planner.toml", ".codex/agents/forge-researcher.toml", ".codex/agents/forge-verifier.toml", ".codex/agents/forge-worker.toml"], "project": "forge-method-core", "project_id": "forge-method-core"}, "ts": "2026-06-11T04:05:50+00:00"}
+{"event": "artifact.added", "payload": {"kind": "brief", "lifecycle": "durable", "path": ".forge-method/artifacts/project-brief.md"}, "ts": "2026-06-11T04:05:50+00:00"}
+{"event": "artifact.linked_to_story", "payload": {"path": ".forge-method/artifacts/project-brief.md", "story": "project-kickoff"}, "ts": "2026-06-11T04:05:50+00:00"}
+{"event": "eval.added", "payload": {"id": "artifact-forge-method-artifacts-project-brief-md-exists", "kind": "artifact-exists", "target": ".forge-method/artifacts/project-brief.md"}, "ts": "2026-06-11T04:05:50+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260611-040550-project-created.md"}, "ts": "2026-06-11T04:05:50+00:00"}
+{"event": "context_load_plan.written", "payload": {"path": ".forge-method/context/load-plan.json"}, "ts": "2026-06-11T04:05:50+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T04:05:50+00:00"}
+{"event": "project.created", "payload": {"artifact": ".forge-method/artifacts/project-brief.md", "checkpoint": ".forge-method/checkpoints/20260611-040550-project-created.md", "eval": ".forge-method/evals/artifact-forge-method-artifacts-project-brief-md-exists.yaml", "load_plan": ".forge-method/context/load-plan.json", "module": "runtime-builder", "story": "project-kickoff"}, "ts": "2026-06-11T04:05:50+00:00"}
+{"event": "context_load_plan.written", "payload": {"path": ".forge-method/context/load-plan.json"}, "ts": "2026-06-11T04:06:20+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "project-kickoff", "to": "in_progress"}, "ts": "2026-06-11T04:06:39+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "1-discovery", "status": "story-in-progress"}, "ts": "2026-06-11T04:10:25+00:00"}
+{"event": "artifact.added", "payload": {"kind": "discovery", "lifecycle": "durable", "path": ".forge-method/artifacts/brownfield-discovery.md"}, "ts": "2026-06-11T04:11:25+00:00"}
+{"event": "artifact.linked_to_story", "payload": {"path": ".forge-method/artifacts/brownfield-discovery.md", "story": "project-kickoff"}, "ts": "2026-06-11T04:11:25+00:00"}
+{"event": "eval.added", "payload": {"id": "artifact-forge-method-artifacts-brownfield-discovery-md-exists", "kind": "artifact-exists", "target": ".forge-method/artifacts/brownfield-discovery.md"}, "ts": "2026-06-11T04:11:25+00:00"}
+{"event": "context_load_plan.written", "payload": {"path": ".forge-method/context/load-plan.json"}, "ts": "2026-06-11T04:11:40+00:00"}
+{"event": "eval.run", "payload": {"count": 2, "failures": 0}, "ts": "2026-06-11T04:11:40+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 2, "passed": true, "warnings": 0}, "ts": "2026-06-11T04:11:40+00:00"}
+{"event": "eval.run", "payload": {"count": 2, "failures": 0}, "ts": "2026-06-11T04:11:40+00:00"}
+{"event": "evidence.added", "payload": {"kind": "story", "path": ".forge-method/evidence/20260611-041155-story-story-project-kickoff-done.md", "story": "project-kickoff"}, "ts": "2026-06-11T04:11:55+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "project-kickoff", "to": "done"}, "ts": "2026-06-11T04:11:55+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "2-specification", "status": "discovery-done"}, "ts": "2026-06-11T04:12:11+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260611-041223-checkpoint.md"}, "ts": "2026-06-11T04:12:23+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T04:12:23+00:00"}
+{"event": "artifact.added", "payload": {"kind": "spec", "lifecycle": "durable", "path": ".forge-method/artifacts/self-hosting-hardening-spec.md"}, "ts": "2026-06-11T04:13:51+00:00"}
+{"event": "eval.added", "payload": {"id": "artifact-forge-method-artifacts-self-hosting-hardening-spec-md-exists", "kind": "artifact-exists", "target": ".forge-method/artifacts/self-hosting-hardening-spec.md"}, "ts": "2026-06-11T04:13:51+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "3-plan", "status": "spec-done"}, "ts": "2026-06-11T04:14:02+00:00"}
+{"event": "story.backlog_imported", "payload": {"path": ".forge-method/artifacts/self-hosting-hardening-backlog.json", "stories": 4}, "ts": "2026-06-11T04:15:51+00:00"}
+{"event": "artifact.added", "payload": {"kind": "plan", "lifecycle": "durable", "path": ".forge-method/artifacts/self-hosting-hardening-backlog.json"}, "ts": "2026-06-11T04:15:52+00:00"}
+{"event": "eval.added", "payload": {"id": "artifact-forge-method-artifacts-self-hosting-hardening-backlog-json-exists", "kind": "artifact-exists", "target": ".forge-method/artifacts/self-hosting-hardening-backlog.json"}, "ts": "2026-06-11T04:15:52+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "4-build-verify", "status": "plan-done"}, "ts": "2026-06-11T04:16:02+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "runtime-self-hosting-guards", "to": "in_progress"}, "ts": "2026-06-11T04:16:17+00:00"}
+{"event": "evidence.added", "payload": {"kind": "story", "path": ".forge-method/evidence/20260611-041618-story-story-runtime-self-hosting-guards-done.md", "story": "runtime-self-hosting-guards"}, "ts": "2026-06-11T04:16:18+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "runtime-self-hosting-guards", "to": "done"}, "ts": "2026-06-11T04:16:18+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "compact-workflow-docs", "to": "in_progress"}, "ts": "2026-06-11T04:16:48+00:00"}
+{"event": "artifact.added", "payload": {"kind": "audit", "lifecycle": "durable", "path": ".forge-method/artifacts/workflow-compactness-audit.md"}, "ts": "2026-06-11T04:17:30+00:00"}
+{"event": "artifact.linked_to_story", "payload": {"path": ".forge-method/artifacts/workflow-compactness-audit.md", "story": "compact-workflow-docs"}, "ts": "2026-06-11T04:17:30+00:00"}
+{"event": "eval.added", "payload": {"id": "artifact-forge-method-artifacts-workflow-compactness-audit-md-exists", "kind": "artifact-exists", "target": ".forge-method/artifacts/workflow-compactness-audit.md"}, "ts": "2026-06-11T04:17:30+00:00"}
+{"event": "evidence.added", "payload": {"kind": "story", "path": ".forge-method/evidence/20260611-041731-story-story-compact-workflow-docs-done.md", "story": "compact-workflow-docs"}, "ts": "2026-06-11T04:17:31+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "compact-workflow-docs", "to": "done"}, "ts": "2026-06-11T04:17:31+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "plugin-native-skill-path", "to": "in_progress"}, "ts": "2026-06-11T04:17:49+00:00"}
+{"event": "evidence.added", "payload": {"kind": "story", "path": ".forge-method/evidence/20260611-041845-story-story-plugin-native-skill-path-done.md", "story": "plugin-native-skill-path"}, "ts": "2026-06-11T04:18:45+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "plugin-native-skill-path", "to": "done"}, "ts": "2026-06-11T04:18:45+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "public-plugin-install-proof", "to": "in_progress"}, "ts": "2026-06-11T04:18:58+00:00"}
+{"event": "artifact.added", "payload": {"kind": "evidence", "lifecycle": "durable", "path": ".forge-method/artifacts/public-plugin-install-proof.md"}, "ts": "2026-06-11T04:20:29+00:00"}
+{"event": "artifact.linked_to_story", "payload": {"path": ".forge-method/artifacts/public-plugin-install-proof.md", "story": "public-plugin-install-proof"}, "ts": "2026-06-11T04:20:29+00:00"}
+{"event": "eval.added", "payload": {"id": "artifact-forge-method-artifacts-public-plugin-install-proof-md-exists", "kind": "artifact-exists", "target": ".forge-method/artifacts/public-plugin-install-proof.md"}, "ts": "2026-06-11T04:20:29+00:00"}
+{"event": "evidence.added", "payload": {"kind": "story", "path": ".forge-method/evidence/20260611-042030-story-story-public-plugin-install-proof-done.md", "story": "public-plugin-install-proof"}, "ts": "2026-06-11T04:20:30+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "public-plugin-install-proof", "to": "done"}, "ts": "2026-06-11T04:20:30+00:00"}
+{"event": "eval.run", "payload": {"count": 6, "failures": 0}, "ts": "2026-06-11T04:20:45+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 6, "passed": true, "warnings": 0}, "ts": "2026-06-11T04:20:45+00:00"}
+{"event": "evidence.added", "payload": {"kind": "release", "path": ".forge-method/evidence/20260611-042058-release-ready-gate.md", "story": ""}, "ts": "2026-06-11T04:20:58+00:00"}
+{"event": "project.ready", "payload": {"evidence": ".forge-method/evidence/20260611-042058-release-ready-gate.md"}, "ts": "2026-06-11T04:20:58+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260611-042127-checkpoint.md"}, "ts": "2026-06-11T04:21:27+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T04:21:27+00:00"}

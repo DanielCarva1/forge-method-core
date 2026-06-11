@@ -1,0 +1,11 @@
+# Forge Method story
+updated_at: "2026-06-11T04:16:18+00:00"
+id: "runtime-self-hosting-guards"
+title: "Harden self-hosting guardrails and story routing"
+status: "done"
+phase: "4-build-verify"
+acceptance_criteria: "runtime repo project-state creation is refused unless --allow-runtime-state is passed | project create accepts --allow-runtime-state | starting a discovery story preserves 1-discovery / discover-intent | unit tests cover self-hosting init and phase-preserving story start"
+evidence: ".forge-method/evidence/20260611-041618-story-story-runtime-self-hosting-guards-done.md"
+checks: "python -m unittest discover -s tests | python -m unittest discover -s tests"
+artifacts: ".forge-method/artifacts/brownfield-discovery.md | .forge-method/artifacts/self-hosting-hardening-spec.md"
+blocker: ""

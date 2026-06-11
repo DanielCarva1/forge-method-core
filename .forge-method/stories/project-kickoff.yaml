@@ -1,0 +1,11 @@
+# Forge Method story
+updated_at: "2026-06-11T04:11:55+00:00"
+id: "project-kickoff"
+title: "Run brownfield discovery"
+status: "done"
+phase: "1-discovery"
+acceptance_criteria: "existing project inventory is captured | current in-progress work is identified | constraints, risks, and safe change boundaries are documented | context load plan exists | quality gate passes with required evals"
+evidence: ".forge-method/evidence/20260611-041155-story-story-project-kickoff-done.md"
+checks: "context plan | gate --require-evals | context plan | gate --require-evals | eval run"
+blocker: ""
+artifacts: ".forge-method/artifacts/project-brief.md | .forge-method/artifacts/brownfield-discovery.md"

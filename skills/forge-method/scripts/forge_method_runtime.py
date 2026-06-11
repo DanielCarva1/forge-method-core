@@ -133,6 +133,16 @@ NEXT_BY_PHASE = {
     "6-evolve": "start the next version cycle from feedback, defects, or new intent",
 }
 
+WORKFLOW_BY_PHASE = {
+    "0-route": "start-runtime",
+    "1-discovery": "discover-intent",
+    "2-specification": "write-spec",
+    "3-plan": "plan-sprint",
+    "4-build-verify": "build-story",
+    "5-ready-operate": "ready-release",
+    "6-evolve": "evolve-project",
+}
+
 SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
@@ -2652,12 +2662,18 @@ def set_story_status(root: Path, story_id: str, target: str, *, force: bool = Fa
 def cmd_story_start(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     story = set_story_status(root, args.id, "in_progress", force=args.force)
-    state["phase"] = "4-build-verify"
+    story_phase = story.get("phase", "4-build-verify")
+    if story_phase not in PHASES:
+        story_phase = "4-build-verify"
+    state["phase"] = story_phase
     state["status"] = "story-in-progress"
-    state["active_workflow"] = "build-story"
+    state["active_workflow"] = WORKFLOW_BY_PHASE.get(story_phase, "build-story")
     state["active_story"] = story["id"]
     state["human_input_required"] = "false"
-    state["next_action"] = f"implement and validate story {story['id']}"
+    if story_phase == "4-build-verify":
+        state["next_action"] = f"implement and validate story {story['id']}"
+    else:
+        state["next_action"] = f"{NEXT_BY_PHASE.get(story_phase, 'continue workflow')} for story {story['id']}"
     write_state(root, state)
     print(f"Story started: {story['id']}")
     return 0
@@ -3071,7 +3087,7 @@ def cmd_project_create(args: argparse.Namespace) -> int:
         mode="brownfield" if brownfield and args.mode == "creation-runtime" else args.mode,
         module=module_id,
         force=args.force,
-        allow_runtime_state=False,
+        allow_runtime_state=args.allow_runtime_state,
         no_project_guidance=args.no_project_guidance,
     )
     state["phase"] = "1-discovery"
@@ -5283,6 +5299,7 @@ def build_parser() -> argparse.ArgumentParser:
     project_create.add_argument("--max-chars", type=int, default=8000)
     project_create.add_argument("--brownfield", action="store_true")
     project_create.add_argument("--force", action="store_true")
+    project_create.add_argument("--allow-runtime-state", action="store_true")
     project_create.add_argument("--no-project-guidance", action="store_true")
     project_create.set_defaults(func=cmd_project_create)
 

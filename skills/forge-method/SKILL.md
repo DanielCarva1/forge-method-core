@@ -34,7 +34,29 @@ Before offering, run the preflight helper so project choices and context files c
 
 ## Runtime Helper
 
-Prefer the installed launcher when it is available:
+First resolve the skill directory that contains this `SKILL.md`. In a plugin install this is the plugin cache skill directory; in a local user install it is usually `$HOME\.agents\skills\forge-method`. Prefer running helpers relative to that directory so the active plugin and the runtime script stay in sync.
+
+Use the launcher from the current skill directory:
+
+```powershell
+$skill = "<directory-containing-this-SKILL.md>"
+& (Join-Path $skill "forge-method.ps1") preflight --root .
+& (Join-Path $skill "forge-method.ps1") start --root .
+& (Join-Path $skill "forge-method.ps1") doctor --root . --touches runtime
+```
+
+Use the helper script from the current skill directory when direct Python execution is useful:
+
+```powershell
+$skill = "<directory-containing-this-SKILL.md>"
+python (Join-Path $skill "scripts\forge_method_runtime.py") preflight --root . --json
+python (Join-Path $skill "scripts\forge_method_runtime.py") status --root . --brief
+python (Join-Path $skill "scripts\forge_method_runtime.py") resume --root . --json
+python (Join-Path $skill "scripts\forge_method_runtime.py") context plan --root .
+python (Join-Path $skill "scripts\forge_method_runtime.py") gate --root . --require-evals
+```
+
+Fallback to the legacy user install path only when the current skill directory cannot be resolved:
 
 ```powershell
 & "$HOME\.agents\skills\forge-method\forge-method.ps1" preflight --root .
@@ -42,7 +64,7 @@ Prefer the installed launcher when it is available:
 & "$HOME\.agents\skills\forge-method\forge-method.ps1" doctor --root . --touches runtime
 ```
 
-When useful, run the helper script:
+Legacy direct helper examples:
 
 ```powershell
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" preflight --root .
@@ -83,8 +105,6 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" relea
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" release check --root . --mode batch --touches runtime
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" doctor --root . --touches runtime
 ```
-
-When using the skill from a plugin checkout instead of user install, run the script from this skill directory.
 
 ## Phase Model
 

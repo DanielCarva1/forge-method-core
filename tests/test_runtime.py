@@ -167,6 +167,44 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn(f"Runtime repo: {root.resolve()}", status)
             self.assertFalse((root / ".forge-method").exists())
 
+            blocked = run_cmd(
+                "project",
+                "create",
+                "--root",
+                str(root),
+                "--path",
+                str(root),
+                "--name",
+                "Forge Method Core",
+                "--module",
+                "runtime-builder",
+                "--objective",
+                "Improve the runtime itself",
+                "--brownfield",
+                check=False,
+            )
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertIn("--allow-runtime-state", blocked.stderr)
+
+            allowed = run_cmd(
+                "project",
+                "create",
+                "--root",
+                str(root),
+                "--path",
+                str(root),
+                "--name",
+                "Forge Method Core",
+                "--module",
+                "runtime-builder",
+                "--objective",
+                "Improve the runtime itself",
+                "--brownfield",
+                "--allow-runtime-state",
+            )
+            self.assertIn("Project type: brownfield", allowed.stdout)
+            self.assertTrue((root / ".forge-method" / "state.yaml").exists())
+
     def test_preflight_empty_workspace_returns_create_decision(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -493,6 +531,32 @@ class RuntimeTests(unittest.TestCase):
             result = run_cmd("story", "done", "--root", str(root), "--id", "story-1", check=False)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Done stories require", result.stderr + result.stdout)
+
+    def test_story_start_preserves_discovery_phase_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            run_cmd("transition", "--root", str(root), "--phase", "1-discovery")
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "discover-existing-system",
+                "--title",
+                "Discover existing system",
+                "--acceptance",
+                "inventory exists",
+            )
+
+            run_cmd("story", "start", "--root", str(root), "--id", "discover-existing-system")
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+
+            self.assertEqual(snapshot["state"]["phase"], "1-discovery")
+            self.assertEqual(snapshot["state"]["active_workflow"], "discover-intent")
+            self.assertEqual(snapshot["state"]["active_story"], "discover-existing-system")
+            self.assertIn("run discovery", snapshot["state"]["next_action"])
 
     def test_review_findings_block_done_until_resolved(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

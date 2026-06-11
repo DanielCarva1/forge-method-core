@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- allow explicit self-hosting initialization in the runtime repo with `project create --allow-runtime-state`
+- preserve the story phase workflow when starting non-build stories instead of always routing to build
+- prefer the active skill/plugin directory for runtime helper commands, with the legacy user install path as fallback
 - route existing codebases without Forge Method state into brownfield discovery before specification, planning, or build
 - add a repo marketplace catalog so Codex users can install Forge Method Core from GitHub
 - add read-only context health guidance for early checkpoint and compact-recovery decisions

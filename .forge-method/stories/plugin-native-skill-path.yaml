@@ -1,0 +1,11 @@
+# Forge Method story
+updated_at: "2026-06-11T04:18:45+00:00"
+id: "plugin-native-skill-path"
+title: "Make skill runtime path resolution plugin-native"
+status: "done"
+phase: "4-build-verify"
+acceptance_criteria: "SKILL.md instructs agents to prefer the current skill directory when running from a plugin checkout | installed skill and plugin checkout instructions do not require literal paths from Daniel's machine | launcher examples remain valid for local installs"
+evidence: ".forge-method/evidence/20260611-041845-story-story-plugin-native-skill-path-done.md"
+checks: "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-install.ps1 | python -m unittest discover -s tests | powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-install.ps1 | python -m unittest discover -s tests"
+artifacts: ""
+blocker: ""
