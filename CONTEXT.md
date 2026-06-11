@@ -200,9 +200,37 @@ A compact Markdown state machine loaded only when the current runtime state requ
 
 The Forge Method surface meant for people: conversational guidance, taste, agent personalities, live council debates, onboarding, tutorials, and user-facing explanation. It may be warmer and more expressive than runtime files.
 
+## Human Voice Layer
+
+The Human Experience policy applied to non-JSON guidance. It makes Forge warm, direct, opinionated, and adaptive while keeping machine-readable runtime surfaces compact.
+
+## Adaptive Energy
+
+The Forge behavior of matching the user's conversational energy without attacking the user. It may be playful, blunt, or profane toward ideas, bugs, and process when appropriate.
+
+## Tasteful Pushback
+
+The Forge behavior of challenging weak ideas, impossible promises, unsafe products, and bad assumptions directly while preserving respect for the human.
+
 ## Agent Runtime
 
 The Forge Method surface meant for agents: compact skills, workflows, manifests, state files, evals, artifacts, gates, and recovery files. It optimizes for deterministic continuation and low context cost.
+
+## Reality/Evidence Gate
+
+A discovery and planning check that tests physical possibility, technical feasibility, user pain, ethics, safety, legal risk, alternatives, and minimum evidence before treating an idea as viable.
+
+## Market Scan
+
+A compact evidence workflow that checks audience, alternatives, demand assumptions, adoption friction, and invalidation signals before making market claims.
+
+## Domain Scan
+
+A compact evidence workflow that checks domain constraints, norms, harms, accepted practices, and required expert or primary-source review.
+
+## Technical Feasibility Scan
+
+A compact evidence workflow that checks whether a product promise is technically possible with the available data, tools, integrations, budget, platform, and operational constraints.
 
 ## Agent Profile
 

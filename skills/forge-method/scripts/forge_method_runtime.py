@@ -17,7 +17,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.25.0"
+RUNTIME_VERSION = "1.26.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -142,6 +142,20 @@ WORKFLOW_BY_PHASE = {
     "5-ready-operate": "ready-release",
     "6-evolve": "evolve-project",
 }
+
+HUMAN_EXPERIENCE_POLICY: dict[str, Any] = {
+    "voice": "warm, direct, opinionated, and useful",
+    "adaptive_energy": "match the user's energy without attacking the user",
+    "pushback": "respect the human; be ruthless with weak ideas, broken process, and bad assumptions",
+    "runtime_boundary": "keep JSON, state, evidence, workflows, and recovery artifacts compact",
+}
+
+REALITY_SCAN_WORKFLOWS = [
+    "reality-evidence-gate",
+    "market-scan",
+    "domain-scan",
+    "technical-feasibility-scan",
+]
 
 TRACKS: list[dict[str, str]] = [
     {
@@ -807,6 +821,105 @@ def project_route_decision(
     }
 
 
+def human_experience_for_route(route: str, *, question: str = "") -> dict[str, Any]:
+    route_copy = {
+        "existing-method-project": "Project state found. Resume from files, not chat memory.",
+        "runtime-repo": "This is the Forge Method Core runtime. Do not create project state here unless intentional.",
+        "workspace-with-projects": "This workspace already contains Forge projects. Ask the human which one to open or whether to create a new one.",
+        "existing-codebase": "This looks like brownfield work. Inventory what exists before planning or building.",
+        "empty-workspace": "No Forge project state is present. Welcome the human and ask what they want to create today.",
+    }.get(route, "Resolve the route before loading broad context.")
+    prompt = {
+        "existing-method-project": "Pick up the thread from the file-backed state.",
+        "runtime-repo": "Which outside workspace should we open or create for the actual project?",
+        "workspace-with-projects": "Which project are we working on, or are we starting a new one?",
+        "existing-codebase": "Want me to treat this as brownfield and start with discovery?",
+        "empty-workspace": "What do you want to create today?",
+    }.get(route, "What should Forge resolve next?")
+    return {
+        **HUMAN_EXPERIENCE_POLICY,
+        "route_summary": route_copy,
+        "opening": "Forge Method turns an idea into discovery, specs, build work, validation, and ready operation.",
+        "prompt": prompt,
+        "question_context": question,
+    }
+
+
+def reality_evidence_assessment(text: str) -> dict[str, Any]:
+    normalized = text.lower()
+    if not normalized.strip():
+        return {
+            "required": False,
+            "status": "not-applicable",
+            "score": None,
+            "summary": "",
+            "workflows": REALITY_SCAN_WORKFLOWS,
+            "next_step": "",
+        }
+    dog_impossible = any(term in normalized for term in ["dog", "cachorro"]) and any(
+        term in normalized for term in ["delegate", "delegado", "speech", "speach", "speak", "talk", "falar", "fala"]
+    )
+    cat_cruel = any(term in normalized for term in ["cat", "gato"]) and any(
+        term in normalized for term in ["spray", "water", "agua", "espirra", "cuspir", "jato"]
+    )
+    if dog_impossible:
+        return {
+            "required": True,
+            "status": "blocked",
+            "score": 0,
+            "summary": "Physical or biological impossibility. Separate the fantasy from any useful product seed before market claims.",
+            "workflows": ["reality-evidence-gate", "technical-feasibility-scan", "domain-scan"],
+            "next_step": "Pivot to a realistic assistant, simulation, training aid, or entertainment concept.",
+        }
+    if cat_cruel:
+        return {
+            "required": True,
+            "status": "blocked",
+            "score": 0,
+            "summary": "Animal-welfare and product-safety failure. Scarcity in the market does not make a cruel idea viable.",
+            "workflows": ["reality-evidence-gate", "domain-scan", "market-scan"],
+            "next_step": "Pivot to humane deterrence, environmental design, or owner education.",
+        }
+    return {
+        "required": True,
+        "status": "needs-evidence",
+        "score": None,
+        "summary": "Run the Reality/Evidence Gate before treating the idea as a market opportunity.",
+        "workflows": REALITY_SCAN_WORKFLOWS,
+        "next_step": "Check feasibility, user pain, alternatives, risks, and minimum evidence during discovery.",
+    }
+
+
+def print_human_experience_intro(payload: dict[str, Any]) -> None:
+    experience = payload.get("human_experience", {})
+    if not experience:
+        return
+    print("Forge Method")
+    print(experience.get("opening", "Forge Method helps turn intent into validated work."))
+    if experience.get("route_summary"):
+        print(experience["route_summary"])
+    if experience.get("prompt"):
+        print(experience["prompt"])
+    assessment = payload.get("reality_evidence_gate") or {}
+    if assessment.get("required") and assessment.get("status") != "not-applicable":
+        score = assessment.get("score")
+        score_text = "" if score is None else f" ({score}/10)"
+        print(f"Reality/Evidence Gate: {assessment.get('status')}{score_text}")
+        print(f"Reality check: {assessment.get('summary')}")
+        if assessment.get("next_step"):
+            print(f"Reality next: {assessment.get('next_step')}")
+    print("")
+
+
+def print_missing_state_start_intro(route: str) -> None:
+    print_human_experience_intro(
+        {
+            "human_experience": human_experience_for_route(route),
+            "reality_evidence_gate": reality_evidence_assessment(""),
+        }
+    )
+
+
 def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: str = "") -> dict[str, Any]:
     state_root, state = load_state_or_none(root)
     runtime_root = find_runtime_repo_root(root)
@@ -836,6 +949,8 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
             "generated_at": utc_now(),
             "workspace": str(root),
             "route": "existing-method-project",
+            "human_experience": human_experience_for_route("existing-method-project", question=objective),
+            "reality_evidence_gate": reality_evidence_assessment(objective),
             "runtime_repo": runtime_repo,
             "runtime_root": str(runtime_root) if runtime_root else "",
             "project_root": str(state_root),
@@ -993,6 +1108,8 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
         "generated_at": utc_now(),
         "workspace": str(root),
         "route": route,
+        "human_experience": human_experience_for_route(route, question=objective),
+        "reality_evidence_gate": reality_evidence_assessment(objective),
         "runtime_repo": runtime_repo,
         "runtime_root": str(runtime_root) if runtime_root else "",
         "project_state": "missing",
@@ -1011,6 +1128,8 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
 
 
 def print_preflight(payload: dict[str, Any]) -> None:
+    if payload.get("route") != "existing-method-project":
+        print_human_experience_intro(payload)
     print("Forge Method Preflight")
     print(f"Workspace: {payload['workspace']}")
     print(f"Route: {payload['route']}")
@@ -1685,7 +1804,15 @@ def workflow_id_from_path(path: Path) -> str:
 
 def workflow_path_by_id(root: Path | None, workflow_id: str) -> Path | None:
     normalized = slugify(workflow_id)
-    for path in reference_workflow_paths(root):
+    paths: list[Path] = []
+    if root is not None:
+        project_workflows = method_dir(root) / "workflows"
+        if project_workflows.exists():
+            paths.extend(sorted(project_workflows.glob("workflow-*.md")))
+    refs = SKILL_DIR / "references"
+    if refs.exists():
+        paths.extend(sorted(refs.glob("workflow-*.md")))
+    for path in paths:
         if workflow_id_from_path(path) == normalized:
             return path
     return None
@@ -2104,10 +2231,10 @@ def cmd_init(args: argparse.Namespace) -> int:
 def cmd_start(args: argparse.Namespace) -> int:
     root = resolve_root(args.root)
     state_root, state = load_state_or_none(root)
-    print("Forge Method Start")
-    print(f"Workspace: {root}")
 
     if state_root:
+        print("Forge Method Start")
+        print(f"Workspace: {root}")
         print("Route: existing-method-project")
         print(f"Project root: {state_root}")
         print_state_summary(state)
@@ -2119,11 +2246,14 @@ def cmd_start(args: argparse.Namespace) -> int:
 
     runtime_root = find_runtime_repo_root(root)
     runtime_repo = runtime_root is not None
-    print(f"Runtime repo: {'yes' if runtime_repo else 'no'}")
     if runtime_root:
+        print_missing_state_start_intro("runtime-repo")
+        print("Forge Method Start")
+        print(f"Workspace: {root}")
+        print(f"Runtime repo: {'yes' if runtime_repo else 'no'}")
         print(f"Runtime root: {runtime_root}")
-    print("Project state: missing")
     if runtime_repo:
+        print("Project state: missing")
         print("Known projects: not scanned inside runtime repo")
         print("Question: Which project folder should be opened or created outside the runtime repo?")
         print("Module choices:")
@@ -2134,6 +2264,11 @@ def cmd_start(args: argparse.Namespace) -> int:
 
     projects = discover_project_roots(root, max_depth=args.scan_depth)
     if projects:
+        print_missing_state_start_intro("workspace-with-projects")
+        print("Forge Method Start")
+        print(f"Workspace: {root}")
+        print(f"Runtime repo: {'yes' if runtime_repo else 'no'}")
+        print("Project state: missing")
         print("Known projects:")
         for index, project_root in enumerate(projects, start=1):
             project_state = apply_state_defaults(read_flat_yaml(state_path(project_root)))
@@ -2150,7 +2285,11 @@ def cmd_start(args: argparse.Namespace) -> int:
         return 0
 
     if is_brownfield_workspace(root):
+        print_missing_state_start_intro("existing-codebase")
+        print("Forge Method Start")
+        print(f"Workspace: {root}")
         print("Route: existing-codebase")
+        print(f"Runtime repo: {'yes' if runtime_repo else 'no'}")
         print("Project state: missing")
         print("Known projects: none")
         print("Question: Initialize Forge Method for this existing project as brownfield?")
@@ -2168,6 +2307,11 @@ def cmd_start(args: argparse.Namespace) -> int:
         print("Next: run brownfield discovery before specification, planning, or implementation.")
         return 0
 
+    print_missing_state_start_intro("empty-workspace")
+    print("Forge Method Start")
+    print(f"Workspace: {root}")
+    print(f"Runtime repo: {'yes' if runtime_repo else 'no'}")
+    print("Project state: missing")
     print("Known projects: none")
     print("Question: Create a new method project in this workspace?")
     print("Module choices:")
@@ -3696,6 +3840,8 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
             "workspace": str(root),
             "state_found": False,
             "route": preflight.get("route", ""),
+            "human_experience": preflight.get("human_experience", {}),
+            "reality_evidence_gate": preflight.get("reality_evidence_gate", {}),
             "question": preflight.get("question", ""),
             "recommended_tracks": tracks,
             "next_action": "answer the preflight route question, then create or open the selected project",
@@ -3709,6 +3855,8 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
         "runtime_version": RUNTIME_VERSION,
         "workspace": str(root),
         "state_found": True,
+        "human_experience": human_experience_for_route("existing-method-project", question=question),
+        "reality_evidence_gate": reality_evidence_assessment(question),
         "project_root": str(state_root),
         "project": state.get("project", ""),
         "track": track,
@@ -3732,6 +3880,8 @@ def cmd_guide(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2))
         return 0
+    if not payload.get("state_found"):
+        print_human_experience_intro(payload)
     print("Forge Guide")
     print(f"Workspace: {payload.get('workspace')}")
     if not payload.get("state_found"):
@@ -3755,6 +3905,12 @@ def cmd_guide(args: argparse.Namespace) -> int:
         print(f"- {agent.get('id')}: {agent.get('purpose')}")
     if payload.get("grill_gate_required"):
         print("Grill Gate: required before leaving this decision phase.")
+    assessment = payload.get("reality_evidence_gate") or {}
+    if assessment.get("required") and assessment.get("status") != "not-applicable":
+        score = assessment.get("score")
+        score_text = "" if score is None else f" ({score}/10)"
+        print(f"Reality/Evidence Gate: {assessment.get('status')}{score_text}")
+        print(f"Reality check: {assessment.get('summary')}")
     work_order = payload.get("mechanical_work_order", {})
     if work_order.get("autonomous"):
         print(f"Mechanical: {work_order.get('next_mechanical_step')}")

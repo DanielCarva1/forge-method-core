@@ -37,7 +37,7 @@ The first-run UX should stay this small:
 5. Create or resume durable file-backed state.
 6. Continue through build, verification, and ready/operate.
 
-After 1.25 is installed from the Git marketplace, later `$forge-method` starts check for package updates, show compact patch notes when a new version is installed, and continue in the same chat.
+After the self-updating package is installed from the Git marketplace, later `$forge-method` starts check for package updates, show compact patch notes when a new version is installed, and continue in the same chat.
 
 ## Onboarding Copy
 

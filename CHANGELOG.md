@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 1.26.0
+
+Forge Method Core v1.26 adds a stronger first-run Human Experience and canonical Reality/Evidence Gate:
+
+- add Human Voice Layer, Adaptive Energy, and Tasteful Pushback guidance for non-JSON human surfaces
+- make empty-workspace and brownfield startup explain Forge before showing technical state
+- add `human_experience` and `reality_evidence_gate` payloads for guide/preflight JSON
+- add Reality/Evidence Gate plus market, domain, and technical feasibility scan workflows
+- keep runtime artifacts compact while allowing human-facing guidance to be warmer and more direct
+
 ## 1.25.0
 
 Forge Method Core v1.25 adds single-pass self-update for marketplace installs:

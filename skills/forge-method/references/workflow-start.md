@@ -24,13 +24,14 @@ steps:
   1. check whether current workspace is the runtime repo
   2. check whether current workspace has `.forge-method/state.yaml`
   3. if state exists, summarize current project, phase, status, and next action
-  4. if no state exists, ask whether to initialize a new project in this workspace
+  4. if no state exists, briefly explain Forge Method and ask what the human wants to create
   5. if multiple known projects exist, show them and ask the user to pick one or create a new one
   6. after initialization, write state and report next action
 
 outputs:
   - `.forge-method/state.yaml`
   - `.forge-method/sprint.yaml`
+  - human route prompt
   - concise status summary
 
 done_when:
@@ -46,4 +47,3 @@ blocked_when:
 
 handoff:
   - write the current project, phase, status, and next action into state
-

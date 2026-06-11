@@ -8,11 +8,12 @@ inputs:
   - opportunity area
   - audience
   - constraints
+  - reality/evidence stance
   - existing alternatives
 
 steps:
   1. identify adjacent possibilities
-  2. compare novelty, usefulness, and feasibility
+  2. compare novelty, usefulness, feasibility, and required evidence
   3. choose a focused innovation bet
   4. define proof needed
 
@@ -24,6 +25,7 @@ outputs:
 done_when:
   - selected direction has a reason
   - feasibility and proof are explicit
+  - blocked ideas are reframed before market claims
   - next validation step is known
 
 blocked_when:

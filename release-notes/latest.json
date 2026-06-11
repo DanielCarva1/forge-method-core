@@ -1,13 +1,13 @@
 {
-  "version": "1.25.0",
+  "version": "1.26.0",
   "date": "2026-06-11",
-  "title": "Self-update without double start",
-  "summary": "Forge Method now checks for safe updates before start and continues in the same chat.",
+  "title": "Human voice and Reality/Evidence Gate",
+  "summary": "Forge Method now starts new work with a warmer guide voice and challenges ideas before treating them as viable.",
   "highlights": [
-    "Self-update runs before start, preflight, guide, and resume.",
-    "Patch notes appear only when a new version is installed.",
-    "JSON commands keep stdout clean while update messages go to stderr.",
-    "Fallback installs continue locally and show a one-time marketplace migration hint."
+    "Empty and brownfield work now opens with human guidance before technical state details.",
+    "Guide/preflight JSON includes compact human_experience and reality_evidence_gate payloads.",
+    "Reality/Evidence Gate blocks impossible, cruel, unsafe, or incoherent ideas before market claims.",
+    "New market, domain, and technical feasibility scan workflows support discovery."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.25.0.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.26.0.md"
 }

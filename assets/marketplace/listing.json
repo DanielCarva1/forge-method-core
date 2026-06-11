@@ -1,7 +1,7 @@
 {
   "schema_version": "forge-marketplace-listing.v1",
   "name": "forge-method-core",
-  "version": "1.25.0",
+  "version": "1.26.0",
   "display_name": "Forge Method Core",
   "tagline": "Run state-machine creation workflows inside Codex.",
   "category": "Productivity",
@@ -11,6 +11,8 @@
     "Keeps project state in files instead of chat memory.",
     "Routes startup through preflight decisions before broad context loading.",
     "Checks for safe Git marketplace updates before startup and summarizes new versions.",
+    "Starts empty and brownfield work with human guidance before technical state details.",
+    "Challenges new ideas through Reality/Evidence Gate before market or implementation claims.",
     "Creates durable project scaffolds with stories, artifacts, evals, checkpoints, evidence, and recovery context.",
     "Supports packaged modules for software, creative, game, runtime-builder, test, launch, and core-runtime work.",
     "Validates progress with local gates, fixture smokes, and clone/install distribution checks."
@@ -21,6 +23,8 @@
     "Project Runtime",
     "Durable Context",
     "Evidence Gates",
+    "Human Voice Layer",
+    "Reality Evidence Gate",
     "Self Update",
     "Module Fixtures"
   ],
@@ -61,7 +65,7 @@
     "python -m unittest discover -s tests",
     "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1",
     "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-all.ps1",
-    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref v1.25.0 -ExpectedVersion 1.25.0"
+    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref v1.26.0 -ExpectedVersion 1.26.0"
   ],
   "publication_status": "metadata-ready; public directory submission is external"
 }

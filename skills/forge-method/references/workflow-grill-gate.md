@@ -10,11 +10,12 @@ inputs:
   - current phase artifact
   - `CONTEXT.md`
   - relevant ADRs
+  - reality/evidence decision artifact when the phase makes a product or market claim
   - acceptance criteria and constraints
 
 steps:
   1. restate the phase decision in one compact paragraph
-  2. compare it against glossary terms, ADRs, constraints, and acceptance criteria
+  2. compare it against glossary terms, ADRs, reality/evidence stance, constraints, and acceptance criteria
   3. identify contradictions, missing definitions, risky assumptions, and irreversible choices
   4. ask one human question only when the contradiction cannot be resolved from artifacts
   5. write a compact grill artifact with decision, risks, assumptions, and next action

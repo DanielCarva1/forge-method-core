@@ -13,11 +13,14 @@ steps:
   1. inspect state, route, track, next story, blockers, and readiness
   2. recommend one next action and optional alternatives
   3. suggest a track when no project state exists
-  4. keep runtime commands as implementation details
+  4. include Reality/Evidence Gate guidance when a new idea or market claim appears
+  5. keep runtime commands as implementation details
 
 outputs:
   - human guidance
+  - compact human_experience guidance
   - optional track recommendation
+  - optional reality/evidence assessment
   - next command for the agent
 
 done_when:
@@ -30,4 +33,4 @@ blocked_when:
   - user asks for a conflicting direction
 
 handoff:
-  - preserve route, selected track, next command, and unresolved choices
+  - preserve route, selected track, reality stance, next command, and unresolved choices

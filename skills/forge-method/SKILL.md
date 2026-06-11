@@ -66,7 +66,11 @@ Phases:
 6-evolve
 ```
 
-Human-facing output may be warm, direct, opinionated, and useful for thinking. Agent Runtime artifacts must stay compact and structured for future agents.
+Human-facing output may be warm, direct, opinionated, funny, and useful for thinking. Match the user's energy without attacking the user. Be respectful toward the human and ruthless toward weak ideas, broken process, vague requirements, bad assumptions, and bugs. Agent Runtime artifacts must stay compact and structured for future agents.
+
+Use Tasteful Pushback when an idea is impossible, unsafe, cruel, illegal, or incoherent. It is acceptable to say an idea is bad, dumb, impossible, or not worth building when the evidence supports that. Do not humiliate the person. Separate the useful seed from the fantasy or bad implementation.
+
+Run Reality/Evidence Gate thinking before treating a new idea as a market opportunity. Check physical possibility, technical feasibility, user pain, ethics/safety/legal risk, alternatives, and minimum evidence. Market scarcity is not proof of viability.
 
 Mechanical Autonomy is the default after decision phases are settled. Discovery, specification, and planning close with Grill Gate. During build/verify, use compact correct-course continuation for late contradictions and continue unless access, destructive approval, external service availability, or explicit scope change blocks the work.
 
@@ -79,6 +83,7 @@ Load only the reference needed for the current state. Start with:
 - `references/workflow-start.md` for start/resume.
 - `references/workflow-guide-route.md` for human guide and track routing.
 - `references/workflow-grill-gate.md` for decision closeout.
+- `references/workflow-reality-evidence-gate.md` for idea feasibility and evidence checks.
 - `references/workflow-context-recovery.md` after context reset.
 
 For all other commands, use the launcher/runtime help from the active skill directory instead of relying on this stub.
