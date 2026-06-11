@@ -238,7 +238,7 @@ Validation tiers:
 - targeted smoke: runtime smoke after workflow/state-transition changes; install smoke after install or packaging changes
 - full: both platform verifiers, fixture matrix, plugin/skill validation, CI, and clean install proof before a published release
 
-Use `release plan` before publishing to choose story, batch, hotfix, or breaking cadence and to confirm the validation tier. Use `release check` after the batch is ready to verify local release readiness before full verification. Both commands are intentionally non-publishing; neither creates a tag nor a GitHub release.
+Use `release plan` when deciding release shape. Use `release check` only after a coherent batch is ready to tag or publish; do not run it after every intermediate commit. During development, use fast or targeted validation and save full release checks for the final gate. Both commands are intentionally non-publishing; neither creates a tag nor a GitHub release.
 
 After a tag or branch is available from a Git-clonable source, run the clone/install distribution smoke:
 

@@ -206,7 +206,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify-all.ps1
 bash scripts/verify-all.sh
 ```
 
-Use full verification before publishing a release, after install/package changes, or after broad runtime changes. Story-by-story versioning is valid when the product is intentionally delivered one story at a time. When several completed stories already form one coherent product increment, batch them into a larger release.
+Use fast or targeted validation while developing. Run full verification before publishing a release, after install/package changes, or after broad runtime changes. Story-by-story versioning is valid when the product is intentionally delivered one story at a time. When several completed stories already form one coherent product increment, batch them into a larger release.
+
+Do not run `release check` for every intermediate commit. Build and validate the batch first, then run `release check` once when the batch is ready to tag or publish.
 
 The full verifier includes a fixture matrix smoke. It creates example and normal projects for every packaged module, runs quality gates, checks compact recovery, verifies parent preflight decisions, and validates objective-to-module recommendations.
 
