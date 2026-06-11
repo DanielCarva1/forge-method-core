@@ -56,6 +56,18 @@ codex plugin marketplace add "<marketplace-root>"
 
 Workspace sharing and public marketplace listing are separate distribution stages. A validated local plugin can be shared in a workspace through the Codex app; public directory availability requires the external publication/listing process.
 
+Marketplace-ready listing metadata is stored in:
+
+```txt
+assets/marketplace/listing.json
+```
+
+First-run onboarding media is stored in:
+
+```txt
+assets/onboarding/first-run-flow.svg
+```
+
 The local installer prints Codex deeplinks for the plugin detail page and share flow:
 
 ```txt
@@ -256,5 +268,6 @@ Do not create a tag or GitHub release for every small story when the work is alr
 
 ## What Still Needs Productization
 
-- marketplace listing/publication metadata
+- public marketplace submission/approval
+- signed release artifacts
 - GitHub PR workflow

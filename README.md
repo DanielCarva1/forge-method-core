@@ -233,6 +233,7 @@ The complete proposal is in:
 - `docs/05-v1-operating-model.md`
 - `docs/06-runtime-improvement-backlog.md`
 - `docs/07-v1-readiness-audit.md`
+- `docs/08-marketplace-onboarding.md`
 
 ## Example
 

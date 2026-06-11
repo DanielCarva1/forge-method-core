@@ -33,6 +33,7 @@ function Resolve-Python {
 $pythonExe = Resolve-Python
 
 Run $pythonExe -m unittest discover -s tests
+Run $pythonExe scripts\verify-onboarding-assets.py
 Run $pythonExe skills\forge-method\scripts\forge_method_runtime.py workflow validate
 Run $pythonExe skills\forge-method\scripts\forge_method_runtime.py agent validate
 

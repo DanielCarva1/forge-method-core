@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- add marketplace listing metadata and a first-run onboarding flow asset
+- add onboarding asset validation to fast and full verification
+- document the publication boundary between local/workspace distribution and public directory submission
+
 ## 1.22.0
 
 Forge Method Core v1.22 broadens real-project fixture coverage:

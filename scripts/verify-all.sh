@@ -4,6 +4,7 @@ set -euo pipefail
 python_bin="${PYTHON:-python3}"
 
 "$python_bin" -m unittest discover -s tests
+"$python_bin" scripts/verify-onboarding-assets.py
 bash scripts/smoke-runtime.sh
 bash scripts/smoke-install.sh
 bash scripts/smoke-plugin-local.sh

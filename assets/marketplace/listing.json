@@ -1,0 +1,61 @@
+{
+  "schema_version": "forge-marketplace-listing.v1",
+  "name": "forge-method-core",
+  "version": "1.22.0",
+  "display_name": "Forge Method Core",
+  "tagline": "Run state-machine creation workflows inside Codex.",
+  "category": "Productivity",
+  "developer": "DanielCarva1",
+  "summary": "Forge Method Core is a Codex-native workflow runtime for long-horizon product, software, creative, game, and builder work.",
+  "description": [
+    "Keeps project state in files instead of chat memory.",
+    "Routes startup through preflight decisions before broad context loading.",
+    "Creates durable project scaffolds with stories, artifacts, evals, checkpoints, evidence, and recovery context.",
+    "Supports packaged modules for software, creative, game, runtime-builder, test, launch, and core-runtime work.",
+    "Validates progress with local gates, fixture smokes, and clone/install distribution checks."
+  ],
+  "capabilities": [
+    "Agent Skills",
+    "State Machines",
+    "Project Runtime",
+    "Durable Context",
+    "Evidence Gates",
+    "Module Fixtures"
+  ],
+  "first_run_prompts": [
+    "$forge-method",
+    "Start Forge Method in this workspace.",
+    "Resume this Forge Method project from file state."
+  ],
+  "install": {
+    "windows": [
+      "git clone https://github.com/DanielCarva1/forge-method-core.git",
+      "cd forge-method-core",
+      "powershell -ExecutionPolicy Bypass -File .\\scripts\\install-plugin-local.ps1"
+    ],
+    "posix": [
+      "git clone https://github.com/DanielCarva1/forge-method-core.git",
+      "cd forge-method-core",
+      "bash scripts/install-plugin-local.sh"
+    ]
+  },
+  "assets": [
+    {
+      "title": "First-run flow",
+      "path": "assets/onboarding/first-run-flow.svg",
+      "alt": "Flow from plugin install to preflight decision, durable project state, build verification, and ready operation."
+    }
+  ],
+  "privacy_and_state": [
+    "Project progress is stored under .forge-method/ in the user's workspace.",
+    "The runtime does not require external services for local state, project routing, or quality gates.",
+    "GitHub is used only when users clone, push, or publish through their own repository workflow."
+  ],
+  "validation": [
+    "python -m unittest discover -s tests",
+    "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1",
+    "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-all.ps1",
+    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref v1.22.0 -ExpectedVersion 1.22.0"
+  ],
+  "publication_status": "metadata-ready; public directory submission is external"
+}

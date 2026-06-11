@@ -85,6 +85,8 @@
 - POSIX installer Python resolution
 - plugin installation diagnostics in doctor
 - Git-clone plugin install smoke for published refs
+- marketplace listing metadata
+- first-run visual onboarding asset
 
 ### Module Packs
 

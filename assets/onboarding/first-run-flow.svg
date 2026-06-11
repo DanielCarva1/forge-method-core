@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">Forge Method first-run flow</title>
+  <desc id="desc">A five-step flow from installing the plugin to ready operation with durable state and verification.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f7f7f4; }
+      .panel { fill: #ffffff; stroke: #22252a; stroke-width: 2; }
+      .accent { fill: #176b5d; }
+      .accent2 { fill: #c75f2a; }
+      .muted { fill: #59636b; }
+      .title { fill: #17191c; font: 700 30px Arial, sans-serif; }
+      .step { fill: #17191c; font: 700 20px Arial, sans-serif; }
+      .body { fill: #343a40; font: 16px Arial, sans-serif; }
+      .small { fill: #59636b; font: 14px Arial, sans-serif; }
+      .arrow { stroke: #176b5d; stroke-width: 4; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#176b5d" />
+    </marker>
+  </defs>
+  <rect class="bg" width="1280" height="640" />
+  <text class="title" x="64" y="72">Forge Method Core: First-Run Flow</text>
+  <text class="body" x="64" y="106">A Codex-native runtime that routes work from file-backed state before the agent reads broadly.</text>
+
+  <g transform="translate(64 160)">
+    <rect class="panel" width="200" height="260" rx="8" />
+    <circle class="accent" cx="36" cy="36" r="18" />
+    <text x="30" y="43" fill="#ffffff" font="700 18px Arial, sans-serif">1</text>
+    <text class="step" x="24" y="84">Install Plugin</text>
+    <text class="body" x="24" y="124">Clone the repo and</text>
+    <text class="body" x="24" y="148">run the local plugin</text>
+    <text class="body" x="24" y="172">installer.</text>
+    <text class="small" x="24" y="218">Marketplace entry</text>
+    <text class="small" x="24" y="240">points at the package.</text>
+  </g>
+
+  <path class="arrow" d="M284 290 H344" />
+
+  <g transform="translate(364 160)">
+    <rect class="panel" width="200" height="260" rx="8" />
+    <circle class="accent" cx="36" cy="36" r="18" />
+    <text x="30" y="43" fill="#ffffff" font="700 18px Arial, sans-serif">2</text>
+    <text class="step" x="24" y="84">Start Skill</text>
+    <text class="body" x="24" y="124">$forge-method</text>
+    <text class="body" x="24" y="154">or the plugin</text>
+    <text class="body" x="24" y="178">default prompt.</text>
+    <text class="small" x="24" y="218">No extra command</text>
+    <text class="small" x="24" y="240">surface required.</text>
+  </g>
+
+  <path class="arrow" d="M584 290 H644" />
+
+  <g transform="translate(664 160)">
+    <rect class="panel" width="200" height="260" rx="8" />
+    <circle class="accent2" cx="36" cy="36" r="18" />
+    <text x="30" y="43" fill="#ffffff" font="700 18px Arial, sans-serif">3</text>
+    <text class="step" x="24" y="84">Preflight</text>
+    <text class="body" x="24" y="124">Resolve workspace:</text>
+    <text class="body" x="24" y="148">existing project,</text>
+    <text class="body" x="24" y="172">project folder, or</text>
+    <text class="body" x="24" y="196">new project.</text>
+    <text class="small" x="24" y="240">Read-only decision.</text>
+  </g>
+
+  <path class="arrow" d="M884 290 H944" />
+
+  <g transform="translate(964 160)">
+    <rect class="panel" width="200" height="260" rx="8" />
+    <circle class="accent" cx="36" cy="36" r="18" />
+    <text x="30" y="43" fill="#ffffff" font="700 18px Arial, sans-serif">4</text>
+    <text class="step" x="24" y="84">Create State</text>
+    <text class="body" x="24" y="124">Write stories,</text>
+    <text class="body" x="24" y="148">artifacts, evals,</text>
+    <text class="body" x="24" y="172">checkpoints, and</text>
+    <text class="body" x="24" y="196">context plans.</text>
+    <text class="small" x="24" y="240">State survives reset.</text>
+  </g>
+
+  <g transform="translate(250 470)">
+    <rect class="panel" width="780" height="92" rx="8" />
+    <circle class="accent2" cx="42" cy="46" r="20" />
+    <text x="36" y="53" fill="#ffffff" font="700 18px Arial, sans-serif">5</text>
+    <text class="step" x="82" y="40">Build, Verify, Ready</text>
+    <text class="body" x="82" y="68">Agents continue from file state, require evidence before done, run gates, and move the project to ready/operate.</text>
+  </g>
+
+  <path class="arrow" d="M1064 420 C1064 455 1016 492 1030 516" />
+  <path class="arrow" d="M664 516 H344" />
+</svg>

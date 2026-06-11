@@ -143,6 +143,5 @@ Fixture release proof must cover every packaged module. The fixture matrix creat
 
 ## Remaining Productization
 
-- public marketplace listing
+- public marketplace submission/approval
 - signed release artifacts
-- richer visual onboarding beyond installer deeplinks

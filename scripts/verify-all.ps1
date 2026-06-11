@@ -33,6 +33,7 @@ function Resolve-Python {
 $pythonExe = Resolve-Python
 
 Run $pythonExe -m unittest discover -s tests
+Run $pythonExe scripts\verify-onboarding-assets.py
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1
 if ($LASTEXITCODE -ne 0) {
   throw "smoke-runtime.ps1 failed"
