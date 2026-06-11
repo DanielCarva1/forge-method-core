@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.21.0
+
+Forge Method Core v1.21 hardens published plugin distribution:
+
+- add a clone/install smoke that validates a Git-cloned package can install as a Codex plugin
+- verify the cloned plugin manifest, marketplace entry, runtime preflight, project creation, and quality gate
+- document the post-tag distribution smoke for Windows and POSIX release validation
+
 ## 1.20.0
 
 Forge Method Core v1.20 improves first-project routing:

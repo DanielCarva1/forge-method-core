@@ -24,6 +24,10 @@ A `codex://` URL printed by the local plugin installer to open the plugin detail
 
 The `doctor` check that reads the personal marketplace, resolves the local plugin source, checks manifest and skill files, compares installed version with runtime version, and prints Codex deeplinks for activation and sharing.
 
+## Clone Install Smoke
+
+A distribution smoke that clones a Git source or published ref, installs the cloned package into an isolated temporary plugin marketplace, verifies plugin metadata, runs preflight, creates a project, and runs the quality gate. It proves the install path a new user would take without relying on chat memory or the local development checkout.
+
 ## Creation Runtime
 
 A state-machine system that turns intent into artifacts, implementation, validation, release, and future evolution.

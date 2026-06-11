@@ -83,6 +83,7 @@
 - plugin installer deeplinks
 - POSIX installer Python resolution
 - plugin installation diagnostics in doctor
+- Git-clone plugin install smoke for published refs
 
 ### Module Packs
 

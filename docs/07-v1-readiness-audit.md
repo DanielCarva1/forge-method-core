@@ -13,7 +13,7 @@ Forge Method Core v1 is ready when a new user can install it, start a project, r
 | Context Recovery | A new session can recover state, read order, commands, done conditions, and blocking conditions from files. | `context plan`, `context recover`, `context recover --compact` |
 | Autonomous Build | Build-phase work can select a story, record review findings, require evidence, and block done state until findings are resolved. | story/review/evidence tests |
 | Ready Phase | Projects can enter `5-ready-operate` only after audit and release evidence. | `ready`, quality gate tests |
-| Distribution | The package validates as a Codex plugin, can be installed into a personal marketplace, prints Codex plugin deeplinks for activation/sharing, diagnoses the installed plugin package, and can also be cloned, installed locally as a skill fallback, validated, and published through a versioned release. | plugin validation, plugin-local smoke, `doctor`, `release check`, CI, GitHub release |
+| Distribution | The package validates as a Codex plugin, can be installed into a personal marketplace, prints Codex plugin deeplinks for activation/sharing, diagnoses the installed plugin package, and can also be cloned from a Git ref, installed locally as a plugin or skill fallback, validated, and published through a versioned release. | plugin validation, plugin-local smoke, clone/install smoke, `doctor`, `release check`, CI, GitHub release |
 | Product Surface | Product docs and runtime copy stay independent and do not create naming noise from comparison research. | repository search before release |
 
 ## Maturity Classification
@@ -39,9 +39,10 @@ Before a v1 release is called stable:
 2. `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1`
 3. `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1`
 4. `powershell -ExecutionPolicy Bypass -File .\scripts\verify-all.ps1`
-5. product-surface scan for comparison-name noise
-6. GitHub CI passes on Windows and Linux
-7. GitHub release points to the tagged commit
+5. `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v<version> -ExpectedVersion <version>`
+6. product-surface scan for comparison-name noise
+7. GitHub CI passes on Windows and Linux
+8. GitHub release points to the tagged commit
 
 ## Known Post-V1 Productization
 

@@ -137,6 +137,8 @@ A project can enter ready/operate only when:
 - release evidence is written
 - state is updated to `5-ready-operate`
 
+Distribution release proof must include a clone/install smoke from a Git-clonable source. For a published tag, the smoke installs the cloned package as a plugin, verifies marketplace metadata, runs preflight, creates a project, and runs the quality gate.
+
 ## Remaining Productization
 
 - public marketplace listing
