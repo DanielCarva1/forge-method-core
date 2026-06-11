@@ -5,7 +5,29 @@ plugin_name="forge-method-core"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 marketplace_path="${MARKETPLACE_PATH:-$HOME/.agents/plugins/marketplace.json}"
 
-marketplace_root="$(MARKETPLACE_PATH="$marketplace_path" python3 - <<'PY'
+resolve_python() {
+  if [[ -n "${PYTHON:-}" ]]; then
+    if "$PYTHON" -c 'import sys' >/dev/null 2>&1; then
+      printf '%s\n' "$PYTHON"
+      return 0
+    fi
+    echo "PYTHON is set but is not executable: $PYTHON" >&2
+    return 1
+  fi
+  local candidate
+  for candidate in python3 python py; do
+    if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c 'import sys' >/dev/null 2>&1; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  echo "Python not found. Set PYTHON to a Python executable." >&2
+  return 1
+}
+
+python_cmd="$(resolve_python)"
+
+marketplace_root="$(MARKETPLACE_PATH="$marketplace_path" "$python_cmd" - <<'PY'
 from pathlib import Path
 import os
 
@@ -34,7 +56,7 @@ fi
 
 mkdir -p "$marketplace_root"
 marketplace_root_real="$(cd "$marketplace_root" && pwd)"
-source_path="$(MARKETPLACE_ROOT="$marketplace_root_real" TARGET="$target" python3 - <<'PY'
+source_path="$(MARKETPLACE_ROOT="$marketplace_root_real" TARGET="$target" "$python_cmd" - <<'PY'
 from pathlib import Path
 import os
 import sys
@@ -79,7 +101,7 @@ for entry in "${entries[@]}"; do
   fi
 done
 
-MARKETPLACE_PATH="$marketplace_path" SOURCE_PATH="$source_path" python3 - <<'PY'
+MARKETPLACE_PATH="$marketplace_path" SOURCE_PATH="$source_path" "$python_cmd" - <<'PY'
 from __future__ import annotations
 
 import json
@@ -114,7 +136,7 @@ payload["plugins"].append(entry)
 marketplace_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 PY
 
-marketplace_name="$(MARKETPLACE_PATH="$marketplace_path" python3 - <<'PY'
+marketplace_name="$(MARKETPLACE_PATH="$marketplace_path" "$python_cmd" - <<'PY'
 import json
 import os
 from pathlib import Path
@@ -125,8 +147,18 @@ PY
 
 echo "Installed local Codex plugin source: $target"
 echo "Updated marketplace: $marketplace_path"
+encoded_marketplace_path="$(MARKETPLACE_PATH="$marketplace_path" "$python_cmd" - <<'PY'
+from pathlib import Path
+from urllib.parse import quote
+import os
+
+print(quote(str(Path(os.environ["MARKETPLACE_PATH"]).expanduser().resolve(strict=False)), safe=""))
+PY
+)"
+echo "Open in Codex: codex://plugins/$plugin_name?marketplacePath=$encoded_marketplace_path"
+echo "Share from Codex: codex://plugins/$plugin_name?marketplacePath=$encoded_marketplace_path&mode=share"
 default_marketplace="$HOME/.agents/plugins/marketplace.json"
-if [[ "$(python3 -c 'import os,sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))' "$marketplace_path")" == "$(python3 -c 'import os,sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))' "$default_marketplace")" ]]; then
+if [[ "$("$python_cmd" -c 'import os,sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))' "$marketplace_path")" == "$("$python_cmd" -c 'import os,sys; print(os.path.abspath(os.path.expanduser(sys.argv[1])))' "$default_marketplace")" ]]; then
   echo "Codex discovers the personal marketplace automatically. Open Codex plugins and select Forge Method Core."
 else
   echo "Register marketplace: codex plugin marketplace add $marketplace_root"

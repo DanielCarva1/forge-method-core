@@ -38,5 +38,11 @@ if ($entry.source.path -ne "./plugins/forge-method-core") {
 if (($output -join "`n") -notmatch [regex]::Escape("codex plugin marketplace add `"$tmp`"")) {
   throw "Non-default marketplace registration guidance did not point at marketplace root."
 }
+if (($output -join "`n") -notmatch "codex://plugins/forge-method-core\?marketplacePath=") {
+  throw "Plugin local installer did not print a Codex plugin deeplink."
+}
+if (($output -join "`n") -notmatch "codex://plugins/forge-method-core\?marketplacePath=.*&mode=share") {
+  throw "Plugin local installer did not print a Codex plugin share deeplink."
+}
 
 Write-Host "Plugin local smoke passed: $pluginRoot"

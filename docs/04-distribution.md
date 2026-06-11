@@ -56,12 +56,20 @@ codex plugin marketplace add "<marketplace-root>"
 
 Workspace sharing and public marketplace listing are separate distribution stages. A validated local plugin can be shared in a workspace through the Codex app; public directory availability requires the external publication/listing process.
 
+The local installer prints Codex deeplinks for the plugin detail page and share flow:
+
+```txt
+codex://plugins/forge-method-core?marketplacePath=<encoded-marketplace-json-path>
+codex://plugins/forge-method-core?marketplacePath=<encoded-marketplace-json-path>&mode=share
+```
+
 Acceptance:
 
 - `.codex-plugin/plugin.json` validates.
 - all skills have valid front matter.
 - local plugin installer copies the package to `~/plugins/forge-method-core`.
 - local plugin installer writes the personal marketplace entry for `forge-method-core`.
+- local plugin installer prints Codex plugin detail and share deeplinks.
 - the plugin default prompt starts the method without requiring internal architecture knowledge.
 - the installed skill can run preflight and project creation from file-backed state.
 - marketplace metadata can point at this package without changing the runtime surface.

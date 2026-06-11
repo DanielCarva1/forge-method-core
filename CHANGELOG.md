@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.18.0
+
+Forge Method Core v1.18 improves plugin onboarding:
+
+- print Codex plugin detail and share deeplinks from local plugin installers
+- validate deeplink output in PowerShell and POSIX plugin-local smokes
+- make the POSIX plugin installer resolve a working Python command instead of assuming `python3`
+- clarify quickstart and distribution docs around plugin activation, skill invocation, and workspace sharing
+
 ## 1.17.1
 
 Forge Method Core v1.17.1 hardens plugin distribution paths:

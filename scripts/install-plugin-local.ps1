@@ -159,6 +159,9 @@ $marketplace | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $MarketplaceP
 
 Write-Host "Installed local Codex plugin source: $target"
 Write-Host "Updated marketplace: $MarketplacePath"
+$encodedMarketplacePath = [System.Uri]::EscapeDataString([System.IO.Path]::GetFullPath($MarketplacePath))
+Write-Host "Open in Codex: codex://plugins/${pluginName}?marketplacePath=$encodedMarketplacePath"
+Write-Host "Share from Codex: codex://plugins/${pluginName}?marketplacePath=$encodedMarketplacePath&mode=share"
 $defaultMarketplace = [System.IO.Path]::GetFullPath((Join-Path $HOME ".agents\plugins\marketplace.json"))
 $currentMarketplace = [System.IO.Path]::GetFullPath($MarketplacePath)
 if ($currentMarketplace -eq $defaultMarketplace) {

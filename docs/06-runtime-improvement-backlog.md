@@ -79,6 +79,8 @@
 - unit tests
 - CI workflow
 - example projects per module
+- plugin installer deeplinks
+- POSIX installer Python resolution
 
 ### Module Packs
 
@@ -109,12 +111,12 @@
 - signed releases
 - versioned changelog
 - local plugin marketplace installer
+- plugin onboarding deeplinks
 - public marketplace listing
 
-## Candidate V1.17 Batch
+## Candidate V1.18 Batch
 
-- package operational readiness diagnostics and verification tier guidance
-- add direct quickstart and v1 readiness audit
-- add installed launchers for shorter helper invocation
-- harden installer replacement of existing skill files
+- make plugin activation easier after local install
+- prove plugin detail and share deeplinks in install smokes
+- harden POSIX installer Python discovery
 - keep product-surface scan clean before release

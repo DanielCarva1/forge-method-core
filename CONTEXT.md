@@ -16,6 +16,10 @@ The primary package shape for Forge Method Core. It includes `.codex-plugin/plug
 
 The directory used as the base for plugin marketplace resolution. A repo or team marketplace stores its catalog at `<marketplace-root>/.agents/plugins/marketplace.json` and plugin bundles under `<marketplace-root>/plugins/`; marketplace `source.path` values are relative to this root.
 
+## Plugin Deeplink
+
+A `codex://` URL printed by the local plugin installer to open the plugin detail page or workspace share flow in the Codex app. It improves onboarding without adding a separate runtime command surface.
+
 ## Creation Runtime
 
 A state-machine system that turns intent into artifacts, implementation, validation, release, and future evolution.

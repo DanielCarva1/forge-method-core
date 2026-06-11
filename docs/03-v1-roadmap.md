@@ -142,4 +142,4 @@ A project can enter ready/operate only when:
 - public marketplace listing
 - signed release artifacts
 - broader real-project fixtures
-- richer visual onboarding
+- richer visual onboarding beyond installer deeplinks

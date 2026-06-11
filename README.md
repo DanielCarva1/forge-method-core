@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.17.1`.
+Current runtime version: `1.18.0`.
 
 ## Current Shape
 
@@ -50,6 +50,8 @@ bash scripts/install-plugin-local.sh
 ```
 
 That copies the plugin source to `~/plugins/forge-method-core` and creates or updates the personal Codex marketplace file at `~/.agents/plugins/marketplace.json`. After that, restart Codex, open Plugins, select Forge Method Core, and start a new thread.
+
+The installer also prints `codex://` links to open the plugin detail page and the workspace share flow directly in the Codex app.
 
 For repo or team distribution, put the marketplace at:
 

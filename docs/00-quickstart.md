@@ -35,6 +35,8 @@ $forge-method
 Start Forge Method in this workspace.
 ```
 
+The installer prints direct `codex://` links for opening the plugin page and sharing it inside the Codex app. After installing or updating the plugin, start a new Codex thread so the enabled skill list is refreshed.
+
 Fallback skill-only install:
 
 Windows:
