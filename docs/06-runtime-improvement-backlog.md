@@ -81,6 +81,7 @@
 - example projects per module
 - plugin installer deeplinks
 - POSIX installer Python resolution
+- plugin installation diagnostics in doctor
 
 ### Module Packs
 
@@ -114,9 +115,9 @@
 - plugin onboarding deeplinks
 - public marketplace listing
 
-## Candidate V1.18 Batch
+## Candidate V1.19 Batch
 
-- make plugin activation easier after local install
-- prove plugin detail and share deeplinks in install smokes
-- harden POSIX installer Python discovery
+- surface plugin installation readiness in doctor
+- detect personal marketplace, plugin source, installed version, and Codex deeplinks
+- tolerate Windows-generated JSON BOMs in local marketplace files
 - keep product-surface scan clean before release

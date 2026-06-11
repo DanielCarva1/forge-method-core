@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.18.0`.
+Current runtime version: `1.19.0`.
 
 ## Current Shape
 
@@ -166,7 +166,7 @@ Use `preflight --root . --json` before broad context loading. It resolves whethe
 
 Use `context recover --compact` for handoff under a tight context budget. It preserves state, resume guidance, read order, and commands before optional sections.
 
-Use `doctor --root . --touches runtime` when a local setup feels slow or uncertain. It reports project/runtime detection, Python/Git/GitHub CLI/WSL readiness, and the recommended development and release verification commands for the touched area.
+Use `doctor --root . --touches runtime` when a local setup feels slow or uncertain. It reports project/runtime detection, plugin installation status, Python/Git/GitHub CLI/WSL readiness, and the recommended development and release verification commands for the touched area.
 
 ## Smoke Tests
 

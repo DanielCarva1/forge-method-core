@@ -12,11 +12,12 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.18.0"
+RUNTIME_VERSION = "1.19.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -4155,6 +4156,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             "passed": not audit_errors if state_root else None,
             "errors": audit_errors,
         },
+        "plugin_installation": collect_plugin_installation(),
         "toolchain": collect_toolchain(),
         "verification": verification_recommendation(args.mode, args.touches or []),
     }
@@ -4169,6 +4171,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"Audit: {'passed' if not audit_errors else 'failed'}")
         for error in audit_errors:
             print(f"- {error}")
+    plugin = payload["plugin_installation"]
+    print("Plugin installation:")
+    print(f"- Status: {plugin['status']}")
+    print(f"- Marketplace: {plugin['marketplace_path']}")
+    print(f"- Plugin source: {plugin['plugin_path'] or '<none>'}")
+    print(f"- Installed version: {plugin['installed_version'] or '<none>'}")
+    if plugin["codex_deeplink"]:
+        print(f"- Open in Codex: {plugin['codex_deeplink']}")
     toolchain = payload["toolchain"]
     python = toolchain["python"]
     print("Toolchain:")
@@ -4188,6 +4198,104 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"  - {command}")
     print(f"- Reason: {validation['reason']}")
     return 0
+
+
+def marketplace_root_for(marketplace_path: Path) -> Path:
+    path = marketplace_path.expanduser().resolve()
+    if (
+        path.name == "marketplace.json"
+        and path.parent.name == "plugins"
+        and path.parent.parent.name == ".agents"
+    ):
+        return path.parent.parent.parent
+    return path.parent
+
+
+def collect_plugin_installation() -> dict[str, Any]:
+    marketplace_path = Path.home() / ".agents" / "plugins" / "marketplace.json"
+    marketplace_root = marketplace_root_for(marketplace_path)
+    encoded_marketplace = quote(str(marketplace_path.resolve()), safe="")
+    base = {
+        "name": RUNTIME_REPO_NAME,
+        "expected_version": RUNTIME_VERSION,
+        "available": False,
+        "status": "missing marketplace",
+        "marketplace_path": str(marketplace_path),
+        "marketplace_root": str(marketplace_root),
+        "marketplace_exists": marketplace_path.exists(),
+        "marketplace_name": None,
+        "entry_found": False,
+        "source_path": None,
+        "plugin_path": None,
+        "manifest_path": None,
+        "skill_path": None,
+        "manifest_exists": False,
+        "skill_exists": False,
+        "installed_version": None,
+        "codex_deeplink": f"codex://plugins/{RUNTIME_REPO_NAME}?marketplacePath={encoded_marketplace}",
+        "share_deeplink": f"codex://plugins/{RUNTIME_REPO_NAME}?marketplacePath={encoded_marketplace}&mode=share",
+    }
+    if not marketplace_path.exists():
+        return base
+    try:
+        marketplace = json.loads(marketplace_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as exc:
+        base["status"] = f"invalid marketplace: {str(exc)[:120]}"
+        return base
+    base["marketplace_name"] = marketplace.get("name")
+    plugins = marketplace.get("plugins", [])
+    entry = next(
+        (plugin for plugin in plugins if isinstance(plugin, dict) and plugin.get("name") == RUNTIME_REPO_NAME),
+        None,
+    )
+    if not entry:
+        base["status"] = "missing marketplace entry"
+        return base
+    base["entry_found"] = True
+    source = entry.get("source", {})
+    source_path = source.get("path")
+    base["source_path"] = source_path
+    if source.get("source") != "local" or not source_path:
+        base["status"] = "marketplace entry is not a local plugin source"
+        return base
+    plugin_path = (marketplace_root / source_path).resolve()
+    try:
+        plugin_path.relative_to(marketplace_root.resolve())
+    except ValueError:
+        base["plugin_path"] = str(plugin_path)
+        base["status"] = "plugin source escapes marketplace root"
+        return base
+    manifest_path = plugin_path / ".codex-plugin" / "plugin.json"
+    skill_path = plugin_path / "skills" / "forge-method" / "SKILL.md"
+    base["plugin_path"] = str(plugin_path)
+    base["manifest_path"] = str(manifest_path)
+    base["skill_path"] = str(skill_path)
+    base["manifest_exists"] = manifest_path.exists()
+    base["skill_exists"] = skill_path.exists()
+    if not plugin_path.exists():
+        base["status"] = "plugin source path missing"
+        return base
+    if not manifest_path.exists():
+        base["status"] = "plugin manifest missing"
+        return base
+    if not skill_path.exists():
+        base["status"] = "forge-method skill missing"
+        return base
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as exc:
+        base["status"] = f"invalid plugin manifest: {str(exc)[:120]}"
+        return base
+    base["installed_version"] = manifest.get("version")
+    if manifest.get("name") != RUNTIME_REPO_NAME:
+        base["status"] = "plugin manifest name mismatch"
+        return base
+    if manifest.get("version") != RUNTIME_VERSION:
+        base["status"] = "plugin version mismatch"
+        return base
+    base["available"] = True
+    base["status"] = "ready"
+    return base
 
 
 def run_probe(command: list[str], timeout: float = 3.0) -> dict[str, Any]:

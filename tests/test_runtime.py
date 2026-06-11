@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -10,10 +11,19 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "skills" / "forge-method" / "scripts" / "forge_method_runtime.py"
 
 
-def run_cmd(*args: str, cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess[str]:
+def run_cmd(
+    *args: str,
+    cwd: Path | None = None,
+    check: bool = True,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    process_env = os.environ.copy()
+    if env:
+        process_env.update(env)
     result = subprocess.run(
         [sys.executable, str(RUNTIME), *args],
         cwd=str(cwd or ROOT),
+        env=process_env,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -188,7 +198,7 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(snapshot["runtime_version"], "1.18.0")
+            self.assertEqual(snapshot["runtime_version"], "1.19.0")
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
@@ -673,6 +683,53 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Python current:", text)
             self.assertIn("Development validation: targeted-smoke", text)
 
+    def test_doctor_reports_plugin_installation_status(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw) / "home"
+            home.mkdir()
+            marketplace_path = home / ".agents" / "plugins" / "marketplace.json"
+            plugin_root = home / "plugins" / "forge-method-core"
+            manifest_path = plugin_root / ".codex-plugin" / "plugin.json"
+            skill_path = plugin_root / "skills" / "forge-method" / "SKILL.md"
+            marketplace_path.parent.mkdir(parents=True)
+            manifest_path.parent.mkdir(parents=True)
+            skill_path.parent.mkdir(parents=True)
+            marketplace_path.write_text(
+                json.dumps(
+                    {
+                        "name": "personal",
+                        "plugins": [
+                            {
+                                "name": "forge-method-core",
+                                "source": {"source": "local", "path": "./plugins/forge-method-core"},
+                                "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+                                "category": "Productivity",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            manifest_path.write_text(
+                json.dumps({"name": "forge-method-core", "version": "1.19.0", "skills": "./skills/"}),
+                encoding="utf-8",
+            )
+            skill_path.write_text("---\nname: forge-method\n---\n", encoding="utf-8")
+            env = {"HOME": str(home), "USERPROFILE": str(home)}
+
+            payload = json.loads(run_cmd("doctor", "--root", str(home), "--json", env=env).stdout)
+            text = run_cmd("doctor", "--root", str(home), env=env).stdout
+
+            plugin = payload["plugin_installation"]
+            self.assertTrue(plugin["available"])
+            self.assertEqual(plugin["status"], "ready")
+            self.assertEqual(plugin["installed_version"], "1.19.0")
+            self.assertEqual(plugin["plugin_path"], str(plugin_root.resolve()))
+            self.assertIn("codex://plugins/forge-method-core?marketplacePath=", plugin["codex_deeplink"])
+            self.assertIn("Plugin installation:", text)
+            self.assertIn("Status: ready", text)
+            self.assertIn("Open in Codex:", text)
+
     def test_artifact_is_indexed_and_added_to_context_pack(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -719,7 +776,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("facilitator", agents)
         self.assertIn("quality-reviewer", agents)
         self.assertIn("Agent profile validation passed.", agent_validation)
-        self.assertEqual(version.strip(), "1.18.0")
+        self.assertEqual(version.strip(), "1.19.0")
 
     def test_context_plan_selects_relevant_files_and_updates_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -762,7 +819,7 @@ class RuntimeTests(unittest.TestCase):
             selected_paths = [item["path"] for item in plan["selected"]]
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(plan["runtime_version"], "1.18.0")
+            self.assertEqual(plan["runtime_version"], "1.19.0")
             self.assertEqual(plan["state"]["phase"], "4-build-verify")
             self.assertIn(".forge-method/state.yaml", selected_paths)
             self.assertIn(".forge-method/sprint.yaml", selected_paths)

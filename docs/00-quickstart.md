@@ -64,6 +64,8 @@ Windows:
 & "$HOME\.agents\skills\forge-method\forge-method.ps1" doctor --root . --touches runtime
 ```
 
+The doctor output should include `Plugin installation` with `Status: ready` after the plugin installer has run.
+
 macOS/Linux:
 
 ```bash

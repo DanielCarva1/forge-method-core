@@ -20,6 +20,10 @@ The directory used as the base for plugin marketplace resolution. A repo or team
 
 A `codex://` URL printed by the local plugin installer to open the plugin detail page or workspace share flow in the Codex app. It improves onboarding without adding a separate runtime command surface.
 
+## Plugin Installation Diagnostic
+
+The `doctor` check that reads the personal marketplace, resolves the local plugin source, checks manifest and skill files, compares installed version with runtime version, and prints Codex deeplinks for activation and sharing.
+
 ## Creation Runtime
 
 A state-machine system that turns intent into artifacts, implementation, validation, release, and future evolution.

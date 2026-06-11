@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.19.0
+
+Forge Method Core v1.19 improves self-diagnosis:
+
+- add plugin installation readiness to `doctor` JSON and text output
+- report personal marketplace path, plugin source path, installed version, and Codex deeplinks
+- tolerate UTF-8 BOM in marketplace and plugin manifest JSON files written by Windows tooling
+- add unit coverage for plugin installation diagnosis with an isolated personal marketplace
+
 ## 1.18.0
 
 Forge Method Core v1.18 improves plugin onboarding:
