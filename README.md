@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.24.0`.
+Current runtime version: `1.25.0`.
 
 ## Current Shape
 
@@ -27,6 +27,7 @@ skills/forge-method/references/    Compact state-machine workflows
 skills/forge-method/techniques/     Compact creative technique manifests
 skills/forge-method/templates/      Reusable artifact templates
 skills/forge-method/scripts/       Deterministic runtime helpers
+release-notes/                     Machine-readable and human patch notes
 docs/                              Product and architecture proposal
 templates/                         Project state templates
 examples/                          Minimal initialized project example and example notes
@@ -64,6 +65,8 @@ codex
 ```
 
 The marketplace entry lives at `.agents/plugins/marketplace.json` and points at this repo root as the plugin source, so people can install from GitHub without manually copying files.
+
+After the 1.25 package is installed, `$forge-method` checks for safe updates before normal startup when the plugin came from the Git marketplace. If a newer package is available, the launcher updates the marketplace copy, prints a short patch-notes summary, and continues `preflight` or `start` in the same chat. Update messages go to stderr so JSON output stays machine-readable. Set `FORGE_METHOD_UPDATE_POLICY=notify|off` to change this behavior, or `FORGE_METHOD_SKIP_UPDATE=1` for CI and local smoke tests.
 
 ## Local Development Install
 
@@ -256,11 +259,11 @@ The full verifier includes a fixture matrix smoke. It creates example and normal
 After a tag is pushed, run a clone/install distribution smoke from the published ref:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.24.0 -ExpectedVersion 1.24.0
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.25.0 -ExpectedVersion 1.25.0
 ```
 
 ```bash
-REF=v1.24.0 EXPECTED_VERSION=1.24.0 bash scripts/smoke-plugin-clone-install.sh
+REF=v1.25.0 EXPECTED_VERSION=1.25.0 bash scripts/smoke-plugin-clone-install.sh
 ```
 
 ## Product Direction

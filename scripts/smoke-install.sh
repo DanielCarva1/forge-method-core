@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export FORGE_METHOD_SKIP_UPDATE=1
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 installer="$repo_root/install.sh"

@@ -17,6 +17,11 @@ function Resolve-Python {
   throw "Python not found. Set PYTHON to a Python executable."
 }
 
+$python = Resolve-Python
+$updater = Join-Path $PSScriptRoot "scripts\forge_method_updater.py"
+if (Test-Path -LiteralPath $updater) {
+  & $python $updater --skill-dir $PSScriptRoot -- @args
+}
 $runtime = Join-Path $PSScriptRoot "scripts\forge_method_runtime.py"
-& (Resolve-Python) $runtime @args
+& $python $runtime @args
 exit $LASTEXITCODE

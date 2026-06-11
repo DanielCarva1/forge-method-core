@@ -19,6 +19,7 @@ It contains:
 - capability labels
 - privacy and state notes
 - validation commands
+- release notes feed
 - onboarding asset references
 
 The listing metadata is prepared for reuse in a plugin directory or publication process, but public directory submission remains external to this repository.
@@ -35,6 +36,8 @@ The first-run UX should stay this small:
 4. Let preflight present existing projects or creation options.
 5. Create or resume durable file-backed state.
 6. Continue through build, verification, and ready/operate.
+
+After 1.25 is installed from the Git marketplace, later `$forge-method` starts check for package updates, show compact patch notes when a new version is installed, and continue in the same chat.
 
 ## Onboarding Copy
 
@@ -66,6 +69,7 @@ Current repository scope:
 - workspace share deeplink
 - first-run visual asset
 - marketplace listing metadata
+- release notes feed
 - clone/install smoke from a published Git ref
 
 External publication scope:

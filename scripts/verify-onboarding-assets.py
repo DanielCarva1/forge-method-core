@@ -24,6 +24,8 @@ def main() -> int:
     repo_marketplace = read_json(repo_marketplace_path)
     listing_path = ROOT / "assets" / "marketplace" / "listing.json"
     listing = read_json(listing_path)
+    release_notes_path = ROOT / "release-notes" / "latest.json"
+    release_notes = read_json(release_notes_path)
 
     if listing.get("name") != plugin.get("name"):
         fail(f"listing name does not match plugin name: {listing.get('name')}")
@@ -31,6 +33,10 @@ def main() -> int:
         fail(f"listing version does not match VERSION: {listing.get('version')} != {version}")
     if listing.get("display_name") != plugin.get("interface", {}).get("displayName"):
         fail("listing display name does not match plugin displayName")
+    if release_notes.get("version") != version:
+        fail(f"release notes version does not match VERSION: {release_notes.get('version')} != {version}")
+    if not release_notes.get("highlights"):
+        fail("release notes highlights missing")
 
     marketplace_plugins = repo_marketplace.get("plugins", [])
     repo_entries = [
@@ -71,6 +77,7 @@ def main() -> int:
         listing_path,
         repo_marketplace_path,
         onboarding_doc,
+        release_notes_path,
         ROOT / "assets" / "onboarding" / "first-run-flow.svg",
     ]
     for path in scan_paths:

@@ -17,4 +17,9 @@ else
   exit 1
 fi
 
+updater="$script_dir/scripts/forge_method_updater.py"
+if [[ -f "$updater" ]]; then
+  "$python_bin" "$updater" --skill-dir "$script_dir" -- "$@" || true
+fi
+
 exec "$python_bin" "$runtime" "$@"

@@ -24,6 +24,18 @@ A `codex://` URL printed by the local plugin installer to open the plugin detail
 
 The `doctor` check that reads the personal marketplace, resolves the local plugin source, checks manifest and skill files, compares installed version with runtime version, and prints Codex deeplinks for activation and sharing.
 
+## Hot Start Stub
+
+The compact, stable `SKILL.md` surface that tells Codex how to invoke the launcher without carrying the full evolving runtime behavior. Normal product evolution should live in runtime scripts, workflow references, and release notes so an update can be used in the same start.
+
+## Self-Update
+
+The launcher behavior that checks a Git marketplace install for a newer Forge Method Core package before normal startup, applies the update when policy allows, and continues the same `preflight` or `start` flow without asking the user to initialize Forge twice.
+
+## Patch Notes Feed
+
+A compact release summary read from `release-notes/latest.json` and printed after a successful self-update. It is human-facing, appears once per installed version, and must not pollute machine-readable stdout.
+
 ## Clone Install Smoke
 
 A distribution smoke that clones a Git source or published ref, installs the cloned package into an isolated temporary plugin marketplace, verifies plugin metadata, runs preflight, creates a project, and runs the quality gate. It proves the install path a new user would take without relying on chat memory or the local development checkout.

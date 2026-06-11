@@ -1,0 +1,10 @@
+# Forge Method story
+updated_at: "2026-06-11T15:24:52+00:00"
+id: "self-update-hot-start"
+title: "Self-update without double start"
+status: "done"
+phase: "5-ready-operate"
+acceptance_criteria: "launcher checks Git marketplace updates before start | patch notes feed appears once | JSON stdout stays clean | startup continues in same chat"
+evidence: ".forge-method/evidence/20260611-152452-story-story-self-update-hot-start-done.md"
+checks: "python -m unittest discover -s tests | python .\\skills\\forge-method\\scripts\\forge_method_runtime.py workflow validate | powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1"
+blocker: ""

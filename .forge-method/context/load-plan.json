@@ -1,9 +1,9 @@
 {
   "budget_chars": 12000,
   "deferred": [],
-  "estimated_required_chars": 2396,
-  "estimated_selected_chars": 11193,
-  "generated_at": "2026-06-11T04:11:40+00:00",
+  "estimated_required_chars": 1569,
+  "estimated_selected_chars": 9291,
+  "generated_at": "2026-06-11T15:29:01+00:00",
   "over_budget": false,
   "root": "C:\\Users\\Danie\\OneDrive\\Documentos\\ody",
   "rules": [
@@ -13,10 +13,10 @@
     "after meaningful progress, write checkpoint or evidence before ending"
   ],
   "runtime": "forge-method",
-  "runtime_version": "1.24.0",
+  "runtime_version": "1.25.0",
   "selected": [
     {
-      "estimated_chars": 577,
+      "estimated_chars": 528,
       "location": "project",
       "path": ".forge-method/state.yaml",
       "priority": 100,
@@ -25,7 +25,7 @@
       "section": "state"
     },
     {
-      "estimated_chars": 234,
+      "estimated_chars": 257,
       "location": "project",
       "path": ".forge-method/sprint.yaml",
       "priority": 96,
@@ -34,16 +34,16 @@
       "section": "state"
     },
     {
-      "estimated_chars": 1014,
+      "estimated_chars": 784,
       "location": "project",
-      "path": "skills/forge-method/references/workflow-discover-intent.md",
+      "path": "skills/forge-method/references/workflow-ready-release.md",
       "priority": 92,
       "reason": "active workflow state machine",
       "required": true,
       "section": "workflow"
     },
     {
-      "estimated_chars": 839,
+      "estimated_chars": 652,
       "location": "project",
       "path": ".forge-method/context/latest-checkpoint.md",
       "priority": 88,
@@ -52,34 +52,25 @@
       "section": "memory"
     },
     {
-      "estimated_chars": 571,
+      "estimated_chars": 610,
       "location": "project",
-      "path": ".forge-method/stories/project-kickoff.yaml",
-      "priority": 86,
-      "reason": "active or next executable story",
-      "required": true,
-      "section": "story"
-    },
-    {
-      "estimated_chars": 501,
-      "location": "project",
-      "path": "skills/forge-method/agents/profiles/facilitator.yaml",
+      "path": "skills/forge-method/agents/profiles/operator.yaml",
       "priority": 80,
-      "reason": "recommended agent profile for current state: facilitator",
+      "reason": "recommended agent profile for current state: operator",
       "required": false,
       "section": "agent-profile"
     },
     {
-      "estimated_chars": 515,
+      "estimated_chars": 673,
       "location": "project",
-      "path": "skills/forge-method/agents/profiles/researcher.yaml",
+      "path": "skills/forge-method/agents/profiles/quality-reviewer.yaml",
       "priority": 79,
-      "reason": "recommended agent profile for current state: researcher",
+      "reason": "recommended agent profile for current state: quality-reviewer",
       "required": false,
       "section": "agent-profile"
     },
     {
-      "estimated_chars": 1585,
+      "estimated_chars": 4598,
       "location": "project",
       "path": ".forge-method/artifacts/index.ndjson",
       "priority": 76,
@@ -88,30 +79,39 @@
       "section": "artifact"
     },
     {
-      "estimated_chars": 4828,
+      "estimated_chars": 284,
       "location": "project",
-      "path": ".forge-method/artifacts/brownfield-discovery.md",
-      "priority": 72,
-      "reason": "artifact linked to story project-kickoff",
+      "path": ".forge-method/evidence/20260611-152635-gate-quality-gate.md",
+      "priority": 68,
+      "reason": "recent validation or release evidence",
       "required": false,
-      "section": "artifact"
+      "section": "evidence"
     },
     {
-      "estimated_chars": 529,
+      "estimated_chars": 631,
       "location": "project",
-      "path": ".forge-method/artifacts/project-brief.md",
-      "priority": 72,
-      "reason": "artifact linked to story project-kickoff",
+      "path": ".forge-method/evidence/20260611-152452-story-story-self-update-hot-start-done.md",
+      "priority": 67,
+      "reason": "recent validation or release evidence",
       "required": false,
-      "section": "artifact"
+      "section": "evidence"
+    },
+    {
+      "estimated_chars": 274,
+      "location": "project",
+      "path": ".forge-method/evidence/20260611-063437-gate-quality-gate.md",
+      "priority": 66,
+      "reason": "recent validation or release evidence",
+      "required": false,
+      "section": "evidence"
     }
   ],
   "state": {
-    "active_story": "project-kickoff",
-    "next_action": "run brownfield discovery for story project-kickoff: inventory existing files, current behavior, in-progress work, constraints, risks, and safe next changes",
-    "phase": "1-discovery",
+    "active_story": "",
+    "next_action": "publish 1.25.0 batch to GitHub",
+    "phase": "5-ready-operate",
     "project": "forge-method-core",
-    "status": "story-in-progress",
-    "workflow": "discover-intent"
+    "status": "story-done",
+    "workflow": "ready-release"
   }
 }

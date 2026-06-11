@@ -1,4 +1,5 @@
 $ErrorActionPreference = "Stop"
+$env:FORGE_METHOD_SKIP_UPDATE = "1"
 
 function Run {
   param(

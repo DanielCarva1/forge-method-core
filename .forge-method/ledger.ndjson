@@ -97,3 +97,14 @@
 {"event": "evidence.added", "payload": {"kind": "gate", "path": ".forge-method/evidence/20260611-063437-gate-quality-gate.md", "story": ""}, "ts": "2026-06-11T06:34:37+00:00"}
 {"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260611-063451-forge-method-1-24-mechanical-autonomy-batch.md"}, "ts": "2026-06-11T06:34:51+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T06:34:51+00:00"}
+{"event": "story.added", "payload": {"id": "self-update-hot-start", "status": "ready"}, "ts": "2026-06-11T15:24:06+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "self-update-hot-start", "to": "in_progress"}, "ts": "2026-06-11T15:24:26+00:00"}
+{"event": "evidence.added", "payload": {"kind": "story", "path": ".forge-method/evidence/20260611-152452-story-story-self-update-hot-start-done.md", "story": "self-update-hot-start"}, "ts": "2026-06-11T15:24:52+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "self-update-hot-start", "to": "done"}, "ts": "2026-06-11T15:24:52+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-11T15:26:35+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-11T15:26:35+00:00"}
+{"event": "evidence.added", "payload": {"kind": "gate", "path": ".forge-method/evidence/20260611-152635-gate-quality-gate.md", "story": ""}, "ts": "2026-06-11T15:26:35+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260611-152656-forge-method-1-25-self-update-batch.md"}, "ts": "2026-06-11T15:26:56+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T15:26:56+00:00"}
+{"event": "context_load_plan.written", "payload": {"path": ".forge-method/context/load-plan.json"}, "ts": "2026-06-11T15:29:01+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T15:29:26+00:00"}

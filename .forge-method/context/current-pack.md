@@ -7,13 +7,13 @@
 - status: story-done
 - workflow: ready-release
 - active_story: <none>
-- next_action: publish 1.24.0 batch to GitHub
+- next_action: publish 1.25.0 batch to GitHub
 
 ## Latest Checkpoint
 
-# Forge Method 1.24 mechanical autonomy batch
+# Forge Method 1.25 self-update batch
 
-- created_at: 2026-06-11T06:34:51+00:00
+- created_at: 2026-06-11T15:26:56+00:00
 - project: forge-method-core
 - phase: 5-ready-operate
 - status: story-done
@@ -22,7 +22,7 @@
 
 ## Summary
 
-Implemented Mechanical Work Order, Grill Gate, correct-course continuation, Codex Goal handoff, commit policy defaults, and regression coverage. Validation passed: unit tests, workflow validate, verify-fast, smoke-runtime, smoke-install, and final gate.
+Implemented single-pass self-update for Git marketplace installs, compact Hot Start Stub, release notes feed, updater tests, docs, and installer packaging updates. Validation passed: unit tests, workflow validate, verify-fast, smoke-install, smoke-runtime, and final gate.
 
 ## Decisions
 
@@ -46,7 +46,7 @@ Implemented Mechanical Work Order, Grill Gate, correct-course continuation, Code
 
 ## Next Action
 
-publish 1.24.0 batch to GitHub
+publish 1.25.0 batch to GitHub
 
 ## Recovery Signals
 
@@ -75,11 +75,11 @@ publish 1.24.0 batch to GitHub
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260611-052318-story-story-expansion-studios-enterprise-done.md
-- .forge-method/evidence/20260611-052401-release-ready-gate.md
 - .forge-method/evidence/20260611-062639-story-story-mechanical-autonomy-grill-gate-done.md
 - .forge-method/evidence/20260611-062657-gate-quality-gate.md
 - .forge-method/evidence/20260611-063437-gate-quality-gate.md
+- .forge-method/evidence/20260611-152452-story-story-self-update-hot-start-done.md
+- .forge-method/evidence/20260611-152635-gate-quality-gate.md
 
 ## Recent Artifacts
 

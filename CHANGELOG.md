@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 1.25.0
+
+Forge Method Core v1.25 adds single-pass self-update for marketplace installs:
+
+- add launcher self-update before `start`, `preflight`, `guide`, and `resume`
+- add a one-time patch notes feed from `release-notes/latest.json`
+- keep JSON stdout clean by writing update messages to stderr
+- add update policy environment overrides and a legacy install migration hint
+- continue Forge startup after update without forcing a second chat initialization
+
 ## 1.24.0
 
 Forge Method Core v1.24 adds mechanical autonomy and Grill Gate phase closeout:

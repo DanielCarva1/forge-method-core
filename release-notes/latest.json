@@ -1,0 +1,13 @@
+{
+  "version": "1.25.0",
+  "date": "2026-06-11",
+  "title": "Self-update without double start",
+  "summary": "Forge Method now checks for safe updates before start and continues in the same chat.",
+  "highlights": [
+    "Self-update runs before start, preflight, guide, and resume.",
+    "Patch notes appear only when a new version is installed.",
+    "JSON commands keep stdout clean while update messages go to stderr.",
+    "Fallback installs continue locally and show a one-time marketplace migration hint."
+  ],
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.25.0.md"
+}

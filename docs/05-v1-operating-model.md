@@ -68,6 +68,10 @@ Agent Council is optional. It may show a rich live discussion to the human, but 
 
 Forge should not ask for procedural confirmation when the next step is mechanical. After discovery, specification, and planning have closed, build work may create stories, implement, review, repair, test, write evidence, update sprint state, and continue to the next story without asking the user to approve each transition.
 
+## Self-Update Rule
+
+Git marketplace installs should check for safe package updates before normal start, preflight, guide, or resume. A successful update prints compact patch notes and continues the same startup; it must not ask the user to open another chat or invoke `$forge-method` again as part of the normal flow.
+
 ## Grill Gate Rule
 
 Discovery, specification, and planning should close with Grill Gate before they unlock long mechanical work. Grill Gate challenges the phase artifact against glossary terms, ADRs, constraints, risks, and acceptance criteria. It asks the user only when durable artifacts cannot resolve a real product decision.

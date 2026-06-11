@@ -92,6 +92,7 @@ $entries = @(
   "assets",
   "docs",
   "examples",
+  "release-notes",
   "scripts",
   "skills",
   "templates",

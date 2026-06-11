@@ -5,19 +5,39 @@ description: Start or resume a Codex-native state-machine runtime for product, s
 
 # Forge Method
 
-Forge Method is a state-machine runtime. Do not infer runtime state from chat history when a `.forge-method/state.yaml` file exists.
+Forge Method is a file-backed state-machine runtime. Do not infer project progress from chat history when `.forge-method/state.yaml` exists.
+
+## Hot Start
+
+First resolve the directory containing this `SKILL.md`. Run the launcher from that same directory so the active plugin/skill package, self-updater, and runtime stay in sync.
+
+```powershell
+$skill = "<directory-containing-this-SKILL.md>"
+& (Join-Path $skill "forge-method.ps1") preflight --root .
+& (Join-Path $skill "forge-method.ps1") start --root .
+& (Join-Path $skill "forge-method.ps1") resume --root . --json
+```
+
+```bash
+skill="<directory-containing-this-SKILL.md>"
+bash "$skill/forge-method.sh" preflight --root .
+bash "$skill/forge-method.sh" start --root .
+bash "$skill/forge-method.sh" resume --root . --json
+```
+
+The launcher may self-update Git marketplace installs before normal startup. Continue the current start after update; do not ask the user to open another chat as part of the normal flow.
+
+Fallback to `$HOME/.agents/skills/forge-method` only when the active skill directory cannot be resolved.
 
 ## Operating Rules
 
-1. Resolve context first.
+1. Resolve context first with `preflight`.
 2. Separate runtime development from projects created by the runtime.
-3. Load only the workflow reference needed for the current state.
-4. Prefer state files and evidence over conversation memory.
-5. Ask for human input only when the workflow marks it required.
-6. For implementation work, run checks and update evidence before marking done.
-7. Temporary task docs may be deleted only after `artifact capture` records their result in state, story, evidence, or checkpoint.
-8. Do not create extra slash commands as product surface unless explicitly requested.
-9. Do not ask for procedural confirmation during mechanical work; use resume/next Mechanical Work Orders.
+3. Prefer durable files over conversation memory.
+4. Ask for human input only when durable state or the active workflow requires it.
+5. Do not create extra slash commands as product surface.
+6. During mechanical build work, follow `resume --json`, `next`, or `guide --json`; do not ask for procedural confirmations.
+7. Before marking work done, run relevant checks and write evidence/checkpoints.
 
 ## Source Of Truth
 
@@ -30,95 +50,11 @@ Look for:
 .forge-method/artifacts/index.ndjson
 ```
 
-If missing, offer to initialize the workspace.
-Before offering, run the preflight helper so project choices and context files come from disk rather than chat memory.
+If state is missing, run `preflight --root .` before offering project creation.
 
-## Runtime Helper
+## Runtime Model
 
-First resolve the skill directory that contains this `SKILL.md`. In a plugin install this is the plugin cache skill directory; in a local user install it is usually `$HOME\.agents\skills\forge-method`. Prefer running helpers relative to that directory so the active plugin and the runtime script stay in sync.
-
-Use the launcher from the current skill directory:
-
-```powershell
-$skill = "<directory-containing-this-SKILL.md>"
-& (Join-Path $skill "forge-method.ps1") preflight --root .
-& (Join-Path $skill "forge-method.ps1") start --root .
-& (Join-Path $skill "forge-method.ps1") doctor --root . --touches runtime
-```
-
-Use the helper script from the current skill directory when direct Python execution is useful:
-
-```powershell
-$skill = "<directory-containing-this-SKILL.md>"
-python (Join-Path $skill "scripts\forge_method_runtime.py") preflight --root . --json
-python (Join-Path $skill "scripts\forge_method_runtime.py") guide --root .
-python (Join-Path $skill "scripts\forge_method_runtime.py") track recommend --objective "<project objective>"
-python (Join-Path $skill "scripts\forge_method_runtime.py") council run --root . --topic "<decision topic>"
-python (Join-Path $skill "scripts\forge_method_runtime.py") correct-course --root . --summary "<late contradiction and conservative continuation>"
-python (Join-Path $skill "scripts\forge_method_runtime.py") status --root . --brief
-python (Join-Path $skill "scripts\forge_method_runtime.py") resume --root . --json
-python (Join-Path $skill "scripts\forge_method_runtime.py") context plan --root .
-python (Join-Path $skill "scripts\forge_method_runtime.py") gate --root . --require-evals
-```
-
-Fallback to the legacy user install path only when the current skill directory cannot be resolved:
-
-```powershell
-& "$HOME\.agents\skills\forge-method\forge-method.ps1" preflight --root .
-& "$HOME\.agents\skills\forge-method\forge-method.ps1" start --root .
-& "$HOME\.agents\skills\forge-method\forge-method.ps1" doctor --root . --touches runtime
-```
-
-Legacy direct helper examples:
-
-```powershell
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" preflight --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" preflight --root . --json
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" start --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project list --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project create --root . --name <name> --module <module-id>
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" status --root . --brief
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" snapshot --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" resume --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" resume --root . --json
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" guide --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" track list
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" track recommend --objective "<project objective>"
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" council run --root . --topic "<decision topic>"
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" correct-course --root . --summary "<late contradiction and conservative continuation>"
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" builder validate --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" config inspect --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" input list --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" review list --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init --project <name>
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story list
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story export --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story import --root . --file backlog.json
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact list
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact verify
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module list
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" module recommend --objective "<project objective>"
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" agent recommend --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example list
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" example create --root <path> --module <module-id>
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" workflow validate
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval run
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval add --kind artifact-exists --id <id> --target <path> --query "<objective check>"
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" checkpoint --summary "<progress memory>"
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context plan --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context health --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context recover --root .
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context recover --root . --compact
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" gate --root . --require-evals
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" release plan --root . --mode batch --touches runtime
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" release check --root . --mode batch --touches runtime
-python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" doctor --root . --touches runtime
-```
-
-## Phase Model
+Phases:
 
 ```txt
 0-route
@@ -130,57 +66,19 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" docto
 6-evolve
 ```
 
-## Human Experience And Agent Runtime
+Human-facing output may be warm, direct, opinionated, and useful for thinking. Agent Runtime artifacts must stay compact and structured for future agents.
 
-Human Experience may be warm, direct, funny, opinionated, and discussion-oriented when talking to the user.
-Agent Runtime outputs must stay compact: state files, workflows, artifacts, evals, and handoffs should be structured for future agents.
+Mechanical Autonomy is the default after decision phases are settled. Discovery, specification, and planning close with Grill Gate. During build/verify, use compact correct-course continuation for late contradictions and continue unless access, destructive approval, external service availability, or explicit scope change blocks the work.
 
-Mechanical Autonomy is the default after decision phases are settled. Do not ask the human to continue the next story, accept a review loop, run checks, or mark ready when those are procedural steps. Use `resume --json`, `next`, or `guide --json` and follow the `mechanical_work_order`.
+For long mechanical loops, prepare a Codex Goal handoff from runtime output. Do not create a separate autopilot command.
 
-Close discovery, specification, and planning with Grill Gate. During build/verify, use `correct-course` for late contradictions, choose the conservative interpretation that preserves the approved spec, and continue unless access, destructive approval, external service availability, or explicit scope change blocks the work.
+## Workflow Loading
 
-For long mechanical loops, prepare a Codex Goal handoff. If `/goal` is unavailable, tell the user to enable Codex goals or continue in the current thread. Do not create a separate autopilot slash command.
+Load only the reference needed for the current state. Start with:
 
-For Agent Council:
+- `references/workflow-start.md` for start/resume.
+- `references/workflow-guide-route.md` for human guide and track routing.
+- `references/workflow-grill-gate.md` for decision closeout.
+- `references/workflow-context-recovery.md` after context reset.
 
-- use real Codex subagents when the current environment exposes them and the user asked for council or the decision is high-risk;
-- otherwise use `council run` as the serial fallback;
-- show the full debate to the human;
-- persist only the compact council decision artifact;
-- never require the future agent to reread a full transcript.
-
-## Workflow Selection
-
-- Start/resume project: read `references/workflow-start.md`.
-- Human guide and track routing: read `references/workflow-guide-route.md`.
-- Phase decision closeout: read `references/workflow-grill-gate.md`.
-- Optional Agent Council: read `references/workflow-council-decision.md`.
-- Discovery: read `references/workflow-discover-intent.md`.
-- Specification: read `references/workflow-write-spec.md`.
-- Product requirements: read `references/workflow-product-requirements.md`.
-- Architecture: read `references/workflow-architecture.md`.
-- UX planning: read `references/workflow-ux-plan.md`.
-- Planning: read `references/workflow-plan-sprint.md`.
-- Epics/story planning: read `references/workflow-create-epics.md`.
-- Implementation readiness: read `references/workflow-readiness-check.md`.
-- Correct course or pivot: read `references/workflow-correct-course.md`.
-- Validation strategy: read `references/workflow-test-strategy.md`.
-- Build a story: read `references/workflow-build-story.md`.
-- Creative/domain ideation: read `references/workflow-creative-session.md`, then the specific creative workflow.
-- Game project path: read `references/workflow-game-project.md`, then the specific game workflow.
-- Create method modules/skills/workflows: read `references/workflow-runtime-builder.md` or `references/workflow-builder-scaffold.md`.
-- Project customization: read `references/workflow-config-customization.md`.
-- Eval design: read `references/workflow-eval-design.md`.
-- Enterprise planning: read the specific security, privacy, DevOps, compliance, observability, risk, or release-readiness workflow.
-- Ready/release: read `references/workflow-ready-release.md`.
-- Evolve an existing project: read `references/workflow-evolve-project.md`.
-- Recover after context reset: read `references/workflow-context-recovery.md`.
-- Diagnose local setup or verification tier: run `doctor --root . --touches <area>` before changing environment.
-- If no workflow matches, report current state and ask one concise routing question.
-
-## Completion Standard
-
-Never mark a workflow done because the agent "feels" done. Mark done only when the workflow `done_when` conditions are satisfied and evidence is written.
-After meaningful progress, write a checkpoint so future sessions can resume without replaying the chat.
-When `context health` returns `compact` or `blocked`, write compact recovery before continuing broad work.
-Before ready/release, run the quality gate and preserve the result as evidence when it passes.
+For all other commands, use the launcher/runtime help from the active skill directory instead of relying on this stub.

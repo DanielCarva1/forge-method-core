@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-11T06:34:37+00:00"
+updated_at: "2026-06-11T15:26:35+00:00"
 id: "artifact-forge-method-artifacts-workflow-compactness-audit-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/workflow-compactness-audit.md"
 query: "Confirmed all packaged workflow references use the required compact state-machine sections and pass workflow validation."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-11T06:34:37+00:00"
+last_run_at: "2026-06-11T15:26:35+00:00"
 last_error: ""
