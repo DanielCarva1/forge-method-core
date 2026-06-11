@@ -36,11 +36,18 @@ install.sh                         Fallback user-skill installer for macOS/Linux
 
 Forge Method Core is packaged as a Codex plugin and this repo is also a Codex marketplace source.
 
+1. Install Codex.
+2. Copy and run this command in a terminal, or ask Codex to run it:
+
 ```powershell
 codex plugin marketplace add DanielCarva1/forge-method-core --ref main
 ```
 
-Then open Codex Plugins or `/plugins`, choose the `Forge Method` marketplace, install or enable `Forge Method Core`, start a new thread, and use:
+3. Open Codex Plugins or `/plugins`.
+4. Choose the `Forge Method` marketplace.
+5. Install or enable `Forge Method Core` with the Codex plugin switch.
+6. Start a new thread.
+7. Invoke Forge Method and ask it to start:
 
 ```txt
 $forge-method
