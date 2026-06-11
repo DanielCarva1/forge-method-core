@@ -6,4 +6,5 @@ when: "2-specification"
 inputs: "intent brief | constraints | module purpose | human decisions"
 outputs: "requirements | acceptance criteria | boundaries | specification artifact"
 handoff: "Preserve requirement decisions, rejected scope, and planning assumptions."
-
+persona: "Precise and product-minded; turns ambition into testable promises."
+council_role: "Guard requirements, acceptance criteria, and scope boundaries."

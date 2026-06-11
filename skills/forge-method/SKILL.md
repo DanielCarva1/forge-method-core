@@ -50,6 +50,9 @@ Use the helper script from the current skill directory when direct Python execut
 ```powershell
 $skill = "<directory-containing-this-SKILL.md>"
 python (Join-Path $skill "scripts\forge_method_runtime.py") preflight --root . --json
+python (Join-Path $skill "scripts\forge_method_runtime.py") guide --root .
+python (Join-Path $skill "scripts\forge_method_runtime.py") track recommend --objective "<project objective>"
+python (Join-Path $skill "scripts\forge_method_runtime.py") council run --root . --topic "<decision topic>"
 python (Join-Path $skill "scripts\forge_method_runtime.py") status --root . --brief
 python (Join-Path $skill "scripts\forge_method_runtime.py") resume --root . --json
 python (Join-Path $skill "scripts\forge_method_runtime.py") context plan --root .
@@ -78,6 +81,12 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" snaps
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" resume --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" resume --root . --json
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" guide --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" track list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" track recommend --objective "<project objective>"
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" council run --root . --topic "<decision topic>"
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" builder validate --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" config inspect --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" input list --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" review list --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init --project <name>
@@ -118,17 +127,41 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" docto
 6-evolve
 ```
 
+## Human Experience And Agent Runtime
+
+Human Experience may be warm, direct, funny, opinionated, and discussion-oriented when talking to the user.
+Agent Runtime outputs must stay compact: state files, workflows, artifacts, evals, and handoffs should be structured for future agents.
+
+For Agent Council:
+
+- use real Codex subagents when the current environment exposes them and the user asked for council or the decision is high-risk;
+- otherwise use `council run` as the serial fallback;
+- show the full debate to the human;
+- persist only the compact council decision artifact;
+- never require the future agent to reread a full transcript.
+
 ## Workflow Selection
 
 - Start/resume project: read `references/workflow-start.md`.
+- Human guide and track routing: read `references/workflow-guide-route.md`.
+- Optional Agent Council: read `references/workflow-council-decision.md`.
 - Discovery: read `references/workflow-discover-intent.md`.
 - Specification: read `references/workflow-write-spec.md`.
+- Product requirements: read `references/workflow-product-requirements.md`.
+- Architecture: read `references/workflow-architecture.md`.
+- UX planning: read `references/workflow-ux-plan.md`.
 - Planning: read `references/workflow-plan-sprint.md`.
+- Epics/story planning: read `references/workflow-create-epics.md`.
+- Implementation readiness: read `references/workflow-readiness-check.md`.
+- Correct course or pivot: read `references/workflow-correct-course.md`.
 - Validation strategy: read `references/workflow-test-strategy.md`.
 - Build a story: read `references/workflow-build-story.md`.
-- Creative/domain ideation: read `references/workflow-creative-session.md`.
-- Game project path: read `references/workflow-game-project.md`.
-- Create method modules/skills/workflows: read `references/workflow-runtime-builder.md`.
+- Creative/domain ideation: read `references/workflow-creative-session.md`, then the specific creative workflow.
+- Game project path: read `references/workflow-game-project.md`, then the specific game workflow.
+- Create method modules/skills/workflows: read `references/workflow-runtime-builder.md` or `references/workflow-builder-scaffold.md`.
+- Project customization: read `references/workflow-config-customization.md`.
+- Eval design: read `references/workflow-eval-design.md`.
+- Enterprise planning: read the specific security, privacy, DevOps, compliance, observability, risk, or release-readiness workflow.
 - Ready/release: read `references/workflow-ready-release.md`.
 - Evolve an existing project: read `references/workflow-evolve-project.md`.
 - Recover after context reset: read `references/workflow-context-recovery.md`.

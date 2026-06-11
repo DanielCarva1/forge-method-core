@@ -1,0 +1,11 @@
+# Forge Method story
+updated_at: "2026-06-11T05:23:17+00:00"
+id: "expansion-builder-config-evals"
+title: "Add builder, config, and eval design support"
+status: "done"
+phase: "4-build-verify"
+acceptance_criteria: "builder scaffold supports workflow, module, agent, skill, template, and eval | builder validate checks generated workflow, agent, skill, and config shape | config inspect and config validate support team/local customization | eval design workflow is packaged"
+evidence: ".forge-method/evidence/20260611-052317-story-story-expansion-builder-config-evals-done.md"
+checks: "python -m unittest discover -s tests | powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-install.ps1 | python -m unittest discover -s tests | powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-install.ps1"
+artifacts: "docs/09-expansion-roadmap.md"
+blocker: ""

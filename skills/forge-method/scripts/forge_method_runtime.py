@@ -143,6 +143,104 @@ WORKFLOW_BY_PHASE = {
     "6-evolve": "evolve-project",
 }
 
+TRACKS: list[dict[str, str]] = [
+    {
+        "id": "quick-flow",
+        "title": "Quick Flow",
+        "complexity": "low",
+        "project_kind": "small-change",
+        "module": "software-builder",
+        "purpose": "Move a narrow request through discovery, build, validation, and ready without heavy planning.",
+        "when": "small fix, prototype, short automation, or low-risk enhancement",
+    },
+    {
+        "id": "standard-product",
+        "title": "Standard Product",
+        "complexity": "medium",
+        "project_kind": "product-software",
+        "module": "software-builder",
+        "purpose": "Create product requirements, architecture, epics, implementation stories, checks, and ready evidence.",
+        "when": "normal app, tool, product, API, site, integration, or software workflow",
+    },
+    {
+        "id": "enterprise",
+        "title": "Enterprise",
+        "complexity": "high",
+        "project_kind": "enterprise-system",
+        "module": "test-architect",
+        "purpose": "Add security, privacy, compliance, deployment, observability, risk, and release readiness.",
+        "when": "regulated, multi-team, security-sensitive, compliance-heavy, or production operations work",
+    },
+    {
+        "id": "creative-studio",
+        "title": "Creative Studio",
+        "complexity": "medium",
+        "project_kind": "creative-work",
+        "module": "creative-studio",
+        "purpose": "Facilitate ideation, direction selection, storytelling, and creative artifact production.",
+        "when": "brand, story, campaign, content, concept, presentation, or creative direction",
+    },
+    {
+        "id": "game-studio",
+        "title": "Game Studio",
+        "complexity": "medium",
+        "project_kind": "game",
+        "module": "game-studio",
+        "purpose": "Shape game concept, GDD, mechanics, narrative, prototype, playtest, and vertical slice work.",
+        "when": "game, mechanic, player experience, prototype, engine, level, economy, or playtest work",
+    },
+    {
+        "id": "runtime-builder",
+        "title": "Runtime Builder",
+        "complexity": "high",
+        "project_kind": "runtime-extension",
+        "module": "runtime-builder",
+        "purpose": "Create or improve workflows, modules, skills, templates, evals, and runtime behavior.",
+        "when": "method, runtime, workflow, skill, agent profile, template, eval, or plugin work",
+    },
+    {
+        "id": "test-architect",
+        "title": "Test Architect",
+        "complexity": "medium",
+        "project_kind": "quality-strategy",
+        "module": "test-architect",
+        "purpose": "Design risk-based validation, review gates, evidence, fixtures, and acceptance checks.",
+        "when": "QA, test plan, risk matrix, review criteria, evidence, regression, or validation strategy",
+    },
+    {
+        "id": "launch-ops",
+        "title": "Launch Ops",
+        "complexity": "medium",
+        "project_kind": "launch-operations",
+        "module": "launch-ops",
+        "purpose": "Move finished work into ready/operate, release evidence, support, feedback, and evolution.",
+        "when": "release, launch, operations, support, feedback, monitoring, or next-version planning",
+    },
+]
+
+TRACK_IDS = {track["id"] for track in TRACKS}
+TRACK_BY_MODULE = {
+    "software-builder": "standard-product",
+    "creative-studio": "creative-studio",
+    "game-studio": "game-studio",
+    "runtime-builder": "runtime-builder",
+    "test-architect": "test-architect",
+    "enterprise": "enterprise",
+    "launch-ops": "launch-ops",
+    "core-runtime": "standard-product",
+}
+CONFIG_ALLOWED_KEYS = {
+    "default_track",
+    "human_tone",
+    "required_checks",
+    "artifact_template",
+    "output_path",
+    "project_conventions",
+    "council_mode",
+}
+BUILDER_KINDS = ["workflow", "module", "agent", "skill", "template", "eval"]
+COUNCIL_DEFAULT_AGENTS = ["facilitator", "researcher", "spec-architect", "planner", "quality-reviewer"]
+
 SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
@@ -263,14 +361,99 @@ def ensure_dirs(root: Path) -> Path:
         "evidence",
         "handoffs",
         "agents",
+        "config",
         "inputs",
         "modules",
         "reviews",
+        "skills",
         "stories",
+        "templates",
         "workflows",
     ]:
         (fm / name).mkdir(parents=True, exist_ok=True)
     return fm
+
+
+def track_by_id(track_id: str) -> dict[str, str] | None:
+    normalized = slugify(track_id)
+    for track in TRACKS:
+        if track["id"] == normalized:
+            return track
+    return None
+
+
+def default_track_for_module(module_id: str) -> dict[str, str]:
+    return track_by_id(TRACK_BY_MODULE.get(slugify(module_id), "standard-product")) or TRACKS[1]
+
+
+def score_track_for_objective(track: dict[str, str], objective: str) -> tuple[int, str]:
+    if not objective:
+        return 0, "no objective supplied"
+    tokens = set(re.findall(r"[a-z0-9]+", objective.lower()))
+    haystack = " ".join(
+        [
+            track.get("id", ""),
+            track.get("title", ""),
+            track.get("purpose", ""),
+            track.get("when", ""),
+            track.get("project_kind", ""),
+        ]
+    ).lower()
+    score = sum(1 for token in tokens if token in haystack)
+    keywords = {
+        "quick-flow": {"quick", "small", "fix", "patch", "prototype", "tiny"},
+        "standard-product": {"app", "api", "software", "web", "product", "tool"},
+        "enterprise": {"security", "privacy", "compliance", "enterprise", "risk", "production"},
+        "creative-studio": {"creative", "brand", "story", "content", "campaign", "concept"},
+        "game-studio": {"game", "player", "mechanic", "gdd", "engine", "playtest"},
+        "runtime-builder": {"runtime", "method", "workflow", "skill", "agent", "plugin"},
+        "test-architect": {"test", "qa", "validation", "review", "evidence", "regression"},
+        "launch-ops": {"launch", "release", "operate", "support", "monitoring", "feedback"},
+    }
+    hits = sorted(tokens & keywords.get(track["id"], set()))
+    score += len(hits) * 3
+    reason = f"matched {', '.join(hits)}" if hits else "matched objective language"
+    return score, reason
+
+
+def recommended_tracks(objective: str, *, limit: int = 5) -> list[dict[str, Any]]:
+    scored: list[dict[str, Any]] = []
+    for track in TRACKS:
+        score, reason = score_track_for_objective(track, objective)
+        item = dict(track)
+        item["score"] = score
+        item["reason"] = reason
+        scored.append(item)
+    scored.sort(key=lambda item: (-int(item.get("score", 0)), item.get("id", "")))
+    return scored[:limit]
+
+
+def config_paths(root: Path) -> tuple[Path, Path]:
+    config_dir = method_dir(root) / "config"
+    return config_dir / "team.yaml", config_dir / "local.yaml"
+
+
+def merged_config(root: Path) -> tuple[dict[str, str], list[str]]:
+    team, local = config_paths(root)
+    merged: dict[str, str] = {}
+    sources: list[str] = []
+    for path in [team, local]:
+        if path.exists():
+            merged.update(read_flat_yaml(path))
+            sources.append(path.relative_to(root).as_posix())
+    return merged, sources
+
+
+def validate_config_values(values: dict[str, str], *, source: str) -> list[str]:
+    errors: list[str] = []
+    for key, value in values.items():
+        if key == "updated_at":
+            continue
+        if key not in CONFIG_ALLOWED_KEYS:
+            errors.append(f"{source}: unsupported config key `{key}`")
+        if key == "default_track" and value and value not in TRACK_IDS:
+            errors.append(f"{source}: default_track must be one of {', '.join(sorted(TRACK_IDS))}")
+    return errors
 
 
 def copy_project_guidance(root: Path, *, force: bool = False) -> list[str]:
@@ -382,6 +565,8 @@ def command_hint_part(value: str | Path | int) -> str:
 
 def print_state_summary(state: dict[str, str]) -> None:
     print(f"Project: {state.get('project', '<unknown>')}")
+    if state.get("track"):
+        print(f"Track: {state.get('track')} ({state.get('complexity', 'unknown')})")
     print(f"Phase: {state.get('phase', '<unknown>')}")
     print(f"Status: {state.get('status', '<unknown>')}")
     print(f"Workflow: {state.get('active_workflow', '<none>')}")
@@ -402,6 +587,9 @@ def build_status_brief(root: Path, state: dict[str, str]) -> dict[str, Any]:
         "runtime_version": snapshot["runtime_version"],
         "root": snapshot["root"],
         "project": state.get("project", ""),
+        "track": state.get("track", ""),
+        "complexity": state.get("complexity", ""),
+        "project_kind": state.get("project_kind", ""),
         "phase": state.get("phase", ""),
         "status": state.get("status", ""),
         "workflow": state.get("active_workflow", ""),
@@ -438,6 +626,8 @@ def print_status_brief(root: Path, state: dict[str, str]) -> None:
     print("Forge Method Status")
     print(f"Workspace: {brief['root']}")
     print(f"Project: {brief['project']}")
+    if brief.get("track"):
+        print(f"Track: {brief['track']} ({brief.get('complexity', '')})")
     print(f"State: {brief['phase']} / {brief['status']} / {brief['workflow']}")
     print(f"Readiness: {brief['readiness']}")
     print(f"Route: {route.get('recommendation', '')}")
@@ -672,7 +862,7 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
         route = "empty-workspace"
         question = "Create a new method project in this workspace?"
 
-    module_choices = project_creation_module_choices(None, objective, limit=5)
+    module_choices = project_creation_module_choices(None, objective, limit=8)
     create_root: str | Path = "<parent-folder-outside-runtime-repo>" if runtime_repo else root
     list_root: str | Path = create_root if runtime_repo else root
     commands = [
@@ -900,6 +1090,7 @@ def initialize_project_state(
         raise FileExistsError(str(path))
 
     project_id = slugify(project)
+    track = default_track_for_module(module)
     state = {
         "schema_version": "1",
         "runtime": RUNTIME_NAME,
@@ -908,12 +1099,17 @@ def initialize_project_state(
         "project_id": project_id,
         "mode": mode,
         "module": module,
+        "track": track["id"],
+        "complexity": track["complexity"],
+        "project_kind": track["project_kind"],
         "phase": "0-route",
         "status": "route-ready",
         "active_workflow": "start-runtime",
         "active_story": "",
         "human_input_required": "false",
         "readiness": "not_ready",
+        "guide_summary": "",
+        "last_council_artifact": "",
         "next_action": NEXT_BY_PHASE["0-route"],
     }
     write_state(root, state)
@@ -1274,6 +1470,9 @@ def score_module_for_objective(module: dict[str, str], objective: str) -> tuple[
     if module.get("id") == "launch-ops" and any(token in tokens for token in {"launch", "release", "operate", "ops"}):
         score += 2
         matches.append("operate")
+    if module.get("id") == "enterprise" and any(token in tokens for token in {"enterprise", "security", "privacy", "compliance", "risk", "production"}):
+        score += 2
+        matches.append("enterprise")
     if module.get("id") == "runtime-builder" and any(token in tokens for token in {"runtime", "workflow", "module", "agent"}):
         score += 2
         matches.append("runtime")
@@ -1307,7 +1506,8 @@ def project_creation_module_choices(root: Path | None, objective: str, *, limit:
             "game-studio": 2,
             "runtime-builder": 3,
             "test-architect": 4,
-            "launch-ops": 5,
+            "enterprise": 5,
+            "launch-ops": 6,
         }
         choices = [item for item in choices if item.get("id") in preferred_order]
         choices.sort(key=lambda item: (preferred_order.get(str(item.get("id", "")), 99), str(item.get("id", ""))))
@@ -1894,7 +2094,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         print("Known projects: not scanned inside runtime repo")
         print("Question: Which project folder should be opened or created outside the runtime repo?")
         print("Module choices:")
-        for item in project_creation_module_choices(None, "", limit=5):
+        for item in project_creation_module_choices(None, "", limit=8):
             print(f"- {item.get('id')}: {item.get('purpose')}")
         print("Next: do not initialize project state in the runtime repo unless explicitly intentional.")
         return 0
@@ -1911,7 +2111,7 @@ def cmd_start(args: argparse.Namespace) -> int:
             print(f"{index}. {label}\t{phase}\t{status}\t{rel}")
         print("Question: Which known project should be opened, or should a new project be created?")
         print("Module choices for a new project:")
-        for item in project_creation_module_choices(None, "", limit=5):
+        for item in project_creation_module_choices(None, "", limit=8):
             print(f"- {item.get('id')}: {item.get('purpose')}")
         print("Next: wait for the user's project choice, then run status in that project root or create a scaffolded project.")
         return 0
@@ -1922,7 +2122,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         print("Known projects: none")
         print("Question: Initialize Forge Method for this existing project as brownfield?")
         print("Module choices:")
-        for item in project_creation_module_choices(None, "", limit=5):
+        for item in project_creation_module_choices(None, "", limit=8):
             print(f"- {item.get('id')}: {item.get('purpose')}")
         print(
             "Create command: "
@@ -1938,7 +2138,7 @@ def cmd_start(args: argparse.Namespace) -> int:
     print("Known projects: none")
     print("Question: Create a new method project in this workspace?")
     print("Module choices:")
-    for item in project_creation_module_choices(None, "", limit=5):
+    for item in project_creation_module_choices(None, "", limit=8):
         print(f"- {item.get('id')}: {item.get('purpose')}")
     print(
         "Create command: "
@@ -2333,6 +2533,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     audit_errors = audit_project(root)
     artifact_errors, artifact_warnings = artifact_findings(root)
     agent_errors = agent_profile_validation_errors(root)
+    config_errors = config_validation_errors(root)
     evals = list_evals(root)
     eval_counts: dict[str, int] = {"total": len(evals), "passed": 0, "failed": 0, "pending": 0}
     for item in evals:
@@ -2395,6 +2596,9 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
             },
             "agents": {
                 "errors": agent_errors,
+            },
+            "config": {
+                "errors": config_errors,
             },
             "evals": eval_counts,
         },
@@ -3285,6 +3489,353 @@ def cmd_agent_validate(args: argparse.Namespace) -> int:
             print(f"- {error}")
         return 1
     print("Agent profile validation passed.")
+    return 0
+
+
+def cmd_track_list(args: argparse.Namespace) -> int:
+    if args.json:
+        print(json.dumps({"tracks": TRACKS}, ensure_ascii=True, sort_keys=True, indent=2))
+        return 0
+    for track in TRACKS:
+        print(
+            f"{track['id']}\t{track['complexity']}\t"
+            f"{track['project_kind']}\t{track['module']}\t{track['purpose']}"
+        )
+    return 0
+
+
+def cmd_track_recommend(args: argparse.Namespace) -> int:
+    recommendations = recommended_tracks(args.objective or "", limit=args.limit)
+    if args.json:
+        print(json.dumps({"recommended": recommendations}, ensure_ascii=True, sort_keys=True, indent=2))
+        return 0
+    for item in recommendations:
+        print(
+            f"{item.get('id')}\t{item.get('score', 0)}\t"
+            f"{item.get('complexity')}\t{item.get('title')}\t{item.get('reason')}"
+        )
+    return 0
+
+
+def cmd_track_set(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    track = track_by_id(args.track)
+    if not track:
+        raise SystemExit(f"Unknown track: {args.track}")
+    state["track"] = track["id"]
+    state["complexity"] = track["complexity"]
+    state["project_kind"] = track["project_kind"]
+    state["guide_summary"] = f"Use {track['title']} for {track['purpose']}"
+    if args.set_module:
+        state["module"] = track["module"]
+    state["next_action"] = args.next_action or f"continue on {track['title']} track"
+    write_state(root, state)
+    append_ledger(root, "track.set", {"track": track["id"], "module": state.get("module", "")})
+    print(f"Track set: {track['id']}")
+    print(f"Next: {state['next_action']}")
+    return 0
+
+
+def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[str, Any]:
+    state_root, state = load_state_or_none(root)
+    if not state_root:
+        preflight = build_preflight(root, scan_depth=2, max_chars=max_chars, objective=question)
+        tracks = recommended_tracks(question, limit=3)
+        return {
+            "runtime": RUNTIME_NAME,
+            "runtime_version": RUNTIME_VERSION,
+            "workspace": str(root),
+            "state_found": False,
+            "route": preflight.get("route", ""),
+            "question": preflight.get("question", ""),
+            "recommended_tracks": tracks,
+            "next_action": "answer the preflight route question, then create or open the selected project",
+            "commands": preflight.get("commands", []),
+        }
+    snapshot = build_snapshot(state_root, state)
+    track = track_by_id(state.get("track", "")) or default_track_for_module(state.get("module", "software-builder"))
+    next_story = snapshot["stories"].get("next") or {}
+    return {
+        "runtime": RUNTIME_NAME,
+        "runtime_version": RUNTIME_VERSION,
+        "workspace": str(root),
+        "state_found": True,
+        "project_root": str(state_root),
+        "project": state.get("project", ""),
+        "track": track,
+        "phase": state.get("phase", ""),
+        "workflow": state.get("active_workflow", ""),
+        "readiness": state.get("readiness", ""),
+        "route": snapshot["route"].get("recommendation", ""),
+        "next_story": next_story,
+        "recommended_agents": snapshot["agents"].get("recommended", []),
+        "next_action": snapshot["route"].get("next_action", "") or state.get("next_action", ""),
+        "council_recommended": bool(question and state.get("readiness") == "ready"),
+    }
+
+
+def cmd_guide(args: argparse.Namespace) -> int:
+    root = resolve_root(args.root)
+    payload = build_guide_payload(root, question=args.question or "", max_chars=args.max_chars)
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2))
+        return 0
+    print("Forge Guide")
+    print(f"Workspace: {payload.get('workspace')}")
+    if not payload.get("state_found"):
+        print(f"Route: {payload.get('route')}")
+        print(f"Question: {payload.get('question')}")
+        print("Recommended tracks:")
+        for track in payload.get("recommended_tracks", []):
+            print(f"- {track.get('id')}: {track.get('title')} ({track.get('reason')})")
+        print(f"Next: {payload.get('next_action')}")
+        return 0
+    track = payload.get("track", {})
+    print(f"Project: {payload.get('project')}")
+    print(f"Track: {track.get('id')} ({track.get('complexity')})")
+    print(f"State: {payload.get('phase')} / {payload.get('workflow')}")
+    print(f"Route: {payload.get('route')}")
+    story = payload.get("next_story") or {}
+    if story:
+        print(f"Next story: {story.get('id')} - {story.get('title')}")
+    print("Recommended agents:")
+    for agent in payload.get("recommended_agents", []):
+        print(f"- {agent.get('id')}: {agent.get('purpose')}")
+    print(f"Next: {payload.get('next_action')}")
+    if payload.get("council_recommended"):
+        print("Council: optional for this question if the decision is high-risk or taste-heavy.")
+    return 0
+
+
+def council_participants(root: Path, raw_agents: list[str] | None) -> list[dict[str, str]]:
+    ids = [slugify(item) for item in (raw_agents or []) if item.strip()]
+    if not ids:
+        ids = COUNCIL_DEFAULT_AGENTS
+    participants: list[dict[str, str]] = []
+    for profile_id in ids:
+        match = agent_profile_by_id(root, profile_id)
+        if match:
+            profile, _ = match
+            participants.append(profile)
+    return participants
+
+
+def council_decision_summary(topic: str, participants: list[dict[str, str]]) -> str:
+    names = ", ".join(profile.get("title", profile.get("id", "")) for profile in participants)
+    return (
+        f"Topic: {topic}. Participants: {names}. Recommendation: run the smallest reversible next step, "
+        "preserve dissent as risk, and update state/evidence before implementation continues. "
+        "Agreements: keep one public entrypoint and separate Human Experience from Agent Runtime. "
+        "Risks: cost, context growth, unclear ownership, and false consensus. "
+        "Next action: convert the decision into a story or explicit human input."
+    )
+
+
+def cmd_council_run(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    topic = args.topic or state.get("next_action") or "current Forge Method decision"
+    participants = council_participants(root, args.agent)
+    if not participants:
+        raise SystemExit("No council participants available.")
+    print("Forge Agent Council")
+    print(f"Topic: {topic}")
+    print("Mode: live transcript on screen; compact decision persisted.")
+    print("")
+    for profile in participants:
+        title = profile.get("title", profile.get("id", "Agent"))
+        persona = profile.get("persona", profile.get("purpose", "Focused specialist."))
+        print(f"[{title}]")
+        print(f"{persona}")
+        print(f"View: {profile.get('purpose', '')}")
+        print(f"Guardrail: {profile.get('handoff', '')}")
+        print("")
+    summary = council_decision_summary(topic, participants)
+    rel = write_artifact(
+        root,
+        kind="council-decision",
+        title=f"Council decision: {topic[:48]}",
+        summary=summary,
+        lifecycle="durable",
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title="Council decision artifact", summary=summary)
+    state["last_council_artifact"] = rel
+    state["guide_summary"] = f"Council reviewed: {topic}"
+    state["next_action"] = args.next_action or "turn council decision into the next story, artifact, or human input"
+    write_state(root, state)
+    append_ledger(
+        root,
+        "council.run",
+        {"topic": topic, "artifact": rel, "participants": [item.get("id", "") for item in participants]},
+    )
+    print(f"Persisted decision artifact: {rel}")
+    print(f"Next: {state['next_action']}")
+    return 0
+
+
+def cmd_config_inspect(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    config, sources = merged_config(root)
+    payload = {
+        "root": str(root),
+        "sources": sources,
+        "effective": config,
+        "allowed_keys": sorted(CONFIG_ALLOWED_KEYS),
+    }
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2))
+        return 0
+    print("Forge Method Config")
+    print(f"Sources: {', '.join(sources) if sources else '<none>'}")
+    if config:
+        for key, value in config.items():
+            if key != "updated_at":
+                print(f"{key}: {value}")
+    else:
+        print("No config overrides.")
+    return 0
+
+
+def config_validation_errors(root: Path) -> list[str]:
+    errors: list[str] = []
+    for path in config_paths(root):
+        if not path.exists():
+            continue
+        values = read_flat_yaml(path)
+        errors.extend(validate_config_values(values, source=path.relative_to(root).as_posix()))
+    return errors
+
+
+def cmd_config_validate(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    errors = config_validation_errors(root)
+    if errors:
+        print("Config validation failed:")
+        for error in errors:
+            print(f"- {error}")
+        return 1
+    print("Config validation passed.")
+    return 0
+
+
+def builder_path(root: Path, kind: str, item_id: str) -> Path:
+    normalized = slugify(item_id)
+    if kind == "workflow":
+        return method_dir(root) / "workflows" / f"workflow-{normalized}.md"
+    if kind == "module":
+        return method_dir(root) / "modules" / f"{normalized}.yaml"
+    if kind == "agent":
+        return method_dir(root) / "agents" / f"{normalized}.yaml"
+    if kind == "skill":
+        return method_dir(root) / "skills" / normalized / "SKILL.md"
+    if kind == "template":
+        return method_dir(root) / "templates" / f"{normalized}.md"
+    if kind == "eval":
+        return eval_path(root, normalized)
+    raise SystemExit(f"Unsupported builder kind: {kind}")
+
+
+def cmd_builder_scaffold(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    kind = args.kind
+    item_id = slugify(args.id)
+    title = args.title or item_id.replace("-", " ").title()
+    purpose = args.purpose or f"Project-local {kind} scaffold for {title}."
+    path = builder_path(root, kind, item_id)
+    if path.exists() and not args.force:
+        raise SystemExit(f"{kind} already exists: {path.relative_to(root).as_posix()}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if kind == "workflow":
+        path.write_text(
+            workflow_text(
+                workflow_id=item_id,
+                title=title,
+                triggers=[args.trigger or f"user asks for {title}"],
+                inputs=["current state", "user intent", "relevant artifacts"],
+                steps=["resolve scope", "create or update the artifact", "run the validation check", "update state"],
+                outputs=[f"{title} artifact", "updated state"],
+                done_when=["artifact exists", "validation passes", "next action is known"],
+                blocked_when=["required input is missing", "scope conflicts with current state"],
+                handoff=["preserve artifact path, validation result, blockers, and next action"],
+            ),
+            encoding="utf-8",
+        )
+        write_eval(root, eval_id=f"{item_id}-routing", kind="workflow-routing", target=item_id, query=title, expected=item_id)
+    elif kind == "module":
+        write_flat_yaml(
+            path,
+            {
+                "id": item_id,
+                "title": title,
+                "purpose": purpose,
+                "phase_span": args.phase_span or "1-discovery | 2-specification | 3-plan | 4-build-verify",
+                "workflows": args.workflows or item_id,
+            },
+            header="Forge Method module",
+        )
+    elif kind == "agent":
+        write_flat_yaml(
+            path,
+            {
+                "id": item_id,
+                "title": title,
+                "purpose": purpose,
+                "when": args.when or "when this specialist perspective is needed",
+                "inputs": "state snapshot | relevant artifact | current question",
+                "outputs": "recommendation | risks | next action",
+                "handoff": "Preserve decision, unresolved risks, and next action.",
+                "persona": args.persona or f"{title} speaks clearly to humans and keeps task output compact.",
+                "council_role": args.council_role or "specialist perspective",
+            },
+            header="Forge Method agent profile",
+        )
+    elif kind == "skill":
+        path.write_text(
+            "\n".join(
+                [
+                    "---",
+                    f"name: {item_id}",
+                    f"description: {purpose}",
+                    "---",
+                    "",
+                    f"# {title}",
+                    "",
+                    "Use compact state, artifacts, and evidence as source of truth.",
+                    "Keep human-facing explanations helpful; keep agent-facing outputs concise.",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+    elif kind == "template":
+        path.write_text(f"# {title}\n\n{purpose}\n\n## Inputs\n\n## Output\n", encoding="utf-8")
+    elif kind == "eval":
+        target = args.target or ".forge-method/artifacts/project-brief.md"
+        query = args.query or f"{title} is available"
+        rel = write_eval(root, eval_id=item_id, kind=args.eval_kind, target=target, query=query, expected=args.expected or "")
+        print(rel)
+        return 0
+    append_ledger(root, "builder.scaffolded", {"kind": kind, "id": item_id, "path": path.relative_to(root).as_posix()})
+    print(path.relative_to(root).as_posix())
+    return 0
+
+
+def cmd_builder_validate(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    errors: list[str] = []
+    errors.extend(workflow_validation_errors(root))
+    errors.extend(agent_profile_validation_errors(root))
+    errors.extend(config_validation_errors(root))
+    for skill_path in sorted((method_dir(root) / "skills").glob("*/SKILL.md")):
+        text = skill_path.read_text(encoding="utf-8")
+        if not text.startswith("---"):
+            errors.append(f"{skill_path.relative_to(root).as_posix()}: missing skill frontmatter")
+    if errors:
+        print("Builder validation failed:")
+        for error in errors:
+            print(f"- {error}")
+        return 1
+    print("Builder validation passed.")
     return 0
 
 
@@ -4414,6 +4965,9 @@ def cmd_gate(args: argparse.Namespace) -> int:
     agent_errors = agent_profile_validation_errors(root)
     if agent_errors:
         errors.extend(f"agent: {error}" for error in agent_errors)
+    config_errors = config_validation_errors(root)
+    if config_errors:
+        errors.extend(f"config: {error}" for error in config_errors)
 
     eval_count = len(list_evals(root))
     passed_evals, eval_failures = run_eval_items(root)
@@ -5121,6 +5675,40 @@ def build_parser() -> argparse.ArgumentParser:
     resume.add_argument("--json", action="store_true")
     resume.set_defaults(func=cmd_resume)
 
+    guide = sub.add_parser("guide", help="print human-friendly guidance for the current workspace")
+    guide.add_argument("--root", default=".")
+    guide.add_argument("--question")
+    guide.add_argument("--max-chars", type=int, default=12000)
+    guide.add_argument("--json", action="store_true")
+    guide.set_defaults(func=cmd_guide)
+
+    track = sub.add_parser("track", help="inspect and set Forge Method tracks")
+    track_sub = track.add_subparsers(dest="track_command", required=True)
+    track_list = track_sub.add_parser("list", help="list packaged tracks")
+    track_list.add_argument("--json", action="store_true")
+    track_list.set_defaults(func=cmd_track_list)
+    track_recommend = track_sub.add_parser("recommend", help="recommend tracks for an objective")
+    track_recommend.add_argument("--objective")
+    track_recommend.add_argument("--limit", type=int, default=5)
+    track_recommend.add_argument("--json", action="store_true")
+    track_recommend.set_defaults(func=cmd_track_recommend)
+    track_set = track_sub.add_parser("set", help="set the current project track")
+    track_set.add_argument("--root", default=".")
+    track_set.add_argument("--track", required=True, choices=sorted(TRACK_IDS))
+    track_set.add_argument("--set-module", action="store_true")
+    track_set.add_argument("--next-action")
+    track_set.set_defaults(func=cmd_track_set)
+
+    council = sub.add_parser("council", help="run an optional Forge Agent Council")
+    council_sub = council.add_subparsers(dest="council_command", required=True)
+    council_run = council_sub.add_parser("run", help="show a live council transcript and persist a compact decision")
+    council_run.add_argument("--root", default=".")
+    council_run.add_argument("--topic")
+    council_run.add_argument("--agent", action="append")
+    council_run.add_argument("--next-action")
+    council_run.add_argument("--eval", action="store_true")
+    council_run.set_defaults(func=cmd_council_run)
+
     transition = sub.add_parser("transition", help="update phase/status/workflow")
     transition.add_argument("--root", default=".")
     transition.add_argument("--phase")
@@ -5358,6 +5946,40 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_create.add_argument("--eval-query")
     workflow_create.add_argument("--force", action="store_true")
     workflow_create.set_defaults(func=cmd_workflow_create)
+
+    builder = sub.add_parser("builder", help="scaffold and validate local Forge Method extensions")
+    builder_sub = builder.add_subparsers(dest="builder_command", required=True)
+    builder_scaffold = builder_sub.add_parser("scaffold", help="scaffold a workflow, module, agent, skill, template, or eval")
+    builder_scaffold.add_argument("--root", default=".")
+    builder_scaffold.add_argument("--kind", required=True, choices=BUILDER_KINDS)
+    builder_scaffold.add_argument("--id", required=True)
+    builder_scaffold.add_argument("--title")
+    builder_scaffold.add_argument("--purpose")
+    builder_scaffold.add_argument("--trigger")
+    builder_scaffold.add_argument("--phase-span")
+    builder_scaffold.add_argument("--workflows")
+    builder_scaffold.add_argument("--when")
+    builder_scaffold.add_argument("--persona")
+    builder_scaffold.add_argument("--council-role")
+    builder_scaffold.add_argument("--target")
+    builder_scaffold.add_argument("--query")
+    builder_scaffold.add_argument("--expected")
+    builder_scaffold.add_argument("--eval-kind", choices=EVAL_KINDS, default="artifact-exists")
+    builder_scaffold.add_argument("--force", action="store_true")
+    builder_scaffold.set_defaults(func=cmd_builder_scaffold)
+    builder_validate = builder_sub.add_parser("validate", help="validate generated local method extensions")
+    builder_validate.add_argument("--root", default=".")
+    builder_validate.set_defaults(func=cmd_builder_validate)
+
+    config = sub.add_parser("config", help="inspect and validate Forge Method customization")
+    config_sub = config.add_subparsers(dest="config_command", required=True)
+    config_inspect = config_sub.add_parser("inspect", help="print merged team/local configuration")
+    config_inspect.add_argument("--root", default=".")
+    config_inspect.add_argument("--json", action="store_true")
+    config_inspect.set_defaults(func=cmd_config_inspect)
+    config_validate = config_sub.add_parser("validate", help="validate team/local configuration")
+    config_validate.add_argument("--root", default=".")
+    config_validate.set_defaults(func=cmd_config_validate)
 
     artifact = sub.add_parser("artifact", help="manage artifacts")
     artifact_sub = artifact.add_subparsers(dest="artifact_command", required=True)

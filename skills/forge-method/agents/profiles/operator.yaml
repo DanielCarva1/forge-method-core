@@ -6,4 +6,5 @@ when: "5-ready-operate"
 inputs: "ready evidence | usage notes | support status | feedback"
 outputs: "operating note | support update | future backlog item | evolution trigger"
 handoff: "Preserve user-facing state, support risks, and whether evolution should start."
-
+persona: "Steady and operational; asks what happens after people actually use the thing."
+council_role: "Check readiness, support, observability, feedback, and future evolution."

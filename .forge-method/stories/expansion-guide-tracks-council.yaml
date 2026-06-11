@@ -1,0 +1,11 @@
+# Forge Method story
+updated_at: "2026-06-11T05:23:17+00:00"
+id: "expansion-guide-tracks-council"
+title: "Add guide, tracks, and Agent Council foundation"
+status: "done"
+phase: "4-build-verify"
+acceptance_criteria: "guide command provides human-friendly workspace guidance | track commands list, recommend, and set tracks | council run shows a live transcript and persists a compact decision artifact | project state supports track, complexity, project_kind, guide_summary, and last_council_artifact"
+evidence: ".forge-method/evidence/20260611-052317-story-story-expansion-guide-tracks-council-done.md"
+checks: "python -m unittest discover -s tests | python .\\skills\\forge-method\\scripts\\forge_method_runtime.py workflow validate | python .\\skills\\forge-method\\scripts\\forge_method_runtime.py agent validate | python -m unittest discover -s tests | python .\\skills\\forge-method\\scripts\\forge_method_runtime.py workflow validate | python .\\skills\\forge-method\\scripts\\forge_method_runtime.py agent validate"
+artifacts: "docs/09-expansion-roadmap.md | docs/adr/0004-agent-council-human-experience.md"
+blocker: ""

@@ -983,6 +983,58 @@ class RuntimeTests(unittest.TestCase):
                 (root / ".forge-method" / "context" / "current-pack.md").read_text(encoding="utf-8"),
             )
 
+    def test_tracks_guide_council_builder_and_config_contracts(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+
+            tracks = json.loads(
+                run_cmd("track", "recommend", "--objective", "build a secure enterprise app", "--json").stdout
+            )
+            guide = json.loads(run_cmd("guide", "--root", str(root), "--json").stdout)
+            set_track = run_cmd("track", "set", "--root", str(root), "--track", "game-studio", "--set-module").stdout
+            council = run_cmd(
+                "council",
+                "run",
+                "--root",
+                str(root),
+                "--topic",
+                "Should this decision use a council?",
+                "--eval",
+            ).stdout
+            workflow_path = run_cmd(
+                "builder",
+                "scaffold",
+                "--root",
+                str(root),
+                "--kind",
+                "workflow",
+                "--id",
+                "custom-check",
+                "--title",
+                "Custom Check",
+            ).stdout.strip()
+            builder_validation = run_cmd("builder", "validate", "--root", str(root)).stdout
+            config = json.loads(run_cmd("config", "inspect", "--root", str(root), "--json").stdout)
+            config_validation = run_cmd("config", "validate", "--root", str(root)).stdout
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+            gate = run_cmd("gate", "--root", str(root), "--require-evals").stdout
+
+            self.assertEqual(tracks["recommended"][0]["id"], "enterprise")
+            self.assertTrue(guide["state_found"])
+            self.assertEqual(guide["track"]["id"], "standard-product")
+            self.assertIn("Track set: game-studio", set_track)
+            self.assertIn("Forge Agent Council", council)
+            self.assertIn("Persisted decision artifact:", council)
+            self.assertEqual(snapshot["state"]["track"], "game-studio")
+            self.assertEqual(snapshot["state"]["module"], "game-studio")
+            self.assertTrue((root / snapshot["state"]["last_council_artifact"]).exists())
+            self.assertTrue((root / workflow_path).exists())
+            self.assertIn("Builder validation passed.", builder_validation)
+            self.assertEqual(config["sources"], [])
+            self.assertIn("Config validation passed.", config_validation)
+            self.assertIn("Gate passed.", gate)
+
     def test_example_list_and_create_seed_project(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw) / "software-example"

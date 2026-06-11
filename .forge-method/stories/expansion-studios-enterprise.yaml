@@ -1,0 +1,11 @@
+# Forge Method story
+updated_at: "2026-06-11T05:23:18+00:00"
+id: "expansion-studios-enterprise"
+title: "Expand Creative, Game, and Enterprise workflow packs"
+status: "done"
+phase: "4-build-verify"
+acceptance_criteria: "creative technique library and workflows are packaged | game design workflows and templates are packaged | enterprise/security/privacy/ops workflows are packaged | workflow validation passes"
+evidence: ".forge-method/evidence/20260611-052318-story-story-expansion-studios-enterprise-done.md"
+checks: "python .\\skills\\forge-method\\scripts\\forge_method_runtime.py workflow validate | python -m unittest discover -s tests | python .\\skills\\forge-method\\scripts\\forge_method_runtime.py workflow validate | python -m unittest discover -s tests"
+artifacts: "skills/forge-method/techniques/creative-techniques.yaml | docs/09-expansion-roadmap.md"
+blocker: ""

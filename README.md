@@ -24,6 +24,8 @@ skills/forge-method/SKILL.md       Main runtime skill
 skills/forge-method/modules/        Packaged module manifests
 skills/forge-method/agents/          Packaged agent profiles
 skills/forge-method/references/    Compact state-machine workflows
+skills/forge-method/techniques/     Compact creative technique manifests
+skills/forge-method/templates/      Reusable artifact templates
 skills/forge-method/scripts/       Deterministic runtime helpers
 docs/                              Product and architecture proposal
 templates/                         Project state templates
@@ -152,6 +154,16 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" statu
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" snapshot --root . --pretty
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" next
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" resume --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" guide --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" guide --root . --question "what should we do next?"
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" track list
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" track recommend --objective "build a secure web app"
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" track set --root . --track standard-product
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" council run --root . --topic "choose the next product direction"
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" builder scaffold --root . --kind workflow --id custom-flow --title "Custom Flow"
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" builder validate --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" config inspect --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" config validate --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" input list --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" review list --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story export --root .
@@ -187,6 +199,10 @@ When a workspace already contains code but no `.forge-method/state.yaml`, prefli
 Use `context health` before long work blocks. Use `context recover --compact` when health is `compact` or `blocked`; it preserves state, resume guidance, read order, and commands before optional sections.
 
 Use `doctor --root . --touches runtime` when a local setup feels slow or uncertain. It reports project/runtime detection, plugin installation status, Python/Git/GitHub CLI/WSL readiness, and the recommended development and release verification commands for the touched area.
+
+Forge Method separates Human Experience from Agent Runtime. Human-facing guide and council output can be conversational, opinionated, and useful for thinking. Runtime artifacts, workflows, evals, and recovery files stay compact so future agents can continue without rereading long discussions.
+
+Agent Council is optional. It can show a rich live discussion for the human, but it persists only a compact decision artifact under `.forge-method/artifacts/`.
 
 ## Smoke Tests
 
@@ -254,6 +270,7 @@ The complete proposal is in:
 - `docs/06-runtime-improvement-backlog.md`
 - `docs/07-v1-readiness-audit.md`
 - `docs/08-marketplace-onboarding.md`
+- `docs/09-expansion-roadmap.md`
 
 ## Example
 

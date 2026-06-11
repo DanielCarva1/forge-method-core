@@ -107,6 +107,46 @@
 - quality reviewer profile
 - operator profile
 
+## Delivered In Expansion Batch
+
+### Guide And Tracks
+
+- guide command
+- track list/recommend/set commands
+- quick, standard-product, enterprise, creative, game, runtime-builder, test-architect, and launch-ops tracks
+- project state fields for track, complexity, project kind, guide summary, and last council artifact
+
+### Agent Council
+
+- council run command
+- compact council decision artifacts
+- optional persona and council role fields in agent profiles
+- Agent Council ADR
+
+### Planning Backbone
+
+- product requirements workflow
+- architecture workflow
+- UX plan workflow
+- epics workflow
+- readiness check workflow
+- correct-course workflow
+
+### Builder And Customization
+
+- builder scaffold command
+- builder validate command
+- config inspect command
+- config validate command
+- eval design workflow
+
+### Studios And Enterprise
+
+- creative technique library
+- creative workflows
+- game design workflows and templates
+- enterprise planning workflows
+
 ## V1 Hardening
 
 ### Release Quality

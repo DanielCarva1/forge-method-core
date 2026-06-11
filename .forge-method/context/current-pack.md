@@ -7,13 +7,13 @@
 - status: ready
 - workflow: ready-release
 - active_story: <none>
-- next_action: use, support, observe, and maintain the ready product
+- next_action: operate Forge Method or start the next evolution request
 
 ## Latest Checkpoint
 
 # Checkpoint
 
-- created_at: 2026-06-11T04:21:27+00:00
+- created_at: 2026-06-11T05:26:46+00:00
 - project: forge-method-core
 - phase: 5-ready-operate
 - status: ready
@@ -22,7 +22,7 @@
 
 ## Summary
 
-Self-hosting Forge Method run completed. Brownfield discovery, spec, plan, implementation stories, gate, and ready transition completed. Runtime fixes: project create --allow-runtime-state, phase-preserving story start. Skill packaging fix: prefer active skill/plugin directory. Validations: python -m unittest discover -s tests passed; smoke-install passed; verify-fast passed; gate --require-evals passed with 6/6 evals.
+Implemented Forge expansion plan after grill: guide, tracks, Agent Council with compact decision artifacts, builder scaffold/validate, config inspect/validate, planning backbone workflows, creative/game/enterprise workflow packs, templates, docs, glossary, and ADR. Validations passed: unit tests, workflow validate, agent validate, smoke-install, verify-fast, and gate --require-evals 9/9.
 
 ## Decisions
 
@@ -30,7 +30,12 @@ Self-hosting Forge Method run completed. Brownfield discovery, spec, plan, imple
 
 ## Checks
 
-- none
+- python -m unittest discover -s tests
+- python .\skills\forge-method\scripts\forge_method_runtime.py workflow validate
+- python .\skills\forge-method\scripts\forge_method_runtime.py agent validate
+- powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1
+- powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1
+- python .\skills\forge-method\scripts\forge_method_runtime.py gate --root . --require-evals
 
 ## Failed Checks
 
@@ -46,7 +51,7 @@ Self-hosting Forge Method run completed. Brownfield discovery, spec, plan, imple
 
 ## Next Action
 
-use, support, observe, and maintain the ready product
+operate Forge Method or start the next evolution request
 
 ## Recovery Signals
 
@@ -76,16 +81,16 @@ use, support, observe, and maintain the ready product
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260611-041618-story-story-runtime-self-hosting-guards-done.md
-- .forge-method/evidence/20260611-041731-story-story-compact-workflow-docs-done.md
-- .forge-method/evidence/20260611-041845-story-story-plugin-native-skill-path-done.md
-- .forge-method/evidence/20260611-042030-story-story-public-plugin-install-proof-done.md
-- .forge-method/evidence/20260611-042058-release-ready-gate.md
+- .forge-method/evidence/20260611-052317-story-story-expansion-builder-config-evals-done.md
+- .forge-method/evidence/20260611-052317-story-story-expansion-guide-tracks-council-done.md
+- .forge-method/evidence/20260611-052318-story-story-expansion-docs-install-proof-done.md
+- .forge-method/evidence/20260611-052318-story-story-expansion-studios-enterprise-done.md
+- .forge-method/evidence/20260611-052401-release-ready-gate.md
 
 ## Recent Artifacts
 
-- plan [active/durable]: .forge-method/artifacts/self-hosting-hardening-backlog.json - Self-hosting hardening backlog - Four-story implementation batch for self-hosting guardrails, plugin-native skill paths, compact workflow docs, and public plugin install proof.
-- audit [active/durable]: .forge-method/artifacts/workflow-compactness-audit.md - Workflow compactness audit - Confirmed all packaged workflow references use the required compact state-machine sections and pass workflow validation.
-- story-link [active/durable]: .forge-method/artifacts/workflow-compactness-audit.md - .forge-method/artifacts/workflow-compactness-audit.md -> compact-workflow-docs - Artifact linked to story.
 - evidence [active/durable]: .forge-method/artifacts/public-plugin-install-proof.md - Public plugin install proof - README public Codex install flow is present; package contents are covered; verify-fast and smoke-install passed for repo-based plugin use.
 - story-link [active/durable]: .forge-method/artifacts/public-plugin-install-proof.md - .forge-method/artifacts/public-plugin-install-proof.md -> public-plugin-install-proof - Artifact linked to story.
+- plan [active/durable]: .forge-method/artifacts/forge-expansion-backlog.json - Forge expansion backlog - Four-story implementation batch for guide/tracks/council, builder/config/evals, creative/game/enterprise packs, and docs/install proof.
+- roadmap [active/durable]: docs/09-expansion-roadmap.md - Expansion roadmap - Public roadmap defining Human Experience, Agent Runtime, tracks, Agent Council, and v1.23-v1.26 delivery packages.
+- adr [active/durable]: docs/adr/0004-agent-council-human-experience.md - Agent Council ADR - Decision to show rich council debate to humans while persisting compact council decision artifacts for future agents.

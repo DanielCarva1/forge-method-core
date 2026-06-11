@@ -48,6 +48,22 @@ handoff:
 
 Human-facing docs explain why the runtime exists, how to install it, and how to reason about it. They should not be required during normal execution.
 
+## Human Experience
+
+Human Experience is allowed to be warm, specific, and conversational. Guide output, onboarding, Agent Council discussion, and user-facing explanations should help people think, compare options, and make decisions.
+
+## Agent Runtime
+
+Agent Runtime is compact and deterministic. Skills, workflows, manifests, artifacts, evals, gates, and recovery files should be optimized for agents that must resume work with minimal context.
+
+## Track Rule
+
+Tracks route the method without adding public skills. A track records complexity, project kind, and the likely module path. The public entrypoint remains `$forge-method`; helper commands such as `track set` are implementation surface for agents.
+
+## Agent Council Rule
+
+Agent Council is optional. It may show a rich live discussion to the human, but durable project memory should be a compact decision artifact. Future agents should load the decision artifact, not a full debate transcript.
+
 ## Completion Rule
 
 A task is complete only when:

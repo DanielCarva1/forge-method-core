@@ -1,0 +1,88 @@
+{
+  "runtime": "forge-method",
+  "project": "forge-method-core",
+  "source": "Forge Expansion Plan After Grill",
+  "stories": [
+    {
+      "id": "expansion-guide-tracks-council",
+      "title": "Add guide, tracks, and Agent Council foundation",
+      "status": "ready",
+      "phase": "4-build-verify",
+      "acceptance_criteria": [
+        "guide command provides human-friendly workspace guidance",
+        "track commands list, recommend, and set tracks",
+        "council run shows a live transcript and persists a compact decision artifact",
+        "project state supports track, complexity, project_kind, guide_summary, and last_council_artifact"
+      ],
+      "checks": [
+        "python -m unittest discover -s tests",
+        "python .\\skills\\forge-method\\scripts\\forge_method_runtime.py workflow validate",
+        "python .\\skills\\forge-method\\scripts\\forge_method_runtime.py agent validate"
+      ],
+      "artifacts": [
+        "docs/09-expansion-roadmap.md",
+        "docs/adr/0004-agent-council-human-experience.md"
+      ]
+    },
+    {
+      "id": "expansion-builder-config-evals",
+      "title": "Add builder, config, and eval design support",
+      "status": "ready",
+      "phase": "4-build-verify",
+      "acceptance_criteria": [
+        "builder scaffold supports workflow, module, agent, skill, template, and eval",
+        "builder validate checks generated workflow, agent, skill, and config shape",
+        "config inspect and config validate support team/local customization",
+        "eval design workflow is packaged"
+      ],
+      "checks": [
+        "python -m unittest discover -s tests",
+        "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-install.ps1"
+      ],
+      "artifacts": [
+        "docs/09-expansion-roadmap.md"
+      ]
+    },
+    {
+      "id": "expansion-studios-enterprise",
+      "title": "Expand Creative, Game, and Enterprise workflow packs",
+      "status": "ready",
+      "phase": "4-build-verify",
+      "acceptance_criteria": [
+        "creative technique library and workflows are packaged",
+        "game design workflows and templates are packaged",
+        "enterprise/security/privacy/ops workflows are packaged",
+        "workflow validation passes"
+      ],
+      "checks": [
+        "python .\\skills\\forge-method\\scripts\\forge_method_runtime.py workflow validate",
+        "python -m unittest discover -s tests"
+      ],
+      "artifacts": [
+        "skills/forge-method/techniques/creative-techniques.yaml",
+        "docs/09-expansion-roadmap.md"
+      ]
+    },
+    {
+      "id": "expansion-docs-install-proof",
+      "title": "Update public docs, skill guidance, and install proof",
+      "status": "ready",
+      "phase": "4-build-verify",
+      "acceptance_criteria": [
+        "README documents the new helper capabilities behind the single entrypoint",
+        "operating model defines Human Experience and Agent Runtime",
+        "skill guidance routes new workflows without adding public skills",
+        "install smoke passes"
+      ],
+      "checks": [
+        "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-install.ps1",
+        "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1"
+      ],
+      "artifacts": [
+        "README.md",
+        "docs/05-v1-operating-model.md",
+        "docs/09-expansion-roadmap.md"
+      ]
+    }
+  ]
+}

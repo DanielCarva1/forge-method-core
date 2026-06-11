@@ -52,3 +52,34 @@
 {"event": "project.ready", "payload": {"evidence": ".forge-method/evidence/20260611-042058-release-ready-gate.md"}, "ts": "2026-06-11T04:20:58+00:00"}
 {"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260611-042127-checkpoint.md"}, "ts": "2026-06-11T04:21:27+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T04:21:27+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "expansion-requested"}, "ts": "2026-06-11T05:21:48+00:00"}
+{"event": "story.backlog_imported", "payload": {"path": ".forge-method/artifacts/forge-expansion-backlog.json", "stories": 4}, "ts": "2026-06-11T05:21:49+00:00"}
+{"event": "artifact.added", "payload": {"kind": "plan", "lifecycle": "durable", "path": ".forge-method/artifacts/forge-expansion-backlog.json"}, "ts": "2026-06-11T05:21:49+00:00"}
+{"event": "eval.added", "payload": {"id": "artifact-forge-method-artifacts-forge-expansion-backlog-json-exists", "kind": "artifact-exists", "target": ".forge-method/artifacts/forge-expansion-backlog.json"}, "ts": "2026-06-11T05:21:49+00:00"}
+{"event": "artifact.added", "payload": {"kind": "roadmap", "lifecycle": "durable", "path": "docs/09-expansion-roadmap.md"}, "ts": "2026-06-11T05:21:49+00:00"}
+{"event": "eval.added", "payload": {"id": "artifact-docs-09-expansion-roadmap-md-exists", "kind": "artifact-exists", "target": "docs/09-expansion-roadmap.md"}, "ts": "2026-06-11T05:21:49+00:00"}
+{"event": "artifact.added", "payload": {"kind": "adr", "lifecycle": "durable", "path": "docs/adr/0004-agent-council-human-experience.md"}, "ts": "2026-06-11T05:21:49+00:00"}
+{"event": "eval.added", "payload": {"id": "artifact-docs-adr-0004-agent-council-human-experience-md-exists", "kind": "artifact-exists", "target": "docs/adr/0004-agent-council-human-experience.md"}, "ts": "2026-06-11T05:21:49+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "4-build-verify", "status": "expansion-implementation"}, "ts": "2026-06-11T05:21:49+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "expansion-guide-tracks-council", "to": "in_progress"}, "ts": "2026-06-11T05:23:17+00:00"}
+{"event": "evidence.added", "payload": {"kind": "story", "path": ".forge-method/evidence/20260611-052317-story-story-expansion-guide-tracks-council-done.md", "story": "expansion-guide-tracks-council"}, "ts": "2026-06-11T05:23:17+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "expansion-guide-tracks-council", "to": "done"}, "ts": "2026-06-11T05:23:17+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "expansion-builder-config-evals", "to": "in_progress"}, "ts": "2026-06-11T05:23:17+00:00"}
+{"event": "evidence.added", "payload": {"kind": "story", "path": ".forge-method/evidence/20260611-052317-story-story-expansion-builder-config-evals-done.md", "story": "expansion-builder-config-evals"}, "ts": "2026-06-11T05:23:17+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "expansion-builder-config-evals", "to": "done"}, "ts": "2026-06-11T05:23:17+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "expansion-studios-enterprise", "to": "in_progress"}, "ts": "2026-06-11T05:23:18+00:00"}
+{"event": "evidence.added", "payload": {"kind": "story", "path": ".forge-method/evidence/20260611-052318-story-story-expansion-studios-enterprise-done.md", "story": "expansion-studios-enterprise"}, "ts": "2026-06-11T05:23:18+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "expansion-studios-enterprise", "to": "done"}, "ts": "2026-06-11T05:23:18+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "expansion-docs-install-proof", "to": "in_progress"}, "ts": "2026-06-11T05:23:18+00:00"}
+{"event": "evidence.added", "payload": {"kind": "story", "path": ".forge-method/evidence/20260611-052318-story-story-expansion-docs-install-proof-done.md", "story": "expansion-docs-install-proof"}, "ts": "2026-06-11T05:23:18+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "expansion-docs-install-proof", "to": "done"}, "ts": "2026-06-11T05:23:18+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-11T05:23:43+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-11T05:23:43+00:00"}
+{"event": "evidence.added", "payload": {"kind": "release", "path": ".forge-method/evidence/20260611-052401-release-ready-gate.md", "story": ""}, "ts": "2026-06-11T05:24:01+00:00"}
+{"event": "project.ready", "payload": {"evidence": ".forge-method/evidence/20260611-052401-release-ready-gate.md"}, "ts": "2026-06-11T05:24:01+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-11T05:24:37+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-11T05:24:37+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-11T05:26:27+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-11T05:26:27+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260611-052646-checkpoint.md"}, "ts": "2026-06-11T05:26:46+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T05:26:46+00:00"}

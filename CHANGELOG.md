@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- add guide, tracks, Agent Council, builder, and config helper commands behind the single `$forge-method` entrypoint
+- add Human Experience and Agent Runtime glossary, operating model, and Agent Council ADR
+- add compact planning, builder, creative, game, and enterprise workflow references
+- add creative technique and game/enterprise artifact templates
+- add optional persona and council role fields to packaged agent profiles
 - allow explicit self-hosting initialization in the runtime repo with `project create --allow-runtime-state`
 - preserve the story phase workflow when starting non-build stories instead of always routing to build
 - prefer the active skill/plugin directory for runtime helper commands, with the legacy user install path as fallback

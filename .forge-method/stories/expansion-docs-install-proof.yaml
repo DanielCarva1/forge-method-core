@@ -1,0 +1,11 @@
+# Forge Method story
+updated_at: "2026-06-11T05:23:18+00:00"
+id: "expansion-docs-install-proof"
+title: "Update public docs, skill guidance, and install proof"
+status: "done"
+phase: "4-build-verify"
+acceptance_criteria: "README documents the new helper capabilities behind the single entrypoint | operating model defines Human Experience and Agent Runtime | skill guidance routes new workflows without adding public skills | install smoke passes"
+evidence: ".forge-method/evidence/20260611-052318-story-story-expansion-docs-install-proof-done.md"
+checks: "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-install.ps1 | powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1 | powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-install.ps1 | powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1"
+artifacts: "README.md | docs/05-v1-operating-model.md | docs/09-expansion-roadmap.md"
+blocker: ""

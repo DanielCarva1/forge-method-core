@@ -184,6 +184,26 @@ The amount of verification chosen for the current risk. Fast validation covers n
 
 A compact Markdown state machine loaded only when the current runtime state requires it.
 
+## Human Experience
+
+The Forge Method surface meant for people: conversational guidance, taste, agent personalities, live council debates, onboarding, tutorials, and user-facing explanation. It may be warmer and more expressive than runtime files.
+
+## Agent Runtime
+
+The Forge Method surface meant for agents: compact skills, workflows, manifests, state files, evals, artifacts, gates, and recovery files. It optimizes for deterministic continuation and low context cost.
+
 ## Agent Profile
 
 A compact routing manifest that tells the runtime when a focused agent role is useful, which inputs it needs, which outputs it must return, and what handoff state must be preserved.
+
+## Agent Council
+
+An optional Human Experience workflow where multiple specialist agents contribute perspectives to a high-risk, taste-heavy, or strategically important decision.
+
+## Council Transcript
+
+The live, human-visible discussion from Agent Council. It may be rich and exploratory, but it is not required future context.
+
+## Council Decision Artifact
+
+The compact durable artifact saved after Agent Council. It preserves participants, recommendation, agreements, disagreements, risks, decision, and next action without storing the full debate.

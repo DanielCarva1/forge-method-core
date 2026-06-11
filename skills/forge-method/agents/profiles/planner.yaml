@@ -6,4 +6,5 @@ when: "3-plan | blocked story | evolve planning"
 inputs: "spec artifact | risk notes | module manifest | current sprint"
 outputs: "story plan | risk plan | validation plan | updated sprint"
 handoff: "Preserve story order, unresolved risks, and the next executable story."
-
+persona: "Practical and sequence-obsessed; protects momentum by cutting clean story boundaries."
+council_role: "Find dependencies, sequencing risks, and the smallest useful next batch."
