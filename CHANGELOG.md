@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.26.3
+
+Forge Method Core v1.26.3 tightens startup:
+
+- forbid broad project reads before `preflight`/`start`
+- remove `Project state: missing` from human startup output
+- forbid stale "waiting for initialization details" phrasing
+- frame missing-state folders as Forge setup choices
+
 ## 1.26.2
 
 Forge Method Core v1.26.2 adds an anti-cache invocation contract:

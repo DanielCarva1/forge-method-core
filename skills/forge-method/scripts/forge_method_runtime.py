@@ -17,7 +17,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.26.2"
+RUNTIME_VERSION = "1.26.3"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -920,6 +920,15 @@ def print_missing_state_start_intro(route: str) -> None:
     )
 
 
+def setup_label_for_route(route: str) -> str:
+    return {
+        "runtime-repo": "choose a project workspace outside the runtime",
+        "workspace-with-projects": "choose an existing project or start a new one",
+        "existing-codebase": "ready for brownfield discovery",
+        "empty-workspace": "ready to create the first Forge project here",
+    }.get(route, "resolve route")
+
+
 def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: str = "") -> dict[str, Any]:
     state_root, state = load_state_or_none(root)
     runtime_root = find_runtime_repo_root(root)
@@ -1179,7 +1188,7 @@ def print_preflight(payload: dict[str, Any]) -> None:
         print(f"Runtime repo: {'yes' if payload.get('runtime_repo') else 'no'}")
         if payload.get("runtime_root"):
             print(f"Runtime root: {payload.get('runtime_root')}")
-        print(f"Project state: {payload.get('project_state', 'missing')}")
+        print(f"Forge setup: {setup_label_for_route(payload.get('route', ''))}")
         projects = payload.get("known_projects", [])
         if projects:
             print("Known projects:")
@@ -1192,7 +1201,7 @@ def print_preflight(payload: dict[str, Any]) -> None:
                 )
         else:
             print("Known projects: none")
-        print(f"Question: {payload.get('question', '')}")
+        print(f"Next question: {payload.get('question', '')}")
         print("Module choices:")
         for item in payload.get("module_choices", []):
             print(f"- {item.get('id')}: {item.get('purpose')}")
@@ -2253,9 +2262,9 @@ def cmd_start(args: argparse.Namespace) -> int:
         print(f"Runtime repo: {'yes' if runtime_repo else 'no'}")
         print(f"Runtime root: {runtime_root}")
     if runtime_repo:
-        print("Project state: missing")
+        print(f"Forge setup: {setup_label_for_route('runtime-repo')}")
         print("Known projects: not scanned inside runtime repo")
-        print("Question: Which project folder should be opened or created outside the runtime repo?")
+        print("Next question: Which project folder should be opened or created outside the runtime repo?")
         print("Module choices:")
         for item in project_creation_module_choices(None, "", limit=8):
             print(f"- {item.get('id')}: {item.get('purpose')}")
@@ -2268,7 +2277,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         print("Forge Method Start")
         print(f"Workspace: {root}")
         print(f"Runtime repo: {'yes' if runtime_repo else 'no'}")
-        print("Project state: missing")
+        print(f"Forge setup: {setup_label_for_route('workspace-with-projects')}")
         print("Known projects:")
         for index, project_root in enumerate(projects, start=1):
             project_state = apply_state_defaults(read_flat_yaml(state_path(project_root)))
@@ -2277,7 +2286,7 @@ def cmd_start(args: argparse.Namespace) -> int:
             status = project_state.get("status", "<unknown>")
             rel = display_path(project_root, base=root)
             print(f"{index}. {label}\t{phase}\t{status}\t{rel}")
-        print("Question: Which known project should be opened, or should a new project be created?")
+        print("Next question: Which known project should be opened, or should a new project be created?")
         print("Module choices for a new project:")
         for item in project_creation_module_choices(None, "", limit=8):
             print(f"- {item.get('id')}: {item.get('purpose')}")
@@ -2290,9 +2299,9 @@ def cmd_start(args: argparse.Namespace) -> int:
         print(f"Workspace: {root}")
         print("Route: existing-codebase")
         print(f"Runtime repo: {'yes' if runtime_repo else 'no'}")
-        print("Project state: missing")
+        print(f"Forge setup: {setup_label_for_route('existing-codebase')}")
         print("Known projects: none")
-        print("Question: Initialize Forge Method for this existing project as brownfield?")
+        print("Next question: Initialize Forge Method for this existing project as brownfield?")
         print("Module choices:")
         for item in project_creation_module_choices(None, "", limit=8):
             print(f"- {item.get('id')}: {item.get('purpose')}")
@@ -2311,9 +2320,9 @@ def cmd_start(args: argparse.Namespace) -> int:
     print("Forge Method Start")
     print(f"Workspace: {root}")
     print(f"Runtime repo: {'yes' if runtime_repo else 'no'}")
-    print("Project state: missing")
+    print(f"Forge setup: {setup_label_for_route('empty-workspace')}")
     print("Known projects: none")
-    print("Question: Create a new method project in this workspace?")
+    print("Next question: Create a new method project in this workspace?")
     print("Module choices:")
     for item in project_creation_module_choices(None, "", limit=8):
         print(f"- {item.get('id')}: {item.get('purpose')}")
@@ -2349,12 +2358,12 @@ def cmd_status(args: argparse.Namespace) -> int:
         runtime_root = find_runtime_repo_root(root)
         if runtime_root:
             print(f"Runtime repo: {runtime_root}")
-            print("Project state: not initialized here")
+            print("Forge setup: choose a project workspace outside the runtime")
             print("Next: open a project folder or initialize a child project outside the runtime root")
             return 0
         print(f"Workspace: {root}")
-        print("Project state: missing")
-        print("Next: run init")
+        print("Forge setup: ready to create the first Forge project here")
+        print("Next: run preflight or start, then ask for project name and objective")
         return 1
     if args.json:
         print(json.dumps(build_status_brief(state_root, state), ensure_ascii=True, sort_keys=True, indent=2))

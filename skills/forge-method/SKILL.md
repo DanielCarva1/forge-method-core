@@ -13,6 +13,10 @@ First resolve the directory containing this `SKILL.md`. Run the launcher from th
 
 Every invocation of this skill must execute the launcher before answering. Do not answer from prior chat state, cached assumptions, or a previous "waiting for initialization details" message. If the user invokes Forge Method again in the same chat, rerun `preflight` and `start`; the current filesystem and launcher output are authoritative.
 
+Bootstrap budget is strict: before `preflight`/`start`, read only this `SKILL.md` and do not inspect project docs, source files, git history, or broad workspace context. Route first, then load only the files the runtime recommends.
+
+For missing-state routes, do not paraphrase into "Forge Method is active", "waiting for initialization details", or "no `.forge-method/state.yaml` was found". Paste or closely relay the runtime's human opening and ask for the project name/objective.
+
 ```powershell
 $skill = "<directory-containing-this-SKILL.md>"
 & (Join-Path $skill "forge-method.ps1") preflight --root .
@@ -52,8 +56,8 @@ Look for:
 .forge-method/artifacts/index.ndjson
 ```
 
-If state is missing, run `preflight --root .` before offering project creation.
-When state is missing, relay the runtime's human opening and ask what the user wants to create. Do not replace it with a dry message about needing `.forge-method/state.yaml`.
+For a folder that is not yet a Forge project, run `preflight --root .` before offering project creation.
+For missing-state routes, relay the runtime's human opening and ask what the user wants to create. Do not replace it with state-file wording.
 
 ## Runtime Model
 

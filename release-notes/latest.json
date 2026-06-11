@@ -1,12 +1,12 @@
 {
-  "version": "1.26.2",
+  "version": "1.26.3",
   "date": "2026-06-11",
-  "title": "Anti-cache invocation contract",
-  "summary": "Forge Method now tells agents to rerun the launcher on every invocation instead of answering from stale chat state.",
+  "title": "Lean bootstrap and less state jargon",
+  "summary": "Forge Method now forbids broad reading before route resolution and removes missing-state jargon from human startup output.",
   "highlights": [
-    "Every $forge-method invocation must run the launcher before answering.",
-    "Prior chat state and old initialization prompts are not authoritative.",
-    "The current filesystem and runtime output win over cached assumptions."
+    "Agents must route first and avoid broad project reads before preflight/start.",
+    "Missing-state human output no longer says Project state: missing.",
+    "The skill forbids stale phrases like waiting for initialization details."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.26.2.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.26.3.md"
 }
