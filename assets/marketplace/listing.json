@@ -65,7 +65,7 @@
     "python -m unittest discover -s tests",
     "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1",
     "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-all.ps1",
-    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref v1.26.0 -ExpectedVersion 1.26.0"
+    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref main -ExpectedVersion 1.26.0"
   ],
   "publication_status": "metadata-ready; public directory submission is external"
 }

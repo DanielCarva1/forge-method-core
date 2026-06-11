@@ -259,11 +259,11 @@ The full verifier includes a fixture matrix smoke. It creates example and normal
 After a tag is pushed, run a clone/install distribution smoke from the published ref:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.26.0 -ExpectedVersion 1.26.0
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref main -ExpectedVersion 1.26.0
 ```
 
 ```bash
-REF=v1.26.0 EXPECTED_VERSION=1.26.0 bash scripts/smoke-plugin-clone-install.sh
+REF=main EXPECTED_VERSION=1.26.0 bash scripts/smoke-plugin-clone-install.sh
 ```
 
 ## Product Direction
