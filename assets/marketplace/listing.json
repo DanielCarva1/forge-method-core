@@ -30,7 +30,7 @@
   "install": {
     "codex_marketplace": [
       "codex plugin marketplace add DanielCarva1/forge-method-core --ref main",
-      "Open Codex Plugins, select the Forge Method marketplace, and install Forge Method Core."
+      "Open Codex Plugins or /plugins, choose the Forge Method marketplace, then install or enable Forge Method Core."
     ],
     "windows": [
       "git clone https://github.com/DanielCarva1/forge-method-core.git",

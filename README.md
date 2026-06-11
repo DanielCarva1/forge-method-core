@@ -40,7 +40,7 @@ Forge Method Core is packaged as a Codex plugin and this repo is also a Codex ma
 codex plugin marketplace add DanielCarva1/forge-method-core --ref main
 ```
 
-Then open Codex Plugins, choose the `Forge Method` marketplace, install `Forge Method Core`, start a new thread, and use:
+Then open Codex Plugins or `/plugins`, choose the `Forge Method` marketplace, install or enable `Forge Method Core`, start a new thread, and use:
 
 ```txt
 $forge-method

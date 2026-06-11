@@ -51,7 +51,10 @@ Its `forge-method-core` entry points at the repo root as the plugin source:
 
 ```txt
 source.path: ./
+policy.installation: AVAILABLE
 ```
+
+After adding the marketplace, users open Codex Plugins or `/plugins`, choose the `Forge Method` marketplace, install or enable `Forge Method Core`, then start a new thread and invoke `$forge-method`.
 
 Local personal distribution remains available for development and fallback installs through `scripts/install-plugin-local.ps1` and `scripts/install-plugin-local.sh`. Those scripts copy the plugin source to the user's personal marketplace root.
 
