@@ -40,6 +40,10 @@ The deterministic entry route that resolves whether the current workspace is an 
 
 A non-mutating route and context check. It identifies project identity, known project choices, required human choice, first files to read, and next helper commands before the agent loads broad context or starts work.
 
+## Preflight Decision
+
+A machine-readable decision contract returned by preflight. It lists safe options such as opening an existing project, choosing an external workspace, or creating a new project, with required user inputs and commands for the selected option.
+
 ## Runtime Snapshot
 
 A machine-readable JSON summary of current project state, sprint counts, next story, route recommendation, quality findings, context paths, and recent artifacts.

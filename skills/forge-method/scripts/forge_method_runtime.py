@@ -17,7 +17,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.19.0"
+RUNTIME_VERSION = "1.20.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -471,6 +471,97 @@ def preflight_command(name: str, *parts: str | Path | int) -> dict[str, str]:
     return {"name": name, "command": " ".join(command_parts)}
 
 
+def decision_option(
+    option_id: str,
+    label: str,
+    action: str,
+    *,
+    description: str,
+    command: dict[str, str] | None = None,
+    project_path: str = "",
+    requires: list[str] | None = None,
+) -> dict[str, Any]:
+    option: dict[str, Any] = {
+        "id": option_id,
+        "label": label,
+        "action": action,
+        "description": description,
+        "requires": requires or [],
+    }
+    if command:
+        option["command"] = command
+    if project_path:
+        option["project_path"] = project_path
+    return option
+
+
+def project_route_decision(
+    *,
+    route: str,
+    question: str,
+    projects: list[dict[str, str]],
+    root: Path,
+    scan_depth: int,
+    objective: str,
+    runtime_repo: bool,
+) -> dict[str, Any]:
+    options: list[dict[str, Any]] = []
+    if route == "workspace-with-projects":
+        for project in projects:
+            project_root = Path(project["root"])
+            options.append(
+                decision_option(
+                    f"open-{slugify(project.get('path') or project.get('project') or 'project')}",
+                    f"Open {project.get('project')}",
+                    "open_existing_project",
+                    description="Resume this project from its file-backed state.",
+                    project_path=project.get("path", ""),
+                    command=preflight_command("status", "status", "--root", project_root, "--brief"),
+                )
+            )
+    create_root: str | Path = "<parent-folder-outside-runtime-repo>" if runtime_repo else root
+    options.append(
+        decision_option(
+            "create-new-project",
+            "Create a new project",
+            "create_new_project",
+            description="Create scaffolded durable state from the selected module and objective.",
+            requires=["project name", "project objective"],
+            command=preflight_command(
+                "project-create",
+                "project",
+                "create",
+                "--root",
+                create_root,
+                "--name",
+                "<name>",
+                "--module",
+                "auto",
+                "--objective",
+                objective or "<objective>",
+            ),
+        )
+    )
+    if route == "runtime-repo":
+        options.insert(
+            0,
+            decision_option(
+                "choose-external-workspace",
+                "Choose a workspace outside this runtime repo",
+                "choose_external_workspace",
+                description="Avoid writing project state into the runtime package unless explicitly intentional.",
+                requires=["workspace path"],
+            ),
+        )
+    return {
+        "required": True,
+        "type": "project-route",
+        "question": question,
+        "options": options,
+        "default_option": options[0]["id"] if options else "",
+    }
+
+
 def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: str = "") -> dict[str, Any]:
     state_root, state = load_state_or_none(root)
     runtime_root = find_runtime_repo_root(root)
@@ -491,6 +582,7 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
             commands.append(preflight_command("review-findings", "review", "list", "--root", state_root))
         elif route == "start_next_story" and next_story.get("id"):
             commands.append(preflight_command("start-story", "story", "start", "--root", state_root, "--id", next_story["id"]))
+        open_required_input = status.get("open_required_input") or {}
         return {
             "runtime": RUNTIME_NAME,
             "runtime_version": RUNTIME_VERSION,
@@ -503,6 +595,22 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
             "project_path": display_path(state_root, base=root),
             "decision_required": bool(status.get("open_required_input")),
             "question": "",
+            "decision": {
+                "required": bool(open_required_input),
+                "type": "resume",
+                "question": open_required_input.get("prompt", ""),
+                "options": [
+                    decision_option(
+                        "continue-current-project",
+                        "Continue current project",
+                        "continue_current_project",
+                        description="Resume from the current file-backed state and recommended next action.",
+                        project_path=display_path(state_root, base=root),
+                        command=preflight_command("resume", "resume", "--root", state_root),
+                    )
+                ],
+                "default_option": "continue-current-project",
+            },
             "status": status,
             "context_load_plan": context_plan,
             "commands": commands,
@@ -547,6 +655,15 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
             objective or "<objective>",
         ),
     ]
+    decision = project_route_decision(
+        route=route,
+        question=question,
+        projects=projects,
+        root=root,
+        scan_depth=scan_depth,
+        objective=objective,
+        runtime_repo=runtime_repo,
+    )
     return {
         "runtime": RUNTIME_NAME,
         "runtime_version": RUNTIME_VERSION,
@@ -558,6 +675,7 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
         "project_state": "missing",
         "decision_required": True,
         "question": question,
+        "decision": decision,
         "known_projects": projects,
         "module_choices": module_choices,
         "commands": commands,
@@ -610,6 +728,11 @@ def print_preflight(payload: dict[str, Any]) -> None:
             print(f"- {item.get('path')} [{item.get('section')}]: {item.get('reason')}")
         if not plan.get("selected"):
             print("- <none>")
+        decision = payload.get("decision", {})
+        if decision.get("options"):
+            print("Decision options:")
+            for index, option in enumerate(decision.get("options", []), start=1):
+                print(f"{index}. {option.get('label')} ({option.get('action')})")
     else:
         print(f"Runtime repo: {'yes' if payload.get('runtime_repo') else 'no'}")
         if payload.get("runtime_root"):
@@ -631,6 +754,14 @@ def print_preflight(payload: dict[str, Any]) -> None:
         print("Module choices:")
         for item in payload.get("module_choices", []):
             print(f"- {item.get('id')}: {item.get('purpose')}")
+        decision = payload.get("decision", {})
+        if decision.get("options"):
+            print("Decision options:")
+            for index, option in enumerate(decision.get("options", []), start=1):
+                requirement = ""
+                if option.get("requires"):
+                    requirement = f" requires: {', '.join(option.get('requires', []))}"
+                print(f"{index}. {option.get('label')} ({option.get('action')}){requirement}")
     print("Commands:")
     for item in payload.get("commands", []):
         print(f"- {item.get('name')}: {item.get('command')}")

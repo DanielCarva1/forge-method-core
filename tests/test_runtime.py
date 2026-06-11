@@ -125,6 +125,11 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(payload["known_projects"][0]["project"], "Client Project")
             self.assertEqual(payload["known_projects"][0]["path"], "client-project")
             self.assertEqual(payload["module_choices"][0]["id"], "software-builder")
+            self.assertEqual(payload["decision"]["type"], "project-route")
+            self.assertEqual(payload["decision"]["options"][0]["action"], "open_existing_project")
+            self.assertEqual(payload["decision"]["options"][0]["project_path"], "client-project")
+            self.assertEqual(payload["decision"]["options"][-1]["action"], "create_new_project")
+            self.assertIn("Decision options:", text)
             self.assertFalse((parent / ".forge-method").exists())
 
     def test_preflight_detects_runtime_repo_without_project_state(self) -> None:
@@ -154,10 +159,31 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(payload["module_choices"][0]["id"], "software-builder")
             self.assertTrue(payload["decision_required"])
             self.assertIn("<parent-folder-outside-runtime-repo>", payload["commands"][0]["command"])
+            self.assertEqual(payload["decision"]["options"][0]["action"], "choose_external_workspace")
+            self.assertEqual(payload["decision"]["options"][1]["action"], "create_new_project")
             self.assertEqual(nested_payload["route"], "runtime-repo")
             self.assertEqual(nested_payload["runtime_root"], str(root.resolve()))
             self.assertIn("Known projects: not scanned inside runtime repo", start)
             self.assertIn(f"Runtime repo: {root.resolve()}", status)
+            self.assertFalse((root / ".forge-method").exists())
+
+    def test_preflight_empty_workspace_returns_create_decision(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+
+            text = run_cmd("preflight", "--root", str(root), "--objective", "build a mobile game").stdout
+            payload = json.loads(
+                run_cmd("preflight", "--root", str(root), "--objective", "build a mobile game", "--json").stdout
+            )
+
+            self.assertEqual(payload["route"], "empty-workspace")
+            self.assertTrue(payload["decision_required"])
+            self.assertEqual(payload["decision"]["type"], "project-route")
+            self.assertEqual(payload["decision"]["default_option"], "create-new-project")
+            self.assertEqual(payload["decision"]["options"][0]["action"], "create_new_project")
+            self.assertIn("project objective", payload["decision"]["options"][0]["requires"])
+            self.assertIn("--objective", payload["decision"]["options"][0]["command"]["command"])
+            self.assertIn("Decision options:", text)
             self.assertFalse((root / ".forge-method").exists())
 
     def test_invalid_phase_transition_is_rejected(self) -> None:
@@ -198,7 +224,7 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(snapshot["runtime_version"], "1.19.0")
+            self.assertEqual(snapshot["runtime_version"], "1.20.0")
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
@@ -711,7 +737,7 @@ class RuntimeTests(unittest.TestCase):
                 encoding="utf-8",
             )
             manifest_path.write_text(
-                json.dumps({"name": "forge-method-core", "version": "1.19.0", "skills": "./skills/"}),
+                json.dumps({"name": "forge-method-core", "version": "1.20.0", "skills": "./skills/"}),
                 encoding="utf-8",
             )
             skill_path.write_text("---\nname: forge-method\n---\n", encoding="utf-8")
@@ -723,7 +749,7 @@ class RuntimeTests(unittest.TestCase):
             plugin = payload["plugin_installation"]
             self.assertTrue(plugin["available"])
             self.assertEqual(plugin["status"], "ready")
-            self.assertEqual(plugin["installed_version"], "1.19.0")
+            self.assertEqual(plugin["installed_version"], "1.20.0")
             self.assertEqual(plugin["plugin_path"], str(plugin_root.resolve()))
             self.assertIn("codex://plugins/forge-method-core?marketplacePath=", plugin["codex_deeplink"])
             self.assertIn("Plugin installation:", text)
@@ -776,7 +802,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("facilitator", agents)
         self.assertIn("quality-reviewer", agents)
         self.assertIn("Agent profile validation passed.", agent_validation)
-        self.assertEqual(version.strip(), "1.19.0")
+        self.assertEqual(version.strip(), "1.20.0")
 
     def test_context_plan_selects_relevant_files_and_updates_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -819,7 +845,7 @@ class RuntimeTests(unittest.TestCase):
             selected_paths = [item["path"] for item in plan["selected"]]
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(plan["runtime_version"], "1.19.0")
+            self.assertEqual(plan["runtime_version"], "1.20.0")
             self.assertEqual(plan["state"]["phase"], "4-build-verify")
             self.assertIn(".forge-method/state.yaml", selected_paths)
             self.assertIn(".forge-method/sprint.yaml", selected_paths)

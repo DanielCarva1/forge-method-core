@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.20.0
+
+Forge Method Core v1.20 improves first-project routing:
+
+- add structured `decision` options to `preflight` JSON for existing projects, empty workspaces, and runtime repos
+- print human-readable decision options in `preflight` text output
+- include safe commands for opening existing projects or creating new projects from the selected objective
+- add unit coverage for workspace, runtime-repo, and empty-workspace decision contracts
+
 ## 1.19.0
 
 Forge Method Core v1.19 improves self-diagnosis:

@@ -7,7 +7,7 @@ Forge Method Core v1 is ready when a new user can install it, start a project, r
 | Area | Criteria | Evidence |
 | --- | --- | --- |
 | Install | Windows and POSIX installers copy the skill and runtime files. | `scripts/smoke-install.ps1`, `scripts/smoke-install.sh` |
-| Start | The runtime routes empty workspaces, existing projects, project parent folders, and runtime repos without writing accidental state. | `preflight`, `start`, unit tests |
+| Start | The runtime routes empty workspaces, existing projects, project parent folders, and runtime repos without writing accidental state, and exposes explicit decision options for the next user choice. | `preflight`, `start`, unit tests |
 | Project Creation | A normal project can be scaffolded from a packaged module. | `project create`, install/runtime smokes |
 | Durable State | Project state, sprint state, stories, evidence, artifacts, checkpoints, reviews, inputs, and ledger are file-backed. | `.forge-method/` project layout and audit checks |
 | Context Recovery | A new session can recover state, read order, commands, done conditions, and blocking conditions from files. | `context plan`, `context recover`, `context recover --compact` |

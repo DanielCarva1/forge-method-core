@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.19.0`.
+Current runtime version: `1.20.0`.
 
 ## Current Shape
 
@@ -162,7 +162,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval 
 
 The script creates `.forge-method/` in the target project and keeps state out of the chat transcript.
 
-Use `preflight --root . --json` before broad context loading. It resolves whether the folder is an existing method project, a runtime repo, a parent folder with known projects, or an empty workspace, then returns the first files and commands an agent should use.
+Use `preflight --root . --json` before broad context loading. It resolves whether the folder is an existing method project, a runtime repo, a parent folder with known projects, or an empty workspace, then returns the first files, decision options, and commands an agent should use.
 
 Use `context recover --compact` for handoff under a tight context budget. It preserves state, resume guidance, read order, and commands before optional sections.
 

@@ -12,6 +12,7 @@
 - runtime-vs-project doctor command
 - status command that does not infer from chat history
 - runtime snapshot for machine-readable agent routing
+- structured preflight decision options
 
 ### Durable State Engine
 
@@ -115,9 +116,9 @@
 - plugin onboarding deeplinks
 - public marketplace listing
 
-## Candidate V1.19 Batch
+## Candidate V1.20 Batch
 
-- surface plugin installation readiness in doctor
-- detect personal marketplace, plugin source, installed version, and Codex deeplinks
-- tolerate Windows-generated JSON BOMs in local marketplace files
+- add machine-readable preflight decision options
+- print decision options in preflight text output
+- cover runtime repo, empty workspace, and project parent decisions
 - keep product-surface scan clean before release

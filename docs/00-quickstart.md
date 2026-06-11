@@ -89,7 +89,7 @@ Forge Method should run preflight first. It will detect one of these routes:
 - runtime repository
 - empty workspace
 
-If the workspace is empty, Codex should ask whether to create a new project, show module choices, then scaffold durable project state after the project name is known.
+If the workspace is empty or contains existing method projects, Codex should show preflight decision options. Those options tell the agent whether to open an existing project, choose a workspace outside the runtime repo, or create a new project after the project name and objective are known.
 
 ## Expected First Files
 
