@@ -2,7 +2,7 @@
 updated_at: "2026-06-11T05:26:46+00:00"
 schema_version: "1"
 runtime: "forge-method"
-runtime_version: "1.22.0"
+runtime_version: "1.23.0"
 project: "forge-method-core"
 project_id: "forge-method-core"
 mode: "brownfield"

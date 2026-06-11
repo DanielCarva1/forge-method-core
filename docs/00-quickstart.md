@@ -147,9 +147,9 @@ bash scripts/smoke-fixtures.sh
 After publishing a tag, verify the published package can be cloned and installed as a plugin:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.22.0 -ExpectedVersion 1.22.0
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.23.0 -ExpectedVersion 1.23.0
 ```
 
 ```bash
-REF=v1.22.0 EXPECTED_VERSION=1.22.0 bash scripts/smoke-plugin-clone-install.sh
+REF=v1.23.0 EXPECTED_VERSION=1.23.0 bash scripts/smoke-plugin-clone-install.sh
 ```

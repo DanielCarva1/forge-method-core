@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.23.0
+
+Forge Method Core v1.23 expands the runtime into guided tracks, optional council decisions, builder customization, creative/game/enterprise workflows, and compact agent-facing artifacts:
+
 - add guide, tracks, Agent Council, builder, and config helper commands behind the single `$forge-method` entrypoint
 - add Human Experience and Agent Runtime glossary, operating model, and Agent Council ADR
 - add compact planning, builder, creative, game, and enterprise workflow references

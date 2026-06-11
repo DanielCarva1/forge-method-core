@@ -13,7 +13,7 @@
     "after meaningful progress, write checkpoint or evidence before ending"
   ],
   "runtime": "forge-method",
-  "runtime_version": "1.22.0",
+  "runtime_version": "1.23.0",
   "selected": [
     {
       "estimated_chars": 577,
