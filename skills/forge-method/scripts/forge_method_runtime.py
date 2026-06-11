@@ -327,6 +327,26 @@ def discover_project_roots(root: Path, *, max_depth: int = 2) -> list[Path]:
     return found
 
 
+def workspace_entries_for_brownfield(root: Path) -> list[Path]:
+    if not root.exists() or not root.is_dir():
+        return []
+    ignored = {STATE_DIR, *SCAN_SKIP_DIRS}
+    entries: list[Path] = []
+    try:
+        children = sorted(root.iterdir(), key=lambda path: path.name.lower())
+    except OSError:
+        return []
+    for child in children:
+        if child.name in ignored:
+            continue
+        entries.append(child)
+    return entries
+
+
+def is_brownfield_workspace(root: Path) -> bool:
+    return bool(workspace_entries_for_brownfield(root)) and not state_path(root).exists()
+
+
 def display_path(path: Path, *, base: Path) -> str:
     try:
         return path.relative_to(base).as_posix() or "."
@@ -635,6 +655,9 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
     elif projects:
         route = "workspace-with-projects"
         question = "Which existing project should be opened, or should a new project be created?"
+    elif is_brownfield_workspace(root):
+        route = "existing-codebase"
+        question = "Initialize Forge Method for this existing project as brownfield?"
     else:
         route = "empty-workspace"
         question = "Create a new method project in this workspace?"
@@ -667,6 +690,78 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
         objective=objective,
         runtime_repo=runtime_repo,
     )
+    if route == "existing-codebase":
+        decision = {
+            "required": True,
+            "type": "project-route",
+            "question": question,
+            "options": [
+                decision_option(
+                    "initialize-brownfield-project",
+                    "Initialize this existing project",
+                    "initialize_brownfield_project",
+                    description="Create Forge Method state in this codebase and start with brownfield discovery.",
+                    requires=["project name", "project objective"],
+                    command=preflight_command(
+                        "project-create-brownfield",
+                        "project",
+                        "create",
+                        "--root",
+                        root.parent,
+                        "--path",
+                        root,
+                        "--name",
+                        "<name>",
+                        "--module",
+                        "auto",
+                        "--objective",
+                        objective or "<objective>",
+                        "--brownfield",
+                    ),
+                    project_path=".",
+                ),
+                decision_option(
+                    "create-new-project",
+                    "Create a separate new project",
+                    "create_new_project",
+                    description="Create a new scaffolded project beside this existing codebase.",
+                    requires=["project name", "project objective"],
+                    command=preflight_command(
+                        "project-create",
+                        "project",
+                        "create",
+                        "--root",
+                        root.parent,
+                        "--name",
+                        "<name>",
+                        "--module",
+                        "auto",
+                        "--objective",
+                        objective or "<objective>",
+                    ),
+                ),
+            ],
+            "default_option": "initialize-brownfield-project",
+        }
+        commands = [
+            preflight_command(
+                "project-create-brownfield",
+                "project",
+                "create",
+                "--root",
+                root.parent,
+                "--path",
+                root,
+                "--name",
+                "<name>",
+                "--module",
+                "auto",
+                "--objective",
+                objective or "<objective>",
+                "--brownfield",
+            ),
+            preflight_command("module-recommend", "module", "recommend", "--root", root, "--objective", objective or "<objective>"),
+        ]
     return {
         "runtime": RUNTIME_NAME,
         "runtime_version": RUNTIME_VERSION,
@@ -1811,6 +1906,25 @@ def cmd_start(args: argparse.Namespace) -> int:
         print("Next: wait for the user's project choice, then run status in that project root or create a scaffolded project.")
         return 0
 
+    if is_brownfield_workspace(root):
+        print("Route: existing-codebase")
+        print("Project state: missing")
+        print("Known projects: none")
+        print("Question: Initialize Forge Method for this existing project as brownfield?")
+        print("Module choices:")
+        for item in project_creation_module_choices(None, "", limit=5):
+            print(f"- {item.get('id')}: {item.get('purpose')}")
+        print(
+            "Create command: "
+            f"{command_hint_value(sys.executable)} "
+            f"{command_hint_value(Path(__file__).resolve())} "
+            f"project create --root {command_hint_value(root.parent)} "
+            f"--path {command_hint_value(root)} "
+            "--name <name> --module auto --objective <objective> --brownfield"
+        )
+        print("Next: run brownfield discovery before specification, planning, or implementation.")
+        return 0
+
     print("Known projects: none")
     print("Question: Create a new method project in this workspace?")
     print("Module choices:")
@@ -2920,10 +3034,18 @@ def cmd_project_list(args: argparse.Namespace) -> int:
 def cmd_project_create(args: argparse.Namespace) -> int:
     parent = resolve_root(args.root)
     project_root = resolve_new_project_root(parent, args.path, args.name)
+    existing_entries = workspace_entries_for_brownfield(project_root)
+    brownfield = bool(args.brownfield or (project_root.exists() and existing_entries and not state_path(project_root).exists() and args.force))
     if project_root.exists() and not project_root.is_dir():
         raise SystemExit(f"Project root must be a directory: {project_root}")
-    if project_root.exists() and any(project_root.iterdir()) and not state_path(project_root).exists() and not args.force:
-        raise SystemExit(f"Project root is not empty: {project_root}. Use --force if this is intentional.")
+    if args.brownfield and (not project_root.exists() or not existing_entries):
+        raise SystemExit(f"--brownfield requires an existing non-empty project root: {project_root}")
+    if project_root.exists() and existing_entries and not state_path(project_root).exists() and not args.force and not args.brownfield:
+        raise SystemExit(
+            f"Project root is not empty: {project_root}. Use --brownfield to initialize an existing project."
+        )
+    if args.brownfield:
+        brownfield = True
     project_root.mkdir(parents=True, exist_ok=True)
 
     module_id = slugify(args.module)
@@ -2946,31 +3068,47 @@ def cmd_project_create(args: argparse.Namespace) -> int:
     state, path, copied_guidance = initialize_project_state(
         project_root,
         project=project,
-        mode=args.mode,
+        mode="brownfield" if brownfield and args.mode == "creation-runtime" else args.mode,
         module=module_id,
         force=args.force,
         allow_runtime_state=False,
         no_project_guidance=args.no_project_guidance,
     )
     state["phase"] = "1-discovery"
-    state["status"] = "project-created"
+    state["status"] = "brownfield-discovery" if brownfield else "project-created"
     state["active_workflow"] = "discover-intent"
-    state["next_action"] = NEXT_BY_PHASE["1-discovery"]
+    if brownfield:
+        state["next_action"] = (
+            "run brownfield discovery: inventory existing files, current behavior, "
+            "in-progress work, constraints, risks, and safe next changes"
+        )
+    else:
+        state["next_action"] = NEXT_BY_PHASE["1-discovery"]
     write_state(project_root, state)
 
     story_id = "project-kickoff"
     story = {
         "id": story_id,
-        "title": "Run project kickoff",
+        "title": "Run brownfield discovery" if brownfield else "Run project kickoff",
         "status": "ready",
         "phase": "1-discovery",
         "acceptance_criteria": join_list(
-            [
-                "project state identifies the selected module",
-                "project brief artifact exists",
-                "context load plan exists",
-                "quality gate passes with required evals",
-            ]
+            (
+                [
+                    "existing project inventory is captured",
+                    "current in-progress work is identified",
+                    "constraints, risks, and safe change boundaries are documented",
+                    "context load plan exists",
+                    "quality gate passes with required evals",
+                ]
+                if brownfield
+                else [
+                    "project state identifies the selected module",
+                    "project brief artifact exists",
+                    "context load plan exists",
+                    "quality gate passes with required evals",
+                ]
+            )
         ),
         "evidence": "",
         "checks": "context plan | gate --require-evals",
@@ -2982,7 +3120,9 @@ def cmd_project_create(args: argparse.Namespace) -> int:
     workflows = split_list(module.get("workflows"))
     brief_rel = ".forge-method/artifacts/project-brief.md"
     summary = (
-        f"Project: {project}. Module: {module_id}. Objective: {objective} "
+        f"Project: {project}. Module: {module_id}. "
+        f"Project type: {'brownfield existing codebase' if brownfield else 'new scaffold'}. "
+        f"Objective: {objective} "
         f"Module purpose: {module.get('purpose', '')}. "
         f"Workflow set: {join_list(workflows) or 'none'}."
     )
@@ -3000,8 +3140,19 @@ def cmd_project_create(args: argparse.Namespace) -> int:
         project_root,
         state,
         title="Project created",
-        summary=f"Created project from module {module_id}.",
-        decisions=[f"Use module {module_id} as the initial route."],
+        summary=(
+            f"Initialized brownfield project from module {module_id}."
+            if brownfield
+            else f"Created project from module {module_id}."
+        ),
+        decisions=[
+            f"Use module {module_id} as the initial route.",
+            *(
+                ["Treat existing files as brownfield context and run discovery before specification or build."]
+                if brownfield
+                else []
+            ),
+        ],
         checks=["context plan", "gate --require-evals"],
         failed_checks=[],
         touched=[STATE_FILE, SPRINT_FILE, story_path(project_root, story_id).relative_to(project_root).as_posix(), artifact],
@@ -3057,6 +3208,7 @@ def cmd_project_create(args: argparse.Namespace) -> int:
     )
 
     print(f"Project created: {project}")
+    print(f"Project type: {'brownfield' if brownfield else 'new'}")
     print(f"Root: {project_root}")
     print(f"State: {path}")
     print(f"Module: {module_id}")
@@ -5129,6 +5281,7 @@ def build_parser() -> argparse.ArgumentParser:
     project_create.add_argument("--path")
     project_create.add_argument("--mode", default="creation-runtime")
     project_create.add_argument("--max-chars", type=int, default=8000)
+    project_create.add_argument("--brownfield", action="store_true")
     project_create.add_argument("--force", action="store_true")
     project_create.add_argument("--no-project-guidance", action="store_true")
     project_create.set_defaults(func=cmd_project_create)

@@ -143,6 +143,7 @@ The skill can ask Codex to run:
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" preflight --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" start --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project create --root . --name my-project --module software-builder
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project create --root .. --path . --name my-existing-project --module auto --objective "continue this existing project" --brownfield
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" project list --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" init --project my-project
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" version
@@ -180,6 +181,8 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval 
 The script creates `.forge-method/` in the target project and keeps state out of the chat transcript.
 
 Use `preflight --root . --json` before broad context loading. It resolves whether the folder is an existing method project, a runtime repo, a parent folder with known projects, or an empty workspace, then returns the first files, decision options, and commands an agent should use.
+
+When a workspace already contains code but no `.forge-method/state.yaml`, preflight treats it as an existing codebase and routes initialization through `project create --brownfield`. Brownfield projects always start in `1-discovery` so the agent inventories current behavior, in-progress work, constraints, and risks before specification, planning, or implementation.
 
 Use `context health` before long work blocks. Use `context recover --compact` when health is `compact` or `blocked`; it preserves state, resume guidance, read order, and commands before optional sections.
 

@@ -67,6 +67,8 @@ Before declaring a project ready, the agent should run the quality gate. The gat
 Starting the method is a routing operation, not implementation work. The agent must resolve whether the current folder already has project state, whether it is the runtime repo, and which known project roots exist before asking the user to choose or create a project.
 When the user chooses a new project, the agent should use project creation so state, kickoff story, brief, eval, checkpoint, and context load plan are created together.
 
+When the selected workspace already contains code but no `.forge-method/state.yaml`, the agent should treat it as brownfield. Brownfield initialization must start in `1-discovery`, inventory existing behavior and in-progress work, and only then move toward specification, planning, or implementation.
+
 The agent should run preflight before broad reading. Preflight is read-only: it may compute the selected context files and next commands, but it must not write state, checkpoint, ledger, or context artifacts.
 
 After preflight resolves an existing project, the agent should use resume guidance to choose the next safe action. Resume guidance is also read-only and must prefer durable inputs, review findings, story state, audit results, and readiness state over chat memory.

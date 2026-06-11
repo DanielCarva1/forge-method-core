@@ -186,6 +186,27 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Decision options:", text)
             self.assertFalse((root / ".forge-method").exists())
 
+    def test_preflight_existing_codebase_returns_brownfield_decision(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "src").mkdir()
+            (root / "src" / "app.py").write_text("print('hello')\n", encoding="utf-8")
+
+            text = run_cmd("preflight", "--root", str(root), "--objective", "continue existing app").stdout
+            payload = json.loads(
+                run_cmd("preflight", "--root", str(root), "--objective", "continue existing app", "--json").stdout
+            )
+            start = run_cmd("start", "--root", str(root)).stdout
+
+            self.assertEqual(payload["route"], "existing-codebase")
+            self.assertTrue(payload["decision_required"])
+            self.assertEqual(payload["decision"]["default_option"], "initialize-brownfield-project")
+            self.assertEqual(payload["decision"]["options"][0]["action"], "initialize_brownfield_project")
+            self.assertIn("--brownfield", payload["decision"]["options"][0]["command"]["command"])
+            self.assertIn("Initialize Forge Method for this existing project as brownfield", text)
+            self.assertIn("Route: existing-codebase", start)
+            self.assertFalse((root / ".forge-method").exists())
+
     def test_invalid_phase_transition_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -962,6 +983,42 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("night-watch", project_list)
             self.assertIn("Gate passed.", gate)
             self.assertIn("Evals: 1/1 passed", gate)
+
+    def test_project_create_brownfield_starts_with_discovery(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            parent = Path(raw)
+            existing = parent / "existing-app"
+            existing.mkdir()
+            (existing / "package.json").write_text('{"scripts":{"test":"echo ok"}}\n', encoding="utf-8")
+
+            create = run_cmd(
+                "project",
+                "create",
+                "--root",
+                str(parent),
+                "--path",
+                str(existing),
+                "--name",
+                "Existing App",
+                "--module",
+                "software-builder",
+                "--objective",
+                "Continue an app that is already in progress.",
+                "--brownfield",
+            ).stdout
+            state = (existing / ".forge-method" / "state.yaml").read_text(encoding="utf-8")
+            story = (existing / ".forge-method" / "stories" / "project-kickoff.yaml").read_text(encoding="utf-8")
+            brief = (existing / ".forge-method" / "artifacts" / "project-brief.md").read_text(encoding="utf-8")
+            next_text = run_cmd("next", "--root", str(existing)).stdout
+
+            self.assertIn("Project type: brownfield", create)
+            self.assertIn('mode: "brownfield"', state)
+            self.assertIn('phase: "1-discovery"', state)
+            self.assertIn('status: "brownfield-discovery"', state)
+            self.assertIn("run brownfield discovery", state)
+            self.assertIn("existing project inventory is captured", story)
+            self.assertIn("Project type: brownfield existing codebase", brief)
+            self.assertIn("run brownfield discovery", next_text)
 
     def test_project_create_auto_selects_module_from_objective(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
