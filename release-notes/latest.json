@@ -1,13 +1,12 @@
 {
-  "version": "1.26.0",
+  "version": "1.26.1",
   "date": "2026-06-11",
-  "title": "Human voice and Reality/Evidence Gate",
-  "summary": "Forge Method now starts new work with a warmer guide voice and challenges ideas before treating them as viable.",
+  "title": "Cleaner human start",
+  "summary": "Forge Method now speaks directly to humans on empty and brownfield starts instead of leaking state-machine wording.",
   "highlights": [
-    "Empty and brownfield work now opens with human guidance before technical state details.",
-    "Guide/preflight JSON includes compact human_experience and reality_evidence_gate payloads.",
-    "Reality/Evidence Gate blocks impossible, cruel, unsafe, or incoherent ideas before market claims.",
-    "New market, domain, and technical feasibility scan workflows support discovery."
+    "Empty workspaces now ask what you want to create without leading with .forge-method/state.yaml.",
+    "Brownfield starts explain that Forge will inspect existing code before planning or building.",
+    "The skill now tells agents not to replace Forge's opening with dry state initialization copy."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.26.0.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.26.1.md"
 }

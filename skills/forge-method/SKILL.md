@@ -51,6 +51,7 @@ Look for:
 ```
 
 If state is missing, run `preflight --root .` before offering project creation.
+When state is missing, relay the runtime's human opening and ask what the user wants to create. Do not replace it with a dry message about needing `.forge-method/state.yaml`.
 
 ## Runtime Model
 

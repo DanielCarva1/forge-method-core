@@ -17,7 +17,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.26.0"
+RUNTIME_VERSION = "1.26.1"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -823,23 +823,23 @@ def project_route_decision(
 
 def human_experience_for_route(route: str, *, question: str = "") -> dict[str, Any]:
     route_copy = {
-        "existing-method-project": "Project state found. Resume from files, not chat memory.",
-        "runtime-repo": "This is the Forge Method Core runtime. Do not create project state here unless intentional.",
-        "workspace-with-projects": "This workspace already contains Forge projects. Ask the human which one to open or whether to create a new one.",
-        "existing-codebase": "This looks like brownfield work. Inventory what exists before planning or building.",
-        "empty-workspace": "No Forge project state is present. Welcome the human and ask what they want to create today.",
+        "existing-method-project": "Achei o estado Forge deste projeto. Vou retomar pelos arquivos, sem fingir que lembro tudo pelo chat.",
+        "runtime-repo": "Esta pasta é o motor do Forge Method. Para criar algo com ele, escolha uma pasta de projeto fora do runtime.",
+        "workspace-with-projects": "Achei projetos Forge aqui. Me diga qual vamos abrir, ou se vamos começar uma coisa nova.",
+        "existing-codebase": "Achei código aqui, mas ainda não achei estado Forge. Isso parece brownfield: primeiro entendo o que já existe, depois mexo.",
+        "empty-workspace": "Ainda não achei um projeto Forge nesta pasta. Bora começar direito: me diz o que você quer criar hoje.",
     }.get(route, "Resolve the route before loading broad context.")
     prompt = {
-        "existing-method-project": "Pick up the thread from the file-backed state.",
-        "runtime-repo": "Which outside workspace should we open or create for the actual project?",
-        "workspace-with-projects": "Which project are we working on, or are we starting a new one?",
-        "existing-codebase": "Want me to treat this as brownfield and start with discovery?",
-        "empty-workspace": "What do you want to create today?",
-    }.get(route, "What should Forge resolve next?")
+        "existing-method-project": "Vou carregar o próximo passo seguro e seguir pelo estado durável.",
+        "runtime-repo": "Qual pasta fora do runtime vamos usar para o projeto real?",
+        "workspace-with-projects": "Qual deles é o da vez?",
+        "existing-codebase": "Quer que eu inicialize o Forge aqui e comece por discovery brownfield?",
+        "empty-workspace": "Me manda um nome e um objetivo em linguagem normal. Eu transformo isso em estado, trilha e próximos passos.",
+    }.get(route, "O que o Forge deve resolver agora?")
     return {
         **HUMAN_EXPERIENCE_POLICY,
         "route_summary": route_copy,
-        "opening": "Forge Method turns an idea into discovery, specs, build work, validation, and ready operation.",
+        "opening": "Forge Method pega uma ideia e conduz por discovery, spec, build, validação e pronto-para-uso.",
         "prompt": prompt,
         "question_context": question,
     }

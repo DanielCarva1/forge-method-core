@@ -223,11 +223,16 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(payload["decision"]["options"][0]["action"], "create_new_project")
             self.assertIn("project objective", payload["decision"]["options"][0]["requires"])
             self.assertIn("--objective", payload["decision"]["options"][0]["command"]["command"])
-            self.assertEqual(payload["human_experience"]["prompt"], "What do you want to create today?")
+            self.assertEqual(
+                payload["human_experience"]["prompt"],
+                "Me manda um nome e um objetivo em linguagem normal. Eu transformo isso em estado, trilha e próximos passos.",
+            )
             self.assertEqual(payload["reality_evidence_gate"]["status"], "needs-evidence")
-            self.assertIn("Forge Method turns an idea into discovery", text)
-            self.assertIn("What do you want to create today?", start)
-            self.assertLess(start.index("What do you want to create today?"), start.index("Project state: missing"))
+            self.assertIn("Forge Method pega uma ideia", text)
+            self.assertIn("Bora começar direito", start)
+            self.assertIn("Me manda um nome e um objetivo", start)
+            self.assertNotIn("Welcome the human", start)
+            self.assertLess(start.index("Bora começar direito"), start.index("Project state: missing"))
             self.assertIn("Reality/Evidence Gate: needs-evidence", guide)
             self.assertIn("Decision options:", text)
             self.assertFalse((root / ".forge-method").exists())
@@ -249,10 +254,14 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(payload["decision"]["default_option"], "initialize-brownfield-project")
             self.assertEqual(payload["decision"]["options"][0]["action"], "initialize_brownfield_project")
             self.assertIn("--brownfield", payload["decision"]["options"][0]["command"]["command"])
-            self.assertEqual(payload["human_experience"]["route_summary"], "This looks like brownfield work. Inventory what exists before planning or building.")
+            self.assertEqual(
+                payload["human_experience"]["route_summary"],
+                "Achei código aqui, mas ainda não achei estado Forge. Isso parece brownfield: primeiro entendo o que já existe, depois mexo.",
+            )
             self.assertIn("Initialize Forge Method for this existing project as brownfield", text)
-            self.assertIn("This looks like brownfield work", start)
-            self.assertLess(start.index("This looks like brownfield work"), start.index("Project state: missing"))
+            self.assertIn("Isso parece brownfield", start)
+            self.assertNotIn("This looks like brownfield work", start)
+            self.assertLess(start.index("Isso parece brownfield"), start.index("Project state: missing"))
             self.assertIn("Route: existing-codebase", start)
             self.assertFalse((root / ".forge-method").exists())
 
@@ -322,7 +331,7 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(snapshot["runtime_version"], "1.26.0")
+            self.assertEqual(snapshot["runtime_version"], "1.26.1")
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
@@ -896,7 +905,7 @@ class RuntimeTests(unittest.TestCase):
                 encoding="utf-8",
             )
             manifest_path.write_text(
-                json.dumps({"name": "forge-method-core", "version": "1.26.0", "skills": "./skills/"}),
+                json.dumps({"name": "forge-method-core", "version": "1.26.1", "skills": "./skills/"}),
                 encoding="utf-8",
             )
             skill_path.write_text("---\nname: forge-method\n---\n", encoding="utf-8")
@@ -908,7 +917,7 @@ class RuntimeTests(unittest.TestCase):
             plugin = payload["plugin_installation"]
             self.assertTrue(plugin["available"])
             self.assertEqual(plugin["status"], "ready")
-            self.assertEqual(plugin["installed_version"], "1.26.0")
+            self.assertEqual(plugin["installed_version"], "1.26.1")
             self.assertEqual(plugin["plugin_path"], str(plugin_root.resolve()))
             self.assertIn("codex://plugins/forge-method-core?marketplacePath=", plugin["codex_deeplink"])
             self.assertIn("Plugin installation:", text)
@@ -961,7 +970,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("facilitator", agents)
         self.assertIn("quality-reviewer", agents)
         self.assertIn("Agent profile validation passed.", agent_validation)
-        self.assertEqual(version.strip(), "1.26.0")
+        self.assertEqual(version.strip(), "1.26.1")
 
     def test_context_plan_selects_relevant_files_and_updates_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -1004,7 +1013,7 @@ class RuntimeTests(unittest.TestCase):
             selected_paths = [item["path"] for item in plan["selected"]]
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(plan["runtime_version"], "1.26.0")
+            self.assertEqual(plan["runtime_version"], "1.26.1")
             self.assertEqual(plan["state"]["phase"], "4-build-verify")
             self.assertIn(".forge-method/state.yaml", selected_paths)
             self.assertIn(".forge-method/sprint.yaml", selected_paths)

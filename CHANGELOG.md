@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.26.1
+
+Forge Method Core v1.26.1 tightens the first-run human voice:
+
+- replace meta-instructions in empty and brownfield startup copy with direct human-facing language
+- tell agents not to replace the runtime opening with dry `.forge-method/state.yaml` initialization wording
+- keep the 1.26 Reality/Evidence Gate behavior unchanged
+
 ## 1.26.0
 
 Forge Method Core v1.26 adds a stronger first-run Human Experience and canonical Reality/Evidence Gate:
