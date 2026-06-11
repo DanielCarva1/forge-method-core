@@ -61,6 +61,7 @@ evidence add
 checkpoint
 context pack
 context plan
+context health
 context recover
 context recover --compact
 module list/recommend/show/create
@@ -121,6 +122,13 @@ A context load plan must include:
 - reason for each file
 - estimated character budget
 - deferred files when the budget is full
+
+A context health check must convert the load plan into an agent action level:
+
+- `ok` to continue
+- `watch` to checkpoint soon
+- `compact` to write compact recovery before broad work
+- `blocked` to split work or recover before loading more context
 
 A preflight must resolve project identity before the agent reads broad context. It must identify existing project state, runtime repo state, known child projects, required user choice, structured decision options, selected context files, and the next helper commands without writing state.
 

@@ -108,6 +108,10 @@ A bounded project context artifact under `.forge-method/context/current-pack.md`
 
 A machine-readable recovery artifact under `.forge-method/context/load-plan.json`. It ranks the files an agent should load now, with reason, priority, estimated size, and deferred items when the context budget is full.
 
+## Context Health
+
+A read-only runtime check that turns the current context load plan into a continuation level: `ok`, `watch`, `compact`, or `blocked`. It tells the agent when to keep working, checkpoint soon, write compact recovery, or split work before loading more context.
+
 ## Recovery Brief
 
 A focused resume artifact under `.forge-method/context/recovery.md`. It lists read order, resume commands, current state, recent checkpoints, failed checks, touched files, and recent artifacts for a new agent context.

@@ -142,6 +142,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" story
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" checkpoint --summary "What changed and what to do next"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context plan --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context health --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context recover --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context recover --root . --compact
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" artifact verify --root .
@@ -164,7 +165,7 @@ The script creates `.forge-method/` in the target project and keeps state out of
 
 Use `preflight --root . --json` before broad context loading. It resolves whether the folder is an existing method project, a runtime repo, a parent folder with known projects, or an empty workspace, then returns the first files, decision options, and commands an agent should use.
 
-Use `context recover --compact` for handoff under a tight context budget. It preserves state, resume guidance, read order, and commands before optional sections.
+Use `context health` before long work blocks. Use `context recover --compact` when health is `compact` or `blocked`; it preserves state, resume guidance, read order, and commands before optional sections.
 
 Use `doctor --root . --touches runtime` when a local setup feels slow or uncertain. It reports project/runtime detection, plugin installation status, Python/Git/GitHub CLI/WSL readiness, and the recommended development and release verification commands for the touched area.
 

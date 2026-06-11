@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add read-only context health guidance for early checkpoint and compact-recovery decisions
 - add marketplace listing metadata and a first-run onboarding flow asset
 - add onboarding asset validation to fast and full verification
 - document the publication boundary between local/workspace distribution and public directory submission

@@ -116,7 +116,7 @@ $forge-method
 Resume this project from file state.
 ```
 
-The agent should run `preflight --root .`, then `resume --root .`, and continue from durable state.
+The agent should run `preflight --root .`, check `context health --root .`, then `resume --root .`, and continue from durable state.
 
 ## Release Loop
 

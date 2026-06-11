@@ -569,9 +569,11 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
     if state_root:
         status = build_status_brief(state_root, state)
         context_plan = build_context_load_plan(state_root, state, max_chars=max_chars)
+        context_health = build_context_health(state_root, state, max_chars=max_chars, plan=context_plan)
         commands = [
             preflight_command("status", "status", "--root", state_root, "--brief"),
             preflight_command("context-plan", "context", "plan", "--root", state_root, "--json", "--max-chars", max_chars),
+            preflight_command("context-health", "context", "health", "--root", state_root, "--json", "--max-chars", max_chars),
             preflight_command("next", "next", "--root", state_root),
         ]
         route = status["route"].get("recommendation", "")
@@ -613,6 +615,7 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
             },
             "status": status,
             "context_load_plan": context_plan,
+            "context_health": context_health,
             "commands": commands,
             "rules": [
                 "treat project_root as the authoritative working directory",
@@ -3583,6 +3586,81 @@ def build_context_load_plan(root: Path, state: dict[str, str], *, max_chars: int
     }
 
 
+def build_context_health(
+    root: Path,
+    state: dict[str, str],
+    *,
+    max_chars: int,
+    plan: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    plan = plan or build_context_load_plan(root, state, max_chars=max_chars)
+    budget = int(plan.get("budget_chars", 0) or 0)
+    selected_chars = int(plan.get("estimated_selected_chars", 0) or 0)
+    required_chars = int(plan.get("estimated_required_chars", 0) or 0)
+    selected_ratio = (selected_chars / budget) if budget else 0.0
+    required_ratio = (required_chars / budget) if budget else 0.0
+    deferred_count = len(plan.get("deferred", []))
+    over_budget = bool(plan.get("over_budget"))
+
+    if over_budget:
+        level = "blocked"
+        recommended_action = "split work or write compact recovery before loading more context"
+    elif budget and (selected_ratio >= 0.90 or deferred_count):
+        level = "compact"
+        recommended_action = "write compact recovery before continuing the work block"
+    elif budget and selected_ratio >= 0.65:
+        level = "watch"
+        recommended_action = "continue, then checkpoint before the next substantial step"
+    else:
+        level = "ok"
+        recommended_action = "continue with selected context"
+
+    commands = [
+        preflight_command("context-plan", "context", "plan", "--root", root, "--json", "--max-chars", max_chars),
+    ]
+    if level in {"compact", "blocked"}:
+        commands.append(
+            preflight_command("compact-recovery", "context", "recover", "--root", root, "--compact", "--max-chars", max_chars)
+        )
+    if level in {"watch", "compact"}:
+        commands.append(
+            preflight_command(
+                "checkpoint",
+                "checkpoint",
+                "--root",
+                root,
+                "--summary",
+                "<progress memory>",
+                "--next-action",
+                "<next action>",
+            )
+        )
+
+    return {
+        "runtime": RUNTIME_NAME,
+        "runtime_version": RUNTIME_VERSION,
+        "generated_at": utc_now(),
+        "root": str(root),
+        "level": level,
+        "recommended_action": recommended_action,
+        "budget_chars": budget,
+        "estimated_selected_chars": selected_chars,
+        "estimated_required_chars": required_chars,
+        "selected_ratio": round(selected_ratio, 3),
+        "required_ratio": round(required_ratio, 3),
+        "selected_count": len(plan.get("selected", [])),
+        "deferred_count": deferred_count,
+        "over_budget": over_budget,
+        "state": plan.get("state", {}),
+        "commands": commands,
+        "rules": [
+            "treat blocked or compact health as a handoff signal",
+            "prefer compact recovery over loading deferred files",
+            "write checkpoint memory before ending a substantial work block",
+        ],
+    }
+
+
 def write_context_load_plan(root: Path, state: dict[str, str], *, out: Path, max_chars: int) -> Path:
     if not out.is_absolute():
         out = root / out
@@ -3961,6 +4039,27 @@ def cmd_context_plan(args: argparse.Namespace) -> int:
         print(out.read_text(encoding="utf-8").rstrip())
     else:
         print(out)
+    return 0
+
+
+def cmd_context_health(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    health = build_context_health(root, state, max_chars=args.max_chars)
+    if args.json:
+        print(json.dumps(health, ensure_ascii=True, sort_keys=True, indent=2))
+    else:
+        print(f"Context health: {health['level']}")
+        print(
+            "Budget: "
+            f"{health['estimated_selected_chars']}/{health['budget_chars']} chars selected "
+            f"({health['selected_ratio']})"
+        )
+        print(f"Required: {health['estimated_required_chars']} chars ({health['required_ratio']})")
+        print(f"Deferred files: {health['deferred_count']}")
+        print(f"Recommended action: {health['recommended_action']}")
+        next_command = health["commands"][0]["command"] if health["commands"] else ""
+        if next_command:
+            print(f"Next command: {next_command}")
     return 0
 
 
@@ -5171,6 +5270,11 @@ def build_parser() -> argparse.ArgumentParser:
     context_plan.add_argument("--max-chars", type=int, default=12000)
     context_plan.add_argument("--json", action="store_true")
     context_plan.set_defaults(func=cmd_context_plan)
+    context_health = context_sub.add_parser("health", help="inspect context budget and handoff risk")
+    context_health.add_argument("--root", default=".")
+    context_health.add_argument("--max-chars", type=int, default=12000)
+    context_health.add_argument("--json", action="store_true")
+    context_health.set_defaults(func=cmd_context_health)
     context_recover = context_sub.add_parser("recover", help="write a focused recovery brief")
     context_recover.add_argument("--root", default=".")
     context_recover.add_argument("--out")

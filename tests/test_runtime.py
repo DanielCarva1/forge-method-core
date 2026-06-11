@@ -1344,6 +1344,36 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("story start", text)
             self.assertEqual(snapshot["context"]["compact_recovery"], ".forge-method/context/recovery-compact.md")
 
+    def test_context_health_is_read_only_when_budget_is_clear(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+
+            health = json.loads(
+                run_cmd("context", "health", "--root", str(root), "--max-chars", "100000", "--json").stdout
+            )
+            text = run_cmd("context", "health", "--root", str(root), "--max-chars", "100000").stdout
+
+            self.assertEqual(health["level"], "ok")
+            self.assertFalse(health["over_budget"])
+            self.assertEqual(health["commands"][0]["name"], "context-plan")
+            self.assertIn("Context health: ok", text)
+            self.assertFalse((root / ".forge-method" / "context" / "load-plan.json").exists())
+
+    def test_context_health_blocks_when_required_context_exceeds_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+
+            health = json.loads(run_cmd("context", "health", "--root", str(root), "--max-chars", "10", "--json").stdout)
+            preflight = json.loads(run_cmd("preflight", "--root", str(root), "--max-chars", "10", "--json").stdout)
+
+            self.assertEqual(health["level"], "blocked")
+            self.assertTrue(health["over_budget"])
+            self.assertIn("compact-recovery", [command["name"] for command in health["commands"]])
+            self.assertEqual(preflight["context_health"]["level"], "blocked")
+            self.assertIn("context-health", [command["name"] for command in preflight["commands"]])
+
 
 if __name__ == "__main__":
     unittest.main()

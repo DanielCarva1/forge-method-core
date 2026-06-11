@@ -162,6 +162,8 @@ This follows the same practical lesson as repo-map based coding agents: context 
 
 The machine-readable load plan is the preferred recovery entrypoint. It ranks files by current state, reason, priority, and budget so a new agent can load only the selected sources before acting.
 
+Context health is the early warning layer over the load plan. It converts budget pressure into `ok`, `watch`, `compact`, or `blocked` so agents checkpoint or write compact recovery before the context window becomes unreliable.
+
 ## Agent Profile Strategy
 
 Agent profiles are compact routing manifests, not long role prompts.

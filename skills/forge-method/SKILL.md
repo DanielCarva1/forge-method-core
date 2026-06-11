@@ -74,6 +74,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval 
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" eval add --kind artifact-exists --id <id> --target <path> --query "<objective check>"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" checkpoint --summary "<progress memory>"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context plan --root .
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context health --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context recover --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" context recover --root . --compact
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" audit
@@ -118,4 +119,5 @@ When using the skill from a plugin checkout instead of user install, run the scr
 
 Never mark a workflow done because the agent "feels" done. Mark done only when the workflow `done_when` conditions are satisfied and evidence is written.
 After meaningful progress, write a checkpoint so future sessions can resume without replaying the chat.
+When `context health` returns `compact` or `blocked`, write compact recovery before continuing broad work.
 Before ready/release, run the quality gate and preserve the result as evidence when it passes.
