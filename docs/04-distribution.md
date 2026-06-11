@@ -13,6 +13,7 @@ This is the primary product shape.
 The repo already contains:
 
 ```txt
+.agents/plugins/marketplace.json
 .codex-plugin/plugin.json
 skills/
 scripts/
@@ -34,25 +35,25 @@ The current validated manifest exposes `defaultPrompt` as:
 Start Forge Method in this workspace.
 ```
 
-Local personal distribution uses:
-
-```txt
-~/.agents/plugins/marketplace.json
-~/plugins/forge-method-core
-```
-
-Repo or team distribution uses:
-
-```txt
-<marketplace-root>/.agents/plugins/marketplace.json
-<marketplace-root>/plugins/forge-method-core
-```
-
-Register a non-default marketplace root with:
+GitHub marketplace distribution uses:
 
 ```powershell
-codex plugin marketplace add "<marketplace-root>"
+codex plugin marketplace add DanielCarva1/forge-method-core --ref main
 ```
+
+The repo marketplace file is:
+
+```txt
+.agents/plugins/marketplace.json
+```
+
+Its `forge-method-core` entry points at the repo root as the plugin source:
+
+```txt
+source.path: ./
+```
+
+Local personal distribution remains available for development and fallback installs through `scripts/install-plugin-local.ps1` and `scripts/install-plugin-local.sh`. Those scripts copy the plugin source to the user's personal marketplace root.
 
 Workspace sharing and public marketplace listing are separate distribution stages. A validated local plugin can be shared in a workspace through the Codex app; public directory availability requires the external publication/listing process.
 
@@ -78,7 +79,9 @@ codex://plugins/forge-method-core?marketplacePath=<encoded-marketplace-json-path
 Acceptance:
 
 - `.codex-plugin/plugin.json` validates.
+- `.agents/plugins/marketplace.json` exposes the repo as an installable Codex marketplace.
 - all skills have valid front matter.
+- GitHub users can add the repo marketplace with `codex plugin marketplace add DanielCarva1/forge-method-core --ref main`.
 - local plugin installer copies the package to `~/plugins/forge-method-core`.
 - local plugin installer writes the personal marketplace entry for `forge-method-core`.
 - local plugin installer prints Codex plugin detail and share deeplinks.

@@ -28,6 +28,10 @@
     "Resume this Forge Method project from file state."
   ],
   "install": {
+    "codex_marketplace": [
+      "codex plugin marketplace add DanielCarva1/forge-method-core --ref main",
+      "Open Codex Plugins, select the Forge Method marketplace, and install Forge Method Core."
+    ],
     "windows": [
       "git clone https://github.com/DanielCarva1/forge-method-core.git",
       "cd forge-method-core",

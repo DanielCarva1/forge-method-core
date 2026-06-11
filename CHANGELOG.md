@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add a repo marketplace catalog so Codex users can install Forge Method Core from GitHub
 - add read-only context health guidance for early checkpoint and compact-recovery decisions
 - add marketplace listing metadata and a first-run onboarding flow asset
 - add onboarding asset validation to fast and full verification

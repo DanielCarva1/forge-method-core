@@ -20,6 +20,8 @@ def fail(message: str) -> None:
 def main() -> int:
     version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
     plugin = read_json(ROOT / ".codex-plugin" / "plugin.json")
+    repo_marketplace_path = ROOT / ".agents" / "plugins" / "marketplace.json"
+    repo_marketplace = read_json(repo_marketplace_path)
     listing_path = ROOT / "assets" / "marketplace" / "listing.json"
     listing = read_json(listing_path)
 
@@ -29,6 +31,22 @@ def main() -> int:
         fail(f"listing version does not match VERSION: {listing.get('version')} != {version}")
     if listing.get("display_name") != plugin.get("interface", {}).get("displayName"):
         fail("listing display name does not match plugin displayName")
+
+    marketplace_plugins = repo_marketplace.get("plugins", [])
+    repo_entries = [
+        item for item in marketplace_plugins
+        if isinstance(item, dict) and item.get("name") == plugin.get("name")
+    ]
+    if not repo_entries:
+        fail("repo marketplace entry missing forge-method-core")
+    source_path = repo_entries[0].get("source", {}).get("path", "")
+    if not source_path.startswith("./"):
+        fail(f"repo marketplace source path must be relative and ./-prefixed: {source_path}")
+    resolved_source = (ROOT / source_path).resolve()
+    if not (resolved_source / ".codex-plugin" / "plugin.json").exists():
+        fail(f"repo marketplace source does not resolve to plugin root: {source_path}")
+    if repo_entries[0].get("policy", {}).get("installation") != "AVAILABLE":
+        fail("repo marketplace plugin must be available for installation")
 
     referenced_assets = listing.get("assets", [])
     if not referenced_assets:
@@ -51,6 +69,7 @@ def main() -> int:
 
     scan_paths = [
         listing_path,
+        repo_marketplace_path,
         onboarding_doc,
         ROOT / "assets" / "onboarding" / "first-run-flow.svg",
     ]

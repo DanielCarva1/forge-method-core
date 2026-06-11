@@ -13,7 +13,7 @@ Forge Method Core v1 is ready when a new user can install it, start a project, r
 | Context Recovery | A new session can recover state, read order, commands, done conditions, blocking conditions, and context budget risk from files. | `context plan`, `context health`, `context recover`, `context recover --compact` |
 | Autonomous Build | Build-phase work can select a story, record review findings, require evidence, and block done state until findings are resolved. | story/review/evidence tests |
 | Ready Phase | Projects can enter `5-ready-operate` only after audit and release evidence. | `ready`, quality gate tests |
-| Distribution | The package validates as a Codex plugin, can be installed into a personal marketplace, prints Codex plugin deeplinks for activation/sharing, diagnoses the installed plugin package, provides listing/onboarding metadata, and can also be cloned from a Git ref, installed locally as a plugin or skill fallback, validated across packaged module fixtures, and published through a versioned release. | plugin validation, plugin-local smoke, onboarding asset validation, fixture matrix smoke, clone/install smoke, `doctor`, `release check`, CI, GitHub release |
+| Distribution | The package validates as a Codex plugin, exposes a repo marketplace for GitHub installation, can be installed into a personal marketplace, prints Codex plugin deeplinks for activation/sharing, diagnoses the installed plugin package, provides listing/onboarding metadata, and can also be cloned from a Git ref, installed locally as a plugin or skill fallback, validated across packaged module fixtures, and published through a versioned release. | repo marketplace catalog, plugin validation, plugin-local smoke, onboarding asset validation, fixture matrix smoke, clone/install smoke, `doctor`, `release check`, CI, GitHub release |
 | Product Surface | Product docs and runtime copy stay independent and do not create naming noise from comparison research. | repository search before release |
 
 ## Maturity Classification
@@ -29,7 +29,7 @@ Meaning:
 - suitable for real projects with an agent/operator in the loop
 - durable enough to survive context resets and terminal restarts
 - auditable through files, checks, evidence, and CI
-- not yet a marketplace-polished one-click product
+- installable from a GitHub marketplace source, but not yet a public directory listing
 
 ## Final Release Gate
 
@@ -47,6 +47,5 @@ Before a v1 release is called stable:
 
 ## Known Post-V1 Productization
 
-- marketplace-backed plugin installation
-- public marketplace listing metadata
+- public directory submission/approval
 - signed release artifacts

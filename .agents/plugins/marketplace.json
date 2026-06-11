@@ -1,0 +1,20 @@
+{
+  "name": "forge-method-core",
+  "interface": {
+    "displayName": "Forge Method"
+  },
+  "plugins": [
+    {
+      "name": "forge-method-core",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -18,6 +18,7 @@ Current runtime version: `1.22.0`.
 ## Current Shape
 
 ```txt
+.agents/plugins/marketplace.json    Repo marketplace for GitHub install
 .codex-plugin/plugin.json          Codex plugin manifest
 skills/forge-method/SKILL.md       Main runtime skill
 skills/forge-method/modules/        Packaged module manifests
@@ -27,13 +28,39 @@ skills/forge-method/scripts/       Deterministic runtime helpers
 docs/                              Product and architecture proposal
 templates/                         Project state templates
 examples/                          Minimal initialized project example and example notes
-install.ps1                        User-skill installer for Windows
-install.sh                         User-skill installer for macOS/Linux
+install.ps1                        Fallback user-skill installer for Windows
+install.sh                         Fallback user-skill installer for macOS/Linux
 ```
 
-## Local Plugin Install
+## Install From GitHub In Codex
 
-Forge Method Core is packaged as a Codex plugin. For a local plugin install on Windows:
+Forge Method Core is packaged as a Codex plugin and this repo is also a Codex marketplace source.
+
+```powershell
+codex plugin marketplace add DanielCarva1/forge-method-core --ref main
+```
+
+Then open Codex Plugins, choose the `Forge Method` marketplace, install `Forge Method Core`, start a new thread, and use:
+
+```txt
+$forge-method
+Start Forge Method in this workspace.
+```
+
+From the CLI plugin browser:
+
+```txt
+codex
+/plugins
+```
+
+The marketplace entry lives at `.agents/plugins/marketplace.json` and points at this repo root as the plugin source, so people can install from GitHub without manually copying files.
+
+## Local Development Install
+
+Use this only while developing the plugin locally or when a GitHub marketplace install is unavailable.
+
+For Windows:
 
 ```powershell
 git clone https://github.com/DanielCarva1/forge-method-core.git
@@ -52,24 +79,6 @@ bash scripts/install-plugin-local.sh
 That copies the plugin source to `~/plugins/forge-method-core` and creates or updates the personal Codex marketplace file at `~/.agents/plugins/marketplace.json`. After that, restart Codex, open Plugins, select Forge Method Core, and start a new thread.
 
 The installer also prints `codex://` links to open the plugin detail page and the workspace share flow directly in the Codex app.
-
-For repo or team distribution, put the marketplace at:
-
-```txt
-<marketplace-root>/.agents/plugins/marketplace.json
-```
-
-and keep the plugin under:
-
-```txt
-<marketplace-root>/plugins/forge-method-core
-```
-
-Then register that root:
-
-```powershell
-codex plugin marketplace add "<marketplace-root>"
-```
 
 Public marketplace publication is a separate external listing process. The repository is packaged and validated for plugin distribution; public availability depends on that listing/approval step.
 

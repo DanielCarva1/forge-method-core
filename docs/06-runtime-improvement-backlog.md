@@ -118,7 +118,7 @@
 - versioned changelog
 - local plugin marketplace installer
 - plugin onboarding deeplinks
-- public marketplace listing
+- public directory submission/approval
 
 ## Candidate V1.20 Batch
 

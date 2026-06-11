@@ -13,7 +13,8 @@ assets/marketplace/listing.json
 It contains:
 
 - display name, tagline, category, developer, and summary
-- install commands for Windows and POSIX shells
+- GitHub marketplace install command
+- local fallback install commands for Windows and POSIX shells
 - first-run prompts
 - capability labels
 - privacy and state notes
@@ -60,6 +61,7 @@ Resume this Forge Method project from file state.
 Current repository scope:
 
 - validated plugin package
+- GitHub marketplace source at `.agents/plugins/marketplace.json`
 - local marketplace installer
 - workspace share deeplink
 - first-run visual asset
