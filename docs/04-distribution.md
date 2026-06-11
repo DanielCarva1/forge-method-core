@@ -213,6 +213,7 @@ python $HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py audit -
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-local.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-fixtures.ps1
 ```
 
 ```bash
@@ -222,6 +223,7 @@ bash ~/.agents/skills/forge-method/forge-method.sh --help
 bash scripts/smoke-runtime.sh
 bash scripts/smoke-install.sh
 bash scripts/smoke-plugin-local.sh
+bash scripts/smoke-fixtures.sh
 ```
 
 On Windows, shell verification requires a registered WSL distribution. WSL version 2 without a distro is not enough to run `bash`; use the PowerShell verification scripts in that environment.
@@ -234,18 +236,18 @@ Validation tiers:
 
 - fast: unit tests, workflow validation, and agent profile validation during normal development
 - targeted smoke: runtime smoke after workflow/state-transition changes; install smoke after install or packaging changes
-- full: both platform verifiers, plugin/skill validation, CI, and clean install proof before a published release
+- full: both platform verifiers, fixture matrix, plugin/skill validation, CI, and clean install proof before a published release
 
 Use `release plan` before publishing to choose story, batch, hotfix, or breaking cadence and to confirm the validation tier. Use `release check` after the batch is ready to verify local release readiness before full verification. Both commands are intentionally non-publishing; neither creates a tag nor a GitHub release.
 
 After a tag or branch is available from a Git-clonable source, run the clone/install distribution smoke:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -RepoUrl https://github.com/DanielCarva1/forge-method-core.git -Ref v1.21.0 -ExpectedVersion 1.21.0
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -RepoUrl https://github.com/DanielCarva1/forge-method-core.git -Ref v1.22.0 -ExpectedVersion 1.22.0
 ```
 
 ```bash
-REPO_URL=https://github.com/DanielCarva1/forge-method-core.git REF=v1.21.0 EXPECTED_VERSION=1.21.0 bash scripts/smoke-plugin-clone-install.sh
+REPO_URL=https://github.com/DanielCarva1/forge-method-core.git REF=v1.22.0 EXPECTED_VERSION=1.22.0 bash scripts/smoke-plugin-clone-install.sh
 ```
 
 This smoke does not use the GitHub API. It clones the requested ref, installs the plugin into an isolated temporary marketplace, verifies manifest and marketplace metadata, runs preflight, creates a project, and runs the quality gate.

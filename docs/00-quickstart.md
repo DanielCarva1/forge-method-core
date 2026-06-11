@@ -134,12 +134,22 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify-all.ps1
 
 Use `release plan` and `release check` to choose version cadence and verify the local release package before tagging.
 
-After publishing a tag, verify the published package can be cloned and installed as a plugin:
+Full verification includes fixture coverage for every packaged module:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.21.0 -ExpectedVersion 1.21.0
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-fixtures.ps1
 ```
 
 ```bash
-REF=v1.21.0 EXPECTED_VERSION=1.21.0 bash scripts/smoke-plugin-clone-install.sh
+bash scripts/smoke-fixtures.sh
+```
+
+After publishing a tag, verify the published package can be cloned and installed as a plugin:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.22.0 -ExpectedVersion 1.22.0
+```
+
+```bash
+REF=v1.22.0 EXPECTED_VERSION=1.22.0 bash scripts/smoke-plugin-clone-install.sh
 ```

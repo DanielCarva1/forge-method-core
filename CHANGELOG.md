@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.22.0
+
+Forge Method Core v1.22 broadens real-project fixture coverage:
+
+- add Windows and POSIX fixture matrix smokes for all packaged modules
+- verify each module can create an example project and a normal project, pass quality gates, and generate compact recovery
+- verify parent preflight decisions and objective-to-module recommendations across core, software, creative, game, runtime, test, and launch workflows
+- include the fixture matrix in full release verification
+
 ## 1.21.0
 
 Forge Method Core v1.21 hardens published plugin distribution:

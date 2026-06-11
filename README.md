@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.21.0`.
+Current runtime version: `1.22.0`.
 
 ## Current Shape
 
@@ -208,14 +208,16 @@ bash scripts/verify-all.sh
 
 Use full verification before publishing a release, after install/package changes, or after broad runtime changes. Story-by-story versioning is valid when the product is intentionally delivered one story at a time. When several completed stories already form one coherent product increment, batch them into a larger release.
 
+The full verifier includes a fixture matrix smoke. It creates example and normal projects for every packaged module, runs quality gates, checks compact recovery, verifies parent preflight decisions, and validates objective-to-module recommendations.
+
 After a tag is pushed, run a clone/install distribution smoke from the published ref:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.21.0 -ExpectedVersion 1.21.0
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.22.0 -ExpectedVersion 1.22.0
 ```
 
 ```bash
-REF=v1.21.0 EXPECTED_VERSION=1.21.0 bash scripts/smoke-plugin-clone-install.sh
+REF=v1.22.0 EXPECTED_VERSION=1.22.0 bash scripts/smoke-plugin-clone-install.sh
 ```
 
 ## Product Direction

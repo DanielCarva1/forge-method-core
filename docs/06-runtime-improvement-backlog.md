@@ -80,6 +80,7 @@
 - unit tests
 - CI workflow
 - example projects per module
+- fixture matrix smoke for all packaged modules
 - plugin installer deeplinks
 - POSIX installer Python resolution
 - plugin installation diagnostics in doctor

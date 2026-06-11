@@ -8,12 +8,12 @@ Forge Method Core v1 is ready when a new user can install it, start a project, r
 | --- | --- | --- |
 | Install | Windows and POSIX installers copy the skill and runtime files. | `scripts/smoke-install.ps1`, `scripts/smoke-install.sh` |
 | Start | The runtime routes empty workspaces, existing projects, project parent folders, and runtime repos without writing accidental state, and exposes explicit decision options for the next user choice. | `preflight`, `start`, unit tests |
-| Project Creation | A normal project can be scaffolded from a packaged module. | `project create`, install/runtime smokes |
+| Project Creation | A normal project can be scaffolded from every packaged module, and examples can be generated for every packaged module. | `project create`, `example create`, fixture matrix smoke |
 | Durable State | Project state, sprint state, stories, evidence, artifacts, checkpoints, reviews, inputs, and ledger are file-backed. | `.forge-method/` project layout and audit checks |
 | Context Recovery | A new session can recover state, read order, commands, done conditions, and blocking conditions from files. | `context plan`, `context recover`, `context recover --compact` |
 | Autonomous Build | Build-phase work can select a story, record review findings, require evidence, and block done state until findings are resolved. | story/review/evidence tests |
 | Ready Phase | Projects can enter `5-ready-operate` only after audit and release evidence. | `ready`, quality gate tests |
-| Distribution | The package validates as a Codex plugin, can be installed into a personal marketplace, prints Codex plugin deeplinks for activation/sharing, diagnoses the installed plugin package, and can also be cloned from a Git ref, installed locally as a plugin or skill fallback, validated, and published through a versioned release. | plugin validation, plugin-local smoke, clone/install smoke, `doctor`, `release check`, CI, GitHub release |
+| Distribution | The package validates as a Codex plugin, can be installed into a personal marketplace, prints Codex plugin deeplinks for activation/sharing, diagnoses the installed plugin package, and can also be cloned from a Git ref, installed locally as a plugin or skill fallback, validated across packaged module fixtures, and published through a versioned release. | plugin validation, plugin-local smoke, fixture matrix smoke, clone/install smoke, `doctor`, `release check`, CI, GitHub release |
 | Product Surface | Product docs and runtime copy stay independent and do not create naming noise from comparison research. | repository search before release |
 
 ## Maturity Classification
@@ -39,10 +39,11 @@ Before a v1 release is called stable:
 2. `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1`
 3. `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1`
 4. `powershell -ExecutionPolicy Bypass -File .\scripts\verify-all.ps1`
-5. `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v<version> -ExpectedVersion <version>`
-6. product-surface scan for comparison-name noise
-7. GitHub CI passes on Windows and Linux
-8. GitHub release points to the tagged commit
+5. `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-fixtures.ps1`
+6. `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v<version> -ExpectedVersion <version>`
+7. product-surface scan for comparison-name noise
+8. GitHub CI passes on Windows and Linux
+9. GitHub release points to the tagged commit
 
 ## Known Post-V1 Productization
 
@@ -50,4 +51,3 @@ Before a v1 release is called stable:
 - public marketplace listing metadata
 - signed release artifacts
 - richer visual onboarding
-- broader real-project fixture coverage

@@ -45,6 +45,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-local.ps1
 if ($LASTEXITCODE -ne 0) {
   throw "smoke-plugin-local.ps1 failed"
 }
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-fixtures.ps1
+if ($LASTEXITCODE -ne 0) {
+  throw "smoke-fixtures.ps1 failed"
+}
 Run $pythonExe skills\forge-method\scripts\forge_method_runtime.py workflow validate
 
 Write-Host "All verification checks passed."

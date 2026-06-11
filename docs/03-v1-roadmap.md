@@ -139,9 +139,10 @@ A project can enter ready/operate only when:
 
 Distribution release proof must include a clone/install smoke from a Git-clonable source. For a published tag, the smoke installs the cloned package as a plugin, verifies marketplace metadata, runs preflight, creates a project, and runs the quality gate.
 
+Fixture release proof must cover every packaged module. The fixture matrix creates an example project and a normal project for each module, runs the quality gate, generates compact recovery, checks parent preflight decisions, and validates representative objective routing.
+
 ## Remaining Productization
 
 - public marketplace listing
 - signed release artifacts
-- broader real-project fixtures
 - richer visual onboarding beyond installer deeplinks
