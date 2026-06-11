@@ -4,25 +4,25 @@
 
 - project: forge-method-core
 - phase: 5-ready-operate
-- status: ready
+- status: story-done
 - workflow: ready-release
 - active_story: <none>
-- next_action: operate Forge Method or start the next evolution request
+- next_action: publish 1.24.0 batch to GitHub
 
 ## Latest Checkpoint
 
-# Checkpoint
+# Forge Method 1.24 mechanical autonomy batch
 
-- created_at: 2026-06-11T05:26:46+00:00
+- created_at: 2026-06-11T06:34:51+00:00
 - project: forge-method-core
 - phase: 5-ready-operate
-- status: ready
+- status: story-done
 - workflow: ready-release
 - active_story: <none>
 
 ## Summary
 
-Implemented Forge expansion plan after grill: guide, tracks, Agent Council with compact decision artifacts, builder scaffold/validate, config inspect/validate, planning backbone workflows, creative/game/enterprise workflow packs, templates, docs, glossary, and ADR. Validations passed: unit tests, workflow validate, agent validate, smoke-install, verify-fast, and gate --require-evals 9/9.
+Implemented Mechanical Work Order, Grill Gate, correct-course continuation, Codex Goal handoff, commit policy defaults, and regression coverage. Validation passed: unit tests, workflow validate, verify-fast, smoke-runtime, smoke-install, and final gate.
 
 ## Decisions
 
@@ -30,12 +30,7 @@ Implemented Forge expansion plan after grill: guide, tracks, Agent Council with 
 
 ## Checks
 
-- python -m unittest discover -s tests
-- python .\skills\forge-method\scripts\forge_method_runtime.py workflow validate
-- python .\skills\forge-method\scripts\forge_method_runtime.py agent validate
-- powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1
-- powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1
-- python .\skills\forge-method\scripts\forge_method_runtime.py gate --root . --require-evals
+- none
 
 ## Failed Checks
 
@@ -51,7 +46,7 @@ Implemented Forge expansion plan after grill: guide, tracks, Agent Council with 
 
 ## Next Action
 
-operate Forge Method or start the next evolution request
+publish 1.24.0 batch to GitHub
 
 ## Recovery Signals
 
@@ -61,10 +56,9 @@ operate Forge Method or start the next evolution request
 
 ### Touched Files
 
-- state.yaml
-- sprint.yaml
-- .forge-method/stories/project-kickoff.yaml
-- .forge-method/artifacts/project-brief.md
+- skills/forge-method/scripts/forge_method_runtime.py
+- skills/forge-method/references/workflow-grill-gate.md
+- docs/adr/0005-mechanical-autonomy-and-grill-gates.md
 
 ## Open Human Inputs
 
@@ -81,11 +75,11 @@ operate Forge Method or start the next evolution request
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260611-052317-story-story-expansion-builder-config-evals-done.md
-- .forge-method/evidence/20260611-052317-story-story-expansion-guide-tracks-council-done.md
-- .forge-method/evidence/20260611-052318-story-story-expansion-docs-install-proof-done.md
 - .forge-method/evidence/20260611-052318-story-story-expansion-studios-enterprise-done.md
 - .forge-method/evidence/20260611-052401-release-ready-gate.md
+- .forge-method/evidence/20260611-062639-story-story-mechanical-autonomy-grill-gate-done.md
+- .forge-method/evidence/20260611-062657-gate-quality-gate.md
+- .forge-method/evidence/20260611-063437-gate-quality-gate.md
 
 ## Recent Artifacts
 

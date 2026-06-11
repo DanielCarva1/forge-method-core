@@ -17,6 +17,7 @@ Forge Method is a state-machine runtime. Do not infer runtime state from chat hi
 6. For implementation work, run checks and update evidence before marking done.
 7. Temporary task docs may be deleted only after `artifact capture` records their result in state, story, evidence, or checkpoint.
 8. Do not create extra slash commands as product surface unless explicitly requested.
+9. Do not ask for procedural confirmation during mechanical work; use resume/next Mechanical Work Orders.
 
 ## Source Of Truth
 
@@ -53,6 +54,7 @@ python (Join-Path $skill "scripts\forge_method_runtime.py") preflight --root . -
 python (Join-Path $skill "scripts\forge_method_runtime.py") guide --root .
 python (Join-Path $skill "scripts\forge_method_runtime.py") track recommend --objective "<project objective>"
 python (Join-Path $skill "scripts\forge_method_runtime.py") council run --root . --topic "<decision topic>"
+python (Join-Path $skill "scripts\forge_method_runtime.py") correct-course --root . --summary "<late contradiction and conservative continuation>"
 python (Join-Path $skill "scripts\forge_method_runtime.py") status --root . --brief
 python (Join-Path $skill "scripts\forge_method_runtime.py") resume --root . --json
 python (Join-Path $skill "scripts\forge_method_runtime.py") context plan --root .
@@ -85,6 +87,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" guide
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" track list
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" track recommend --objective "<project objective>"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" council run --root . --topic "<decision topic>"
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" correct-course --root . --summary "<late contradiction and conservative continuation>"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" builder validate --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" config inspect --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" input list --root .
@@ -132,6 +135,12 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" docto
 Human Experience may be warm, direct, funny, opinionated, and discussion-oriented when talking to the user.
 Agent Runtime outputs must stay compact: state files, workflows, artifacts, evals, and handoffs should be structured for future agents.
 
+Mechanical Autonomy is the default after decision phases are settled. Do not ask the human to continue the next story, accept a review loop, run checks, or mark ready when those are procedural steps. Use `resume --json`, `next`, or `guide --json` and follow the `mechanical_work_order`.
+
+Close discovery, specification, and planning with Grill Gate. During build/verify, use `correct-course` for late contradictions, choose the conservative interpretation that preserves the approved spec, and continue unless access, destructive approval, external service availability, or explicit scope change blocks the work.
+
+For long mechanical loops, prepare a Codex Goal handoff. If `/goal` is unavailable, tell the user to enable Codex goals or continue in the current thread. Do not create a separate autopilot slash command.
+
 For Agent Council:
 
 - use real Codex subagents when the current environment exposes them and the user asked for council or the decision is high-risk;
@@ -144,6 +153,7 @@ For Agent Council:
 
 - Start/resume project: read `references/workflow-start.md`.
 - Human guide and track routing: read `references/workflow-guide-route.md`.
+- Phase decision closeout: read `references/workflow-grill-gate.md`.
 - Optional Agent Council: read `references/workflow-council-decision.md`.
 - Discovery: read `references/workflow-discover-intent.md`.
 - Specification: read `references/workflow-write-spec.md`.

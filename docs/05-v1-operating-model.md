@@ -64,6 +64,22 @@ Tracks route the method without adding public skills. A track records complexity
 
 Agent Council is optional. It may show a rich live discussion to the human, but durable project memory should be a compact decision artifact. Future agents should load the decision artifact, not a full debate transcript.
 
+## Mechanical Autonomy Rule
+
+Forge should not ask for procedural confirmation when the next step is mechanical. After discovery, specification, and planning have closed, build work may create stories, implement, review, repair, test, write evidence, update sprint state, and continue to the next story without asking the user to approve each transition.
+
+## Grill Gate Rule
+
+Discovery, specification, and planning should close with Grill Gate before they unlock long mechanical work. Grill Gate challenges the phase artifact against glossary terms, ADRs, constraints, risks, and acceptance criteria. It asks the user only when durable artifacts cannot resolve a real product decision.
+
+## Correct-Course Continuation Rule
+
+If a contradiction appears during mechanical work, the agent should write a compact correct-course artifact, choose the conservative interpretation that preserves the approved spec, and continue. Human input is reserved for missing access, destructive approval, explicit user scope changes, or contradictions that cannot be resolved from artifacts.
+
+## Codex Goal Rule
+
+When a mechanical work order is long-running, Forge should prepare a Codex Goal handoff instead of inventing a separate autopilot surface. If Goal mode is unavailable, the user can enable Codex goals or the agent can continue in the current thread.
+
 ## Completion Rule
 
 A task is complete only when:
@@ -92,6 +108,8 @@ After preflight resolves an existing project, the agent should use resume guidan
 ## Human Input Rule
 
 Human input must be requested as durable state when it blocks the project route, discovery, specification, or a risky decision. Required open input sets `human_input_required`. The agent may continue autonomous work only after the input is answered, deferred, or marked non-required.
+
+Procedural confirmations such as continue next story, accept review loop, run tests, or move to ready are not human input.
 
 ## Review Finding Rule
 

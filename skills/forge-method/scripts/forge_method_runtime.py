@@ -17,7 +17,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.23.0"
+RUNTIME_VERSION = "1.24.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 
@@ -237,6 +237,19 @@ CONFIG_ALLOWED_KEYS = {
     "output_path",
     "project_conventions",
     "council_mode",
+    "autonomy_mode",
+    "commit_policy",
+}
+AUTONOMY_MODES = {"auto", "manual"}
+COMMIT_POLICIES = {"off", "story", "epic"}
+GRILL_GATE_PHASES = {"1-discovery", "2-specification", "3-plan"}
+MECHANICAL_ACTIONS = {
+    "start_next_story",
+    "continue_active_story",
+    "review_active_story",
+    "resolve_review_findings",
+    "repair_project_state",
+    "run_ready_gate",
 }
 BUILDER_KINDS = ["workflow", "module", "agent", "skill", "template", "eval"]
 COUNCIL_DEFAULT_AGENTS = ["facilitator", "researcher", "spec-architect", "planner", "quality-reviewer"]
@@ -453,7 +466,19 @@ def validate_config_values(values: dict[str, str], *, source: str) -> list[str]:
             errors.append(f"{source}: unsupported config key `{key}`")
         if key == "default_track" and value and value not in TRACK_IDS:
             errors.append(f"{source}: default_track must be one of {', '.join(sorted(TRACK_IDS))}")
+        if key == "autonomy_mode" and value and value not in AUTONOMY_MODES:
+            errors.append(f"{source}: autonomy_mode must be one of {', '.join(sorted(AUTONOMY_MODES))}")
+        if key == "commit_policy" and value and value not in COMMIT_POLICIES:
+            errors.append(f"{source}: commit_policy must be one of {', '.join(sorted(COMMIT_POLICIES))}")
     return errors
+
+
+def apply_state_defaults(state: dict[str, str]) -> dict[str, str]:
+    state.setdefault("autonomy_mode", "auto")
+    state.setdefault("commit_policy", "off")
+    state.setdefault("last_grill_artifact", "")
+    state.setdefault("last_correct_course_artifact", "")
+    return state
 
 
 def copy_project_guidance(root: Path, *, force: bool = False) -> list[str]:
@@ -477,7 +502,7 @@ def load_state_or_none(root: Path) -> tuple[Path | None, dict[str, str]]:
     state_root = find_state_root(root)
     if state_root is None:
         return None, {}
-    return state_root, read_flat_yaml(state_path(state_root))
+    return state_root, apply_state_defaults(read_flat_yaml(state_path(state_root)))
 
 
 def load_state_or_fail(root: Path) -> tuple[Path, dict[str, str]]:
@@ -669,7 +694,7 @@ def print_status_brief(root: Path, state: dict[str, str]) -> None:
 
 
 def project_route_summary(project_root: Path, *, base: Path) -> dict[str, str]:
-    state = read_flat_yaml(state_path(project_root))
+    state = apply_state_defaults(read_flat_yaml(state_path(project_root)))
     return {
         "root": str(project_root),
         "path": display_path(project_root, base=base),
@@ -1069,6 +1094,10 @@ def write_state(root: Path, state: dict[str, Any]) -> None:
     state.setdefault("schema_version", "1")
     state.setdefault("runtime", RUNTIME_NAME)
     state.setdefault("runtime_version", RUNTIME_VERSION)
+    state.setdefault("autonomy_mode", "auto")
+    state.setdefault("commit_policy", "off")
+    state.setdefault("last_grill_artifact", "")
+    state.setdefault("last_correct_course_artifact", "")
     write_flat_yaml(state_path(root), state, header="Forge Method state")
 
 
@@ -1110,6 +1139,10 @@ def initialize_project_state(
         "readiness": "not_ready",
         "guide_summary": "",
         "last_council_artifact": "",
+        "last_grill_artifact": "",
+        "last_correct_course_artifact": "",
+        "autonomy_mode": "auto",
+        "commit_policy": "off",
         "next_action": NEXT_BY_PHASE["0-route"],
     }
     write_state(root, state)
@@ -1180,7 +1213,7 @@ def update_sprint(root: Path) -> None:
     for story in stories:
         status = story.get("status", "planned")
         counts[status] = counts.get(status, 0) + 1
-    state = read_flat_yaml(state_path(root))
+    state = apply_state_defaults(read_flat_yaml(state_path(root)))
     values: dict[str, Any] = {
         "active_story": state.get("active_story", ""),
         "story_count": str(len(stories)),
@@ -1994,7 +2027,7 @@ def validate_story_transition(current: str, target: str, *, force: bool = False)
 
 def audit_project(root: Path) -> list[str]:
     errors: list[str] = []
-    state = read_flat_yaml(state_path(root))
+    state = apply_state_defaults(read_flat_yaml(state_path(root)))
     if not state:
         return ["missing .forge-method/state.yaml"]
     artifact_errors, _ = artifact_findings(root)
@@ -2103,7 +2136,7 @@ def cmd_start(args: argparse.Namespace) -> int:
     if projects:
         print("Known projects:")
         for index, project_root in enumerate(projects, start=1):
-            project_state = read_flat_yaml(state_path(project_root))
+            project_state = apply_state_defaults(read_flat_yaml(state_path(project_root)))
             label = project_state.get("project", project_root.name)
             phase = project_state.get("phase", "<unknown>")
             status = project_state.get("status", "<unknown>")
@@ -2521,6 +2554,94 @@ def build_resume_guidance(
     )
 
 
+def effective_config_value(root: Path, state: dict[str, str], key: str, default: str) -> str:
+    config, _ = merged_config(root)
+    return config.get(key) or state.get(key) or default
+
+
+def grill_gate_required_for_state(state: dict[str, str]) -> bool:
+    return state.get("phase", "") in GRILL_GATE_PHASES
+
+
+def remaining_mechanical_stories(story_counts: dict[str, int]) -> int:
+    return sum(story_counts.get(status, 0) for status in ["planned", "ready", "in_progress", "review"])
+
+
+def empty_mechanical_work_order(root: Path, state: dict[str, str], resume: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "autonomous": False,
+        "goal_recommended": False,
+        "next_mechanical_step": "",
+        "required_context": resume.get("read", []),
+        "commands": [],
+        "done_when": [],
+        "self_repair_when": [],
+        "stop_only_when": [],
+        "correct_course_policy": "",
+        "commit_policy": effective_config_value(root, state, "commit_policy", "off"),
+    }
+
+
+def build_mechanical_work_order(
+    root: Path,
+    state: dict[str, str],
+    resume: dict[str, Any],
+    story_counts: dict[str, int],
+) -> dict[str, Any]:
+    action = resume.get("action", "")
+    autonomy_mode = effective_config_value(root, state, "autonomy_mode", "auto")
+    if autonomy_mode != "auto" or action not in MECHANICAL_ACTIONS:
+        return empty_mechanical_work_order(root, state, resume)
+    stop_only_when = [
+        "missing external credential or access",
+        "destructive action requires explicit approval",
+        "unavailable external service prevents verification",
+        "user explicitly changes scope or constraints",
+    ]
+    self_repair_when = [
+        "required check fails",
+        "review finding is open",
+        "artifact or evidence is missing",
+        "state, sprint, or story status is stale",
+    ]
+    return {
+        "autonomous": bool(resume.get("autonomous")),
+        "goal_recommended": remaining_mechanical_stories(story_counts) > 1 or action == "run_ready_gate",
+        "next_mechanical_step": resume.get("summary", ""),
+        "required_context": resume.get("read", []),
+        "commands": resume.get("commands", []),
+        "done_when": resume.get("done_when", []),
+        "self_repair_when": self_repair_when,
+        "stop_only_when": stop_only_when,
+        "correct_course_policy": (
+            "If late contradiction appears, write a compact correct-course artifact, "
+            "choose the conservative interpretation that preserves the approved spec, and continue."
+        ),
+        "commit_policy": effective_config_value(root, state, "commit_policy", "off"),
+    }
+
+
+def build_codex_goal_handoff(state: dict[str, str], work_order: dict[str, Any]) -> dict[str, Any]:
+    if not work_order.get("goal_recommended"):
+        return {"recommended": False}
+    goal_text = "\n".join(
+        [
+            f"Complete Forge mechanical work for {state.get('project', 'this project')}.",
+            f"Start with: {work_order.get('next_mechanical_step', '')}",
+            "Run story implementation, review, fixes, tests, evidence, sprint updates, and ready gate autonomously.",
+            "Use correct-course continuation for late contradictions and stop only for credentials/access, destructive approval, external-service unavailability, or explicit user scope changes.",
+            f"Commit policy: {work_order.get('commit_policy', 'off')}.",
+            "Done when all mechanical work is complete, required checks pass, evidence is written, and project state is ready or the next non-mechanical phase is explicit.",
+        ]
+    )
+    return {
+        "recommended": True,
+        "command": "/goal",
+        "goal_text": goal_text,
+        "enable_hint": "If /goal is unavailable, enable Codex goals with `codex features enable goals` or `[features] goals = true` in config.toml.",
+    }
+
+
 def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     sprint = read_flat_yaml(method_dir(root) / SPRINT_FILE)
     stories = list_stories(root)
@@ -2552,6 +2673,9 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
         open_findings,
         story_counts,
     )
+    resume["grill_gate_required"] = grill_gate_required_for_state(state)
+    resume["mechanical_work_order"] = build_mechanical_work_order(root, state, resume, story_counts)
+    resume["codex_goal_handoff"] = build_codex_goal_handoff(state, resume["mechanical_work_order"])
     context_dir = method_dir(root) / "context"
     current_pack = context_dir / "current-pack.md"
     recovery = context_dir / "recovery.md"
@@ -2627,14 +2751,21 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
 
 def cmd_next(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
-    open_inputs = open_required_inputs(root)
-    if open_inputs:
-        item = open_inputs[0]
+    snapshot = build_snapshot(root, state)
+    required_inputs = snapshot["human_inputs"]["required_open"]
+    if required_inputs:
+        item = required_inputs[0]
         print(f"answer human input {item.get('id')}: {item.get('prompt')}")
+        return 0
+    work_order = snapshot["resume"].get("mechanical_work_order", {})
+    if work_order.get("autonomous") and work_order.get("next_mechanical_step"):
+        print(work_order["next_mechanical_step"])
+        if work_order.get("goal_recommended"):
+            print("Goal recommended: use /goal with the generated Forge mechanical goal handoff.")
         return 0
     phase = state.get("phase", "0-route")
     if phase == "4-build-verify":
-        story = select_next_story(root)
+        story = snapshot["stories"]["next"]
         if story:
             print(f"{NEXT_BY_PHASE[phase]}: {story.get('id')} - {story.get('title')}")
             return 0
@@ -2678,6 +2809,23 @@ def print_resume_guidance(root: Path, resume: dict[str, Any]) -> None:
             print(f"- {item}")
     else:
         print("- <not specified>")
+    if resume.get("grill_gate_required"):
+        print("Grill Gate: required before leaving this decision phase.")
+    work_order = resume.get("mechanical_work_order", {})
+    if work_order.get("autonomous"):
+        print("Mechanical Work Order:")
+        print(f"- next: {work_order.get('next_mechanical_step', '')}")
+        print(f"- commit_policy: {work_order.get('commit_policy', 'off')}")
+        print(f"- goal_recommended: {'yes' if work_order.get('goal_recommended') else 'no'}")
+        if work_order.get("self_repair_when"):
+            print("- self_repair_when: " + " | ".join(work_order["self_repair_when"]))
+        if work_order.get("stop_only_when"):
+            print("- stop_only_when: " + " | ".join(work_order["stop_only_when"]))
+    goal = resume.get("codex_goal_handoff", {})
+    if goal.get("recommended"):
+        print("Codex Goal Handoff:")
+        print(goal.get("goal_text", ""))
+        print(goal.get("enable_hint", ""))
 
 
 def cmd_resume(args: argparse.Namespace) -> int:
@@ -2897,6 +3045,7 @@ def cmd_story_review(args: argparse.Namespace) -> int:
 def cmd_story_done(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     story = load_story(root, args.id)
+    validate_story_transition(story.get("status", "planned"), "done", force=args.force)
     open_findings = open_review_findings(root, story.get("id", ""))
     if open_findings and not args.force:
         ids = ", ".join(item.get("id", "") for item in open_findings)
@@ -3240,7 +3389,7 @@ def cmd_project_list(args: argparse.Namespace) -> int:
         print("No method projects found.")
         return 0
     for project_root in projects:
-        state = read_flat_yaml(state_path(project_root))
+        state = apply_state_defaults(read_flat_yaml(state_path(project_root)))
         print(
             f"{display_path(project_root, base=root)}\t"
             f"{state.get('project', project_root.name)}\t"
@@ -3570,6 +3719,9 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
         "next_story": next_story,
         "recommended_agents": snapshot["agents"].get("recommended", []),
         "next_action": snapshot["route"].get("next_action", "") or state.get("next_action", ""),
+        "grill_gate_required": snapshot["resume"].get("grill_gate_required", False),
+        "mechanical_work_order": snapshot["resume"].get("mechanical_work_order", {}),
+        "codex_goal_handoff": snapshot["resume"].get("codex_goal_handoff", {}),
         "council_recommended": bool(question and state.get("readiness") == "ready"),
     }
 
@@ -3601,6 +3753,13 @@ def cmd_guide(args: argparse.Namespace) -> int:
     print("Recommended agents:")
     for agent in payload.get("recommended_agents", []):
         print(f"- {agent.get('id')}: {agent.get('purpose')}")
+    if payload.get("grill_gate_required"):
+        print("Grill Gate: required before leaving this decision phase.")
+    work_order = payload.get("mechanical_work_order", {})
+    if work_order.get("autonomous"):
+        print(f"Mechanical: {work_order.get('next_mechanical_step')}")
+        if work_order.get("goal_recommended"):
+            print("Goal: recommended for this mechanical loop.")
     print(f"Next: {payload.get('next_action')}")
     if payload.get("council_recommended"):
         print("Council: optional for this question if the decision is high-risk or taste-heavy.")
@@ -3670,6 +3829,38 @@ def cmd_council_run(args: argparse.Namespace) -> int:
     )
     print(f"Persisted decision artifact: {rel}")
     print(f"Next: {state['next_action']}")
+    return 0
+
+
+def cmd_correct_course(args: argparse.Namespace) -> int:
+    root, state = load_state_or_fail(resolve_root(args.root))
+    impact = args.impact or "late contradiction discovered during mechanical work"
+    next_action = args.next_action or state.get("next_action") or NEXT_BY_PHASE.get(state.get("phase", ""), "continue workflow")
+    summary = "\n\n".join(
+        [
+            args.summary.strip(),
+            f"Impact: {impact}.",
+            "Policy: choose the conservative interpretation that preserves the approved spec.",
+            f"Continuation: {next_action}.",
+        ]
+    )
+    rel = write_artifact(
+        root,
+        kind="correct-course",
+        title=args.title or "Correct-course continuation",
+        summary=summary,
+        lifecycle="durable",
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title="Correct-course artifact", summary=summary)
+    state["last_correct_course_artifact"] = rel
+    state["human_input_required"] = "false"
+    state["status"] = "correct-course-continued"
+    state["next_action"] = next_action
+    write_state(root, state)
+    append_ledger(root, "correct_course.continued", {"artifact": rel, "impact": impact})
+    print(f"Correct-course artifact: {rel}")
+    print(f"Next: {next_action}")
     return 0
 
 
@@ -5708,6 +5899,15 @@ def build_parser() -> argparse.ArgumentParser:
     council_run.add_argument("--next-action")
     council_run.add_argument("--eval", action="store_true")
     council_run.set_defaults(func=cmd_council_run)
+
+    correct_course = sub.add_parser("correct-course", help="write a compact correct-course continuation artifact")
+    correct_course.add_argument("--root", default=".")
+    correct_course.add_argument("--summary", required=True)
+    correct_course.add_argument("--impact")
+    correct_course.add_argument("--title")
+    correct_course.add_argument("--next-action")
+    correct_course.add_argument("--eval", action="store_true")
+    correct_course.set_defaults(func=cmd_correct_course)
 
     transition = sub.add_parser("transition", help="update phase/status/workflow")
     transition.add_argument("--root", default=".")

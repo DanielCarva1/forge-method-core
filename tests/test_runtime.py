@@ -283,7 +283,7 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(snapshot["runtime_version"], "1.23.0")
+            self.assertEqual(snapshot["runtime_version"], "1.24.0")
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
@@ -531,6 +531,41 @@ class RuntimeTests(unittest.TestCase):
             result = run_cmd("story", "done", "--root", str(root), "--id", "story-1", check=False)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Done stories require", result.stderr + result.stdout)
+
+    def test_invalid_done_transition_does_not_write_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
+                run_cmd("transition", "--root", str(root), "--phase", phase, "--force")
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-1",
+                "--title",
+                "Build thing",
+                "--acceptance",
+                "thing works",
+            )
+
+            result = run_cmd(
+                "story",
+                "done",
+                "--root",
+                str(root),
+                "--id",
+                "story-1",
+                "--summary",
+                "Done.",
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Invalid story transition", result.stderr + result.stdout)
+            self.assertEqual([], list((root / ".forge-method" / "evidence").glob("*story-1-done.md")))
 
     def test_story_start_preserves_discovery_phase_workflow(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -822,7 +857,7 @@ class RuntimeTests(unittest.TestCase):
                 encoding="utf-8",
             )
             manifest_path.write_text(
-                json.dumps({"name": "forge-method-core", "version": "1.23.0", "skills": "./skills/"}),
+                json.dumps({"name": "forge-method-core", "version": "1.24.0", "skills": "./skills/"}),
                 encoding="utf-8",
             )
             skill_path.write_text("---\nname: forge-method\n---\n", encoding="utf-8")
@@ -834,7 +869,7 @@ class RuntimeTests(unittest.TestCase):
             plugin = payload["plugin_installation"]
             self.assertTrue(plugin["available"])
             self.assertEqual(plugin["status"], "ready")
-            self.assertEqual(plugin["installed_version"], "1.23.0")
+            self.assertEqual(plugin["installed_version"], "1.24.0")
             self.assertEqual(plugin["plugin_path"], str(plugin_root.resolve()))
             self.assertIn("codex://plugins/forge-method-core?marketplacePath=", plugin["codex_deeplink"])
             self.assertIn("Plugin installation:", text)
@@ -887,7 +922,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("facilitator", agents)
         self.assertIn("quality-reviewer", agents)
         self.assertIn("Agent profile validation passed.", agent_validation)
-        self.assertEqual(version.strip(), "1.23.0")
+        self.assertEqual(version.strip(), "1.24.0")
 
     def test_context_plan_selects_relevant_files_and_updates_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -930,7 +965,7 @@ class RuntimeTests(unittest.TestCase):
             selected_paths = [item["path"] for item in plan["selected"]]
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(plan["runtime_version"], "1.23.0")
+            self.assertEqual(plan["runtime_version"], "1.24.0")
             self.assertEqual(plan["state"]["phase"], "4-build-verify")
             self.assertIn(".forge-method/state.yaml", selected_paths)
             self.assertIn(".forge-method/sprint.yaml", selected_paths)
@@ -1034,6 +1069,86 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(config["sources"], [])
             self.assertIn("Config validation passed.", config_validation)
             self.assertIn("Gate passed.", gate)
+
+    def test_mechanical_work_order_goal_and_commit_policy_contracts(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            for phase in ["1-discovery", "2-specification", "3-plan"]:
+                run_cmd("transition", "--root", str(root), "--phase", phase)
+                phase_snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+                self.assertTrue(phase_snapshot["resume"]["grill_gate_required"])
+            run_cmd("transition", "--root", str(root), "--phase", "4-build-verify")
+            run_cmd("story", "add", "--root", str(root), "--id", "story-a", "--title", "Build A", "--acceptance", "A works")
+            run_cmd("story", "add", "--root", str(root), "--id", "story-b", "--title", "Build B", "--acceptance", "B works")
+            config_dir = root / ".forge-method" / "config"
+            config_dir.mkdir(parents=True, exist_ok=True)
+            (config_dir / "local.yaml").write_text('commit_policy: "epic"\n', encoding="utf-8")
+
+            resume = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
+            guide = json.loads(run_cmd("guide", "--root", str(root), "--json").stdout)
+            next_text = run_cmd("next", "--root", str(root)).stdout
+            config_validation = run_cmd("config", "validate", "--root", str(root)).stdout
+
+            work_order = resume["mechanical_work_order"]
+            self.assertFalse(resume["grill_gate_required"])
+            self.assertEqual(resume["action"], "start_next_story")
+            self.assertTrue(work_order["autonomous"])
+            self.assertTrue(work_order["goal_recommended"])
+            self.assertEqual(work_order["commit_policy"], "epic")
+            self.assertIn("required check fails", work_order["self_repair_when"])
+            self.assertIn("missing external credential or access", work_order["stop_only_when"])
+            self.assertTrue(resume["codex_goal_handoff"]["recommended"])
+            self.assertIn("/goal", resume["codex_goal_handoff"]["command"])
+            self.assertEqual(guide["mechanical_work_order"]["next_mechanical_step"], work_order["next_mechanical_step"])
+            self.assertIn("Goal recommended", next_text)
+            self.assertIn("Config validation passed.", config_validation)
+
+    def test_correct_course_continuation_writes_artifact_without_human_block(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
+                run_cmd("transition", "--root", str(root), "--phase", phase)
+
+            output = run_cmd(
+                "correct-course",
+                "--root",
+                str(root),
+                "--summary",
+                "Implementation found a late contradiction in wording.",
+                "--impact",
+                "acceptance wording is stricter than the approved spec",
+                "--next-action",
+                "continue with the conservative approved-spec interpretation",
+                "--eval",
+            ).stdout
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+
+            artifact = root / snapshot["state"]["last_correct_course_artifact"]
+            self.assertIn("Correct-course artifact:", output)
+            self.assertTrue(artifact.exists())
+            self.assertEqual(snapshot["state"]["human_input_required"], "false")
+            self.assertEqual(snapshot["state"]["status"], "correct-course-continued")
+            self.assertIn("conservative interpretation", artifact.read_text(encoding="utf-8"))
+            self.assertIn("continue with the conservative", snapshot["state"]["next_action"])
+
+    def test_ready_gate_is_mechanical_when_stories_are_done(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
+                run_cmd("transition", "--root", str(root), "--phase", phase)
+            run_cmd("story", "add", "--root", str(root), "--id", "story-a", "--title", "Build A", "--acceptance", "A works")
+            run_cmd("story", "start", "--root", str(root), "--id", "story-a")
+            run_cmd("story", "done", "--root", str(root), "--id", "story-a", "--summary", "A works.", "--check", "unit")
+
+            resume = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
+
+            self.assertEqual(resume["action"], "run_ready_gate")
+            self.assertTrue(resume["mechanical_work_order"]["autonomous"])
+            self.assertTrue(resume["mechanical_work_order"]["goal_recommended"])
+            self.assertIn("project phase is 5-ready-operate", resume["mechanical_work_order"]["done_when"])
 
     def test_example_list_and_create_seed_project(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.24.0
+
+Forge Method Core v1.24 adds mechanical autonomy and Grill Gate phase closeout:
+
+- add Mechanical Work Order output for autonomous story, review, repair, ready, and goal handoff loops
+- add Grill Gate and Correct-Course Continuation docs for decision-phase closure and late contradictions
+- add autonomy and commit policy defaults for project state/config
+
 ## 1.23.0
 
 Forge Method Core v1.23 expands the runtime into guided tracks, optional council decisions, builder customization, creative/game/enterprise workflows, and compact agent-facing artifacts:

@@ -207,3 +207,27 @@ The live, human-visible discussion from Agent Council. It may be rich and explor
 ## Council Decision Artifact
 
 The compact durable artifact saved after Agent Council. It preserves participants, recommendation, agreements, disagreements, risks, decision, and next action without storing the full debate.
+
+## Mechanical Autonomy
+
+The default Forge behavior for procedural work after decision phases are settled. It lets the agent create stories, implement, review, repair, test, write evidence, update sprint state, and advance readiness without asking for procedural confirmation.
+
+## Grill Gate
+
+A phase-closing decision check for discovery, specification, and planning. It challenges the phase artifact against glossary terms, ADRs, constraints, risks, and acceptance criteria before mechanical work can proceed.
+
+## Mechanical Work Order
+
+A compact runtime payload returned by resume, next, and guide. It names the next autonomous step, required context, commands, done conditions, self-repair conditions, stop conditions, commit policy, and whether Codex Goal mode is recommended.
+
+## Correct-Course Continuation
+
+The policy for contradictions discovered during mechanical work. The agent writes a compact correct-course artifact, chooses the conservative interpretation that preserves the approved spec, updates state, and continues.
+
+## Codex Goal Handoff
+
+A generated objective for Codex Goal mode. It turns a Forge Mechanical Work Order into durable success criteria for a long-running Codex task.
+
+## Commit Policy
+
+A project setting that controls automatic commits during mechanical work. The default is `off`; project configuration may choose `story` or `epic`.

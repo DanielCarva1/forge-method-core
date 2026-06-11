@@ -1,0 +1,10 @@
+# Forge Method story
+updated_at: "2026-06-11T06:26:39+00:00"
+id: "mechanical-autonomy-grill-gate"
+title: "Mechanical autonomy and Grill Gate"
+status: "done"
+phase: "5-ready-operate"
+acceptance_criteria: "resume exposes mechanical work orders | decision phases require Grill Gate | late contradictions use correct-course continuation | runtime version is 1.24.0"
+evidence: ".forge-method/evidence/20260611-062639-story-story-mechanical-autonomy-grill-gate-done.md"
+checks: "python -m unittest discover -s tests | workflow validate | verify-fast.ps1 | smoke-runtime.ps1 | smoke-install.ps1"
+blocker: ""

@@ -1,7 +1,7 @@
 {
   "schema_version": "forge-marketplace-listing.v1",
   "name": "forge-method-core",
-  "version": "1.23.0",
+  "version": "1.24.0",
   "display_name": "Forge Method Core",
   "tagline": "Run state-machine creation workflows inside Codex.",
   "category": "Productivity",
@@ -59,7 +59,7 @@
     "python -m unittest discover -s tests",
     "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1",
     "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-all.ps1",
-    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref v1.23.0 -ExpectedVersion 1.23.0"
+    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref v1.24.0 -ExpectedVersion 1.24.0"
   ],
   "publication_status": "metadata-ready; public directory submission is external"
 }

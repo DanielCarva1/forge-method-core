@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.23.0`.
+Current runtime version: `1.24.0`.
 
 ## Current Shape
 
@@ -160,6 +160,7 @@ python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" track
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" track recommend --objective "build a secure web app"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" track set --root . --track standard-product
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" council run --root . --topic "choose the next product direction"
+python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" correct-course --root . --summary "late contradiction and conservative continuation"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" builder scaffold --root . --kind workflow --id custom-flow --title "Custom Flow"
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" builder validate --root .
 python "$HOME\.agents\skills\forge-method\scripts\forge_method_runtime.py" config inspect --root .
@@ -203,6 +204,10 @@ Use `doctor --root . --touches runtime` when a local setup feels slow or uncerta
 Forge Method separates Human Experience from Agent Runtime. Human-facing guide and council output can be conversational, opinionated, and useful for thinking. Runtime artifacts, workflows, evals, and recovery files stay compact so future agents can continue without rereading long discussions.
 
 Agent Council is optional. It can show a rich live discussion for the human, but it persists only a compact decision artifact under `.forge-method/artifacts/`.
+
+Mechanical Autonomy is the default for procedural build work. `resume`, `next`, and `guide` expose a Mechanical Work Order so agents can create stories, implement, review, repair, test, write evidence, update sprint state, and move to ready without asking for procedural confirmations. Discovery, specification, and planning close with Grill Gate; late contradictions in build use compact correct-course continuation.
+
+For long loops, Forge prepares a Codex Goal handoff instead of inventing another public command. Automatic commits are off by default and can be configured per project as `story` or `epic`.
 
 ## Smoke Tests
 
@@ -251,11 +256,11 @@ The full verifier includes a fixture matrix smoke. It creates example and normal
 After a tag is pushed, run a clone/install distribution smoke from the published ref:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.23.0 -ExpectedVersion 1.23.0
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.24.0 -ExpectedVersion 1.24.0
 ```
 
 ```bash
-REF=v1.23.0 EXPECTED_VERSION=1.23.0 bash scripts/smoke-plugin-clone-install.sh
+REF=v1.24.0 EXPECTED_VERSION=1.24.0 bash scripts/smoke-plugin-clone-install.sh
 ```
 
 ## Product Direction

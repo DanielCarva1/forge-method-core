@@ -83,3 +83,17 @@
 {"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-11T05:26:27+00:00"}
 {"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260611-052646-checkpoint.md"}, "ts": "2026-06-11T05:26:46+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T05:26:46+00:00"}
+{"event": "story.added", "payload": {"id": "mechanical-autonomy-grill-gate", "status": "ready"}, "ts": "2026-06-11T06:26:12+00:00"}
+{"event": "evidence.added", "payload": {"kind": "story", "path": ".forge-method/evidence/20260611-062627-story-story-mechanical-autonomy-grill-gate-done.md", "story": "mechanical-autonomy-grill-gate"}, "ts": "2026-06-11T06:26:27+00:00"}
+{"event": "evidence.added", "payload": {"kind": "story", "path": ".forge-method/evidence/20260611-062639-story-story-mechanical-autonomy-grill-gate-done.md", "story": "mechanical-autonomy-grill-gate"}, "ts": "2026-06-11T06:26:39+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "mechanical-autonomy-grill-gate", "to": "done"}, "ts": "2026-06-11T06:26:39+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-11T06:26:57+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-11T06:26:57+00:00"}
+{"event": "evidence.added", "payload": {"kind": "gate", "path": ".forge-method/evidence/20260611-062657-gate-quality-gate.md", "story": ""}, "ts": "2026-06-11T06:26:57+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260611-062658-checkpoint.md"}, "ts": "2026-06-11T06:26:58+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T06:26:58+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-11T06:34:37+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-11T06:34:37+00:00"}
+{"event": "evidence.added", "payload": {"kind": "gate", "path": ".forge-method/evidence/20260611-063437-gate-quality-gate.md", "story": ""}, "ts": "2026-06-11T06:34:37+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260611-063451-forge-method-1-24-mechanical-autonomy-batch.md"}, "ts": "2026-06-11T06:34:51+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T06:34:51+00:00"}
