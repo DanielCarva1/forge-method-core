@@ -243,3 +243,9 @@
 {"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T04:48:06+00:00"}
 {"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T04:48:06+00:00"}
 {"event": "evidence.added", "payload": {"kind": "gate", "path": ".forge-method/evidence/20260612-044806-gate-quality-gate.md", "story": ""}, "ts": "2026-06-12T04:48:06+00:00"}
+{"event": "artifact.added", "payload": {"kind": "correct-course", "lifecycle": "durable", "path": ".forge-method/artifacts/20260612-144025-correct-course-correct-course-continuation.md"}, "ts": "2026-06-12T14:40:25+00:00"}
+{"event": "correct_course.continued", "payload": {"artifact": ".forge-method/artifacts/20260612-144025-correct-course-correct-course-continuation.md", "impact": "Evita otimizar o Forge plugin para um problema que pertence a superficie Codex e preserva a decisao de continuar refinando o Forge como plugin enquanto a ideia de app proprio fica em pesquisa futura."}, "ts": "2026-06-12T14:40:25+00:00"}
+{"event": "artifact.added", "payload": {"kind": "research-reference", "lifecycle": "durable", "path": ".forge-method/artifacts/20260612-independent-app-research-and-experiment-reference.md"}, "ts": "2026-06-12T14:45:00+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "story-done"}, "ts": "2026-06-12T14:42:53+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-144322-independent-app-experiments-archived.md"}, "ts": "2026-06-12T14:43:22+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T14:43:22+00:00"}
