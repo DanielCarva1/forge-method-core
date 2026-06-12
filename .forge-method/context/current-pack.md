@@ -4,37 +4,38 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: parity-audit-recorded
+- status: p0-help-oracle-facilitation-done
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Implement P0.1 Help Oracle invariant and P0.2 facilitation coverage gate from the BMAD parity audit.
+- next_action: Implement P0.3 PRD/UX/Quick Dev parity from the BMAD parity audit.
 
 ## Latest Checkpoint
 
-# BMAD Forge parity audit recorded
+# Help Oracle and facilitation gate closed
 
-- created_at: 2026-06-12T20:06:14+00:00
+- created_at: 2026-06-12T20:31:14+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: parity-audit-recorded
+- status: p0-help-oracle-facilitation-done
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Recorded a systematic first-pass BMAD-to-Forge parity audit. The audit covers BMAD Method core, Builder, CIS, Game Dev Studio, and TEA; maps command/token families to Forge equivalents; and identifies P0 gaps in Help Oracle, facilitation coverage, PRD/UX/Quick Dev depth, story lifecycle proof, and parity replay harness.
+Closed BMAD parity P0.1/P0.2: Forge now exposes a Help Oracle required_next_workflow in snapshot/resume/next/transition, keeps active 6-evolve runtime-builder work despite readiness ready, and validates that human-facing workflows have facilitation packs. This is not full BMAD parity; next P0 is PRD/UX/Quick Dev depth.
 
 ## Decisions
 
-- Do not claim complete BMAD parity yet; this artifact proves the gap map, not gap closure.
-- Translate BMAD behavior into Forge-native human facilitation plus compact agent runtime contracts.
-- Next implementation should start with P0.1 Help Oracle invariant and P0.2 facilitation coverage gate.
+- Do not claim full BMAD parity; this increment makes next-workflow guidance and facilitation coverage mechanically enforced.
+- Keep BMAD as internal benchmark; Forge product docs stay Codex-native and independent.
 
 ## Checks
 
-- artifact verify: passed, with only pre-existing stale warnings for older artifacts
-- audit: passed
-- workflow validate: passed
+- python -m unittest discover -s tests: passed 61 tests
+- python skills\\forge-method\\scripts\\forge_method_runtime.py workflow validate: passed
+- powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-runtime.ps1: passed
+- powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1: passed
+- powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-install.ps1: passed
 
 ## Failed Checks
 
@@ -42,16 +43,19 @@ Recorded a systematic first-pass BMAD-to-Forge parity audit. The audit covers BM
 
 ## Touched Files
 
-- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
+- skills/forge-method/scripts/forge_method_runtime.py
+- skills/forge-method/catalog/workflows.json
+- skills/forge-method/facilitation/*.md
+- tests/test_runtime.py
+- CHANGELOG.md
 
 ## Artifacts
 
-- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
-- .forge-method/evidence/20260612-200602-audit-bmad-forge-systematic-parity-audit.md
+- .forge-method/evidence/20260612-203044-validation-help-oracle-and-facilitation-coverage-validation.md
 
 ## Next Action
 
-Implement P0.1 Help Oracle invariant and P0.2 facilitation coverage gate from the BMAD parity audit.
+Implement P0.3 PRD/UX/Quick Dev parity from the BMAD parity audit.
 
 ## Recovery Signals
 
@@ -61,8 +65,6 @@ Implement P0.1 Help Oracle invariant and P0.2 facilitation coverage gate from th
 
 ### Touched Files
 
-- .forge-method/artifacts/20260612-independent-app-research-and-experiment-reference.md
-- .forge-method/artifacts/20260612-144025-correct-course-correct-course-continuation.md
 - skills/forge-method/scripts/forge_method_runtime.py
 - tests/test_runtime.py
 - tests/fixtures/guidance_transcripts.json
@@ -70,6 +72,9 @@ Implement P0.1 Help Oracle invariant and P0.2 facilitation coverage gate from th
 - docs/adr/0008-guidance-engine.md
 - install.ps1
 - .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
+- skills/forge-method/catalog/workflows.json
+- skills/forge-method/facilitation/*.md
+- CHANGELOG.md
 
 ## Open Human Inputs
 
@@ -86,14 +91,15 @@ Implement P0.1 Help Oracle invariant and P0.2 facilitation coverage gate from th
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260612-044806-gate-quality-gate.md
 - .forge-method/evidence/20260612-181924-validation-guidance-experience-correct-course-validation.md
 - .forge-method/evidence/20260612-183040-validation-guidance-experience-final-validation.md
 - .forge-method/evidence/20260612-183453-validation-guidance-experience-install-validation.md
 - .forge-method/evidence/20260612-200602-audit-bmad-forge-systematic-parity-audit.md
+- .forge-method/evidence/20260612-203044-validation-help-oracle-and-facilitation-coverage-validation.md
 
 ## Recent Artifacts
 
+- story-link [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - .forge-method/artifacts/guidance-engine-benchmark.md -> script-audit-optimization-p1 - Artifact linked to story.
 - correct-course [active/durable]: .forge-method/artifacts/20260612-144025-correct-course-correct-course-continuation.md - Correct-course continuation - A conversa corrigiu a premissa: o problema de performance/travamento e do Codex como superficie, nao causado pelo Forge plugin. Experimentos TS/Rust/hooks devem ser encerrados como forks ativos.
 
 Impact: Evita otimizar o Forge plugin para um problema que pertence a superficie Codex e preserva a decisao de continuar refinando o Forge como plugin enquanto a ideia de app proprio fica em pesquisa futura..
@@ -109,5 +115,4 @@ Impact: New users could receive technical artifacts and stories before taste, pa
 Policy: choose the conservative interpretation that preserves the approved spec.
 
 Continuation: Keep initial projects gated by facilitation input, route method-experience criticism to correct-course first, and validate with transcript fixtures plus runtime smoke.
-- internal-parity-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD to Forge systematic parity audit - Systematic first-pass parity audit comparing BMAD Method, Builder, CIS, Game Dev Studio, and TEA against Forge principles, workflows, facilitation packs, runtime contracts, scripts, state, and validation.
 - internal-parity-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD to Forge systematic parity audit - Systematic first-pass parity audit comparing BMAD Method, Builder, CIS, Game Dev Studio, and TEA against Forge principles, workflows, facilitation packs, runtime contracts, scripts, state, and validation.

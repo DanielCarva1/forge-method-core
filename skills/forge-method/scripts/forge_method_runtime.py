@@ -163,6 +163,67 @@ WORKFLOW_BY_PHASE = {
     "6-evolve": "evolve-project",
 }
 
+HUMAN_FACING_REQUIRED_WORKFLOWS = {
+    "discover-intent",
+    "reality-evidence-gate",
+    "market-scan",
+    "domain-scan",
+    "technical-feasibility-scan",
+    "brainstorming",
+    "problem-solving",
+    "design-thinking",
+    "innovation-strategy",
+    "storytelling",
+    "creative-session",
+    "concept-selection",
+    "write-spec",
+    "product-requirements",
+    "architecture",
+    "ux-plan",
+    "create-epics",
+    "plan-sprint",
+    "readiness-check",
+    "grill-gate",
+    "ready-release",
+    "release-readiness",
+    "evolve-project",
+    "correct-course",
+    "runtime-builder",
+    "game-brief",
+    "gdd",
+    "narrative-design",
+    "mechanics-design",
+    "game-ux-design",
+    "game-prd",
+    "engine-architecture",
+    "quick-prototype",
+    "game-story-creation",
+    "game-sprint-status",
+    "game-retrospective",
+    "game-test-framework",
+    "game-test-automation",
+    "game-e2e-scaffold",
+    "playtest-plan",
+    "performance-plan",
+    "game-qa-review",
+    "test-strategy",
+    "teach-testing",
+    "test-engagement-model",
+    "test-framework",
+    "ci-quality-pipeline",
+    "atdd-plan",
+    "test-automation",
+    "test-review",
+    "nfr-evidence-audit",
+    "traceability-gate",
+    "risk-register",
+    "security-plan",
+    "privacy-data-plan",
+    "devops-deployment-plan",
+    "compliance-checklist",
+    "observability-plan",
+}
+
 HUMAN_EXPERIENCE_POLICY: dict[str, Any] = {
     "voice": "warm, direct, opinionated, and useful",
     "adaptive_energy": "match the user's energy without attacking the user",
@@ -2137,6 +2198,8 @@ def validate_workflow_catalog(root: Path | None = None) -> list[str]:
             errors.append(f"workflow catalog {workflow_id} references missing workflow: {item.get('reference', workflow_id)}")
         raw_pack = str(item.get("facilitation_pack", ""))
         pack_id = slugify(raw_pack) if raw_pack.strip() else ""
+        if workflow_id in HUMAN_FACING_REQUIRED_WORKFLOWS and not pack_id:
+            errors.append(f"workflow catalog {workflow_id} is human-facing but has no facilitation_pack")
         if pack_id:
             pack_path = FACILITATION_DIR / f"{pack_id}.md"
             if not pack_path.exists():
@@ -2900,7 +2963,7 @@ def build_resume_guidance(
             blocked_when=["the answer changes project scope, risk, budget, or acceptance criteria"],
         )
 
-    if state.get("readiness") == "ready" or state.get("phase") == "5-ready-operate":
+    if state.get("phase") == "5-ready-operate" or (state.get("readiness") == "ready" and state.get("phase") != "6-evolve"):
         return resume_payload(
             action="operate_or_evolve",
             summary="Project is ready for use; operate it or route a new evolution request.",
@@ -3149,6 +3212,77 @@ def build_codex_goal_handoff(state: dict[str, str], work_order: dict[str, Any]) 
     }
 
 
+def default_workflow_for_phase(phase: str) -> str:
+    return WORKFLOW_BY_PHASE.get(phase, "guide-route")
+
+
+def help_oracle_workflow_for_resume(state: dict[str, str], resume: dict[str, Any]) -> tuple[str, str]:
+    action = resume.get("action", "")
+    active_workflow = state.get("active_workflow", "")
+    phase = state.get("phase", "")
+    if action == "answer_required_input":
+        workflow = active_workflow if active_workflow and active_workflow != "start-runtime" else default_workflow_for_phase(phase)
+        return workflow, "Required human input blocks progress; answer or defer it before running another workflow."
+    if action == "operate_or_evolve":
+        return "guidance-engine", "Ready projects must route new support, feedback, or evolution intent through Guidance Engine."
+    if action == "resolve_review_findings":
+        return "test-review", "Open review findings are the next required quality workflow before story completion."
+    if action == "repair_project_state":
+        return "context-recovery", "Project state must be repaired before normal workflow guidance is trustworthy."
+    if action in {"start_next_story", "continue_active_story", "review_active_story"}:
+        return "build-story", "An executable implementation story is active; continue the build-story loop mechanically."
+    if action == "resolve_story_blocker":
+        return "correct-course", "A blocked story needs a route correction or human decision before build can continue."
+    if action == "run_ready_gate":
+        return "ready-release", "All implementation stories are done; run gate and ready-release next."
+    if action == "plan_next_story":
+        return "plan-sprint", "Build phase has no executable story; plan or import the next story batch."
+    if action == "continue_current_workflow":
+        return active_workflow or default_workflow_for_phase(phase), "Continue the active workflow selected by durable state."
+    return active_workflow or default_workflow_for_phase(phase), "Use durable state and resume action to choose the next workflow."
+
+
+def build_help_oracle(
+    root: Path,
+    state: dict[str, str],
+    resume: dict[str, Any],
+) -> dict[str, Any]:
+    workflow_id, reason = help_oracle_workflow_for_resume(state, resume)
+    workflow_metadata = workflow_catalog_entry(workflow_id)
+    facilitation_pack = facilitation_pack_for_workflow(workflow_id)
+    commands = resume.get("commands", [])
+    target = resume.get("target", {})
+    action = resume.get("action", "")
+    human_next_step = resume.get("summary", "") or state.get("next_action", "")
+    if action == "answer_required_input" and target.get("id"):
+        human_next_step = f"answer human input {target.get('id')}: {target.get('prompt', '')}"
+    state_update_required = False
+    state_updates: dict[str, str] = {}
+    active_workflow = state.get("active_workflow", "")
+    if workflow_id and active_workflow and active_workflow != workflow_id and action in {"repair_project_state", "resolve_story_blocker"}:
+        state_update_required = True
+        state_updates["active_workflow"] = workflow_id
+    return {
+        "source": "help-oracle",
+        "required_next_workflow": workflow_id,
+        "recommended_phase": recommended_phase_for_workflow(workflow_metadata, state.get("phase", "")) if workflow_metadata else state.get("phase", ""),
+        "reason": reason,
+        "human_next_step": human_next_step,
+        "facilitation_pack": facilitation_pack,
+        "workflow_metadata": workflow_metadata,
+        "commands": commands,
+        "state_update_required": state_update_required,
+        "state_updates": state_updates,
+        "stale_state_guard": "Help Oracle is derived from current state, open inputs/findings, stories, audit status, and catalog metadata; do not follow stale chat next steps.",
+        "alternatives": guidance_alternatives(
+            ("guide-route", "orient the human when intent is unclear"),
+            ("guidance-engine", "classify fresh human intent before continuing stale state"),
+            ("context-recovery", "recover when state or context looks stale"),
+        ),
+        "command": commands[0]["command"] if commands else "",
+    }
+
+
 def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     sprint = read_flat_yaml(method_dir(root) / SPRINT_FILE)
     stories = list_stories(root)
@@ -3183,6 +3317,8 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     resume["grill_gate_required"] = grill_gate_required_for_state(state)
     resume["mechanical_work_order"] = build_mechanical_work_order(root, state, resume, story_counts)
     resume["codex_goal_handoff"] = build_codex_goal_handoff(state, resume["mechanical_work_order"])
+    help_oracle = build_help_oracle(root, state, resume)
+    resume["help_oracle"] = help_oracle
     context_dir = method_dir(root) / "context"
     current_pack = context_dir / "current-pack.md"
     recovery = context_dir / "recovery.md"
@@ -3205,6 +3341,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
             "next_action": state.get("next_action", ""),
             "human_input_required": state.get("human_input_required", "false"),
         },
+        "help_oracle": help_oracle,
         "resume": resume,
         "human_inputs": {
             "total": len(inputs),
@@ -3259,10 +3396,14 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
 def cmd_next(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     snapshot = build_snapshot(root, state)
-    required_inputs = snapshot["human_inputs"]["required_open"]
-    if required_inputs:
-        item = required_inputs[0]
-        print(f"answer human input {item.get('id')}: {item.get('prompt')}")
+    help_oracle = snapshot.get("help_oracle", {})
+    if help_oracle.get("human_next_step"):
+        print(help_oracle["human_next_step"])
+        if help_oracle.get("required_next_workflow"):
+            print(f"Next required workflow: {help_oracle.get('required_next_workflow')}")
+        work_order = snapshot["resume"].get("mechanical_work_order", {})
+        if work_order.get("autonomous") and work_order.get("goal_recommended"):
+            print("Goal recommended: use /goal with the generated Forge mechanical goal handoff.")
         return 0
     work_order = snapshot["resume"].get("mechanical_work_order", {})
     if work_order.get("autonomous") and work_order.get("next_mechanical_step"):
@@ -3318,6 +3459,13 @@ def print_resume_guidance(root: Path, resume: dict[str, Any]) -> None:
         print("- <not specified>")
     if resume.get("grill_gate_required"):
         print("Grill Gate: required before leaving this decision phase.")
+    help_oracle = resume.get("help_oracle", {})
+    if help_oracle:
+        print("Help Oracle:")
+        print(f"- required_next_workflow: {help_oracle.get('required_next_workflow', '')}")
+        print(f"- reason: {help_oracle.get('reason', '')}")
+        if help_oracle.get("facilitation_pack"):
+            print(f"- facilitation: {help_oracle.get('facilitation_pack')}")
     work_order = resume.get("mechanical_work_order", {})
     if work_order.get("autonomous"):
         print("Mechanical Work Order:")
@@ -3368,6 +3516,9 @@ def cmd_transition(args: argparse.Namespace) -> int:
     print(f"Phase: {state.get('phase')}")
     print(f"Status: {state.get('status')}")
     print(f"Next: {state.get('next_action')}")
+    oracle = build_snapshot(root, state).get("help_oracle", {})
+    if oracle.get("required_next_workflow"):
+        print(f"Required next workflow: {oracle.get('required_next_workflow')}")
     return 0
 
 

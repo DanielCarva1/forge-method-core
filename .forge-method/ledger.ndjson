@@ -266,3 +266,7 @@
 {"event": "evidence.added", "payload": {"kind": "audit", "path": ".forge-method/evidence/20260612-200602-audit-bmad-forge-systematic-parity-audit.md", "story": ""}, "ts": "2026-06-12T20:06:02+00:00"}
 {"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-200614-bmad-forge-parity-audit-recorded.md"}, "ts": "2026-06-12T20:06:14+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T20:06:14+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-203044-validation-help-oracle-and-facilitation-coverage-validation.md", "story": "bmad-parity-p0-help-oracle-facilitation"}, "ts": "2026-06-12T20:30:44+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "p0-help-oracle-facilitation-done"}, "ts": "2026-06-12T20:30:55+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-203114-help-oracle-and-facilitation-gate-closed.md"}, "ts": "2026-06-12T20:31:14+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T20:31:14+00:00"}

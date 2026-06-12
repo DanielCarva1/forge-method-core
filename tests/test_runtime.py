@@ -483,6 +483,9 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue(snapshot["resume"]["autonomous"])
             self.assertTrue(snapshot["resume"]["mechanical_work_order"]["goal_recommended"])
             self.assertTrue(snapshot["resume"]["codex_goal_handoff"]["recommended"])
+            self.assertEqual(snapshot["help_oracle"]["required_next_workflow"], "build-story")
+            self.assertEqual(snapshot["resume"]["help_oracle"]["required_next_workflow"], "build-story")
+            self.assertIn("implementation story", snapshot["help_oracle"]["reason"])
             self.assertTrue(snapshot["quality"]["audit"]["passed"])
 
     def test_snapshot_does_not_start_story_before_build_phase(self) -> None:
@@ -591,8 +594,12 @@ class RuntimeTests(unittest.TestCase):
             self.assertFalse(resume["autonomous"])
             self.assertEqual(resume["target"]["id"], "target-user")
             self.assertIn("input list", resume["next_command"])
+            self.assertEqual(resume["help_oracle"]["required_next_workflow"], "discover-intent")
+            self.assertIn("Required human input", resume["help_oracle"]["reason"])
             self.assertIn("Action: answer_required_input", resume_text)
+            self.assertIn("Help Oracle:", resume_text)
             self.assertIn("answer human input target-user", next_text)
+            self.assertIn("Next required workflow: discover-intent", next_text)
             self.assertIn("Audit passed.", run_cmd("audit", "--root", str(root)).stdout)
 
             run_cmd(
@@ -615,6 +622,64 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(released["human_inputs"]["required_open"], [])
             answered = run_cmd("input", "list", "--root", str(root), "--status", "answered").stdout
             self.assertIn("target-user", answered)
+
+    def test_help_oracle_overrides_ready_state_stale_next_action(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            run_cmd(
+                "transition",
+                "--root",
+                str(root),
+                "--phase",
+                "5-ready-operate",
+                "--status",
+                "ready",
+                "--workflow",
+                "ready-release",
+                "--next-action",
+                "publish current batch",
+                "--force",
+            )
+
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+            resume = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
+            next_text = run_cmd("next", "--root", str(root)).stdout
+
+            self.assertEqual(snapshot["resume"]["action"], "operate_or_evolve")
+            self.assertEqual(snapshot["help_oracle"]["required_next_workflow"], "guidance-engine")
+            self.assertEqual(resume["help_oracle"]["required_next_workflow"], "guidance-engine")
+            self.assertIn("Ready projects must route", snapshot["help_oracle"]["reason"])
+            self.assertIn("Next required workflow: guidance-engine", next_text)
+            self.assertNotIn("publish current batch", next_text)
+
+    def test_help_oracle_respects_active_evolve_workflow_even_when_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            run_cmd(
+                "transition",
+                "--root",
+                str(root),
+                "--phase",
+                "6-evolve",
+                "--status",
+                "parity-audit-recorded",
+                "--workflow",
+                "runtime-builder",
+                "--next-action",
+                "Implement Help Oracle invariant",
+                "--force",
+            )
+
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+            next_text = run_cmd("next", "--root", str(root)).stdout
+
+            self.assertEqual(snapshot["resume"]["action"], "continue_current_workflow")
+            self.assertEqual(snapshot["help_oracle"]["required_next_workflow"], "runtime-builder")
+            self.assertIn("Continue the active workflow", snapshot["help_oracle"]["reason"])
+            self.assertIn("Implement Help Oracle invariant", next_text)
+            self.assertIn("Next required workflow: runtime-builder", next_text)
 
     def test_story_block_routes_without_fake_human_input(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -1219,6 +1284,21 @@ class RuntimeTests(unittest.TestCase):
             }
         )
         self.assertGreaterEqual(len(pack_ids), 10)
+        human_facing_required = {
+            "product-requirements",
+            "ux-plan",
+            "architecture",
+            "create-epics",
+            "plan-sprint",
+            "readiness-check",
+            "gdd",
+            "test-engagement-model",
+            "traceability-gate",
+            "security-plan",
+        }
+        by_id = {item["id"]: item for item in catalog["workflows"]}
+        for workflow_id in human_facing_required:
+            self.assertIn("facilitation_pack", by_id[workflow_id], workflow_id)
         for pack_id in pack_ids:
             pack_text = (ROOT / "skills" / "forge-method" / "facilitation" / f"{pack_id}.md").read_text(
                 encoding="utf-8"

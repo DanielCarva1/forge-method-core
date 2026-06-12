@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- add Help Oracle output to snapshot/resume/next/transition so the runtime reports the required next workflow from durable state
+- preserve active `6-evolve` runtime-builder work even when readiness is still `ready`
+- enforce facilitation pack coverage for human-facing workflows during workflow validation
+- add facilitation packs for research, creative direction, product planning, UX, architecture, story lifecycle, decision gates, and enterprise readiness
 - require initial human facilitation before creating stories for new projects
 - route method-experience criticism to `correct-course` before `runtime-builder`
 - make `correct-course` update active workflow and route metadata to avoid stale agent guidance
