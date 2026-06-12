@@ -217,3 +217,14 @@
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T02:48:59+00:00"}
 {"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T02:49:16+00:00"}
 {"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T02:49:16+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T03:47:18+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T03:47:18+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T03:50:06+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T03:50:06+00:00"}
+{"event": "story.added", "payload": {"id": "post-release-guidance-audit-p1", "status": "in_progress"}, "ts": "2026-06-12T03:51:31+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-035148-validation-post-release-guidance-audit.md", "story": "post-release-guidance-audit-p1"}, "ts": "2026-06-12T03:51:48+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "post-release-guidance-audit-p1", "to": "done"}, "ts": "2026-06-12T03:52:02+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-035218-post-release-guidance-audit-closed.md"}, "ts": "2026-06-12T03:52:18+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T03:52:18+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T03:52:35+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T03:52:35+00:00"}

@@ -11,9 +11,9 @@
 
 ## Latest Checkpoint
 
-# Human facilitation depth enforced
+# Post-release guidance audit closed
 
-- created_at: 2026-06-12T02:48:59+00:00
+- created_at: 2026-06-12T03:52:18+00:00
 - project: forge-method-core
 - phase: 6-evolve
 - status: story-done
@@ -22,7 +22,7 @@
 
 ## Summary
 
-Responded to the correction that BMAD being stronger in facilitation is a product gap. Forge now treats rich human facilitation as required: referenced packs must include stage scripts, elicitation options, facilitator moves, quality bars, and anti-patterns. Agent workflow docs stay compact. Tests, workflow validate, smoke-runtime, smoke-install, verify-fast, and gate with evals passed.
+Audited the 1.27.0 guidance release after tag/push. Human-guided experience is structurally comparable now: rich facilitation is validated separately from compact agent workflows. Remaining proof for 'better than BMAD' needs live transcript/user-session evals, not more architecture. Fixed misleading docs that used main for published-tag smoke and marked the older BMAD facilitation-depth verdict as superseded. Clone/install smoke from v1.27.0 passed.
 
 ## Decisions
 
@@ -56,7 +56,6 @@ select next ready story or move to ready when build scope is complete
 
 ### Touched Files
 
-- skills/forge-method/templates/*-artifact.md; skills/forge-method/catalog/workflows.json; skills/forge-method/scripts/forge_method_runtime.py; skills/forge-method/facilitation/*.md; tests/fixtures/guidance_transcripts.json; tests/test_runtime.py
 - skills/forge-method/facilitation/game-lifecycle.md; skills/forge-method/facilitation/test-architecture.md; skills/forge-method/facilitation/builder-utility.md; skills/forge-method/facilitation/document-utility.md; skills/forge-method/scripts/forge_method_runtime.py; tests/fixtures/guidance_transcripts.json; tests/test_runtime.py
 - skills/forge-method/references/workflow-teach-testing.md; skills/forge-method/catalog/workflows.json; skills/forge-method/modules/test-architect.yaml; skills/forge-method/facilitation/test-architecture.md; skills/forge-method/scripts/forge_method_runtime.py; tests/fixtures/guidance_transcripts.json; tests/test_runtime.py; local-comparison/bmad-forge-guided-flow-comparison.md
 
@@ -75,11 +74,11 @@ select next ready story or move to ready when build scope is complete
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260612-011021-validation-guided-depth-template-validation.md
 - .forge-method/evidence/20260612-013040-validation-guided-depth-execution-routing-validation.md
 - .forge-method/evidence/20260612-014938-validation-teach-testing-guided-workflow-validation.md
 - .forge-method/evidence/20260612-020414-validation-bmad-parity-audit-cleanup-validation.md
 - .forge-method/evidence/20260612-024829-validation-human-facilitation-depth-validation.md
+- .forge-method/evidence/20260612-035148-validation-post-release-guidance-audit.md
 
 ## Recent Artifacts
 

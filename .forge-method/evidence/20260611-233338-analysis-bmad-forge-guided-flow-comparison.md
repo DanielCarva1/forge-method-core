@@ -6,4 +6,6 @@
 
 ## Summary
 
-Compared BMAD installed sandbox guided flows against Forge v1.27.0. Report written to local-comparison/bmad-forge-guided-flow-comparison.md. Verdict: Forge is at parity or better for agent-operable routing/runtime state, but BMAD is still stronger in deep human facilitation inside specialized flows.
+Compared BMAD installed sandbox guided flows against Forge v1.27.0. Report written to local-comparison/bmad-forge-guided-flow-comparison.md. Historical verdict at the time of this evidence: Forge was at parity or better for agent-operable routing/runtime state, while human facilitation depth still needed work.
+
+Superseded by `.forge-method/evidence/20260612-024829-validation-human-facilitation-depth-validation.md`: rich human facilitation is now a validated Forge product contract for referenced packs.

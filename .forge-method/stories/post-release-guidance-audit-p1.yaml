@@ -1,0 +1,10 @@
+# Forge Method story
+updated_at: "2026-06-12T03:52:02+00:00"
+id: "post-release-guidance-audit-p1"
+title: "Audit 1.27.0 guidance release docs"
+status: "done"
+phase: "6-evolve"
+acceptance_criteria: "published-ref smoke docs point at v1.27.0 instead of main | superseded BMAD facilitation verdict is clearly marked | workflow validate and gate pass after audit"
+evidence: ".forge-method/evidence/20260612-035148-validation-post-release-guidance-audit.md"
+checks: "workflow validate; audit; gate --require-evals; stale phrase scan; smoke-plugin-clone-install v1.27.0"
+blocker: ""

@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-12T02:49:16+00:00"
+updated_at: "2026-06-12T03:52:35+00:00"
 id: "artifact-forge-method-artifacts-public-plugin-install-proof-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/public-plugin-install-proof.md"
 query: "README public Codex install flow is present; package contents are covered; verify-fast and smoke-install passed for repo-based plugin use."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-12T02:49:16+00:00"
+last_run_at: "2026-06-12T03:52:35+00:00"
 last_error: ""
