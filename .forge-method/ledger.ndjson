@@ -228,3 +228,18 @@
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T03:52:18+00:00"}
 {"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T03:52:35+00:00"}
 {"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T03:52:35+00:00"}
+{"event": "story.added", "payload": {"id": "script-audit-optimization-p1", "status": "in_progress"}, "ts": "2026-06-12T04:04:20+00:00"}
+{"event": "artifact.added", "payload": {"kind": "audit", "lifecycle": "durable", "path": ".forge-method/artifacts/script-audit-optimization.md"}, "ts": "2026-06-12T04:29:11+00:00"}
+{"event": "artifact.linked_to_story", "payload": {"path": ".forge-method/artifacts/script-audit-optimization.md", "story": "script-audit-optimization-p1"}, "ts": "2026-06-12T04:29:11+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-benchmark", "lifecycle": "durable", "path": ".forge-method/artifacts/guidance-engine-benchmark.md"}, "ts": "2026-06-12T04:29:51+00:00"}
+{"event": "artifact.linked_to_story", "payload": {"path": ".forge-method/artifacts/guidance-engine-benchmark.md", "story": "script-audit-optimization-p1"}, "ts": "2026-06-12T04:29:51+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-044523-validation-script-audit-optimization-validation.md", "story": "script-audit-optimization-p1"}, "ts": "2026-06-12T04:45:23+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T04:45:23+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T04:45:23+00:00"}
+{"event": "evidence.added", "payload": {"kind": "gate", "path": ".forge-method/evidence/20260612-044523-gate-quality-gate.md", "story": ""}, "ts": "2026-06-12T04:45:23+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "script-audit-optimization-p1", "to": "done"}, "ts": "2026-06-12T04:45:43+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-044607-script-audit-optimization-closed.md"}, "ts": "2026-06-12T04:46:07+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T04:46:07+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T04:48:06+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T04:48:06+00:00"}
+{"event": "evidence.added", "payload": {"kind": "gate", "path": ".forge-method/evidence/20260612-044806-gate-quality-gate.md", "story": ""}, "ts": "2026-06-12T04:48:06+00:00"}

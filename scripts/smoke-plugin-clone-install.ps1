@@ -22,8 +22,9 @@ function Run {
 }
 
 function Resolve-Python {
-  if ($Python) {
-    return $Python
+  param([string]$PythonPath)
+  if ($PythonPath) {
+    return $PythonPath
   }
   if ($env:PYTHON) {
     return $env:PYTHON
@@ -50,7 +51,7 @@ if (-not $WorkRoot) {
   $WorkRoot = Join-Path $env:TEMP ("forge-method-plugin-clone-smoke-" + [guid]::NewGuid().ToString("N"))
 }
 
-$pythonExe = Resolve-Python
+$pythonExe = Resolve-Python -PythonPath $Python
 $cloneRoot = Join-Path $WorkRoot "repo"
 $pluginParent = Join-Path $WorkRoot "plugins"
 $marketplacePath = Join-Path $WorkRoot ".agents\plugins\marketplace.json"

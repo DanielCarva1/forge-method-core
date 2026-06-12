@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 1.28.0
+
+Forge Method Core v1.28.0 hardens guidance audit routing and local install diagnostics:
+
+- route method/runtime audit requests, dead-code concerns, misleading agent docs, and human-guided experience questions to `runtime-builder`
+- add transcript coverage for runtime audit guidance
+- make `doctor` print repair commands for stale local plugin installs
+- document the current guidance parity verdict, script audit results, hook/tracing references, and isolated experiment plan
+- clean up shell and PowerShell smoke/install script warnings
+- bump release metadata to `1.28.0`
+
 ## 1.27.0
 
 Forge Method Core v1.27.0 adds the native Guidance Engine:

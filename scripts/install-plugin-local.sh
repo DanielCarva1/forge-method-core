@@ -137,15 +137,6 @@ payload["plugins"].append(entry)
 marketplace_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 PY
 
-marketplace_name="$(MARKETPLACE_PATH="$marketplace_path" "$python_cmd" - <<'PY'
-import json
-import os
-from pathlib import Path
-payload = json.loads(Path(os.environ["MARKETPLACE_PATH"]).read_text(encoding="utf-8"))
-print(payload.get("name", "personal"))
-PY
-)"
-
 echo "Installed local Codex plugin source: $target"
 echo "Updated marketplace: $marketplace_path"
 encoded_marketplace_path="$(MARKETPLACE_PATH="$marketplace_path" "$python_cmd" - <<'PY'

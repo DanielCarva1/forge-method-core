@@ -18,7 +18,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.27.0"
+RUNTIME_VERSION = "1.28.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 WORKFLOW_CATALOG_PATH = SKILL_DIR / "catalog" / "workflows.json"
@@ -2794,7 +2794,6 @@ def route_recommendation(
         if status == "in_progress":
             return "continue_active_story"
         if status == "review":
-            story_id = next_story.get("id", "")
             return "review_active_story"
         if status == "blocked":
             return "resolve_story_blocker"
@@ -4164,6 +4163,28 @@ def detect_guidance_signals(question: str) -> list[str]:
         "research-needed": ["deep research", "pesquisa profunda", "consultar documentacao", "ler docs", "benchmark"],
         "document-utility": ["index docs", "shard document", "editorial review", "edge case", "spec distillation"],
         "quality-flow": ["teach me testing"],
+        "builder-flow": [
+            "audit runtime",
+            "audit scripts",
+            "auditoria do runtime",
+            "auditoria de scripts",
+            "codigo morto",
+            "dead code",
+            "doc misleading",
+            "docs misleading",
+            "misleading doc",
+            "misleading docs",
+            "missleading doc",
+            "missleading docs",
+            "doc enganoso",
+            "docs enganosos",
+            "documentacao enganosa",
+            "parte guiada",
+            "experiencia guiada",
+            "fluxo guiado",
+            "guided flow",
+            "human guidance",
+        ],
     }
     for signal, phrases in phrase_signals.items():
         if any(phrase in normalized for phrase in phrases):
@@ -4198,6 +4219,8 @@ def detect_guidance_signals(question: str) -> list[str]:
             "workflows",
             "skill",
             "agent",
+            "agente",
+            "agentes",
             "plugin",
             "guidance",
             "router",
@@ -6281,10 +6304,10 @@ def cmd_gate(args: argparse.Namespace) -> int:
 
     if passed:
         print("Gate passed.")
-        print(f"Audit: passed")
-        print(f"Artifacts: passed")
-        print(f"Workflows: passed")
-        print(f"Agents: passed")
+        print("Audit: passed")
+        print("Artifacts: passed")
+        print("Workflows: passed")
+        print("Agents: passed")
         print(f"Evals: {len(passed_evals)}/{eval_count} passed")
         if warnings:
             print("Warnings:")
@@ -6421,6 +6444,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(f"- Installed version: {plugin['installed_version'] or '<none>'}")
     if plugin["codex_deeplink"]:
         print(f"- Open in Codex: {plugin['codex_deeplink']}")
+    if plugin["status"] != "ready":
+        for command in plugin["repair_commands"]["windows"]:
+            print(f"- Repair: {command}")
     toolchain = payload["toolchain"]
     python = toolchain["python"]
     print("Toolchain:")
@@ -6476,6 +6502,10 @@ def collect_plugin_installation() -> dict[str, Any]:
         "installed_version": None,
         "codex_deeplink": f"codex://plugins/{RUNTIME_REPO_NAME}?marketplacePath={encoded_marketplace}",
         "share_deeplink": f"codex://plugins/{RUNTIME_REPO_NAME}?marketplacePath={encoded_marketplace}&mode=share",
+        "repair_commands": {
+            "windows": ["powershell -ExecutionPolicy Bypass -File .\\scripts\\install-plugin-local.ps1"],
+            "posix": ["bash scripts/install-plugin-local.sh"],
+        },
     }
     if not marketplace_path.exists():
         return base
@@ -6537,6 +6567,7 @@ def collect_plugin_installation() -> dict[str, Any]:
         return base
     base["available"] = True
     base["status"] = "ready"
+    base["repair_commands"] = {"windows": [], "posix": []}
     return base
 
 

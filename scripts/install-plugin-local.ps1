@@ -67,10 +67,11 @@ function Clear-ReadOnly {
     return
   }
   Get-ChildItem -LiteralPath $Path -Recurse -Force | ForEach-Object {
+    $child = $_
     try {
-      $_.Attributes = $_.Attributes -band (-bnot [System.IO.FileAttributes]::ReadOnly)
+      $child.Attributes = $child.Attributes -band (-bnot [System.IO.FileAttributes]::ReadOnly)
     } catch {
-      # Best effort: Remove-Item will report a concrete failure if this still matters.
+      Write-Verbose "Could not clear read-only attribute for $($child.FullName): $($_.Exception.Message)"
     }
   }
   $item = Get-Item -LiteralPath $Path -Force

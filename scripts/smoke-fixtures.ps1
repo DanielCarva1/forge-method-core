@@ -19,8 +19,9 @@ function Run {
 }
 
 function Resolve-Python {
-  if ($Python) {
-    return $Python
+  param([string]$PythonPath)
+  if ($PythonPath) {
+    return $PythonPath
   }
   if ($env:PYTHON) {
     return $env:PYTHON
@@ -73,7 +74,7 @@ function Assert-Recommendation {
   Write-Host "Recommendation passed: $ExpectedModule"
 }
 
-$pythonExe = Resolve-Python
+$pythonExe = Resolve-Python -PythonPath $Python
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $runtime = Join-Path $repoRoot "skills\forge-method\scripts\forge_method_runtime.py"
 

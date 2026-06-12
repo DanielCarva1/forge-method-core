@@ -1,0 +1,11 @@
+# Forge Method story
+updated_at: "2026-06-12T04:45:43+00:00"
+id: "script-audit-optimization-p1"
+title: "Audit Forge scripts and optimization paths"
+status: "done"
+phase: "6-evolve"
+acceptance_criteria: "script inventory covers runtime/install/smoke/update paths | dead-code and misleading-agent-doc scan has evidence | market technique scan covers hooks/harness options with primary sources | core fixes are scoped and tested | experiment forks are planned without contaminating core"
+evidence: ".forge-method/evidence/20260612-044523-validation-script-audit-optimization-validation.md"
+checks: "verify-all.ps1 | gate --require-evals | ruff | shellcheck-py | PSScriptAnalyzer | vulture | radon"
+blocker: ""
+artifacts: ".forge-method/artifacts/script-audit-optimization.md | .forge-method/artifacts/guidance-engine-benchmark.md"

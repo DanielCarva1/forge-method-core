@@ -475,7 +475,7 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(snapshot["runtime_version"], "1.27.0")
+            self.assertEqual(snapshot["runtime_version"], "1.28.0")
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
@@ -1049,7 +1049,7 @@ class RuntimeTests(unittest.TestCase):
                 encoding="utf-8",
             )
             manifest_path.write_text(
-                json.dumps({"name": "forge-method-core", "version": "1.27.0", "skills": "./skills/"}),
+                json.dumps({"name": "forge-method-core", "version": "1.28.0", "skills": "./skills/"}),
                 encoding="utf-8",
             )
             skill_path.write_text("---\nname: forge-method\n---\n", encoding="utf-8")
@@ -1061,12 +1061,61 @@ class RuntimeTests(unittest.TestCase):
             plugin = payload["plugin_installation"]
             self.assertTrue(plugin["available"])
             self.assertEqual(plugin["status"], "ready")
-            self.assertEqual(plugin["installed_version"], "1.27.0")
+            self.assertEqual(plugin["installed_version"], "1.28.0")
             self.assertEqual(plugin["plugin_path"], str(plugin_root.resolve()))
+            self.assertEqual(plugin["repair_commands"]["windows"], [])
             self.assertIn("codex://plugins/forge-method-core?marketplacePath=", plugin["codex_deeplink"])
             self.assertIn("Plugin installation:", text)
             self.assertIn("Status: ready", text)
             self.assertIn("Open in Codex:", text)
+
+    def test_doctor_suggests_repair_for_stale_plugin_installation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw) / "home"
+            home.mkdir()
+            marketplace_path = home / ".agents" / "plugins" / "marketplace.json"
+            plugin_root = home / "plugins" / "forge-method-core"
+            manifest_path = plugin_root / ".codex-plugin" / "plugin.json"
+            skill_path = plugin_root / "skills" / "forge-method" / "SKILL.md"
+            marketplace_path.parent.mkdir(parents=True)
+            manifest_path.parent.mkdir(parents=True)
+            skill_path.parent.mkdir(parents=True)
+            marketplace_path.write_text(
+                json.dumps(
+                    {
+                        "name": "personal",
+                        "plugins": [
+                            {
+                                "name": "forge-method-core",
+                                "source": {"source": "local", "path": "./plugins/forge-method-core"},
+                                "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+                                "category": "Productivity",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            manifest_path.write_text(
+                json.dumps({"name": "forge-method-core", "version": "1.22.0", "skills": "./skills/"}),
+                encoding="utf-8",
+            )
+            skill_path.write_text("---\nname: forge-method\n---\n", encoding="utf-8")
+            env = {"HOME": str(home), "USERPROFILE": str(home)}
+
+            payload = json.loads(run_cmd("doctor", "--root", str(home), "--json", env=env).stdout)
+            text = run_cmd("doctor", "--root", str(home), env=env).stdout
+
+            plugin = payload["plugin_installation"]
+            self.assertFalse(plugin["available"])
+            self.assertEqual(plugin["status"], "plugin version mismatch")
+            self.assertEqual(plugin["installed_version"], "1.22.0")
+            self.assertIn(
+                "powershell -ExecutionPolicy Bypass -File .\\scripts\\install-plugin-local.ps1",
+                plugin["repair_commands"]["windows"],
+            )
+            self.assertIn("Status: plugin version mismatch", text)
+            self.assertIn("Repair: powershell -ExecutionPolicy Bypass -File .\\scripts\\install-plugin-local.ps1", text)
 
     def test_artifact_is_indexed_and_added_to_context_pack(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -1184,7 +1233,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("facilitator", agents)
         self.assertIn("quality-reviewer", agents)
         self.assertIn("Agent profile validation passed.", agent_validation)
-        self.assertEqual(version.strip(), "1.27.0")
+        self.assertEqual(version.strip(), "1.28.0")
 
     def test_skill_requires_launcher_on_every_invocation(self) -> None:
         skill_text = (ROOT / "skills" / "forge-method" / "SKILL.md").read_text(encoding="utf-8")
@@ -1237,7 +1286,7 @@ class RuntimeTests(unittest.TestCase):
             selected_paths = [item["path"] for item in plan["selected"]]
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(plan["runtime_version"], "1.27.0")
+            self.assertEqual(plan["runtime_version"], "1.28.0")
             self.assertEqual(plan["state"]["phase"], "4-build-verify")
             self.assertIn(".forge-method/state.yaml", selected_paths)
             self.assertIn(".forge-method/sprint.yaml", selected_paths)

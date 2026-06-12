@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.27.0`.
+Current runtime version: `1.28.0`.
 
 ## Current Shape
 
@@ -281,11 +281,11 @@ The full verifier includes a fixture matrix smoke. It creates example and normal
 After a tag is pushed, run a clone/install distribution smoke from the published ref:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.27.0 -ExpectedVersion 1.27.0
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.28.0 -ExpectedVersion 1.28.0
 ```
 
 ```bash
-REF=v1.27.0 EXPECTED_VERSION=1.27.0 bash scripts/smoke-plugin-clone-install.sh
+REF=v1.28.0 EXPECTED_VERSION=1.28.0 bash scripts/smoke-plugin-clone-install.sh
 ```
 
 ## Product Direction

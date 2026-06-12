@@ -59,6 +59,16 @@
     "state_update_required": false
   },
   {
+    "id": "runtime_guidance_audit_request",
+    "state": "evolve_runtime",
+    "question": "a parte guiada pra humanos esta boa mesmo? compensa fazer audit pra descobrir codigo morto e doc missleading pro agente",
+    "expected_classification": "builder-flow",
+    "expected_phase": "6-evolve",
+    "expected_workflow": "runtime-builder",
+    "expected_facilitation_pack": "skill:facilitation/runtime-builder.md",
+    "state_update_required": false
+  },
+  {
     "id": "game_story_lifecycle_request",
     "state": "discovery",
     "question": "preciso criar game stories implementation-ready para o proximo playable slice do jogo",
