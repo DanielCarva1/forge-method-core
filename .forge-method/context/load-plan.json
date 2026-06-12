@@ -1,9 +1,9 @@
 {
   "budget_chars": 12000,
   "deferred": [],
-  "estimated_required_chars": 1569,
-  "estimated_selected_chars": 9291,
-  "generated_at": "2026-06-11T15:29:01+00:00",
+  "estimated_required_chars": 2057,
+  "estimated_selected_chars": 11027,
+  "generated_at": "2026-06-11T23:34:18+00:00",
   "over_budget": false,
   "root": "C:\\Users\\Danie\\OneDrive\\Documentos\\ody",
   "rules": [
@@ -13,10 +13,10 @@
     "after meaningful progress, write checkpoint or evidence before ending"
   ],
   "runtime": "forge-method",
-  "runtime_version": "1.25.0",
+  "runtime_version": "1.27.0",
   "selected": [
     {
-      "estimated_chars": 528,
+      "estimated_chars": 932,
       "location": "project",
       "path": ".forge-method/state.yaml",
       "priority": 100,
@@ -34,16 +34,16 @@
       "section": "state"
     },
     {
-      "estimated_chars": 784,
+      "estimated_chars": 868,
       "location": "project",
-      "path": "skills/forge-method/references/workflow-ready-release.md",
+      "path": "skills/forge-method/references/workflow-evolve-project.md",
       "priority": 92,
       "reason": "active workflow state machine",
       "required": true,
       "section": "workflow"
     },
     {
-      "estimated_chars": 652,
+      "estimated_chars": 766,
       "location": "project",
       "path": ".forge-method/context/latest-checkpoint.md",
       "priority": 88,
@@ -52,25 +52,25 @@
       "section": "memory"
     },
     {
-      "estimated_chars": 610,
-      "location": "project",
-      "path": "skills/forge-method/agents/profiles/operator.yaml",
-      "priority": 80,
-      "reason": "recommended agent profile for current state: operator",
-      "required": false,
-      "section": "agent-profile"
-    },
-    {
       "estimated_chars": 673,
       "location": "project",
-      "path": "skills/forge-method/agents/profiles/quality-reviewer.yaml",
-      "priority": 79,
-      "reason": "recommended agent profile for current state: quality-reviewer",
+      "path": "skills/forge-method/agents/profiles/facilitator.yaml",
+      "priority": 80,
+      "reason": "recommended agent profile for current state: facilitator",
       "required": false,
       "section": "agent-profile"
     },
     {
-      "estimated_chars": 4598,
+      "estimated_chars": 626,
+      "location": "project",
+      "path": "skills/forge-method/agents/profiles/planner.yaml",
+      "priority": 79,
+      "reason": "recommended agent profile for current state: planner",
+      "required": false,
+      "section": "agent-profile"
+    },
+    {
+      "estimated_chars": 5336,
       "location": "project",
       "path": ".forge-method/artifacts/index.ndjson",
       "priority": 76,
@@ -79,27 +79,27 @@
       "section": "artifact"
     },
     {
-      "estimated_chars": 284,
+      "estimated_chars": 564,
       "location": "project",
-      "path": ".forge-method/evidence/20260611-152635-gate-quality-gate.md",
+      "path": ".forge-method/evidence/20260611-233338-analysis-bmad-forge-guided-flow-comparison.md",
       "priority": 68,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 631,
+      "estimated_chars": 518,
       "location": "project",
-      "path": ".forge-method/evidence/20260611-152452-story-story-self-update-hot-start-done.md",
+      "path": ".forge-method/evidence/20260611-231428-validation-guidance-engine-validation.md",
       "priority": 67,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 274,
+      "estimated_chars": 487,
       "location": "project",
-      "path": ".forge-method/evidence/20260611-063437-gate-quality-gate.md",
+      "path": ".forge-method/evidence/20260611-205934-validation-reload-emergency-entrypoint-validation.md",
       "priority": 66,
       "reason": "recent validation or release evidence",
       "required": false,
@@ -108,10 +108,10 @@
   ],
   "state": {
     "active_story": "",
-    "next_action": "publish 1.25.0 batch to GitHub",
-    "phase": "5-ready-operate",
+    "next_action": "decide whether to implement priority gaps: workflow metadata, facilitation packs, game/test depth, and catalog consistency fixes",
+    "phase": "6-evolve",
     "project": "forge-method-core",
-    "status": "story-done",
-    "workflow": "ready-release"
+    "status": "guidance-comparison",
+    "workflow": "evolve-project"
   }
 }

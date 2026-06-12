@@ -66,6 +66,7 @@ class UpdaterTests(unittest.TestCase):
         self.assertFalse(updater.is_newer_version("1.24.0", "1.24.0"))
         self.assertTrue(updater.should_run_for_args([]))
         self.assertTrue(updater.should_run_for_args(["preflight", "--json"]))
+        self.assertTrue(updater.should_run_for_args(["reload", "--root", "."]))
         self.assertFalse(updater.should_run_for_args(["--help"]))
         self.assertFalse(updater.should_run_for_args(["story", "list"]))
 

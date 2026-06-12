@@ -1,0 +1,10 @@
+# Forge Method story
+updated_at: "2026-06-12T01:10:46+00:00"
+id: "guided-depth-templates-p1"
+title: "Add artifact templates for guided-depth workflows"
+status: "done"
+phase: "6-evolve"
+acceptance_criteria: "guided-depth workflows have artifact templates or template references | workflow catalog validates optional template references | facilitation packs name per-workflow artifact outputs | tests cover template metadata for game lifecycle, test architecture, builder utility, and document utility families | workflow validation and runtime tests pass"
+evidence: ".forge-method/evidence/20260612-011021-validation-guided-depth-template-validation.md"
+checks: "workflow validate; python -m unittest discover -s tests; scripts/verify-fast.ps1; scripts/smoke-runtime.ps1; scripts/smoke-install.ps1; gate --require-evals"
+blocker: ""

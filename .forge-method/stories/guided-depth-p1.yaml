@@ -1,0 +1,11 @@
+# Forge Method story
+updated_at: "2026-06-12T00:41:14+00:00"
+id: "guided-depth-p1"
+title: "Add BMAD-depth guided workflow coverage"
+status: "done"
+phase: "6-evolve"
+acceptance_criteria: "Forge catalog includes deep game lifecycle, test architecture lifecycle, builder analysis/conversion, and document utility workflows | each new workflow has compact state-machine docs with trigger/inputs/steps/outputs/done_when/blocked_when/handoff | human-facing facilitation packs exist for the newly guided depth families | module manifests expose the new workflows in the right tracks | Guidance Engine routes explicit game lifecycle, test architecture, builder analysis/conversion, and document utility requests to the right workflows | unit tests and workflow validation cover the new coverage"
+evidence: ".forge-method/evidence/20260612-004053-validation-bmad-guided-depth-p1-validation.md"
+checks: "python -m unittest discover -s tests; scripts/smoke-runtime.ps1; scripts/verify-fast.ps1; scripts/smoke-install.ps1; workflow validate; gate --require-evals"
+blocker: ""
+artifacts: ".forge-method/artifacts/guidance-engine-benchmark.md"

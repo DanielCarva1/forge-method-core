@@ -14,7 +14,7 @@ from typing import Any
 
 
 PLUGIN_NAME = "forge-method-core"
-USER_ENTRYPOINTS = {"start", "preflight", "guide", "resume"}
+USER_ENTRYPOINTS = {"start", "preflight", "guide", "resume", "reload"}
 SKIP_VALUES = {"1", "true", "yes", "on"}
 POLICIES = {"auto", "notify", "off"}
 

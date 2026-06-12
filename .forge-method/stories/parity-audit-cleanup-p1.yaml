@@ -1,0 +1,10 @@
+# Forge Method story
+updated_at: "2026-06-12T02:04:40+00:00"
+id: "parity-audit-cleanup-p1"
+title: "Clean up BMAD parity audit report"
+status: "done"
+phase: "6-evolve"
+acceptance_criteria: "comparison report no longer lists implemented workflows as gaps | correct-course facilitation has domain impact examples | validation proves workflow catalog and gate remain clean"
+evidence: ".forge-method/evidence/20260612-020414-validation-bmad-parity-audit-cleanup-validation.md"
+checks: "stale gap scan: no matches; workflow validate: passed; smoke-install.ps1: passed; gate --require-evals: passed"
+blocker: ""

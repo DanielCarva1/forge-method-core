@@ -1,0 +1,34 @@
+# workflow: spec-distillation
+
+trigger:
+  - messy notes, transcript, or long brief must become a compact machine contract
+  - user asks to distill a spec before planning
+
+inputs:
+  - source notes or transcript
+  - known constraints
+  - target module/track
+  - acceptance expectations
+
+steps:
+  1. extract objective, users, constraints, decisions, and open questions
+  2. separate facts, assumptions, risks, and rejected options
+  3. produce compact spec kernel and companion notes if needed
+  4. route to write-spec, product-requirements, or plan-sprint
+
+outputs:
+  - spec kernel
+  - assumption/risk/open-question list
+  - next workflow
+
+done_when:
+  - spec is compact enough for agent handoff
+  - assumptions and open questions are explicit
+  - next workflow is known
+
+blocked_when:
+  - source material is unavailable
+  - objective cannot be inferred without human input
+
+handoff:
+  - preserve spec kernel path, assumptions, open questions, and next workflow

@@ -1,12 +1,18 @@
 {
-  "version": "1.26.3",
+  "version": "1.27.0",
   "date": "2026-06-11",
-  "title": "Lean bootstrap and less state jargon",
-  "summary": "Forge Method now forbids broad reading before route resolution and removes missing-state jargon from human startup output.",
+  "title": "Guidance Engine routing",
+  "summary": "Forge Method now routes substantive human intent through a native Guidance Engine, workflow catalog metadata, human facilitation packs, and specialized guided-depth workflows before following stale state actions.",
   "highlights": [
-    "Agents must route first and avoid broad project reads before preflight/start.",
-    "Missing-state human output no longer says Project state: missing.",
-    "The skill forbids stale phrases like waiting for initialization details."
+    "guide --question --json classifies corrections, confusion, brainstorm, research, game, quality, builder, and mechanical build intent.",
+    "Workflow catalog metadata now validates phase, required status, outputs, aliases, and facilitation pack references.",
+    "Human facilitation packs add richer guided conversation for the core workflows without bloating compact agent state machines.",
+    "Guided-depth workflows cover game lifecycle, test architecture, builder analysis/conversion, and document utility requests.",
+    "Guided-depth catalog entries can now reference validated artifact templates.",
+    "Narrow guided-depth routes now return transition commands and facilitation packs include domain examples.",
+    "Testing education requests route to teach-testing before strategy/framework selection.",
+    "Hot Start now runs Guidance Engine after resume when the user message contains substantive intent.",
+    "Emergency reload remains included for stale chat recovery."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.26.3.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.27.0.md"
 }

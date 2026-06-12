@@ -6,6 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 installer="$repo_root/install.sh"
 installed_runtime="$HOME/.agents/skills/forge-method/scripts/forge_method_runtime.py"
 installed_launcher="$HOME/.agents/skills/forge-method/forge-method.sh"
+installed_reload_skill="$HOME/.agents/skills/forge-reload/SKILL.md"
 tmp="${TMPDIR:-/tmp}/forge-method-install-smoke"
 example_tmp="${TMPDIR:-/tmp}/forge-method-install-example-smoke"
 project_parent_tmp="${TMPDIR:-/tmp}/forge-method-install-project-smoke"
@@ -17,6 +18,10 @@ if [[ ! -f "$installed_runtime" ]]; then
   echo "Installed runtime helper not found: $installed_runtime" >&2
   exit 1
 fi
+if [[ ! -f "$installed_reload_skill" ]]; then
+  echo "Installed reload skill not found: $installed_reload_skill" >&2
+  exit 1
+fi
 
 rm -rf "$tmp"
 rm -rf "$example_tmp"
@@ -26,6 +31,7 @@ mkdir -p "$project_parent_tmp"
 
 "$python_bin" "$installed_runtime" --help
 bash "$installed_launcher" --help
+bash "$installed_launcher" reload --root "$tmp"
 "$python_bin" "$installed_runtime" module list
 "$python_bin" "$installed_runtime" agent list
 "$python_bin" "$installed_runtime" agent validate
@@ -38,9 +44,11 @@ bash "$installed_launcher" --help
 "$python_bin" "$installed_runtime" gate --root "$project_parent_tmp/installed-generated" --require-evals
 "$python_bin" "$installed_runtime" workflow validate
 "$python_bin" "$installed_runtime" preflight --root "$tmp"
+"$python_bin" "$installed_runtime" reload --root "$tmp"
 "$python_bin" "$installed_runtime" start --root "$tmp"
 "$python_bin" "$installed_runtime" init --project install-smoke --root "$tmp"
 "$python_bin" "$installed_runtime" preflight --root "$tmp"
+"$python_bin" "$installed_runtime" reload --root "$tmp"
 "$python_bin" "$installed_runtime" resume --root "$tmp"
 "$python_bin" "$installed_runtime" start --root "$tmp"
 "$python_bin" "$installed_runtime" snapshot --root "$tmp"

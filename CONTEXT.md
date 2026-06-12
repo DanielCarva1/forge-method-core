@@ -72,6 +72,24 @@ A compact status summary for humans and agents. It highlights route recommendati
 
 A structured, non-mutating decision for the next safe action. It identifies the action, target, whether it can proceed autonomously, minimal files to read, commands to run, done conditions, and blocking conditions.
 
+## Guidance Engine
+
+The canonical runtime subsystem that interprets the latest human message together with durable Forge state, sprint/story context, artifacts, and available workflows. It classifies intent, detects signals, recommends phase/workflow/action, returns a human prompt and alternatives, and says whether state must be updated before continuing.
+
+## Workflow Catalog
+
+The runtime metadata registry for packaged workflows. It records workflow id, reference alias, phase, required/optional status, follow-up workflows, expected outputs, and optional facilitation pack. Guidance Engine uses it to explain route decisions and future agents use it to validate module workflow references.
+
+## Guided Depth Family
+
+A related set of specialized workflows that deepens a broad track without changing the single Forge entrypoint. Current depth families include game lifecycle, test architecture, builder utility, and document utility. Each family keeps compact workflow state machines for agents and a separate facilitation pack for human conversation.
+
+## Facilitation Pack
+
+A human-facing conversation guide for a workflow. It contains open-floor prompts, source-material intake, follow-up question batches, stage-by-stage conversation scripts, elicitation options, facilitator moves, quality bars, anti-patterns, fast/deep paths, checkpoint options, artifact rules, and headless behavior. It is intentionally separate from agent-facing workflow state machines so human guidance can be rich without bloating agent recovery context.
+
+Facilitation packs are part of the product contract, not optional polish. If a workflow is routed to humans through Guidance Engine, its pack must make the interaction feel guided, tasteful, and useful while the paired `workflow-*.md` remains compact for agents.
+
 ## Human Input
 
 A durable request for user judgment under `.forge-method/inputs/`. Required open human input sets `human_input_required` and blocks autonomous progression until answered or deferred.
@@ -200,6 +218,8 @@ A compact Markdown state machine loaded only when the current runtime state requ
 
 The Forge Method surface meant for people: conversational guidance, taste, agent personalities, live council debates, onboarding, tutorials, and user-facing explanation. It may be warmer and more expressive than runtime files.
 
+Human Experience uses Guidance Engine output to decide what to say next. It should not invent routes from chat memory when durable state and the latest human intent disagree.
+
 ## Human Voice Layer
 
 The Human Experience policy applied to non-JSON guidance. It makes Forge warm, direct, opinionated, and adaptive while keeping machine-readable runtime surfaces compact.
@@ -215,6 +235,8 @@ The Forge behavior of challenging weak ideas, impossible promises, unsafe produc
 ## Agent Runtime
 
 The Forge Method surface meant for agents: compact skills, workflows, manifests, state files, evals, artifacts, gates, and recovery files. It optimizes for deterministic continuation and low context cost.
+
+Agent Runtime consumes Guidance Engine output as compact JSON, commands, state update hints, and workflow references. It keeps the routing contract small enough for future agents to resume without replaying the conversation.
 
 ## Reality/Evidence Gate
 
@@ -263,6 +285,8 @@ A compact runtime payload returned by resume, next, and guide. It names the next
 ## Correct-Course Continuation
 
 The policy for contradictions discovered during mechanical work. The agent writes a compact correct-course artifact, chooses the conservative interpretation that preserves the approved spec, updates state, and continues.
+
+When the human message rejects the current route, names a failure, or shows strong frustration, Guidance Engine may route to Correct-Course Continuation even if the previous `next_action` points at release, publication, or normal operation.
 
 ## Codex Goal Handoff
 

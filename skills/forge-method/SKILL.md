@@ -22,6 +22,9 @@ $skill = "<directory-containing-this-SKILL.md>"
 & (Join-Path $skill "forge-method.ps1") preflight --root .
 & (Join-Path $skill "forge-method.ps1") start --root .
 & (Join-Path $skill "forge-method.ps1") resume --root . --json
+# If the user message includes a substantive question, correction, complaint,
+# new intent, brainstorm request, research request, or build request, run:
+& (Join-Path $skill "forge-method.ps1") guide --root . --question "<latest-user-message>" --json
 ```
 
 ```bash
@@ -29,11 +32,18 @@ skill="<directory-containing-this-SKILL.md>"
 bash "$skill/forge-method.sh" preflight --root .
 bash "$skill/forge-method.sh" start --root .
 bash "$skill/forge-method.sh" resume --root . --json
+# If the user message includes a substantive question, correction, complaint,
+# new intent, brainstorm request, research request, or build request, run:
+bash "$skill/forge-method.sh" guide --root . --question "<latest-user-message>" --json
 ```
 
 The launcher may self-update Git marketplace installs before normal startup. Continue the current start after update; do not ask the user to open another chat as part of the normal flow.
 
 Fallback to `$HOME/.agents/skills/forge-method` only when the active skill directory cannot be resolved.
+
+When `guide --question --json` returns a `guidance_engine` block, treat it as authoritative for the next step. A current human correction, frustration signal, brainstorm request, research request, or new intent can override an old `next_action`; follow `recommended_workflow`, `recommended_phase`, `recommended_action`, and `commands` before continuing stale release or publish work.
+
+If Guidance Engine returns `facilitation_pack`, load that `skill:facilitation/*.md` file before running the human-facing workflow. The pack is the richer conversation guide; the `references/workflow-*.md` file remains the compact agent state machine.
 
 ## Operating Rules
 
@@ -89,6 +99,8 @@ Load only the reference needed for the current state. Start with:
 
 - `references/workflow-start.md` for start/resume.
 - `references/workflow-guide-route.md` for human guide and track routing.
+- `references/workflow-guidance-engine.md` when `guide --question` classifies a human correction, doubt, research/brainstorm request, new intent, or workflow mismatch.
+- `facilitation/*.md` when `guide --question --json` returns a `facilitation_pack`.
 - `references/workflow-grill-gate.md` for decision closeout.
 - `references/workflow-reality-evidence-gate.md` for idea feasibility and evidence checks.
 - `references/workflow-context-recovery.md` after context reset.

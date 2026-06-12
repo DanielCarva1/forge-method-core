@@ -37,6 +37,8 @@ Start Forge Method in this workspace.
 
 The installer prints direct `codex://` links for opening the plugin page and sharing it inside the Codex app. After a first install, start a new Codex thread so the enabled skill list is refreshed. After the self-updating package is installed, normal `$forge-method` starts can self-update the Git marketplace package and continue in the same chat.
 
+When your message includes a question, correction, brainstorm/research request, new intent, or build request, `$forge-method` routes it through Guidance Engine after startup. The runtime returns the recommended phase, workflow, action, alternatives, and any state update command before following older state actions.
+
 Fallback skill-only install:
 
 Windows:
@@ -147,9 +149,9 @@ bash scripts/smoke-fixtures.sh
 After publishing a tag, verify the published package can be cloned and installed as a plugin:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref main -ExpectedVersion 1.26.3
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref main -ExpectedVersion 1.27.0
 ```
 
 ```bash
-REF=main EXPECTED_VERSION=1.26.3 bash scripts/smoke-plugin-clone-install.sh
+REF=main EXPECTED_VERSION=1.27.0 bash scripts/smoke-plugin-clone-install.sh
 ```

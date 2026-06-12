@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -17,9 +18,12 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.26.3"
+RUNTIME_VERSION = "1.27.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
+WORKFLOW_CATALOG_PATH = SKILL_DIR / "catalog" / "workflows.json"
+FACILITATION_DIR = SKILL_DIR / "facilitation"
+TEMPLATES_DIR = SKILL_DIR / "templates"
 
 STATE_DIR = ".forge-method"
 STATE_FILE = "state.yaml"
@@ -106,6 +110,22 @@ WORKFLOW_REQUIRED_SECTIONS = [
     "done_when:",
     "blocked_when:",
     "handoff:",
+]
+
+FACILITATION_REQUIRED_SECTIONS = [
+    "purpose:",
+    "open_floor:",
+    "source_material:",
+    "follow_up_batches:",
+    "conversation_stages:",
+    "elicitation_options:",
+    "facilitator_moves:",
+    "quality_bar:",
+    "anti_patterns:",
+    "paths:",
+    "checkpoint_options:",
+    "artifact_rules:",
+    "headless:",
 ]
 
 SCAN_SKIP_DIRS = {
@@ -416,7 +436,7 @@ def default_track_for_module(module_id: str) -> dict[str, str]:
 def score_track_for_objective(track: dict[str, str], objective: str) -> tuple[int, str]:
     if not objective:
         return 0, "no objective supplied"
-    tokens = set(re.findall(r"[a-z0-9]+", objective.lower()))
+    tokens = objective_tokens(objective)
     haystack = " ".join(
         [
             track.get("id", ""),
@@ -432,7 +452,23 @@ def score_track_for_objective(track: dict[str, str], objective: str) -> tuple[in
         "standard-product": {"app", "api", "software", "web", "product", "tool"},
         "enterprise": {"security", "privacy", "compliance", "enterprise", "risk", "production"},
         "creative-studio": {"creative", "brand", "story", "content", "campaign", "concept"},
-        "game-studio": {"game", "player", "mechanic", "gdd", "engine", "playtest"},
+        "game-studio": {
+            "game",
+            "player",
+            "mechanic",
+            "gdd",
+            "engine",
+            "playtest",
+            "rpg",
+            "vtt",
+            "tabletop",
+            "campaign",
+            "dice",
+            "rulebook",
+            "jogar",
+            "mesa",
+            "regras",
+        },
         "runtime-builder": {"runtime", "method", "workflow", "skill", "agent", "plugin"},
         "test-architect": {"test", "qa", "validation", "review", "evidence", "regression"},
         "launch-ops": {"launch", "release", "operate", "support", "monitoring", "feedback"},
@@ -1218,6 +1254,120 @@ def print_preflight(payload: dict[str, Any]) -> None:
         print(f"- {item.get('name')}: {item.get('command')}")
 
 
+def build_reload_payload(root: Path, *, scan_depth: int) -> dict[str, Any]:
+    state_root, state = load_state_or_none(root)
+    runtime_root = find_runtime_repo_root(root)
+    runtime_repo = runtime_root is not None
+    commands = [
+        preflight_command("preflight", "preflight", "--root", root),
+        preflight_command("start", "start", "--root", root),
+    ]
+    bootstrap_contract = {
+        "current_filesystem_authoritative": True,
+        "launcher_output_authoritative": True,
+        "do_not_replay_chat_state": True,
+        "read_before_route": ["active SKILL.md", "launcher/runtime output"],
+        "avoid_before_route": ["project docs", "source files", "git history", "broad workspace scans"],
+        "stale_reply_policy": "Do not answer with prior waiting/init/state-file wording.",
+    }
+    base: dict[str, Any] = {
+        "runtime": RUNTIME_NAME,
+        "runtime_version": RUNTIME_VERSION,
+        "generated_at": utc_now(),
+        "workspace": str(root),
+        "skill_dir": str(SKILL_DIR),
+        "bootstrap_contract": bootstrap_contract,
+        "runtime_repo": runtime_repo,
+        "runtime_root": str(runtime_root) if runtime_root else "",
+    }
+    if state_root:
+        commands.extend(
+            [
+                preflight_command("resume", "resume", "--root", state_root, "--json"),
+                preflight_command("next", "next", "--root", state_root),
+            ]
+        )
+        base.update(
+            {
+                "route": "existing-method-project",
+                "project_root": str(state_root),
+                "project": state.get("project", ""),
+                "phase": state.get("phase", ""),
+                "status": state.get("status", ""),
+                "workflow": state.get("active_workflow", ""),
+                "human_experience": human_experience_for_route("existing-method-project"),
+                "decision_required": False,
+                "question": "",
+                "commands": commands,
+            }
+        )
+        return base
+
+    projects = [] if runtime_repo else [
+        project_route_summary(project, base=root)
+        for project in discover_project_roots(root, max_depth=scan_depth)
+    ]
+    if runtime_repo:
+        route = "runtime-repo"
+        question = "Which project folder should be opened or created outside the runtime repo?"
+    elif projects:
+        route = "workspace-with-projects"
+        question = "Which existing project should be opened, or should a new project be created?"
+        commands.append(preflight_command("project-list", "project", "list", "--root", root, "--scan-depth", scan_depth))
+    elif is_brownfield_workspace(root):
+        route = "existing-codebase"
+        question = "Initialize Forge Method for this existing project as brownfield?"
+    else:
+        route = "empty-workspace"
+        question = "Create a new method project in this workspace?"
+    base.update(
+        {
+            "route": route,
+            "human_experience": human_experience_for_route(route),
+            "reality_evidence_gate": reality_evidence_assessment(""),
+            "decision_required": True,
+            "question": question,
+            "known_projects": projects,
+            "commands": commands,
+        }
+    )
+    return base
+
+
+def print_reload(payload: dict[str, Any]) -> None:
+    contract = payload["bootstrap_contract"]
+    print("Forge Reload")
+    print(f"Runtime: {payload['runtime']} {payload['runtime_version']}")
+    print(f"Workspace: {payload['workspace']}")
+    print(f"Skill dir: {payload['skill_dir']}")
+    print("Contract: current filesystem and launcher output override prior Forge chat state.")
+    print("Budget: read only the active skill and launcher output before route; avoid broad project reads.")
+    print(f"Stale reply guard: {contract['stale_reply_policy']}")
+    print(f"Route: {payload.get('route', '')}")
+    if payload.get("route") == "existing-method-project":
+        print(f"Project root: {payload.get('project_root', '')}")
+        print(f"Project: {payload.get('project', '')}")
+        print(f"State: {payload.get('phase', '')} / {payload.get('status', '')} / {payload.get('workflow', '')}")
+        print("Next: run resume --json, then continue from durable state.")
+    else:
+        print_human_experience_intro(payload)
+        projects = payload.get("known_projects", [])
+        if projects:
+            print("Known projects:")
+            for index, project in enumerate(projects, start=1):
+                print(
+                    f"{index}. {project.get('project')}\t"
+                    f"{project.get('phase')}\t"
+                    f"{project.get('status')}\t"
+                    f"{project.get('path')}"
+                )
+        print(f"Next question: {payload.get('question', '')}")
+        print("Next: relay the route opening above; do not replace it with cached initialization copy.")
+    print("Commands:")
+    for item in payload.get("commands", []):
+        print(f"- {item.get('name')}: {item.get('command')}")
+
+
 def write_state(root: Path, state: dict[str, Any]) -> None:
     state.setdefault("schema_version", "1")
     state.setdefault("runtime", RUNTIME_NAME)
@@ -1599,9 +1749,31 @@ def module_summary(module: dict[str, str], *, score: int | None = None, reason: 
     return summary
 
 
+def normalize_text(value: str) -> str:
+    return unicodedata.normalize("NFKD", value.lower()).encode("ascii", "ignore").decode("ascii")
+
+
 def objective_tokens(value: str) -> set[str]:
-    tokens = set(re.findall(r"[a-z0-9]+", value.lower()))
-    return {token for token in tokens if len(token) > 2}
+    tokens = set(re.findall(r"[a-z0-9]+", normalize_text(value)))
+    stopwords = {
+        "and",
+        "any",
+        "build",
+        "create",
+        "for",
+        "from",
+        "into",
+        "make",
+        "that",
+        "the",
+        "with",
+        "quero",
+        "queria",
+        "fazer",
+        "criar",
+        "preciso",
+    }
+    return {token for token in tokens if len(token) > 2 and token not in stopwords}
 
 
 def score_module_for_objective(module: dict[str, str], objective: str) -> tuple[int, str]:
@@ -1622,8 +1794,26 @@ def score_module_for_objective(module: dict[str, str], objective: str) -> tuple[
     if module.get("id") == "software-builder" and any(token in tokens for token in {"app", "api", "code", "software", "web"}):
         score += 2
         matches.append("software")
-    if module.get("id") == "game-studio" and any(token in tokens for token in {"game", "play", "prototype"}):
-        score += 2
+    if module.get("id") == "game-studio" and any(
+        token in tokens
+        for token in {
+            "game",
+            "play",
+            "prototype",
+            "rpg",
+            "vtt",
+            "tabletop",
+            "campaign",
+            "dice",
+            "rulebook",
+            "rules",
+            "jogar",
+            "mesa",
+            "regras",
+            "livro",
+        }
+    ):
+        score += 4
         matches.append("game")
     if module.get("id") == "creative-studio" and any(token in tokens for token in {"brand", "creative", "content", "story"}):
         score += 2
@@ -1825,6 +2015,122 @@ def workflow_path_by_id(root: Path | None, workflow_id: str) -> Path | None:
         if workflow_id_from_path(path) == normalized:
             return path
     return None
+
+
+def workflow_catalog_payload() -> dict[str, Any]:
+    if not WORKFLOW_CATALOG_PATH.exists():
+        return {"schema_version": "", "workflows": []}
+    try:
+        payload = json.loads(WORKFLOW_CATALOG_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"schema_version": "invalid-json", "workflows": []}
+    if not isinstance(payload, dict):
+        return {"schema_version": "invalid", "workflows": []}
+    workflows = payload.get("workflows", [])
+    if not isinstance(workflows, list):
+        payload["workflows"] = []
+    return payload
+
+
+def workflow_catalog_entries() -> dict[str, dict[str, Any]]:
+    entries: dict[str, dict[str, Any]] = {}
+    for item in workflow_catalog_payload().get("workflows", []):
+        if not isinstance(item, dict):
+            continue
+        workflow_id = slugify(str(item.get("id", "")))
+        if workflow_id:
+            entries[workflow_id] = item
+    return entries
+
+
+def workflow_catalog_entry(workflow_id: str) -> dict[str, Any]:
+    return workflow_catalog_entries().get(slugify(workflow_id), {})
+
+
+def workflow_reference_id(workflow_id: str) -> str:
+    entry = workflow_catalog_entry(workflow_id)
+    return slugify(str(entry.get("reference", workflow_id)))
+
+
+def workflow_path_by_catalog_id(root: Path | None, workflow_id: str) -> Path | None:
+    return workflow_path_by_id(root, workflow_reference_id(workflow_id))
+
+
+def facilitation_pack_for_workflow(workflow_id: str) -> str:
+    entry = workflow_catalog_entry(workflow_id)
+    raw_pack = str(entry.get("facilitation_pack", ""))
+    pack_id = slugify(raw_pack) if raw_pack.strip() else ""
+    if not pack_id:
+        return ""
+    path = FACILITATION_DIR / f"{pack_id}.md"
+    if path.exists():
+        return f"skill:facilitation/{pack_id}.md"
+    return ""
+
+
+def validate_workflow_catalog(root: Path | None = None) -> list[str]:
+    errors: list[str] = []
+    payload = workflow_catalog_payload()
+    if payload.get("schema_version") != "forge-workflow-catalog.v1":
+        errors.append("workflow catalog missing schema_version forge-workflow-catalog.v1")
+    raw_entries = payload.get("workflows", [])
+    if not isinstance(raw_entries, list) or not raw_entries:
+        errors.append("workflow catalog has no workflows")
+        raw_entries = []
+    seen: set[str] = set()
+    checked_packs: set[str] = set()
+    entries = workflow_catalog_entries()
+    for item in raw_entries:
+        if not isinstance(item, dict):
+            errors.append("workflow catalog entry is not an object")
+            continue
+        workflow_id = slugify(str(item.get("id", "")))
+        if not workflow_id:
+            errors.append("workflow catalog entry missing id")
+            continue
+        if workflow_id in seen:
+            errors.append(f"workflow catalog duplicate id: {workflow_id}")
+        seen.add(workflow_id)
+        for field in ["phase", "required", "outputs"]:
+            if field not in item:
+                errors.append(f"workflow catalog {workflow_id} missing {field}")
+        if not workflow_path_by_id(root, slugify(str(item.get("reference", workflow_id)))):
+            errors.append(f"workflow catalog {workflow_id} references missing workflow: {item.get('reference', workflow_id)}")
+        raw_pack = str(item.get("facilitation_pack", ""))
+        pack_id = slugify(raw_pack) if raw_pack.strip() else ""
+        if pack_id:
+            pack_path = FACILITATION_DIR / f"{pack_id}.md"
+            if not pack_path.exists():
+                errors.append(f"workflow catalog {workflow_id} references missing facilitation pack: {pack_id}")
+            elif pack_id not in checked_packs:
+                errors.extend(validate_facilitation_pack(pack_path))
+                checked_packs.add(pack_id)
+        raw_template = str(item.get("template", ""))
+        template_id = slugify(raw_template) if raw_template.strip() else ""
+        if template_id and not (TEMPLATES_DIR / f"{template_id}.md").exists():
+            errors.append(f"workflow catalog {workflow_id} references missing template: {template_id}")
+    for module, path in module_manifests(root):
+        packaged = SKILL_DIR in path.parents
+        for workflow_id in split_list(module.get("workflows", "")):
+            normalized = slugify(workflow_id)
+            if not workflow_path_by_catalog_id(root, normalized):
+                errors.append(f"{path.name}: workflow `{normalized}` has no reference or catalog alias")
+            if packaged and normalized not in entries:
+                errors.append(f"{path.name}: workflow `{normalized}` missing catalog metadata")
+    return errors
+
+
+def validate_facilitation_pack(path: Path) -> list[str]:
+    if not path.exists():
+        return [f"missing facilitation pack: {path}"]
+    text = path.read_text(encoding="utf-8")
+    errors = []
+    for section in FACILITATION_REQUIRED_SECTIONS:
+        if section not in text:
+            errors.append(f"{path.name}: missing facilitation section `{section}`")
+    if text.count("\n  - ") < 12:
+        errors.append(f"{path.name}: too thin for a human-facing facilitation pack")
+    return errors
 
 
 def validate_workflow_file(path: Path) -> list[str]:
@@ -2348,6 +2654,16 @@ def cmd_preflight(args: argparse.Namespace) -> int:
         print(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2))
     else:
         print_preflight(payload)
+    return 0
+
+
+def cmd_reload(args: argparse.Namespace) -> int:
+    root = resolve_root(args.root)
+    payload = build_reload_payload(root, scan_depth=args.scan_depth)
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2))
+    else:
+        print_reload(payload)
     return 0
 
 
@@ -3838,11 +4154,560 @@ def cmd_track_set(args: argparse.Namespace) -> int:
     return 0
 
 
+def detect_guidance_signals(question: str) -> list[str]:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    signals: list[str] = []
+    phrase_signals = {
+        "correct-course": ["correct course", "corrigir curso", "curso errado", "wrong direction", "back up", "voltar atras"],
+        "confusion": ["nao sei", "não sei", "em duvida", "em dúvida", "what should", "o que fazer", "proximo passo", "próximo passo"],
+        "research-needed": ["deep research", "pesquisa profunda", "consultar documentacao", "ler docs", "benchmark"],
+        "document-utility": ["index docs", "shard document", "editorial review", "edge case", "spec distillation"],
+        "quality-flow": ["teach me testing"],
+    }
+    for signal, phrases in phrase_signals.items():
+        if any(phrase in normalized for phrase in phrases):
+            signals.append(signal)
+    keyword_signals = {
+        "correct-course": {"errado", "falhou", "falha", "problema", "corrigir", "faltando", "pular", "escapar", "quebrado"},
+        "frustration": {"frustrado", "frustrante", "cansado", "vergonha", "burro", "merda", "pessimo", "horrivel", "inaceitavel"},
+        "confusion": {"duvida", "confuso", "perdido", "incerto", "ajuda", "orientar", "guiar"},
+        "brainstorm": {"brainstorm", "ideia", "ideias", "ideation", "explorar", "opcoes", "alternativas"},
+        "research-needed": {"pesquisa", "research", "mercado", "documentacao", "docs", "evidencia", "fontes", "benchmark"},
+        "creative-flow": {"creative", "criativo", "historia", "storytelling", "marca", "campanha", "conceito"},
+        "game-flow": {"game", "jogo", "jogar", "player", "mecanica", "rpg", "mesa", "dice", "engine"},
+        "quality-flow": {"test", "testing", "teste", "qa", "qualidade", "risco", "nfr", "gate", "review"},
+        "document-utility": {
+            "index",
+            "shard",
+            "editorial",
+            "prose",
+            "estrutura",
+            "structure",
+            "distill",
+            "distillation",
+            "adversarial",
+            "edge",
+        },
+        "builder-flow": {
+            "forge",
+            "method",
+            "bmad",
+            "runtime",
+            "workflow",
+            "workflows",
+            "skill",
+            "agent",
+            "plugin",
+            "guidance",
+            "router",
+            "catalog",
+            "catalogo",
+            "metadata",
+            "facilitation",
+            "packs",
+            "parity",
+            "paridade",
+        },
+        "mechanical-build": {"implementar", "implementa", "implement", "build", "corrigir", "fix", "rodar", "story", "historia", "testes", "tests"},
+        "operate-support": {"publicar", "publish", "release", "suporte", "support", "operar", "operate"},
+    }
+    for signal, keywords in keyword_signals.items():
+        if tokens & keywords and signal not in signals:
+            signals.append(signal)
+    return signals
+
+
+def guidance_alternatives(*items: tuple[str, str]) -> list[dict[str, str]]:
+    return [{"workflow": workflow, "reason": reason} for workflow, reason in items]
+
+
+def routed_game_workflow(question: str) -> str:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    if {"ux", "hud", "controls", "controle", "onboarding", "accessibility", "acessibilidade"} & tokens:
+        return "game-ux-design"
+    if {"prd", "requirements", "requisitos"} & tokens or "game prd" in normalized:
+        return "game-prd"
+    if "sprint status" in normalized or {"status"} & tokens:
+        return "game-sprint-status"
+    if {"retro", "retrospective", "retrospectiva"} & tokens:
+        return "game-retrospective"
+    if {"e2e", "smoke"} & tokens or "end to end" in normalized:
+        return "game-e2e-scaffold"
+    if {"automation", "automacao", "automate", "automatizar"} & tokens:
+        return "game-test-automation"
+    if {"framework", "harness"} & tokens and {"test", "teste", "qa"} & tokens:
+        return "game-test-framework"
+    if {"story", "stories", "historia", "historias"} & tokens or "create story" in normalized or "criar story" in normalized:
+        return "game-story-creation"
+    return "game-brief"
+
+
+def routed_quality_workflow(question: str) -> str:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    if {"teach", "ensina", "ensinar", "explica", "explicar", "learn", "aprender"} & tokens or "teach me testing" in normalized:
+        return "teach-testing"
+    if {"traceability", "traceabilidade", "matrix", "matriz"} & tokens:
+        return "traceability-gate"
+    if {"nfr", "nonfunctional", "non-functional"} & tokens or "non functional" in normalized:
+        return "nfr-evidence-audit"
+    if {"atdd", "acceptance"} & tokens or "acceptance test" in normalized:
+        return "atdd-plan"
+    if {"ci", "pipeline"} & tokens:
+        return "ci-quality-pipeline"
+    if {"automation", "automacao", "automate", "automatizar"} & tokens:
+        return "test-automation"
+    if {"framework", "harness"} & tokens:
+        return "test-framework"
+    if {"review", "revisao", "audit", "auditoria"} & tokens:
+        return "test-review"
+    if {"engagement", "modelo"} & tokens:
+        return "test-engagement-model"
+    return "test-strategy"
+
+
+def routed_builder_workflow(question: str) -> str:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    if {"convert", "converter", "conversion"} & tokens or "convert skill" in normalized or "converter skill" in normalized:
+        return "skill-convert"
+    if {"agent", "agents"} & tokens and {"analyze", "analise", "analisar", "analysis"} & tokens:
+        return "agent-analyze"
+    if {"workflow", "workflows"} & tokens and {"analyze", "analise", "analisar", "analysis"} & tokens:
+        return "workflow-analyze"
+    return "runtime-builder"
+
+
+def routed_document_workflow(question: str) -> str:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    if {"shard", "split", "quebrar", "dividir"} & tokens:
+        return "doc-shard"
+    if {"editorial", "prose", "estrutura", "structure"} & tokens:
+        return "editorial-review"
+    if {"adversarial", "edge"} & tokens or "edge case" in normalized:
+        return "edge-case-review"
+    if {"distill", "distillation", "kernel"} & tokens or "spec distillation" in normalized:
+        return "spec-distillation"
+    if {"index", "map", "mapa"} & tokens:
+        return "doc-index"
+    return "doc-index"
+
+
+def catalog_phase_options(metadata: dict[str, Any]) -> list[str]:
+    phase_text = str(metadata.get("phase", ""))
+    return [part.strip() for part in phase_text.split("|") if part.strip()]
+
+
+def recommended_phase_for_workflow(metadata: dict[str, Any], current_phase: str) -> str:
+    phases = catalog_phase_options(metadata)
+    if not phases:
+        return current_phase or "0-route"
+    if "anytime" in phases:
+        return current_phase or "1-discovery"
+    if current_phase in phases:
+        return current_phase
+    return phases[0]
+
+
+def should_transition_to_guided_workflow(
+    *,
+    state: dict[str, str] | None,
+    has_question: bool,
+    classification: str,
+    recommended_workflow: str,
+    metadata: dict[str, Any],
+    commands: list[dict[str, str]],
+) -> bool:
+    if not state or not has_question or not metadata.get("modes"):
+        return False
+    if commands:
+        return False
+    if recommended_workflow == state.get("active_workflow", ""):
+        return False
+    return classification in {"game-flow", "quality-flow", "builder-flow", "document-utility"}
+
+
+def build_guidance_decision(
+    root: Path,
+    state: dict[str, str] | None,
+    *,
+    question: str,
+    current_next_action: str,
+    next_story: dict[str, Any] | None,
+) -> dict[str, Any]:
+    signals = detect_guidance_signals(question)
+    signal_set = set(signals)
+    phase = state.get("phase", "") if state else ""
+    module_id = state.get("module", "") if state else ""
+    has_question = bool(question.strip())
+    commands: list[dict[str, str]] = []
+    classification = "operate-support"
+    recommended_phase = phase or "0-route"
+    recommended_workflow = state.get("active_workflow", "start-runtime") if state else "start-runtime"
+    recommended_action = current_next_action or "resolve project route"
+    human_prompt = "I can continue from the current state, or you can give me the outcome you want to route."
+    alternatives = guidance_alternatives(
+        ("guide-route", "orient the human without changing project state"),
+        ("context-recovery", "recover state when context is stale or overloaded"),
+    )
+    state_update_required = False
+    reason = "No stronger human intent was detected, so the durable state remains authoritative."
+
+    if not state:
+        recommended_phase = "0-route"
+        recommended_workflow = "start-runtime"
+        recommended_action = "answer the route question, then create or open the selected project"
+        human_prompt = "Tell me the project name and the outcome you want; I will choose the track and first workflow."
+        reason = "No Forge project state exists in this workspace."
+        if "game-flow" in signal_set:
+            classification = "game-flow"
+            recommended_phase = "1-discovery"
+            recommended_workflow = routed_game_workflow(question)
+            recommended_action = f"create a game-studio project, then run {recommended_workflow} before build"
+            human_prompt = "I should shape player fantasy, loop, scope, and proof target before technical planning."
+            reason = "The first intent is game-shaped, so the first guided flow should be game-specific."
+        elif "creative-flow" in signal_set:
+            classification = "creative-flow"
+            recommended_phase = "1-discovery"
+            recommended_workflow = "creative-session"
+            recommended_action = "create a creative-studio project, then explore and select a creative direction"
+            human_prompt = "I should preserve taste, constraints, and rejected directions before writing a spec."
+            reason = "The first intent is taste-heavy or creative."
+        elif "document-utility" in signal_set:
+            classification = "document-utility"
+            recommended_phase = "1-discovery"
+            recommended_workflow = routed_document_workflow(question)
+            recommended_action = f"create the project, then run {recommended_workflow} to make the source material usable"
+            human_prompt = "I should clarify the document job and source-of-truth boundary before editing docs."
+            reason = "The first intent is documentation utility work."
+        elif "research-needed" in signal_set:
+            classification = "research-needed"
+            recommended_phase = "1-discovery"
+            recommended_workflow = "domain-scan"
+            recommended_action = "create the project with an evidence-first discovery flow, then write a compact scan"
+            human_prompt = "I should gather enough evidence to make the next decision defensible."
+            reason = "The first intent depends on docs, evidence, or external benchmark behavior."
+        elif "brainstorm" in signal_set:
+            classification = "brainstorm"
+            recommended_phase = "1-discovery"
+            recommended_workflow = "brainstorming"
+            recommended_action = "create the project, then generate and compare options before specification"
+            human_prompt = "I should keep this divergent until the direction is chosen."
+            reason = "The first intent asks for ideas, options, or exploration."
+        elif "builder-flow" in signal_set:
+            classification = "builder-flow"
+            recommended_phase = "1-discovery"
+            recommended_workflow = routed_builder_workflow(question)
+            recommended_action = f"create a runtime-builder project, then run {recommended_workflow} before scaffolding"
+            human_prompt = "I should clarify the method artifact and acceptance criteria before editing runtime files."
+            reason = "The first intent is about runtime, workflow, skill, or plugin behavior."
+    elif has_question and ({"correct-course", "frustration"} & signal_set):
+        classification = "correct-course"
+        recommended_phase = "6-evolve" if phase == "5-ready-operate" else phase
+        recommended_workflow = "correct-course"
+        recommended_action = (
+            "write a correct-course artifact, classify what failed in the method guidance, "
+            "then route the smallest fix through runtime-builder"
+        )
+        human_prompt = "I should step back, name what failed, compare it against the method docs, and route a repair before building more."
+        alternatives = guidance_alternatives(
+            ("problem-solving", "diagnose symptoms and causes before selecting a repair"),
+            ("council-decision", "use multiple perspectives when the correction is taste-heavy or strategic"),
+            ("runtime-builder", "turn the corrected decision into compact workflows, tests, and runtime changes"),
+        )
+        state_update_required = True
+        reason = "The latest user message contradicts or rejects the current route, so stale next_action must not dominate."
+        if phase == "5-ready-operate":
+            commands.append(
+                preflight_command(
+                    "transition-evolve",
+                    "transition",
+                    "--root",
+                    root,
+                    "--phase",
+                    "6-evolve",
+                    "--status",
+                    "evolution-intake",
+                    "--workflow",
+                    "correct-course",
+                    "--next-action",
+                    recommended_action,
+                )
+            )
+        commands.append(
+            preflight_command(
+                "correct-course",
+                "correct-course",
+                "--root",
+                root,
+                "--summary",
+                "<summarize the guidance failure and user correction>",
+                "--impact",
+                "human guidance routed to stale state instead of the user's current intent",
+                "--next-action",
+                recommended_action,
+            )
+        )
+    elif has_question and phase == "5-ready-operate" and "research-needed" in signal_set:
+        classification = "research-needed"
+        recommended_phase = "6-evolve"
+        recommended_workflow = "domain-scan"
+        recommended_action = "open an evolution cycle, collect grounded evidence, then decide the next runtime change"
+        human_prompt = "This ready project has new evidence needs; I should research before publishing or building."
+        alternatives = guidance_alternatives(
+            ("market-scan", "when alternatives and adoption risk matter"),
+            ("technical-feasibility-scan", "when implementation feasibility is the main uncertainty"),
+            ("evolve-project", "when the evidence question is already answered"),
+        )
+        state_update_required = True
+        reason = "A ready project with a new research request should enter evolve and run the evidence workflow."
+        commands.append(
+            preflight_command(
+                "transition-evolve",
+                "transition",
+                "--root",
+                root,
+                "--phase",
+                "6-evolve",
+                "--status",
+                "evolution-research",
+                "--workflow",
+                "domain-scan",
+                "--next-action",
+                recommended_action,
+            )
+        )
+    elif has_question and phase == "5-ready-operate" and "brainstorm" in signal_set:
+        classification = "brainstorm"
+        recommended_phase = "6-evolve"
+        recommended_workflow = "brainstorming"
+        recommended_action = "open an evolution cycle, explore options, then select the smallest coherent direction"
+        human_prompt = "This ready project has new direction-finding work; I should brainstorm before making a plan."
+        alternatives = guidance_alternatives(
+            ("concept-selection", "choose between candidate directions after divergence"),
+            ("problem-solving", "use when the issue is a failure mode rather than an opportunity"),
+            ("evolve-project", "use when the direction is already clear"),
+        )
+        state_update_required = True
+        reason = "A ready project with a new brainstorm request should enter evolve and run an exploratory workflow."
+        commands.append(
+            preflight_command(
+                "transition-evolve",
+                "transition",
+                "--root",
+                root,
+                "--phase",
+                "6-evolve",
+                "--status",
+                "evolution-brainstorm",
+                "--workflow",
+                "brainstorming",
+                "--next-action",
+                recommended_action,
+            )
+        )
+    elif has_question and phase == "5-ready-operate" and "builder-flow" in signal_set:
+        classification = "evolution-request"
+        recommended_phase = "6-evolve"
+        recommended_workflow = "evolve-project"
+        recommended_action = "classify the new method improvement request, then choose discovery, research, planning, or build"
+        human_prompt = "This is new intent for a ready project; I should open an evolution cycle instead of publishing the old batch."
+        alternatives = guidance_alternatives(
+            ("problem-solving", "use when the failure mode is still unclear"),
+            ("runtime-builder", "use after the improvement target is clear"),
+            ("research-needed", "use when external benchmark or docs should drive the change"),
+        )
+        state_update_required = True
+        reason = "Ready projects should enter evolve when the human brings new feedback or product intent."
+        commands.append(
+            preflight_command(
+                "transition-evolve",
+                "transition",
+                "--root",
+                root,
+                "--phase",
+                "6-evolve",
+                "--status",
+                "evolution-intake",
+                "--workflow",
+                "evolve-project",
+                "--next-action",
+                recommended_action,
+            )
+        )
+    elif has_question and "builder-flow" in signal_set and (module_id == "runtime-builder" or phase == "6-evolve"):
+        classification = "builder-flow"
+        recommended_workflow = routed_builder_workflow(question)
+        if recommended_workflow == "runtime-builder":
+            recommended_action = "shape and implement the Forge runtime/workflow/catalog change with tests and evidence"
+            human_prompt = "This is about improving Forge itself; I should route through runtime-builder before any domain-specific game, test, or research workflow."
+        else:
+            recommended_action = f"run {recommended_workflow} to analyze or convert the runtime artifact before scaffolding"
+            human_prompt = "This is a specific runtime-builder utility task; I should analyze or convert before patching."
+        alternatives = guidance_alternatives(
+            ("agent-analyze", "analyze agent behavior and boundaries"),
+            ("workflow-analyze", "analyze workflow state-machine and metadata gaps"),
+            ("skill-convert", "convert source skill material into Forge-native artifacts"),
+            ("workflow-validate", "prove workflow catalog, state-machine docs, and facilitation packs are consistent"),
+        )
+        reason = "Runtime-builder context and builder signals outrank domain words; explicit analysis/conversion words select the narrower builder utility workflow."
+    elif has_question and "confusion" in signal_set:
+        classification = "confusion"
+        recommended_workflow = "problem-solving"
+        recommended_action = "frame the confusion, identify candidate routes, and ask one high-leverage question"
+        human_prompt = "I should orient you with one recommendation and two alternatives, not dump the workflow catalog."
+        alternatives = guidance_alternatives(
+            ("guide-route", "if the route is merely unclear"),
+            ("brainstorming", "if you need options before deciding"),
+        )
+        reason = "The message asks for orientation or indicates uncertainty."
+    elif has_question and "brainstorm" in signal_set:
+        classification = "brainstorm"
+        recommended_workflow = "brainstorming"
+        recommended_action = "generate and compare options before committing to specification"
+        human_prompt = "I should keep this divergent until the direction is chosen."
+        alternatives = guidance_alternatives(
+            ("concept-selection", "choose between candidate directions"),
+            ("reality-evidence-gate", "filter impossible or risky promises"),
+        )
+        reason = "The message asks for ideas, options, or exploration."
+    elif has_question and "document-utility" in signal_set:
+        classification = "document-utility"
+        recommended_workflow = routed_document_workflow(question)
+        recommended_action = f"run {recommended_workflow} to make the document set usable for humans and future agents"
+        human_prompt = "I should clarify the document job and source-of-truth boundary before editing docs."
+        alternatives = guidance_alternatives(
+            ("editorial-review", "when clarity, tone, or structure is the main problem"),
+            ("edge-case-review", "when the artifact needs adversarial stress testing"),
+            ("spec-distillation", "when messy notes must become a compact machine contract"),
+        )
+        reason = "The message is documentation utility work rather than general research."
+    elif has_question and "research-needed" in signal_set:
+        classification = "research-needed"
+        recommended_workflow = "domain-scan"
+        recommended_action = "collect grounded evidence before deciding or building"
+        human_prompt = "I should research enough to make the next decision defensible, then write a compact scan."
+        alternatives = guidance_alternatives(
+            ("market-scan", "when market alternatives matter"),
+            ("technical-feasibility-scan", "when architecture feasibility is the main risk"),
+        )
+        reason = "The message depends on docs, evidence, or external benchmark behavior."
+    elif next_story and phase == "4-build-verify" and (not has_question or "mechanical-build" in signal_set or "operate-support" in signal_set):
+        classification = "mechanical-build"
+        recommended_workflow = "build-story"
+        recommended_action = f"implement and validate story {next_story.get('id')}"
+        human_prompt = "The approved decision work is done; I should continue mechanically and write evidence."
+        reason = "A build-ready story exists in build/verify and the human asked for implementation."
+    elif has_question and "game-flow" in signal_set:
+        classification = "game-flow"
+        recommended_workflow = routed_game_workflow(question)
+        recommended_action = f"run {recommended_workflow} before game implementation"
+        human_prompt = "I should define player fantasy, loop, scope, and proof target before technical planning."
+        alternatives = guidance_alternatives(
+            ("game-brief", "when the player fantasy and loop are still unclear"),
+            ("quick-prototype", "if a playable experiment matters more than documentation"),
+            ("game-test-framework", "if proof strategy is the main gap"),
+        )
+        reason = "The message is game-shaped and includes enough detail to choose a game-specific workflow."
+    elif has_question and "creative-flow" in signal_set:
+        classification = "creative-flow"
+        recommended_workflow = "creative-session"
+        recommended_action = "explore and select a creative direction before specification"
+        human_prompt = "I should help choose the creative mode and preserve rejected directions compactly."
+        reason = "The message is taste-heavy or creative."
+    elif has_question and "quality-flow" in signal_set:
+        classification = "quality-flow"
+        recommended_workflow = routed_quality_workflow(question)
+        recommended_action = f"run {recommended_workflow} to produce quality evidence before implementation or release"
+        human_prompt = "I should classify the quality engagement and risks before writing tests."
+        alternatives = guidance_alternatives(
+            ("test-engagement-model", "when the quality mode is ambiguous"),
+            ("test-strategy", "when risks and checks need the broad plan first"),
+            ("traceability-gate", "when release depends on requirement/test/evidence mapping"),
+        )
+        reason = "The message is primarily about quality, risk, review, or test architecture."
+    elif has_question and "builder-flow" in signal_set:
+        classification = "builder-flow"
+        recommended_workflow = routed_builder_workflow(question)
+        recommended_action = f"run {recommended_workflow} before scaffolding or editing runtime files"
+        human_prompt = "I should clarify the method artifact and acceptance criteria before editing runtime files."
+        reason = "The message is about the method, runtime, workflows, skills, or plugin behavior."
+    elif next_story and phase == "4-build-verify":
+        classification = "mechanical-build"
+        recommended_workflow = "build-story"
+        recommended_action = f"implement and validate story {next_story.get('id')}"
+        human_prompt = "The approved decision work is done; I should continue mechanically and write evidence."
+        reason = "A build-ready story exists in build/verify."
+
+    workflow_metadata = workflow_catalog_entry(recommended_workflow)
+    facilitation_pack = facilitation_pack_for_workflow(recommended_workflow)
+    if workflow_metadata:
+        recommended_phase = recommended_phase_for_workflow(workflow_metadata, recommended_phase)
+    if should_transition_to_guided_workflow(
+        state=state,
+        has_question=has_question,
+        classification=classification,
+        recommended_workflow=recommended_workflow,
+        metadata=workflow_metadata,
+        commands=commands,
+    ):
+        state_update_required = True
+        commands.append(
+            preflight_command(
+                "transition-workflow",
+                "transition",
+                "--root",
+                root,
+                "--phase",
+                recommended_phase,
+                "--status",
+                "workflow-selected",
+                "--workflow",
+                recommended_workflow,
+                "--next-action",
+                recommended_action,
+            )
+        )
+        reason = f"{reason} The selected catalog workflow is narrow and executable, so the runtime should enter it before continuing."
+    if not commands:
+        commands = [preflight_command("guide", "guide", "--root", root, "--question", question or "<question>", "--json")]
+    return {
+        "intent_classification": classification,
+        "signals": signals,
+        "route_reason": reason,
+        "recommended_phase": recommended_phase,
+        "recommended_workflow": recommended_workflow,
+        "workflow_metadata": workflow_metadata,
+        "facilitation_pack": facilitation_pack,
+        "recommended_action": recommended_action,
+        "human_prompt": human_prompt,
+        "alternatives": alternatives,
+        "state_update_required": state_update_required,
+        "state_updates": {
+            "last_intent_classification": classification,
+            "last_route_reason": reason,
+            "active_guidance_mode": recommended_workflow,
+        },
+        "commands": commands,
+        "source": "guidance-engine",
+    }
+
+
 def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[str, Any]:
     state_root, state = load_state_or_none(root)
     if not state_root:
         preflight = build_preflight(root, scan_depth=2, max_chars=max_chars, objective=question)
         tracks = recommended_tracks(question, limit=3)
+        guidance = build_guidance_decision(
+            root,
+            None,
+            question=question,
+            current_next_action="answer the preflight route question, then create or open the selected project",
+            next_story=None,
+        )
         return {
             "runtime": RUNTIME_NAME,
             "runtime_version": RUNTIME_VERSION,
@@ -3853,12 +4718,32 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
             "reality_evidence_gate": preflight.get("reality_evidence_gate", {}),
             "question": preflight.get("question", ""),
             "recommended_tracks": tracks,
-            "next_action": "answer the preflight route question, then create or open the selected project",
-            "commands": preflight.get("commands", []),
+            "next_action": guidance["recommended_action"],
+            "guidance_engine": guidance,
+            "intent_classification": guidance["intent_classification"],
+            "signals": guidance["signals"],
+            "recommended_phase": guidance["recommended_phase"],
+            "recommended_workflow": guidance["recommended_workflow"],
+            "workflow_metadata": guidance["workflow_metadata"],
+            "facilitation_pack": guidance["facilitation_pack"],
+            "recommended_action": guidance["recommended_action"],
+            "human_prompt": guidance["human_prompt"],
+            "alternatives": guidance["alternatives"],
+            "state_update_required": guidance["state_update_required"],
+            "state_updates": guidance["state_updates"],
+            "commands": preflight.get("commands", []) + guidance["commands"],
         }
     snapshot = build_snapshot(state_root, state)
     track = track_by_id(state.get("track", "")) or default_track_for_module(state.get("module", "software-builder"))
     next_story = snapshot["stories"].get("next") or {}
+    current_next_action = snapshot["route"].get("next_action", "") or state.get("next_action", "")
+    guidance = build_guidance_decision(
+        state_root,
+        state,
+        question=question,
+        current_next_action=current_next_action,
+        next_story=next_story,
+    )
     return {
         "runtime": RUNTIME_NAME,
         "runtime_version": RUNTIME_VERSION,
@@ -3875,12 +4760,56 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
         "route": snapshot["route"].get("recommendation", ""),
         "next_story": next_story,
         "recommended_agents": snapshot["agents"].get("recommended", []),
-        "next_action": snapshot["route"].get("next_action", "") or state.get("next_action", ""),
+        "next_action": guidance["recommended_action"],
+        "guidance_engine": guidance,
+        "intent_classification": guidance["intent_classification"],
+        "signals": guidance["signals"],
+        "recommended_phase": guidance["recommended_phase"],
+        "recommended_workflow": guidance["recommended_workflow"],
+        "workflow_metadata": guidance["workflow_metadata"],
+        "facilitation_pack": guidance["facilitation_pack"],
+        "recommended_action": guidance["recommended_action"],
+        "human_prompt": guidance["human_prompt"],
+        "alternatives": guidance["alternatives"],
+        "state_update_required": guidance["state_update_required"],
+        "state_updates": guidance["state_updates"],
+        "commands": guidance["commands"],
         "grill_gate_required": snapshot["resume"].get("grill_gate_required", False),
         "mechanical_work_order": snapshot["resume"].get("mechanical_work_order", {}),
         "codex_goal_handoff": snapshot["resume"].get("codex_goal_handoff", {}),
         "council_recommended": bool(question and state.get("readiness") == "ready"),
     }
+
+
+def print_guidance_engine_summary(payload: dict[str, Any]) -> None:
+    guidance = payload.get("guidance_engine") or {}
+    if not guidance:
+        return
+    intent = guidance.get("intent_classification", "")
+    workflow = guidance.get("recommended_workflow", "")
+    phase = guidance.get("recommended_phase", "")
+    print(f"Guidance Engine: {intent} -> {workflow} / {phase}")
+    metadata = guidance.get("workflow_metadata") or {}
+    if metadata:
+        required = "required" if metadata.get("required") else "optional"
+        outputs = join_list([str(item) for item in metadata.get("outputs", [])]) if isinstance(metadata.get("outputs"), list) else str(metadata.get("outputs", ""))
+        print(f"Workflow metadata: {required}; outputs: {outputs}")
+    if guidance.get("facilitation_pack"):
+        print(f"Facilitation: {guidance.get('facilitation_pack')}")
+    signals = guidance.get("signals") or []
+    if signals:
+        print(f"Signals: {join_list(signals)}")
+    if guidance.get("route_reason"):
+        print(f"Route reason: {guidance.get('route_reason')}")
+    if guidance.get("human_prompt"):
+        print(f"Prompt: {guidance.get('human_prompt')}")
+    alternatives = guidance.get("alternatives") or []
+    if alternatives:
+        print("Alternatives:")
+        for item in alternatives[:3]:
+            print(f"- {item.get('workflow')}: {item.get('reason')}")
+    if guidance.get("state_update_required"):
+        print("State update: required before continuing this route.")
 
 
 def cmd_guide(args: argparse.Namespace) -> int:
@@ -3899,6 +4828,7 @@ def cmd_guide(args: argparse.Namespace) -> int:
         print("Recommended tracks:")
         for track in payload.get("recommended_tracks", []):
             print(f"- {track.get('id')}: {track.get('title')} ({track.get('reason')})")
+        print_guidance_engine_summary(payload)
         print(f"Next: {payload.get('next_action')}")
         return 0
     track = payload.get("track", {})
@@ -3925,6 +4855,7 @@ def cmd_guide(args: argparse.Namespace) -> int:
         print(f"Mechanical: {work_order.get('next_mechanical_step')}")
         if work_order.get("goal_recommended"):
             print("Goal: recommended for this mechanical loop.")
+    print_guidance_engine_summary(payload)
     print(f"Next: {payload.get('next_action')}")
     if payload.get("council_recommended"):
         print("Council: optional for this question if the decision is high-risk or taste-heavy.")
@@ -4361,12 +5292,15 @@ def cmd_workflow_list(args: argparse.Namespace) -> int:
 def cmd_workflow_validate(args: argparse.Namespace) -> int:
     if args.path:
         paths = [Path(args.path)]
+        root = None
     else:
         root, _ = load_state_or_none(resolve_root(args.root))
         paths = reference_workflow_paths(root)
     errors: list[str] = []
     for path in paths:
         errors.extend(validate_workflow_file(path))
+    if not args.path:
+        errors.extend(validate_workflow_catalog(root))
     if errors:
         print("Workflow validation failed:")
         for error in errors:
@@ -6000,6 +6934,12 @@ def build_parser() -> argparse.ArgumentParser:
     preflight.add_argument("--objective")
     preflight.add_argument("--json", action="store_true")
     preflight.set_defaults(func=cmd_preflight)
+
+    reload_cmd = sub.add_parser("reload", help="refresh Forge bootstrap contract without broad context loading")
+    reload_cmd.add_argument("--root", default=".")
+    reload_cmd.add_argument("--scan-depth", type=int, default=2)
+    reload_cmd.add_argument("--json", action="store_true")
+    reload_cmd.set_defaults(func=cmd_reload)
 
     init = sub.add_parser("init", help="initialize .forge-method state")
     init.add_argument("--project", required=True)

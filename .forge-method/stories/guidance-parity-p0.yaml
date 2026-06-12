@@ -1,0 +1,11 @@
+# Forge Method story
+updated_at: "2026-06-12T00:08:40+00:00"
+id: "guidance-parity-p0"
+title: "Close BMAD guided-flow parity gaps"
+status: "done"
+phase: "6-evolve"
+acceptance_criteria: "workflow catalog metadata exists and validates | Guidance Engine routes mixed Forge/BMAD improvement requests to runtime-builder instead of game-flow | facilitation packs exist for the core human-guided workflows | catalog inconsistencies for start-runtime, discover-intent, and workflow-validate are resolved | unit tests and workflow validation cover the new contracts"
+evidence: ".forge-method/evidence/20260612-000823-validation-bmad-guided-flow-parity-p0-validation.md"
+checks: "python -m unittest discover -s tests; scripts/smoke-runtime.ps1; scripts/verify-fast.ps1; scripts/smoke-install.ps1; workflow validate; gate --require-evals"
+blocker: ""
+artifacts: ".forge-method/artifacts/guidance-engine-benchmark.md"

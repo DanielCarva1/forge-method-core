@@ -36,6 +36,7 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $installer = Join-Path $repoRoot "install.ps1"
 $installedRuntime = Join-Path $HOME ".agents\skills\forge-method\scripts\forge_method_runtime.py"
 $installedLauncher = Join-Path $HOME ".agents\skills\forge-method\forge-method.ps1"
+$installedReloadSkill = Join-Path $HOME ".agents\skills\forge-reload\SKILL.md"
 $tmp = Join-Path $env:TEMP "forge-method-install-smoke"
 $exampleTmp = Join-Path $env:TEMP "forge-method-install-example-smoke"
 $projectParentTmp = Join-Path $env:TEMP "forge-method-install-project-smoke"
@@ -51,6 +52,9 @@ if (-not (Test-Path -LiteralPath $installedRuntime)) {
 }
 if (-not (Test-Path -LiteralPath $installedLauncher)) {
   throw "Installed runtime launcher not found: $installedLauncher"
+}
+if (-not (Test-Path -LiteralPath $installedReloadSkill)) {
+  throw "Installed reload skill not found: $installedReloadSkill"
 }
 
 if (Test-Path -LiteralPath $tmp) {
@@ -68,6 +72,7 @@ New-Item -ItemType Directory -Path $projectParentTmp | Out-Null
 
 Run $pythonExe $installedRuntime --help
 Run powershell -ExecutionPolicy Bypass -File $installedLauncher --help
+Run powershell -ExecutionPolicy Bypass -File $installedLauncher reload --root $tmp
 Run $pythonExe $installedRuntime module list
 Run $pythonExe $installedRuntime agent list
 Run $pythonExe $installedRuntime agent validate
@@ -80,9 +85,11 @@ Run $pythonExe $installedRuntime preflight --root $projectParentTmp
 Run $pythonExe $installedRuntime gate --root $generatedProjectTmp --require-evals
 Run $pythonExe $installedRuntime workflow validate
 Run $pythonExe $installedRuntime preflight --root $tmp
+Run $pythonExe $installedRuntime reload --root $tmp
 Run $pythonExe $installedRuntime start --root $tmp
 Run $pythonExe $installedRuntime init --project install-smoke --root $tmp
 Run $pythonExe $installedRuntime preflight --root $tmp
+Run $pythonExe $installedRuntime reload --root $tmp
 Run $pythonExe $installedRuntime resume --root $tmp
 Run $pythonExe $installedRuntime start --root $tmp
 Run $pythonExe $installedRuntime snapshot --root $tmp

@@ -1,0 +1,11 @@
+# Forge Method story
+updated_at: "2026-06-12T01:50:00+00:00"
+id: "teach-testing-gap-p1"
+title: "Add teach-testing guided workflow"
+status: "done"
+phase: "6-evolve"
+acceptance_criteria: "Forge has a compact teach-testing workflow for quality education requests | test-architect module and workflow catalog expose teach-testing | Guidance Engine routes teach-me-testing requests to teach-testing with test-architecture facilitation | tests cover the route and catalog metadata | comparison report no longer lists Teach Me Testing as an unimplemented gap"
+evidence: ".forge-method/evidence/20260612-014938-validation-teach-testing-guided-workflow-validation.md"
+checks: "workflow validate; python -m unittest discover -s tests; scripts/smoke-runtime.ps1; scripts/smoke-install.ps1; scripts/verify-fast.ps1; gate --require-evals"
+blocker: ""
+artifacts: ".forge-method/artifacts/guidance-engine-benchmark.md"

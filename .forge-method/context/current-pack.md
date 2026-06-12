@@ -3,26 +3,26 @@
 ## State
 
 - project: forge-method-core
-- phase: 5-ready-operate
+- phase: 6-evolve
 - status: story-done
-- workflow: ready-release
+- workflow: evolve-project
 - active_story: <none>
-- next_action: publish 1.25.0 batch to GitHub
+- next_action: select next ready story or move to ready when build scope is complete
 
 ## Latest Checkpoint
 
-# Forge Method 1.25 self-update batch
+# Human facilitation depth enforced
 
-- created_at: 2026-06-11T15:26:56+00:00
+- created_at: 2026-06-12T02:48:59+00:00
 - project: forge-method-core
-- phase: 5-ready-operate
+- phase: 6-evolve
 - status: story-done
-- workflow: ready-release
+- workflow: evolve-project
 - active_story: <none>
 
 ## Summary
 
-Implemented single-pass self-update for Git marketplace installs, compact Hot Start Stub, release notes feed, updater tests, docs, and installer packaging updates. Validation passed: unit tests, workflow validate, verify-fast, smoke-install, smoke-runtime, and final gate.
+Responded to the correction that BMAD being stronger in facilitation is a product gap. Forge now treats rich human facilitation as required: referenced packs must include stage scripts, elicitation options, facilitator moves, quality bars, and anti-patterns. Agent workflow docs stay compact. Tests, workflow validate, smoke-runtime, smoke-install, verify-fast, and gate with evals passed.
 
 ## Decisions
 
@@ -46,7 +46,7 @@ Implemented single-pass self-update for Git marketplace installs, compact Hot St
 
 ## Next Action
 
-publish 1.25.0 batch to GitHub
+select next ready story or move to ready when build scope is complete
 
 ## Recovery Signals
 
@@ -56,9 +56,9 @@ publish 1.25.0 batch to GitHub
 
 ### Touched Files
 
-- skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/references/workflow-grill-gate.md
-- docs/adr/0005-mechanical-autonomy-and-grill-gates.md
+- skills/forge-method/templates/*-artifact.md; skills/forge-method/catalog/workflows.json; skills/forge-method/scripts/forge_method_runtime.py; skills/forge-method/facilitation/*.md; tests/fixtures/guidance_transcripts.json; tests/test_runtime.py
+- skills/forge-method/facilitation/game-lifecycle.md; skills/forge-method/facilitation/test-architecture.md; skills/forge-method/facilitation/builder-utility.md; skills/forge-method/facilitation/document-utility.md; skills/forge-method/scripts/forge_method_runtime.py; tests/fixtures/guidance_transcripts.json; tests/test_runtime.py
+- skills/forge-method/references/workflow-teach-testing.md; skills/forge-method/catalog/workflows.json; skills/forge-method/modules/test-architect.yaml; skills/forge-method/facilitation/test-architecture.md; skills/forge-method/scripts/forge_method_runtime.py; tests/fixtures/guidance_transcripts.json; tests/test_runtime.py; local-comparison/bmad-forge-guided-flow-comparison.md
 
 ## Open Human Inputs
 
@@ -70,21 +70,21 @@ publish 1.25.0 batch to GitHub
 
 ## Recommended Agent Profiles
 
-- operator (Operator): Maintain a ready project through usage notes, support status, feedback, and future backlog.
-- quality-reviewer (Quality Reviewer): Review implementation, artifacts, workflows, and evidence before work is marked done or ready.
+- facilitator (Facilitator): Clarify intent, constraints, trade-offs, and human decisions without expanding implementation scope.
+- planner (Planner): Turn specs, risks, and constraints into executable stories, sequencing, and validation strategy.
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260611-062639-story-story-mechanical-autonomy-grill-gate-done.md
-- .forge-method/evidence/20260611-062657-gate-quality-gate.md
-- .forge-method/evidence/20260611-063437-gate-quality-gate.md
-- .forge-method/evidence/20260611-152452-story-story-self-update-hot-start-done.md
-- .forge-method/evidence/20260611-152635-gate-quality-gate.md
+- .forge-method/evidence/20260612-011021-validation-guided-depth-template-validation.md
+- .forge-method/evidence/20260612-013040-validation-guided-depth-execution-routing-validation.md
+- .forge-method/evidence/20260612-014938-validation-teach-testing-guided-workflow-validation.md
+- .forge-method/evidence/20260612-020414-validation-bmad-parity-audit-cleanup-validation.md
+- .forge-method/evidence/20260612-024829-validation-human-facilitation-depth-validation.md
 
 ## Recent Artifacts
 
-- evidence [active/durable]: .forge-method/artifacts/public-plugin-install-proof.md - Public plugin install proof - README public Codex install flow is present; package contents are covered; verify-fast and smoke-install passed for repo-based plugin use.
-- story-link [active/durable]: .forge-method/artifacts/public-plugin-install-proof.md - .forge-method/artifacts/public-plugin-install-proof.md -> public-plugin-install-proof - Artifact linked to story.
-- plan [active/durable]: .forge-method/artifacts/forge-expansion-backlog.json - Forge expansion backlog - Four-story implementation batch for guide/tracks/council, builder/config/evals, creative/game/enterprise packs, and docs/install proof.
-- roadmap [active/durable]: docs/09-expansion-roadmap.md - Expansion roadmap - Public roadmap defining Human Experience, Agent Runtime, tracks, Agent Council, and v1.23-v1.26 delivery packages.
-- adr [active/durable]: docs/adr/0004-agent-council-human-experience.md - Agent Council ADR - Decision to show rich council debate to humans while persisting compact council decision artifacts for future agents.
+- story-link [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - .forge-method/artifacts/guidance-engine-benchmark.md -> guided-depth-p1 - Artifact linked to story.
+- internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine internal benchmark - Internal behavior benchmark for route-aware human guidance, narrow guided-depth transition commands, domain examples, correct-course, research, brainstorm, game, builder, quality, document utility, and mechanical build routing.
+- story-link [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - .forge-method/artifacts/guidance-engine-benchmark.md -> guided-depth-execution-p1 - Artifact linked to story.
+- internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine internal benchmark - Internal behavior benchmark for route-aware human guidance, narrow guided-depth transition commands, teach-testing, domain examples, correct-course, research, brainstorm, game, builder, quality, document utility, and mechanical build routing.
+- story-link [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - .forge-method/artifacts/guidance-engine-benchmark.md -> teach-testing-gap-p1 - Artifact linked to story.

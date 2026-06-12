@@ -1,0 +1,11 @@
+# Forge Method story
+updated_at: "2026-06-12T01:31:14+00:00"
+id: "guided-depth-execution-p1"
+title: "Add examples and executable transitions for guided-depth workflows"
+status: "done"
+phase: "6-evolve"
+acceptance_criteria: "guided-depth facilitation packs include domain examples for the supported workflow families | Guidance Engine returns transition commands when an existing project asks to enter a narrow guided-depth workflow | recommended_phase follows workflow catalog metadata for narrow workflows | tests cover game, test, builder, and document guided-depth transition commands | workflow validation and runtime tests pass"
+evidence: ".forge-method/evidence/20260612-013040-validation-guided-depth-execution-routing-validation.md"
+checks: "workflow validate; python -m unittest discover -s tests; scripts/smoke-runtime.ps1; scripts/smoke-install.ps1; scripts/verify-fast.ps1; gate --require-evals"
+blocker: ""
+artifacts: ".forge-method/artifacts/guidance-engine-benchmark.md"

@@ -108,3 +108,112 @@
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T15:26:56+00:00"}
 {"event": "context_load_plan.written", "payload": {"path": ".forge-method/context/load-plan.json"}, "ts": "2026-06-11T15:29:01+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T15:29:26+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260611-205934-validation-reload-emergency-entrypoint-validation.md", "story": ""}, "ts": "2026-06-11T20:59:34+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260611-210009-reload-emergency-entrypoint-ready.md"}, "ts": "2026-06-11T21:00:09+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T21:00:10+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-benchmark", "lifecycle": "durable", "path": ".forge-method/artifacts/guidance-engine-benchmark.md"}, "ts": "2026-06-11T22:55:27+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260611-231428-validation-guidance-engine-validation.md", "story": ""}, "ts": "2026-06-11T23:14:28+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260611-231447-guidance-engine-redesign-ready.md"}, "ts": "2026-06-11T23:14:47+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T23:14:47+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T23:15:48+00:00"}
+{"event": "context_load_plan.written", "payload": {"path": ".forge-method/context/load-plan.json"}, "ts": "2026-06-11T23:15:48+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-11T23:16:30+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 1}, "ts": "2026-06-11T23:16:30+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-11T23:17:13+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 1}, "ts": "2026-06-11T23:17:13+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-benchmark", "lifecycle": "durable", "path": ".forge-method/artifacts/guidance-engine-benchmark.md"}, "ts": "2026-06-11T23:19:19+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-11T23:19:46+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-11T23:19:46+00:00"}
+{"event": "context_load_plan.written", "payload": {"path": ".forge-method/context/load-plan.json"}, "ts": "2026-06-11T23:20:04+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T23:20:04+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "guidance-comparison"}, "ts": "2026-06-11T23:26:10+00:00"}
+{"event": "evidence.added", "payload": {"kind": "analysis", "path": ".forge-method/evidence/20260611-233338-analysis-bmad-forge-guided-flow-comparison.md", "story": ""}, "ts": "2026-06-11T23:33:38+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260611-233359-bmad-guided-flow-comparison-complete.md"}, "ts": "2026-06-11T23:33:59+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T23:33:59+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-11T23:34:18+00:00"}
+{"event": "context_load_plan.written", "payload": {"path": ".forge-method/context/load-plan.json"}, "ts": "2026-06-11T23:34:18+00:00"}
+{"event": "story.added", "payload": {"id": "guidance-parity-p0", "status": "ready"}, "ts": "2026-06-11T23:39:54+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "guidance-parity-p0", "to": "in_progress"}, "ts": "2026-06-11T23:40:09+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T00:06:39+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 1}, "ts": "2026-06-12T00:06:39+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-benchmark", "lifecycle": "durable", "path": ".forge-method/artifacts/guidance-engine-benchmark.md"}, "ts": "2026-06-12T00:07:05+00:00"}
+{"event": "artifact.linked_to_story", "payload": {"path": ".forge-method/artifacts/guidance-engine-benchmark.md", "story": "guidance-parity-p0"}, "ts": "2026-06-12T00:07:05+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T00:07:20+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T00:07:20+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-000823-validation-bmad-guided-flow-parity-p0-validation.md", "story": "guidance-parity-p0"}, "ts": "2026-06-12T00:08:23+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "guidance-parity-p0", "to": "done"}, "ts": "2026-06-12T00:08:40+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-000903-bmad-guided-flow-parity-p0-closed.md"}, "ts": "2026-06-12T00:09:03+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T00:09:03+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T00:09:29+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T00:09:29+00:00"}
+{"event": "story.added", "payload": {"id": "guided-depth-p1", "status": "ready"}, "ts": "2026-06-12T00:13:59+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "guided-depth-p1", "to": "in_progress"}, "ts": "2026-06-12T00:14:21+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T00:39:42+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 1}, "ts": "2026-06-12T00:39:42+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-benchmark", "lifecycle": "durable", "path": ".forge-method/artifacts/guidance-engine-benchmark.md"}, "ts": "2026-06-12T00:40:01+00:00"}
+{"event": "artifact.linked_to_story", "payload": {"path": ".forge-method/artifacts/guidance-engine-benchmark.md", "story": "guided-depth-p1"}, "ts": "2026-06-12T00:40:01+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T00:40:15+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T00:40:15+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-004053-validation-bmad-guided-depth-p1-validation.md", "story": "guided-depth-p1"}, "ts": "2026-06-12T00:40:53+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "guided-depth-p1", "to": "done"}, "ts": "2026-06-12T00:41:14+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-004156-bmad-guided-depth-p1-closed.md"}, "ts": "2026-06-12T00:41:56+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T00:41:56+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T00:43:31+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T00:43:31+00:00"}
+{"event": "story.added", "payload": {"id": "guided-depth-templates-p1", "status": "ready"}, "ts": "2026-06-12T00:44:15+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "guided-depth-templates-p1", "to": "in_progress"}, "ts": "2026-06-12T00:44:31+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T01:10:00+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T01:10:00+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-011021-validation-guided-depth-template-validation.md", "story": "guided-depth-templates-p1"}, "ts": "2026-06-12T01:10:21+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "guided-depth-templates-p1", "to": "done"}, "ts": "2026-06-12T01:10:46+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-011121-guided-depth-templates-closed.md"}, "ts": "2026-06-12T01:11:21+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T01:11:22+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T01:11:53+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T01:11:53+00:00"}
+{"event": "story.added", "payload": {"id": "guided-depth-execution-p1", "status": "ready"}, "ts": "2026-06-12T01:15:44+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "guided-depth-execution-p1", "to": "in_progress"}, "ts": "2026-06-12T01:16:07+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T01:29:27+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 1}, "ts": "2026-06-12T01:29:27+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-benchmark", "lifecycle": "durable", "path": ".forge-method/artifacts/guidance-engine-benchmark.md"}, "ts": "2026-06-12T01:29:43+00:00"}
+{"event": "artifact.linked_to_story", "payload": {"path": ".forge-method/artifacts/guidance-engine-benchmark.md", "story": "guided-depth-execution-p1"}, "ts": "2026-06-12T01:29:43+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T01:30:03+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T01:30:03+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-013040-validation-guided-depth-execution-routing-validation.md", "story": "guided-depth-execution-p1"}, "ts": "2026-06-12T01:30:40+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "guided-depth-execution-p1", "to": "done"}, "ts": "2026-06-12T01:31:14+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-013137-guided-depth-execution-routing-closed.md"}, "ts": "2026-06-12T01:31:37+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T01:31:37+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T01:32:10+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T01:32:10+00:00"}
+{"event": "story.added", "payload": {"id": "teach-testing-gap-p1", "status": "ready"}, "ts": "2026-06-12T01:32:58+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "teach-testing-gap-p1", "to": "in_progress"}, "ts": "2026-06-12T01:33:14+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T01:48:18+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 1}, "ts": "2026-06-12T01:48:18+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-benchmark", "lifecycle": "durable", "path": ".forge-method/artifacts/guidance-engine-benchmark.md"}, "ts": "2026-06-12T01:48:39+00:00"}
+{"event": "artifact.linked_to_story", "payload": {"path": ".forge-method/artifacts/guidance-engine-benchmark.md", "story": "teach-testing-gap-p1"}, "ts": "2026-06-12T01:48:39+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T01:48:56+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T01:48:56+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-014938-validation-teach-testing-guided-workflow-validation.md", "story": "teach-testing-gap-p1"}, "ts": "2026-06-12T01:49:38+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "teach-testing-gap-p1", "to": "done"}, "ts": "2026-06-12T01:50:00+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-015039-teach-testing-gap-closed.md"}, "ts": "2026-06-12T01:50:39+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T01:50:39+00:00"}
+{"event": "story.added", "payload": {"id": "parity-audit-cleanup-p1", "status": "ready"}, "ts": "2026-06-12T01:55:37+00:00"}
+{"event": "story.status_changed", "payload": {"from": "ready", "id": "parity-audit-cleanup-p1", "to": "in_progress"}, "ts": "2026-06-12T01:55:54+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T01:56:23+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T01:56:23+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T02:02:39+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T02:02:39+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-020414-validation-bmad-parity-audit-cleanup-validation.md", "story": "parity-audit-cleanup-p1"}, "ts": "2026-06-12T02:04:14+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "parity-audit-cleanup-p1", "to": "done"}, "ts": "2026-06-12T02:04:40+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-020504-bmad-parity-audit-cleanup-closed.md"}, "ts": "2026-06-12T02:05:04+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T02:05:04+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T02:05:31+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T02:05:31+00:00"}
+{"event": "story.added", "payload": {"id": "human-facilitation-depth-p1", "status": "in_progress"}, "ts": "2026-06-12T02:24:46+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T02:47:58+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T02:47:58+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-024829-validation-human-facilitation-depth-validation.md", "story": "human-facilitation-depth-p1"}, "ts": "2026-06-12T02:48:29+00:00"}
+{"event": "story.status_changed", "payload": {"from": "in_progress", "id": "human-facilitation-depth-p1", "to": "done"}, "ts": "2026-06-12T02:48:46+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-024859-human-facilitation-depth-enforced.md"}, "ts": "2026-06-12T02:48:59+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T02:48:59+00:00"}
+{"event": "eval.run", "payload": {"count": 9, "failures": 0}, "ts": "2026-06-12T02:49:16+00:00"}
+{"event": "gate.run", "payload": {"errors": 0, "evals": 9, "passed": true, "warnings": 0}, "ts": "2026-06-12T02:49:16+00:00"}

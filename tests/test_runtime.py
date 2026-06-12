@@ -9,6 +9,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "skills" / "forge-method" / "scripts" / "forge_method_runtime.py"
+GUIDANCE_FIXTURES = ROOT / "tests" / "fixtures" / "guidance_transcripts.json"
+GUIDANCE_BENCHMARK = ROOT / ".forge-method" / "artifacts" / "guidance-engine-benchmark.md"
 
 
 def run_cmd(
@@ -33,6 +35,64 @@ def run_cmd(
             f"command failed: {args}\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
         )
     return result
+
+
+def prepare_guidance_fixture(root: Path, state_kind: str) -> None:
+    if state_kind == "none":
+        return
+    run_cmd("init", "--project", "Guidance Fixture", "--root", str(root))
+    if state_kind == "discovery":
+        run_cmd("transition", "--root", str(root), "--phase", "1-discovery")
+        return
+    if state_kind == "ready":
+        run_cmd(
+            "transition",
+            "--root",
+            str(root),
+            "--phase",
+            "5-ready-operate",
+            "--status",
+            "story-done",
+            "--workflow",
+            "ready-release",
+            "--next-action",
+            "publish current batch",
+            "--force",
+        )
+        return
+    if state_kind == "evolve_runtime":
+        run_cmd(
+            "transition",
+            "--root",
+            str(root),
+            "--phase",
+            "6-evolve",
+            "--status",
+            "evolution-intake",
+            "--workflow",
+            "evolve-project",
+            "--next-action",
+            "compare and implement guided-flow parity gaps",
+            "--force",
+        )
+        return
+    if state_kind == "build_story_ready":
+        for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
+            run_cmd("transition", "--root", str(root), "--phase", phase)
+        run_cmd(
+            "story",
+            "add",
+            "--root",
+            str(root),
+            "--id",
+            "story-guidance",
+            "--title",
+            "Build guidance target",
+            "--acceptance",
+            "target works",
+        )
+        return
+    raise AssertionError(f"unknown guidance fixture state: {state_kind}")
 
 
 class RuntimeTests(unittest.TestCase):
@@ -104,6 +164,23 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(payload["status"]["resume"]["action"], "continue_current_workflow")
             self.assertIn(".forge-method/state.yaml", selected_paths)
             self.assertIn(".forge-method/sprint.yaml", selected_paths)
+            self.assertFalse((root / ".forge-method" / "context" / "load-plan.json").exists())
+
+    def test_reload_reports_bootstrap_contract_without_writing_context(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+
+            text = run_cmd("reload", "--root", str(root)).stdout
+            payload = json.loads(run_cmd("reload", "--root", str(root), "--json").stdout)
+
+            self.assertIn("Forge Reload", text)
+            self.assertIn("Contract: current filesystem and launcher output override prior Forge chat state.", text)
+            self.assertIn("Next: run resume --json", text)
+            self.assertEqual(payload["route"], "existing-method-project")
+            self.assertEqual(payload["project_root"], str(root.resolve()))
+            self.assertTrue(payload["bootstrap_contract"]["do_not_replay_chat_state"])
+            self.assertIn("resume", [command["name"] for command in payload["commands"]])
             self.assertFalse((root / ".forge-method" / "context" / "load-plan.json").exists())
 
     def test_preflight_lists_known_projects_and_requires_choice(self) -> None:
@@ -287,6 +364,69 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(cat_payload["reality_evidence_gate"]["score"], 0)
             self.assertIn("Animal-welfare", cat_payload["reality_evidence_gate"]["summary"])
 
+    def test_guidance_engine_routes_transcript_fixtures(self) -> None:
+        fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
+        required_keys = {
+            "intent_classification",
+            "signals",
+            "recommended_phase",
+            "recommended_workflow",
+            "recommended_action",
+            "human_prompt",
+            "alternatives",
+            "state_update_required",
+            "commands",
+            "workflow_metadata",
+            "facilitation_pack",
+        }
+        for case in fixtures:
+            with self.subTest(case=case["id"]):
+                with tempfile.TemporaryDirectory() as raw:
+                    root = Path(raw)
+                    prepare_guidance_fixture(root, case["state"])
+
+                    payload = json.loads(
+                        run_cmd("guide", "--root", str(root), "--question", case["question"], "--json").stdout
+                    )
+
+                    self.assertTrue(required_keys <= payload.keys())
+                    self.assertTrue(required_keys <= payload["guidance_engine"].keys())
+                    self.assertEqual(payload["intent_classification"], case["expected_classification"])
+                    self.assertEqual(payload["recommended_workflow"], case["expected_workflow"])
+                    self.assertEqual(payload["state_update_required"], case["state_update_required"])
+                    self.assertEqual(payload["workflow_metadata"]["id"], case["expected_workflow"])
+                    if case.get("expected_phase"):
+                        self.assertEqual(payload["recommended_phase"], case["expected_phase"])
+                    if case.get("expected_command"):
+                        command_names = [item["name"] for item in payload["commands"]]
+                        self.assertIn(case["expected_command"], command_names)
+                    if case.get("expected_facilitation_pack"):
+                        self.assertEqual(payload["facilitation_pack"], case["expected_facilitation_pack"])
+                    if case.get("expected_template"):
+                        self.assertEqual(payload["workflow_metadata"].get("template"), case["expected_template"])
+                    elif case["id"] in {"confused_user", "brainstorm_request", "mixed_bmad_parity_runtime_request"}:
+                        self.assertTrue(payload["facilitation_pack"].startswith("skill:facilitation/"))
+                    if case["id"] == "method_frustration_ready":
+                        self.assertNotIn("publish current batch", payload["recommended_action"])
+                        command_names = [item["name"] for item in payload["commands"]]
+                        self.assertIn("transition-evolve", command_names)
+                        self.assertIn("correct-course", command_names)
+                        text = run_cmd("guide", "--root", str(root), "--question", case["question"]).stdout
+                        self.assertIn("Guidance Engine: correct-course -> correct-course / 6-evolve", text)
+                        self.assertIn("State update: required", text)
+
+    def test_guidance_engine_benchmark_artifact_covers_fixture_targets(self) -> None:
+        text = GUIDANCE_BENCHMARK.read_text(encoding="utf-8")
+        fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
+
+        self.assertIn("Forge parity targets", text)
+        self.assertIn("Correct-course", text)
+        self.assertIn("Broad ideas", text)
+        self.assertIn("Confusion", text)
+        self.assertIn("Mechanical build", text)
+        for workflow in {case["expected_workflow"] for case in fixtures}:
+            self.assertIn(workflow, text)
+
     def test_packaged_reality_workflows_are_available(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -335,7 +475,7 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(snapshot["runtime_version"], "1.26.3")
+            self.assertEqual(snapshot["runtime_version"], "1.27.0")
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
@@ -909,7 +1049,7 @@ class RuntimeTests(unittest.TestCase):
                 encoding="utf-8",
             )
             manifest_path.write_text(
-                json.dumps({"name": "forge-method-core", "version": "1.26.3", "skills": "./skills/"}),
+                json.dumps({"name": "forge-method-core", "version": "1.27.0", "skills": "./skills/"}),
                 encoding="utf-8",
             )
             skill_path.write_text("---\nname: forge-method\n---\n", encoding="utf-8")
@@ -921,7 +1061,7 @@ class RuntimeTests(unittest.TestCase):
             plugin = payload["plugin_installation"]
             self.assertTrue(plugin["available"])
             self.assertEqual(plugin["status"], "ready")
-            self.assertEqual(plugin["installed_version"], "1.26.3")
+            self.assertEqual(plugin["installed_version"], "1.27.0")
             self.assertEqual(plugin["plugin_path"], str(plugin_root.resolve()))
             self.assertIn("codex://plugins/forge-method-core?marketplacePath=", plugin["codex_deeplink"])
             self.assertIn("Plugin installation:", text)
@@ -961,6 +1101,15 @@ class RuntimeTests(unittest.TestCase):
             run_cmd("module", "recommend", "--objective", "build a web app with an API", "--json").stdout
         )
         validation = run_cmd("workflow", "validate").stdout
+        workflow_list = run_cmd("workflow", "list").stdout
+        guide = json.loads(
+            run_cmd(
+                "guide",
+                "--question",
+                "implementar workflow metadata e facilitation packs do Forge",
+                "--json",
+            ).stdout
+        )
         version = run_cmd("version").stdout
 
         self.assertIn("core-runtime", modules)
@@ -968,13 +1117,74 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(modules_json["modules"])
         self.assertEqual(module_recommendation["recommended"][0]["id"], "software-builder")
         self.assertIn("Workflow validation passed.", validation)
+        self.assertIn("workflow-validate", workflow_list)
+        for workflow_id in [
+            "game-story-creation",
+            "game-test-framework",
+            "traceability-gate",
+            "teach-testing",
+            "nfr-evidence-audit",
+            "workflow-analyze",
+            "skill-convert",
+            "doc-index",
+            "spec-distillation",
+        ]:
+            self.assertIn(workflow_id, workflow_list)
+        for template_path in [
+            ROOT / "skills" / "forge-method" / "templates" / "game-lifecycle-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "test-architecture-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "builder-utility-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "document-utility-artifact.md",
+        ]:
+            self.assertTrue(template_path.exists())
+        for pack_path in [
+            ROOT / "skills" / "forge-method" / "facilitation" / "game-lifecycle.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "test-architecture.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "builder-utility.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "document-utility.md",
+        ]:
+            self.assertIn("domain_examples:", pack_path.read_text(encoding="utf-8"))
+        catalog = json.loads((ROOT / "skills" / "forge-method" / "catalog" / "workflows.json").read_text(encoding="utf-8"))
+        required_facilitation_sections = [
+            "purpose:",
+            "open_floor:",
+            "source_material:",
+            "follow_up_batches:",
+            "conversation_stages:",
+            "elicitation_options:",
+            "facilitator_moves:",
+            "quality_bar:",
+            "anti_patterns:",
+            "paths:",
+            "checkpoint_options:",
+            "artifact_rules:",
+            "headless:",
+        ]
+        pack_ids = sorted(
+            {
+                item["facilitation_pack"]
+                for item in catalog["workflows"]
+                if item.get("facilitation_pack")
+            }
+        )
+        self.assertGreaterEqual(len(pack_ids), 10)
+        for pack_id in pack_ids:
+            pack_text = (ROOT / "skills" / "forge-method" / "facilitation" / f"{pack_id}.md").read_text(
+                encoding="utf-8"
+            )
+            for section in required_facilitation_sections:
+                self.assertIn(section, pack_text, pack_id)
+            self.assertGreaterEqual(pack_text.count("\n  - "), 12, pack_id)
+        self.assertEqual(guide["recommended_workflow"], "runtime-builder")
+        self.assertEqual(guide["workflow_metadata"]["id"], "runtime-builder")
+        self.assertEqual(guide["facilitation_pack"], "skill:facilitation/runtime-builder.md")
         agents = run_cmd("agent", "list").stdout
         agent_validation = run_cmd("agent", "validate").stdout
 
         self.assertIn("facilitator", agents)
         self.assertIn("quality-reviewer", agents)
         self.assertIn("Agent profile validation passed.", agent_validation)
-        self.assertEqual(version.strip(), "1.26.3")
+        self.assertEqual(version.strip(), "1.27.0")
 
     def test_skill_requires_launcher_on_every_invocation(self) -> None:
         skill_text = (ROOT / "skills" / "forge-method" / "SKILL.md").read_text(encoding="utf-8")
@@ -1027,7 +1237,7 @@ class RuntimeTests(unittest.TestCase):
             selected_paths = [item["path"] for item in plan["selected"]]
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(plan["runtime_version"], "1.26.3")
+            self.assertEqual(plan["runtime_version"], "1.27.0")
             self.assertEqual(plan["state"]["phase"], "4-build-verify")
             self.assertIn(".forge-method/state.yaml", selected_paths)
             self.assertIn(".forge-method/sprint.yaml", selected_paths)
@@ -1271,7 +1481,12 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue(artifact.exists())
             self.assertTrue(load_plan.exists())
             self.assertIn('phase: "1-discovery"', state.read_text(encoding="utf-8"))
-            self.assertIn('active_workflow: "discover-intent"', state.read_text(encoding="utf-8"))
+            state_text = state.read_text(encoding="utf-8")
+            story_text = story.read_text(encoding="utf-8")
+            self.assertIn('status: "project-created"', state_text)
+            self.assertIn('active_workflow: "discover-intent"', state_text)
+            self.assertIn("run discovery", state_text)
+            self.assertIn("project brief artifact exists", story_text)
             self.assertIn("software-builder", artifact.read_text(encoding="utf-8"))
             self.assertIn("night-watch", project_list)
             self.assertIn("Gate passed.", gate)
@@ -1332,6 +1547,8 @@ class RuntimeTests(unittest.TestCase):
             state = (root / ".forge-method" / "state.yaml").read_text(encoding="utf-8")
 
             self.assertIn('module: "game-studio"', state)
+            self.assertIn('active_workflow: "discover-intent"', state)
+            self.assertIn("run discovery", state)
 
     def test_workflow_module_and_eval_generation(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

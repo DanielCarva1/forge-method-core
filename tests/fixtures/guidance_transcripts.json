@@ -1,0 +1,121 @@
+[
+  {
+    "id": "method_frustration_ready",
+    "state": "ready",
+    "question": "isso esta errado, o metodo pulou etapas, nao guiou humanos e eu estou frustrado",
+    "expected_classification": "correct-course",
+    "expected_phase": "6-evolve",
+    "expected_workflow": "correct-course",
+    "state_update_required": true
+  },
+  {
+    "id": "broad_game_idea_no_state",
+    "state": "none",
+    "question": "quero criar um jogo online de rpg de mesa com regras, jogadores, campanha e dados",
+    "expected_classification": "game-flow",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "game-brief",
+    "state_update_required": false
+  },
+  {
+    "id": "confused_user",
+    "state": "discovery",
+    "question": "estou em duvida e nao sei qual deveria ser o proximo passo",
+    "expected_classification": "confusion",
+    "expected_workflow": "problem-solving",
+    "state_update_required": false
+  },
+  {
+    "id": "research_request",
+    "state": "discovery",
+    "question": "preciso de pesquisa profunda com docs, fontes e benchmark antes de decidir",
+    "expected_classification": "research-needed",
+    "expected_workflow": "domain-scan",
+    "state_update_required": false
+  },
+  {
+    "id": "brainstorm_request",
+    "state": "discovery",
+    "question": "vamos fazer um brainstorm de ideias e alternativas antes de especificar",
+    "expected_classification": "brainstorm",
+    "expected_workflow": "brainstorming",
+    "state_update_required": false
+  },
+  {
+    "id": "mechanical_build",
+    "state": "build_story_ready",
+    "question": "implementa a proxima historia",
+    "expected_classification": "mechanical-build",
+    "expected_workflow": "build-story",
+    "state_update_required": false
+  },
+  {
+    "id": "mixed_bmad_parity_runtime_request",
+    "state": "evolve_runtime",
+    "question": "implementar o que ainda falta do BMAD: workflow metadata, facilitation packs, game/test depth e consistencia do catalogo",
+    "expected_classification": "builder-flow",
+    "expected_phase": "6-evolve",
+    "expected_workflow": "runtime-builder",
+    "state_update_required": false
+  },
+  {
+    "id": "game_story_lifecycle_request",
+    "state": "discovery",
+    "question": "preciso criar game stories implementation-ready para o proximo playable slice do jogo",
+    "expected_classification": "game-flow",
+    "expected_phase": "3-plan",
+    "expected_workflow": "game-story-creation",
+    "expected_facilitation_pack": "skill:facilitation/game-lifecycle.md",
+    "expected_template": "game-lifecycle-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "test_architecture_traceability_request",
+    "state": "discovery",
+    "question": "preciso de traceability matrix e gate decision para qualidade antes do release",
+    "expected_classification": "quality-flow",
+    "expected_phase": "4-build-verify",
+    "expected_workflow": "traceability-gate",
+    "expected_facilitation_pack": "skill:facilitation/test-architecture.md",
+    "expected_template": "test-architecture-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "teach_testing_request",
+    "state": "discovery",
+    "question": "teach me testing para eu entender qual estrategia de QA usar neste projeto",
+    "expected_classification": "quality-flow",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "teach-testing",
+    "expected_facilitation_pack": "skill:facilitation/test-architecture.md",
+    "expected_template": "test-architecture-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "builder_workflow_analysis_request",
+    "state": "evolve_runtime",
+    "question": "analyze workflow behavior, metadata and state-machine gaps before scaffolding",
+    "expected_classification": "builder-flow",
+    "expected_phase": "6-evolve",
+    "expected_workflow": "workflow-analyze",
+    "expected_facilitation_pack": "skill:facilitation/builder-utility.md",
+    "expected_template": "builder-utility-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "document_utility_index_request",
+    "state": "discovery",
+    "question": "index docs and create navigation guidance for future agents",
+    "expected_classification": "document-utility",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "doc-index",
+    "expected_facilitation_pack": "skill:facilitation/document-utility.md",
+    "expected_template": "document-utility-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  }
+]

@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 1.27.0
+
+Forge Method Core v1.27.0 adds the native Guidance Engine:
+
+- route substantive human messages through `guide --question --json`
+- classify correction, confusion, brainstorm, research, creative, game, quality, builder, mechanical build, support, and evolution intent
+- make ready projects enter `6-evolve` or `correct-course` when new critique or intent overrides stale release work
+- update Hot Start to run Guidance Engine after resume when the invocation contains substantive intent
+- add transcript fixtures and an internal benchmark artifact for guided human routing
+- keep the emergency reload entrypoint from v1.26.4 in the same delivery batch
+
+## 1.26.4
+
+Forge Method Core v1.26.4 adds emergency reload support:
+
+- add read-only `reload` runtime command for a fresh bootstrap contract
+- add `$forge-reload` as a tiny escape hatch for stale chat instructions
+- install and smoke-test both fallback skills
+- include `reload` in startup update checks
+
 ## 1.26.3
 
 Forge Method Core v1.26.3 tightens startup:

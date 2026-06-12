@@ -52,6 +52,20 @@ Human-facing docs explain why the runtime exists, how to install it, and how to 
 
 Human Experience is allowed to be warm, specific, and conversational. Guide output, onboarding, Agent Council discussion, and user-facing explanations should help people think, compare options, and make decisions.
 
+## Guidance Engine Rule
+
+`guide --question --json` is the authoritative interpreter when the latest user message contains a correction, doubt, brainstorm request, research request, new intent, or build request. It must classify intent, detect signals, recommend phase/workflow/action, include alternatives, and say whether state must update before continuing.
+
+A stale `next_action` must not override a newer human correction. If a ready project receives critique or new intent, the next route is `6-evolve` or `correct-course`, not repeated release or publication work.
+
+Guidance Engine should return workflow catalog metadata and a facilitation pack when one exists. The catalog gives agents phase, required/optional, follow-up, and output expectations. The facilitation pack gives humans a richer guided conversation without making the compact workflow state machine larger.
+
+A facilitation pack is not just a short prompt. It must include stage-by-stage conversation flow, elicitation options, facilitator moves, quality bar, and anti-patterns. This is how Forge keeps the agent runtime compact while giving humans a guided experience with taste.
+
+Specialized requests should route to the narrowest available depth workflow when the human names the lifecycle job. Examples: game story creation should not collapse to generic game brief; traceability should not collapse to generic test strategy; workflow analysis should not collapse to generic runtime-builder; document indexing should not collapse to domain research.
+
+When a narrow catalog workflow has execution modes and differs from the current active workflow, Guidance Engine should return a `transition-workflow` command and mark `state_update_required` so the next agent can enter that workflow instead of only describing it.
+
 ## Agent Runtime
 
 Agent Runtime is compact and deterministic. Skills, workflows, manifests, artifacts, evals, gates, and recovery files should be optimized for agents that must resume work with minimal context.

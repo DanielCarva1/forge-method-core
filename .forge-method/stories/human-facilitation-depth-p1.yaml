@@ -1,0 +1,10 @@
+# Forge Method story
+updated_at: "2026-06-12T02:48:46+00:00"
+id: "human-facilitation-depth-p1"
+title: "Deepen human facilitation packs"
+status: "done"
+phase: "6-evolve"
+acceptance_criteria: "facilitation packs define rich human-stage scripts without bloating workflow state machines | validation enforces required rich facilitation sections | BMAD comparison treats per-workflow richness as product requirement, not optional polish"
+evidence: ".forge-method/evidence/20260612-024829-validation-human-facilitation-depth-validation.md"
+checks: "workflow validate; targeted unit test; full unittest; smoke-runtime; smoke-install; verify-fast; gate --require-evals"
+blocker: ""
