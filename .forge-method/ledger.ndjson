@@ -260,3 +260,9 @@
 {"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-183453-validation-guidance-experience-install-validation.md", "story": ""}, "ts": "2026-06-12T18:34:53+00:00"}
 {"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-183507-guidance-experience-installed-validation.md"}, "ts": "2026-06-12T18:35:07+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T18:35:07+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-parity-audit", "lifecycle": "durable", "path": ".forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md"}, "ts": "2026-06-12T20:03:02+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "parity-audit-recorded"}, "ts": "2026-06-12T20:04:18+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-parity-audit", "lifecycle": "durable", "path": ".forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md"}, "ts": "2026-06-12T20:05:24+00:00"}
+{"event": "evidence.added", "payload": {"kind": "audit", "path": ".forge-method/evidence/20260612-200602-audit-bmad-forge-systematic-parity-audit.md", "story": ""}, "ts": "2026-06-12T20:06:02+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-200614-bmad-forge-parity-audit-recorded.md"}, "ts": "2026-06-12T20:06:14+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T20:06:14+00:00"}

@@ -4,34 +4,37 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: correct-course-continued
-- workflow: correct-course
+- status: parity-audit-recorded
+- workflow: runtime-builder
 - active_story: <none>
-- next_action: Use /forge-reload in a fresh project and judge the live first-run facilitation; if it still feels thin, deepen facilitation packs and transcript replay rather than creating stories early.
+- next_action: Implement P0.1 Help Oracle invariant and P0.2 facilitation coverage gate from the BMAD parity audit.
 
 ## Latest Checkpoint
 
-# Guidance experience installed validation
+# BMAD Forge parity audit recorded
 
-- created_at: 2026-06-12T18:35:07+00:00
+- created_at: 2026-06-12T20:06:14+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: correct-course-continued
-- workflow: correct-course
+- status: parity-audit-recorded
+- workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Synchronized the installed Forge skill after source changes and verified the installed runtime. The user can now test /forge-reload in another project against the corrected runtime, not the stale installed copy.
+Recorded a systematic first-pass BMAD-to-Forge parity audit. The audit covers BMAD Method core, Builder, CIS, Game Dev Studio, and TEA; maps command/token families to Forge equivalents; and identifies P0 gaps in Help Oracle, facilitation coverage, PRD/UX/Quick Dev depth, story lifecycle proof, and parity replay harness.
 
 ## Decisions
 
-- The local installed skill must be refreshed after source runtime changes, otherwise live Forge usage keeps old behavior.
+- Do not claim complete BMAD parity yet; this artifact proves the gap map, not gap closure.
+- Translate BMAD behavior into Forge-native human facilitation plus compact agent runtime contracts.
+- Next implementation should start with P0.1 Help Oracle invariant and P0.2 facilitation coverage gate.
 
 ## Checks
 
-- powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1: passed
-- Installed runtime hash matches repo runtime hash.
+- artifact verify: passed, with only pre-existing stale warnings for older artifacts
+- audit: passed
+- workflow validate: passed
 
 ## Failed Checks
 
@@ -39,16 +42,16 @@ Synchronized the installed Forge skill after source changes and verified the ins
 
 ## Touched Files
 
-- skills/forge-method/scripts/forge_method_runtime.py
-- install.ps1
+- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
 
 ## Artifacts
 
-- .forge-method/evidence/20260612-183453-validation-guidance-experience-install-validation.md
+- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
+- .forge-method/evidence/20260612-200602-audit-bmad-forge-systematic-parity-audit.md
 
 ## Next Action
 
-Use /forge-reload in a fresh project and judge the live first-run facilitation; if it still feels thin, deepen facilitation packs and transcript replay rather than creating stories early.
+Implement P0.1 Help Oracle invariant and P0.2 facilitation coverage gate from the BMAD parity audit.
 
 ## Recovery Signals
 
@@ -66,6 +69,7 @@ Use /forge-reload in a fresh project and judge the live first-run facilitation; 
 - .forge-method/artifacts/guidance-engine-benchmark.md
 - docs/adr/0008-guidance-engine.md
 - install.ps1
+- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
 
 ## Open Human Inputs
 
@@ -82,16 +86,14 @@ Use /forge-reload in a fresh project and judge the live first-run facilitation; 
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260612-044523-validation-script-audit-optimization-validation.md
 - .forge-method/evidence/20260612-044806-gate-quality-gate.md
 - .forge-method/evidence/20260612-181924-validation-guidance-experience-correct-course-validation.md
 - .forge-method/evidence/20260612-183040-validation-guidance-experience-final-validation.md
 - .forge-method/evidence/20260612-183453-validation-guidance-experience-install-validation.md
+- .forge-method/evidence/20260612-200602-audit-bmad-forge-systematic-parity-audit.md
 
 ## Recent Artifacts
 
-- internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine internal benchmark - Internal behavior benchmark for route-aware human guidance, runtime audit routing, narrow guided-depth transitions, correct-course, research, brainstorm, game, builder, quality, document utility, and mechanical build routing.
-- story-link [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - .forge-method/artifacts/guidance-engine-benchmark.md -> script-audit-optimization-p1 - Artifact linked to story.
 - correct-course [active/durable]: .forge-method/artifacts/20260612-144025-correct-course-correct-course-continuation.md - Correct-course continuation - A conversa corrigiu a premissa: o problema de performance/travamento e do Codex como superficie, nao causado pelo Forge plugin. Experimentos TS/Rust/hooks devem ser encerrados como forks ativos.
 
 Impact: Evita otimizar o Forge plugin para um problema que pertence a superficie Codex e preserva a decisao de continuar refinando o Forge como plugin enquanto a ideia de app proprio fica em pesquisa futura..
@@ -107,3 +109,5 @@ Impact: New users could receive technical artifacts and stories before taste, pa
 Policy: choose the conservative interpretation that preserves the approved spec.
 
 Continuation: Keep initial projects gated by facilitation input, route method-experience criticism to correct-course first, and validate with transcript fixtures plus runtime smoke.
+- internal-parity-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD to Forge systematic parity audit - Systematic first-pass parity audit comparing BMAD Method, Builder, CIS, Game Dev Studio, and TEA against Forge principles, workflows, facilitation packs, runtime contracts, scripts, state, and validation.
+- internal-parity-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD to Forge systematic parity audit - Systematic first-pass parity audit comparing BMAD Method, Builder, CIS, Game Dev Studio, and TEA against Forge principles, workflows, facilitation packs, runtime contracts, scripts, state, and validation.
