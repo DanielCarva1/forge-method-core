@@ -37,7 +37,7 @@ Start Forge Method in this workspace.
 
 The installer prints direct `codex://` links for opening the plugin page and sharing it inside the Codex app. After a first install, start a new Codex thread so the enabled skill list is refreshed. After the self-updating package is installed, normal `$forge-method` starts can self-update the Git marketplace package and continue in the same chat.
 
-When your message includes a question, correction, brainstorm/research request, product/UX planning request, quick-dev request, new intent, or build request, `$forge-method` routes it through Guidance Engine after startup. The runtime returns the recommended phase, workflow, action, alternatives, and any state update command before following older state actions.
+When your message includes a question, correction, brainstorm/research request, product/UX planning request, quick-dev request, story lifecycle request, new intent, or build request, `$forge-method` routes it through Guidance Engine after startup. The runtime returns the recommended phase, workflow, action, alternatives, and any state update command before following older state actions.
 
 Fallback skill-only install:
 

@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-Forge Method already has durable state, preflight, resume guidance, workflows, Grill Gate, Correct-Course Continuation, and Mechanical Autonomy. The weak spot was human routing: a stale `next_action` could dominate even when the latest user message clearly corrected the route, expressed confusion, asked for brainstorm/research/product/UX/quick-dev help, or introduced new intent.
+Forge Method already has durable state, preflight, resume guidance, workflows, Grill Gate, Correct-Course Continuation, and Mechanical Autonomy. The weak spot was human routing: a stale `next_action` could dominate even when the latest user message clearly corrected the route, expressed confusion, asked for brainstorm/research/product/UX/quick-dev/story lifecycle help, or introduced new intent.
 
 The runtime needs one canonical subsystem that reads the latest human message and durable state together, then chooses the next workflow without relying on chat memory.
 
@@ -27,7 +27,7 @@ Guidance Engine returns:
 - `state_updates`
 - `commands`
 
-`guide --question --json` is authoritative when the latest human message is substantive. A correction, complaint, doubt, brainstorm request, research request, product/UX planning request, quick-dev request, or new intent may override an older `next_action`. A ready project with fresh critique or new intent should enter `6-evolve` or `correct-course`, not keep repeating release/publication work.
+`guide --question --json` is authoritative when the latest human message is substantive. A correction, complaint, doubt, brainstorm request, research request, product/UX planning request, quick-dev request, story lifecycle request, or new intent may override an older `next_action`. A ready project with fresh critique or new intent should enter `6-evolve` or `correct-course`, not keep repeating release/publication work.
 
 Hot Start must run `guide --question --json` after `preflight`, `start`, and `resume --json` whenever the invocation contains substantive human intent beyond merely starting the runtime.
 

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- add `story-creation` workflow, artifact template, and Guidance Engine story-flow routing
+- block mechanical build resume for implementation-ready stories that lack decision-source artifacts
+- add tests proving ready build stories need decision sources and mechanical loops do not ask procedural continue prompts
 - route PRD, UX, and quick-dev requests through Guidance Engine product-flow with executable workflow transitions
 - add `quick-dev` spec-lite workflow, facilitation pack, and compact artifact template
 - add product requirements and UX artifact templates plus create/update/validate workflow metadata

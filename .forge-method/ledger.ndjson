@@ -275,3 +275,8 @@
 {"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "p0-prd-ux-quick-dev-done"}, "ts": "2026-06-12T20:47:33+00:00"}
 {"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-204751-prd-ux-quick-dev-parity-closed.md"}, "ts": "2026-06-12T20:47:51+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T20:47:51+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-benchmark", "lifecycle": "durable", "path": ".forge-method/artifacts/guidance-engine-benchmark.md"}, "ts": "2026-06-12T21:07:04+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-211014-validation-story-lifecycle-guard-validation.md", "story": "bmad-parity-p0-story-lifecycle-guard"}, "ts": "2026-06-12T21:10:14+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "p0-story-lifecycle-guard-done"}, "ts": "2026-06-12T21:10:20+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-211040-story-lifecycle-guard-closed.md"}, "ts": "2026-06-12T21:10:40+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T21:10:41+00:00"}

@@ -37,6 +37,23 @@ def run_cmd(
     return result
 
 
+def add_decision_source(root: Path, *, title: str = "Approved spec") -> str:
+    return run_cmd(
+        "artifact",
+        "add",
+        "--root",
+        str(root),
+        "--kind",
+        "spec",
+        "--title",
+        title,
+        "--summary",
+        "Approved decision source for implementation-ready story tests.",
+        "--path",
+        ".forge-method/artifacts/test-decision-source.md",
+    ).stdout.strip()
+
+
 def prepare_guidance_fixture(root: Path, state_kind: str) -> None:
     if state_kind == "none":
         return
@@ -79,6 +96,7 @@ def prepare_guidance_fixture(root: Path, state_kind: str) -> None:
     if state_kind == "build_story_ready":
         for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
             run_cmd("transition", "--root", str(root), "--phase", phase)
+        add_decision_source(root)
         run_cmd(
             "story",
             "add",
@@ -460,6 +478,7 @@ class RuntimeTests(unittest.TestCase):
             run_cmd("transition", "--root", str(root), "--phase", "2-specification")
             run_cmd("transition", "--root", str(root), "--phase", "3-plan")
             run_cmd("transition", "--root", str(root), "--phase", "4-build-verify")
+            add_decision_source(root)
             run_cmd(
                 "story",
                 "add",
@@ -511,12 +530,47 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "continue_current_workflow")
 
+    def test_story_lifecycle_guard_requires_decision_source_for_build_story(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
+                run_cmd("transition", "--root", str(root), "--phase", phase, "--force")
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-1",
+                "--title",
+                "Build thing",
+                "--acceptance",
+                "thing works",
+            )
+
+            blocked = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+
+            self.assertFalse(blocked["quality"]["audit"]["passed"])
+            self.assertIn("decision artifact source", "\n".join(blocked["quality"]["audit"]["errors"]))
+            self.assertEqual(blocked["route"]["recommendation"], "repair_project_state")
+            self.assertEqual(blocked["resume"]["action"], "repair_project_state")
+            self.assertEqual(blocked["help_oracle"]["required_next_workflow"], "context-recovery")
+
+            add_decision_source(root)
+            released = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+
+            self.assertTrue(released["quality"]["audit"]["passed"])
+            self.assertEqual(released["route"]["recommendation"], "start_next_story")
+            self.assertEqual(released["help_oracle"]["required_next_workflow"], "build-story")
+
     def test_status_brief_surfaces_actionable_runtime_state(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             run_cmd("init", "--project", "Example Project", "--root", str(root))
             for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
                 run_cmd("transition", "--root", str(root), "--phase", phase, "--force")
+            add_decision_source(root)
             run_cmd(
                 "story",
                 "add",
@@ -797,6 +851,7 @@ class RuntimeTests(unittest.TestCase):
             run_cmd("init", "--project", "Example Project", "--root", str(root))
             for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
                 run_cmd("transition", "--root", str(root), "--phase", phase, "--force")
+            add_decision_source(root)
             run_cmd(
                 "story",
                 "add",
@@ -858,6 +913,7 @@ class RuntimeTests(unittest.TestCase):
             run_cmd("init", "--project", "Example Project", "--root", str(root))
             for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
                 run_cmd("transition", "--root", str(root), "--phase", phase, "--force")
+            add_decision_source(root)
             run_cmd(
                 "story",
                 "add",
@@ -939,6 +995,7 @@ class RuntimeTests(unittest.TestCase):
             run_cmd("init", "--project", "Example Project", "--root", str(root))
             for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
                 run_cmd("transition", "--root", str(root), "--phase", phase, "--force")
+            add_decision_source(root)
             run_cmd(
                 "story",
                 "add",
@@ -1247,6 +1304,7 @@ class RuntimeTests(unittest.TestCase):
             "product-requirements",
             "ux-plan",
             "quick-dev",
+            "story-creation",
         ]:
             self.assertIn(workflow_id, workflow_list)
         for template_path in [
@@ -1257,6 +1315,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "product-requirements-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "ux-design-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "quick-dev-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "story-creation-artifact.md",
         ]:
             self.assertTrue(template_path.exists())
         for pack_path in [
@@ -1296,6 +1355,7 @@ class RuntimeTests(unittest.TestCase):
             "product-requirements",
             "ux-plan",
             "quick-dev",
+            "story-creation",
             "architecture",
             "create-epics",
             "plan-sprint",
@@ -1311,9 +1371,11 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["product-requirements"].get("template"), "product-requirements-artifact")
         self.assertEqual(by_id["ux-plan"].get("template"), "ux-design-artifact")
         self.assertEqual(by_id["quick-dev"].get("template"), "quick-dev-artifact")
+        self.assertEqual(by_id["story-creation"].get("template"), "story-creation-artifact")
         self.assertIn("validate", by_id["product-requirements"].get("modes", []))
         self.assertIn("validate", by_id["ux-plan"].get("modes", []))
         self.assertIn("spec-lite", by_id["quick-dev"].get("modes", []))
+        self.assertIn("validate", by_id["story-creation"].get("modes", []))
         for pack_id in pack_ids:
             pack_text = (ROOT / "skills" / "forge-method" / "facilitation" / f"{pack_id}.md").read_text(
                 encoding="utf-8"
@@ -1406,6 +1468,7 @@ class RuntimeTests(unittest.TestCase):
             run_cmd("transition", "--root", str(root), "--phase", "2-specification")
             run_cmd("transition", "--root", str(root), "--phase", "3-plan")
             run_cmd("transition", "--root", str(root), "--phase", "4-build-verify")
+            add_decision_source(root)
             run_cmd(
                 "story",
                 "add",
@@ -1497,6 +1560,7 @@ class RuntimeTests(unittest.TestCase):
                 phase_snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
                 self.assertTrue(phase_snapshot["resume"]["grill_gate_required"])
             run_cmd("transition", "--root", str(root), "--phase", "4-build-verify")
+            add_decision_source(root)
             run_cmd("story", "add", "--root", str(root), "--id", "story-a", "--title", "Build A", "--acceptance", "A works")
             run_cmd("story", "add", "--root", str(root), "--id", "story-b", "--title", "Build B", "--acceptance", "B works")
             config_dir = root / ".forge-method" / "config"
@@ -1520,6 +1584,9 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("/goal", resume["codex_goal_handoff"]["command"])
             self.assertEqual(guide["mechanical_work_order"]["next_mechanical_step"], work_order["next_mechanical_step"])
             self.assertIn("Goal recommended", next_text)
+            self.assertNotIn("ok?", next_text.lower())
+            self.assertNotIn("continue?", next_text.lower())
+            self.assertNotIn("quer continuar", next_text.lower())
             self.assertIn("Config validation passed.", config_validation)
 
     def test_correct_course_continuation_writes_artifact_without_human_block(self) -> None:
@@ -2041,6 +2108,7 @@ class RuntimeTests(unittest.TestCase):
             run_cmd("init", "--project", "Example Project", "--root", str(root))
             for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
                 run_cmd("transition", "--root", str(root), "--phase", phase, "--force")
+            add_decision_source(root)
             run_cmd(
                 "story",
                 "add",

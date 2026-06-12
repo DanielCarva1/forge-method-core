@@ -174,5 +174,17 @@
     "expected_template": "quick-dev-artifact",
     "state_update_required": true,
     "expected_command": "transition-workflow"
+  },
+  {
+    "id": "story_creation_readiness_request",
+    "state": "discovery",
+    "question": "preciso criar stories implementation-ready com decision source map, acceptance criteria, validation map e proximo build-story",
+    "expected_classification": "story-flow",
+    "expected_phase": "3-plan",
+    "expected_workflow": "story-creation",
+    "expected_facilitation_pack": "skill:facilitation/story-lifecycle.md",
+    "expected_template": "story-creation-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
   }
 ]

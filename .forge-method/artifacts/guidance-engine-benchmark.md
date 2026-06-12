@@ -6,7 +6,7 @@
 - docs_cache: `%TEMP%/forge-bmad-docs`
 - installed_modules: bmb 1.8.1, cis 0.2.1, tea 1.19.0, gds 0.6.0
 
-Internal behavior benchmark for route-aware human guidance, correct-course, research, brainstorm, product/UX/quick-dev, game, builder, and quality routing.
+Internal behavior benchmark for route-aware human guidance, correct-course, research, brainstorm, product/UX/quick-dev, story lifecycle, game, builder, and quality routing.
 
 ## Sources
 
@@ -32,6 +32,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - PRD requests should route to a create/update/validate product-requirements workflow with decision log, addendum, validation findings, and next workflow.
 - UX requests should route to UX planning with taste calibration, journeys, interaction model, accessibility, rejection log, and proof target before stories.
 - Quick Dev / Quick Flow requests should route to a spec-lite workflow that clarifies scope, implements or hands off mechanically, reviews, validates, writes evidence, and names the next workflow.
+- Story lifecycle requests should route to story-creation/readiness flows that require accepted decision sources, acceptance criteria, checks, evidence expectations, and a validation map before build-story.
 
 ## Forge parity targets
 
@@ -43,6 +44,8 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Mechanical build requests should continue autonomously when decision artifacts and stories are already ready.
 - Method/runtime audit requests should route to runtime-builder instead of generic operate/support, especially when they mention scripts, dead code, misleading docs, agent behavior, or human-guided experience.
 - Product planning, UX design, and quick-dev requests should route to narrow executable workflows rather than generic build-story or stale state.
+- Story creation requests should not create ready build stories from vague intent; they need accepted source artifacts and a validation map.
+- Mechanical build loops should continue through story start/review/fix/evidence/ready gate without asking for procedural "ok" once stories are ready.
 - Runtime outputs must remain compact JSON/state-machine artifacts for agents, while non-JSON guidance can be human, direct, and useful.
 
 ## Fixture workflow ids
@@ -57,6 +60,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `product-requirements`
 - `ux-plan`
 - `quick-dev`
+- `story-creation`
 - `game-story-creation`
 - `traceability-gate`
 - `teach-testing`

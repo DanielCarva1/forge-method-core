@@ -54,7 +54,7 @@ Human Experience is allowed to be warm, specific, and conversational. Guide outp
 
 ## Guidance Engine Rule
 
-`guide --question --json` is the authoritative interpreter when the latest user message contains a correction, doubt, brainstorm request, research request, product/UX planning request, quick-dev request, new intent, or build request. It must classify intent, detect signals, recommend phase/workflow/action, include alternatives, and say whether state must update before continuing.
+`guide --question --json` is the authoritative interpreter when the latest user message contains a correction, doubt, brainstorm request, research request, product/UX planning request, quick-dev request, story lifecycle request, new intent, or build request. It must classify intent, detect signals, recommend phase/workflow/action, include alternatives, and say whether state must update before continuing.
 
 A stale `next_action` must not override a newer human correction. If a ready project receives critique or new intent, the next route is `6-evolve` or `correct-course`, not repeated release or publication work.
 

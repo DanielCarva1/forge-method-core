@@ -181,6 +181,7 @@ HUMAN_FACING_REQUIRED_WORKFLOWS = {
     "product-requirements",
     "architecture",
     "ux-plan",
+    "story-creation",
     "create-epics",
     "plan-sprint",
     "readiness-check",
@@ -346,6 +347,49 @@ MECHANICAL_ACTIONS = {
     "resolve_review_findings",
     "repair_project_state",
     "run_ready_gate",
+}
+
+STORY_DECISION_ARTIFACT_KINDS = {
+    "architecture",
+    "architecture-plan",
+    "atdd-plan",
+    "decision",
+    "decision-gate",
+    "epics",
+    "game-prd",
+    "gdd",
+    "mechanics-matrix",
+    "prd",
+    "product-requirements",
+    "quick-dev",
+    "requirements",
+    "risk-register",
+    "spec",
+    "specification",
+    "story-creation",
+    "test-strategy",
+    "traceability-gate",
+    "ux",
+    "ux-design",
+    "ux-plan",
+    "validation-map",
+}
+STORY_DECISION_PATH_HINTS = {
+    "architecture",
+    "atdd",
+    "epic",
+    "gdd",
+    "mechanics",
+    "prd",
+    "quick-dev",
+    "requirements",
+    "risk",
+    "spec",
+    "story-creation",
+    "test-strategy",
+    "traceability",
+    "ux",
+    "validation",
 }
 BUILDER_KINDS = ["workflow", "module", "agent", "skill", "template", "eval"]
 COUNCIL_DEFAULT_AGENTS = ["facilitator", "researcher", "spec-architect", "planner", "quality-reviewer"]
@@ -1731,6 +1775,40 @@ def artifact_summaries(root: Path) -> dict[str, str]:
     return summaries
 
 
+def story_decision_artifact_sources(root: Path) -> list[str]:
+    sources: list[str] = []
+    for entry in artifact_states(root).values():
+        if entry.get("status", "active") == "captured":
+            continue
+        kind = slugify(str(entry.get("kind", "")))
+        path = str(entry.get("path", ""))
+        title = normalize_text(str(entry.get("title", "")))
+        haystack = normalize_text(f"{kind} {path} {title}")
+        if kind in STORY_DECISION_ARTIFACT_KINDS or any(hint in haystack for hint in STORY_DECISION_PATH_HINTS):
+            sources.append(path)
+    return sorted(set(sources))
+
+
+def story_is_implementation_ready_candidate(story: dict[str, str]) -> bool:
+    if story.get("status", "") not in {"ready", "in_progress", "review"}:
+        return False
+    return story.get("phase", "") == "4-build-verify"
+
+
+def story_decision_source_errors(root: Path, story: dict[str, str], sources: list[str] | None = None) -> list[str]:
+    if not story_is_implementation_ready_candidate(story):
+        return []
+    available = sources if sources is not None else story_decision_artifact_sources(root)
+    if available:
+        return []
+    return [
+        (
+            f"{story.get('id')}: implementation-ready story has no decision artifact source "
+            "(run story-creation/readiness-check or add/link PRD, spec, UX, architecture, test, or validation artifact)"
+        )
+    ]
+
+
 def parse_timestamp(value: str) -> dt.datetime | None:
     if not value:
         return None
@@ -2593,6 +2671,7 @@ def audit_project(root: Path) -> list[str]:
     stories_by_id = {story.get("id", ""): story for story in list_stories(root)}
     if active_story and active_story not in story_ids:
         errors.append(f"active story does not exist: {active_story}")
+    decision_sources = story_decision_artifact_sources(root)
     for finding in list_review_findings(root):
         finding_id = finding.get("id", "")
         story_id = finding.get("story", "")
@@ -2615,6 +2694,7 @@ def audit_project(root: Path) -> list[str]:
             errors.append(f"{story.get('id')}: done story has no evidence")
         if status in {"ready", "in_progress", "review"} and not story.get("acceptance_criteria"):
             errors.append(f"{story.get('id')}: executable story has no acceptance criteria")
+        errors.extend(story_decision_source_errors(root, story, decision_sources))
         for artifact in split_list(story.get("artifacts")):
             if not (root / artifact).exists() and not artifact_missing_allowed(root, artifact):
                 errors.append(f"{story.get('id')}: linked artifact missing: {artifact}")
@@ -4386,6 +4466,18 @@ def detect_guidance_signals(question: str) -> list[str]:
         "research-needed": ["deep research", "pesquisa profunda", "consultar documentacao", "ler docs", "benchmark"],
         "document-utility": ["index docs", "shard document", "editorial review", "edge case", "spec distillation"],
         "quality-flow": ["teach me testing"],
+        "story-flow": [
+            "story lifecycle",
+            "story creation",
+            "create story",
+            "create stories",
+            "implementation-ready",
+            "implementation ready",
+            "criar story",
+            "criar stories",
+            "criar historias",
+            "historias prontas",
+        ],
         "product-flow": [
             "product requirements",
             "requisitos de produto",
@@ -4451,6 +4543,7 @@ def detect_guidance_signals(question: str) -> list[str]:
         "creative-flow": {"creative", "criativo", "historia", "storytelling", "marca", "campanha", "conceito"},
         "game-flow": {"game", "jogo", "jogar", "player", "mecanica", "rpg", "mesa", "dice", "engine"},
         "quality-flow": {"test", "testing", "teste", "qa", "qualidade", "risco", "nfr", "gate", "review"},
+        "story-flow": {"backlog", "epic", "epics", "sprint", "stories", "story", "historia", "historias"},
         "product-flow": {
             "prd",
             "prfaq",
@@ -4587,6 +4680,20 @@ def routed_product_workflow(question: str) -> str:
     return "product-requirements"
 
 
+def routed_story_workflow(question: str) -> str:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    if "create story" in normalized or "create stories" in normalized or "criar story" in normalized or "criar stories" in normalized or "criar historias" in normalized:
+        return "story-creation"
+    if {"epic", "epics"} & tokens or "create epics" in normalized:
+        return "create-epics"
+    if {"sprint"} & tokens or "plan sprint" in normalized or "sprint planning" in normalized:
+        return "plan-sprint"
+    if {"readiness", "ready"} & tokens or "implementation ready" in normalized or "implementation-ready" in normalized:
+        return "readiness-check"
+    return "story-creation"
+
+
 def routed_builder_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
@@ -4646,7 +4753,7 @@ def should_transition_to_guided_workflow(
         return False
     if recommended_workflow == state.get("active_workflow", ""):
         return False
-    return classification in {"game-flow", "quality-flow", "builder-flow", "document-utility", "product-flow"}
+    return classification in {"game-flow", "quality-flow", "builder-flow", "document-utility", "product-flow", "story-flow"}
 
 
 def build_guidance_decision(
@@ -4723,6 +4830,13 @@ def build_guidance_decision(
             recommended_action = f"create the project, then run {recommended_workflow} before implementation"
             human_prompt = "I should shape product requirements, UX, or a spec-lite quick-dev path before building."
             reason = "The first intent asks for product planning, UX design, PRD validation, or a small guided build."
+        elif "story-flow" in signal_set:
+            classification = "story-flow"
+            recommended_phase = "3-plan"
+            recommended_workflow = routed_story_workflow(question)
+            recommended_action = f"create the project, then run {recommended_workflow} with decision-source and readiness checks before build"
+            human_prompt = "I should not create implementation stories until accepted decisions and validation evidence exist."
+            reason = "The first intent asks for story lifecycle planning rather than direct implementation."
         elif "builder-flow" in signal_set:
             classification = "builder-flow"
             recommended_phase = "1-discovery"
@@ -4945,6 +5059,24 @@ def build_guidance_decision(
         recommended_action = f"implement and validate story {next_story.get('id')}"
         human_prompt = "The approved decision work is done; I should continue mechanically and write evidence."
         reason = "A build-ready story exists in build/verify and the human asked for implementation."
+    elif has_question and "story-flow" in signal_set and "game-flow" not in signal_set:
+        classification = "story-flow"
+        recommended_workflow = routed_story_workflow(question)
+        if recommended_workflow == "story-creation":
+            recommended_action = "run story-creation to verify decision sources, write implementation-ready stories, checks, evidence map, and next build step"
+            human_prompt = "I should convert approved decisions into stories, not use stories as a substitute for decisions."
+        elif recommended_workflow == "readiness-check":
+            recommended_action = "run readiness-check to prove stories have accepted sources, acceptance criteria, checks, and evidence expectations"
+            human_prompt = "I should prove the backlog is implementation-ready before build-story starts."
+        else:
+            recommended_action = f"run {recommended_workflow} to plan the next story batch from accepted decision artifacts"
+            human_prompt = "I should preserve story order, dependencies, acceptance, checks, and decision sources."
+        alternatives = guidance_alternatives(
+            ("story-creation", "when implementation-ready story files need to be authored from accepted decisions"),
+            ("readiness-check", "when stories exist but their decision sources or validation map may be weak"),
+            ("plan-sprint", "when the next slice and sequencing need sprint planning"),
+        )
+        reason = "The message asks for story lifecycle work, so stories must be generated from accepted decision artifacts before build."
     elif has_question and "game-flow" in signal_set:
         classification = "game-flow"
         recommended_workflow = routed_game_workflow(question)
