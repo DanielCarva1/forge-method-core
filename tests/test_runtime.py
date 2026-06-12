@@ -1244,6 +1244,9 @@ class RuntimeTests(unittest.TestCase):
             "skill-convert",
             "doc-index",
             "spec-distillation",
+            "product-requirements",
+            "ux-plan",
+            "quick-dev",
         ]:
             self.assertIn(workflow_id, workflow_list)
         for template_path in [
@@ -1251,6 +1254,9 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "test-architecture-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "builder-utility-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "document-utility-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "product-requirements-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "ux-design-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "quick-dev-artifact.md",
         ]:
             self.assertTrue(template_path.exists())
         for pack_path in [
@@ -1258,6 +1264,8 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "facilitation" / "test-architecture.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "builder-utility.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "document-utility.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "product-planning.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "ux-design.md",
         ]:
             self.assertIn("domain_examples:", pack_path.read_text(encoding="utf-8"))
         catalog = json.loads((ROOT / "skills" / "forge-method" / "catalog" / "workflows.json").read_text(encoding="utf-8"))
@@ -1287,6 +1295,7 @@ class RuntimeTests(unittest.TestCase):
         human_facing_required = {
             "product-requirements",
             "ux-plan",
+            "quick-dev",
             "architecture",
             "create-epics",
             "plan-sprint",
@@ -1299,6 +1308,12 @@ class RuntimeTests(unittest.TestCase):
         by_id = {item["id"]: item for item in catalog["workflows"]}
         for workflow_id in human_facing_required:
             self.assertIn("facilitation_pack", by_id[workflow_id], workflow_id)
+        self.assertEqual(by_id["product-requirements"].get("template"), "product-requirements-artifact")
+        self.assertEqual(by_id["ux-plan"].get("template"), "ux-design-artifact")
+        self.assertEqual(by_id["quick-dev"].get("template"), "quick-dev-artifact")
+        self.assertIn("validate", by_id["product-requirements"].get("modes", []))
+        self.assertIn("validate", by_id["ux-plan"].get("modes", []))
+        self.assertIn("spec-lite", by_id["quick-dev"].get("modes", []))
         for pack_id in pack_ids:
             pack_text = (ROOT / "skills" / "forge-method" / "facilitation" / f"{pack_id}.md").read_text(
                 encoding="utf-8"

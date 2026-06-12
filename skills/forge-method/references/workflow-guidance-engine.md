@@ -14,7 +14,7 @@ inputs:
 
 steps:
   1. classify the user intent before repeating the old next action
-  2. detect signals: correction, frustration, confusion, brainstorm, research, creative, game, quality, builder, mechanical, or operation
+  2. detect signals: correction, frustration, confusion, brainstorm, research, product, UX, quick-dev, creative, game, quality, builder, mechanical, or operation
   3. choose the next workflow and phase from state plus signals
   4. explain why this workflow is better than the stale state action
   5. return one recommended action, alternatives, a human prompt, and commands

@@ -177,6 +177,7 @@ HUMAN_FACING_REQUIRED_WORKFLOWS = {
     "creative-session",
     "concept-selection",
     "write-spec",
+    "quick-dev",
     "product-requirements",
     "architecture",
     "ux-plan",
@@ -4385,6 +4386,21 @@ def detect_guidance_signals(question: str) -> list[str]:
         "research-needed": ["deep research", "pesquisa profunda", "consultar documentacao", "ler docs", "benchmark"],
         "document-utility": ["index docs", "shard document", "editorial review", "edge case", "spec distillation"],
         "quality-flow": ["teach me testing"],
+        "product-flow": [
+            "product requirements",
+            "requisitos de produto",
+            "prd",
+            "prfaq",
+            "ux design",
+            "ux plan",
+            "user experience",
+            "experiencia de usuario",
+            "plano de ux",
+            "quick dev",
+            "quick flow",
+            "spec lite",
+            "spec-lite",
+        ],
         "builder-flow": [
             "audit runtime",
             "audit scripts",
@@ -4435,6 +4451,24 @@ def detect_guidance_signals(question: str) -> list[str]:
         "creative-flow": {"creative", "criativo", "historia", "storytelling", "marca", "campanha", "conceito"},
         "game-flow": {"game", "jogo", "jogar", "player", "mecanica", "rpg", "mesa", "dice", "engine"},
         "quality-flow": {"test", "testing", "teste", "qa", "qualidade", "risco", "nfr", "gate", "review"},
+        "product-flow": {
+            "prd",
+            "prfaq",
+            "requirements",
+            "requisitos",
+            "produto",
+            "product",
+            "ux",
+            "ui",
+            "interface",
+            "journey",
+            "jornada",
+            "quick",
+            "rapido",
+            "rapida",
+            "pequeno",
+            "small",
+        },
         "document-utility": {
             "index",
             "shard",
@@ -4528,6 +4562,31 @@ def routed_quality_workflow(question: str) -> str:
     return "test-strategy"
 
 
+def routed_product_workflow(question: str) -> str:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    padded = f" {normalized} "
+    if (
+        {"quick", "rapido", "rapida", "pequeno", "small"} & tokens
+        or "quick dev" in normalized
+        or "quick flow" in normalized
+        or "spec lite" in normalized
+        or "spec-lite" in normalized
+    ):
+        return "quick-dev"
+    if (
+        {"ux", "ui", "interface", "journey", "jornada"} & tokens
+        or " ux " in padded
+        or "ui " in padded
+        or "user experience" in normalized
+        or "experiencia de usuario" in normalized
+    ):
+        return "ux-plan"
+    if {"prd", "prfaq", "requirements", "requisitos", "produto", "product"} & tokens:
+        return "product-requirements"
+    return "product-requirements"
+
+
 def routed_builder_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
@@ -4587,7 +4646,7 @@ def should_transition_to_guided_workflow(
         return False
     if recommended_workflow == state.get("active_workflow", ""):
         return False
-    return classification in {"game-flow", "quality-flow", "builder-flow", "document-utility"}
+    return classification in {"game-flow", "quality-flow", "builder-flow", "document-utility", "product-flow"}
 
 
 def build_guidance_decision(
@@ -4657,6 +4716,13 @@ def build_guidance_decision(
             recommended_action = "create the project, then generate and compare options before specification"
             human_prompt = "I should keep this divergent until the direction is chosen."
             reason = "The first intent asks for ideas, options, or exploration."
+        elif "product-flow" in signal_set:
+            classification = "product-flow"
+            recommended_phase = "2-specification"
+            recommended_workflow = routed_product_workflow(question)
+            recommended_action = f"create the project, then run {recommended_workflow} before implementation"
+            human_prompt = "I should shape product requirements, UX, or a spec-lite quick-dev path before building."
+            reason = "The first intent asks for product planning, UX design, PRD validation, or a small guided build."
         elif "builder-flow" in signal_set:
             classification = "builder-flow"
             recommended_phase = "1-discovery"
@@ -4855,6 +4921,24 @@ def build_guidance_decision(
             ("technical-feasibility-scan", "when architecture feasibility is the main risk"),
         )
         reason = "The message depends on docs, evidence, or external benchmark behavior."
+    elif has_question and "product-flow" in signal_set and "game-flow" not in signal_set:
+        classification = "product-flow"
+        recommended_workflow = routed_product_workflow(question)
+        if recommended_workflow == "quick-dev":
+            recommended_action = "run quick-dev to clarify scope, write spec-lite, implement or hand off, review, validate, and record evidence"
+            human_prompt = "This sounds small enough for a fast path, but I should still lock scope, proof, and non-goals before building."
+        elif recommended_workflow == "ux-plan":
+            recommended_action = "run ux-plan to calibrate taste, journeys, interaction model, accessibility, rejection log, and proof"
+            human_prompt = "I should make the human experience concrete before implementation stories."
+        else:
+            recommended_action = "run product-requirements in create/update/validate mode with decisions, addendum, findings, and next workflow"
+            human_prompt = "I should turn product intent into testable requirements and a durable decision log before architecture or stories."
+        alternatives = guidance_alternatives(
+            ("product-requirements", "when product promise, scope, or acceptance criteria need a PRD"),
+            ("ux-plan", "when taste, journey, interface, states, or accessibility are the main uncertainty"),
+            ("quick-dev", "when the change is small, bounded, and ready for spec-lite plus implementation evidence"),
+        )
+        reason = "The message asks for product requirements, UX design, PRD validation, or a quick guided build path."
     elif next_story and phase == "4-build-verify" and (not has_question or "mechanical-build" in signal_set or "operate-support" in signal_set):
         classification = "mechanical-build"
         recommended_workflow = "build-story"

@@ -138,5 +138,41 @@
     "expected_template": "document-utility-artifact",
     "state_update_required": true,
     "expected_command": "transition-workflow"
+  },
+  {
+    "id": "product_requirements_validate_request",
+    "state": "discovery",
+    "question": "preciso criar e validar um PRD com requisitos de produto, decision log e acceptance criteria antes de arquitetura",
+    "expected_classification": "product-flow",
+    "expected_phase": "2-specification",
+    "expected_workflow": "product-requirements",
+    "expected_facilitation_pack": "skill:facilitation/product-planning.md",
+    "expected_template": "product-requirements-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "ux_design_taste_request",
+    "state": "discovery",
+    "question": "preciso de UX design com taste calibration, jornada, estados, acessibilidade e rejeitar padroes genericos",
+    "expected_classification": "product-flow",
+    "expected_phase": "3-plan",
+    "expected_workflow": "ux-plan",
+    "expected_facilitation_pack": "skill:facilitation/ux-design.md",
+    "expected_template": "ux-design-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "quick_dev_small_change_request",
+    "state": "discovery",
+    "question": "quick dev para um pequeno ajuste: clarificar escopo, fazer spec-lite, implementar, revisar e validar",
+    "expected_classification": "product-flow",
+    "expected_phase": "2-specification",
+    "expected_workflow": "quick-dev",
+    "expected_facilitation_pack": "skill:facilitation/quick-dev.md",
+    "expected_template": "quick-dev-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
   }
 ]

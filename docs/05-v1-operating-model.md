@@ -54,7 +54,7 @@ Human Experience is allowed to be warm, specific, and conversational. Guide outp
 
 ## Guidance Engine Rule
 
-`guide --question --json` is the authoritative interpreter when the latest user message contains a correction, doubt, brainstorm request, research request, new intent, or build request. It must classify intent, detect signals, recommend phase/workflow/action, include alternatives, and say whether state must update before continuing.
+`guide --question --json` is the authoritative interpreter when the latest user message contains a correction, doubt, brainstorm request, research request, product/UX planning request, quick-dev request, new intent, or build request. It must classify intent, detect signals, recommend phase/workflow/action, include alternatives, and say whether state must update before continuing.
 
 A stale `next_action` must not override a newer human correction. If a ready project receives critique or new intent, the next route is `6-evolve` or `correct-course`, not repeated release or publication work.
 
@@ -62,7 +62,7 @@ Guidance Engine should return workflow catalog metadata and a facilitation pack 
 
 A facilitation pack is not just a short prompt. It must include stage-by-stage conversation flow, elicitation options, facilitator moves, quality bar, and anti-patterns. This is how Forge keeps the agent runtime compact while giving humans a guided experience with taste.
 
-Specialized requests should route to the narrowest available depth workflow when the human names the lifecycle job. Examples: game story creation should not collapse to generic game brief; traceability should not collapse to generic test strategy; workflow analysis should not collapse to generic runtime-builder; document indexing should not collapse to domain research.
+Specialized requests should route to the narrowest available depth workflow when the human names the lifecycle job. Examples: PRD validation should not collapse to generic spec writing; UX planning should not collapse to implementation; quick-dev should not skip spec-lite proof; game story creation should not collapse to generic game brief; traceability should not collapse to generic test strategy; workflow analysis should not collapse to generic runtime-builder; document indexing should not collapse to domain research.
 
 When a narrow catalog workflow has execution modes and differs from the current active workflow, Guidance Engine should return a `transition-workflow` command and mark `state_update_required` so the next agent can enter that workflow instead of only describing it.
 

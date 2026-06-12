@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- route PRD, UX, and quick-dev requests through Guidance Engine product-flow with executable workflow transitions
+- add `quick-dev` spec-lite workflow, facilitation pack, and compact artifact template
+- add product requirements and UX artifact templates plus create/update/validate workflow metadata
 - add Help Oracle output to snapshot/resume/next/transition so the runtime reports the required next workflow from durable state
 - preserve active `6-evolve` runtime-builder work even when readiness is still `ready`
 - enforce facilitation pack coverage for human-facing workflows during workflow validation

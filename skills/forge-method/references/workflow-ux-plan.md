@@ -9,26 +9,36 @@ inputs:
   - target user
   - brand or tone constraints
   - workflow goals
+  - references and anti-references
+  - accessibility, device, density, localization, and support constraints
 
 steps:
-  1. map primary user tasks
-  2. define screens, states, copy tone, and interaction rules
-  3. identify empty, error, loading, and success states
-  4. save UX plan artifact
+  1. calibrate taste with references, anti-references, tone, density, and rejected patterns
+  2. map primary user journeys, first-session success, and repeated workflows
+  3. define surfaces, controls, information hierarchy, copy tone, and interaction rules
+  4. identify empty, error, loading, success, permission, and recovery states
+  5. define accessibility and usability proof targets
+  6. save UX plan artifact and rejection log
 
 outputs:
   - UX plan artifact
+  - taste calibration and rejection log
+  - user journeys
   - interaction states
+  - accessibility and proof targets
   - copy and tone constraints
 
 done_when:
   - primary workflow is testable
+  - taste choices and rejected patterns are explicit
   - key states are listed
+  - accessibility and proof target are defined
   - implementation stories can reference UX decisions
 
 blocked_when:
   - audience or product posture is unknown
   - visual or content direction conflicts with requirements
+  - references, anti-references, or workflow expectations are too vague to guide implementation
 
 handoff:
-  - preserve UX plan path, states, copy constraints, and risks
+  - preserve UX plan path, taste decisions, journeys, states, accessibility, proof target, copy constraints, risks, and next workflow
