@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- require initial human facilitation before creating stories for new projects
+- route method-experience criticism to `correct-course` before `runtime-builder`
+- make `correct-course` update active workflow and route metadata to avoid stale agent guidance
+- recommend Codex Goal handoff for autonomous mechanical resume paths
+
 ## 1.28.0
 
 Forge Method Core v1.28.0 hardens guidance audit routing and local install diagnostics:

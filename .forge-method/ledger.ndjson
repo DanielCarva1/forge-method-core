@@ -249,3 +249,14 @@
 {"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "story-done"}, "ts": "2026-06-12T14:42:53+00:00"}
 {"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-144322-independent-app-experiments-archived.md"}, "ts": "2026-06-12T14:43:22+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T14:43:22+00:00"}
+{"event": "artifact.added", "payload": {"kind": "correct-course", "lifecycle": "durable", "path": ".forge-method/artifacts/20260612-180403-correct-course-correct-course-continuation.md"}, "ts": "2026-06-12T18:04:03+00:00"}
+{"event": "correct_course.continued", "payload": {"artifact": ".forge-method/artifacts/20260612-180403-correct-course-correct-course-continuation.md", "impact": "New users could receive technical artifacts and stories before taste, pain, theme, UX, or route facilitation, then get procedural confirmations instead of guided or autonomous progress."}, "ts": "2026-06-12T18:04:03+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-181924-validation-guidance-experience-correct-course-validation.md", "story": ""}, "ts": "2026-06-12T18:19:24+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-181956-guidance-experience-correction.md"}, "ts": "2026-06-12T18:19:56+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T18:19:56+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-183040-validation-guidance-experience-final-validation.md", "story": ""}, "ts": "2026-06-12T18:30:40+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-183101-guidance-experience-final-validation.md"}, "ts": "2026-06-12T18:31:01+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T18:31:01+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260612-183453-validation-guidance-experience-install-validation.md", "story": ""}, "ts": "2026-06-12T18:34:53+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-183507-guidance-experience-installed-validation.md"}, "ts": "2026-06-12T18:35:07+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T18:35:07+00:00"}

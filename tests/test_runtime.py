@@ -481,6 +481,8 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
             self.assertEqual(snapshot["resume"]["action"], "start_next_story")
             self.assertTrue(snapshot["resume"]["autonomous"])
+            self.assertTrue(snapshot["resume"]["mechanical_work_order"]["goal_recommended"])
+            self.assertTrue(snapshot["resume"]["codex_goal_handoff"]["recommended"])
             self.assertTrue(snapshot["quality"]["audit"]["passed"])
 
     def test_snapshot_does_not_start_story_before_build_phase(self) -> None:
@@ -1451,6 +1453,10 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue(artifact.exists())
             self.assertEqual(snapshot["state"]["human_input_required"], "false")
             self.assertEqual(snapshot["state"]["status"], "correct-course-continued")
+            self.assertEqual(snapshot["state"]["active_workflow"], "correct-course")
+            self.assertEqual(snapshot["state"]["last_intent_classification"], "correct-course")
+            self.assertEqual(snapshot["state"]["active_guidance_mode"], "correct-course")
+            self.assertIn("acceptance wording", snapshot["state"]["last_route_reason"])
             self.assertIn("conservative interpretation", artifact.read_text(encoding="utf-8"))
             self.assertIn("continue with the conservative", snapshot["state"]["next_action"])
 
@@ -1519,23 +1525,29 @@ class RuntimeTests(unittest.TestCase):
             root = parent / "night-watch"
             state = root / ".forge-method" / "state.yaml"
             story = root / ".forge-method" / "stories" / "project-kickoff.yaml"
+            input_file = root / ".forge-method" / "inputs" / "initial-facilitation.yaml"
             artifact = root / ".forge-method" / "artifacts" / "project-brief.md"
             load_plan = root / ".forge-method" / "context" / "load-plan.json"
             project_list = run_cmd("project", "list", "--root", str(parent)).stdout
             gate = run_cmd("gate", "--root", str(root), "--require-evals").stdout
+            resume = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
 
             self.assertIn("Project created: Night Watch", create)
             self.assertTrue(state.exists())
-            self.assertTrue(story.exists())
+            self.assertFalse(story.exists())
+            self.assertTrue(input_file.exists())
             self.assertTrue(artifact.exists())
             self.assertTrue(load_plan.exists())
             self.assertIn('phase: "1-discovery"', state.read_text(encoding="utf-8"))
             state_text = state.read_text(encoding="utf-8")
-            story_text = story.read_text(encoding="utf-8")
-            self.assertIn('status: "project-created"', state_text)
+            input_text = input_file.read_text(encoding="utf-8")
+            self.assertIn('status: "waiting-human-input"', state_text)
+            self.assertIn('human_input_required: "true"', state_text)
             self.assertIn('active_workflow: "discover-intent"', state_text)
-            self.assertIn("run discovery", state_text)
-            self.assertIn("project brief artifact exists", story_text)
+            self.assertIn("answer human input initial-facilitation", state_text)
+            self.assertIn("Antes de criar stories ou desenvolver", input_text)
+            self.assertEqual(resume["action"], "answer_required_input")
+            self.assertFalse(resume["autonomous"])
             self.assertIn("software-builder", artifact.read_text(encoding="utf-8"))
             self.assertIn("night-watch", project_list)
             self.assertIn("Gate passed.", gate)
@@ -1594,10 +1606,13 @@ class RuntimeTests(unittest.TestCase):
             )
             root = parent / "game-idea"
             state = (root / ".forge-method" / "state.yaml").read_text(encoding="utf-8")
+            input_text = (root / ".forge-method" / "inputs" / "initial-facilitation.yaml").read_text(encoding="utf-8")
 
             self.assertIn('module: "game-studio"', state)
-            self.assertIn('active_workflow: "discover-intent"', state)
-            self.assertIn("run discovery", state)
+            self.assertIn('active_workflow: "game-brief"', state)
+            self.assertIn('human_input_required: "true"', state)
+            self.assertIn("fantasia do jogador", input_text)
+            self.assertIn("stories, arquitetura ou seguranca", input_text)
 
     def test_workflow_module_and_eval_generation(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

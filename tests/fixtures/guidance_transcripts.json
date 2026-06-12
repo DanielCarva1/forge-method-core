@@ -9,6 +9,17 @@
     "state_update_required": true
   },
   {
+    "id": "forge_experience_not_example_project",
+    "state": "evolve_runtime",
+    "question": "nao e pra resolver o projeto exemplo; entenda a experiencia real de usar o Forge: ele pula brainstorm e facilitacao, cria artefatos tecnicos cedo demais, depois no reload pergunta de novo e ainda nao conduz uma experiencia rica",
+    "expected_classification": "correct-course",
+    "expected_phase": "6-evolve",
+    "expected_workflow": "correct-course",
+    "expected_facilitation_pack": "skill:facilitation/correct-course.md",
+    "expected_command": "correct-course",
+    "state_update_required": true
+  },
+  {
     "id": "broad_game_idea_no_state",
     "state": "none",
     "question": "quero criar um jogo online de rpg de mesa com regras, jogadores, campanha e dados",

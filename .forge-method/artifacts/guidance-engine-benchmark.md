@@ -27,12 +27,14 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Documentation utility flows index, shard, review, stress-test, and distill source material before agents consume it.
 - Narrow guided workflows should be executable next steps: when selected inside an existing project, the route should include a state transition command instead of only restating the recommendation.
 - Correct-course is a first-class recovery path when the conversation shows the current route is wrong.
+- Transcript corrections such as "do not solve the example project; understand the Forge experience" must be treated as method correct-course, even when they also mention runtime, Forge, benchmark, or guided flows.
 - Runtime audit requests should be treated as guided builder work when the human asks about dead code, misleading agent docs, stale workflow behavior, or whether the guided experience is truly comparable.
 
 ## Forge parity targets
 
 - `guide --question --json` must classify the latest human message against durable state and available workflows.
 - Human frustration or rejection of the current route must override stale `next_action` and route to `correct-course` or `6-evolve`.
+- Corrections about the method's own experience must route to `correct-course` first; `runtime-builder` is the repair path after the failed behavior is named.
 - Broad ideas should receive a guided discovery, brainstorm, research, game, creative, quality, or builder workflow before technical implementation plans.
 - Confusion should produce one recommended route and a small set of alternatives.
 - Mechanical build requests should continue autonomously when decision artifacts and stories are already ready.

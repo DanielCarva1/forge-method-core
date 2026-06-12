@@ -1865,6 +1865,45 @@ def project_creation_module_choices(root: Path | None, objective: str, *, limit:
     return choices[:limit]
 
 
+def initial_workflow_for_module(module_id: str) -> str:
+    return {
+        "game-studio": "game-brief",
+        "creative-studio": "creative-session",
+        "runtime-builder": "runtime-builder",
+        "test-architect": "test-engagement-model",
+    }.get(module_id, "discover-intent")
+
+
+def initial_facilitation_prompt(module_id: str, objective: str) -> str:
+    prompts = {
+        "game-studio": (
+            "Antes de stories, arquitetura ou seguranca: qual fantasia do jogador, tema/tom visual, "
+            "referencias boas e ruins, primeiro modo jogavel, publico, postura da IA e o que isso nao deve virar?"
+        ),
+        "creative-studio": (
+            "Antes de especificar: qual sensacao, audiencia, referencias boas e ruins, criterios de gosto, "
+            "restricoes e direcoes que devemos rejeitar?"
+        ),
+        "runtime-builder": (
+            "Antes de mexer no runtime: qual comportamento humano falhou, qual contrato compacto o agente precisa, "
+            "e qual fixture/eval prova que nao ficou so bonito no texto?"
+        ),
+        "test-architect": (
+            "Antes de criar testes: que risco ou decisao de qualidade estamos respondendo, qual usuario ou fluxo importa, "
+            "e que evidencia faria voce confiar no resultado?"
+        ),
+    }
+    if module_id in prompts:
+        return prompts[module_id]
+    if objective:
+        return (
+            "Antes de criar stories ou desenvolver: quem usa, qual dor/desejo isso resolve, "
+            "qual experiencia faria a pessoa gostar, qual taste/UX importa, quais restricoes existem, "
+            "e como saberemos que funcionou?"
+        )
+    return "Me da o quadro inteiro: para quem e isso, por que importa, que experiencia deve ter, e como saberemos que funcionou?"
+
+
 def agent_profile_paths(root: Path | None = None) -> list[Path]:
     paths: list[Path] = []
     packaged = SKILL_DIR / "agents" / "profiles"
@@ -3074,7 +3113,7 @@ def build_mechanical_work_order(
     ]
     return {
         "autonomous": bool(resume.get("autonomous")),
-        "goal_recommended": remaining_mechanical_stories(story_counts) > 1 or action == "run_ready_gate",
+        "goal_recommended": bool(resume.get("autonomous")),
         "next_mechanical_step": resume.get("summary", ""),
         "required_context": resume.get("read", []),
         "commands": resume.get("commands", []),
@@ -3912,25 +3951,26 @@ def cmd_project_create(args: argparse.Namespace) -> int:
         no_project_guidance=args.no_project_guidance,
     )
     state["phase"] = "1-discovery"
-    state["status"] = "brownfield-discovery" if brownfield else "project-created"
-    state["active_workflow"] = "discover-intent"
+    state["status"] = "brownfield-discovery" if brownfield else "facilitation-needed"
+    state["active_workflow"] = "discover-intent" if brownfield else initial_workflow_for_module(module_id)
     if brownfield:
         state["next_action"] = (
             "run brownfield discovery: inventory existing files, current behavior, "
             "in-progress work, constraints, risks, and safe next changes"
         )
     else:
-        state["next_action"] = NEXT_BY_PHASE["1-discovery"]
+        state["next_action"] = f"run facilitated {state['active_workflow']} before specification, stories, or build"
     write_state(project_root, state)
 
-    story_id = "project-kickoff"
-    story = {
-        "id": story_id,
-        "title": "Run brownfield discovery" if brownfield else "Run project kickoff",
-        "status": "ready",
-        "phase": "1-discovery",
-        "acceptance_criteria": join_list(
-            (
+    story_id = ""
+    if brownfield:
+        story_id = "project-kickoff"
+        story = {
+            "id": story_id,
+            "title": "Run brownfield discovery",
+            "status": "ready",
+            "phase": "1-discovery",
+            "acceptance_criteria": join_list(
                 [
                     "existing project inventory is captured",
                     "current in-progress work is identified",
@@ -3938,20 +3978,27 @@ def cmd_project_create(args: argparse.Namespace) -> int:
                     "context load plan exists",
                     "quality gate passes with required evals",
                 ]
-                if brownfield
-                else [
-                    "project state identifies the selected module",
-                    "project brief artifact exists",
-                    "context load plan exists",
-                    "quality gate passes with required evals",
-                ]
-            )
-        ),
-        "evidence": "",
-        "checks": "context plan | gate --require-evals",
-        "blocker": "",
-    }
-    save_story(project_root, story)
+            ),
+            "evidence": "",
+            "checks": "context plan | gate --require-evals",
+            "blocker": "",
+        }
+        save_story(project_root, story)
+    else:
+        save_human_input(
+            project_root,
+            {
+                "id": "initial-facilitation",
+                "phase": "1-discovery",
+                "status": "open",
+                "required": "true",
+                "prompt": initial_facilitation_prompt(module_id, objective),
+                "reason": "New projects must pass human-facing discovery before stories, architecture, or implementation.",
+                "answer": "",
+            },
+        )
+        sync_human_input_state(project_root, state)
+        write_state(project_root, state)
     update_sprint(project_root)
 
     workflows = split_list(module.get("workflows"))
@@ -3971,8 +4018,14 @@ def cmd_project_create(args: argparse.Namespace) -> int:
         path=brief_rel,
         lifecycle="durable",
     )
-    link_artifact_to_story(project_root, artifact, story_id)
+    if story_id:
+        link_artifact_to_story(project_root, artifact, story_id)
     eval_path_rel = write_artifact_eval(project_root, artifact, title=f"{project} project brief", summary=summary)
+    touched = [STATE_FILE, SPRINT_FILE, artifact]
+    if story_id:
+        touched.insert(2, story_path(project_root, story_id).relative_to(project_root).as_posix())
+    else:
+        touched.insert(2, human_input_path(project_root, "initial-facilitation").relative_to(project_root).as_posix())
     checkpoint = write_checkpoint(
         project_root,
         state,
@@ -3987,12 +4040,15 @@ def cmd_project_create(args: argparse.Namespace) -> int:
             *(
                 ["Treat existing files as brownfield context and run discovery before specification or build."]
                 if brownfield
-                else []
+                else [
+                    "Do not create implementation stories until the initial human facilitation question is answered.",
+                    f"Start human-facing discovery with {state['active_workflow']}.",
+                ]
             ),
         ],
         checks=["context plan", "gate --require-evals"],
         failed_checks=[],
-        touched=[STATE_FILE, SPRINT_FILE, story_path(project_root, story_id).relative_to(project_root).as_posix(), artifact],
+        touched=touched,
         artifacts=[artifact],
         next_action=state["next_action"],
     )
@@ -4049,7 +4105,7 @@ def cmd_project_create(args: argparse.Namespace) -> int:
     print(f"Root: {project_root}")
     print(f"State: {path}")
     print(f"Module: {module_id}")
-    print(f"Story: {story_id}")
+    print(f"Story: {story_id or '<none - facilitation required>'}")
     print(f"Artifact: {artifact}")
     print(f"Eval: {eval_path_rel}")
     print(f"Checkpoint: {checkpoint}")
@@ -4158,7 +4214,22 @@ def detect_guidance_signals(question: str) -> list[str]:
     normalized = normalize_text(question)
     signals: list[str] = []
     phrase_signals = {
-        "correct-course": ["correct course", "corrigir curso", "curso errado", "wrong direction", "back up", "voltar atras"],
+        "correct-course": [
+            "correct course",
+            "corrigir curso",
+            "curso errado",
+            "wrong direction",
+            "back up",
+            "voltar atras",
+            "nao era pra",
+            "nao e pra",
+            "nao deveria",
+            "sem perguntar",
+            "nao guiou",
+            "nao conduziu",
+            "nao conduz",
+            "cedo demais",
+        ],
         "confusion": ["nao sei", "não sei", "em duvida", "em dúvida", "what should", "o que fazer", "proximo passo", "próximo passo"],
         "research-needed": ["deep research", "pesquisa profunda", "consultar documentacao", "ler docs", "benchmark"],
         "document-utility": ["index docs", "shard document", "editorial review", "edge case", "spec distillation"],
@@ -4190,7 +4261,22 @@ def detect_guidance_signals(question: str) -> list[str]:
         if any(phrase in normalized for phrase in phrases):
             signals.append(signal)
     keyword_signals = {
-        "correct-course": {"errado", "falhou", "falha", "problema", "corrigir", "faltando", "pular", "escapar", "quebrado"},
+        "correct-course": {
+            "errado",
+            "falhou",
+            "falha",
+            "problema",
+            "corrigir",
+            "faltando",
+            "pular",
+            "pula",
+            "pulou",
+            "ignorar",
+            "ignora",
+            "ignorou",
+            "escapar",
+            "quebrado",
+        },
         "frustration": {"frustrado", "frustrante", "cansado", "vergonha", "burro", "merda", "pessimo", "horrivel", "inaceitavel"},
         "confusion": {"duvida", "confuso", "perdido", "incerto", "ajuda", "orientar", "guiar"},
         "brainstorm": {"brainstorm", "ideia", "ideias", "ideation", "explorar", "opcoes", "alternativas"},
@@ -4975,6 +5061,10 @@ def cmd_correct_course(args: argparse.Namespace) -> int:
     state["last_correct_course_artifact"] = rel
     state["human_input_required"] = "false"
     state["status"] = "correct-course-continued"
+    state["active_workflow"] = "correct-course"
+    state["last_intent_classification"] = "correct-course"
+    state["last_route_reason"] = impact
+    state["active_guidance_mode"] = "correct-course"
     state["next_action"] = next_action
     write_state(root, state)
     append_ledger(root, "correct_course.continued", {"artifact": rel, "impact": impact})

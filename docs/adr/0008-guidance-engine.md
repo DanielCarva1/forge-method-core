@@ -31,6 +31,8 @@ Guidance Engine returns:
 
 Hot Start must run `guide --question --json` after `preflight`, `start`, and `resume --json` whenever the invocation contains substantive human intent beyond merely starting the runtime.
 
+Corrections about Forge Method's own human experience have precedence over generic runtime-builder routing. If the user says the method skipped facilitation, did not ask enough, created technical artifacts too early, or kept asking procedural confirmations, Guidance Engine must route to `correct-course` first. `runtime-builder` is the repair path after the failed behavior is named and preserved evidence is recorded.
+
 ## Boundaries
 
 - Human Experience uses Guidance Engine output to speak clearly, ask one useful question, and offer alternatives.
