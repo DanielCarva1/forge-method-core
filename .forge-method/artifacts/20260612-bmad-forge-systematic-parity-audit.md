@@ -335,6 +335,6 @@ The full objective is complete only when:
 
 ## Current status
 
-This audit remains the gap map for the full objective. P0.1 through P0.5 are now implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. This is not full parity completion: P1 capability depth and explicit deferral/waiver decisions still remain.
+This audit remains the gap map for the full objective. P0.1 through P0.5 are now implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. The execution plan is `.forge-method/artifacts/20260613-systematic-parity-plan.md`. This is not full parity completion: P1 capability depth and explicit deferral/waiver decisions still remain.
 
-Immediate next step: implement P1.1 Builder parity unless a new audit shows a higher-severity regression. The next batch should translate module ideation, agent builder, workflow builder, module builder, and module validation into Forge-native workflows, packs, templates, scripts/tests, and install validation.
+Immediate next step: implement P1.1 Builder Factory from the systematic plan unless a new audit shows a higher-severity regression. The next batch should translate module ideation, agent builder, workflow builder, module builder, and module validation into Forge-native workflows, packs, templates, scripts/tests, and install validation.
