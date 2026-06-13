@@ -9,8 +9,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "skills" / "forge-method" / "scripts" / "forge_method_runtime.py"
-GUIDANCE_FIXTURES = ROOT / "tests" / "fixtures" / "guidance_transcripts.json"
+GUIDANCE_FIXTURES = ROOT / "skills" / "forge-method" / "fixtures" / "guidance-parity-replay.json"
 GUIDANCE_BENCHMARK = ROOT / ".forge-method" / "artifacts" / "guidance-engine-benchmark.md"
+PARITY_REQUIRED_FAMILIES = {
+    "help",
+    "confusion",
+    "brainstorm",
+    "research",
+    "prd",
+    "ux",
+    "architecture",
+    "quick-dev",
+    "story-cycle",
+    "correct-course",
+    "builder",
+    "cis",
+    "game",
+    "tea",
+}
 
 
 def run_cmd(
@@ -444,6 +460,24 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("Mechanical build", text)
         for workflow in {case["expected_workflow"] for case in fixtures}:
             self.assertIn(workflow, text)
+
+    def test_guidance_parity_replay_fixture_covers_required_families(self) -> None:
+        fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
+        families = {case["family"] for case in fixtures}
+
+        self.assertTrue(PARITY_REQUIRED_FAMILIES <= families)
+        for case in fixtures:
+            self.assertIn("expected_classification", case)
+            self.assertIn("expected_workflow", case)
+            self.assertNotIn("bmad-", case["expected_workflow"])
+
+    def test_parity_replay_command_validates_fixture_matrix(self) -> None:
+        payload = json.loads(run_cmd("parity", "replay", "--json").stdout)
+
+        self.assertEqual(payload["failed"], 0)
+        self.assertEqual(payload["missing_families"], [])
+        self.assertTrue(PARITY_REQUIRED_FAMILIES <= set(payload["covered_families"]))
+        self.assertEqual(payload["passed"], payload["total"])
 
     def test_packaged_reality_workflows_are_available(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

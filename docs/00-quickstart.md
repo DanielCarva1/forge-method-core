@@ -146,6 +146,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\smoke-fixtures.ps1
 bash scripts/smoke-fixtures.sh
 ```
 
+Internal guidance replay can be run directly when changing Guidance Engine routing:
+
+```powershell
+python .\skills\forge-method\scripts\forge_method_runtime.py parity replay
+```
+
 After publishing a tag, verify the published package can be cloned and installed as a plugin:
 
 ```powershell

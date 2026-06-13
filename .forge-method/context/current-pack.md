@@ -4,50 +4,42 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: p0-story-lifecycle-guard-done
+- status: p0-parity-replay-harness-done
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Implement P0.5 Parity replay harness from the BMAD parity audit.
+- next_action: Implement P1.1 Builder parity from the BMAD parity audit: module ideation, agent builder, workflow builder, module builder, and module validation.
 
 ## Latest Checkpoint
 
-# Story lifecycle guard closed
+# Parity replay harness closed
 
-- created_at: 2026-06-12T21:10:40+00:00
+- created_at: 2026-06-13T02:46:34+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: p0-story-lifecycle-guard-done
+- status: p0-parity-replay-harness-done
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed BMAD parity P0.4: Forge now has a story-creation workflow, story-flow Guidance Engine routing, a story lifecycle facilitation pack upgrade, and an audit guard that blocks implementation-ready build stories without accepted decision-source artifacts. This does not complete full BMAD parity; next P0 is a parity replay harness.
+Closed BMAD parity P0.5: Forge now ships a packaged parity replay harness inside the forge-method skill. The replay covers help, confusion, brainstorm, research, PRD, UX, architecture, quick-dev, story cycle, correct-course, builder, CIS/creative, game, and TEA-shaped guidance prompts, expecting Forge-native workflow/phase/action outputs. Install smoke now runs the installed replay fixture. Full parity goal remains active; next work is P1.1 Builder parity.
 
 ## Decisions
 
-- Treat stories as execution artifacts generated from accepted decisions, not as substitutes for PRD/spec/UX/architecture/test/validation decisions.
-- Route story lifecycle requests through Guidance Engine story-flow to story-creation, readiness-check, create-epics, or plan-sprint before build-story.
-- Keep rich human story facilitation in facilitation/story-lifecycle.md and compact agent contract in references/workflow-story-creation.md.
+- Make the skill-packaged fixture the canonical transcript matrix so source tests and installed smoke exercise the same guidance routes.
+- Use Forge-native expected outputs only; benchmark family labels are internal coverage metadata, not public product language.
+- Keep P0 closure reflected in the internal parity audit while preserving P1/P2 as unfinished work.
 
 ## Checks
 
-- python -m unittest discover -s tests: passed 62 tests
+- python skills\\forge-method\\scripts\\forge_method_runtime.py parity replay: passed 20/20 cases
+- python -m unittest discover -s tests: passed 64 tests
 - python skills\\forge-method\\scripts\\forge_method_runtime.py workflow validate: passed
 - python skills\\forge-method\\scripts\\forge_method_runtime.py audit --root .: passed
 - python skills\\forge-method\\scripts\\forge_method_runtime.py artifact verify --root .: passed with only pre-existing correct-course stale-summary warning
 - powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-runtime.ps1: passed
 - powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1: passed
-- powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-install.ps1: passed
-- installed forge-method guide story-flow route: passed
-
-## Failed Checks
-
-- none
-
-## Touched Files
-
-- skills/fo
+- powershell -ExecutionPolicy Bypass -File .\\s
 [checkpoint truncated]
 
 ## Recovery Signals
@@ -58,9 +50,8 @@ Closed BMAD parity P0.4: Forge now has a story-creation workflow, story-flow Gui
 
 ### Touched Files
 
-- skills/forge-method/scripts/forge_method_runtime.py
-- install.ps1
 - .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
+- skills/forge-method/scripts/forge_method_runtime.py
 - skills/forge-method/catalog/workflows.json
 - skills/forge-method/facilitation/*.md
 - tests/test_runtime.py
@@ -70,6 +61,7 @@ Closed BMAD parity P0.4: Forge now has a story-creation workflow, story-flow Gui
 - skills/forge-method/references/workflow-quick-dev.md
 - skills/forge-method/facilitation/product-planning.md
 - skills/forge-method/facilitation/ux-design.md
+- skills/forge-method/facilitation/quick-dev.md
 
 ## Open Human Inputs
 
@@ -86,22 +78,16 @@ Closed BMAD parity P0.4: Forge now has a story-creation workflow, story-flow Gui
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260612-183453-validation-guidance-experience-install-validation.md
 - .forge-method/evidence/20260612-200602-audit-bmad-forge-systematic-parity-audit.md
 - .forge-method/evidence/20260612-203044-validation-help-oracle-and-facilitation-coverage-validation.md
 - .forge-method/evidence/20260612-204726-validation-prd-ux-quick-dev-parity-validation.md
 - .forge-method/evidence/20260612-211014-validation-story-lifecycle-guard-validation.md
+- .forge-method/evidence/20260613-024610-validation-parity-replay-harness-validation.md
 
 ## Recent Artifacts
 
-- research-reference [archived-reference/durable]: .forge-method/artifacts/20260612-independent-app-research-and-experiment-reference.md - Independent app research and experiment reference - Preserves the TS/Rust/hooks experiment findings, records that Codex instability is outside the Forge plugin boundary, and defers independent app work to a future Rust-core product track.
-- correct-course [active/durable]: .forge-method/artifacts/20260612-180403-correct-course-correct-course-continuation.md - Correct-course continuation - Forge human guidance treated a critique of the method experience as generic builder work, and new project creation could seed ready stories before facilitated discovery.
-
-Impact: New users could receive technical artifacts and stories before taste, pain, theme, UX, or route facilitation, then get procedural confirmations instead of guided or autonomous progress.
-
-Policy: choose the conservative interpretation that preserves the approved spec.
-
-Continuation: Keep initial projects gated by facilitation input, route method-experience criticism to correct-course first, and validate with transcript fixtures plus runtime smoke.
-- internal-parity-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD to Forge systematic parity audit - Systematic first-pass parity audit comparing BMAD Method, Builder, CIS, Game Dev Studio, and TEA against Forge principles, workflows, facilitation packs, runtime contracts, scripts, state, and validation.
 - internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine internal benchmark - Updated internal benchmark to include product requirements, UX planning, and quick-dev routing expectations alongside correct-course, research, brainstorm, game, builder, document, and quality routes.
 - internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine internal benchmark - Updated internal benchmark to include story lifecycle routing expectations: story-creation/readiness flows require decision-source maps, validation maps, and mechanical loops without procedural continue prompts.
+- internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine internal benchmark - Updated internal benchmark to include architecture and CIS/creative parity replay expectations, backed by packaged parity replay fixtures.
+- internal-parity-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD to Forge systematic parity audit - Updated parity audit current status: P0.1-P0.5 are implemented and validated, while P1 builder/customization/persona/game/TEA depth remains the next parity work.
+- internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine internal benchmark - Updated internal benchmark to include architecture and CIS/creative parity replay expectations, backed by packaged parity replay fixtures.

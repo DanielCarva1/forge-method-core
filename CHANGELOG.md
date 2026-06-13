@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- add packaged `parity replay` for internal Guidance Engine fixture coverage across help, confusion, brainstorm, research, PRD, UX, architecture, quick-dev, story cycle, correct-course, builder, CIS/creative, game, and test architecture requests
+- run parity replay during install smoke so the installed `$forge-method` validates the same guidance fixtures as the source checkout
 - add `story-creation` workflow, artifact template, and Guidance Engine story-flow routing
 - block mechanical build resume for implementation-ready stories that lack decision-source artifacts
 - add tests proving ready build stories need decision sources and mechanical loops do not ask procedural continue prompts

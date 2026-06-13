@@ -6,7 +6,7 @@
 - docs_cache: `%TEMP%/forge-bmad-docs`
 - installed_modules: bmb 1.8.1, cis 0.2.1, tea 1.19.0, gds 0.6.0
 
-Internal behavior benchmark for route-aware human guidance, correct-course, research, brainstorm, product/UX/quick-dev, story lifecycle, game, builder, and quality routing.
+Internal behavior benchmark for route-aware human guidance, correct-course, research, brainstorm, product/UX/architecture/quick-dev, story lifecycle, CIS/creative, game, builder, and quality routing.
 
 ## Sources
 
@@ -31,8 +31,10 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Runtime audit requests should be treated as guided builder work when the human asks about dead code, misleading agent docs, stale workflow behavior, or whether the guided experience is truly comparable.
 - PRD requests should route to a create/update/validate product-requirements workflow with decision log, addendum, validation findings, and next workflow.
 - UX requests should route to UX planning with taste calibration, journeys, interaction model, accessibility, rejection log, and proof target before stories.
+- Architecture requests should route to architecture planning that connects accepted product decisions to technical constraints, interfaces, risks, and story boundaries.
 - Quick Dev / Quick Flow requests should route to a spec-lite workflow that clarifies scope, implements or hands off mechanically, reviews, validates, writes evidence, and names the next workflow.
 - Story lifecycle requests should route to story-creation/readiness flows that require accepted decision sources, acceptance criteria, checks, evidence expectations, and a validation map before build-story.
+- CIS/creative requests should route to creative-session/concept-selection style flows before converging on specification.
 
 ## Forge parity targets
 
@@ -59,8 +61,10 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `runtime-builder`
 - `product-requirements`
 - `ux-plan`
+- `architecture`
 - `quick-dev`
 - `story-creation`
+- `creative-session`
 - `game-story-creation`
 - `traceability-gate`
 - `teach-testing`

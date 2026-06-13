@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import unicodedata
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,7 @@ PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 WORKFLOW_CATALOG_PATH = SKILL_DIR / "catalog" / "workflows.json"
 FACILITATION_DIR = SKILL_DIR / "facilitation"
 TEMPLATES_DIR = SKILL_DIR / "templates"
+PARITY_REPLAY_FIXTURE_PATH = SKILL_DIR / "fixtures" / "guidance-parity-replay.json"
 
 STATE_DIR = ".forge-method"
 STATE_FILE = "state.yaml"
@@ -127,6 +129,23 @@ FACILITATION_REQUIRED_SECTIONS = [
     "artifact_rules:",
     "headless:",
 ]
+
+PARITY_REPLAY_REQUIRED_FAMILIES = {
+    "help",
+    "confusion",
+    "brainstorm",
+    "research",
+    "prd",
+    "ux",
+    "architecture",
+    "quick-dev",
+    "story-cycle",
+    "correct-course",
+    "builder",
+    "cis",
+    "game",
+    "tea",
+}
 
 SCAN_SKIP_DIRS = {
     ".git",
@@ -4540,7 +4559,7 @@ def detect_guidance_signals(question: str) -> list[str]:
         "confusion": {"duvida", "confuso", "perdido", "incerto", "ajuda", "orientar", "guiar"},
         "brainstorm": {"brainstorm", "ideia", "ideias", "ideation", "explorar", "opcoes", "alternativas"},
         "research-needed": {"pesquisa", "research", "mercado", "documentacao", "docs", "evidencia", "fontes", "benchmark"},
-        "creative-flow": {"creative", "criativo", "historia", "storytelling", "marca", "campanha", "conceito"},
+        "creative-flow": {"creative", "criativo", "cis", "storytelling", "marca", "campanha", "conceito"},
         "game-flow": {"game", "jogo", "jogar", "player", "mecanica", "rpg", "mesa", "dice", "engine"},
         "quality-flow": {"test", "testing", "teste", "qa", "qualidade", "risco", "nfr", "gate", "review"},
         "story-flow": {"backlog", "epic", "epics", "sprint", "stories", "story", "historia", "historias"},
@@ -4551,6 +4570,8 @@ def detect_guidance_signals(question: str) -> list[str]:
             "requisitos",
             "produto",
             "product",
+            "architecture",
+            "arquitetura",
             "ux",
             "ui",
             "interface",
@@ -4667,6 +4688,8 @@ def routed_product_workflow(question: str) -> str:
         or "spec-lite" in normalized
     ):
         return "quick-dev"
+    if {"architecture", "arquitetura"} & tokens and "antes de arquitetura" not in normalized and "before architecture" not in normalized:
+        return "architecture"
     if (
         {"ux", "ui", "interface", "journey", "jornada"} & tokens
         or " ux " in padded
@@ -4675,7 +4698,9 @@ def routed_product_workflow(question: str) -> str:
         or "experiencia de usuario" in normalized
     ):
         return "ux-plan"
-    if {"prd", "prfaq", "requirements", "requisitos", "produto", "product"} & tokens:
+    if {"prd", "prfaq", "requirements", "requisitos"} & tokens:
+        return "product-requirements"
+    if {"produto", "product"} & tokens:
         return "product-requirements"
     return "product-requirements"
 
@@ -4753,7 +4778,7 @@ def should_transition_to_guided_workflow(
         return False
     if recommended_workflow == state.get("active_workflow", ""):
         return False
-    return classification in {"game-flow", "quality-flow", "builder-flow", "document-utility", "product-flow", "story-flow"}
+    return classification in {"game-flow", "quality-flow", "builder-flow", "document-utility", "product-flow", "story-flow", "creative-flow"}
 
 
 def build_guidance_decision(
@@ -5004,6 +5029,12 @@ def build_guidance_decision(
             ("brainstorming", "if you need options before deciding"),
         )
         reason = "The message asks for orientation or indicates uncertainty."
+    elif has_question and "creative-flow" in signal_set:
+        classification = "creative-flow"
+        recommended_workflow = "creative-session"
+        recommended_action = "explore and select a creative direction before specification"
+        human_prompt = "I should help choose the creative mode and preserve rejected directions compactly."
+        reason = "The message is taste-heavy or creative."
     elif has_question and "brainstorm" in signal_set:
         classification = "brainstorm"
         recommended_workflow = "brainstorming"
@@ -5044,6 +5075,9 @@ def build_guidance_decision(
         elif recommended_workflow == "ux-plan":
             recommended_action = "run ux-plan to calibrate taste, journeys, interaction model, accessibility, rejection log, and proof"
             human_prompt = "I should make the human experience concrete before implementation stories."
+        elif recommended_workflow == "architecture":
+            recommended_action = "run architecture to connect accepted product decisions to technical constraints, interfaces, risks, and story boundaries"
+            human_prompt = "I should turn accepted requirements into implementation architecture before story creation."
         else:
             recommended_action = "run product-requirements in create/update/validate mode with decisions, addendum, findings, and next workflow"
             human_prompt = "I should turn product intent into testable requirements and a durable decision log before architecture or stories."
@@ -5088,12 +5122,6 @@ def build_guidance_decision(
             ("game-test-framework", "if proof strategy is the main gap"),
         )
         reason = "The message is game-shaped and includes enough detail to choose a game-specific workflow."
-    elif has_question and "creative-flow" in signal_set:
-        classification = "creative-flow"
-        recommended_workflow = "creative-session"
-        recommended_action = "explore and select a creative direction before specification"
-        human_prompt = "I should help choose the creative mode and preserve rejected directions compactly."
-        reason = "The message is taste-heavy or creative."
     elif has_question and "quality-flow" in signal_set:
         classification = "quality-flow"
         recommended_workflow = routed_quality_workflow(question)
@@ -5336,6 +5364,233 @@ def cmd_guide(args: argparse.Namespace) -> int:
     if payload.get("council_recommended"):
         print("Council: optional for this question if the decision is high-risk or taste-heavy.")
     return 0
+
+
+def read_parity_replay_cases(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        raise SystemExit(f"Parity replay fixture not found: {path}")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid parity replay fixture JSON: {path}: {exc}") from exc
+    if not isinstance(payload, list):
+        raise SystemExit("Parity replay fixture must be a JSON list.")
+    required = {"id", "family", "state", "question", "expected_classification", "expected_workflow"}
+    for index, case in enumerate(payload, start=1):
+        if not isinstance(case, dict):
+            raise SystemExit(f"Parity replay case #{index} must be an object.")
+        missing = sorted(required - set(case))
+        if missing:
+            raise SystemExit(f"Parity replay case {case.get('id', index)} missing keys: {', '.join(missing)}")
+    return payload
+
+
+def set_replay_state(
+    root: Path,
+    *,
+    phase: str,
+    status: str,
+    workflow: str,
+    next_action: str,
+    readiness: str = "not_ready",
+) -> None:
+    state = apply_state_defaults(read_flat_yaml(state_path(root)))
+    state["phase"] = phase
+    state["status"] = status
+    state["active_workflow"] = workflow
+    state["next_action"] = next_action
+    state["readiness"] = readiness
+    state["human_input_required"] = "false"
+    write_state(root, state)
+    update_sprint(root)
+
+
+def prepare_parity_replay_state(root: Path, state_kind: str) -> None:
+    if state_kind == "none":
+        return
+    initialize_project_state(
+        root,
+        project="Parity Replay Fixture",
+        mode="creation-runtime",
+        module="software-builder",
+        no_project_guidance=True,
+    )
+    if state_kind == "discovery":
+        set_replay_state(
+            root,
+            phase="1-discovery",
+            status="discovery-ready",
+            workflow="discover-intent",
+            next_action=NEXT_BY_PHASE["1-discovery"],
+        )
+        return
+    if state_kind == "ready":
+        set_replay_state(
+            root,
+            phase="5-ready-operate",
+            status="story-done",
+            workflow="ready-release",
+            next_action="publish current batch",
+            readiness="ready",
+        )
+        return
+    if state_kind == "evolve_runtime":
+        set_replay_state(
+            root,
+            phase="6-evolve",
+            status="evolution-intake",
+            workflow="evolve-project",
+            next_action="compare and implement guided-flow parity gaps",
+            readiness="ready",
+        )
+        return
+    if state_kind == "build_story_ready":
+        set_replay_state(
+            root,
+            phase="4-build-verify",
+            status="build-ready",
+            workflow="build-story",
+            next_action=NEXT_BY_PHASE["4-build-verify"],
+        )
+        decision_source = write_artifact(
+            root,
+            kind="spec",
+            title="Replay decision source",
+            summary="Accepted decision source for parity replay build-story routing.",
+            path=".forge-method/artifacts/replay-decision-source.md",
+        )
+        save_story(
+            root,
+            {
+                "id": "story-replay",
+                "title": "Build replay target",
+                "status": "ready",
+                "phase": "4-build-verify",
+                "acceptance_criteria": "target works",
+                "checks": "python -m unittest discover -s tests",
+                "artifacts": decision_source,
+                "evidence": "",
+                "blocker": "",
+            },
+        )
+        update_sprint(root)
+        return
+    raise SystemExit(f"Unknown parity replay fixture state: {state_kind}")
+
+
+def command_names(commands: list[dict[str, Any]]) -> list[str]:
+    return [str(item.get("name", "")) for item in commands]
+
+
+def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[str]:
+    failures: list[str] = []
+
+    def expect_equal(field: str, actual: Any, expected: Any) -> None:
+        if expected is not None and actual != expected:
+            failures.append(f"{field}: expected {expected!r}, got {actual!r}")
+
+    expect_equal("intent_classification", payload.get("intent_classification"), case.get("expected_classification"))
+    expect_equal("recommended_workflow", payload.get("recommended_workflow"), case.get("expected_workflow"))
+    expect_equal("recommended_phase", payload.get("recommended_phase"), case.get("expected_phase"))
+    expect_equal("state_update_required", payload.get("state_update_required"), case.get("state_update_required"))
+    expect_equal("facilitation_pack", payload.get("facilitation_pack"), case.get("expected_facilitation_pack"))
+    metadata = payload.get("workflow_metadata") or {}
+    expect_equal("workflow_metadata.id", metadata.get("id"), case.get("expected_workflow"))
+    expect_equal("workflow_metadata.template", metadata.get("template"), case.get("expected_template"))
+    expected_command = case.get("expected_command")
+    if expected_command and expected_command not in command_names(payload.get("commands") or []):
+        failures.append(f"commands: expected {expected_command!r}, got {command_names(payload.get('commands') or [])!r}")
+    for signal in case.get("expected_signals", []):
+        if signal not in payload.get("signals", []):
+            failures.append(f"signals: missing {signal!r}")
+    for forbidden in case.get("forbidden_action_terms", []):
+        if forbidden and forbidden in str(payload.get("recommended_action", "")):
+            failures.append(f"recommended_action contains forbidden term {forbidden!r}")
+    if not payload.get("recommended_action"):
+        failures.append("recommended_action is empty")
+    if not payload.get("human_prompt"):
+        failures.append("human_prompt is empty")
+    if not isinstance(payload.get("alternatives"), list):
+        failures.append("alternatives is not a list")
+    return failures
+
+
+def run_parity_replay(*, fixture_path: Path, max_chars: int) -> dict[str, Any]:
+    cases = read_parity_replay_cases(fixture_path)
+    covered_families = sorted({str(case.get("family", "")) for case in cases if case.get("family")})
+    missing_families = sorted(PARITY_REPLAY_REQUIRED_FAMILIES - set(covered_families))
+    results: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+
+    for case in cases:
+        with tempfile.TemporaryDirectory(prefix="forge-parity-replay-") as raw:
+            replay_root = Path(raw)
+            prepare_parity_replay_state(replay_root, str(case.get("state", "")))
+            payload = build_guide_payload(replay_root, question=str(case.get("question", "")), max_chars=max_chars)
+            case_failures = parity_case_failures(case, payload)
+            result = {
+                "id": case.get("id"),
+                "family": case.get("family"),
+                "state": case.get("state"),
+                "passed": not case_failures,
+                "failures": case_failures,
+                "actual": {
+                    "intent_classification": payload.get("intent_classification"),
+                    "recommended_phase": payload.get("recommended_phase"),
+                    "recommended_workflow": payload.get("recommended_workflow"),
+                    "facilitation_pack": payload.get("facilitation_pack"),
+                    "template": (payload.get("workflow_metadata") or {}).get("template"),
+                    "state_update_required": payload.get("state_update_required"),
+                    "commands": command_names(payload.get("commands") or []),
+                },
+            }
+            results.append(result)
+            if case_failures:
+                failures.append(result)
+
+    if missing_families:
+        failures.append(
+            {
+                "id": "required-family-coverage",
+                "family": "coverage",
+                "passed": False,
+                "failures": [f"missing required families: {', '.join(missing_families)}"],
+                "actual": {"covered_families": covered_families},
+            }
+        )
+
+    return {
+        "runtime": RUNTIME_NAME,
+        "runtime_version": RUNTIME_VERSION,
+        "fixture": str(fixture_path),
+        "required_families": sorted(PARITY_REPLAY_REQUIRED_FAMILIES),
+        "covered_families": covered_families,
+        "missing_families": missing_families,
+        "total": len(cases),
+        "passed": len([item for item in results if item["passed"]]),
+        "failed": len(failures),
+        "failures": failures,
+        "results": results,
+    }
+
+
+def cmd_parity_replay(args: argparse.Namespace) -> int:
+    fixture_path = Path(args.fixture).resolve() if args.fixture else PARITY_REPLAY_FIXTURE_PATH
+    payload = run_parity_replay(fixture_path=fixture_path, max_chars=args.max_chars)
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2))
+    else:
+        print("Forge Parity Replay")
+        print(f"Fixture: {payload['fixture']}")
+        print(f"Cases: {payload['passed']}/{payload['total']} passed")
+        print(f"Families: {', '.join(payload['covered_families'])}")
+        if payload["missing_families"]:
+            print(f"Missing families: {', '.join(payload['missing_families'])}")
+        for failure in payload["failures"]:
+            print(f"FAIL {failure.get('id')}: {'; '.join(failure.get('failures', []))}")
+        if not payload["failures"]:
+            print("Parity replay passed.")
+    return 0 if not payload["failures"] else 1
 
 
 def council_participants(root: Path, raw_agents: list[str] | None) -> list[dict[str, str]]:
@@ -7465,6 +7720,14 @@ def build_parser() -> argparse.ArgumentParser:
     guide.add_argument("--max-chars", type=int, default=12000)
     guide.add_argument("--json", action="store_true")
     guide.set_defaults(func=cmd_guide)
+
+    parity = sub.add_parser("parity", help="run internal parity checks against benchmark-shaped fixtures")
+    parity_sub = parity.add_subparsers(dest="parity_command", required=True)
+    parity_replay = parity_sub.add_parser("replay", help="replay guidance parity fixtures through Guidance Engine")
+    parity_replay.add_argument("--fixture")
+    parity_replay.add_argument("--max-chars", type=int, default=12000)
+    parity_replay.add_argument("--json", action="store_true")
+    parity_replay.set_defaults(func=cmd_parity_replay)
 
     track = sub.add_parser("track", help="inspect and set Forge Method tracks")
     track_sub = track.add_subparsers(dest="track_command", required=True)

@@ -84,6 +84,7 @@ Run $pythonExe $installedRuntime project list --root $projectParentTmp
 Run $pythonExe $installedRuntime preflight --root $projectParentTmp
 Run $pythonExe $installedRuntime gate --root $generatedProjectTmp --require-evals
 Run $pythonExe $installedRuntime workflow validate
+Run $pythonExe $installedRuntime parity replay
 Run $pythonExe $installedRuntime preflight --root $tmp
 Run $pythonExe $installedRuntime reload --root $tmp
 Run $pythonExe $installedRuntime start --root $tmp

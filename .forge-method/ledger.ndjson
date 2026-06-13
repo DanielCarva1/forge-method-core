@@ -280,3 +280,10 @@
 {"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "p0-story-lifecycle-guard-done"}, "ts": "2026-06-12T21:10:20+00:00"}
 {"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260612-211040-story-lifecycle-guard-closed.md"}, "ts": "2026-06-12T21:10:40+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-12T21:10:41+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-benchmark", "lifecycle": "durable", "path": ".forge-method/artifacts/guidance-engine-benchmark.md"}, "ts": "2026-06-13T02:42:46+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-parity-audit", "lifecycle": "durable", "path": ".forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md"}, "ts": "2026-06-13T02:46:00+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-benchmark", "lifecycle": "durable", "path": ".forge-method/artifacts/guidance-engine-benchmark.md"}, "ts": "2026-06-13T02:46:00+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260613-024610-validation-parity-replay-harness-validation.md", "story": "bmad-parity-p0-parity-replay-harness"}, "ts": "2026-06-13T02:46:10+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "p0-parity-replay-harness-done"}, "ts": "2026-06-13T02:46:17+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260613-024634-parity-replay-harness-closed.md"}, "ts": "2026-06-13T02:46:34+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-13T02:46:34+00:00"}

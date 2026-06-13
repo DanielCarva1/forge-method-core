@@ -140,13 +140,21 @@ The product direction is therefore:
 
 ## Severity summary
 
-P0 gaps block the stated Forge promise:
+Original P0 gaps that blocked the stated Forge promise:
 
 1. Universal Help/Next-Step Oracle: BMAD's strongest behavior is that help/status tells the user and agent what to do next after each workflow. Forge must make this a runtime invariant.
 2. Human facilitation coverage: every high-level workflow that a human experiences must have a rich pack, not just a compact state machine.
 3. PRD/UX/Quick Dev depth: Forge has skeletons but not BMAD-level coached create/update/validate flows.
 4. Story lifecycle proof: Forge must prove it will not create stories before decision artifacts, and will not ask procedural "ok/continue" during mechanical loops.
 5. Systematic parity fixture harness: current transcript fixtures are useful but not broad enough to prove parity.
+
+P0 closure status as of the parity replay harness batch:
+
+1. Help/Next-Step Oracle: implemented and validated.
+2. Human facilitation coverage gate: implemented and validated.
+3. PRD/UX/Quick Dev depth: translated into Forge workflows, packs, templates, routes, and fixtures.
+4. Story lifecycle proof: implemented through `story-creation`, decision-source guard, and mechanical no-procedural-confirmation tests.
+5. Systematic parity fixture harness: implemented as packaged `parity replay` and installed-smoke validation.
 
 P1 gaps are important for product maturity:
 
@@ -327,6 +335,6 @@ The full objective is complete only when:
 
 ## Current status
 
-This audit is evidence of the gap map, not evidence that the gaps are closed.
+This audit remains the gap map for the full objective. P0.1 through P0.5 are now implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. This is not full parity completion: P1 capability depth and explicit deferral/waiver decisions still remain.
 
-Immediate next step: implement P0.1 and P0.2 first. Without a universal Help Oracle and facilitation coverage gate, Forge will keep regressing into "workflow names exist, but the human experience is thin."
+Immediate next step: implement P1.1 Builder parity unless a new audit shows a higher-severity regression. The next batch should translate module ideation, agent builder, workflow builder, module builder, and module validation into Forge-native workflows, packs, templates, scripts/tests, and install validation.

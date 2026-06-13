@@ -177,6 +177,8 @@ Eval kinds should stay objective and cheap: workflow routing, workflow trigger c
 
 Packaged modules must be covered by fixture projects before release. The fixture matrix creates an example and a normal project for each module, runs quality gates, generates compact recovery, checks parent preflight choices, and verifies representative objective routing.
 
+Guidance Engine changes must also pass the packaged parity replay fixture. The replay fixture lives inside the Forge skill package so source tests and installed-smoke validation exercise the same human-intent routing matrix without relying on chat memory.
+
 ## Agent Profile Rule
 
 Agent profiles are compact routing manifests. They must define when to use the profile, required inputs, required outputs, and handoff content. The quality gate validates packaged and project-local profiles before ready/release.

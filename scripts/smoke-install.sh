@@ -43,6 +43,7 @@ bash "$installed_launcher" reload --root "$tmp"
 "$python_bin" "$installed_runtime" preflight --root "$project_parent_tmp"
 "$python_bin" "$installed_runtime" gate --root "$project_parent_tmp/installed-generated" --require-evals
 "$python_bin" "$installed_runtime" workflow validate
+"$python_bin" "$installed_runtime" parity replay
 "$python_bin" "$installed_runtime" preflight --root "$tmp"
 "$python_bin" "$installed_runtime" reload --root "$tmp"
 "$python_bin" "$installed_runtime" start --root "$tmp"
