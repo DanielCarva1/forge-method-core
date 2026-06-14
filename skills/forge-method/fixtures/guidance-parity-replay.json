@@ -216,6 +216,19 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "config_customization_request",
+    "family": "config",
+    "state": "evolve_runtime",
+    "question": "quero customizar o Forge com override de workflow e gerar capability index compacto para agentes",
+    "expected_classification": "builder-flow",
+    "expected_phase": "6-evolve",
+    "expected_workflow": "config-customization",
+    "expected_facilitation_pack": "skill:facilitation/config-customization.md",
+    "expected_template": "config-customization-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
     "id": "cis_creative_direction_request",
     "family": "cis",
     "state": "discovery",

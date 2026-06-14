@@ -101,8 +101,8 @@ The product direction is therefore:
 | Party mode / multi-agent discussion | `council-decision` | partial | Forge council is compact but lacks BMAD's richer named multi-agent experience. | Add council participant routing and richer human transcript mode while keeping compact decision artifact. |
 | Named agents/personas | 7 generic profiles | partial | BMAD has named PM/Architect/Analyst/Dev/UX/Tech Writer plus module agents; Forge has roles but little human personality or specialization. | Add optional persona layer for human experience; keep agent profiles compact. |
 | Fresh chats per workflow | Context recovery, checkpoints, compact packs | partial | Forge does not enforce/teach fresh chat boundaries the same way; Codex-native context can still drift. | Add hot-start/context-boundary guidance per workflow and recovery triggers. |
-| Customization: per-agent/workflow overrides | `config-customization` only | partial/missing | No BMAD-like TOML override model for workflows, agents, templates, menus, or persistent facts. | Design Forge config override surface with validation and install persistence. |
-| Central config / module help registry | `modules/*.yaml`, `catalog/workflows.json` | partial | Forge has package catalog but no user-editable help registry or generated capability index. | Add generated compact capability index and config validation for custom modules. |
+| Customization: per-agent/workflow overrides | `config-customization`, Project Configuration, Override Model | translated | P1.2 adds validated workflow metadata, facilitation/template, agent metadata, convention, and custom capability overrides with package/team/local precedence. | Keep override surface narrow; route new runtime behavior through Builder Factory instead of freeform config. |
+| Central config / module help registry | `config index`, `modules/*.yaml`, `catalog/workflows.json` | translated | P1.2 adds generated Capability Index from effective workflows, modules, agents, conventions, and custom capabilities. | Keep generated index compact and install-safe; add richer module registration later if needed. |
 | BMAD Builder: ideate module | `module-ideation`, `builder-factory` pack, builder templates | translated | P1.1 adds explicit module ideation route, compact workflow, pack, template, and replay coverage. | Keep depth examples current as future modules are built. |
 | BMAD Builder: build agent | `agent-builder`, `agent-analyze`, `builder-factory` pack | translated | P1.1 adds guided agent build route with agent type, capability, memory/autonomy, script, and quality handoff contract. | Add concrete generated-agent examples in a later builder depth batch if needed. |
 | BMAD Builder: build workflow | `workflow-builder`, `workflow-analyze`, `skill-convert`, `workflow-validate` | translated | P1.1 adds coached workflow build route with compact state-machine, pack/template, catalog, and proof plan. | Add generated-workflow examples as future modules use the factory. |
@@ -216,7 +216,7 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | `bmad-agent-dev` | `implementer`, build-story | partial |
 | `bmad-agent-ux-designer` | future UX persona/workflow pack | partial/missing |
 | `bmad-agent-tech-writer` | document utility workflows, future tech writer persona | partial |
-| `bmad-customize` | `config-customization`, future override model | partial |
+| `bmad-customize` | `config-customization`, Project Configuration, Capability Index | translated |
 | `bmad-bmb-setup` | install/setup scripts, future module registration workflow | partial |
 | `bmad-agent-builder` | `agent-builder` plus `agent-analyze` | translated |
 | `bmad-workflow-builder` | `workflow-builder`, `workflow-analyze`, `skill-convert`, `workflow-validate` | translated |
@@ -308,8 +308,8 @@ Use these as implementation increments. Each item must ship with workflow metada
 
 ### P1.2 Customization surface
 
-- Design a Forge override model for agent profiles, workflow metadata, facilitation packs, templates, and project conventions.
-- Add validation and conflict reporting.
+- Status: translated in the Customization and Capability Index batch.
+- Added Project Configuration, Override Model, Capability Index, `config index`, `config-customization` facilitation, workflow metadata overrides, agent metadata overrides, convention entries, custom capability entries, and stale-reference validation.
 
 ### P1.3 Persona layer
 

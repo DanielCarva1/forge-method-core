@@ -305,3 +305,13 @@
 {"event": "artifact.added", "payload": {"kind": "internal-parity-plan", "lifecycle": "durable", "path": ".forge-method/artifacts/20260613-systematic-parity-plan.md"}, "ts": "2026-06-14T23:13:23+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-14T23:13:23+00:00"}
 {"event": "context_load_plan.written", "payload": {"path": ".forge-method/context/load-plan.json"}, "ts": "2026-06-14T23:13:24+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "p1-customization-index-done"}, "ts": "2026-06-14T23:37:46+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260614-233818-validation-p1-2-customization-and-capability-index-validati.md", "story": ""}, "ts": "2026-06-14T23:38:18+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260614-233830-checkpoint.md"}, "ts": "2026-06-14T23:38:30+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-14T23:38:30+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-benchmark", "lifecycle": "durable", "path": ".forge-method/artifacts/guidance-engine-benchmark.md"}, "ts": "2026-06-14T23:38:56+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-parity-audit", "lifecycle": "durable", "path": ".forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md"}, "ts": "2026-06-14T23:38:57+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-parity-plan", "lifecycle": "durable", "path": ".forge-method/artifacts/20260613-systematic-parity-plan.md"}, "ts": "2026-06-14T23:38:57+00:00"}
+{"event": "artifact.added", "payload": {"kind": "grill-with-docs", "lifecycle": "durable", "path": ".forge-method/artifacts/20260614-customization-capability-index-grill.md"}, "ts": "2026-06-14T23:38:57+00:00"}
+{"event": "artifact.added", "payload": {"kind": "capability-index", "lifecycle": "durable", "path": ".forge-method/context/capability-index.json"}, "ts": "2026-06-14T23:38:57+00:00"}
+{"event": "artifact.added", "payload": {"kind": "adr", "lifecycle": "durable", "path": "docs/adr/0009-project-configuration-overrides.md"}, "ts": "2026-06-14T23:38:57+00:00"}

@@ -166,6 +166,11 @@ Done when:
 - valid customization changes runtime-visible behavior predictably;
 - generated index is compact and install-safe.
 
+Status:
+
+- implemented in P1.2 with Project Configuration, Override Model, Capability Index, `config index`, `config-customization` facilitation, replay fixture, and targeted tests;
+- validation evidence must be recorded before moving to P1.3.
+
 ### P1.3 Persona And Elicitation Layer
 
 Scope:
@@ -362,7 +367,7 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 ## Immediate Next Step
 
-Next implementation batch: P1.2 Customization And Capability Index.
+Next implementation batch: P1.3 Persona Layer after P1.2 validation evidence is recorded.
 
 Do not start P1.2 as an ad hoc implementation. Start P1.2 from this plan:
 

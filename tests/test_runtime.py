@@ -23,6 +23,7 @@ PARITY_REQUIRED_FAMILIES = {
     "story-cycle",
     "correct-course",
     "builder",
+    "config",
     "cis",
     "game",
     "tea",
@@ -1412,6 +1413,7 @@ class RuntimeTests(unittest.TestCase):
             "workflow-builder",
             "module-builder",
             "module-validate",
+            "config-customization",
         }
         by_id = {item["id"]: item for item in catalog["workflows"]}
         for workflow_id in human_facing_required:
@@ -1425,6 +1427,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["workflow-builder"].get("template"), "builder-factory-artifact")
         self.assertEqual(by_id["module-builder"].get("template"), "module-builder-artifact")
         self.assertEqual(by_id["module-validate"].get("template"), "module-validation-report")
+        self.assertEqual(by_id["config-customization"].get("template"), "config-customization-artifact")
         self.assertIn("validate", by_id["product-requirements"].get("modes", []))
         self.assertIn("validate", by_id["ux-plan"].get("modes", []))
         self.assertIn("spec-lite", by_id["quick-dev"].get("modes", []))
@@ -1434,6 +1437,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("create", by_id["workflow-builder"].get("modes", []))
         self.assertIn("package", by_id["module-builder"].get("modes", []))
         self.assertIn("validate", by_id["module-validate"].get("modes", []))
+        self.assertIn("index", by_id["config-customization"].get("modes", []))
         for pack_id in pack_ids:
             pack_text = (ROOT / "skills" / "forge-method" / "facilitation" / f"{pack_id}.md").read_text(
                 encoding="utf-8"
@@ -1646,6 +1650,89 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotIn("continue?", next_text.lower())
             self.assertNotIn("quer continuar", next_text.lower())
             self.assertIn("Config validation passed.", config_validation)
+
+    def test_project_config_override_model_and_capability_index_contracts(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Config Project", "--root", str(root))
+            config_dir = root / ".forge-method" / "config"
+            config_dir.mkdir(parents=True, exist_ok=True)
+            (config_dir / "team.yaml").write_text(
+                "\n".join(
+                    [
+                        'human_tone: "calm"',
+                        'workflow.product-requirements.template: "quick-dev-artifact"',
+                        'workflow.product-requirements.outputs: "requirements | override proof"',
+                        'agent.facilitator.title: "Project Facilitator"',
+                        'convention.release-notes: "short and evidence-first"',
+                        'capability.config-review.summary: "Review effective Forge config."',
+                        'capability.config-review.workflow: "config-customization"',
+                        'capability.config-review.kind: "workflow"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (config_dir / "local.yaml").write_text(
+                "\n".join(
+                    [
+                        'human_tone: "direct"',
+                        'workflow.product-requirements.facilitation_pack: "config-customization"',
+                        'workflow.product-requirements.modes: "create | validate | index"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            validation = run_cmd("config", "validate", "--root", str(root)).stdout
+            inspect_payload = json.loads(run_cmd("config", "inspect", "--root", str(root), "--json").stdout)
+            guide = json.loads(
+                run_cmd(
+                    "guide",
+                    "--root",
+                    str(root),
+                    "--question",
+                    "preciso criar e validar um PRD com requisitos de produto",
+                    "--json",
+                ).stdout
+            )
+            index_payload = json.loads(run_cmd("config", "index", "--root", str(root), "--json").stdout)
+            written_payload = json.loads(run_cmd("config", "index", "--root", str(root), "--write", "--json").stdout)
+
+            self.assertIn("Config validation passed.", validation)
+            self.assertEqual(inspect_payload["effective"]["human_tone"], "direct")
+            self.assertEqual(inspect_payload["override_precedence"][0], "packaged defaults")
+            self.assertEqual(inspect_payload["overrides"][0]["key"], "human_tone")
+            self.assertEqual(guide["recommended_workflow"], "product-requirements")
+            self.assertEqual(guide["workflow_metadata"]["template"], "quick-dev-artifact")
+            self.assertEqual(guide["facilitation_pack"], "skill:facilitation/config-customization.md")
+            self.assertIn("override proof", guide["workflow_metadata"]["outputs"])
+            product_workflow = next(item for item in index_payload["workflows"] if item["id"] == "product-requirements")
+            custom_capability = next(item for item in index_payload["custom_capabilities"] if item["id"] == "config-review")
+            facilitator = next(item for item in index_payload["agents"] if item["id"] == "facilitator")
+            self.assertEqual(product_workflow["template"], "quick-dev-artifact")
+            self.assertEqual(custom_capability["workflow"], "config-customization")
+            self.assertEqual(facilitator["title"], "Project Facilitator")
+            self.assertTrue((root / written_payload["written_path"]).exists())
+
+            (config_dir / "local.yaml").write_text(
+                "\n".join(
+                    [
+                        'workflow.product-requirements.template: "missing-template"',
+                        'workflow.missing-workflow.template: "quick-dev-artifact"',
+                        'capability.bad.workflow: "missing-workflow"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            invalid = run_cmd("config", "validate", "--root", str(root), check=False)
+            invalid_index = run_cmd("config", "index", "--root", str(root), "--json", check=False)
+            self.assertNotEqual(invalid.returncode, 0)
+            self.assertIn("references missing template `missing-template`", invalid.stdout)
+            self.assertIn("references unknown workflow `missing-workflow`", invalid.stdout)
+            self.assertNotEqual(invalid_index.returncode, 0)
 
     def test_correct_course_continuation_writes_artifact_without_human_block(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

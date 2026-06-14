@@ -80,6 +80,18 @@ The canonical runtime subsystem that interprets the latest human message togethe
 
 The runtime metadata registry for packaged workflows. It records workflow id, reference alias, phase, required/optional status, follow-up workflows, expected outputs, and optional facilitation pack. Guidance Engine uses it to explain route decisions and future agents use it to validate module workflow references.
 
+## Project Configuration
+
+The validated team/local configuration under `.forge-method/config/` for one Method Project. It is the only supported project-local surface for runtime behavior overrides, conventions, and custom capability entries.
+
+## Override Model
+
+The deterministic customization contract that applies Project Configuration over packaged runtime defaults. Precedence is packaged defaults, then team config, then local config; only validated workflow metadata, agent profile metadata, project conventions, and capability index entries may override runtime-visible behavior.
+
+## Capability Index
+
+A generated compact summary of effective Forge capabilities for future agents. It is derived from packaged metadata plus valid Project Configuration, and should be regenerated instead of edited by hand.
+
 ## Guided Depth Family
 
 A related set of specialized workflows that deepens a broad track without changing the single Forge entrypoint. Current depth families include game lifecycle, test architecture, builder utility, and document utility. Each family keeps compact workflow state machines for agents and a separate facilitation pack for human conversation.

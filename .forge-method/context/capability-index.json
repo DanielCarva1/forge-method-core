@@ -1,0 +1,1416 @@
+{
+  "agents": [
+    {
+      "handoff": "Record the decision, remaining uncertainty, and exact next state action.",
+      "id": "facilitator",
+      "inputs": "state snapshot | open human inputs | current workflow | recent checkpoint",
+      "outputs": "answered input | clarified constraint | next action | checkpoint update",
+      "purpose": "Clarify intent, constraints, trade-offs, and human decisions without expanding implementation scope.",
+      "title": "Facilitator",
+      "when": "0-route | 1-discovery | blocked story | required human input"
+    },
+    {
+      "handoff": "List touched files, checks, failures, and the next repair or review step.",
+      "id": "implementer",
+      "inputs": "active story | acceptance criteria | linked artifacts | context pack",
+      "outputs": "minimal diff | checks run | evidence summary | updated story state",
+      "purpose": "Apply scoped code or artifact changes for the active story and keep progress file-backed.",
+      "title": "Implementer",
+      "when": "4-build-verify with ready or in-progress story"
+    },
+    {
+      "handoff": "Preserve user-facing state, support risks, and whether evolution should start.",
+      "id": "operator",
+      "inputs": "ready evidence | usage notes | support status | feedback",
+      "outputs": "operating note | support update | future backlog item | evolution trigger",
+      "purpose": "Maintain a ready project through usage notes, support status, feedback, and future backlog.",
+      "title": "Operator",
+      "when": "5-ready-operate"
+    },
+    {
+      "handoff": "Preserve story order, unresolved risks, and the next executable story.",
+      "id": "planner",
+      "inputs": "spec artifact | risk notes | module manifest | current sprint",
+      "outputs": "story plan | risk plan | validation plan | updated sprint",
+      "purpose": "Turn specs, risks, and constraints into executable stories, sequencing, and validation strategy.",
+      "title": "Planner",
+      "when": "3-plan | blocked story | evolve planning"
+    },
+    {
+      "handoff": "Record findings, repaired items, remaining risks, and gate status.",
+      "id": "quality-reviewer",
+      "inputs": "diff | story criteria | evidence ledger | gate output | artifact index",
+      "outputs": "blocking findings | non-blocking findings | required checks | approval evidence",
+      "purpose": "Review implementation, artifacts, workflows, and evidence before work is marked done or ready.",
+      "title": "Quality Reviewer",
+      "when": "story review | quality gate | audit failure | ready gate"
+    },
+    {
+      "handoff": "Preserve sources, date, decision impact, and unresolved verification gaps.",
+      "id": "researcher",
+      "inputs": "question | decision to support | source constraints | freshness needs",
+      "outputs": "source-backed findings | recommendation | confidence | cited evidence artifact",
+      "purpose": "Collect current external or domain evidence only when it changes a decision or requirement.",
+      "title": "Researcher",
+      "when": "discovery uncertainty | specification risk | market or technical evidence needed"
+    },
+    {
+      "handoff": "Preserve requirement decisions, rejected scope, and planning assumptions.",
+      "id": "spec-architect",
+      "inputs": "intent brief | constraints | module purpose | human decisions",
+      "outputs": "requirements | acceptance criteria | boundaries | specification artifact",
+      "purpose": "Convert clarified intent into requirements, acceptance criteria, boundaries, and non-goals.",
+      "title": "Spec Architect",
+      "when": "2-specification"
+    }
+  ],
+  "custom_capabilities": [],
+  "generated_at": "2026-06-14T23:35:09+00:00",
+  "modules": [
+    {
+      "id": "core-runtime",
+      "phase_span": "0-route | 1-discovery | 2-specification | 3-plan | 4-build-verify | 5-ready-operate | 6-evolve",
+      "purpose": "Route projects, preserve durable state, recover context, and enforce phase transitions.",
+      "title": "Core Runtime",
+      "workflows": "start-runtime | discover-intent | guide-route | guidance-engine | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | grill-gate | council-decision | context-recovery | ready-release | evolve-project | correct-course"
+    },
+    {
+      "id": "creative-studio",
+      "phase_span": "1-discovery | 2-specification | 3-plan",
+      "purpose": "Explore creative directions, select a concrete direction, and turn it into durable artifacts.",
+      "title": "Creative Studio",
+      "workflows": "guidance-engine | discover-intent | creative-session | brainstorming | design-thinking | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | innovation-strategy | problem-solving | storytelling | concept-selection | write-spec | plan-sprint | grill-gate"
+    },
+    {
+      "id": "enterprise",
+      "phase_span": "2-specification | 3-plan | 4-build-verify | 5-ready-operate | 6-evolve",
+      "purpose": "Plan security, privacy, compliance, DevOps, observability, risk, and release readiness for production-grade work.",
+      "title": "Enterprise",
+      "workflows": "guidance-engine | discover-intent | reality-evidence-gate | domain-scan | technical-feasibility-scan | security-plan | privacy-data-plan | devops-deployment-plan | ci-quality-pipeline | compliance-checklist | observability-plan | nfr-evidence-audit | traceability-gate | risk-register | release-readiness | grill-gate"
+    },
+    {
+      "id": "game-studio",
+      "phase_span": "1-discovery | 2-specification | 3-plan | 4-build-verify",
+      "purpose": "Preserve game-specific concept, mechanic, prototype, design, engine, and vertical-slice decisions.",
+      "title": "Game Studio",
+      "workflows": "guidance-engine | discover-intent | game-project | game-brief | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | gdd | narrative-design | mechanics-design | game-ux-design | game-prd | engine-architecture | game-story-creation | game-sprint-status | game-retrospective | game-test-framework | game-test-automation | game-e2e-scaffold | quick-prototype | playtest-plan | performance-plan | game-qa-review | build-story | grill-gate"
+    },
+    {
+      "id": "launch-ops",
+      "phase_span": "4-build-verify | 5-ready-operate | 6-evolve",
+      "purpose": "Move a project into ready/operate, preserve release evidence, and route future evolution.",
+      "title": "Launch Ops",
+      "workflows": "guidance-engine | discover-intent | ready-release | release-readiness | observability-plan | devops-deployment-plan | evolve-project | context-recovery"
+    },
+    {
+      "id": "runtime-builder",
+      "phase_span": "1-discovery | 2-specification | 3-plan | 4-build-verify | 6-evolve",
+      "purpose": "Create new workflows, modules, skills, scripts, and validations for Forge Method projects.",
+      "title": "Runtime Builder",
+      "workflows": "guidance-engine | discover-intent | runtime-builder | module-ideation | agent-builder | workflow-builder | module-builder | module-validate | builder-scaffold | agent-analyze | workflow-analyze | skill-convert | config-customization | reality-evidence-gate | technical-feasibility-scan | doc-index | doc-shard | editorial-review | edge-case-review | spec-distillation | eval-design | workflow-validate | build-story | grill-gate"
+    },
+    {
+      "id": "software-builder",
+      "phase_span": "2-specification | 3-plan | 4-build-verify | 5-ready-operate",
+      "purpose": "Turn specifications into implementation stories, code changes, checks, review, and evidence.",
+      "title": "Software Builder",
+      "workflows": "guidance-engine | discover-intent | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | spec-distillation | product-requirements | ux-plan | quick-dev | architecture | create-epics | story-creation | doc-index | doc-shard | editorial-review | edge-case-review | readiness-check | grill-gate | build-story | ready-release | correct-course"
+    },
+    {
+      "id": "test-architect",
+      "phase_span": "2-specification | 3-plan | 4-build-verify | 5-ready-operate",
+      "purpose": "Define validation strategy, risk checks, review gates, and evidence expectations.",
+      "title": "Test Architect",
+      "workflows": "guidance-engine | discover-intent | reality-evidence-gate | domain-scan | technical-feasibility-scan | test-strategy | teach-testing | test-engagement-model | test-framework | ci-quality-pipeline | atdd-plan | test-automation | test-review | nfr-evidence-audit | traceability-gate | risk-register | readiness-check | release-readiness | build-story | ready-release | grill-gate"
+    }
+  ],
+  "override_precedence": [
+    "packaged defaults",
+    ".forge-method/config/team.yaml",
+    ".forge-method/config/local.yaml"
+  ],
+  "project_conventions": [],
+  "runtime": "forge-method",
+  "runtime_version": "1.28.0",
+  "sources": [],
+  "workflows": [
+    {
+      "facilitation_pack": "builder-utility",
+      "followed_by": [
+        "builder-scaffold",
+        "eval-design"
+      ],
+      "id": "agent-analyze",
+      "modes": [
+        "analyze",
+        "validate"
+      ],
+      "outputs": [
+        "agent analysis",
+        "findings"
+      ],
+      "phase": "1-discovery | 6-evolve",
+      "required": false,
+      "template": "builder-utility-artifact"
+    },
+    {
+      "facilitation_pack": "builder-factory",
+      "followed_by": [
+        "agent-analyze",
+        "module-builder",
+        "workflow-validate"
+      ],
+      "id": "agent-builder",
+      "modes": [
+        "create",
+        "edit",
+        "rebuild",
+        "headless"
+      ],
+      "outputs": [
+        "agent build plan",
+        "capability contract",
+        "quality follow-up"
+      ],
+      "phase": "1-discovery | 6-evolve",
+      "required": false,
+      "template": "builder-factory-artifact"
+    },
+    {
+      "facilitation_pack": "architecture-planning",
+      "followed_by": [
+        "create-epics"
+      ],
+      "id": "architecture",
+      "outputs": [
+        "architecture notes"
+      ],
+      "phase": "3-plan",
+      "required": true
+    },
+    {
+      "facilitation_pack": "test-architecture",
+      "followed_by": [
+        "test-automation",
+        "build-story"
+      ],
+      "id": "atdd-plan",
+      "modes": [
+        "create",
+        "update",
+        "validate"
+      ],
+      "outputs": [
+        "ATDD examples",
+        "acceptance test map"
+      ],
+      "phase": "3-plan | 4-build-verify",
+      "required": false,
+      "template": "test-architecture-artifact"
+    },
+    {
+      "facilitation_pack": "brainstorming",
+      "followed_by": [
+        "concept-selection"
+      ],
+      "id": "brainstorming",
+      "outputs": [
+        "option set"
+      ],
+      "phase": "1-discovery",
+      "required": false
+    },
+    {
+      "followed_by": [
+        "ready-release"
+      ],
+      "id": "build-story",
+      "outputs": [
+        "implementation",
+        "evidence"
+      ],
+      "phase": "4-build-verify",
+      "required": true
+    },
+    {
+      "followed_by": [
+        "workflow-validate",
+        "eval-design"
+      ],
+      "id": "builder-scaffold",
+      "outputs": [
+        "workflow/module/agent scaffold"
+      ],
+      "phase": "4-build-verify",
+      "required": false
+    },
+    {
+      "facilitation_pack": "test-architecture",
+      "followed_by": [
+        "release-readiness",
+        "traceability-gate"
+      ],
+      "id": "ci-quality-pipeline",
+      "modes": [
+        "create",
+        "update",
+        "validate"
+      ],
+      "outputs": [
+        "CI quality pipeline plan",
+        "gate command map"
+      ],
+      "phase": "3-plan | 5-ready-operate",
+      "required": false,
+      "template": "test-architecture-artifact"
+    },
+    {
+      "facilitation_pack": "enterprise-readiness",
+      "id": "compliance-checklist",
+      "outputs": [
+        "compliance checklist"
+      ],
+      "phase": "3-plan | 5-ready-operate",
+      "required": false
+    },
+    {
+      "facilitation_pack": "creative-direction",
+      "followed_by": [
+        "write-spec"
+      ],
+      "id": "concept-selection",
+      "outputs": [
+        "selected concept",
+        "rejected alternatives"
+      ],
+      "phase": "1-discovery",
+      "required": false
+    },
+    {
+      "facilitation_pack": "config-customization",
+      "followed_by": [
+        "guidance-engine",
+        "workflow-validate",
+        "module-validate"
+      ],
+      "id": "config-customization",
+      "modes": [
+        "inspect",
+        "override",
+        "validate",
+        "index",
+        "headless"
+      ],
+      "outputs": [
+        "project config",
+        "override contract",
+        "capability index"
+      ],
+      "phase": "anytime",
+      "required": false,
+      "template": "config-customization-artifact"
+    },
+    {
+      "id": "context-recovery",
+      "outputs": [
+        "recovery brief"
+      ],
+      "phase": "anytime",
+      "required": false
+    },
+    {
+      "facilitation_pack": "correct-course",
+      "followed_by": [
+        "runtime-builder",
+        "build-story"
+      ],
+      "id": "correct-course",
+      "outputs": [
+        "correction artifact"
+      ],
+      "phase": "anytime",
+      "required": false
+    },
+    {
+      "id": "council-decision",
+      "outputs": [
+        "council decision"
+      ],
+      "phase": "anytime",
+      "required": false
+    },
+    {
+      "facilitation_pack": "story-lifecycle",
+      "followed_by": [
+        "story-creation",
+        "readiness-check"
+      ],
+      "id": "create-epics",
+      "outputs": [
+        "epics",
+        "stories"
+      ],
+      "phase": "3-plan",
+      "required": true
+    },
+    {
+      "facilitation_pack": "brainstorming",
+      "followed_by": [
+        "concept-selection"
+      ],
+      "id": "creative-session",
+      "outputs": [
+        "creative direction"
+      ],
+      "phase": "1-discovery",
+      "required": false
+    },
+    {
+      "facilitation_pack": "design-thinking",
+      "id": "design-thinking",
+      "outputs": [
+        "user problem frame"
+      ],
+      "phase": "1-discovery",
+      "required": false
+    },
+    {
+      "facilitation_pack": "enterprise-readiness",
+      "id": "devops-deployment-plan",
+      "outputs": [
+        "deployment plan"
+      ],
+      "phase": "3-plan | 5-ready-operate",
+      "required": false
+    },
+    {
+      "facilitation_pack": "discover-intent",
+      "followed_by": [
+        "reality-evidence-gate",
+        "write-spec"
+      ],
+      "id": "discover-intent",
+      "outputs": [
+        "intent",
+        "constraints",
+        "success criteria"
+      ],
+      "phase": "1-discovery",
+      "required": true
+    },
+    {
+      "facilitation_pack": "document-utility",
+      "followed_by": [
+        "doc-shard",
+        "editorial-review"
+      ],
+      "id": "doc-index",
+      "modes": [
+        "create",
+        "update",
+        "validate"
+      ],
+      "outputs": [
+        "doc index",
+        "navigation guidance"
+      ],
+      "phase": "anytime",
+      "required": false,
+      "template": "document-utility-artifact"
+    },
+    {
+      "facilitation_pack": "document-utility",
+      "followed_by": [
+        "doc-index",
+        "editorial-review"
+      ],
+      "id": "doc-shard",
+      "modes": [
+        "create",
+        "update",
+        "validate"
+      ],
+      "outputs": [
+        "sharded docs",
+        "index updates"
+      ],
+      "phase": "anytime",
+      "required": false,
+      "template": "document-utility-artifact"
+    },
+    {
+      "facilitation_pack": "evidence-research",
+      "id": "domain-scan",
+      "outputs": [
+        "domain constraints"
+      ],
+      "phase": "1-discovery",
+      "required": false
+    },
+    {
+      "facilitation_pack": "document-utility",
+      "followed_by": [
+        "risk-register",
+        "build-story"
+      ],
+      "id": "edge-case-review",
+      "modes": [
+        "analyze",
+        "validate"
+      ],
+      "outputs": [
+        "edge-case findings",
+        "follow-up stories"
+      ],
+      "phase": "anytime",
+      "required": false,
+      "template": "document-utility-artifact"
+    },
+    {
+      "facilitation_pack": "document-utility",
+      "followed_by": [
+        "doc-index",
+        "edge-case-review"
+      ],
+      "id": "editorial-review",
+      "modes": [
+        "analyze",
+        "edit",
+        "validate"
+      ],
+      "outputs": [
+        "editorial findings",
+        "scoped edits"
+      ],
+      "phase": "anytime",
+      "required": false,
+      "template": "document-utility-artifact"
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "id": "engine-architecture",
+      "outputs": [
+        "engine architecture"
+      ],
+      "phase": "3-plan",
+      "required": true
+    },
+    {
+      "followed_by": [
+        "workflow-validate"
+      ],
+      "id": "eval-design",
+      "outputs": [
+        "local eval"
+      ],
+      "phase": "3-plan | 4-build-verify",
+      "required": true
+    },
+    {
+      "facilitation_pack": "problem-solving",
+      "followed_by": [
+        "guidance-engine",
+        "runtime-builder",
+        "correct-course"
+      ],
+      "id": "evolve-project",
+      "outputs": [
+        "evolution route"
+      ],
+      "phase": "6-evolve",
+      "required": true
+    },
+    {
+      "facilitation_pack": "game-brief",
+      "followed_by": [
+        "gdd",
+        "game-ux-design",
+        "game-prd",
+        "quick-prototype"
+      ],
+      "id": "game-brief",
+      "outputs": [
+        "game brief",
+        "decision log"
+      ],
+      "phase": "1-discovery",
+      "required": true
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "game-qa-review",
+        "release-readiness"
+      ],
+      "id": "game-e2e-scaffold",
+      "modes": [
+        "create",
+        "validate"
+      ],
+      "outputs": [
+        "game E2E scaffold",
+        "smoke path"
+      ],
+      "phase": "4-build-verify",
+      "required": false,
+      "template": "game-lifecycle-artifact"
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "create-epics",
+        "game-story-creation"
+      ],
+      "id": "game-prd",
+      "modes": [
+        "create",
+        "update",
+        "validate"
+      ],
+      "outputs": [
+        "game PRD",
+        "acceptance/evidence map"
+      ],
+      "phase": "2-specification | 3-plan",
+      "required": false,
+      "template": "game-lifecycle-artifact"
+    },
+    {
+      "followed_by": [
+        "game-brief"
+      ],
+      "id": "game-project",
+      "outputs": [
+        "game project route"
+      ],
+      "phase": "1-discovery",
+      "required": false
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "id": "game-qa-review",
+      "outputs": [
+        "game QA review"
+      ],
+      "phase": "4-build-verify",
+      "required": false
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "game-story-creation",
+        "plan-sprint"
+      ],
+      "id": "game-retrospective",
+      "modes": [
+        "create",
+        "update"
+      ],
+      "outputs": [
+        "retrospective notes",
+        "action items"
+      ],
+      "phase": "5-ready-operate | 6-evolve",
+      "required": false,
+      "template": "game-lifecycle-artifact"
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "build-story",
+        "game-retrospective"
+      ],
+      "id": "game-sprint-status",
+      "modes": [
+        "status",
+        "resume"
+      ],
+      "outputs": [
+        "sprint status summary",
+        "next action"
+      ],
+      "phase": "4-build-verify | 5-ready-operate",
+      "required": false,
+      "template": "game-lifecycle-artifact"
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "build-story",
+        "game-sprint-status"
+      ],
+      "id": "game-story-creation",
+      "modes": [
+        "create",
+        "resume",
+        "validate"
+      ],
+      "outputs": [
+        "game story files",
+        "story order"
+      ],
+      "phase": "3-plan",
+      "required": false,
+      "template": "game-lifecycle-artifact"
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "game-e2e-scaffold",
+        "game-qa-review"
+      ],
+      "id": "game-test-automation",
+      "modes": [
+        "create",
+        "update",
+        "validate"
+      ],
+      "outputs": [
+        "game automation plan",
+        "test command"
+      ],
+      "phase": "4-build-verify",
+      "required": false,
+      "template": "game-lifecycle-artifact"
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "game-test-automation",
+        "game-e2e-scaffold"
+      ],
+      "id": "game-test-framework",
+      "modes": [
+        "create",
+        "validate"
+      ],
+      "outputs": [
+        "game test framework plan",
+        "test layer map"
+      ],
+      "phase": "3-plan | 4-build-verify",
+      "required": false,
+      "template": "game-lifecycle-artifact"
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "game-prd",
+        "game-story-creation"
+      ],
+      "id": "game-ux-design",
+      "modes": [
+        "create",
+        "update",
+        "validate"
+      ],
+      "outputs": [
+        "game UX plan",
+        "interaction map"
+      ],
+      "phase": "2-specification | 3-plan",
+      "required": false,
+      "template": "game-lifecycle-artifact"
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "narrative-design",
+        "mechanics-design",
+        "game-ux-design",
+        "game-prd",
+        "engine-architecture"
+      ],
+      "id": "gdd",
+      "outputs": [
+        "game design document"
+      ],
+      "phase": "2-specification",
+      "required": true
+    },
+    {
+      "facilitation_pack": "decision-gate",
+      "followed_by": [
+        "build-story"
+      ],
+      "id": "grill-gate",
+      "outputs": [
+        "decision challenge result"
+      ],
+      "phase": "1-discovery | 2-specification | 3-plan",
+      "required": true
+    },
+    {
+      "id": "guidance-engine",
+      "outputs": [
+        "intent classification",
+        "recommended workflow",
+        "commands"
+      ],
+      "phase": "anytime",
+      "required": true
+    },
+    {
+      "followed_by": [
+        "guidance-engine"
+      ],
+      "id": "guide-route",
+      "outputs": [
+        "route recommendation"
+      ],
+      "phase": "anytime",
+      "required": false
+    },
+    {
+      "facilitation_pack": "creative-direction",
+      "id": "innovation-strategy",
+      "outputs": [
+        "innovation options"
+      ],
+      "phase": "1-discovery",
+      "required": false
+    },
+    {
+      "facilitation_pack": "evidence-research",
+      "id": "market-scan",
+      "outputs": [
+        "market evidence"
+      ],
+      "phase": "1-discovery",
+      "required": false
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "id": "mechanics-design",
+      "outputs": [
+        "mechanics matrix"
+      ],
+      "phase": "2-specification",
+      "required": true
+    },
+    {
+      "facilitation_pack": "builder-factory",
+      "followed_by": [
+        "module-validate",
+        "workflow-validate"
+      ],
+      "id": "module-builder",
+      "modes": [
+        "create",
+        "package",
+        "assemble",
+        "headless"
+      ],
+      "outputs": [
+        "module manifest",
+        "install contract",
+        "validation handoff"
+      ],
+      "phase": "1-discovery | 6-evolve",
+      "required": false,
+      "template": "module-builder-artifact"
+    },
+    {
+      "facilitation_pack": "builder-factory",
+      "followed_by": [
+        "agent-builder",
+        "workflow-builder",
+        "module-builder"
+      ],
+      "id": "module-ideation",
+      "modes": [
+        "ideate",
+        "plan",
+        "brainstorm",
+        "headless"
+      ],
+      "outputs": [
+        "module plan",
+        "capability map",
+        "build roadmap"
+      ],
+      "phase": "1-discovery | 6-evolve",
+      "required": false,
+      "template": "builder-factory-artifact"
+    },
+    {
+      "facilitation_pack": "builder-factory",
+      "followed_by": [
+        "workflow-validate",
+        "eval-design"
+      ],
+      "id": "module-validate",
+      "modes": [
+        "validate",
+        "audit",
+        "headless"
+      ],
+      "outputs": [
+        "module validation report",
+        "structural findings",
+        "quality findings"
+      ],
+      "phase": "1-discovery | 6-evolve",
+      "required": false,
+      "template": "module-validation-report"
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "id": "narrative-design",
+      "outputs": [
+        "narrative design"
+      ],
+      "phase": "2-specification",
+      "required": false
+    },
+    {
+      "facilitation_pack": "test-architecture",
+      "followed_by": [
+        "traceability-gate",
+        "release-readiness"
+      ],
+      "id": "nfr-evidence-audit",
+      "modes": [
+        "audit",
+        "validate"
+      ],
+      "outputs": [
+        "NFR evidence audit",
+        "gaps and waivers"
+      ],
+      "phase": "5-ready-operate",
+      "required": false,
+      "template": "test-architecture-artifact"
+    },
+    {
+      "facilitation_pack": "enterprise-readiness",
+      "id": "observability-plan",
+      "outputs": [
+        "observability plan"
+      ],
+      "phase": "5-ready-operate",
+      "required": false
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "id": "performance-plan",
+      "outputs": [
+        "performance plan"
+      ],
+      "phase": "3-plan | 4-build-verify",
+      "required": false
+    },
+    {
+      "facilitation_pack": "story-lifecycle",
+      "followed_by": [
+        "story-creation",
+        "readiness-check"
+      ],
+      "id": "plan-sprint",
+      "outputs": [
+        "story plan",
+        "validation plan"
+      ],
+      "phase": "3-plan",
+      "required": true
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "id": "playtest-plan",
+      "outputs": [
+        "playtest plan"
+      ],
+      "phase": "4-build-verify",
+      "required": false
+    },
+    {
+      "facilitation_pack": "enterprise-readiness",
+      "id": "privacy-data-plan",
+      "outputs": [
+        "privacy data plan"
+      ],
+      "phase": "3-plan",
+      "required": true
+    },
+    {
+      "facilitation_pack": "problem-solving",
+      "followed_by": [
+        "correct-course",
+        "runtime-builder"
+      ],
+      "id": "problem-solving",
+      "outputs": [
+        "problem frame",
+        "next reversible action"
+      ],
+      "phase": "1-discovery",
+      "required": false
+    },
+    {
+      "facilitation_pack": "product-planning",
+      "followed_by": [
+        "architecture",
+        "ux-plan",
+        "quick-dev"
+      ],
+      "id": "product-requirements",
+      "modes": [
+        "create",
+        "update",
+        "validate",
+        "addendum",
+        "headless"
+      ],
+      "outputs": [
+        "requirements",
+        "decision log",
+        "validation findings"
+      ],
+      "phase": "2-specification",
+      "required": true,
+      "template": "product-requirements-artifact"
+    },
+    {
+      "facilitation_pack": "quick-dev",
+      "followed_by": [
+        "build-story",
+        "ready-release",
+        "product-requirements",
+        "ux-plan"
+      ],
+      "id": "quick-dev",
+      "modes": [
+        "clarify",
+        "spec-lite",
+        "implement",
+        "review",
+        "headless"
+      ],
+      "outputs": [
+        "spec-lite",
+        "implementation evidence",
+        "next workflow"
+      ],
+      "phase": "2-specification | 4-build-verify",
+      "required": false,
+      "template": "quick-dev-artifact"
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "id": "quick-prototype",
+      "outputs": [
+        "prototype proof"
+      ],
+      "phase": "4-build-verify",
+      "required": false
+    },
+    {
+      "facilitation_pack": "story-lifecycle",
+      "followed_by": [
+        "build-story"
+      ],
+      "id": "readiness-check",
+      "outputs": [
+        "readiness report"
+      ],
+      "phase": "3-plan",
+      "required": true
+    },
+    {
+      "facilitation_pack": "story-lifecycle",
+      "followed_by": [
+        "evolve-project"
+      ],
+      "id": "ready-release",
+      "outputs": [
+        "ready evidence",
+        "release status"
+      ],
+      "phase": "5-ready-operate",
+      "required": true
+    },
+    {
+      "facilitation_pack": "evidence-research",
+      "followed_by": [
+        "market-scan",
+        "domain-scan",
+        "technical-feasibility-scan"
+      ],
+      "id": "reality-evidence-gate",
+      "outputs": [
+        "feasibility stance",
+        "evidence needs"
+      ],
+      "phase": "1-discovery",
+      "required": true
+    },
+    {
+      "facilitation_pack": "enterprise-readiness",
+      "id": "release-readiness",
+      "outputs": [
+        "release checklist"
+      ],
+      "phase": "5-ready-operate",
+      "required": true
+    },
+    {
+      "facilitation_pack": "enterprise-readiness",
+      "id": "risk-register",
+      "outputs": [
+        "risk register"
+      ],
+      "phase": "3-plan | 5-ready-operate",
+      "required": false
+    },
+    {
+      "facilitation_pack": "runtime-builder",
+      "followed_by": [
+        "module-ideation",
+        "agent-builder",
+        "workflow-builder",
+        "module-builder",
+        "module-validate",
+        "builder-scaffold",
+        "agent-analyze",
+        "workflow-analyze",
+        "skill-convert",
+        "eval-design"
+      ],
+      "id": "runtime-builder",
+      "outputs": [
+        "runtime change shape"
+      ],
+      "phase": "1-discovery | 6-evolve",
+      "required": true
+    },
+    {
+      "facilitation_pack": "enterprise-readiness",
+      "id": "security-plan",
+      "outputs": [
+        "security plan"
+      ],
+      "phase": "3-plan",
+      "required": true
+    },
+    {
+      "facilitation_pack": "builder-utility",
+      "followed_by": [
+        "builder-scaffold",
+        "workflow-validate",
+        "eval-design"
+      ],
+      "id": "skill-convert",
+      "modes": [
+        "create",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "converted workflow/pack",
+        "validation evidence"
+      ],
+      "phase": "1-discovery | 6-evolve",
+      "required": false,
+      "template": "builder-utility-artifact"
+    },
+    {
+      "facilitation_pack": "document-utility",
+      "followed_by": [
+        "write-spec",
+        "product-requirements",
+        "plan-sprint"
+      ],
+      "id": "spec-distillation",
+      "modes": [
+        "create",
+        "resume",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "spec kernel",
+        "assumptions",
+        "open questions"
+      ],
+      "phase": "1-discovery | 2-specification",
+      "required": false,
+      "template": "document-utility-artifact"
+    },
+    {
+      "followed_by": [
+        "guide-route",
+        "discover-intent"
+      ],
+      "id": "start-runtime",
+      "outputs": [
+        "route decision",
+        "project state"
+      ],
+      "phase": "0-route",
+      "required": true
+    },
+    {
+      "facilitation_pack": "story-lifecycle",
+      "followed_by": [
+        "readiness-check",
+        "build-story"
+      ],
+      "id": "story-creation",
+      "modes": [
+        "create",
+        "update",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "implementation-ready stories",
+        "decision-source map",
+        "validation map"
+      ],
+      "phase": "3-plan",
+      "required": false,
+      "template": "story-creation-artifact"
+    },
+    {
+      "facilitation_pack": "creative-direction",
+      "id": "storytelling",
+      "outputs": [
+        "narrative arc"
+      ],
+      "phase": "2-specification",
+      "required": false
+    },
+    {
+      "facilitation_pack": "test-architecture",
+      "followed_by": [
+        "test-engagement-model",
+        "test-strategy",
+        "test-framework"
+      ],
+      "id": "teach-testing",
+      "modes": [
+        "teach",
+        "explain",
+        "resume"
+      ],
+      "outputs": [
+        "testing explanation",
+        "applied examples",
+        "next test workflow"
+      ],
+      "phase": "anytime",
+      "required": false,
+      "template": "test-architecture-artifact"
+    },
+    {
+      "facilitation_pack": "evidence-research",
+      "id": "technical-feasibility-scan",
+      "outputs": [
+        "technical feasibility evidence"
+      ],
+      "phase": "1-discovery",
+      "required": false
+    },
+    {
+      "facilitation_pack": "test-architecture",
+      "followed_by": [
+        "test-review",
+        "traceability-gate"
+      ],
+      "id": "test-automation",
+      "modes": [
+        "create",
+        "update",
+        "validate"
+      ],
+      "outputs": [
+        "automation plan",
+        "test commands"
+      ],
+      "phase": "4-build-verify",
+      "required": false,
+      "template": "test-architecture-artifact"
+    },
+    {
+      "facilitation_pack": "test-architecture",
+      "followed_by": [
+        "test-framework",
+        "test-review",
+        "nfr-evidence-audit",
+        "traceability-gate"
+      ],
+      "id": "test-engagement-model",
+      "modes": [
+        "create",
+        "resume"
+      ],
+      "outputs": [
+        "test engagement decision",
+        "next quality workflow"
+      ],
+      "phase": "2-specification | 3-plan",
+      "required": false,
+      "template": "test-architecture-artifact"
+    },
+    {
+      "facilitation_pack": "test-architecture",
+      "followed_by": [
+        "ci-quality-pipeline",
+        "atdd-plan",
+        "test-automation"
+      ],
+      "id": "test-framework",
+      "modes": [
+        "create",
+        "validate"
+      ],
+      "outputs": [
+        "test framework plan",
+        "command contract"
+      ],
+      "phase": "3-plan | 4-build-verify",
+      "required": false,
+      "template": "test-architecture-artifact"
+    },
+    {
+      "facilitation_pack": "test-architecture",
+      "followed_by": [
+        "nfr-evidence-audit",
+        "traceability-gate"
+      ],
+      "id": "test-review",
+      "modes": [
+        "analyze",
+        "validate"
+      ],
+      "outputs": [
+        "test review findings",
+        "gate recommendation"
+      ],
+      "phase": "4-build-verify | 5-ready-operate",
+      "required": false,
+      "template": "test-architecture-artifact"
+    },
+    {
+      "facilitation_pack": "test-strategy",
+      "followed_by": [
+        "test-engagement-model",
+        "risk-register",
+        "readiness-check"
+      ],
+      "id": "test-strategy",
+      "outputs": [
+        "test strategy"
+      ],
+      "phase": "3-plan",
+      "required": true
+    },
+    {
+      "facilitation_pack": "test-architecture",
+      "followed_by": [
+        "release-readiness",
+        "ready-release"
+      ],
+      "id": "traceability-gate",
+      "modes": [
+        "create",
+        "validate",
+        "gate"
+      ],
+      "outputs": [
+        "traceability matrix",
+        "gate decision"
+      ],
+      "phase": "4-build-verify | 5-ready-operate",
+      "required": false,
+      "template": "test-architecture-artifact"
+    },
+    {
+      "facilitation_pack": "ux-design",
+      "followed_by": [
+        "story-creation",
+        "create-epics",
+        "quick-dev"
+      ],
+      "id": "ux-plan",
+      "modes": [
+        "create",
+        "update",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "ux plan",
+        "taste calibration",
+        "rejection log"
+      ],
+      "phase": "3-plan",
+      "required": false,
+      "template": "ux-design-artifact"
+    },
+    {
+      "facilitation_pack": "builder-utility",
+      "followed_by": [
+        "workflow-validate",
+        "builder-scaffold",
+        "eval-design"
+      ],
+      "id": "workflow-analyze",
+      "modes": [
+        "analyze",
+        "validate"
+      ],
+      "outputs": [
+        "workflow analysis",
+        "gap list"
+      ],
+      "phase": "1-discovery | 6-evolve",
+      "required": false,
+      "template": "builder-utility-artifact"
+    },
+    {
+      "facilitation_pack": "builder-factory",
+      "followed_by": [
+        "workflow-analyze",
+        "workflow-validate",
+        "module-builder"
+      ],
+      "id": "workflow-builder",
+      "modes": [
+        "create",
+        "edit",
+        "rebuild",
+        "headless"
+      ],
+      "outputs": [
+        "workflow build plan",
+        "compact workflow contract",
+        "proof plan"
+      ],
+      "phase": "1-discovery | 6-evolve",
+      "required": false,
+      "template": "builder-factory-artifact"
+    },
+    {
+      "id": "workflow-validate",
+      "outputs": [
+        "workflow validation result"
+      ],
+      "phase": "4-build-verify",
+      "required": true
+    },
+    {
+      "facilitation_pack": "product-planning",
+      "followed_by": [
+        "plan-sprint",
+        "quick-dev"
+      ],
+      "id": "write-spec",
+      "outputs": [
+        "specification artifact"
+      ],
+      "phase": "2-specification",
+      "required": true
+    }
+  ]
+}

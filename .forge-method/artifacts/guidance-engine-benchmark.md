@@ -6,7 +6,7 @@
 - docs_cache: `%TEMP%/forge-bmad-docs`
 - installed_modules: bmb 1.8.1, cis 0.2.1, tea 1.19.0, gds 0.6.0
 
-Internal behavior benchmark for route-aware human guidance, correct-course, research, brainstorm, product/UX/architecture/quick-dev, story lifecycle, CIS/creative, game, builder, and quality routing.
+Internal behavior benchmark for route-aware human guidance, correct-course, research, brainstorm, product/UX/architecture/quick-dev, story lifecycle, CIS/creative, game, builder, customization, and quality routing.
 
 ## Sources
 
@@ -24,6 +24,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Test architecture flows sequence risk, strategy, framework, CI, automation, review, and traceability so quality requests route to the right quality artifact before implementation.
 - Testing education requests should route to an applied teaching workflow before test strategy when the user is trying to learn or choose a quality approach.
 - Builder utility flows analyze agents/workflows and convert skill material before scaffolding new runtime artifacts.
+- Customization flows select team/local scope, choose supported override keys, validate merged behavior, and expose an effective capability index instead of relying on hidden prose.
 - Documentation utility flows index, shard, review, stress-test, and distill source material before agents consume it.
 - Narrow guided workflows should be executable next steps: when selected inside an existing project, the route should include a state transition command instead of only restating the recommendation.
 - Correct-course is a first-class recovery path when the conversation shows the current route is wrong.
@@ -51,6 +52,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Mechanical build loops should continue through story start/review/fix/evidence/ready gate without asking for procedural "ok" once stories are ready.
 - Runtime outputs must remain compact JSON/state-machine artifacts for agents, while non-JSON guidance can be human, direct, and useful.
 - Builder Factory outputs must keep coached human creation in facilitation packs and compact agent contracts in workflow refs, templates, catalog metadata, and validation reports.
+- Project Configuration outputs must make customization visible through inspect, Guidance Engine metadata, validation, and the generated Capability Index.
 
 ## Fixture workflow ids
 
@@ -76,6 +78,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `workflow-builder`
 - `module-builder`
 - `module-validate`
+- `config-customization`
 - `doc-index`
 
 ## Non-goals

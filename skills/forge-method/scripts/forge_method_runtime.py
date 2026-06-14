@@ -142,6 +142,7 @@ PARITY_REPLAY_REQUIRED_FAMILIES = {
     "story-cycle",
     "correct-course",
     "builder",
+    "config",
     "cis",
     "game",
     "tea",
@@ -210,6 +211,7 @@ HUMAN_FACING_REQUIRED_WORKFLOWS = {
     "evolve-project",
     "correct-course",
     "runtime-builder",
+    "config-customization",
     "game-brief",
     "gdd",
     "narrative-design",
@@ -356,6 +358,34 @@ CONFIG_ALLOWED_KEYS = {
     "autonomy_mode",
     "commit_policy",
 }
+CONFIG_ALLOWED_KEY_PATTERNS = [
+    "workflow.<workflow-id>.phase",
+    "workflow.<workflow-id>.required",
+    "workflow.<workflow-id>.outputs",
+    "workflow.<workflow-id>.followed_by",
+    "workflow.<workflow-id>.facilitation_pack",
+    "workflow.<workflow-id>.template",
+    "workflow.<workflow-id>.modes",
+    "agent.<agent-id>.title",
+    "agent.<agent-id>.purpose",
+    "agent.<agent-id>.when",
+    "agent.<agent-id>.inputs",
+    "agent.<agent-id>.outputs",
+    "agent.<agent-id>.handoff",
+    "convention.<slug>",
+    "capability.<capability-id>.title",
+    "capability.<capability-id>.summary",
+    "capability.<capability-id>.workflow",
+    "capability.<capability-id>.kind",
+    "capability.<capability-id>.command",
+    "capability.<capability-id>.phase",
+    "capability.<capability-id>.module",
+]
+CONFIG_WORKFLOW_OVERRIDE_FIELDS = {"phase", "required", "outputs", "followed_by", "facilitation_pack", "template", "modes"}
+CONFIG_AGENT_OVERRIDE_FIELDS = {"title", "purpose", "when", "inputs", "outputs", "handoff"}
+CONFIG_CAPABILITY_FIELDS = {"title", "summary", "workflow", "kind", "command", "phase", "module"}
+CONFIG_CAPABILITY_KINDS = {"custom", "workflow", "agent", "module", "command", "guide"}
+CONFIG_OVERRIDE_PRECEDENCE = ["packaged defaults", ".forge-method/config/team.yaml", ".forge-method/config/local.yaml"]
 AUTONOMY_MODES = {"auto", "manual"}
 COMMIT_POLICIES = {"off", "story", "epic"}
 GRILL_GATE_PHASES = {"1-discovery", "2-specification", "3-plan"}
@@ -531,6 +561,7 @@ def ensure_dirs(root: Path) -> Path:
         "context",
         "evals",
         "evidence",
+        "facilitation",
         "handoffs",
         "agents",
         "config",
@@ -621,31 +652,251 @@ def config_paths(root: Path) -> tuple[Path, Path]:
     return config_dir / "team.yaml", config_dir / "local.yaml"
 
 
-def merged_config(root: Path) -> tuple[dict[str, str], list[str]]:
+def config_layers(root: Path) -> list[dict[str, Any]]:
     team, local = config_paths(root)
+    layers: list[dict[str, Any]] = []
+    for scope, path in [("team", team), ("local", local)]:
+        if path.exists():
+            layers.append(
+                {
+                    "scope": scope,
+                    "path": path,
+                    "relative_path": path.relative_to(root).as_posix(),
+                    "values": read_flat_yaml(path),
+                }
+            )
+    return layers
+
+
+def merged_config(root: Path) -> tuple[dict[str, str], list[str]]:
     merged: dict[str, str] = {}
     sources: list[str] = []
-    for path in [team, local]:
-        if path.exists():
-            merged.update(read_flat_yaml(path))
-            sources.append(path.relative_to(root).as_posix())
+    for layer in config_layers(root):
+        merged.update(layer["values"])
+        sources.append(str(layer["relative_path"]))
     return merged, sources
 
 
-def validate_config_values(values: dict[str, str], *, source: str) -> list[str]:
+def config_allowed_keys() -> list[str]:
+    return [*sorted(CONFIG_ALLOWED_KEYS), *CONFIG_ALLOWED_KEY_PATTERNS]
+
+
+def config_key_parts(key: str) -> tuple[str, str, str]:
+    if key in CONFIG_ALLOWED_KEYS:
+        return "base", "", key
+    parts = key.split(".")
+    if len(parts) == 3 and parts[0] in {"workflow", "agent", "capability"}:
+        return parts[0], slugify(parts[1]), parts[2].strip()
+    if len(parts) == 2 and parts[0] == "convention":
+        return "convention", slugify(parts[1]), "value"
+    return "unsupported", "", ""
+
+
+def config_bool(value: str) -> bool | None:
+    normalized = value.strip().lower()
+    if normalized in {"true", "yes", "1", "on"}:
+        return True
+    if normalized in {"false", "no", "0", "off"}:
+        return False
+    return None
+
+
+def config_list(value: str) -> list[str]:
+    if "|" in value:
+        raw_items = value.split("|")
+    else:
+        raw_items = value.split(",")
+    return [item.strip() for item in raw_items if item.strip()]
+
+
+def template_exists(root: Path | None, template_id: str) -> bool:
+    normalized = slugify(template_id)
+    if not normalized:
+        return False
+    if (TEMPLATES_DIR / f"{normalized}.md").exists():
+        return True
+    if root is not None and (method_dir(root) / "templates" / f"{normalized}.md").exists():
+        return True
+    return False
+
+
+def facilitation_pack_exists(root: Path | None, pack_id: str) -> bool:
+    normalized = slugify(pack_id)
+    if not normalized:
+        return False
+    if (FACILITATION_DIR / f"{normalized}.md").exists():
+        return True
+    if root is not None and (method_dir(root) / "facilitation" / f"{normalized}.md").exists():
+        return True
+    return False
+
+
+def known_agent_profile_ids(root: Path | None) -> set[str]:
+    ids: set[str] = set()
+    for path in agent_profile_paths(root):
+        profile = read_flat_yaml(path)
+        ids.add(slugify(profile.get("id", path.stem)))
+    return ids
+
+
+def validate_capability_entries(values: dict[str, str], *, source: str) -> list[str]:
     errors: list[str] = []
+    entries: dict[str, set[str]] = {}
+    for key, value in values.items():
+        surface, item_id, field = config_key_parts(key)
+        if surface != "capability" or not item_id:
+            continue
+        entries.setdefault(item_id, set()).add(field)
+        if field == "kind" and value and slugify(value) not in CONFIG_CAPABILITY_KINDS:
+            errors.append(f"{source}: capability `{item_id}` kind must be one of {', '.join(sorted(CONFIG_CAPABILITY_KINDS))}")
+    for item_id, fields in entries.items():
+        if "summary" not in fields and "workflow" not in fields:
+            errors.append(f"{source}: capability `{item_id}` needs at least summary or workflow")
+    return errors
+
+
+def validate_config_values(values: dict[str, str], *, source: str, root: Path | None = None) -> list[str]:
+    errors: list[str] = []
+    workflow_ids = set(packaged_workflow_catalog_entries())
+    agent_ids = known_agent_profile_ids(root)
+    phase_ids = {*NEXT_BY_PHASE, "anytime"}
     for key, value in values.items():
         if key == "updated_at":
             continue
-        if key not in CONFIG_ALLOWED_KEYS:
+        surface, item_id, field = config_key_parts(key)
+        if surface == "unsupported":
             errors.append(f"{source}: unsupported config key `{key}`")
+            continue
+        if surface == "workflow":
+            if not item_id:
+                errors.append(f"{source}: workflow override `{key}` is missing workflow id")
+                continue
+            if item_id not in workflow_ids:
+                errors.append(f"{source}: workflow override `{key}` references unknown workflow `{item_id}`")
+            if field not in CONFIG_WORKFLOW_OVERRIDE_FIELDS:
+                errors.append(f"{source}: workflow override `{key}` uses unsupported field `{field}`")
+                continue
+            if field == "required" and value and config_bool(value) is None:
+                errors.append(f"{source}: workflow `{item_id}` required must be true or false")
+            if field == "phase" and value:
+                invalid = [phase for phase in config_list(value) if phase not in phase_ids]
+                if invalid:
+                    errors.append(f"{source}: workflow `{item_id}` phase has invalid value(s): {', '.join(invalid)}")
+            if field == "followed_by" and value:
+                invalid = [workflow_id for workflow_id in config_list(value) if slugify(workflow_id) not in workflow_ids]
+                if invalid:
+                    errors.append(f"{source}: workflow `{item_id}` followed_by references unknown workflow(s): {', '.join(invalid)}")
+            if field == "facilitation_pack" and value and not facilitation_pack_exists(root, value):
+                errors.append(f"{source}: workflow `{item_id}` references missing facilitation pack `{slugify(value)}`")
+            if field == "template" and value and not template_exists(root, value):
+                errors.append(f"{source}: workflow `{item_id}` references missing template `{slugify(value)}`")
+            continue
+        if surface == "agent":
+            if not item_id:
+                errors.append(f"{source}: agent override `{key}` is missing agent id")
+                continue
+            if item_id not in agent_ids:
+                errors.append(f"{source}: agent override `{key}` references unknown agent `{item_id}`")
+            if field not in CONFIG_AGENT_OVERRIDE_FIELDS:
+                errors.append(f"{source}: agent override `{key}` uses unsupported field `{field}`")
+            continue
+        if surface == "convention":
+            if not item_id:
+                errors.append(f"{source}: convention override `{key}` is missing convention id")
+            continue
+        if surface == "capability":
+            if not item_id:
+                errors.append(f"{source}: capability override `{key}` is missing capability id")
+                continue
+            if field not in CONFIG_CAPABILITY_FIELDS:
+                errors.append(f"{source}: capability override `{key}` uses unsupported field `{field}`")
+                continue
+            if field == "workflow" and value and slugify(value) not in workflow_ids:
+                errors.append(f"{source}: capability `{item_id}` references unknown workflow `{slugify(value)}`")
+            continue
         if key == "default_track" and value and value not in TRACK_IDS:
             errors.append(f"{source}: default_track must be one of {', '.join(sorted(TRACK_IDS))}")
         if key == "autonomy_mode" and value and value not in AUTONOMY_MODES:
             errors.append(f"{source}: autonomy_mode must be one of {', '.join(sorted(AUTONOMY_MODES))}")
         if key == "commit_policy" and value and value not in COMMIT_POLICIES:
             errors.append(f"{source}: commit_policy must be one of {', '.join(sorted(COMMIT_POLICIES))}")
+    errors.extend(validate_capability_entries(values, source=source))
     return errors
+
+
+def config_override_report(root: Path) -> list[dict[str, str]]:
+    seen: dict[str, dict[str, str]] = {}
+    report: list[dict[str, str]] = []
+    for layer in config_layers(root):
+        source = str(layer["relative_path"])
+        for key, value in layer["values"].items():
+            if key == "updated_at":
+                continue
+            previous = seen.get(key)
+            if previous and previous.get("value") != value:
+                report.append(
+                    {
+                        "key": key,
+                        "source": source,
+                        "value": value,
+                        "overrides": previous.get("source", ""),
+                    }
+                )
+            seen[key] = {"source": source, "value": value}
+    return report
+
+
+def workflow_config_overrides(config: dict[str, str]) -> dict[str, dict[str, str]]:
+    overrides: dict[str, dict[str, str]] = {}
+    for key, value in config.items():
+        surface, workflow_id, field = config_key_parts(key)
+        if surface == "workflow" and workflow_id and field in CONFIG_WORKFLOW_OVERRIDE_FIELDS:
+            overrides.setdefault(workflow_id, {})[field] = value
+    return overrides
+
+
+def apply_workflow_config_overrides(entries: dict[str, dict[str, Any]], config: dict[str, str]) -> dict[str, dict[str, Any]]:
+    for workflow_id, fields in workflow_config_overrides(config).items():
+        if workflow_id not in entries:
+            continue
+        entry = dict(entries[workflow_id])
+        for field, value in fields.items():
+            if field == "required":
+                parsed = config_bool(value)
+                if parsed is not None:
+                    entry[field] = parsed
+            elif field in {"outputs", "followed_by", "modes"}:
+                entry[field] = config_list(value)
+            elif field in {"facilitation_pack", "template"}:
+                entry[field] = slugify(value)
+            else:
+                entry[field] = value
+        entries[workflow_id] = entry
+    return entries
+
+
+def agent_config_overrides(config: dict[str, str]) -> dict[str, dict[str, str]]:
+    overrides: dict[str, dict[str, str]] = {}
+    for key, value in config.items():
+        surface, agent_id, field = config_key_parts(key)
+        if surface == "agent" and agent_id and field in CONFIG_AGENT_OVERRIDE_FIELDS:
+            overrides.setdefault(agent_id, {})[field] = value
+    return overrides
+
+
+def capability_config_entries(config: dict[str, str]) -> list[dict[str, str]]:
+    grouped: dict[str, dict[str, str]] = {}
+    for key, value in config.items():
+        surface, capability_id, field = config_key_parts(key)
+        if surface == "capability" and capability_id and field in CONFIG_CAPABILITY_FIELDS:
+            grouped.setdefault(capability_id, {"id": capability_id})[field] = value
+    entries: list[dict[str, str]] = []
+    for capability_id, fields in sorted(grouped.items()):
+        item = dict(fields)
+        item.setdefault("title", capability_id.replace("-", " ").title())
+        item.setdefault("kind", "custom")
+        entries.append(item)
+    return entries
 
 
 def apply_state_defaults(state: dict[str, str]) -> dict[str, str]:
@@ -2078,12 +2329,19 @@ def agent_profile_paths(root: Path | None = None) -> list[Path]:
 def agent_profiles(root: Path | None = None) -> list[tuple[dict[str, str], Path]]:
     profiles: list[tuple[dict[str, str], Path]] = []
     seen: set[str] = set()
+    config: dict[str, str] = {}
+    overrides: dict[str, dict[str, str]] = {}
+    if root is not None:
+        config, _ = merged_config(root)
+        overrides = agent_config_overrides(config)
     for path in agent_profile_paths(root):
         profile = read_flat_yaml(path)
         profile_id = slugify(profile.get("id", path.stem))
         if profile_id in seen:
             continue
         profile["id"] = profile_id
+        if profile_id in overrides:
+            profile.update(overrides[profile_id])
         seen.add(profile_id)
         profiles.append((profile, path))
     return profiles
@@ -2230,32 +2488,40 @@ def workflow_catalog_payload() -> dict[str, Any]:
     return payload
 
 
-def workflow_catalog_entries() -> dict[str, dict[str, Any]]:
+def packaged_workflow_catalog_entries() -> dict[str, dict[str, Any]]:
     entries: dict[str, dict[str, Any]] = {}
     for item in workflow_catalog_payload().get("workflows", []):
         if not isinstance(item, dict):
             continue
         workflow_id = slugify(str(item.get("id", "")))
         if workflow_id:
-            entries[workflow_id] = item
+            entries[workflow_id] = dict(item)
     return entries
 
 
-def workflow_catalog_entry(workflow_id: str) -> dict[str, Any]:
-    return workflow_catalog_entries().get(slugify(workflow_id), {})
+def workflow_catalog_entries(root: Path | None = None) -> dict[str, dict[str, Any]]:
+    entries = packaged_workflow_catalog_entries()
+    if root is not None:
+        config, _ = merged_config(root)
+        entries = apply_workflow_config_overrides(entries, config)
+    return entries
 
 
-def workflow_reference_id(workflow_id: str) -> str:
-    entry = workflow_catalog_entry(workflow_id)
+def workflow_catalog_entry(workflow_id: str, root: Path | None = None) -> dict[str, Any]:
+    return workflow_catalog_entries(root).get(slugify(workflow_id), {})
+
+
+def workflow_reference_id(workflow_id: str, root: Path | None = None) -> str:
+    entry = workflow_catalog_entry(workflow_id, root)
     return slugify(str(entry.get("reference", workflow_id)))
 
 
 def workflow_path_by_catalog_id(root: Path | None, workflow_id: str) -> Path | None:
-    return workflow_path_by_id(root, workflow_reference_id(workflow_id))
+    return workflow_path_by_id(root, workflow_reference_id(workflow_id, root))
 
 
-def facilitation_pack_for_workflow(workflow_id: str) -> str:
-    entry = workflow_catalog_entry(workflow_id)
+def facilitation_pack_for_workflow(workflow_id: str, root: Path | None = None) -> str:
+    entry = workflow_catalog_entry(workflow_id, root)
     raw_pack = str(entry.get("facilitation_pack", ""))
     pack_id = slugify(raw_pack) if raw_pack.strip() else ""
     if not pack_id:
@@ -2263,6 +2529,10 @@ def facilitation_pack_for_workflow(workflow_id: str) -> str:
     path = FACILITATION_DIR / f"{pack_id}.md"
     if path.exists():
         return f"skill:facilitation/{pack_id}.md"
+    if root is not None:
+        project_path = method_dir(root) / "facilitation" / f"{pack_id}.md"
+        if project_path.exists():
+            return project_path.relative_to(root).as_posix()
     return ""
 
 
@@ -3348,8 +3618,8 @@ def build_help_oracle(
     resume: dict[str, Any],
 ) -> dict[str, Any]:
     workflow_id, reason = help_oracle_workflow_for_resume(state, resume)
-    workflow_metadata = workflow_catalog_entry(workflow_id)
-    facilitation_pack = facilitation_pack_for_workflow(workflow_id)
+    workflow_metadata = workflow_catalog_entry(workflow_id, root)
+    facilitation_pack = facilitation_pack_for_workflow(workflow_id, root)
     commands = resume.get("commands", [])
     target = resume.get("target", {})
     action = resume.get("action", "")
@@ -4553,6 +4823,15 @@ def detect_guidance_signals(question: str) -> list[str]:
             "fluxo guiado",
             "guided flow",
             "human guidance",
+            "config customization",
+            "customize forge",
+            "customizar forge",
+            "project configuration",
+            "override model",
+            "capability index",
+            "config index",
+            "config validate",
+            "config inspect",
         ],
     }
     for signal, phrases in phrase_signals.items():
@@ -4637,6 +4916,14 @@ def detect_guidance_signals(question: str) -> list[str]:
             "catalog",
             "catalogo",
             "metadata",
+            "config",
+            "configuration",
+            "customization",
+            "customize",
+            "customizar",
+            "override",
+            "overrides",
+            "capability",
             "facilitation",
             "packs",
             "parity",
@@ -4764,6 +5051,27 @@ def routed_builder_workflow(question: str) -> str:
     module_tokens = {"module", "modules", "modulo", "modulos"}
     agent_tokens = {"agent", "agents", "agente", "agentes"}
     workflow_tokens = {"workflow", "workflows", "skill", "skills"}
+    config_tokens = {
+        "config",
+        "configuration",
+        "customization",
+        "customize",
+        "customizar",
+        "override",
+        "overrides",
+        "capability",
+        "convention",
+        "convencao",
+    }
+    if (
+        config_tokens & tokens
+        or "capability index" in normalized
+        or "project configuration" in normalized
+        or "config validate" in normalized
+        or "config inspect" in normalized
+        or "config index" in normalized
+    ):
+        return "config-customization"
     if (
         "audit runtime" in normalized
         or "audit scripts" in normalized
@@ -4822,6 +5130,16 @@ def routed_builder_workflow(question: str) -> str:
 
 
 def builder_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "config-customization":
+        return (
+            "run config-customization to choose team/local scope, map supported override keys, validate config, and generate the capability index when useful",
+            "I should make the customization runtime-visible instead of leaving hidden prose or chat-only instructions.",
+            guidance_alternatives(
+                ("runtime-builder", "use when the requested behavior needs new runtime code"),
+                ("workflow-builder", "use when a new workflow contract is required"),
+                ("module-validate", "use when an extension package needs structural proof"),
+            ),
+        )
     if workflow_id == "module-ideation":
         return (
             "run module-ideation to explore the module idea, choose architecture, define capabilities, and produce a build roadmap",
@@ -5299,8 +5617,8 @@ def build_guidance_decision(
         human_prompt = "The approved decision work is done; I should continue mechanically and write evidence."
         reason = "A build-ready story exists in build/verify."
 
-    workflow_metadata = workflow_catalog_entry(recommended_workflow)
-    facilitation_pack = facilitation_pack_for_workflow(recommended_workflow)
+    workflow_metadata = workflow_catalog_entry(recommended_workflow, root)
+    facilitation_pack = facilitation_pack_for_workflow(recommended_workflow, root)
     if workflow_metadata:
         recommended_phase = recommended_phase_for_workflow(workflow_metadata, recommended_phase)
     if should_transition_to_guided_workflow(
@@ -5855,12 +6173,15 @@ def cmd_config_inspect(args: argparse.Namespace) -> int:
         "root": str(root),
         "sources": sources,
         "effective": config,
-        "allowed_keys": sorted(CONFIG_ALLOWED_KEYS),
+        "allowed_keys": config_allowed_keys(),
+        "override_precedence": CONFIG_OVERRIDE_PRECEDENCE,
+        "overrides": config_override_report(root),
     }
     if args.json:
         print(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2))
         return 0
     print("Forge Method Config")
+    print(f"Precedence: {' < '.join(CONFIG_OVERRIDE_PRECEDENCE)}")
     print(f"Sources: {', '.join(sources) if sources else '<none>'}")
     if config:
         for key, value in config.items():
@@ -5877,7 +6198,7 @@ def config_validation_errors(root: Path) -> list[str]:
         if not path.exists():
             continue
         values = read_flat_yaml(path)
-        errors.extend(validate_config_values(values, source=path.relative_to(root).as_posix()))
+        errors.extend(validate_config_values(values, source=path.relative_to(root).as_posix(), root=root))
     return errors
 
 
@@ -5890,6 +6211,73 @@ def cmd_config_validate(args: argparse.Namespace) -> int:
             print(f"- {error}")
         return 1
     print("Config validation passed.")
+    return 0
+
+
+def capability_index_payload(root: Path) -> dict[str, Any]:
+    config, sources = merged_config(root)
+    workflows: list[dict[str, Any]] = []
+    for workflow_id, entry in sorted(workflow_catalog_entries(root).items()):
+        item: dict[str, Any] = {
+            "id": workflow_id,
+            "phase": entry.get("phase", ""),
+            "required": bool(entry.get("required", False)),
+        }
+        for field in ["facilitation_pack", "template", "outputs", "followed_by", "modes"]:
+            value = entry.get(field)
+            if value:
+                item[field] = value
+        workflows.append(item)
+
+    modules = [module_summary(module) for module, _ in module_manifests(root)]
+    agents = [agent_profile_summary(profile) for profile, _ in agent_profiles(root)]
+    conventions = [
+        {"id": item_id, "value": value}
+        for key, value in sorted(config.items())
+        for surface, item_id, field in [config_key_parts(key)]
+        if surface == "convention" and field == "value"
+    ]
+    return {
+        "runtime": RUNTIME_NAME,
+        "runtime_version": RUNTIME_VERSION,
+        "generated_at": utc_now(),
+        "sources": sources,
+        "override_precedence": CONFIG_OVERRIDE_PRECEDENCE,
+        "workflows": workflows,
+        "modules": modules,
+        "agents": agents,
+        "custom_capabilities": capability_config_entries(config),
+        "project_conventions": conventions,
+    }
+
+
+def cmd_config_index(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    errors = config_validation_errors(root)
+    if errors:
+        print("Config validation failed:")
+        for error in errors:
+            print(f"- {error}")
+        return 1
+    payload = capability_index_payload(root)
+    written_path = ""
+    if args.write:
+        target = method_dir(root) / "context" / "capability-index.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        written_path = target.relative_to(root).as_posix()
+        payload["written_path"] = written_path
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2))
+        return 0
+    print("Forge Method Capability Index")
+    print(f"Sources: {', '.join(payload['sources']) if payload['sources'] else '<none>'}")
+    print(f"Workflows: {len(payload['workflows'])}")
+    print(f"Modules: {len(payload['modules'])}")
+    print(f"Agents: {len(payload['agents'])}")
+    print(f"Custom capabilities: {len(payload['custom_capabilities'])}")
+    if written_path:
+        print(f"Wrote: {written_path}")
     return 0
 
 
@@ -8189,6 +8577,11 @@ def build_parser() -> argparse.ArgumentParser:
     config_validate = config_sub.add_parser("validate", help="validate team/local configuration")
     config_validate.add_argument("--root", default=".")
     config_validate.set_defaults(func=cmd_config_validate)
+    config_index = config_sub.add_parser("index", help="generate the compact effective capability index")
+    config_index.add_argument("--root", default=".")
+    config_index.add_argument("--json", action="store_true")
+    config_index.add_argument("--write", action="store_true")
+    config_index.set_defaults(func=cmd_config_index)
 
     artifact = sub.add_parser("artifact", help="manage artifacts")
     artifact_sub = artifact.add_subparsers(dest="artifact_command", required=True)

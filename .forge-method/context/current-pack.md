@@ -4,40 +4,36 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: p1-builder-factory-done
+- status: p1-customization-index-done
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Implement P1.2 Customization and Capability Index from the systematic parity plan.
+- next_action: Implement P1.3 Persona Layer from the systematic parity plan.
 
 ## Latest Checkpoint
 
-# P1.1 Builder Factory closed
+# Checkpoint
 
-- created_at: 2026-06-14T23:12:53+00:00
+- created_at: 2026-06-14T23:38:30+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: systematic-parity-plan-done
+- status: p1-customization-index-done
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed the Builder Factory parity batch. Added five narrow builder workflows, shared human facilitation, plan/manifest/validation templates, Guidance Engine routes, replay fixtures, benchmark/audit/plan updates, and installed validation. Next batch is P1.2 Customization and Capability Index.
+Closed P1.2 Customization and Capability Index. Added validated Project Configuration overrides, config-customization workflow pack/template, Capability Index generation, Guidance Engine route/replay case, ADR/glossary updates, and tests for valid and stale overrides.
 
 ## Decisions
 
-- Builder Factory is the canonical Forge term for the guided creation/validation family.
-- Analysis/conversion remain builder-utility; creation/package/whole-module validation route to builder-factory workflows.
+- Project Configuration is the canonical override surface with packaged defaults < team config < local config precedence.
+- Capability Index is generated from effective metadata instead of manually maintained.
 
 ## Checks
 
 - python -m unittest discover -s tests
-- workflow validate
-- builder validate
-- parity replay
-- smoke-runtime.ps1
-- verify-fast.ps1
-- smoke-install.ps1
+- workflow validate; builder validate; config validate; config index --write --json; parity replay; audit; artifact verify
+- smoke-runtime.ps1; verify-fast.ps1; smoke-install.ps1
 
 ## Failed Checks
 
@@ -45,25 +41,21 @@ Closed the Builder Factory parity batch. Added five narrow builder workflows, sh
 
 ## Touched Files
 
-- skills/forge-method/catalog/workflows.json
 - skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/facilitation/builder-factory.md
-- skills/forge-method/references/workflow-module-ideation.md
-- skills/forge-method/references/workflow-agent-builder.md
-- skills/forge-method/references/workflow-workflow-builder.md
-- skills/forge-method/references/workflow-module-builder.md
-- skills/forge-method/references/workflow-module-validate.md
-- skills/forge-method/fixtures/guidance-parity-replay.json
-- CONTEXT.md
-- .forge-method/artifacts/20260614-builder-factory-grill.md
+- skills/forge-method/catalog/workflows.json
+- skills/forge-method/facilitation/config-customization.md
+- skills/forge-method/references/workflow-config-customization.md
+- skills/forge-method/templates/config-customization-artifact.md
+- tests/test_runtime.py
+- docs/adr/0009-project-configuration-overrides.md
 
 ## Artifacts
 
-- none
+- .forge-method/artifacts/20260614-customization-capability-index-grill.md
 
 ## Next Action
 
-Implement P1.2 Customization and Capability Index from the systematic parity plan.
+Implement P1.3 Persona Layer from the systematic parity plan.
 
 ## Recovery Signals
 
@@ -75,16 +67,16 @@ Implement P1.2 Customization and Capability Index from the systematic parity pla
 
 - skills/forge-method/scripts/forge_method_runtime.py
 - skills/forge-method/catalog/workflows.json
-- skills/forge-method/references/workflow-product-requirements.md
-- skills/forge-method/references/workflow-ux-plan.md
-- skills/forge-method/references/workflow-quick-dev.md
-- skills/forge-method/facilitation/product-planning.md
-- skills/forge-method/facilitation/ux-design.md
-- skills/forge-method/facilitation/quick-dev.md
-- skills/forge-method/templates/*product*|*ux*|*quick*
-- tests/fixtures/guidance_transcripts.json
-- tests/test_runtime.py
 - skills/forge-method/references/workflow-story-creation.md
+- skills/forge-method/facilitation/story-lifecycle.md
+- skills/forge-method/templates/story-creation-artifact.md
+- tests/test_runtime.py
+- tests/fixtures/guidance_transcripts.json
+- skills/forge-method/fixtures/guidance-parity-replay.json
+- scripts/smoke-install.ps1
+- scripts/smoke-install.sh
+- docs/00-quickstart.md
+- docs/05-v1-operating-model.md
 
 ## Open Human Inputs
 
@@ -101,11 +93,11 @@ Implement P1.2 Customization and Capability Index from the systematic parity pla
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260612-204726-validation-prd-ux-quick-dev-parity-validation.md
 - .forge-method/evidence/20260612-211014-validation-story-lifecycle-guard-validation.md
 - .forge-method/evidence/20260613-024610-validation-parity-replay-harness-validation.md
 - .forge-method/evidence/20260613-031940-planning-systematic-parity-plan-validation.md
 - .forge-method/evidence/20260614-231253-validation-p1-1-builder-factory-validation.md
+- .forge-method/evidence/20260614-233818-validation-p1-2-customization-and-capability-index-validati.md
 
 ## Recent Artifacts
 
