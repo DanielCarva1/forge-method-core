@@ -4513,6 +4513,26 @@ def detect_guidance_signals(question: str) -> list[str]:
             "spec-lite",
         ],
         "builder-flow": [
+            "builder factory",
+            "module ideation",
+            "ideate module",
+            "plan module",
+            "brainstorm module",
+            "build module",
+            "create module",
+            "package module",
+            "validate module",
+            "check module",
+            "build an agent",
+            "create an agent",
+            "design an agent",
+            "rebuild agent",
+            "build a workflow",
+            "create workflow",
+            "design workflow",
+            "workflow builder",
+            "agent builder",
+            "module builder",
             "audit runtime",
             "audit scripts",
             "auditoria do runtime",
@@ -4602,10 +4622,15 @@ def detect_guidance_signals(question: str) -> list[str]:
             "runtime",
             "workflow",
             "workflows",
+            "module",
+            "modules",
+            "modulo",
+            "modulos",
             "skill",
             "agent",
             "agente",
             "agentes",
+            "builder",
             "plugin",
             "guidance",
             "router",
@@ -4722,13 +4747,151 @@ def routed_story_workflow(question: str) -> str:
 def routed_builder_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
+    analysis_tokens = {"analyze", "analise", "analisar", "analysis", "review", "revisao", "quality", "audit", "auditoria"}
+    build_tokens = {
+        "build",
+        "builder",
+        "create",
+        "criar",
+        "design",
+        "desenhar",
+        "edit",
+        "modify",
+        "update",
+        "rebuild",
+        "scaffold",
+    }
+    module_tokens = {"module", "modules", "modulo", "modulos"}
+    agent_tokens = {"agent", "agents", "agente", "agentes"}
+    workflow_tokens = {"workflow", "workflows", "skill", "skills"}
+    if (
+        "audit runtime" in normalized
+        or "audit scripts" in normalized
+        or "codigo morto" in normalized
+        or "dead code" in normalized
+        or "doc misleading" in normalized
+        or "docs misleading" in normalized
+        or "misleading doc" in normalized
+        or "doc enganoso" in normalized
+        or "documentacao enganosa" in normalized
+        or "parte guiada" in normalized
+        or "experiencia guiada" in normalized
+        or "human guidance" in normalized
+    ):
+        return "runtime-builder"
     if {"convert", "converter", "conversion"} & tokens or "convert skill" in normalized or "converter skill" in normalized:
         return "skill-convert"
-    if {"agent", "agents"} & tokens and {"analyze", "analise", "analisar", "analysis"} & tokens:
+    if module_tokens & tokens and (
+        {"validate", "validar", "validation", "check", "audit", "auditoria"} & tokens
+        or "validate module" in normalized
+        or "check module" in normalized
+    ):
+        return "module-validate"
+    if agent_tokens & tokens and (analysis_tokens & tokens or "quality check agent" in normalized):
         return "agent-analyze"
-    if {"workflow", "workflows"} & tokens and {"analyze", "analise", "analisar", "analysis"} & tokens:
+    if workflow_tokens & tokens and (analysis_tokens & tokens or "quality check workflow" in normalized):
         return "workflow-analyze"
+    if module_tokens & tokens and (
+        {"ideate", "ideation", "idea", "ideia", "brainstorm", "plan", "planejar", "explore", "explorar"} & tokens
+        or "module ideation" in normalized
+        or "ideate module" in normalized
+        or "plan module" in normalized
+        or "brainstorm module" in normalized
+    ):
+        return "module-ideation"
+    if agent_tokens & tokens and (build_tokens & tokens or "build an agent" in normalized or "create an agent" in normalized):
+        return "agent-builder"
+    if workflow_tokens & tokens and (
+        build_tokens & tokens
+        or "build a workflow" in normalized
+        or "create workflow" in normalized
+        or "workflow builder" in normalized
+    ):
+        return "workflow-builder"
+    if module_tokens & tokens and (
+        build_tokens & tokens
+        or {"package", "assemble", "packaging"} & tokens
+        or "build module" in normalized
+        or "create module" in normalized
+        or "module builder" in normalized
+    ):
+        return "module-builder"
+    if "builder factory" in normalized:
+        return "module-ideation"
     return "runtime-builder"
+
+
+def builder_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "module-ideation":
+        return (
+            "run module-ideation to explore the module idea, choose architecture, define capabilities, and produce a build roadmap",
+            "I should keep this generative long enough to shape the module before scaffolding agents, workflows, or packaging.",
+            guidance_alternatives(
+                ("agent-builder", "use when the first artifact is clearly an agent"),
+                ("workflow-builder", "use when the first artifact is clearly a workflow"),
+                ("module-builder", "use when a plan already exists and packaging is the next step"),
+            ),
+        )
+    if workflow_id == "agent-builder":
+        return (
+            "run agent-builder to define identity, outcomes, memory/autonomy boundary, capabilities, scripts, and quality follow-up",
+            "I should design the agent as an outcome contract before writing or changing files.",
+            guidance_alternatives(
+                ("agent-analyze", "use when an existing agent needs quality review first"),
+                ("module-ideation", "use when this agent belongs to a broader module that is not planned yet"),
+                ("module-builder", "use after built artifacts need packaging"),
+            ),
+        )
+    if workflow_id == "workflow-builder":
+        return (
+            "run workflow-builder to define triggers, compact state machine, pack/template needs, catalog metadata, and proof",
+            "I should design the workflow boundary and validation path before editing runtime files.",
+            guidance_alternatives(
+                ("workflow-analyze", "use when an existing workflow needs review first"),
+                ("skill-convert", "use when source material must be converted into Forge form"),
+                ("workflow-validate", "use when files are already changed and need proof"),
+            ),
+        )
+    if workflow_id == "module-builder":
+        return (
+            "run module-builder to assemble manifest, catalog links, setup/install contract, generated paths, and validation handoff",
+            "I should package the already-shaped artifacts into a coherent module before release-style validation.",
+            guidance_alternatives(
+                ("module-ideation", "use when module architecture is still unclear"),
+                ("module-validate", "use when packaging exists and needs validation"),
+                ("workflow-validate", "use when only workflow/catalog references changed"),
+            ),
+        )
+    if workflow_id == "module-validate":
+        return (
+            "run module-validate to check structure, route accuracy, pack/template coverage, quality findings, and install proof",
+            "I should validate the whole extension, not only individual workflow files.",
+            guidance_alternatives(
+                ("workflow-validate", "use for lower-level catalog and workflow reference checks"),
+                ("module-builder", "use when validation finds missing packaging"),
+                ("eval-design", "use when a new replay or local eval is needed"),
+            ),
+        )
+    if workflow_id in {"agent-analyze", "workflow-analyze", "skill-convert"}:
+        return (
+            f"run {workflow_id} to analyze or convert the runtime artifact before scaffolding",
+            "This is a specific runtime-builder utility task; I should analyze or convert before patching.",
+            guidance_alternatives(
+                ("agent-builder", "use when analysis says a new or rebuilt agent is needed"),
+                ("workflow-builder", "use when analysis says a new or rebuilt workflow is needed"),
+                ("workflow-validate", "prove workflow catalog, state-machine docs, and facilitation packs are consistent"),
+            ),
+        )
+    return (
+        "shape and implement the Forge runtime/workflow/catalog change with tests and evidence",
+        "This is about improving Forge itself; I should route through runtime-builder before any domain-specific game, test, or research workflow.",
+        guidance_alternatives(
+            ("module-ideation", "plan a new runtime module or capability family"),
+            ("agent-builder", "create or rebuild an agent profile or skill"),
+            ("workflow-builder", "create or rebuild a workflow contract"),
+            ("module-validate", "validate a complete runtime extension"),
+        ),
+    )
 
 
 def routed_document_workflow(question: str) -> str:
@@ -4866,8 +5029,10 @@ def build_guidance_decision(
             classification = "builder-flow"
             recommended_phase = "1-discovery"
             recommended_workflow = routed_builder_workflow(question)
-            recommended_action = f"create a runtime-builder project, then run {recommended_workflow} before scaffolding"
-            human_prompt = "I should clarify the method artifact and acceptance criteria before editing runtime files."
+            action_text, prompt_text, builder_alternatives = builder_guidance_text(recommended_workflow)
+            recommended_action = f"create a runtime-builder project, then {action_text}"
+            human_prompt = prompt_text
+            alternatives = builder_alternatives
             reason = "The first intent is about runtime, workflow, skill, or plugin behavior."
     elif has_question and ({"correct-course", "frustration"} & signal_set):
         classification = "correct-course"
@@ -5006,19 +5171,8 @@ def build_guidance_decision(
     elif has_question and "builder-flow" in signal_set and (module_id == "runtime-builder" or phase == "6-evolve"):
         classification = "builder-flow"
         recommended_workflow = routed_builder_workflow(question)
-        if recommended_workflow == "runtime-builder":
-            recommended_action = "shape and implement the Forge runtime/workflow/catalog change with tests and evidence"
-            human_prompt = "This is about improving Forge itself; I should route through runtime-builder before any domain-specific game, test, or research workflow."
-        else:
-            recommended_action = f"run {recommended_workflow} to analyze or convert the runtime artifact before scaffolding"
-            human_prompt = "This is a specific runtime-builder utility task; I should analyze or convert before patching."
-        alternatives = guidance_alternatives(
-            ("agent-analyze", "analyze agent behavior and boundaries"),
-            ("workflow-analyze", "analyze workflow state-machine and metadata gaps"),
-            ("skill-convert", "convert source skill material into Forge-native artifacts"),
-            ("workflow-validate", "prove workflow catalog, state-machine docs, and facilitation packs are consistent"),
-        )
-        reason = "Runtime-builder context and builder signals outrank domain words; explicit analysis/conversion words select the narrower builder utility workflow."
+        recommended_action, human_prompt, alternatives = builder_guidance_text(recommended_workflow)
+        reason = "Runtime-builder context and builder signals outrank domain words; explicit create/analyze/convert/validate words select the narrow builder workflow."
     elif has_question and "confusion" in signal_set:
         classification = "confusion"
         recommended_workflow = "problem-solving"
@@ -5136,8 +5290,7 @@ def build_guidance_decision(
     elif has_question and "builder-flow" in signal_set:
         classification = "builder-flow"
         recommended_workflow = routed_builder_workflow(question)
-        recommended_action = f"run {recommended_workflow} before scaffolding or editing runtime files"
-        human_prompt = "I should clarify the method artifact and acceptance criteria before editing runtime files."
+        recommended_action, human_prompt, alternatives = builder_guidance_text(recommended_workflow)
         reason = "The message is about the method, runtime, workflows, skills, or plugin behavior."
     elif next_story and phase == "4-build-verify":
         classification = "mechanical-build"

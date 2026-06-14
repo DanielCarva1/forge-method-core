@@ -1333,6 +1333,11 @@ class RuntimeTests(unittest.TestCase):
             "nfr-evidence-audit",
             "workflow-analyze",
             "skill-convert",
+            "module-ideation",
+            "agent-builder",
+            "workflow-builder",
+            "module-builder",
+            "module-validate",
             "doc-index",
             "spec-distillation",
             "product-requirements",
@@ -1345,6 +1350,9 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "game-lifecycle-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "test-architecture-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "builder-utility-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "builder-factory-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "module-builder-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "module-validation-report.md",
             ROOT / "skills" / "forge-method" / "templates" / "document-utility-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "product-requirements-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "ux-design-artifact.md",
@@ -1356,6 +1364,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "facilitation" / "game-lifecycle.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "test-architecture.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "builder-utility.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "builder-factory.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "document-utility.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "product-planning.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "ux-design.md",
@@ -1398,6 +1407,11 @@ class RuntimeTests(unittest.TestCase):
             "test-engagement-model",
             "traceability-gate",
             "security-plan",
+            "module-ideation",
+            "agent-builder",
+            "workflow-builder",
+            "module-builder",
+            "module-validate",
         }
         by_id = {item["id"]: item for item in catalog["workflows"]}
         for workflow_id in human_facing_required:
@@ -1406,10 +1420,20 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["ux-plan"].get("template"), "ux-design-artifact")
         self.assertEqual(by_id["quick-dev"].get("template"), "quick-dev-artifact")
         self.assertEqual(by_id["story-creation"].get("template"), "story-creation-artifact")
+        self.assertEqual(by_id["module-ideation"].get("template"), "builder-factory-artifact")
+        self.assertEqual(by_id["agent-builder"].get("template"), "builder-factory-artifact")
+        self.assertEqual(by_id["workflow-builder"].get("template"), "builder-factory-artifact")
+        self.assertEqual(by_id["module-builder"].get("template"), "module-builder-artifact")
+        self.assertEqual(by_id["module-validate"].get("template"), "module-validation-report")
         self.assertIn("validate", by_id["product-requirements"].get("modes", []))
         self.assertIn("validate", by_id["ux-plan"].get("modes", []))
         self.assertIn("spec-lite", by_id["quick-dev"].get("modes", []))
         self.assertIn("validate", by_id["story-creation"].get("modes", []))
+        self.assertIn("ideate", by_id["module-ideation"].get("modes", []))
+        self.assertIn("create", by_id["agent-builder"].get("modes", []))
+        self.assertIn("create", by_id["workflow-builder"].get("modes", []))
+        self.assertIn("package", by_id["module-builder"].get("modes", []))
+        self.assertIn("validate", by_id["module-validate"].get("modes", []))
         for pack_id in pack_ids:
             pack_text = (ROOT / "skills" / "forge-method" / "facilitation" / f"{pack_id}.md").read_text(
                 encoding="utf-8"

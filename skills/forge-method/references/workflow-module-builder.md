@@ -1,0 +1,37 @@
+# workflow: module-builder
+
+trigger:
+  - user wants to build, create, scaffold, package, or assemble a Forge module
+  - module ideation has produced a build roadmap
+
+inputs:
+  - module plan or skills/workflows folder
+  - module id, title, purpose, workflows, agents, templates, and packs
+  - configuration and dependency decisions
+  - install and validation expectations
+
+steps:
+  1. read the plan and all included runtime artifacts
+  2. assemble module manifest, catalog links, setup/install notes, and generated paths
+  3. confirm workflow order, followed_by relationships, outputs, templates, and packs
+  4. add deterministic scripts or smoke hooks only where reliability needs them
+  5. run or schedule module validation and install proof
+
+outputs:
+  - module manifest
+  - packaged runtime artifact list
+  - install or setup contract
+  - validation handoff
+
+done_when:
+  - module membership resolves to packaged workflow/catalog entries
+  - setup, configuration, and dependency behavior are explicit
+  - next workflow is `module-validate` or `workflow-validate`
+
+blocked_when:
+  - required artifact paths are missing
+  - module metadata conflicts with catalog or workflow docs
+  - install path cannot be validated locally
+
+handoff:
+  - preserve module manifest path, generated paths, install command, validation command, and remaining manual steps

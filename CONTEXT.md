@@ -84,6 +84,10 @@ The runtime metadata registry for packaged workflows. It records workflow id, re
 
 A related set of specialized workflows that deepens a broad track without changing the single Forge entrypoint. Current depth families include game lifecycle, test architecture, builder utility, and document utility. Each family keeps compact workflow state machines for agents and a separate facilitation pack for human conversation.
 
+## Builder Factory
+
+The guided depth family for creating and validating Forge runtime extensions: module ideation, agent builder, workflow builder, module builder, and module validation. It gives humans a coached creation loop while future agents receive compact workflow contracts, templates, catalog metadata, and validation commands.
+
 ## Facilitation Pack
 
 A human-facing conversation guide for a workflow. It contains open-floor prompts, source-material intake, follow-up question batches, stage-by-stage conversation scripts, elicitation options, facilitator moves, quality bars, anti-patterns, fast/deep paths, checkpoint options, artifact rules, and headless behavior. It is intentionally separate from agent-facing workflow state machines so human guidance can be rich without bloating agent recovery context.

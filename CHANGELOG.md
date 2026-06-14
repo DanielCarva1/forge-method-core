@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add Builder Factory guided depth with `module-ideation`, `agent-builder`, `workflow-builder`, `module-builder`, and `module-validate` workflows, facilitation pack, templates, Guidance Engine routes, and parity replay cases
 - add packaged `parity replay` for internal Guidance Engine fixture coverage across help, confusion, brainstorm, research, PRD, UX, architecture, quick-dev, story cycle, correct-course, builder, CIS/creative, game, and test architecture requests
 - run parity replay during install smoke so the installed `$forge-method` validates the same guidance fixtures as the source checkout
 - add `story-creation` workflow, artifact template, and Guidance Engine story-flow routing

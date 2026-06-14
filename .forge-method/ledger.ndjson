@@ -293,3 +293,15 @@
 {"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "systematic-parity-plan-done"}, "ts": "2026-06-13T03:19:40+00:00"}
 {"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260613-031952-systematic-parity-plan-closed.md"}, "ts": "2026-06-13T03:19:52+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-13T03:19:53+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-benchmark", "lifecycle": "durable", "path": ".forge-method/artifacts/guidance-engine-benchmark.md"}, "ts": "2026-06-14T23:12:27+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-parity-audit", "lifecycle": "durable", "path": ".forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md"}, "ts": "2026-06-14T23:12:28+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-parity-plan", "lifecycle": "durable", "path": ".forge-method/artifacts/20260613-systematic-parity-plan.md"}, "ts": "2026-06-14T23:12:28+00:00"}
+{"event": "artifact.added", "payload": {"kind": "grill-with-docs", "lifecycle": "durable", "path": ".forge-method/artifacts/20260614-builder-factory-grill.md"}, "ts": "2026-06-14T23:12:28+00:00"}
+{"event": "artifact.added", "payload": {"kind": "correct-course", "lifecycle": "durable", "path": ".forge-method/artifacts/20260612-180403-correct-course-correct-course-continuation.md"}, "ts": "2026-06-14T23:12:28+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260614-231253-validation-p1-1-builder-factory-validation.md", "story": ""}, "ts": "2026-06-14T23:12:53+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260614-231253-p1-1-builder-factory-closed.md"}, "ts": "2026-06-14T23:12:53+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-14T23:12:53+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "p1-builder-factory-done"}, "ts": "2026-06-14T23:12:53+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-parity-plan", "lifecycle": "durable", "path": ".forge-method/artifacts/20260613-systematic-parity-plan.md"}, "ts": "2026-06-14T23:13:23+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-14T23:13:23+00:00"}
+{"event": "context_load_plan.written", "payload": {"path": ".forge-method/context/load-plan.json"}, "ts": "2026-06-14T23:13:24+00:00"}

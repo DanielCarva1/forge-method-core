@@ -1,0 +1,37 @@
+# workflow: module-ideation
+
+trigger:
+  - user wants to ideate, plan, or brainstorm a Forge module or runtime extension
+  - a broad builder request needs architecture before scaffolding
+
+inputs:
+  - module idea or problem space
+  - target humans and agents
+  - expected workflows, agents, templates, scripts, or packs
+  - constraints, dependencies, and validation expectations
+
+steps:
+  1. capture raw idea, audience, outcome, and non-goals
+  2. choose module shape: agent, workflow, utility, pack, script, plugin, or mixed family
+  3. define human experience separately from agent runtime contract
+  4. map workflows, relationships, configuration, dependencies, and proof
+  5. write a self-contained builder plan and first build order
+
+outputs:
+  - module plan
+  - capability map
+  - build roadmap
+  - validation plan
+
+done_when:
+  - module identity, audience, boundaries, and first build target are explicit
+  - each planned capability has owner layer, output, and proof
+  - next workflow is `agent-builder`, `workflow-builder`, or `module-builder`
+
+blocked_when:
+  - module purpose is too broad to name a first capability
+  - target user or agent contract is unknown
+  - required external dependency cannot be installed or mocked
+
+handoff:
+  - preserve plan path, chosen architecture, rejected alternatives, first build target, and validation command

@@ -15,14 +15,16 @@ steps:
   1. classify artifact: skill, workflow, module, script, plugin, or eval
   2. define trigger and non-trigger cases
   3. define state-machine contract
-  4. create compact agent-facing workflow docs
-  5. add deterministic scripts only where reliability matters
-  6. generate skill metadata
-  7. run skill/plugin validation
-  8. create smoke test or eval spec
+  4. route creation work through module-ideation, agent-builder, workflow-builder, module-builder, or module-validate when narrow enough
+  5. create compact agent-facing workflow docs
+  6. add deterministic scripts only where reliability matters
+  7. generate catalog/module metadata
+  8. run workflow, module, skill, plugin, or install validation
+  9. create smoke test or eval spec
 
 outputs:
   - generated skill/module files
+  - builder plan or validation report
   - validation result
   - smoke/eval plan
   - distribution note

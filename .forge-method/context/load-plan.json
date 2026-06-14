@@ -1,9 +1,19 @@
 {
   "budget_chars": 12000,
-  "deferred": [],
-  "estimated_required_chars": 2057,
-  "estimated_selected_chars": 11027,
-  "generated_at": "2026-06-11T23:34:18+00:00",
+  "deferred": [
+    {
+      "estimated_chars": 17578,
+      "location": "project",
+      "path": ".forge-method/artifacts/index.ndjson",
+      "priority": 76,
+      "reason": "artifact provenance and lifecycle index",
+      "required": false,
+      "section": "artifact"
+    }
+  ],
+  "estimated_required_chars": 2634,
+  "estimated_selected_chars": 7921,
+  "generated_at": "2026-06-14T23:13:24+00:00",
   "over_budget": false,
   "root": "C:\\Users\\Danie\\OneDrive\\Documentos\\ody",
   "rules": [
@@ -13,10 +23,10 @@
     "after meaningful progress, write checkpoint or evidence before ending"
   ],
   "runtime": "forge-method",
-  "runtime_version": "1.27.0",
+  "runtime_version": "1.28.0",
   "selected": [
     {
-      "estimated_chars": 932,
+      "estimated_chars": 1072,
       "location": "project",
       "path": ".forge-method/state.yaml",
       "priority": 100,
@@ -25,7 +35,7 @@
       "section": "state"
     },
     {
-      "estimated_chars": 257,
+      "estimated_chars": 236,
       "location": "project",
       "path": ".forge-method/sprint.yaml",
       "priority": 96,
@@ -34,16 +44,16 @@
       "section": "state"
     },
     {
-      "estimated_chars": 868,
+      "estimated_chars": 1326,
       "location": "project",
-      "path": "skills/forge-method/references/workflow-evolve-project.md",
+      "path": "skills/forge-method/references/workflow-runtime-builder.md",
       "priority": 92,
       "reason": "active workflow state machine",
       "required": true,
       "section": "workflow"
     },
     {
-      "estimated_chars": 766,
+      "estimated_chars": 1659,
       "location": "project",
       "path": ".forge-method/context/latest-checkpoint.md",
       "priority": 88,
@@ -70,36 +80,27 @@
       "section": "agent-profile"
     },
     {
-      "estimated_chars": 5336,
+      "estimated_chars": 765,
       "location": "project",
-      "path": ".forge-method/artifacts/index.ndjson",
-      "priority": 76,
-      "reason": "artifact provenance and lifecycle index",
-      "required": false,
-      "section": "artifact"
-    },
-    {
-      "estimated_chars": 564,
-      "location": "project",
-      "path": ".forge-method/evidence/20260611-233338-analysis-bmad-forge-guided-flow-comparison.md",
+      "path": ".forge-method/evidence/20260614-231253-validation-p1-1-builder-factory-validation.md",
       "priority": 68,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 518,
+      "estimated_chars": 758,
       "location": "project",
-      "path": ".forge-method/evidence/20260611-231428-validation-guidance-engine-validation.md",
+      "path": ".forge-method/evidence/20260613-031940-planning-systematic-parity-plan-validation.md",
       "priority": 67,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 487,
+      "estimated_chars": 806,
       "location": "project",
-      "path": ".forge-method/evidence/20260611-205934-validation-reload-emergency-entrypoint-validation.md",
+      "path": ".forge-method/evidence/20260613-024610-validation-parity-replay-harness-validation.md",
       "priority": 66,
       "reason": "recent validation or release evidence",
       "required": false,
@@ -108,10 +109,10 @@
   ],
   "state": {
     "active_story": "",
-    "next_action": "decide whether to implement priority gaps: workflow metadata, facilitation packs, game/test depth, and catalog consistency fixes",
+    "next_action": "Implement P1.2 Customization and Capability Index from the systematic parity plan.",
     "phase": "6-evolve",
     "project": "forge-method-core",
-    "status": "guidance-comparison",
-    "workflow": "evolve-project"
+    "status": "p1-builder-factory-done",
+    "workflow": "runtime-builder"
   }
 }

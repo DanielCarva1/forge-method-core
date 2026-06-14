@@ -4,16 +4,16 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: systematic-parity-plan-done
+- status: p1-builder-factory-done
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Implement P1.1 Builder Factory from the systematic parity plan: module-ideation, agent-builder, workflow-builder, module-builder, and module-validate.
+- next_action: Implement P1.2 Customization and Capability Index from the systematic parity plan.
 
 ## Latest Checkpoint
 
-# Systematic parity plan closed
+# P1.1 Builder Factory closed
 
-- created_at: 2026-06-13T03:19:52+00:00
+- created_at: 2026-06-14T23:12:53+00:00
 - project: forge-method-core
 - phase: 6-evolve
 - status: systematic-parity-plan-done
@@ -22,18 +22,22 @@
 
 ## Summary
 
-Closed the planning layer for the BMAD-to-Forge parity audit. The audit remains the gap map, and the new systematic parity plan defines translation units, completion states, P1/P2 batches, validation ladder, and completion audit checklist. No P1 implementation was started in this batch; next work is P1.1 Builder Factory from the plan.
+Closed the Builder Factory parity batch. Added five narrow builder workflows, shared human facilitation, plan/manifest/validation templates, Guidance Engine routes, replay fixtures, benchmark/audit/plan updates, and installed validation. Next batch is P1.2 Customization and Capability Index.
 
 ## Decisions
 
-- Separate audit map from execution plan so future work follows planned Forge-native batches instead of ad hoc parity patches.
-- Use a Forge translation unit for every capability: route, human pack, compact workflow, template/scripts if needed, tests/replay, install proof when relevant, evidence/checkpoint.
-- Treat P2 items as explicit defer/non-goal decisions before full parity can be marked complete.
+- Builder Factory is the canonical Forge term for the guided creation/validation family.
+- Analysis/conversion remain builder-utility; creation/package/whole-module validation route to builder-factory workflows.
 
 ## Checks
 
-- python skills\\forge-method\\scripts\\forge_method_runtime.py artifact verify --root .: passed with only pre-existing correct-course stale-summary warning
-- python skills\\forge-method\\scripts\\forge_method_runtime.py audit --root .: passed
+- python -m unittest discover -s tests
+- workflow validate
+- builder validate
+- parity replay
+- smoke-runtime.ps1
+- verify-fast.ps1
+- smoke-install.ps1
 
 ## Failed Checks
 
@@ -41,19 +45,25 @@ Closed the planning layer for the BMAD-to-Forge parity audit. The audit remains 
 
 ## Touched Files
 
-- .forge-method/artifacts/20260613-systematic-parity-plan.md
-- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
+- skills/forge-method/catalog/workflows.json
+- skills/forge-method/scripts/forge_method_runtime.py
+- skills/forge-method/facilitation/builder-factory.md
+- skills/forge-method/references/workflow-module-ideation.md
+- skills/forge-method/references/workflow-agent-builder.md
+- skills/forge-method/references/workflow-workflow-builder.md
+- skills/forge-method/references/workflow-module-builder.md
+- skills/forge-method/references/workflow-module-validate.md
+- skills/forge-method/fixtures/guidance-parity-replay.json
+- CONTEXT.md
+- .forge-method/artifacts/20260614-builder-factory-grill.md
 
 ## Artifacts
 
-- .forge-method/evidence/20260613-031940-planning-systematic-parity-plan-validation.md
-- .forge-method/artifacts/20260613-systematic-parity-plan.md
-- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
+- none
 
 ## Next Action
 
-Implement P1.1 Builder Factory from the systematic parity plan: module-ideation, agent-builder, workfl
-[checkpoint truncated]
+Implement P1.2 Customization and Capability Index from the systematic parity plan.
 
 ## Recovery Signals
 
@@ -65,9 +75,6 @@ Implement P1.1 Builder Factory from the systematic parity plan: module-ideation,
 
 - skills/forge-method/scripts/forge_method_runtime.py
 - skills/forge-method/catalog/workflows.json
-- skills/forge-method/facilitation/*.md
-- tests/test_runtime.py
-- CHANGELOG.md
 - skills/forge-method/references/workflow-product-requirements.md
 - skills/forge-method/references/workflow-ux-plan.md
 - skills/forge-method/references/workflow-quick-dev.md
@@ -75,6 +82,9 @@ Implement P1.1 Builder Factory from the systematic parity plan: module-ideation,
 - skills/forge-method/facilitation/ux-design.md
 - skills/forge-method/facilitation/quick-dev.md
 - skills/forge-method/templates/*product*|*ux*|*quick*
+- tests/fixtures/guidance_transcripts.json
+- tests/test_runtime.py
+- skills/forge-method/references/workflow-story-creation.md
 
 ## Open Human Inputs
 
@@ -91,16 +101,16 @@ Implement P1.1 Builder Factory from the systematic parity plan: module-ideation,
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260612-203044-validation-help-oracle-and-facilitation-coverage-validation.md
 - .forge-method/evidence/20260612-204726-validation-prd-ux-quick-dev-parity-validation.md
 - .forge-method/evidence/20260612-211014-validation-story-lifecycle-guard-validation.md
 - .forge-method/evidence/20260613-024610-validation-parity-replay-harness-validation.md
 - .forge-method/evidence/20260613-031940-planning-systematic-parity-plan-validation.md
+- .forge-method/evidence/20260614-231253-validation-p1-1-builder-factory-validation.md
 
 ## Recent Artifacts
 
-- internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine internal benchmark - Updated internal benchmark to include architecture and CIS/creative parity replay expectations, backed by packaged parity replay fixtures.
-- internal-parity-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD to Forge systematic parity audit - Updated parity audit current status: P0.1-P0.5 are implemented and validated, while P1 builder/customization/persona/game/TEA depth remains the next parity work.
-- internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine internal benchmark - Updated internal benchmark to include architecture and CIS/creative parity replay expectations, backed by packaged parity replay fixtures.
-- internal-parity-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic parity plan - Execution plan for completing BMAD-to-Forge parity systematically: translation unit, completion model, P1/P2 batches, validation ladder, and completion audit checklist.
-- internal-parity-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD to Forge systematic parity audit - Updated parity audit to point at the systematic parity plan and preserve P1/P2 as unfinished work after P0 closure.
+- internal-parity-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD to Forge systematic parity audit - Updated parity audit to mark P1.1 Builder Factory rows translated while preserving P1.2+ as remaining parity work.
+- internal-parity-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic parity plan - Updated systematic parity plan after P1.1 Builder Factory implementation; next planned batch is P1.2 Customization and Capability Index.
+- grill-with-docs [active/durable]: .forge-method/artifacts/20260614-builder-factory-grill.md - Builder Factory grill with docs - Grill closed P1.1 architecture decisions: single entrypoint, Builder Factory glossary term, rich human pack, compact agent workflows, templates, routes, and validation proof.
+- correct-course [active/durable]: .forge-method/artifacts/20260612-180403-correct-course-correct-course-continuation.md - Correct-course continuation - Method-experience correction artifact preserving the decision to route method failures through correct-course before runtime-builder repair.
+- internal-parity-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic parity plan - Updated systematic parity plan after P1.1 Builder Factory validation; next planned batch is P1.2 Customization and Capability Index.

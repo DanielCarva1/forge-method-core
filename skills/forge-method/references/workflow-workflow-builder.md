@@ -1,0 +1,37 @@
+# workflow: workflow-builder
+
+trigger:
+  - user wants to create, edit, rebuild, or design a Forge workflow or skill
+  - a module plan names a workflow as the next build target
+
+inputs:
+  - workflow idea or existing workflow path
+  - target module and related workflows
+  - trigger and non-trigger cases
+  - artifact, template, pack, script, and validation expectations
+
+steps:
+  1. classify workflow kind: utility, simple workflow, complex workflow, or conversion
+  2. define trigger, inputs, state-machine steps, outputs, done_when, blocked_when, and handoff
+  3. split human facilitation from compact agent workflow contract
+  4. map catalog metadata, module membership, templates, packs, and tests
+  5. write workflow build plan and validation path
+
+outputs:
+  - workflow build plan
+  - compact workflow contract
+  - catalog and module metadata plan
+  - proof plan
+
+done_when:
+  - workflow boundaries are clear and not overlapping silently
+  - human pack, template, and validation needs are identified
+  - next workflow is `workflow-analyze`, `workflow-validate`, or `module-builder`
+
+blocked_when:
+  - trigger overlaps another workflow and no routing precedence is accepted
+  - output artifact or state transition cannot be described
+  - benchmark or source material has unclear copying boundary
+
+handoff:
+  - preserve workflow id, source path, catalog metadata, pack/template needs, tests, and validation command

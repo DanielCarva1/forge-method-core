@@ -81,19 +81,22 @@ The full parity goal is complete only when every audit row is `translated`, `str
 
 ## Current Status
 
-P0 is closed:
+P0 and P1.1 are closed:
 
 - Help/Next-Step Oracle: implemented and validated.
 - Human facilitation coverage gate: implemented and validated.
 - PRD/UX/Quick Dev depth: implemented with workflows, packs, templates, routes, and fixtures.
 - Story lifecycle proof: implemented with `story-creation`, decision-source guard, and mechanical no-procedural-confirmation tests.
-- Parity replay harness: implemented as packaged `parity replay`; installed smoke validates 20/20 cases.
+- Parity replay harness: implemented as packaged `parity replay`; installed smoke validates the packaged replay matrix.
+- Builder Factory: implemented with `module-ideation`, `agent-builder`, `workflow-builder`, `module-builder`, `module-validate`, `builder-factory` facilitation, templates, Guidance Engine routes, and parity replay coverage.
 
 The remaining work is a planned sequence, not ad hoc patching.
 
 ## P1 Execution Batches
 
 ### P1.1 Builder Factory
+
+Status: translated in the 2026-06-14 Builder Factory batch.
 
 Scope:
 
@@ -125,11 +128,11 @@ Deliverables:
 
 Done when:
 
-- source tests pass;
-- `parity replay` includes builder factory cases;
-- workflow validate passes;
-- installed smoke validates new packaged workflows;
-- evidence and checkpoint recorded.
+- source tests pass: done;
+- `parity replay` includes builder factory cases: done;
+- workflow validate passes: done;
+- installed smoke validates new packaged workflows: done;
+- evidence and checkpoint recorded: done.
 
 ### P1.2 Customization And Capability Index
 
@@ -359,11 +362,14 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 ## Immediate Next Step
 
-Do not start P1.1 as an ad hoc implementation. Start P1.1 from this plan:
+Next implementation batch: P1.2 Customization And Capability Index.
 
-1. select the Builder Factory rows from the audit;
-2. write or update the five Forge-native builder workflows;
-3. add human packs/templates and compact runtime contracts;
-4. update Guidance Engine routing and replay fixtures;
-5. validate source and installed behavior;
-6. record evidence and checkpoint.
+Do not start P1.2 as an ad hoc implementation. Start P1.2 from this plan:
+
+1. identify customization and capability-index rows from the audit;
+2. define override precedence and allowed keys;
+3. add validation and conflict reporting;
+4. generate a compact capability index;
+5. add fixtures for valid, conflicting, and stale customization;
+6. validate source and installed behavior;
+7. record evidence and checkpoint.

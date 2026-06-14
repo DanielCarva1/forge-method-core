@@ -103,11 +103,11 @@ The product direction is therefore:
 | Fresh chats per workflow | Context recovery, checkpoints, compact packs | partial | Forge does not enforce/teach fresh chat boundaries the same way; Codex-native context can still drift. | Add hot-start/context-boundary guidance per workflow and recovery triggers. |
 | Customization: per-agent/workflow overrides | `config-customization` only | partial/missing | No BMAD-like TOML override model for workflows, agents, templates, menus, or persistent facts. | Design Forge config override surface with validation and install persistence. |
 | Central config / module help registry | `modules/*.yaml`, `catalog/workflows.json` | partial | Forge has package catalog but no user-editable help registry or generated capability index. | Add generated compact capability index and config validation for custom modules. |
-| BMAD Builder: ideate module | `runtime-builder`, `brainstorming` | partial | No explicit module ideation flow with audience, architecture, agents/workflows, config, dependencies. | Add `module-ideation` workflow and pack. |
-| BMAD Builder: build agent | `builder-scaffold`, `agent-analyze` | partial | No memory/autonomous/stateless agent builder path. | Add `agent-builder` workflow with agent type decision and templates. |
-| BMAD Builder: build workflow | `builder-scaffold`, `workflow-analyze`, `skill-convert` | partial | Scaffold exists but not a coached workflow builder with quality dimensions. | Add `workflow-builder` workflow or enrich `builder-scaffold`. |
-| BMAD Builder: create module/package | install scripts, local plugin packaging | partial | No module builder that creates setup skill, module metadata, marketplace manifest, cleanup scripts. | Add `module-builder` workflow with packaging artifacts. |
-| BMAD Builder: validate module | `workflow-validate`, `agent validate`, `config validate`, smoke scripts | partial | Good low-level checks, missing structural/quality report for a whole extension/module. | Add `module-validate` combining workflows, agents, templates, packaging, docs. |
+| BMAD Builder: ideate module | `module-ideation`, `builder-factory` pack, builder templates | translated | P1.1 adds explicit module ideation route, compact workflow, pack, template, and replay coverage. | Keep depth examples current as future modules are built. |
+| BMAD Builder: build agent | `agent-builder`, `agent-analyze`, `builder-factory` pack | translated | P1.1 adds guided agent build route with agent type, capability, memory/autonomy, script, and quality handoff contract. | Add concrete generated-agent examples in a later builder depth batch if needed. |
+| BMAD Builder: build workflow | `workflow-builder`, `workflow-analyze`, `skill-convert`, `workflow-validate` | translated | P1.1 adds coached workflow build route with compact state-machine, pack/template, catalog, and proof plan. | Add generated-workflow examples as future modules use the factory. |
+| BMAD Builder: create module/package | `module-builder`, module manifest template, install/smoke validation path | translated | P1.1 adds module assembly workflow, manifest template, followed_by metadata, and validation handoff. | Future customization batch handles richer override/index behavior. |
+| BMAD Builder: validate module | `module-validate`, `builder validate`, `workflow-validate`, parity replay | translated | P1.1 adds whole-extension validation workflow, validation report template, and structural plus quality checklist. | Keep install smoke as the packaging proof for changed packaged behavior. |
 | Eval runner / Docker runner | Forge evals and smoke scripts | partial | Forge has local evals/smokes but not a BMAD-like eval runner or isolated runner story. | Add eval runner design or keep deferred if Codex-native local is enough. |
 | Session prep | Context packs/checkpoints | partial | Need a first-class session prep workflow that loads only what a future agent needs. | Add `session-prep` alias/workflow using context plan/current pack. |
 | Progressive disclosure pattern | Skill instructions and context plan | partial | Principle exists, not audited across every pack/workflow. | Add compactness verifier for workflows/facilitation refs. |
@@ -218,9 +218,9 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | `bmad-agent-tech-writer` | document utility workflows, future tech writer persona | partial |
 | `bmad-customize` | `config-customization`, future override model | partial |
 | `bmad-bmb-setup` | install/setup scripts, future module registration workflow | partial |
-| `bmad-agent-builder` | future `agent-builder` | missing |
-| `bmad-workflow-builder` | future `workflow-builder`, current `builder-scaffold` | partial |
-| `bmad-module-builder` | future `module-builder` | missing |
+| `bmad-agent-builder` | `agent-builder` plus `agent-analyze` | translated |
+| `bmad-workflow-builder` | `workflow-builder`, `workflow-analyze`, `skill-convert`, `workflow-validate` | translated |
+| `bmad-module-builder` | `module-ideation`, `module-builder`, `module-validate` | translated |
 | `bmad-eval-runner` | `eval run`, smoke scripts, future eval runner | partial |
 | `bmad-session-prep` | `context plan`, `context recover`, future `session-prep` | partial |
 | `/cis-brainstorm` | `brainstorming` | strong-ish |
@@ -302,8 +302,9 @@ Use these as implementation increments. Each item must ship with workflow metada
 
 ### P1.1 Builder parity
 
-- Add `module-ideation`, `agent-builder`, `workflow-builder`, `module-builder`, `module-validate`.
-- Generate compact Forge module metadata, skill files, workflow refs, packs, templates, tests, and install validation.
+- Status: translated in the Builder Factory batch.
+- Added `module-ideation`, `agent-builder`, `workflow-builder`, `module-builder`, and `module-validate`.
+- Added `builder-factory` facilitation, builder templates, catalog/module metadata, Guidance Engine routes, parity replay coverage, and validation evidence.
 
 ### P1.2 Customization surface
 

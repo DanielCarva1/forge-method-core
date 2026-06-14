@@ -29,6 +29,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Correct-course is a first-class recovery path when the conversation shows the current route is wrong.
 - Transcript corrections such as "do not solve the example project; understand the Forge experience" must be treated as method correct-course, even when they also mention runtime, Forge, benchmark, or guided flows.
 - Runtime audit requests should be treated as guided builder work when the human asks about dead code, misleading agent docs, stale workflow behavior, or whether the guided experience is truly comparable.
+- Builder creation requests should route to narrow Builder Factory workflows: module ideation before broad module build, agent builder before agent files, workflow builder before workflow files, module builder before packaging, and module validate for whole-extension checks.
 - PRD requests should route to a create/update/validate product-requirements workflow with decision log, addendum, validation findings, and next workflow.
 - UX requests should route to UX planning with taste calibration, journeys, interaction model, accessibility, rejection log, and proof target before stories.
 - Architecture requests should route to architecture planning that connects accepted product decisions to technical constraints, interfaces, risks, and story boundaries.
@@ -49,6 +50,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Story creation requests should not create ready build stories from vague intent; they need accepted source artifacts and a validation map.
 - Mechanical build loops should continue through story start/review/fix/evidence/ready gate without asking for procedural "ok" once stories are ready.
 - Runtime outputs must remain compact JSON/state-machine artifacts for agents, while non-JSON guidance can be human, direct, and useful.
+- Builder Factory outputs must keep coached human creation in facilitation packs and compact agent contracts in workflow refs, templates, catalog metadata, and validation reports.
 
 ## Fixture workflow ids
 
@@ -69,6 +71,11 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `traceability-gate`
 - `teach-testing`
 - `workflow-analyze`
+- `module-ideation`
+- `agent-builder`
+- `workflow-builder`
+- `module-builder`
+- `module-validate`
 - `doc-index`
 
 ## Non-goals
