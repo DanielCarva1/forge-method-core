@@ -253,7 +253,7 @@
     "expected_facilitation_pack": "skill:facilitation/correct-course.md",
     "expected_template": "correct-course-artifact",
     "state_update_required": true,
-    "expected_command": "correct-course",
+    "expected_commands": ["transition-evolve", "correct-course"],
     "forbidden_action_terms": ["publish current batch"]
   },
   {

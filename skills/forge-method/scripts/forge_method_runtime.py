@@ -9157,6 +9157,13 @@ def command_names(commands: list[dict[str, Any]]) -> list[str]:
     return [str(item.get("name", "")) for item in commands]
 
 
+MUTATING_GUIDE_COMMANDS = {"transition-workflow", "transition-evolve", "correct-course"}
+
+
+def mutating_command_names(commands: list[dict[str, Any]]) -> list[str]:
+    return [name for name in command_names(commands) if name in MUTATING_GUIDE_COMMANDS]
+
+
 def persona_lens_id_for_payload(payload: dict[str, Any]) -> str:
     persona_lens = payload.get("persona_lens") or {}
     if isinstance(persona_lens, dict):
@@ -9217,9 +9224,25 @@ def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[
         and not case.get("expected_template")
     ):
         failures.append("fixture must declare expected_template for human-facing guided cases")
+    actual_commands = command_names(payload.get("commands") or [])
+    actual_mutating_commands = mutating_command_names(payload.get("commands") or [])
     expected_command = case.get("expected_command")
-    if expected_command and expected_command not in command_names(payload.get("commands") or []):
-        failures.append(f"commands: expected {expected_command!r}, got {command_names(payload.get('commands') or [])!r}")
+    expected_commands = case.get("expected_commands")
+    if expected_commands is not None:
+        if not isinstance(expected_commands, list) or not all(isinstance(item, str) for item in expected_commands):
+            failures.append("expected_commands must be a list of command names")
+        else:
+            for expected in expected_commands:
+                if expected not in actual_commands:
+                    failures.append(f"commands: expected {expected!r}, got {actual_commands!r}")
+            if actual_mutating_commands and expected_commands != actual_mutating_commands:
+                failures.append(f"mutating_commands: expected {expected_commands!r}, got {actual_mutating_commands!r}")
+    elif expected_command and expected_command not in actual_commands:
+        failures.append(f"commands: expected {expected_command!r}, got {actual_commands!r}")
+    if actual_mutating_commands and not expected_command and expected_commands is None:
+        failures.append("fixture must declare expected_command or expected_commands when guidance returns a mutating command")
+    if len(actual_mutating_commands) > 1 and expected_commands is None:
+        failures.append("fixture must declare expected_commands when guidance returns multiple mutating commands")
     for signal in case.get("expected_signals", []):
         if signal not in payload.get("signals", []):
             failures.append(f"signals: missing {signal!r}")
@@ -9265,6 +9288,7 @@ def run_parity_replay(*, fixture_path: Path, max_chars: int) -> dict[str, Any]:
                     "codex_goal_handoff_recommended": bool((payload.get("codex_goal_handoff") or {}).get("recommended")),
                     "mechanical_work_order_autonomous": bool((payload.get("mechanical_work_order") or {}).get("autonomous")),
                     "state_update_required": payload.get("state_update_required"),
+                    "mutating_commands": mutating_command_names(payload.get("commands") or []),
                     "commands": command_names(payload.get("commands") or []),
                 },
             }

@@ -470,6 +470,10 @@ class RuntimeTests(unittest.TestCase):
                     if case.get("expected_command"):
                         command_names = [item["name"] for item in payload["commands"]]
                         self.assertIn(case["expected_command"], command_names)
+                    if case.get("expected_commands"):
+                        command_names = [item["name"] for item in payload["commands"]]
+                        for expected_command in case["expected_commands"]:
+                            self.assertIn(expected_command, command_names)
                     if case.get("expected_facilitation_pack"):
                         self.assertEqual(payload["facilitation_pack"], case["expected_facilitation_pack"])
                     if case.get("expected_template"):
@@ -688,6 +692,39 @@ class RuntimeTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         failures = "\n".join("\n".join(item["failures"]) for item in payload["failures"])
         self.assertIn("fixture must declare expected_mechanical_work_order_autonomous", failures)
+
+    def test_parity_replay_requires_multi_command_assertions(self) -> None:
+        fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
+        case = next(item for item in fixtures if item["id"] == "method_frustration_ready").copy()
+        case.pop("expected_commands", None)
+        case["expected_command"] = "correct-course"
+
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Path(raw) / "fixture.json"
+            fixture.write_text(json.dumps([case]), encoding="utf-8")
+
+            result = run_cmd("parity", "replay", "--fixture", str(fixture), "--json", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        failures = "\n".join("\n".join(item["failures"]) for item in payload["failures"])
+        self.assertIn("fixture must declare expected_commands", failures)
+
+    def test_parity_replay_rejects_partial_mutating_command_assertions(self) -> None:
+        fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
+        case = next(item for item in fixtures if item["id"] == "method_frustration_ready").copy()
+        case["expected_commands"] = ["correct-course"]
+
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Path(raw) / "fixture.json"
+            fixture.write_text(json.dumps([case]), encoding="utf-8")
+
+            result = run_cmd("parity", "replay", "--fixture", str(fixture), "--json", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        failures = "\n".join("\n".join(item["failures"]) for item in payload["failures"])
+        self.assertIn("mutating_commands: expected", failures)
 
     def test_packaged_reality_workflows_are_available(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
