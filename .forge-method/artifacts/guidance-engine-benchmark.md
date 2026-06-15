@@ -20,7 +20,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Help/orientation is route-aware. It reads configuration, available artifacts, phase metadata, required/preceded/followed relationships, and recommends the next workflow with a reason instead of dumping a catalog.
 - Builder flows keep an open floor first, then ask focused questions once the agent has enough context to classify the user's goal.
 - Innovation/problem-solving flows treat uncertainty as a real workflow input, not as a request for the user to choose from a technical menu.
-- Game flows have game-specific entrypoints, correct-course, project brief, sprint status, and story cycle behavior instead of forcing generic software planning first.
+- Game flows have game-specific entrypoints, correct-course, project context, engine setup/profile, project brief, GDD, sprint status, story cycle, prototype, playtest, performance, and review behavior instead of forcing generic software planning first.
 - Test architecture flows sequence risk, strategy, framework, CI, automation, review, and traceability so quality requests route to the right quality artifact before implementation.
 - Testing education requests should route to an applied teaching workflow before test strategy when the user is trying to learn or choose a quality approach.
 - Builder utility flows analyze agents/workflows and convert skill material before scaffolding new runtime artifacts.
@@ -60,11 +60,22 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Persona Lens outputs must preserve a compact `persona_lens` object, route PM/Architect/UX/QA/Game/Builder/Tech Writer and coach requests, and keep default agent recommendations compact.
 - Lifecycle Closure outputs must preserve route, source material, findings, decisions, checks, next workflow, and load hints without storing full transcripts.
 - Runtime-builder/systematic parity batch names must outrank loose domain words such as "product", "context", "review", or "retro" when the state is `6-evolve` or runtime-builder.
+- Game Studio Depth outputs must route game-specific requests to game-context, engine-setup, GDD, narrative, mechanics, quick-prototype, playtest, performance, or game QA workflows before generic software planning; artifacts must preserve player fantasy, engine profile, playable-slice proof, decision sources, and validation evidence compactly.
 
 ## Fixture workflow ids
 
 - `correct-course`
 - `game-brief`
+- `game-context`
+- `engine-setup`
+- `gdd`
+- `narrative-design`
+- `mechanics-design`
+- `engine-architecture`
+- `quick-prototype`
+- `playtest-plan`
+- `performance-plan`
+- `game-qa-review`
 - `problem-solving`
 - `domain-scan`
 - `brainstorming`

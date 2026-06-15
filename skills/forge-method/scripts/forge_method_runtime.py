@@ -4951,6 +4951,20 @@ def detect_guidance_signals(question: str) -> list[str]:
         "research-needed": ["deep research", "pesquisa profunda", "consultar documentacao", "ler docs", "benchmark"],
         "document-utility": ["index docs", "shard document", "editorial review", "edge case", "spec distillation"],
         "quality-flow": ["teach me testing"],
+        "game-flow": [
+            "game context",
+            "game project context",
+            "engine setup",
+            "engine profile",
+            "first playable",
+            "playable slice",
+            "quick prototype",
+            "playtest plan",
+            "performance budget",
+            "game qa",
+            "game review",
+            "game design document",
+        ],
         "lifecycle-flow": [
             "track decision",
             "choose track",
@@ -5105,7 +5119,36 @@ def detect_guidance_signals(question: str) -> list[str]:
         "brainstorm": {"brainstorm", "ideia", "ideias", "ideation", "explorar", "opcoes", "alternativas"},
         "research-needed": {"pesquisa", "research", "mercado", "documentacao", "docs", "evidencia", "fontes", "benchmark"},
         "creative-flow": {"creative", "criativo", "cis", "storytelling", "marca", "campanha", "conceito"},
-        "game-flow": {"game", "jogo", "jogar", "player", "mecanica", "rpg", "mesa", "dice", "engine"},
+        "game-flow": {
+            "game",
+            "jogo",
+            "jogar",
+            "player",
+            "mecanica",
+            "mechanic",
+            "mechanics",
+            "rpg",
+            "mesa",
+            "dice",
+            "engine",
+            "gdd",
+            "godot",
+            "unity",
+            "unreal",
+            "phaser",
+            "prototype",
+            "prototipo",
+            "playtest",
+            "performance",
+            "fps",
+            "frame",
+            "level",
+            "levels",
+            "narrative",
+            "lore",
+            "quest",
+            "quests",
+        },
         "quality-flow": {"test", "testing", "teste", "qa", "qualidade", "risco", "nfr", "gate", "review"},
         "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness"},
         "persona-lens": {"lens", "lente", "persona", "coach", "perspectiva", "visao", "pm", "architect", "arquiteto", "analyst", "analista", "ux", "qa", "writer", "storyteller"},
@@ -5194,10 +5237,38 @@ def guidance_alternatives(*items: tuple[str, str]) -> list[dict[str, str]]:
 def routed_game_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
+    if {"gdd"} & tokens or "game design document" in normalized:
+        return "gdd"
+    if (
+        "game context" in normalized
+        or "game project context" in normalized
+        or "document game project" in normalized
+        or "contexto do jogo" in normalized
+        or ({"context", "contexto", "document"} & tokens and {"game", "jogo"} & tokens)
+    ):
+        return "game-context"
+    if (
+        "engine setup" in normalized
+        or "engine profile" in normalized
+        or "first run" in normalized
+        or "folder layout" in normalized
+        or "project setup" in normalized
+        or "setup de engine" in normalized
+        or ({"setup", "template"} & tokens and ({"engine", "godot", "unity", "unreal", "phaser"} & tokens))
+    ):
+        return "engine-setup"
+    if {"narrative", "lore", "world", "characters", "character", "dialogue", "quest", "quests", "storytelling"} & tokens:
+        return "narrative-design"
+    if {"mechanic", "mechanics", "mecanica", "mecanicas", "economy", "economia", "balance", "balanco", "progression", "progressao"} & tokens:
+        return "mechanics-design"
     if {"ux", "hud", "controls", "controle", "onboarding", "accessibility", "acessibilidade"} & tokens:
         return "game-ux-design"
     if {"prd", "requirements", "requisitos"} & tokens or "game prd" in normalized:
         return "game-prd"
+    if {"architecture", "arquitetura"} & tokens or "engine architecture" in normalized:
+        return "engine-architecture"
+    if {"prototype", "prototipo"} & tokens or "quick prototype" in normalized or "playable proof" in normalized or "first playable" in normalized:
+        return "quick-prototype"
     if "sprint status" in normalized or {"status"} & tokens:
         return "game-sprint-status"
     if {"retro", "retrospective", "retrospectiva"} & tokens:
@@ -5208,9 +5279,127 @@ def routed_game_workflow(question: str) -> str:
         return "game-test-automation"
     if {"framework", "harness"} & tokens and {"test", "teste", "qa"} & tokens:
         return "game-test-framework"
+    if {"qa", "review", "revisao"} & tokens or "game qa" in normalized or "game review" in normalized:
+        return "game-qa-review"
+    if {"playtest", "playtesting"} & tokens:
+        return "playtest-plan"
+    if {"performance", "perf", "fps", "frame", "memory", "memoria", "latency", "latencia"} & tokens or "performance budget" in normalized:
+        return "performance-plan"
     if {"story", "stories", "historia", "historias"} & tokens or "create story" in normalized or "criar story" in normalized:
         return "game-story-creation"
     return "game-brief"
+
+
+def game_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "game-context":
+        return (
+            "run game-context to preserve player fantasy, loop, engine profile, playable slice, source artifacts, validation proof, and next game workflow",
+            "I should make the game-specific context durable before future agents continue from generic software state.",
+            guidance_alternatives(
+                ("gdd", "use when the accepted brief needs deeper design"),
+                ("engine-setup", "use when the engine/profile and first-run proof are the blocker"),
+                ("game-story-creation", "use when the playable slice is ready to become stories"),
+            ),
+        )
+    if workflow_id == "engine-setup":
+        return (
+            "run engine-setup to choose the engine profile, project structure, first-run command, validation commands, and setup risks",
+            "I should keep engine setup as one Forge workflow with engine profiles, not separate entrypoints per engine.",
+            guidance_alternatives(
+                ("engine-architecture", "use after setup when core systems and performance budgets need architecture"),
+                ("quick-prototype", "use when setup exists and the next proof is playable"),
+                ("game-test-framework", "use when engine tooling should define test layers first"),
+            ),
+        )
+    if workflow_id == "gdd":
+        return (
+            "run gdd to expand the brief into pillars, loop, systems, content, progression, engine assumptions, playable slice, and proof",
+            "I should deepen the design from the accepted brief before architecture or stories.",
+            guidance_alternatives(
+                ("mechanics-design", "use when rules, balance, economy, or progression are the main uncertainty"),
+                ("narrative-design", "use when story, world, characters, or quests shape the player goal"),
+                ("engine-architecture", "use when design decisions are ready for technical structure"),
+            ),
+        )
+    if workflow_id == "narrative-design":
+        return (
+            "run narrative-design to bind premise, player role, content units, tone, and world rules to mechanics and slice scope",
+            "I should keep story content playable and bounded instead of generating loose lore.",
+            guidance_alternatives(
+                ("mechanics-design", "use when narrative choices change rules or player decisions"),
+                ("gdd", "use when the broader design document is not accepted yet"),
+                ("game-story-creation", "use when slice content can become implementation stories"),
+            ),
+        )
+    if workflow_id == "mechanics-design":
+        return (
+            "run mechanics-design to map rules, player decisions, feedback, resources, failure states, balance assumptions, and prototype tests",
+            "I should make mechanics testable before implementation stories.",
+            guidance_alternatives(
+                ("quick-prototype", "use when the mechanic needs the smallest playable proof"),
+                ("playtest-plan", "use when the mechanic exists and needs player feedback"),
+                ("game-story-creation", "use when mechanics are ready for story order"),
+            ),
+        )
+    if workflow_id == "engine-architecture":
+        return (
+            "run engine-architecture to connect engine profile, game loop, core systems, data/content boundaries, assets, saves/networking, and performance budget",
+            "I should turn accepted design into technical boundaries before the playable slice is built.",
+            guidance_alternatives(
+                ("engine-setup", "use when first-run commands or project structure are not durable"),
+                ("game-test-framework", "use when architecture needs test layers"),
+                ("performance-plan", "use when frame/load/memory budgets are the main risk"),
+            ),
+        )
+    if workflow_id == "quick-prototype":
+        return (
+            "run quick-prototype to define the smallest playable player action, asset stubs, proof check, result, and next decision",
+            "I should prove the playable core before producing more content or architecture.",
+            guidance_alternatives(
+                ("playtest-plan", "use after a prototype exists and needs player feedback"),
+                ("mechanics-design", "use if the rules are not testable yet"),
+                ("game-story-creation", "use when prototype proof is accepted"),
+            ),
+        )
+    if workflow_id == "playtest-plan":
+        return (
+            "run playtest-plan to define target players, tasks, observation method, signals, decision map, and evidence capture",
+            "I should convert feel and fun into observable playtest decisions.",
+            guidance_alternatives(
+                ("game-qa-review", "use when the slice also needs acceptance/stability review"),
+                ("game-retrospective", "use after playtest evidence exists"),
+                ("game-story-creation", "use when findings become next slice stories"),
+            ),
+        )
+    if workflow_id == "performance-plan":
+        return (
+            "run performance-plan to define budget, critical gameplay scenarios, measurement commands, manual checks, thresholds, and optimization story",
+            "I should make performance measurable for the target engine/platform before tuning.",
+            guidance_alternatives(
+                ("engine-architecture", "use when the budget changes system structure"),
+                ("game-qa-review", "use when performance evidence gates the slice"),
+                ("game-story-creation", "use when optimization work becomes stories"),
+            ),
+        )
+    if workflow_id == "game-qa-review":
+        return (
+            "run game-qa-review to inspect playability, feedback, stability, performance, scope, evidence, findings, and repair route",
+            "I should review the game slice as a player experience and production artifact, not only as code.",
+            guidance_alternatives(
+                ("build-story", "use when findings require implementation repair"),
+                ("playtest-plan", "use when QA needs human player evidence"),
+                ("game-retrospective", "use when review closes the increment"),
+            ),
+        )
+    return (
+        f"run {workflow_id} before game implementation",
+        "I should define player fantasy, loop, scope, and proof target before technical planning.",
+        guidance_alternatives(
+            ("game-brief", "when the player fantasy and loop are still unclear"),
+            ("quick-prototype", "if a playable experiment matters more than documentation"),
+            ("game-test-framework", "if proof strategy is the main gap"),
+        ),
+    )
 
 
 def routed_quality_workflow(question: str) -> str:
@@ -5777,8 +5966,10 @@ def build_guidance_decision(
             classification = "game-flow"
             recommended_phase = "1-discovery"
             recommended_workflow = routed_game_workflow(question)
-            recommended_action = f"create a game-studio project, then run {recommended_workflow} before build"
-            human_prompt = "I should shape player fantasy, loop, scope, and proof target before technical planning."
+            action_text, prompt_text, game_alternatives = game_guidance_text(recommended_workflow)
+            recommended_action = f"create a game-studio project, then {action_text}"
+            human_prompt = prompt_text
+            alternatives = game_alternatives
             reason = "The first intent is game-shaped, so the first guided flow should be game-specific."
         elif "creative-flow" in signal_set:
             classification = "creative-flow"
@@ -5998,6 +6189,11 @@ def build_guidance_decision(
         recommended_workflow = routed_builder_workflow(question)
         recommended_action, human_prompt, alternatives = builder_guidance_text(recommended_workflow)
         reason = "Runtime-builder context and builder signals outrank domain words; explicit create/analyze/convert/validate words select the narrow builder workflow."
+    elif has_question and "game-flow" in signal_set and "lifecycle-flow" in signal_set and routed_game_workflow(question) != "game-brief":
+        classification = "game-flow"
+        recommended_workflow = routed_game_workflow(question)
+        recommended_action, human_prompt, alternatives = game_guidance_text(recommended_workflow)
+        reason = "Game-specific lifecycle wording outranks generic lifecycle closure when the game router selects a narrow game workflow."
     elif has_question and "lifecycle-flow" in signal_set:
         classification = "lifecycle-flow"
         recommended_workflow = routed_lifecycle_workflow(question)
@@ -6098,13 +6294,7 @@ def build_guidance_decision(
     elif has_question and "game-flow" in signal_set:
         classification = "game-flow"
         recommended_workflow = routed_game_workflow(question)
-        recommended_action = f"run {recommended_workflow} before game implementation"
-        human_prompt = "I should define player fantasy, loop, scope, and proof target before technical planning."
-        alternatives = guidance_alternatives(
-            ("game-brief", "when the player fantasy and loop are still unclear"),
-            ("quick-prototype", "if a playable experiment matters more than documentation"),
-            ("game-test-framework", "if proof strategy is the main gap"),
-        )
+        recommended_action, human_prompt, alternatives = game_guidance_text(recommended_workflow)
         reason = "The message is game-shaped and includes enough detail to choose a game-specific workflow."
     elif has_question and "quality-flow" in signal_set:
         classification = "quality-flow"

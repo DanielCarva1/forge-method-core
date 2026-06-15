@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T00:30:02+00:00",
+  "generated_at": "2026-06-15T00:57:26+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -145,7 +145,7 @@
       "phase_span": "1-discovery | 2-specification | 3-plan | 4-build-verify",
       "purpose": "Preserve game-specific concept, mechanic, prototype, design, engine, and vertical-slice decisions.",
       "title": "Game Studio",
-      "workflows": "guidance-engine | discover-intent | game-project | game-brief | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | gdd | narrative-design | mechanics-design | game-ux-design | game-prd | engine-architecture | game-story-creation | game-sprint-status | game-retrospective | game-test-framework | game-test-automation | game-e2e-scaffold | quick-prototype | playtest-plan | performance-plan | game-qa-review | build-story | grill-gate"
+      "workflows": "guidance-engine | discover-intent | game-project | game-brief | game-context | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | gdd | narrative-design | mechanics-design | game-ux-design | game-prd | engine-setup | engine-architecture | game-story-creation | game-sprint-status | game-retrospective | game-test-framework | game-test-automation | game-e2e-scaffold | quick-prototype | playtest-plan | performance-plan | game-qa-review | build-story | grill-gate"
     },
     {
       "id": "launch-ops",
@@ -862,12 +862,47 @@
     },
     {
       "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "game-story-creation",
+        "game-test-framework",
+        "performance-plan"
+      ],
       "id": "engine-architecture",
+      "modes": [
+        "create",
+        "update",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "engine architecture"
+        "engine architecture",
+        "performance budget"
       ],
       "phase": "3-plan",
-      "required": true
+      "required": true,
+      "template": "engine-architecture-artifact"
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "engine-architecture",
+        "quick-prototype",
+        "game-test-framework"
+      ],
+      "id": "engine-setup",
+      "modes": [
+        "profile",
+        "setup",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "engine setup artifact",
+        "first-run command contract"
+      ],
+      "phase": "2-specification | 3-plan | 4-build-verify",
+      "required": false,
+      "template": "engine-setup-artifact"
     },
     {
       "followed_by": [
@@ -897,6 +932,7 @@
     {
       "facilitation_pack": "game-brief",
       "followed_by": [
+        "game-context",
         "gdd",
         "game-ux-design",
         "game-prd",
@@ -909,6 +945,30 @@
       ],
       "phase": "1-discovery",
       "required": true
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "session-prep",
+        "gdd",
+        "engine-setup",
+        "game-story-creation"
+      ],
+      "id": "game-context",
+      "modes": [
+        "document",
+        "update",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "game context artifact",
+        "source map",
+        "next game workflow"
+      ],
+      "phase": "1-discovery | 2-specification | 3-plan | 4-build-verify | 6-evolve",
+      "required": false,
+      "template": "game-context-artifact"
     },
     {
       "facilitation_pack": "game-lifecycle",
@@ -950,24 +1010,44 @@
       "template": "game-lifecycle-artifact"
     },
     {
+      "facilitation_pack": "game-lifecycle",
       "followed_by": [
-        "game-brief"
+        "game-brief",
+        "game-context"
       ],
       "id": "game-project",
+      "modes": [
+        "route",
+        "validate",
+        "headless"
+      ],
       "outputs": [
         "game project route"
       ],
       "phase": "1-discovery",
-      "required": false
+      "required": false,
+      "template": "game-context-artifact"
     },
     {
       "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "build-story",
+        "playtest-plan",
+        "game-retrospective"
+      ],
       "id": "game-qa-review",
+      "modes": [
+        "review",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "game QA review"
+        "game QA review",
+        "repair/readiness route"
       ],
       "phase": "4-build-verify",
-      "required": false
+      "required": false,
+      "template": "game-qa-review-artifact"
     },
     {
       "facilitation_pack": "game-lifecycle",
@@ -1093,14 +1173,23 @@
         "mechanics-design",
         "game-ux-design",
         "game-prd",
+        "engine-setup",
         "engine-architecture"
       ],
       "id": "gdd",
+      "modes": [
+        "create",
+        "update",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "game design document"
+        "game design document",
+        "playable slice"
       ],
       "phase": "2-specification",
-      "required": true
+      "required": true,
+      "template": "gdd"
     },
     {
       "facilitation_pack": "decision-gate",
@@ -1155,12 +1244,25 @@
     },
     {
       "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "quick-prototype",
+        "game-story-creation",
+        "playtest-plan"
+      ],
       "id": "mechanics-design",
+      "modes": [
+        "create",
+        "balance",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "mechanics matrix"
+        "mechanics matrix",
+        "prototype tests"
       ],
       "phase": "2-specification",
-      "required": true
+      "required": true,
+      "template": "mechanics-matrix"
     },
     {
       "facilitation_pack": "builder-factory",
@@ -1230,12 +1332,25 @@
     },
     {
       "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "gdd",
+        "mechanics-design",
+        "game-story-creation"
+      ],
       "id": "narrative-design",
+      "modes": [
+        "create",
+        "update",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "narrative design"
+        "narrative design",
+        "content units"
       ],
       "phase": "2-specification",
-      "required": false
+      "required": false,
+      "template": "narrative-bible"
     },
     {
       "facilitation_pack": "test-architecture",
@@ -1267,12 +1382,24 @@
     },
     {
       "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "game-story-creation",
+        "game-qa-review"
+      ],
       "id": "performance-plan",
+      "modes": [
+        "create",
+        "measure",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "performance plan"
+        "performance plan",
+        "measurement checks"
       ],
       "phase": "3-plan | 4-build-verify",
-      "required": false
+      "required": false,
+      "template": "performance-plan-artifact"
     },
     {
       "facilitation_pack": "story-lifecycle",
@@ -1290,12 +1417,24 @@
     },
     {
       "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "game-qa-review",
+        "game-retrospective"
+      ],
       "id": "playtest-plan",
+      "modes": [
+        "create",
+        "run",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "playtest plan"
+        "playtest plan",
+        "decision map"
       ],
       "phase": "4-build-verify",
-      "required": false
+      "required": false,
+      "template": "playtest-plan-artifact"
     },
     {
       "facilitation_pack": "enterprise-readiness",
@@ -1392,12 +1531,25 @@
     },
     {
       "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "playtest-plan",
+        "game-story-creation",
+        "game-qa-review"
+      ],
       "id": "quick-prototype",
+      "modes": [
+        "create",
+        "prove",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "prototype proof"
+        "prototype proof",
+        "proof decision"
       ],
       "phase": "4-build-verify",
-      "required": false
+      "required": false,
+      "template": "quick-prototype-artifact"
     },
     {
       "facilitation_pack": "story-lifecycle",

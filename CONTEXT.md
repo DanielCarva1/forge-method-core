@@ -120,6 +120,22 @@ A compact handoff after evidence work. It records sources, confidence, decision 
 
 A related set of specialized workflows that deepens a broad track without changing the single Forge entrypoint. Current depth families include game lifecycle, test architecture, builder utility, and document utility. Each family keeps compact workflow state machines for agents and a separate facilitation pack for human conversation.
 
+## Game Studio Depth
+
+The guided depth family for game projects. It preserves player fantasy, playable slice, engine profile, design artifacts, production stories, playtest learning, and performance proof without collapsing game work into generic software planning.
+
+## Playable Slice
+
+A bounded build target that lets the player actually do the core action loop. It is smaller than the dream game and more concrete than a technical prototype.
+
+## Engine Profile
+
+A compact engine-specific setup contract used by `engine-setup`. It captures project structure, language/runtime assumptions, asset pipeline, test commands, performance budgets, and known engine risks without creating separate Forge entrypoints per engine.
+
+## Game Context Artifact
+
+A durable game-specific source-of-truth summary. It captures player fantasy, loop, references, chosen engine profile, design artifacts, playable slice, validation proof, and next game workflow for future agents.
+
 ## Builder Factory
 
 The guided depth family for creating and validating Forge runtime extensions: module ideation, agent builder, workflow builder, module builder, and module validation. It gives humans a coached creation loop while future agents receive compact workflow contracts, templates, catalog metadata, and validation commands.

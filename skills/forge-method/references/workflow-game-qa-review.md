@@ -9,10 +9,11 @@ inputs:
   - game artifacts
   - build or prototype evidence
   - playtest or QA notes
+  - performance or stability evidence if relevant
 
 steps:
   1. verify acceptance criteria
-  2. check playability, feedback, stability, and scope
+  2. check playability, feedback, stability, performance, and scope
   3. record findings
   4. approve, block, or request repair
 
@@ -20,6 +21,7 @@ outputs:
   - QA review result
   - findings
   - evidence references
+  - repair/readiness route
 
 done_when:
   - findings are recorded
@@ -31,4 +33,4 @@ blocked_when:
   - acceptance criteria cannot be tested
 
 handoff:
-  - preserve review result, findings, evidence, and repair path
+  - preserve review result, findings, evidence, repair path, and next game workflow

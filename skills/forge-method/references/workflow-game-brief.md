@@ -14,7 +14,8 @@ steps:
   1. define player fantasy and core loop
   2. choose genre, platform, and prototype scope
   3. identify risks and proof needs
-  4. save game brief
+  4. separate dream game, playable slice, and parked scope
+  5. save game brief
 
 outputs:
   - game brief
@@ -23,7 +24,7 @@ outputs:
 
 done_when:
   - player, loop, and prototype target are explicit
-  - engine assumption is recorded
+  - engine/profile assumption is recorded
   - next game workflow is known
 
 blocked_when:
@@ -31,4 +32,4 @@ blocked_when:
   - prototype scope is too broad
 
 handoff:
-  - preserve brief path, player fantasy, core loop, engine, and next workflow
+  - preserve brief path, player fantasy, core loop, engine profile, playable slice, and next workflow

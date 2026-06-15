@@ -4,6 +4,8 @@
 
 ## Player Role
 
+## Player Motivation
+
 ## World Rules
 
 ## Characters
@@ -12,6 +14,10 @@
 
 ## Tone
 
+## Quest Or Content Units
+
 ## Content Scope
 
 ## Mechanics Links
+
+## Production Risks

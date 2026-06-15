@@ -8,17 +8,20 @@ inputs:
   - prototype goal
   - success signal
   - constraints
+  - engine profile
   - available assets or code
 
 steps:
-  1. define the smallest playable or usable proof
-  2. create prototype story
-  3. run the proof check
-  4. record outcome and next decision
+  1. define the smallest playable proof
+  2. choose asset stubs and engine/runtime assumptions
+  3. create prototype story and proof check
+  4. run or specify the proof check
+  5. record outcome and next decision
 
 outputs:
   - prototype scope
   - prototype story
+  - proof command or manual check
   - result evidence
 
 done_when:
@@ -31,4 +34,4 @@ blocked_when:
   - scope exceeds one focused proof
 
 handoff:
-  - preserve prototype goal, story, result, and next decision
+  - preserve prototype goal, player action, story, proof check, result, and next decision

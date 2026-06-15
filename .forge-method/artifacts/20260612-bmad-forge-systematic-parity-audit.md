@@ -119,13 +119,13 @@ The product direction is therefore:
 | CIS problem solving | `problem-solving` pack plus Creative Problem Solver lens | strong-ish | Coach route exists; more stuck/frustrated transcripts would improve proof. | Add fixtures for messy constraints and recovery. |
 | CIS storytelling | `storytelling` plus Storyteller lens | partial | Lens route exists, but no rich pack. | Add storytelling pack and output template. |
 | CIS presentation master | no equivalent | missing | Forge has no presentation/communication craft workflow. | Add only if Forge scope includes pitch/deck narrative; otherwise document non-goal. |
-| Game project context | context pack + game workflows | partial | Missing explicit game project-context generation. | Add game project context artifact workflow. |
-| Game engine setup (Godot/Unity/Phaser) | `engine-architecture`, maybe tech feasibility | missing/partial | No engine-specific setup guides or templates. | Add engine setup workflows/templates only if game module remains product goal. |
-| Game brainstorm/brief/GDD | `game-brief`, `gdd`, `brainstorming` | partial/strong | Brief fixed recently; GDD lacks rich pack. | Add GDD facilitation pack and transcript tests. |
-| Narrative/mechanics design | `narrative-design`, `mechanics-design` | partial | Workflows exist but no rich packs/templates beyond templates. | Add packs and validation examples. |
-| Quick prototype | `quick-prototype` | partial | Needs route and proof scripts for actual playable prototype expectations. | Add prototype acceptance/evidence template. |
-| Game sprint/story/dev/review | `game-story-creation`, `game-sprint-status`, `build-story`, `game-qa-review` | partial | Good catalog, but lifecycle not proven end-to-end. | Add game transcript replay from brief to first playable slice. |
-| Game playtest/performance/testing | `playtest-plan`, `performance-plan`, `game-test-*`, `game-e2e-scaffold` | partial | Workflows exist but need deeper engine/player evidence. | Add playtest/perf templates and smoke examples. |
+| Game project context | `game-context` plus game lifecycle pack | translated | P1.5 adds explicit game context generation with player fantasy, loop, engine profile, source material, and playable-slice handoff. | Add domain examples only when real game projects expose gaps. |
+| Game engine setup (Godot/Unity/Phaser) | `engine-setup`, `engine-architecture` | translated | P1.5 uses a compact engine profile instead of separate engine-specific public entrypoints, preserving engine assumptions, folder/runtime decisions, first-run check, and validation evidence. | Add engine-specific examples when a project needs them; avoid heavy engine smoke by default. |
+| Game brainstorm/brief/GDD | `game-brief`, `gdd`, `brainstorming` | translated | P1.5 expands GDD template and game lifecycle prompts so broad ideas stay in guided game discovery before architecture/build. | Add richer transcript examples for messy ideation later. |
+| Narrative/mechanics design | `narrative-design`, `mechanics-design` | translated | P1.5 expands templates/contracts for motivation, content units, player verbs, balance assumptions, and production risks. | Add balancing examples when a project reaches tuning depth. |
+| Quick prototype | `quick-prototype` | translated | P1.5 adds playable-slice proof contract, acceptance evidence, commands/manual checks, and route replay. | Add runnable smoke only when a lightweight fixture exists. |
+| Game sprint/story/dev/review | `game-story-creation`, `game-sprint-status`, `build-story`, `game-qa-review` | strong-ish | P1.5 adds first playable slice decision sources, story order, QA review artifact, and route proof; full game dev-story execution remains project-dependent. | Add end-to-end implementation replay when a real game fixture exists. |
+| Game playtest/performance/testing | `playtest-plan`, `performance-plan`, `game-test-*`, `game-e2e-scaffold` | translated | P1.5 adds playtest/performance evidence templates and routes for player signals, frame/runtime budgets, and validation proof. | Add engine-specific measurement examples as projects demand them. |
 | TEA engagement models | `test-engagement-model` | partial | Exists, but likely much thinner than TEA's five-model decision guide. | Expand model decision artifact and fixtures. |
 | Teach testing | `teach-testing` | partial/strong | Route exists; need richer applied teaching examples. | Add fixture and examples. |
 | Test design / ATDD | `atdd-plan`, `test-strategy` | partial | Need stronger risk/design/test layer matrix. | Expand templates. |
@@ -234,19 +234,19 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | `/cis-agent-creative-problem-solver` | `creative-problem-solver` Persona Lens over `problem-solving` | translated |
 | `/cis-agent-storyteller` | `storyteller` Persona Lens over `storytelling` | translated |
 | `/cis-agent-presentation-master` | future presentation/story craft workflow or non-goal | missing |
-| `/bmgd-generate-project-context` | future game project-context workflow | partial/missing |
-| `/bmgd-brainstorm-game` | `brainstorming`, `game-brief` | partial |
+| `/bmgd-generate-project-context` | `game-context` | translated |
+| `/bmgd-brainstorm-game` | `brainstorming`, `game-brief`, `game-context` | strong-ish |
 | `/bmgd-game-brief` | `game-brief` | strong-ish |
-| `/bmgd-create-gdd` | `gdd` | partial |
-| `/bmgd-create-architecture` | `engine-architecture` | partial |
+| `/bmgd-create-gdd` | `gdd` | translated |
+| `/bmgd-create-architecture` | `engine-architecture`, `engine-setup` | translated |
 | `/bmgd-sprint-planning` | `plan-sprint`, `game-story-creation` | partial |
 | `/bmgd-sprint-status` | `game-sprint-status`, `resume` | partial |
 | `/bmgd-create-story` | `game-story-creation` | partial |
 | `/bmgd-dev-story` | `build-story` with game artifacts | partial |
-| `/bmgd-code-review` | `game-qa-review`, future code-review | partial |
-| `/bmgd-quick-prototype` | `quick-prototype` | partial |
-| `playtest-plan` | `playtest-plan` | partial |
-| `performance-test` | `performance-plan` | partial |
+| `/bmgd-code-review` | `game-qa-review`, `code-review` | strong-ish |
+| `/bmgd-quick-prototype` | `quick-prototype` | translated |
+| `playtest-plan` | `playtest-plan` | translated |
+| `performance-test` | `performance-plan` | translated |
 | `test-framework` | `game-test-framework`, `test-framework` | partial |
 | `e2e-scaffold` | `game-e2e-scaffold` | partial |
 | `bmad-tea` | `test-architect` module | partial |
@@ -325,10 +325,16 @@ Use these as implementation increments. Each item must ship with workflow metada
 - Added lifecycle facilitation, compact workflow refs, templates, catalog/module metadata, Guidance Engine routes, replay coverage, and Capability Index exposure.
 - Added precedence guard so runtime-builder/systematic parity batch names outrank loose domain words while handoff/context/review/retro requests still route to Lifecycle Closure.
 
-### P1.5 Game and TEA depth
+### P1.5 Game Studio depth
 
-- Add game project context and engine setup workflows.
-- Expand GDD, mechanics, narrative, playtest, performance, and game QA packs.
+- Status: translated in the Game Studio Depth batch.
+- Added `game-context` and `engine-setup` workflows, compact refs, templates, catalog/module metadata, and Guidance Engine routes.
+- Expanded GDD, narrative, mechanics, quick prototype, playtest, performance, game lifecycle, and game QA templates/contracts.
+- Added replay coverage for game-context, engine-setup, GDD, quick prototype, playtest, performance, and game QA routes.
+- Kept engine-specific setup as profile-driven guidance instead of separate public commands; heavy engine smoke remains deferred until a real lightweight game fixture exists.
+
+### P1.6 TEA depth
+
 - Expand TEA engagement model, fixture architecture, CI, automation, NFR, traceability, and waiver/gate templates.
 
 ## Completion criteria for the full parity goal
@@ -344,6 +350,6 @@ The full objective is complete only when:
 
 ## Current status
 
-This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.4 are now implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. The execution plan is `.forge-method/artifacts/20260613-systematic-parity-plan.md`. This is not full parity completion: P1.5+ game, TEA depth, and explicit deferral/waiver decisions still remain.
+This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.5 are now implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. The execution plan is `.forge-method/artifacts/20260613-systematic-parity-plan.md`. This is not full parity completion: P1.6 TEA depth and explicit deferral/waiver decisions still remain.
 
-Immediate next step: implement P1.5 Game Studio Depth from the systematic plan unless a new audit shows a higher-severity regression.
+Immediate next step: implement P1.6 Test Architecture Enterprise Depth from the systematic plan unless a new audit shows a higher-severity regression.

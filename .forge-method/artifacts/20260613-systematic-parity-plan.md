@@ -81,7 +81,7 @@ The full parity goal is complete only when every audit row is `translated`, `str
 
 ## Current Status
 
-P0 through P1.4 are closed:
+P0 through P1.5 are closed:
 
 - Help/Next-Step Oracle: implemented and validated.
 - Human facilitation coverage gate: implemented and validated.
@@ -92,6 +92,7 @@ P0 through P1.4 are closed:
 - Customization and Capability Index: implemented with Project Configuration, Override Model, Capability Index, `config index`, config validation, replay coverage, install smoke proof, and evidence.
 - Persona and Elicitation Layer: implemented with Persona Lens overlays, elicitation technique index, persona facilitation pack, Guidance Engine `persona_lens` output, council participant routing, replay coverage, compactness guards, and evidence.
 - Lifecycle Closure: implemented with `track-decision`, `project-context`, `session-prep`, `code-review`, `retrospective`, `research-closeout`, readiness matrix template, lifecycle facilitation, Guidance Engine routes, replay coverage, compact workflow refs, and Capability Index exposure.
+- Game Studio Depth: implemented with `game-context`, `engine-setup`, expanded GDD/narrative/mechanics/prototype/playtest/performance/QA contracts, game-lifecycle facilitation, Guidance Engine routes, replay fixtures, compact workflow refs, templates, and validation coverage.
 
 The remaining work is a planned sequence, not ad hoc patching.
 
@@ -245,6 +246,8 @@ Done when:
 
 ### P1.5 Game Studio Depth
 
+Status: translated in the 2026-06-15 Game Studio Depth batch.
+
 Scope:
 
 - game project context;
@@ -265,15 +268,15 @@ Forge translation:
 
 Deliverables:
 
-- game-context and engine-setup workflows if accepted;
-- expanded packs/templates for GDD, narrative, mechanics, prototype, playtest, performance;
-- replay fixture for game lifecycle;
-- optional smoke example only if feasible without heavy engine setup.
+- game-context and engine-setup workflows: done;
+- expanded packs/templates for GDD, narrative, mechanics, prototype, playtest, performance, and game QA: done;
+- replay fixture coverage for game lifecycle routes: done;
+- optional smoke example without heavy engine setup: deferred until a specific lightweight engine/app fixture exists.
 
 Done when:
 
-- game projects no longer collapse to generic software planning;
-- first playable slice has decision sources, story order, and validation proof.
+- game projects no longer collapse to generic software planning: done;
+- first playable slice has decision sources, story order, and validation proof: done in compact templates/workflow contracts.
 
 ### P1.6 Test Architecture Enterprise Depth
 
@@ -374,12 +377,12 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 ## Immediate Next Step
 
-Next implementation batch: P1.5 Game Studio Depth after P1.4 validation evidence is recorded.
+Next implementation batch: P1.6 Test Architecture Enterprise Depth after P1.5 validation evidence is recorded.
 
-Do not start P1.5 as an ad hoc implementation. Start P1.5 from this plan:
+Do not start P1.6 as an ad hoc implementation. Start P1.6 from this plan:
 
-1. identify game-studio depth rows from the audit;
-2. define accepted scope for game project context, GDD, narrative, mechanics, prototype, playtest, performance, and game QA depth;
+1. identify Test Architecture Enterprise depth rows from the audit;
+2. define accepted scope for engagement model, fixture architecture, CI, automation, NFR, traceability, waiver, and gate semantics;
 3. add or expand compact workflow refs, facilitation packs, templates, routes, and replay fixtures;
 4. validate source and installed behavior;
 5. record evidence and checkpoint.

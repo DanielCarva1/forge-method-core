@@ -6,19 +6,22 @@ trigger:
 
 inputs:
   - target platform
+  - engine profile
   - performance goal
   - current architecture
   - known bottlenecks
 
 steps:
-  1. define performance budget
+  1. define frame, load, memory, network, or input-latency budget
   2. identify likely bottlenecks
-  3. define measurement commands or manual checks
-  4. save performance plan
+  3. define critical gameplay scenarios
+  4. define measurement commands or manual checks
+  5. save performance plan
 
 outputs:
   - performance plan
   - measurement checks
+  - critical scenarios
   - risk list
 
 done_when:
@@ -31,4 +34,4 @@ blocked_when:
   - performance cannot be measured
 
 handoff:
-  - preserve budget, checks, bottlenecks, and next story
+  - preserve engine profile, budget, scenarios, checks, bottlenecks, and next story

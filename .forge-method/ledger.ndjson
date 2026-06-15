@@ -337,3 +337,12 @@
 {"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260615-003711-p1-4-lifecycle-closure-closed.md"}, "ts": "2026-06-15T00:37:11+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-15T00:37:11+00:00"}
 {"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "p1-lifecycle-closure-done"}, "ts": "2026-06-15T00:37:19+00:00"}
+{"event": "artifact.added", "payload": {"kind": "benchmark", "lifecycle": "durable", "path": ".forge-method/artifacts/guidance-engine-benchmark.md"}, "ts": "2026-06-15T01:02:29+00:00"}
+{"event": "artifact.added", "payload": {"kind": "audit", "lifecycle": "durable", "path": ".forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md"}, "ts": "2026-06-15T01:02:29+00:00"}
+{"event": "artifact.added", "payload": {"kind": "plan", "lifecycle": "durable", "path": ".forge-method/artifacts/20260613-systematic-parity-plan.md"}, "ts": "2026-06-15T01:02:29+00:00"}
+{"event": "artifact.added", "payload": {"kind": "grill", "lifecycle": "durable", "path": ".forge-method/artifacts/20260615-game-studio-depth-grill.md"}, "ts": "2026-06-15T01:02:30+00:00"}
+{"event": "artifact.added", "payload": {"kind": "capability-index", "lifecycle": "durable", "path": ".forge-method/context/capability-index.json"}, "ts": "2026-06-15T01:02:30+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260615-010242-validation-p1-5-game-studio-depth-validation.md", "story": ""}, "ts": "2026-06-15T01:02:42+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260615-010301-p1-5-game-studio-depth-closed.md"}, "ts": "2026-06-15T01:03:01+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-15T01:03:01+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "p1-game-studio-depth-done"}, "ts": "2026-06-15T01:03:08+00:00"}

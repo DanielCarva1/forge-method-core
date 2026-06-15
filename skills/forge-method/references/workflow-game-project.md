@@ -16,21 +16,24 @@ steps:
   2. define core mechanic
   3. create prototype goal
   4. create game brief
-  5. create or update GDD
-  6. create technical architecture for selected engine
-  7. plan vertical slice
-  8. move implementation tasks into sprint
+  5. create game context handoff
+  6. choose engine profile and setup path
+  7. create or update GDD
+  8. create technical architecture for selected engine
+  9. plan playable slice and move tasks into sprint
 
 outputs:
   - game brief
   - GDD
+  - game context
+  - engine setup
   - engine architecture
-  - vertical slice plan
+  - playable slice plan
   - sprint stories
 
 done_when:
   - game concept, mechanic, and target engine are explicit
-  - first playable/vertical slice has acceptance criteria
+  - first playable slice has acceptance criteria and proof
   - implementation stories exist
 
 blocked_when:
@@ -39,4 +42,4 @@ blocked_when:
   - required assets are unavailable
 
 handoff:
-  - preserve game brief path, engine decision, vertical slice target, and next implementation story
+  - preserve game brief path, game context, engine profile, playable slice target, and next implementation story

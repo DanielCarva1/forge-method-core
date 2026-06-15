@@ -9,17 +9,20 @@ inputs:
   - target players
   - assumptions
   - feedback questions
+  - playable slice target
 
 steps:
   1. define test goals and player tasks
   2. choose observation and feedback format
-  3. define pass/fail signals
-  4. save playtest plan
+  3. define pass/fail signals and decision map
+  4. define logistics and evidence capture
+  5. save playtest plan
 
 outputs:
   - playtest plan
   - feedback questions
   - success signals
+  - decision map
 
 done_when:
   - test can be run by another agent or human
@@ -31,4 +34,4 @@ blocked_when:
   - target player is unknown
 
 handoff:
-  - preserve playtest path, tasks, signals, and feedback plan
+  - preserve playtest path, playable slice, tasks, signals, decision map, and feedback plan

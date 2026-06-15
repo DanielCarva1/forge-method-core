@@ -13,8 +13,9 @@ inputs:
 steps:
   1. define premise, world, characters, and player role
   2. align narrative with core loop
-  3. define content units and constraints
-  4. save narrative design artifact
+  3. define quest/content units, tone, delivery format, and production constraints
+  4. map narrative beats to mechanics, UI, and playable slice
+  5. save narrative design artifact
 
 outputs:
   - narrative artifact
@@ -24,6 +25,7 @@ outputs:
 done_when:
   - narrative supports player action
   - content scope is bounded
+  - playable slice content is explicit
   - next story is known
 
 blocked_when:
@@ -31,4 +33,4 @@ blocked_when:
   - content scope is too large
 
 handoff:
-  - preserve narrative path, player role, content scope, and mechanic links
+  - preserve narrative path, player role, content units, mechanic links, slice content, and next workflow
