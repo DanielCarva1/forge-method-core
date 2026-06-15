@@ -140,6 +140,20 @@ Assert-Contains $installedProjectReloadText "Forge Reload" "installed project pa
 Assert-Contains $installedProjectReloadText "Route: workspace-with-projects" "installed project parent reload output"
 Assert-Contains $installedProjectReloadText "Known projects:" "installed project parent reload output"
 Assert-Contains $installedProjectReloadText "Next: relay the route opening above" "installed project parent reload output"
+$installedFirstFacilitationAnswer = "Usuarios: professores independentes. Dor: organizar aulas vagas em plano testavel. Experiencia: conversa guiada com criterios claros. Restricoes: browser simples sem login. Sucesso: brief revisavel em dez minutos."
+$installedProjectAnswerText = Run-Capture $pythonExe $installedRuntime input answer --root $generatedProjectTmp --id initial-facilitation --answer $installedFirstFacilitationAnswer
+Assert-Contains $installedProjectAnswerText "required_next_workflow: discover-intent" "installed project first answer output"
+Assert-Contains $installedProjectAnswerText "context_boundary: resume-first -> discover-intent" "installed project first answer output"
+Assert-NotContains $installedProjectAnswerText "Story added" "installed project first answer output"
+if (Test-Path -LiteralPath (Join-Path $generatedProjectTmp ".forge-method\stories\project-kickoff.yaml")) {
+  throw "installed project first answer created a premature story"
+}
+$installedProjectGuideText = Run-Capture $pythonExe $installedRuntime guide --root $generatedProjectTmp --question $installedFirstFacilitationAnswer
+Assert-Contains $installedProjectGuideText "Guidance Engine: operate-support -> discover-intent / 1-discovery" "installed project first answer guide output"
+Assert-Contains $installedProjectGuideText "Grill Gate: required" "installed project first answer guide output"
+Assert-Contains $installedProjectGuideText "First question: what outcome, constraint, and proof should shape the next pass?" "installed project first answer guide output"
+Assert-NotContains $installedProjectGuideText "Prompt: Let's use" "installed project first answer guide output"
+Assert-NotContains $installedProjectGuideText "build-story" "installed project first answer guide output"
 Run $pythonExe $installedRuntime gate --root $generatedProjectTmp --require-evals
 Run $pythonExe $installedRuntime workflow validate
 Run $pythonExe $installedRuntime parity replay

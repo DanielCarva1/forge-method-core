@@ -3826,6 +3826,29 @@ class RuntimeTests(unittest.TestCase):
             project_list = run_cmd("project", "list", "--root", str(parent)).stdout
             gate = run_cmd("gate", "--root", str(root), "--require-evals").stdout
             resume = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
+            initial_state_text = state.read_text(encoding="utf-8")
+            initial_input_text = input_file.read_text(encoding="utf-8")
+            first_answer = (
+                "Usuarios: professores independentes. Dor: organizar aulas vagas em plano testavel. "
+                "Experiencia: conversa guiada com criterios claros. Restricoes: browser simples sem login. "
+                "Sucesso: brief revisavel em dez minutos."
+            )
+            answer_text = run_cmd(
+                "input",
+                "answer",
+                "--root",
+                str(root),
+                "--id",
+                "initial-facilitation",
+                "--answer",
+                first_answer,
+            ).stdout
+            answered_snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+            answered_resume = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
+            answer_guide = json.loads(
+                run_cmd("guide", "--root", str(root), "--question", first_answer, "--json").stdout
+            )
+            answer_guide_text = run_cmd("guide", "--root", str(root), "--question", first_answer).stdout
 
             self.assertIn("Project created: Night Watch", create)
             self.assertTrue(state.exists())
@@ -3833,20 +3856,38 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue(input_file.exists())
             self.assertTrue(artifact.exists())
             self.assertTrue(load_plan.exists())
-            self.assertIn('phase: "1-discovery"', state.read_text(encoding="utf-8"))
-            state_text = state.read_text(encoding="utf-8")
-            input_text = input_file.read_text(encoding="utf-8")
-            self.assertIn('status: "waiting-human-input"', state_text)
-            self.assertIn('human_input_required: "true"', state_text)
-            self.assertIn('active_workflow: "discover-intent"', state_text)
-            self.assertIn("answer human input initial-facilitation", state_text)
-            self.assertIn("Antes de criar stories ou desenvolver", input_text)
+            self.assertIn('phase: "1-discovery"', initial_state_text)
+            self.assertIn('status: "waiting-human-input"', initial_state_text)
+            self.assertIn('human_input_required: "true"', initial_state_text)
+            self.assertIn('active_workflow: "discover-intent"', initial_state_text)
+            self.assertIn("answer human input initial-facilitation", initial_state_text)
+            self.assertIn("Antes de criar stories ou desenvolver", initial_input_text)
             self.assertEqual(resume["action"], "answer_required_input")
             self.assertFalse(resume["autonomous"])
             self.assertIn("software-builder", artifact.read_text(encoding="utf-8"))
             self.assertIn("night-watch", project_list)
             self.assertIn("Gate passed.", gate)
             self.assertIn("Evals: 1/1 passed", gate)
+            self.assertIn("required_next_workflow: discover-intent", answer_text)
+            self.assertNotIn("Story added", answer_text)
+            self.assertFalse(story.exists())
+            self.assertEqual(answered_snapshot["stories"]["total"], 0)
+            self.assertEqual(answered_snapshot["state"]["active_workflow"], "discover-intent")
+            self.assertEqual(answered_snapshot["state"]["human_input_required"], "false")
+            self.assertEqual(answered_snapshot["state"]["status"], "input-resolved")
+            self.assertEqual(answered_resume["target"]["workflow"], "discover-intent")
+            self.assertTrue(answered_resume["grill_gate_required"])
+            self.assertEqual(answer_guide["intent_classification"], "operate-support")
+            self.assertEqual(answer_guide["recommended_workflow"], "discover-intent")
+            self.assertEqual(answer_guide["recommended_phase"], "1-discovery")
+            self.assertEqual(answer_guide["facilitation_pack"], "skill:facilitation/discover-intent.md")
+            self.assertIn("First question:", answer_guide["human_prompt"])
+            self.assertEqual(answer_guide["human_experience"]["human_question"], "what outcome, constraint, and proof should shape the next pass?")
+            self.assertIn("Guidance Engine: operate-support -> discover-intent / 1-discovery", answer_guide_text)
+            self.assertIn("Grill Gate: required", answer_guide_text)
+            self.assertIn("First question: what outcome, constraint, and proof should shape the next pass?", answer_guide_text)
+            self.assertNotIn("Prompt: Let's use", answer_guide_text)
+            self.assertNotIn("build-story", answer_guide_text)
 
     def test_project_create_brownfield_starts_with_discovery(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

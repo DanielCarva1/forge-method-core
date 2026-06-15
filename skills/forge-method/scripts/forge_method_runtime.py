@@ -1395,6 +1395,14 @@ def reality_evidence_for_guidance(question: str, guidance: dict[str, Any]) -> di
     return not_applicable_reality_evidence()
 
 
+def split_guidance_first_question(prompt: str) -> tuple[str, str]:
+    marker = "First question:"
+    if marker not in prompt:
+        return prompt.strip(), ""
+    guidance, first_question = prompt.split(marker, 1)
+    return guidance.strip(), first_question.strip()
+
+
 def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
     classification = str(guidance.get("intent_classification", "operate-support"))
     workflow = str(guidance.get("recommended_workflow", "guide-route"))
@@ -1508,7 +1516,8 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
     return {
         "decision_summary": f"Rota escolhida: {workflow} em {phase or 'fase atual'}.",
         "next_move": str(guidance.get("recommended_action", "seguir a rota recomendada")),
-        "human_question": str(guidance.get("human_prompt", "")),
+        "human_question": split_guidance_first_question(str(guidance.get("human_prompt", "")))[1]
+        or str(guidance.get("human_prompt", "")),
         "guardrail": "O estado duravel manda, mas a fala humana substantiva pode corrigir a rota.",
     }
 
@@ -9129,14 +9138,6 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
         "codex_goal_handoff": snapshot["resume"].get("codex_goal_handoff", {}),
         "council_recommended": council_recommended_for_guidance(question, guidance),
     }
-
-
-def split_guidance_first_question(prompt: str) -> tuple[str, str]:
-    marker = "First question:"
-    if marker not in prompt:
-        return prompt.strip(), ""
-    guidance, first_question = prompt.split(marker, 1)
-    return guidance.strip(), first_question.strip()
 
 
 def print_guidance_human_prompt(guidance: dict[str, Any]) -> None:

@@ -124,6 +124,20 @@ Assert-Contains $projectReloadText "Forge Reload" "project parent reload output"
 Assert-Contains $projectReloadText "Route: workspace-with-projects" "project parent reload output"
 Assert-Contains $projectReloadText "Known projects:" "project parent reload output"
 Assert-Contains $projectReloadText "Next: relay the route opening above" "project parent reload output"
+$firstFacilitationAnswer = "Usuarios: professores independentes. Dor: organizar aulas vagas em plano testavel. Experiencia: conversa guiada com criterios claros. Restricoes: browser simples sem login. Sucesso: brief revisavel em dez minutos."
+$projectAnswerText = Run-Capture $pythonExe $runtime input answer --root $generatedProjectTmp --id initial-facilitation --answer $firstFacilitationAnswer
+Assert-Contains $projectAnswerText "required_next_workflow: discover-intent" "project first answer output"
+Assert-Contains $projectAnswerText "context_boundary: resume-first -> discover-intent" "project first answer output"
+Assert-NotContains $projectAnswerText "Story added" "project first answer output"
+if (Test-Path -LiteralPath (Join-Path $generatedProjectTmp ".forge-method\stories\project-kickoff.yaml")) {
+  throw "project first answer created a premature story"
+}
+$projectGuideText = Run-Capture $pythonExe $runtime guide --root $generatedProjectTmp --question $firstFacilitationAnswer
+Assert-Contains $projectGuideText "Guidance Engine: operate-support -> discover-intent / 1-discovery" "project first answer guide output"
+Assert-Contains $projectGuideText "Grill Gate: required" "project first answer guide output"
+Assert-Contains $projectGuideText "First question: what outcome, constraint, and proof should shape the next pass?" "project first answer guide output"
+Assert-NotContains $projectGuideText "Prompt: Let's use" "project first answer guide output"
+Assert-NotContains $projectGuideText "build-story" "project first answer guide output"
 Run $pythonExe $runtime gate --root $generatedProjectTmp --require-evals
 Run $pythonExe $runtime workflow validate
 Run $pythonExe $runtime workflow compactness
