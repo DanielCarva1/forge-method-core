@@ -802,6 +802,73 @@ class RuntimeTests(unittest.TestCase):
 
         self.assertIn("route_reason must include Signals and Route summary", failures)
 
+    def test_first_guidance_questions_are_workflow_specific(self) -> None:
+        runtime = load_runtime_module()
+        workflows = [
+            "write-spec",
+            "ux-plan",
+            "architecture",
+            "quick-dev",
+            "game-brief",
+            "engine-setup",
+            "game-sprint-status",
+            "test-strategy",
+            "test-automation",
+            "module-ideation",
+            "module-validate",
+            "doc-index",
+            "doc-shard",
+            "session-prep",
+            "checkpoint-preview",
+        ]
+
+        questions = [runtime.first_guidance_question("product-flow", workflow) for workflow in workflows]
+
+        self.assertEqual(len(questions), len(set(questions)))
+        self.assertIn("spec kernel", runtime.first_guidance_question("product-flow", "write-spec"))
+        self.assertIn("engine profile", runtime.first_guidance_question("game-flow", "engine-setup"))
+        self.assertIn("install", runtime.first_guidance_question("builder-flow", "module-distribution"))
+
+    def test_parity_replay_requires_mechanical_build_status_prompt(self) -> None:
+        runtime = load_runtime_module()
+        route_reason = "A build-ready story exists. Signals: mechanical-build. Route: 4-build-verify / mechanical-build -> build-story."
+        case = {
+            "expected_classification": "mechanical-build",
+            "expected_phase": "4-build-verify",
+            "expected_workflow": "build-story",
+            "expected_facilitation_pack": "skill:facilitation/story-lifecycle.md",
+            "expected_template": "build-story-work-order",
+            "state_update_required": False,
+            "expected_codex_goal_handoff_recommended": True,
+            "expected_mechanical_work_order_autonomous": True,
+        }
+        payload = {
+            "intent_classification": "mechanical-build",
+            "recommended_phase": "4-build-verify",
+            "recommended_workflow": "build-story",
+            "state_update_required": False,
+            "facilitation_pack": "skill:facilitation/story-lifecycle.md",
+            "persona_lens": {},
+            "workflow_metadata": {"id": "build-story", "template": "build-story-work-order"},
+            "commands": [{"name": "guide"}],
+            "signals": ["mechanical-build"],
+            "recommended_action": "implement and validate story story-1",
+            "human_prompt": "The approved decision work is done; I should continue mechanically and write evidence.",
+            "alternatives": [],
+            "guidance_engine": {"route_reason": route_reason},
+            "state_updates": {
+                "last_intent_classification": "mechanical-build",
+                "active_guidance_mode": "build-story",
+                "last_route_reason": route_reason,
+            },
+            "codex_goal_handoff": {"recommended": True},
+            "mechanical_work_order": {"autonomous": True},
+        }
+
+        failures = runtime.parity_case_failures(case, payload)
+
+        self.assertIn("mechanical-build human_prompt must be status wording, not facilitation or internal notes", failures)
+
     def test_parity_replay_requires_council_assertions(self) -> None:
         fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
         case = next(item for item in fixtures if item["id"] == "lifecycle_party_mode_council_request").copy()

@@ -8298,7 +8298,81 @@ def humanize_guidance_sentence(prompt: str) -> str:
     return text.rstrip(".")
 
 
+WORKFLOW_FIRST_QUESTIONS = {
+    "context-recovery": "which durable file, launcher output, or chat assumption should we trust first?",
+    "problem-solving": "what symptom, recent change, and desired end state should anchor the diagnosis?",
+    "investigation": "what happened, what changed, and what evidence would separate cause from noise?",
+    "brainstorming": "what option lanes, taste constraints, and obviously bad ideas should we explore or reject?",
+    "domain-scan": "which domain rule, harm, or expert assumption could block this idea?",
+    "market-scan": "which alternative, adoption friction, or switching signal would change the product bet?",
+    "technical-feasibility-scan": "which technical promise is riskiest, and what is the cheapest proof path?",
+    "product-requirements": "what user promise, acceptance signal, and non-goal should become durable requirements?",
+    "write-spec": "what stable capability, constraint, non-goal, and success signal must the spec kernel preserve?",
+    "working-backwards-challenge": "what customer claim, FAQ objection, and evidence gap should pressure-test the promise?",
+    "ux-plan": "what moment should feel excellent, what generic interaction should we reject, and how do we prove the feeling?",
+    "architecture": "which accepted PRD or UX decision, interface, risk, and validation hook should drive architecture?",
+    "quick-dev": "what tiny scope, proof command, and explicit non-goal keep this fast path honest?",
+    "story-creation": "which accepted decision source should become the first implementation-ready story?",
+    "plan-sprint": "what sprint goal, story order, deferred work, and validation proof should shape the batch?",
+    "sprint-status": "what is active, blocked, review-ready, and the single next executable move?",
+    "readiness-check": "which accepted source, missing proof, or waiver decides whether this is ready?",
+    "module-ideation": "what new capability should exist, who uses it, and which existing workflow might overlap?",
+    "agent-builder": "what agent job, inputs, outputs, and handoff should stay compact enough to trust?",
+    "workflow-builder": "what trigger, non-trigger, state transition, and done condition define the workflow boundary?",
+    "module-builder": "which shaped workflows, packs, templates, and validation hooks belong in the module package?",
+    "module-distribution": "what install, upgrade, config, and registry proof makes this module usable outside this checkout?",
+    "module-validate": "which route, pack, template, or install invariant would prove this extension is coherent?",
+    "runtime-builder": "what human behavior should improve, what compact agent contract should exist, and which test would catch regression?",
+    "workflow-analyze": "which workflow trigger, overlap, missing handoff, or stale doc should the analysis prove?",
+    "agent-analyze": "which agent profile, instruction boundary, or handoff contract needs analysis before patching?",
+    "skill-convert": "what source skill behavior must survive conversion, and what Codex-native contract should replace it?",
+    "config-customization": "which project override, capability entry, or convention should change runtime behavior?",
+    "design-thinking": "whose real situation, unmet need, and cheap prototype should shape the next move?",
+    "innovation-strategy": "which bet, adoption friction, reversibility, and evidence grade should decide novelty?",
+    "storytelling": "what audience shift, tension, payoff, and rejected arc should the story preserve?",
+    "creative-session": "what taste direction, anti-reference, and selection criterion should guide the creative pass?",
+    "game-brief": "what player fantasy, core loop, first playable proof, and parked scope should anchor the brief?",
+    "game-context": "what player fantasy, engine profile, source artifact, and next game workflow must future agents preserve?",
+    "engine-setup": "which engine profile, first-run command, folder shape, and setup risk must become durable?",
+    "gdd": "which pillar, core loop, system, and playable-slice decision should deepen beyond the brief?",
+    "quick-prototype": "what smallest playable action, stub asset, proof check, and next decision should we run?",
+    "game-story-creation": "which playable-slice decision should become the first buildable game story?",
+    "game-sprint-planning": "what playable-slice goal, story order, asset assumption, and validation proof shape the sprint?",
+    "game-sprint-status": "what is playable now, what is blocked, and what is the next player-visible proof?",
+    "game-qa-review": "what player-facing failure, acceptance check, and evidence should block the slice?",
+    "game-e2e-scaffold": "which player path, visible outcome, and engine command should the E2E scaffold prove?",
+    "game-test-framework": "which engine layer, fixture boundary, and first failing/passing check should define the harness?",
+    "playtest-plan": "which target player, task, observation signal, and decision will the playtest answer?",
+    "performance-plan": "which gameplay scenario, budget, measurement command, and threshold should gate performance?",
+    "test-engagement-model": "what risk tier, collaboration mode, and evidence expectation should QA own?",
+    "test-strategy": "which user risk, test layer, and release-blocking evidence should define coverage?",
+    "test-framework": "which fixture boundary, semantic locator, and maintainability risk should the framework prove?",
+    "ci-quality-pipeline": "which check, failure signal, runtime budget, and ownership rule should CI enforce?",
+    "atdd-plan": "which acceptance behavior, example, and automation layer should define done?",
+    "test-automation": "which scenario deserves automation, what visible outcome proves it, and what flake risk must be avoided?",
+    "test-review": "which finding, missing proof, or regression risk should block story completion?",
+    "nfr-evidence-audit": "which non-functional claim lacks evidence, threshold, owner, or waiver?",
+    "traceability-gate": "which requirement lacks a test, which test lacks a requirement, and what closes the gap?",
+    "teach-testing": "what testing concept, local example, and proof exercise should make the human stronger?",
+    "doc-index": "which source is authoritative, what stale marker matters, and what map should future agents trust?",
+    "doc-shard": "what original document policy, shard boundary, and index link prevent source ambiguity?",
+    "editorial-review": "what audience, tone, structure, and unsupported claim should the review protect?",
+    "edge-case-review": "which boundary condition, misuse path, or failure mode would hurt most if missed?",
+    "adversarial-review": "which assumption should we attack, and what evidence would force repair, waiver, or rejection?",
+    "track-decision": "which track changes the next workflow, required evidence, and operating constraints?",
+    "council-decision": "which perspectives must disagree before we choose, and what decision artifact should merge them?",
+    "project-context": "what project truth, source map, and next workflow must survive a fresh chat?",
+    "session-prep": "what should the next session load first, avoid trusting, and do immediately?",
+    "checkpoint-preview": "what summary, decision, touched files, and next action should durable memory preserve?",
+    "code-review": "which diff, behavior risk, missing test, or review finding should be recorded first?",
+    "retrospective": "what actually changed, what should we repeat or stop, and what evolution follows?",
+    "research-closeout": "which evidence, uncertainty, stance, and next workflow should close research?",
+}
+
+
 def first_guidance_question(classification: str, workflow_id: str) -> str:
+    if workflow_id in WORKFLOW_FIRST_QUESTIONS:
+        return WORKFLOW_FIRST_QUESTIONS[workflow_id]
     if workflow_id == "correct-course" or classification == "correct-course":
         return "what felt wrong, what should have happened instead, and what evidence would prove the correction worked?"
     if workflow_id in {"context-recovery", "problem-solving", "investigation"} or classification == "confusion":
@@ -8326,14 +8400,31 @@ def first_guidance_question(classification: str, workflow_id: str) -> str:
     return "what outcome, constraint, and proof should shape the next pass?"
 
 
+def mechanical_human_prompt_for_guidance(*, prompt: str, signals: list[str], workflow_id: str) -> str:
+    if workflow_id != "build-story":
+        return humanize_guidance_sentence(prompt)
+    if "game-flow" in signals:
+        return (
+            "Build is ready: I will implement the game story, preserve player-facing proof and engine constraints, "
+            "run checks, resolve review findings, and write evidence before calling it done."
+        )
+    return (
+        "Build is ready: I will implement the selected story, run required checks, resolve review findings, "
+        "and write evidence before calling it done."
+    )
+
+
 def rich_human_prompt_for_guidance(
     *,
     prompt: str,
     classification: str,
     workflow_id: str,
+    signals: list[str],
     facilitation_pack: str,
 ) -> str:
-    if not facilitation_pack or classification == "mechanical-build":
+    if classification == "mechanical-build":
+        return mechanical_human_prompt_for_guidance(prompt=prompt, signals=signals, workflow_id=workflow_id)
+    if not facilitation_pack:
         return prompt
     base = humanize_guidance_sentence(prompt)
     if not base:
@@ -8890,6 +8981,7 @@ def build_guidance_decision(
         prompt=human_prompt,
         classification=classification,
         workflow_id=recommended_workflow,
+        signals=signals,
         facilitation_pack=facilitation_pack,
     )
     reason = specific_route_reason(
@@ -9370,6 +9462,9 @@ def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[
         prompt = str(payload.get("human_prompt") or "")
         if "First question:" not in prompt or "?" not in prompt:
             failures.append("human_prompt must include a human-facing first question for facilitated guidance")
+        expected_question = first_guidance_question(str(payload.get("intent_classification") or ""), str(payload.get("recommended_workflow") or ""))
+        if expected_question not in prompt:
+            failures.append("human_prompt must include the workflow-specific first question")
         internal_prefixes = (
             "I should ",
             "This ready project ",
@@ -9381,6 +9476,12 @@ def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[
             failures.append("human_prompt must not start as an internal agent note")
         if "I should " in prompt:
             failures.append("human_prompt must not contain internal 'I should' phrasing")
+    if payload.get("intent_classification") == "mechanical-build":
+        prompt = str(payload.get("human_prompt") or "")
+        if "I should " in prompt or "First question:" in prompt:
+            failures.append("mechanical-build human_prompt must be status wording, not facilitation or internal notes")
+        if "Build is ready:" not in prompt or "write evidence" not in prompt:
+            failures.append("mechanical-build human_prompt must summarize autonomous build/status/evidence work")
     if not isinstance(payload.get("alternatives"), list):
         failures.append("alternatives is not a list")
     return failures
