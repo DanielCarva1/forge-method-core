@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add discovery closeout quality gate with `artifact discovery-check`, required Grill Gate handoff fields, and source/install smoke coverage for valid closeout artifacts before specification
 - require generated-project discovery closeout before specification: an answered `initial-facilitation` input must have a durable discovery-intent artifact before `transition --phase 2-specification`
 - require initial-facilitation answer paths to stay in guided discovery, keep zero stories, and expose clean first-question guidance
 - require runtime and install smokes to assert generated-project first facilitation plus workspace open/reload selection output

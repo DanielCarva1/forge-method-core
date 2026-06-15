@@ -4,29 +4,29 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: discovery-closeout-before-specification-hardened
+- status: discovery-closeout-quality-gate-hardened
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Continue post-parity Forge polish by auditing discovery closeout artifact content quality and Grill Gate handoff before specification.
+- next_action: Continue post-parity Forge polish by adding a first-class discovery closeout template or generator so agents can produce the required artifact without hand-rolled markdown.
 
 ## Latest Checkpoint
 
-# Discovery closeout before specification hardened
+# Discovery closeout quality gate hardened
 
-- created_at: 2026-06-15T19:09:40+00:00
+- created_at: 2026-06-15T19:49:44+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: discovery-closeout-before-specification-hardened
+- status: discovery-closeout-quality-gate-hardened
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Blocked generated-project transition from answered discovery to specification until a durable discovery-intent closeout artifact exists.
+Added artifact discovery-check and made discovery-to-spec transition require a valid closeout with Grill Gate handoff fields.
 
 ## Decisions
 
-- The first facilitation answer is discovery material and must be compacted into a durable closeout artifact before specification.
+- A discovery closeout must be useful agent context, not just an artifact marker; weak title/summary artifacts remain blocked.
 
 ## Checks
 
@@ -42,18 +42,17 @@ Blocked generated-project transition from answered discovery to specification un
 - tests/test_runtime.py
 - scripts/smoke-runtime.ps1
 - scripts/smoke-install.ps1
-- .forge-method/artifacts/20260615-discovery-closeout-before-specification-contract.md
 - CHANGELOG.md
-- .forge-method/state.yaml
+- .forge-method/artifacts/20260615-discovery-closeout-quality-gate-contract.md
 
 ## Artifacts
 
-- .forge-method/artifacts/20260615-discovery-closeout-before-specification-contract.md
+- .forge-method/artifacts/20260615-discovery-closeout-quality-gate-contract.md
 - CHANGELOG.md
 
 ## Next Action
 
-Continue post-parity Forge polish by auditing discovery closeout artifact content quality and Grill Gate handoff before specification.
+Continue post-parity Forge polish by adding a first-class discovery closeout template or generator so agents can produce the required artifact without hand-rolled markdown.
 
 ## Recovery Signals
 
@@ -63,18 +62,18 @@ Continue post-parity Forge polish by auditing discovery closeout artifact conten
 
 ### Touched Files
 
-- skills/forge-method/scripts/forge_method_runtime.py
-- tests/test_runtime.py
-- CHANGELOG.md
-- .forge-method/artifacts/20260615-guide-cli-first-question-output-contract.md
-- .forge-method/evidence/20260615-173256-validation-guide-cli-first-question-output-validation.md
-- .forge-method/artifacts/index.ndjson
-- .forge-method/state.yaml
 - scripts/smoke-install.ps1
+- CHANGELOG.md
 - .forge-method/artifacts/20260615-installed-guide-output-smoke-contract.md
 - .forge-method/evidence/20260615-174911-validation-installed-guide-output-smoke-validation.md
+- .forge-method/artifacts/index.ndjson
+- .forge-method/state.yaml
 - scripts/smoke-runtime.ps1
 - .forge-method/artifacts/20260615-generated-project-open-reload-smoke-contract.md
+- .forge-method/evidence/20260615-180331-validation-generated-project-open-reload-smoke-validation.md
+- skills/forge-method/scripts/forge_method_runtime.py
+- tests/test_runtime.py
+- .forge-method/artifacts/20260615-initial-facilitation-answer-guidance-contract.md
 
 ## Open Human Inputs
 
@@ -91,16 +90,16 @@ Continue post-parity Forge polish by auditing discovery closeout artifact conten
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260615-173256-validation-guide-cli-first-question-output-validation.md
-- .forge-method/evidence/20260615-174911-validation-installed-guide-output-smoke-validation.md
 - .forge-method/evidence/20260615-180331-validation-generated-project-open-reload-smoke-validation.md
 - .forge-method/evidence/20260615-183009-validation-initial-facilitation-answer-guidance-validation.md
 - .forge-method/evidence/20260615-190939-validation-discovery-closeout-before-specification-validati.md
+- .forge-method/evidence/20260615-191033-gate-quality-gate.md
+- .forge-method/evidence/20260615-194943-validation-discovery-closeout-quality-gate-validation.md
 
 ## Recent Artifacts
 
-- changelog [active/durable]: CHANGELOG.md - Unreleased changelog - generated project open reload smoke - Unreleased notes updated with runtime/install smoke assertions for generated project first facilitation and workspace open/reload selection output.
-- runtime-guidance-contract [active/durable]: .forge-method/artifacts/20260615-initial-facilitation-answer-guidance-contract.md - Initial facilitation answer guidance contract - Initial-facilitation answers now stay in guided discovery with zero stories, Grill Gate required, clean first-question lede output, and source/installed smoke coverage.
 - changelog [active/durable]: CHANGELOG.md - Unreleased changelog - initial facilitation answer guidance - Unreleased notes updated with initial-facilitation answer routing, zero-story, Grill Gate, and first-question guidance coverage.
 - runtime-guidance-contract [active/durable]: .forge-method/artifacts/20260615-discovery-closeout-before-specification-contract.md - Discovery closeout before specification contract - Answered initial-facilitation generated projects must capture a durable discovery-intent closeout artifact before transitioning from discovery to specification.
 - changelog [active/durable]: CHANGELOG.md - Unreleased changelog - discovery closeout before specification - Unreleased notes updated with the generated-project discovery closeout guard before specification.
+- runtime-guidance-contract [active/durable]: .forge-method/artifacts/20260615-discovery-closeout-quality-gate-contract.md - Discovery closeout quality gate contract - Discovery closeout artifacts must pass artifact discovery-check with source, audience, outcome, constraints, non-goals, success signal, Grill Gate handoff, and next workflow before specification.
+- changelog [active/durable]: CHANGELOG.md - Unreleased changelog - discovery closeout quality gate - Unreleased notes updated with artifact discovery-check and closeout quality requirements before specification.

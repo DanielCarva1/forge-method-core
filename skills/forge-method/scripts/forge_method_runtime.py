@@ -456,6 +456,17 @@ DISCOVERY_CLOSEOUT_PATH_HINTS = {
     "discovery-closeout",
     "discovery-intent",
 }
+DISCOVERY_CLOSEOUT_WORKFLOWS = {
+    "creative-direction",
+    "discover-intent",
+    "game-brief",
+    "module-ideation",
+}
+DISCOVERY_CLOSEOUT_NEXT_WORKFLOWS = {
+    "product-requirements",
+    "quick-dev",
+    "write-spec",
+}
 MECHANICAL_ACTIONS = {
     "start_next_story",
     "continue_active_story",
@@ -2569,6 +2580,66 @@ def parse_markdown_artifact_fields(path: Path) -> dict[str, str]:
     return fields
 
 
+def discovery_closeout_findings(root: Path, artifact_path: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not artifact_path.exists():
+        return [f"discovery closeout artifact not found: {artifact_path}"], warnings
+    fields = parse_markdown_artifact_fields(artifact_path)
+    workflow = fields.get("workflow", "")
+    if workflow not in DISCOVERY_CLOSEOUT_WORKFLOWS:
+        errors.append(f"workflow must be one of {', '.join(sorted(DISCOVERY_CLOSEOUT_WORKFLOWS))}")
+    for key in [
+        "source_input",
+        "audience",
+        "outcome",
+        "constraints",
+        "non_goals",
+        "success_signal",
+        "open_questions",
+        "grill_gate_handoff",
+        "next_workflow",
+    ]:
+        if not fields.get(key, ""):
+            errors.append(f"discovery closeout requires {key}")
+    source_input = normalize_text(fields.get("source_input", ""))
+    if source_input and "initial-facilitation" not in source_input:
+        errors.append("source_input must name initial-facilitation")
+    weak_values = {"", "none", "n/a", "na", "tbd", "unknown", "ok", "works", "good"}
+    for key in ["audience", "outcome", "constraints", "non_goals", "success_signal"]:
+        if normalize_text(fields.get(key, "")) in weak_values:
+            errors.append(f"{key} must be specific enough for a future agent")
+    if normalize_text(fields.get("non_goals", "")) in {"none", "n/a", "na", "tbd"}:
+        errors.append("non_goals must prevent downstream agents from filling scope by guesswork")
+    success_signal = normalize_text(fields.get("success_signal", ""))
+    if success_signal in {"users love it", "good ux", "it works", "works"}:
+        errors.append("success_signal must be demonstrable or testable")
+    handoff = normalize_text(fields.get("grill_gate_handoff", ""))
+    if handoff and ("grill" not in handoff or not any(token in handoff for token in ["gate", "check", "required", "pass"])):
+        errors.append("grill_gate_handoff must explicitly name the Grill Gate decision/check")
+    next_workflow = fields.get("next_workflow", "")
+    if next_workflow and next_workflow not in DISCOVERY_CLOSEOUT_NEXT_WORKFLOWS:
+        errors.append(f"next_workflow must be one of {', '.join(sorted(DISCOVERY_CLOSEOUT_NEXT_WORKFLOWS))}")
+    if normalize_text(fields.get("open_questions", "")) in {"", "tbd", "unknown"}:
+        errors.append("open_questions must name blockers or say none blocking")
+    if not fields.get("decision_log", ""):
+        warnings.append("discovery closeout should preserve a decision_log path or compact decision summary")
+    return errors, warnings
+
+
+def valid_discovery_closeout_artifacts(root: Path) -> tuple[list[str], list[str]]:
+    valid: list[str] = []
+    errors: list[str] = []
+    for rel in discovery_closeout_artifacts(root):
+        artifact_path = root / rel
+        artifact_errors, _ = discovery_closeout_findings(root, artifact_path)
+        if artifact_errors:
+            errors.extend(f"{rel}: {error}" for error in artifact_errors)
+        else:
+            valid.append(rel)
+    return valid, errors
+
+
 def is_external_doc_reference(value: str) -> bool:
     normalized = value.strip().lower()
     if not normalized or normalized in {"none", "n/a", "na", "not-applicable", "<none>"}:
@@ -4061,13 +4132,23 @@ def enforce_discovery_closeout_before_specification(root: Path, state: dict[str,
         return
     if not initial_facilitation_answered(root):
         return
-    if discovery_closeout_artifacts(root):
+    closeout_artifacts = discovery_closeout_artifacts(root)
+    if not closeout_artifacts:
+        raise SystemExit(
+            "Discovery closeout required before specification: add a durable discovery-intent artifact "
+            "from the accepted human input, then transition. Example: artifact add --kind discovery-intent "
+            '--title "Accepted discovery intent" --summary "Accepted first facilitation answer." '
+            '--path ".forge-method/artifacts/discovery-intent.md"'
+        )
+    valid_closeouts, closeout_errors = valid_discovery_closeout_artifacts(root)
+    if valid_closeouts:
         return
+    details = "\n".join(f"- {error}" for error in closeout_errors[:8])
     raise SystemExit(
-        "Discovery closeout required before specification: add a durable discovery-intent artifact "
-        "from the accepted human input, then transition. Example: artifact add --kind discovery-intent "
-        '--title "Accepted discovery intent" --summary "Accepted first facilitation answer." '
-        '--path ".forge-method/artifacts/discovery-intent.md"'
+        "Discovery closeout quality required before specification: the durable discovery-intent artifact "
+        "must preserve source_input, audience, outcome, constraints, non_goals, success_signal, "
+        "open_questions, grill_gate_handoff, and next_workflow.\n"
+        f"{details}"
     )
 
 
@@ -5672,6 +5753,25 @@ def cmd_artifact_doc_check(args: argparse.Namespace) -> int:
     if errors or (args.strict and warnings):
         return 1
     print("Document utility check passed.")
+    print(f"Artifact: {rel}")
+    return 0
+
+
+def cmd_artifact_discovery_check(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    artifact_path, rel = project_path(root, args.path)
+    errors, warnings = discovery_closeout_findings(root, artifact_path)
+    if errors:
+        print("Discovery closeout check failed:")
+        for error in errors:
+            print(f"- {error}")
+    if warnings:
+        print("Discovery closeout check warnings:")
+        for warning in warnings:
+            print(f"- {warning}")
+    if errors or (args.strict and warnings):
+        return 1
+    print("Discovery closeout check passed.")
     print(f"Artifact: {rel}")
     return 0
 
@@ -12482,6 +12582,15 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_doc_check.add_argument("--path", required=True)
     artifact_doc_check.add_argument("--strict", action="store_true")
     artifact_doc_check.set_defaults(func=cmd_artifact_doc_check)
+
+    artifact_discovery_check = artifact_sub.add_parser(
+        "discovery-check",
+        help="validate accepted discovery intent and Grill Gate handoff before specification",
+    )
+    artifact_discovery_check.add_argument("--root", default=".")
+    artifact_discovery_check.add_argument("--path", required=True)
+    artifact_discovery_check.add_argument("--strict", action="store_true")
+    artifact_discovery_check.set_defaults(func=cmd_artifact_discovery_check)
 
     artifact_spec_check = artifact_sub.add_parser(
         "spec-check",

@@ -3906,7 +3906,7 @@ class RuntimeTests(unittest.TestCase):
                 blocked_transition.stderr + blocked_transition.stdout,
             )
             self.assertIn('phase: "1-discovery"', state.read_text(encoding="utf-8"))
-            discovery_closeout = run_cmd(
+            weak_closeout = run_cmd(
                 "artifact",
                 "add",
                 "--root",
@@ -3920,6 +3920,78 @@ class RuntimeTests(unittest.TestCase):
                 "--path",
                 ".forge-method/artifacts/discovery-intent.md",
             ).stdout
+            weak_check = run_cmd(
+                "artifact",
+                "discovery-check",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/discovery-intent.md",
+                check=False,
+            )
+            weak_transition = run_cmd(
+                "transition",
+                "--root",
+                str(root),
+                "--phase",
+                "2-specification",
+                "--status",
+                "specification-ready",
+                "--workflow",
+                "write-spec",
+                check=False,
+            )
+            self.assertIn(".forge-method/artifacts/discovery-intent.md", weak_closeout)
+            self.assertNotEqual(weak_check.returncode, 0)
+            self.assertIn("discovery closeout requires source_input", weak_check.stdout)
+            self.assertNotEqual(weak_transition.returncode, 0)
+            self.assertIn(
+                "Discovery closeout quality required before specification",
+                weak_transition.stderr + weak_transition.stdout,
+            )
+            valid_closeout_path = root / ".forge-method" / "artifacts" / "discovery-intent-accepted.md"
+            valid_closeout_path.write_text(
+                "\n".join(
+                    [
+                        "# Accepted Discovery Intent",
+                        "workflow: discover-intent",
+                        "source_input: initial-facilitation",
+                        "audience: independent teachers planning flexible lessons",
+                        "outcome: create a guided planning product that turns vague class ideas into reviewable plans",
+                        "constraints: browser-first prototype, no login in the first pass, preserve simple language",
+                        "non_goals: no scheduling marketplace, no automated grading, no implementation architecture yet",
+                        "success_signal: a teacher can produce a reviewable brief with constraints and proof in ten minutes",
+                        "open_questions: none blocking; pricing and collaboration can wait",
+                        "grill_gate_handoff: Grill Gate required before spec; check outcome, constraints, non_goals, and success_signal.",
+                        "decision_log: first answer accepted as discovery source, not as implementation permission",
+                        "next_workflow: write-spec",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            discovery_closeout = run_cmd(
+                "artifact",
+                "add",
+                "--root",
+                str(root),
+                "--kind",
+                "discovery-intent",
+                "--title",
+                "Accepted discovery intent quality gate",
+                "--summary",
+                "Accepted first facilitation answer with outcome, constraints, proof, and Grill Gate handoff.",
+                "--path",
+                ".forge-method/artifacts/discovery-intent-accepted.md",
+            ).stdout
+            discovery_check = run_cmd(
+                "artifact",
+                "discovery-check",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/discovery-intent-accepted.md",
+            ).stdout
             transition = run_cmd(
                 "transition",
                 "--root",
@@ -3931,7 +4003,8 @@ class RuntimeTests(unittest.TestCase):
                 "--workflow",
                 "write-spec",
             ).stdout
-            self.assertIn(".forge-method/artifacts/discovery-intent.md", discovery_closeout)
+            self.assertIn(".forge-method/artifacts/discovery-intent-accepted.md", discovery_closeout)
+            self.assertIn("Discovery closeout check passed.", discovery_check)
             self.assertIn("Transition written.", transition)
             self.assertIn('phase: "2-specification"', state.read_text(encoding="utf-8"))
 

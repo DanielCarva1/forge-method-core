@@ -161,8 +161,24 @@ Assert-NotContains $projectGuideText "Prompt: Let's use" "project first answer g
 Assert-NotContains $projectGuideText "build-story" "project first answer guide output"
 $blockedProjectTransitionText = Run-Fails-Capture $pythonExe $runtime transition --root $generatedProjectTmp --phase 2-specification --status specification-ready --workflow write-spec
 Assert-Contains $blockedProjectTransitionText "Discovery closeout required before specification" "project first answer transition guard output"
+$projectCloseoutPath = Join-Path $generatedProjectTmp ".forge-method\artifacts\discovery-intent.md"
+@(
+  "# Accepted Discovery Intent",
+  "workflow: discover-intent",
+  "source_input: initial-facilitation",
+  "audience: independent teachers planning flexible lessons",
+  "outcome: create a guided planning product that turns vague class ideas into reviewable plans",
+  "constraints: browser-first prototype, no login in the first pass, preserve simple language",
+  "non_goals: no scheduling marketplace, no automated grading, no implementation architecture yet",
+  "success_signal: a teacher can produce a reviewable brief with constraints and proof in ten minutes",
+  "open_questions: none blocking; pricing and collaboration can wait",
+  "grill_gate_handoff: Grill Gate required before spec; check outcome, constraints, non_goals, and success_signal.",
+  "decision_log: first answer accepted as discovery source, not as implementation permission",
+  "next_workflow: write-spec"
+) | Set-Content -LiteralPath $projectCloseoutPath -Encoding UTF8
 $projectCloseoutText = Run-Capture $pythonExe $runtime artifact add --root $generatedProjectTmp --kind discovery-intent --title "Accepted discovery intent" --summary "Accepted first facilitation answer for specification." --path ".forge-method/artifacts/discovery-intent.md"
 Assert-Contains $projectCloseoutText ".forge-method/artifacts/discovery-intent.md" "project discovery closeout output"
+Run $pythonExe $runtime artifact discovery-check --root $generatedProjectTmp --path ".forge-method/artifacts/discovery-intent.md"
 $projectCloseoutTransitionText = Run-Capture $pythonExe $runtime transition --root $generatedProjectTmp --phase 2-specification --status specification-ready --workflow write-spec
 Assert-Contains $projectCloseoutTransitionText "Transition written." "project discovery closeout transition output"
 Run $pythonExe $runtime gate --root $generatedProjectTmp --require-evals
