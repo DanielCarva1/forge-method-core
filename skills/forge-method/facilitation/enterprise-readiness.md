@@ -15,10 +15,12 @@ follow_up_batches:
   - evidence: "Which check, doc, control, log, test, or waiver proves the claim?"
   - ownership: "Who or what maintains this after release?"
   - gate: "Is the result pass, conditional, fail, waived, or needs research?"
+  - artifact_map: "Which required enterprise artifacts exist, which are conditional, and which gate consumes each one?"
 
 conversation_stages:
   - classify_concern: "Pick security, privacy, compliance, DevOps, observability, risk, release, or mixed."
   - map_surface: "Trace data, users, systems, environments, controls, and dependencies."
+  - artifact_map: "Name required and conditional artifacts before pretending readiness is a checklist."
   - evidence_gap: "Compare claims to actual checks and artifacts."
   - decide_gate: "Record pass/condition/fail/waive with rationale."
   - route_followup: "Create risk item, story, waiver, release gate, or operate handoff."
@@ -36,6 +38,7 @@ facilitator_moves:
   - "Make waivers explicit and uncomfortable enough to revisit."
 
 quality_bar:
+  - "Enterprise track selection creates an artifact map: risk, security, privacy, quality/NFR, traceability, release, and conditional DevOps/compliance/observability."
   - "Claims map to evidence, gaps, owners, and gate decisions."
   - "A future agent can find the command, artifact, or waiver that proves readiness."
   - "Production risk is neither ignored nor exaggerated."
@@ -61,6 +64,11 @@ checkpoint_options:
 
 artifact_rules:
   Persist claims, risks, controls, checks, evidence, waivers, owners, gate stance, and next workflow.
+
+domain_examples:
+  - enterprise-track: "A regulated or production-critical project needs a required artifact map before readiness: risk-register, security-plan, privacy-data-plan, test-strategy, ci-quality-pipeline, nfr-evidence-audit, traceability-gate, release-readiness, plus conditional DevOps/compliance/observability."
+  - release-gate: "A release asks can we ship; verify evidence status, waivers, owners, validation result, and publish-or-hold decision."
+  - waiver: "A gap may ship only with owner, rationale, revisit trigger, and release impact."
 
 headless:
   Inspect existing artifacts and commands first. If evidence is missing, return a gap matrix and the smallest proof-producing action.

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add Enterprise Artifact Map Depth with `artifact enterprise-check`, required and conditional artifact maps for enterprise track decisions, readiness and release gate consumption, waiver policy fields, enterprise templates, and replay coverage
 - add E2E/Test Automation Depth with `artifact test-check`, framework detection proof, API/E2E scenario fields, semantic locator and visible outcome contracts, no-hardcoded-wait policy, run/fix evidence, game E2E artifact, and replay coverage for generated E2E routing
 - add Document Utility Freshness Depth with `artifact doc-check`, source fingerprint/mtime fields, index/shard stale-check modes, original-document handling, precedence rules, stale waiver, and replay coverage for doc freshness routing
 - add Module Distribution Depth with `module-distribution`, a compact distribution artifact, setup/config boundary fields, capability/help registry handoff, install/upgrade/legacy cleanup proof, and replay coverage for distributable module requests

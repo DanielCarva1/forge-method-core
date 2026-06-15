@@ -14,16 +14,19 @@ steps:
   1. list applicable obligations
   2. map obligations to evidence or checks
   3. record gaps and owners
-  4. save compliance checklist
+  4. record waiver/audit trail and release impact
+  5. save compliance checklist
 
 outputs:
   - compliance checklist
   - evidence map
   - open gaps
+  - audit trail
 
 done_when:
   - each obligation has evidence, waiver, or owner
   - gaps are explicit
+  - release impact is explicit
   - release gate can inspect checklist
 
 blocked_when:
@@ -31,4 +34,4 @@ blocked_when:
   - legal or policy interpretation is required
 
 handoff:
-  - preserve checklist path, evidence map, gaps, and owners
+  - preserve checklist path, evidence map, gaps, owners, waivers, audit trail, and release impact

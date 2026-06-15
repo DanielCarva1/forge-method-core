@@ -873,6 +873,19 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "enterprise_track_artifact_map_request",
+    "family": "enterprise",
+    "state": "discovery",
+    "question": "enterprise artifact map: choose enterprise track and map required artifacts for security privacy risk quality NFR traceability release readiness waivers and conditional devops compliance observability",
+    "expected_classification": "lifecycle-flow",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "track-decision",
+    "expected_facilitation_pack": "skill:facilitation/lifecycle-closure.md",
+    "expected_template": "track-decision-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
     "id": "lifecycle_party_mode_council_request",
     "family": "lifecycle",
     "state": "discovery",
@@ -968,6 +981,19 @@
     "family": "lifecycle",
     "state": "discovery",
     "question": "create a readiness matrix linking PRD UX architecture risk stories validation and findings",
+    "expected_classification": "lifecycle-flow",
+    "expected_phase": "3-plan",
+    "expected_workflow": "readiness-check",
+    "expected_facilitation_pack": "skill:facilitation/story-lifecycle.md",
+    "expected_template": "readiness-matrix-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "enterprise_readiness_matrix_request",
+    "family": "enterprise",
+    "state": "discovery",
+    "question": "create enterprise readiness matrix with required artifacts risk-register security-plan privacy-data-plan NFR evidence traceability release gate waivers and missing sources",
     "expected_classification": "lifecycle-flow",
     "expected_phase": "3-plan",
     "expected_workflow": "readiness-check",

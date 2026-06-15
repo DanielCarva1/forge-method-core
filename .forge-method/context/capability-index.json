@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T09:25:31+00:00",
+  "generated_at": "2026-06-15T10:01:41+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -733,12 +733,27 @@
     },
     {
       "facilitation_pack": "enterprise-readiness",
+      "followed_by": [
+        "nfr-evidence-audit",
+        "traceability-gate",
+        "release-readiness"
+      ],
       "id": "compliance-checklist",
+      "modes": [
+        "create",
+        "evidence",
+        "waiver",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "compliance checklist"
+        "compliance checklist",
+        "evidence map",
+        "audit trail"
       ],
       "phase": "3-plan | 5-ready-operate",
-      "required": false
+      "required": false,
+      "template": "compliance-checklist"
     },
     {
       "facilitation_pack": "creative-direction",
@@ -910,12 +925,26 @@
     },
     {
       "facilitation_pack": "enterprise-readiness",
+      "followed_by": [
+        "ci-quality-pipeline",
+        "observability-plan",
+        "release-readiness"
+      ],
       "id": "devops-deployment-plan",
+      "modes": [
+        "create",
+        "rollback",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "deployment plan"
+        "deployment plan",
+        "environment checklist",
+        "release checks"
       ],
       "phase": "3-plan | 5-ready-operate",
-      "required": false
+      "required": false,
+      "template": "devops-deployment-plan"
     },
     {
       "facilitation_pack": "discover-intent",
@@ -1636,12 +1665,26 @@
     },
     {
       "facilitation_pack": "enterprise-readiness",
+      "followed_by": [
+        "release-readiness",
+        "retrospective"
+      ],
       "id": "observability-plan",
+      "modes": [
+        "create",
+        "signals",
+        "operate",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "observability plan"
+        "observability plan",
+        "signal checklist",
+        "support actions"
       ],
       "phase": "5-ready-operate",
-      "required": false
+      "required": false,
+      "template": "observability-plan"
     },
     {
       "facilitation_pack": "game-lifecycle",
@@ -1711,12 +1754,26 @@
     },
     {
       "facilitation_pack": "enterprise-readiness",
+      "followed_by": [
+        "compliance-checklist",
+        "readiness-check"
+      ],
       "id": "privacy-data-plan",
+      "modes": [
+        "create",
+        "data-flow",
+        "retention",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "privacy data plan"
+        "privacy data plan",
+        "data classification",
+        "release impact"
       ],
       "phase": "3-plan",
-      "required": true
+      "required": true,
+      "template": "privacy-data-plan"
     },
     {
       "facilitation_pack": "problem-solving",
@@ -1847,11 +1904,13 @@
         "create",
         "validate",
         "matrix",
+        "enterprise",
         "headless"
       ],
       "outputs": [
         "readiness report",
-        "readiness matrix"
+        "readiness matrix",
+        "track artifact coverage"
       ],
       "phase": "3-plan",
       "required": true,
@@ -1888,11 +1947,20 @@
     {
       "facilitation_pack": "enterprise-readiness",
       "id": "release-readiness",
+      "modes": [
+        "check",
+        "gate",
+        "enterprise",
+        "waiver",
+        "headless"
+      ],
       "outputs": [
-        "release checklist"
+        "release checklist",
+        "enterprise evidence gate"
       ],
       "phase": "5-ready-operate",
-      "required": true
+      "required": true,
+      "template": "release-readiness-artifact"
     },
     {
       "facilitation_pack": "lifecycle-closure",
@@ -1941,12 +2009,28 @@
     },
     {
       "facilitation_pack": "enterprise-readiness",
+      "followed_by": [
+        "security-plan",
+        "privacy-data-plan",
+        "readiness-check",
+        "release-readiness"
+      ],
       "id": "risk-register",
+      "modes": [
+        "create",
+        "update",
+        "evidence",
+        "waiver",
+        "headless"
+      ],
       "outputs": [
-        "risk register"
+        "risk register",
+        "owner map",
+        "release impact"
       ],
       "phase": "3-plan | 5-ready-operate",
-      "required": false
+      "required": false,
+      "template": "risk-register"
     },
     {
       "facilitation_pack": "runtime-builder",
@@ -1972,12 +2056,26 @@
     },
     {
       "facilitation_pack": "enterprise-readiness",
+      "followed_by": [
+        "privacy-data-plan",
+        "test-strategy",
+        "readiness-check"
+      ],
       "id": "security-plan",
+      "modes": [
+        "create",
+        "threats",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "security plan"
+        "security plan",
+        "required checks",
+        "release impact"
       ],
       "phase": "3-plan",
-      "required": true
+      "required": true,
+      "template": "security-plan"
     },
     {
       "facilitation_pack": "lifecycle-closure",
@@ -2307,17 +2405,20 @@
       "followed_by": [
         "project-context",
         "product-requirements",
-        "runtime-builder"
+        "runtime-builder",
+        "readiness-check"
       ],
       "id": "track-decision",
       "modes": [
         "decide",
+        "enterprise-map",
         "validate",
         "headless"
       ],
       "outputs": [
         "track decision artifact",
-        "required workflow map"
+        "required workflow map",
+        "track artifact map"
       ],
       "phase": "0-route | 1-discovery | 6-evolve",
       "required": false,

@@ -14,16 +14,19 @@ steps:
   1. identify critical signals
   2. define logs, metrics, traces, alerts, and dashboards
   3. map signals to support actions
-  4. save observability plan
+  4. link signal evidence, gaps, support owners, and release impact
+  5. save observability plan
 
 outputs:
   - observability plan
   - signal checklist
   - support actions
+  - release impact
 
 done_when:
   - critical failures have observable signals
   - support path is defined
+  - release gate can inspect monitoring evidence or gaps
   - ready gate can inspect the plan
 
 blocked_when:
@@ -31,4 +34,4 @@ blocked_when:
   - signals cannot be collected
 
 handoff:
-  - preserve signal map, alert needs, support action, and gaps
+  - preserve signal map, alert needs, dashboards, support action, evidence links, gaps, and release impact

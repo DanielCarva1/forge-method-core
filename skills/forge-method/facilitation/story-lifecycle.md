@@ -7,7 +7,7 @@ open_floor:
   "What is the next executable slice, and what evidence proves it is ready to build or ready to use?"
 
 source_material:
-  Ask for spec, PRD, UX plan, architecture, risk register, sprint state, story files, evidence, review findings, and release criteria.
+  Ask for spec, PRD, UX plan, architecture, track decision, enterprise artifact map, risk register, sprint state, story files, evidence, review findings, and release criteria.
 
 follow_up_batches:
   - readiness: "Which decision artifacts are approved, missing, or contradicted?"
@@ -16,6 +16,7 @@ follow_up_batches:
   - acceptance: "What acceptance criteria and checks make each story implementation-ready?"
   - source_map: "Which PRD/spec/UX/architecture/test artifact justifies each ready story?"
   - evidence_map: "What evidence will prove each story is done without re-asking the human to continue?"
+  - enterprise_map: "If the selected track is enterprise, which security/privacy/risk/NFR/release artifacts are required, missing, or waived?"
   - capacity: "What is the timebox, review bandwidth, or attention budget for this sprint?"
   - sequence: "What must happen first because of dependency, risk, or learning?"
   - closeout: "What gate, evidence, release, or retrospective closes this loop?"
@@ -53,6 +54,7 @@ quality_bar:
   - "Every ready build story has a decision-source map and validation map."
   - "When multiple decision artifacts exist, each ready story names the exact `decision_sources` that justify it."
   - "Sprint plans separate ready, planned, blocked, and deferred work with a clear reason for each bucket."
+  - "Enterprise readiness carries required artifact coverage into build/release gates instead of hiding it as a generic risk."
 
 anti_patterns:
   - "Do not use stories as a substitute for discovery or spec."
@@ -85,6 +87,7 @@ domain_examples:
   - mechanical_loop: "When a story is ready in build phase, continue through start, implementation, review, fixes, checks, evidence, and ready gate without asking for procedural permission."
   - readiness_guard: "If a ready story lacks source artifacts or validation map, block with story-creation/readiness-check instead of starting build."
   - source_disambiguation: "When PRD, UX, architecture, and test artifacts all exist, pass the specific source that justifies each story."
+  - enterprise_readiness: "When the track is enterprise, readiness-check maps risk-register, security-plan, privacy-data-plan, test-strategy, ci-quality-pipeline, nfr-evidence-audit, traceability-gate, release-readiness, conditional DevOps/compliance/observability, and waivers."
 
 headless:
   Continue mechanical story work when artifacts are approved. Stop only for real blockers: missing decisions, access, destructive approval, unavailable services, or explicit scope change.

@@ -85,6 +85,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Game Studio Depth outputs must route game-specific requests to game-context, engine-setup, GDD, narrative, mechanics, game-story-creation, game-sprint-status, build-story, game-test-framework, game-e2e-scaffold, quick-prototype, playtest, performance, or game QA workflows before generic software planning; artifacts must preserve player fantasy, engine profile, playable-slice proof, story order, sprint progress, decision sources, and validation evidence compactly.
 - Test Architecture Enterprise Depth outputs must route quality requests to the right engagement mode and workflow, preserve fixture architecture and command contracts, and make gate outcomes distinguish pass, concerns, fail, missing evidence, and explicit waiver.
 - E2E/Test Automation Depth outputs must detect the existing framework, select API/E2E scenarios by risk, prefer semantic locators and visible outcome assertions, require independent tests with no hardcoded waits, and preserve run/fix result, evidence links, failure repair policy, and gate impact before generated tests count as done.
+- Enterprise Artifact Map Depth outputs must make enterprise track decisions produce required/conditional artifact maps, including risk, security, privacy, quality/NFR, CI, traceability, release, conditional DevOps/compliance/observability, evidence status, waiver policy, and readiness/release gate consumers.
 - Document Review Depth outputs must route prose/structure/tone requests to `editorial-review` and boundary/failure/misuse requests to `edge-case-review`, each with a narrow compact artifact rather than the generic document utility shape.
 - Document Utility Freshness outputs must route explicit index/shard/stale-doc requests to `doc-index` or `doc-shard`, preserve source fingerprint/mtime, original-document handling, precedence rules, and `artifact doc-check` proof.
 
@@ -147,6 +148,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `adversarial-review`
 - `design-thinking`
 - `track-decision`
+- `release-readiness`
 - `council-decision`
 - `project-context`
 - `session-prep`

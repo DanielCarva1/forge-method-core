@@ -27,6 +27,7 @@ PARITY_REQUIRED_FAMILIES = {
     "config",
     "persona",
     "cis",
+    "enterprise",
     "game",
     "tea",
     "lifecycle",
@@ -1649,6 +1650,69 @@ class RuntimeTests(unittest.TestCase):
             game_pass = run_cmd("artifact", "test-check", "--root", str(root), "--path", str(game_e2e_artifact))
             self.assertIn("Test utility check passed.", game_pass.stdout)
 
+    def test_artifact_enterprise_check_validates_track_and_readiness_maps(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            artifacts_dir = root / ".forge-method" / "artifacts"
+            required = (
+                "risk-register, security-plan, privacy-data-plan, test-strategy, ci-quality-pipeline, "
+                "nfr-evidence-audit, traceability-gate, release-readiness"
+            )
+            conditional = "devops-deployment-plan when deployment matters, compliance-checklist when obligations exist, observability-plan before operate"
+
+            track_artifact = artifacts_dir / "enterprise-track-map.md"
+            track_artifact.write_text(
+                "\n".join(
+                    [
+                        "# Track Decision Artifact",
+                        "workflow: track-decision",
+                        "selected_track: enterprise",
+                        "selected_module: test-architect",
+                        f"track_required_artifacts: {required}",
+                        f"enterprise_required_artifacts: {required}",
+                        f"enterprise_conditional_artifacts: {conditional}",
+                        "artifact_evidence_map: each artifact names evidence, owner, gate consumer, and path",
+                        "readiness_gate: readiness-check then traceability-gate and release-readiness",
+                        "waiver_policy: owner, rationale, revisit trigger, and release impact required",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            track_pass = run_cmd("artifact", "enterprise-check", "--root", str(root), "--path", str(track_artifact))
+            self.assertIn("Enterprise artifact check passed.", track_pass.stdout)
+
+            readiness_artifact = artifacts_dir / "enterprise-readiness.md"
+            readiness_artifact.write_text(
+                "\n".join(
+                    [
+                        "# Readiness Matrix Artifact",
+                        "workflow: readiness-check",
+                        "scope: enterprise checkout release",
+                        "selected_track: enterprise",
+                        f"track_required_artifacts: {required}",
+                        f"enterprise_required_artifacts: {required}",
+                        f"enterprise_conditional_artifacts: {conditional}",
+                        "enterprise_evidence_status: security/privacy/quality evidence present, compliance waived with owner",
+                        "nfr_evidence: nfr-evidence-audit linked to thresholds and release claims",
+                        "release_gate_impact: traceability-gate blocks release on missing P0 evidence",
+                        "waivers: compliance-checklist waived by owner until SOC2 scope starts",
+                        "missing_or_weak_sources: none blocking; conditional observability deferred to operate",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            readiness_pass = run_cmd("artifact", "enterprise-check", "--root", str(root), "--path", str(readiness_artifact))
+            self.assertIn("Enterprise artifact check passed.", readiness_pass.stdout)
+
+            broken = artifacts_dir / "enterprise-broken.md"
+            broken.write_text(track_artifact.read_text(encoding="utf-8").replace("privacy-data-plan, ", ""), encoding="utf-8")
+            broken_result = run_cmd("artifact", "enterprise-check", "--root", str(root), "--path", str(broken), check=False)
+            self.assertNotEqual(broken_result.returncode, 0)
+            self.assertIn("enterprise required artifacts must include privacy-data-plan", broken_result.stdout)
+
     def test_packaged_modules_and_workflows_validate(self) -> None:
         modules = run_cmd("module", "list").stdout
         modules_json = json.loads(run_cmd("module", "list", "--json").stdout)
@@ -1765,6 +1829,13 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "test-review-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "nfr-evidence-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "traceability-gate-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "risk-register.md",
+            ROOT / "skills" / "forge-method" / "templates" / "security-plan.md",
+            ROOT / "skills" / "forge-method" / "templates" / "privacy-data-plan.md",
+            ROOT / "skills" / "forge-method" / "templates" / "devops-deployment-plan.md",
+            ROOT / "skills" / "forge-method" / "templates" / "compliance-checklist.md",
+            ROOT / "skills" / "forge-method" / "templates" / "observability-plan.md",
+            ROOT / "skills" / "forge-method" / "templates" / "release-readiness-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "builder-utility-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "builder-factory-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "module-builder-artifact.md",
@@ -1870,6 +1941,13 @@ class RuntimeTests(unittest.TestCase):
             "test-review",
             "nfr-evidence-audit",
             "traceability-gate",
+            "risk-register",
+            "security-plan",
+            "privacy-data-plan",
+            "devops-deployment-plan",
+            "compliance-checklist",
+            "observability-plan",
+            "release-readiness",
             "security-plan",
             "module-ideation",
             "agent-builder",
@@ -1957,6 +2035,13 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["test-review"].get("template"), "test-review-artifact")
         self.assertEqual(by_id["nfr-evidence-audit"].get("template"), "nfr-evidence-artifact")
         self.assertEqual(by_id["traceability-gate"].get("template"), "traceability-gate-artifact")
+        self.assertEqual(by_id["risk-register"].get("template"), "risk-register")
+        self.assertEqual(by_id["security-plan"].get("template"), "security-plan")
+        self.assertEqual(by_id["privacy-data-plan"].get("template"), "privacy-data-plan")
+        self.assertEqual(by_id["devops-deployment-plan"].get("template"), "devops-deployment-plan")
+        self.assertEqual(by_id["compliance-checklist"].get("template"), "compliance-checklist")
+        self.assertEqual(by_id["observability-plan"].get("template"), "observability-plan")
+        self.assertEqual(by_id["release-readiness"].get("template"), "release-readiness-artifact")
         self.assertEqual(by_id["game-context"].get("template"), "game-context-artifact")
         self.assertEqual(by_id["gdd"].get("template"), "gdd")
         self.assertEqual(by_id["narrative-design"].get("template"), "narrative-bible")
@@ -2001,8 +2086,27 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("shared_config", module_distribution_template)
         self.assertIn("anti_stale_registration", module_distribution_template)
         self.assertIn("legacy_cleanup", module_distribution_template)
+        track_decision_template = (
+            ROOT / "skills" / "forge-method" / "templates" / "track-decision-artifact.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("enterprise_required_artifacts", track_decision_template)
+        self.assertIn("artifact_evidence_map", track_decision_template)
+        self.assertIn("waiver_policy", track_decision_template)
+        readiness_template = (
+            ROOT / "skills" / "forge-method" / "templates" / "readiness-matrix-artifact.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("track_required_artifacts", readiness_template)
+        self.assertIn("enterprise_evidence_status", readiness_template)
+        self.assertIn("release_gate_impact", readiness_template)
+        release_template = (
+            ROOT / "skills" / "forge-method" / "templates" / "release-readiness-artifact.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("enterprise_required_artifacts", release_template)
+        self.assertIn("gate_decision", release_template)
+        self.assertIn("publish_or_hold", release_template)
         self.assertIn("index", by_id["config-customization"].get("modes", []))
         self.assertIn("decide", by_id["track-decision"].get("modes", []))
+        self.assertIn("enterprise-map", by_id["track-decision"].get("modes", []))
         self.assertIn("parallel", by_id["council-decision"].get("modes", []))
         self.assertIn("document", by_id["project-context"].get("modes", []))
         self.assertIn("prep", by_id["session-prep"].get("modes", []))
@@ -2011,6 +2115,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("review", by_id["code-review"].get("modes", []))
         self.assertIn("create", by_id["retrospective"].get("modes", []))
         self.assertIn("matrix", by_id["readiness-check"].get("modes", []))
+        self.assertIn("enterprise", by_id["readiness-check"].get("modes", []))
         self.assertIn("closeout", by_id["research-closeout"].get("modes", []))
         self.assertIn("source-map", by_id["doc-index"].get("modes", []))
         self.assertIn("stale-check", by_id["doc-index"].get("modes", []))
@@ -2039,6 +2144,13 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("review", by_id["test-review"].get("modes", []))
         self.assertIn("waiver", by_id["nfr-evidence-audit"].get("modes", []))
         self.assertIn("phase-2", by_id["traceability-gate"].get("modes", []))
+        self.assertIn("evidence", by_id["risk-register"].get("modes", []))
+        self.assertIn("threats", by_id["security-plan"].get("modes", []))
+        self.assertIn("data-flow", by_id["privacy-data-plan"].get("modes", []))
+        self.assertIn("rollback", by_id["devops-deployment-plan"].get("modes", []))
+        self.assertIn("evidence", by_id["compliance-checklist"].get("modes", []))
+        self.assertIn("signals", by_id["observability-plan"].get("modes", []))
+        self.assertIn("gate", by_id["release-readiness"].get("modes", []))
         self.assertIn("document", by_id["game-context"].get("modes", []))
         self.assertIn("create", by_id["gdd"].get("modes", []))
         self.assertIn("create", by_id["narrative-design"].get("modes", []))

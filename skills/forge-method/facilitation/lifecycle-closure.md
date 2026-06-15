@@ -12,6 +12,7 @@ source_material:
 follow_up_batches:
   - route: "What workflow should become the next durable step, and what alternatives were rejected?"
   - sources: "Which artifacts are source-of-truth, stale, missing, or contradicted?"
+  - track_artifacts: "If a track is selected, which required artifacts and gates does it impose?"
   - compactness: "What should future agents load, and what can remain out of recovery context?"
   - proof: "Which check, finding, matrix, or action item proves the closure is useful?"
   - ownership: "Who or what workflow owns the next action?"
@@ -41,6 +42,7 @@ facilitator_moves:
 quality_bar:
   - "The artifact is compact enough for a future agent to use without chat history."
   - "The next workflow is explicit."
+  - "Track decisions include required workflow and artifact maps; enterprise decisions name evidence gates and waivers."
   - "Source-of-truth artifacts and stale/missing artifacts are named."
   - "Open risks, findings, or human inputs are not hidden."
 

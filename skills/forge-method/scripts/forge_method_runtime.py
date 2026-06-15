@@ -193,6 +193,7 @@ PARITY_REPLAY_REQUIRED_FAMILIES = {
     "config",
     "persona",
     "lifecycle",
+    "enterprise",
     "cis",
     "game",
     "tea",
@@ -2432,6 +2433,29 @@ TEST_UTILITY_WORKFLOWS = {
     "game-e2e-scaffold",
 }
 
+ENTERPRISE_ARTIFACT_WORKFLOWS = {
+    "track-decision",
+    "readiness-check",
+    "release-readiness",
+}
+
+ENTERPRISE_BASELINE_ARTIFACTS = [
+    "risk-register",
+    "security-plan",
+    "privacy-data-plan",
+    "test-strategy",
+    "ci-quality-pipeline",
+    "nfr-evidence-audit",
+    "traceability-gate",
+    "release-readiness",
+]
+
+ENTERPRISE_CONDITIONAL_ARTIFACTS = [
+    "devops-deployment-plan",
+    "compliance-checklist",
+    "observability-plan",
+]
+
 
 def parse_markdown_artifact_fields(path: Path) -> dict[str, str]:
     fields: dict[str, str] = {}
@@ -2571,6 +2595,82 @@ def test_utility_findings(root: Path, artifact_path: Path) -> tuple[list[str], l
     waits = normalize_text(fields.get("no_hardcoded_waits", ""))
     if waits and waits in {"false", "no", "nao", "não"}:
         errors.append("no_hardcoded_waits must reject sleeps or document a waiver")
+    return errors, warnings
+
+
+def enterprise_artifact_findings(root: Path, artifact_path: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not artifact_path.exists():
+        return [f"enterprise artifact not found: {artifact_path}"], warnings
+    fields = parse_markdown_artifact_fields(artifact_path)
+    workflow = fields.get("workflow", "")
+    if workflow not in ENTERPRISE_ARTIFACT_WORKFLOWS:
+        errors.append(f"workflow must be one of {', '.join(sorted(ENTERPRISE_ARTIFACT_WORKFLOWS))}")
+
+    combined = normalize_text(
+        " ".join(
+            [
+                fields.get("selected_track", ""),
+                fields.get("selected_module", ""),
+                fields.get("scope", ""),
+                fields.get("track_required_artifacts", ""),
+                fields.get("enterprise_required_artifacts", ""),
+                fields.get("enterprise_conditional_artifacts", ""),
+            ]
+        )
+    )
+    if "enterprise" not in combined:
+        errors.append("enterprise artifacts must explicitly identify selected_track or scope as enterprise")
+
+    if workflow == "track-decision":
+        for key in [
+            "selected_track",
+            "track_required_artifacts",
+            "enterprise_required_artifacts",
+            "enterprise_conditional_artifacts",
+            "artifact_evidence_map",
+            "readiness_gate",
+            "waiver_policy",
+        ]:
+            if not fields.get(key, ""):
+                errors.append(f"track-decision enterprise map requires {key}")
+    if workflow == "readiness-check":
+        for key in [
+            "track_required_artifacts",
+            "enterprise_required_artifacts",
+            "enterprise_evidence_status",
+            "nfr_evidence",
+            "release_gate_impact",
+            "waivers",
+            "missing_or_weak_sources",
+        ]:
+            if not fields.get(key, ""):
+                errors.append(f"readiness-check enterprise matrix requires {key}")
+    if workflow == "release-readiness":
+        for key in [
+            "enterprise_required_artifacts",
+            "enterprise_evidence_status",
+            "gate_decision",
+            "release_gate_impact",
+            "waivers",
+        ]:
+            if not fields.get(key, ""):
+                errors.append(f"release-readiness enterprise gate requires {key}")
+
+    required_text = normalize_text(
+        fields.get("track_required_artifacts", "") + " " + fields.get("enterprise_required_artifacts", "")
+    )
+    for artifact_id in ENTERPRISE_BASELINE_ARTIFACTS:
+        if artifact_id not in required_text:
+            errors.append(f"enterprise required artifacts must include {artifact_id}")
+    conditional_text = normalize_text(fields.get("enterprise_conditional_artifacts", ""))
+    for artifact_id in ENTERPRISE_CONDITIONAL_ARTIFACTS:
+        if artifact_id not in conditional_text:
+            warnings.append(f"enterprise conditional artifacts should mention {artifact_id} or explain why it is not applicable")
+    waiver_text = normalize_text(fields.get("waiver_policy", "") + " " + fields.get("waivers", ""))
+    if "waiver" in combined and not waiver_text:
+        warnings.append("enterprise waivers should preserve owner, rationale, revisit trigger, and release impact")
     return errors, warnings
 
 
@@ -5293,6 +5393,25 @@ def cmd_artifact_test_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_artifact_enterprise_check(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    artifact_path, rel = project_path(root, args.path)
+    errors, warnings = enterprise_artifact_findings(root, artifact_path)
+    if errors:
+        print("Enterprise artifact check failed:")
+        for error in errors:
+            print(f"- {error}")
+    if warnings:
+        print("Enterprise artifact check warnings:")
+        for warning in warnings:
+            print(f"- {warning}")
+    if errors or (args.strict and warnings):
+        return 1
+    print("Enterprise artifact check passed.")
+    print(f"Artifact: {rel}")
+    return 0
+
+
 def cmd_artifact_link_story(args: argparse.Namespace) -> int:
     root, _ = load_state_or_fail(resolve_root(args.root))
     link_artifact_to_story(root, args.path, args.story)
@@ -5889,6 +6008,9 @@ def detect_guidance_signals(question: str) -> list[str]:
             "readiness matrix",
             "implementation readiness",
             "ready to build",
+            "enterprise artifact map",
+            "required artifact map",
+            "track artifact map",
         ],
         "persona-lens": [
             "pm lens",
@@ -6123,7 +6245,7 @@ def detect_guidance_signals(question: str) -> list[str]:
             "automate",
             "auditoria",
         },
-        "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness", "checkpoint", "council", "party", "subagent", "subagents"},
+        "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness", "artifact-map", "checkpoint", "council", "party", "subagent", "subagents"},
         "persona-lens": {"lens", "lente", "persona", "coach", "perspectiva", "visao", "pm", "architect", "arquiteto", "analyst", "analista", "ux", "qa", "writer", "storyteller"},
         "story-flow": {"backlog", "epic", "epics", "sprint", "stories", "story", "historia", "historias"},
         "product-flow": {
@@ -6948,6 +7070,9 @@ def routed_lifecycle_workflow(question: str) -> str:
         "track decision" in normalized
         or "choose track" in normalized
         or "which track" in normalized
+        or "enterprise artifact map" in normalized
+        or "required artifact map" in normalized
+        or "track artifact map" in normalized
         or "decidir trilha" in normalized
         or "qual trilha" in normalized
         or ({"track", "trilha"} & tokens and {"choose", "escolher", "decidir", "decision"} & tokens)
@@ -7031,8 +7156,8 @@ def lifecycle_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, 
         )
     if workflow_id == "track-decision":
         return (
-            "run track-decision to select the module/track, preserve rejected routes, and map required next workflows",
-            "I should make the route decision durable before creating more artifacts.",
+            "run track-decision to select the module/track, preserve rejected routes, and map required workflows plus track-specific artifacts",
+            "I should make the route decision durable; for enterprise, that means security, privacy, risk, quality, release, and waiver evidence are named before planning continues.",
             guidance_alternatives(
                 ("project-context", "use after the track is chosen and the project needs source-of-truth context"),
                 ("session-prep", "use when the next agent needs a compact start"),
@@ -7110,8 +7235,8 @@ def lifecycle_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, 
             ),
         )
     return (
-        "run readiness-check to produce a readiness matrix across sources, stories, risks, validation, inputs, and findings",
-        "I should prove implementation readiness with a matrix, not confidence from memory.",
+        "run readiness-check to produce a readiness matrix across sources, stories, risks, validation, enterprise artifacts, inputs, and findings",
+        "I should prove implementation readiness with a matrix, not confidence from memory; enterprise work must show the required artifact/evidence map or a waiver.",
         guidance_alternatives(
             ("story-creation", "use when implementation-ready stories are missing"),
             ("code-review", "use when changed code needs findings before readiness"),
@@ -11426,6 +11551,15 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_test_check.add_argument("--path", required=True)
     artifact_test_check.add_argument("--strict", action="store_true")
     artifact_test_check.set_defaults(func=cmd_artifact_test_check)
+
+    artifact_enterprise_check = artifact_sub.add_parser(
+        "enterprise-check",
+        help="validate enterprise track artifact map and readiness proof",
+    )
+    artifact_enterprise_check.add_argument("--root", default=".")
+    artifact_enterprise_check.add_argument("--path", required=True)
+    artifact_enterprise_check.add_argument("--strict", action="store_true")
+    artifact_enterprise_check.set_defaults(func=cmd_artifact_enterprise_check)
 
     artifact_list = artifact_sub.add_parser("list", help="list recent artifacts")
     artifact_list.add_argument("--root", default=".")
