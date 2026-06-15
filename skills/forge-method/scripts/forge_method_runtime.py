@@ -447,6 +447,23 @@ MECHANICAL_ACTIONS = {
     "repair_project_state",
     "run_ready_gate",
 }
+MECHANICAL_STORY_ACTIONS = {"start_next_story", "continue_active_story", "review_active_story"}
+MECHANICAL_STORY_LOOP_STEPS = [
+    "start or resume the active story from durable state",
+    "load only story-relevant context",
+    "implement acceptance criteria",
+    "run required checks",
+    "perform review and create findings when needed",
+    "repair or waive findings with evidence",
+    "write story evidence",
+    "mark the story done",
+    "update sprint/status and continue to the next ready story or ready gate",
+]
+MECHANICAL_DO_NOT_PROMPT = [
+    "do not ask for procedural ok/continue between mechanical steps",
+    "do not stop after story-start when acceptance work can proceed",
+    "do not treat missing chat memory as a blocker when durable files are sufficient",
+]
 
 STORY_DECISION_ARTIFACT_KINDS = {
     "architecture",
@@ -3835,6 +3852,70 @@ def resume_payload(
     }
 
 
+def mechanical_story_done_when(story_id: str) -> list[str]:
+    return [
+        f"story {story_id} acceptance criteria are implemented",
+        "required checks pass or documented exceptions are accepted",
+        "review is complete and findings are resolved or waived with evidence",
+        f"evidence is written for story {story_id}",
+        f"story {story_id} is marked done or the next explicit non-mechanical workflow is recorded",
+        "sprint/status is updated and the next ready story or ready gate is explicit",
+    ]
+
+
+def mechanical_story_command_map(root: Path, story_id: str, *, start: bool, review_stage: bool = False) -> list[dict[str, str]]:
+    commands: list[dict[str, str]] = []
+    if start:
+        commands.append(preflight_command("story-start", "story", "start", "--root", root, "--id", story_id))
+    commands.extend(
+        [
+            preflight_command("context-plan", "context", "plan", "--root", root, "--json"),
+            preflight_command("status", "status", "--root", root, "--brief"),
+        ]
+    )
+    if not review_stage:
+        commands.append(preflight_command("story-review", "story", "review", "--root", root, "--id", story_id))
+    commands.extend(
+        [
+            preflight_command("review-list", "review", "list", "--root", root, "--story", story_id),
+            preflight_command(
+                "evidence-add",
+                "evidence",
+                "add",
+                "--root",
+                root,
+                "--kind",
+                "validation",
+                "--story",
+                story_id,
+                "--title",
+                "<story evidence>",
+                "--summary",
+                "<checks and result summary>",
+                "--check",
+                "<check command/result>",
+            ),
+            preflight_command(
+                "story-done",
+                "story",
+                "done",
+                "--root",
+                root,
+                "--id",
+                story_id,
+                "--summary",
+                "<implementation summary>",
+                "--evidence",
+                "<evidence path>",
+                "--check",
+                "<check command/result>",
+            ),
+            preflight_command("resume", "resume", "--root", root, "--json"),
+        ]
+    )
+    return commands
+
+
 def build_resume_guidance(
     root: Path,
     state: dict[str, str],
@@ -3932,12 +4013,13 @@ def build_resume_guidance(
                     autonomous=True,
                     target=story_summary(next_story) or {},
                     read=story_read,
-                    commands=[
-                        preflight_command("story-start", "story", "start", "--root", root, "--id", story_id),
-                        preflight_command("context-plan", "context", "plan", "--root", root, "--json"),
+                    commands=mechanical_story_command_map(root, story_id, start=True),
+                    done_when=mechanical_story_done_when(story_id),
+                    blocked_when=[
+                        "story lacks acceptance criteria or decision sources",
+                        "story conflicts with current project state",
+                        "implementation needs missing external credentials, destructive approval, or unavailable service",
                     ],
-                    done_when=[f"story {story_id} moves to in_progress and implementation work begins"],
-                    blocked_when=["story lacks acceptance criteria or conflicts with current project state"],
                 )
             if status == "in_progress":
                 return resume_payload(
@@ -3946,11 +4028,8 @@ def build_resume_guidance(
                     autonomous=True,
                     target=story_summary(next_story) or {},
                     read=story_read,
-                    commands=[
-                        preflight_command("context-plan", "context", "plan", "--root", root, "--json"),
-                        preflight_command("status", "status", "--root", root, "--brief"),
-                    ],
-                    done_when=[f"story {story_id} reaches review or done with evidence"],
+                    commands=mechanical_story_command_map(root, story_id, start=False),
+                    done_when=mechanical_story_done_when(story_id),
                     blocked_when=["implementation needs missing external credentials, user decision, or unavailable dependency"],
                 )
             if status == "review":
@@ -3960,11 +4039,8 @@ def build_resume_guidance(
                     autonomous=True,
                     target=story_summary(next_story) or {},
                     read=story_read,
-                    commands=[
-                        preflight_command("review-list", "review", "list", "--root", root, "--story", story_id),
-                        preflight_command("gate", "gate", "--root", root, "--require-evals"),
-                    ],
-                    done_when=[f"story {story_id} is marked done or durable findings are created"],
+                    commands=mechanical_story_command_map(root, story_id, start=False, review_stage=True),
+                    done_when=mechanical_story_done_when(story_id),
                     blocked_when=["review finds a product decision or acceptance gap"],
                 )
             if status == "blocked":
@@ -4047,6 +4123,8 @@ def empty_mechanical_work_order(root: Path, state: dict[str, str], resume: dict[
         "required_context": resume.get("read", []),
         "commands": [],
         "done_when": [],
+        "loop": [],
+        "do_not_prompt": [],
         "self_repair_when": [],
         "stop_only_when": [],
         "correct_course_policy": "",
@@ -4064,6 +4142,7 @@ def build_mechanical_work_order(
     autonomy_mode = effective_config_value(root, state, "autonomy_mode", "auto")
     if autonomy_mode != "auto" or action not in MECHANICAL_ACTIONS:
         return empty_mechanical_work_order(root, state, resume)
+    story_loop = action in MECHANICAL_STORY_ACTIONS
     stop_only_when = [
         "missing external credential or access",
         "destructive action requires explicit approval",
@@ -4083,11 +4162,13 @@ def build_mechanical_work_order(
         "required_context": resume.get("read", []),
         "commands": resume.get("commands", []),
         "done_when": resume.get("done_when", []),
+        "loop": MECHANICAL_STORY_LOOP_STEPS if story_loop else [],
+        "do_not_prompt": MECHANICAL_DO_NOT_PROMPT if story_loop else [],
         "self_repair_when": self_repair_when,
         "stop_only_when": stop_only_when,
         "correct_course_policy": (
             "If late contradiction appears, write a compact correct-course artifact, "
-            "choose the conservative interpretation that preserves the approved spec, and continue."
+            "choose the conservative interpretation that preserves the approved spec, and continue without procedural confirmation."
         ),
         "commit_policy": effective_config_value(root, state, "commit_policy", "off"),
     }
@@ -4101,6 +4182,8 @@ def build_codex_goal_handoff(state: dict[str, str], work_order: dict[str, Any]) 
             f"Complete Forge mechanical work for {state.get('project', 'this project')}.",
             f"Start with: {work_order.get('next_mechanical_step', '')}",
             "Run story implementation, review, fixes, tests, evidence, sprint updates, and ready gate autonomously.",
+            "Loop: " + " -> ".join(work_order.get("loop") or MECHANICAL_STORY_LOOP_STEPS),
+            "Do not ask for procedural ok/continue between mechanical steps.",
             "Use correct-course continuation for late contradictions and stop only for credentials/access, destructive approval, external-service unavailability, or explicit user scope changes.",
             f"Commit policy: {work_order.get('commit_policy', 'off')}.",
             "Done when all mechanical work is complete, required checks pass, evidence is written, and project state is ready or the next non-mechanical phase is explicit.",
@@ -4491,6 +4574,10 @@ def print_resume_guidance(root: Path, resume: dict[str, Any]) -> None:
         print(f"- next: {work_order.get('next_mechanical_step', '')}")
         print(f"- commit_policy: {work_order.get('commit_policy', 'off')}")
         print(f"- goal_recommended: {'yes' if work_order.get('goal_recommended') else 'no'}")
+        if work_order.get("loop"):
+            print("- loop: " + " -> ".join(work_order["loop"]))
+        if work_order.get("do_not_prompt"):
+            print("- do_not_prompt: " + " | ".join(work_order["do_not_prompt"]))
         if work_order.get("self_repair_when"):
             print("- self_repair_when: " + " | ".join(work_order["self_repair_when"]))
         if work_order.get("stop_only_when"):
@@ -9083,9 +9170,18 @@ def build_compact_recovery_brief_text(
     failed_checks = checkpoint_section_items(root, "Failed Checks", checkpoint_limit=checkpoint_limit)
     touched_files = checkpoint_section_items(root, "Touched Files", checkpoint_limit=checkpoint_limit)
 
+    compact_next_command = ""
+    if resume.get("commands"):
+        compact_next_command = str(resume["commands"][0].get("name", ""))
+    else:
+        compact_next_command = resume.get("next_command", "")
+    read_first_section = markdown_section(
+        "Read First",
+        [f"- {item}" for item in resume.get("read", [])[:8]] or ["- none"],
+    )
     command_section = markdown_section(
         "Commands",
-        [compact_command_summary(item) for item in resume.get("commands", [])[:6]] or ["- none"],
+        [compact_command_summary(item) for item in resume.get("commands", [])[:4]] or ["- none"],
     )
     sections: list[str] = [
         "# Forge Method Compact Recovery",
@@ -9108,12 +9204,12 @@ def build_compact_recovery_brief_text(
                 f"- action: {resume.get('action', '')}",
                 f"- autonomous: {'true' if resume.get('autonomous') else 'false'}",
                 f"- summary: {resume.get('summary', '')}",
-                f"- next_command: {resume.get('next_command', '')}",
+                f"- next_command: {compact_next_command}",
             ],
         ),
+        read_first_section,
         command_section,
     ]
-    append_compact_section(sections, "Read First", [f"- {item}" for item in resume.get("read", [])], max_items=8)
     append_compact_section(
         sections,
         "Context Selection",

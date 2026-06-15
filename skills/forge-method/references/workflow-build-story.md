@@ -10,6 +10,7 @@ inputs:
   - `.forge-method/sprint.yaml`
   - active story
   - acceptance criteria
+  - decision sources
   - relevant source files
   - required checks
 
@@ -25,10 +26,12 @@ steps:
   9. resolve or waive review findings
   10. write evidence
   11. update sprint status
-  12. delete ephemeral task docs only after evidence is recorded
+  12. continue to the next ready story or ready gate without procedural confirmation
+  13. delete ephemeral task docs only after evidence is recorded
 
 outputs:
   - code changes
+  - review findings or explicit clean review
   - check results
   - evidence entry
   - updated sprint
@@ -40,6 +43,7 @@ done_when:
   - linked review findings are resolved or waived
   - evidence is written
   - sprint status is updated
+  - next story or ready gate is explicit
 
 blocked_when:
   - missing credential
@@ -52,3 +56,4 @@ handoff:
   - preserve exact next action
   - preserve failing command and output summary if blocked
   - preserve touched files and evidence path
+  - never ask for procedural ok/continue between mechanical steps

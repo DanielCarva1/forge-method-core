@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add Build Story Autonomy Depth with a structured `build-story` work order template, start/continue/review/evidence modes, full mechanical command map, JSON `loop` and `do_not_prompt` fields, and no-procedural-prompt Codex Goal handoff
 - add Sprint Planning Depth with a dedicated `plan-sprint` artifact template, sequence/rebalance/validate modes, richer story-lifecycle guidance for sprint goals/deferred work, Guidance Engine precedence over generic quality wording, and replay proof
 - add Story Decision Source Gate so implementation-ready stories require approved decision artifacts, persist explicit `decision_sources`, autoattach a single clear source, and require `--source` when multiple sources are available
 - add Agent Compactness Guard with `workflow compactness`, stricter workflow/facilitation shape checks, audit integration, smoke-runtime coverage, and unit proof for progressive disclosure

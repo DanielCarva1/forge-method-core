@@ -1591,6 +1591,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "story-creation-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "sprint-plan-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "sprint-status-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "build-story-work-order.md",
             ROOT / "skills" / "forge-method" / "templates" / "track-decision-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "project-context-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "session-prep-artifact.md",
@@ -1717,6 +1718,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["story-creation"].get("template"), "story-creation-artifact")
         self.assertEqual(by_id["plan-sprint"].get("template"), "sprint-plan-artifact")
         self.assertEqual(by_id["sprint-status"].get("template"), "sprint-status-artifact")
+        self.assertEqual(by_id["build-story"].get("template"), "build-story-work-order")
         self.assertEqual(by_id["module-ideation"].get("template"), "builder-factory-artifact")
         self.assertEqual(by_id["agent-builder"].get("template"), "builder-factory-artifact")
         self.assertEqual(by_id["workflow-builder"].get("template"), "builder-factory-artifact")
@@ -1768,6 +1770,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("validate", by_id["story-creation"].get("modes", []))
         self.assertIn("rebalance", by_id["plan-sprint"].get("modes", []))
         self.assertIn("status", by_id["sprint-status"].get("modes", []))
+        self.assertIn("evidence", by_id["build-story"].get("modes", []))
         self.assertIn("ideate", by_id["module-ideation"].get("modes", []))
         self.assertIn("create", by_id["agent-builder"].get("modes", []))
         self.assertIn("create", by_id["workflow-builder"].get("modes", []))
@@ -2440,11 +2443,24 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue(work_order["autonomous"])
             self.assertTrue(work_order["goal_recommended"])
             self.assertEqual(work_order["commit_policy"], "epic")
+            command_names = [item["name"] for item in work_order["commands"]]
+            self.assertIn("story-start", command_names)
+            self.assertIn("story-review", command_names)
+            self.assertIn("evidence-add", command_names)
+            self.assertIn("story-done", command_names)
+            self.assertIn("run required checks", work_order["loop"])
+            self.assertIn("write story evidence", work_order["loop"])
+            self.assertIn("do not ask for procedural ok/continue between mechanical steps", work_order["do_not_prompt"])
+            self.assertIn("evidence is written for story story-a", work_order["done_when"])
+            self.assertIn("sprint/status is updated and the next ready story or ready gate is explicit", work_order["done_when"])
             self.assertIn("required check fails", work_order["self_repair_when"])
             self.assertIn("missing external credential or access", work_order["stop_only_when"])
             self.assertTrue(resume["codex_goal_handoff"]["recommended"])
             self.assertIn("/goal", resume["codex_goal_handoff"]["command"])
+            self.assertIn("Do not ask for procedural ok/continue", resume["codex_goal_handoff"]["goal_text"])
             self.assertEqual(guide["mechanical_work_order"]["next_mechanical_step"], work_order["next_mechanical_step"])
+            self.assertEqual(guide["workflow_metadata"].get("template"), "build-story-work-order")
+            self.assertEqual(guide["facilitation_pack"], "skill:facilitation/story-lifecycle.md")
             self.assertIn("Goal recommended", next_text)
             self.assertNotIn("ok?", next_text.lower())
             self.assertNotIn("continue?", next_text.lower())

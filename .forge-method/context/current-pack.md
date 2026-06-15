@@ -4,30 +4,30 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: sprint-planning-depth-hardened
+- status: build-story-autonomy-hardened
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Continue real-use transcript hardening for remaining partial and strong-ish rows; next inspect dev-story mechanical autonomy and no-procedural-confirmation transcript gaps before claiming full guided-flow parity.
+- next_action: Continue real-use transcript hardening for remaining partial and strong-ish rows; next inspect editorial/edge-case/party-mode human guidance gaps before claiming full guided-flow parity.
 
 ## Latest Checkpoint
 
-# Sprint Planning Depth hardened
+# Build Story Autonomy Depth hardened
 
-- created_at: 2026-06-15T05:48:47+00:00
+- created_at: 2026-06-15T06:09:15+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: sprint-planning-depth-hardened
+- status: build-story-autonomy-hardened
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed the sprint-planning guidance gap: plan-sprint now has a compact source-aware state machine, dedicated sprint plan artifact template, sequence/rebalance/validate metadata, enriched story-lifecycle facilitation, Guidance Engine precedence over generic quality wording, and parity replay coverage.
+Closed the dev-story mechanical-autonomy gap: build-story now has a compact workflow contract, structured work-order template, catalog modes, full mechanical command map, JSON loop/do_not_prompt fields, compact recovery priority protection, and Codex Goal handoff that forbids procedural ok/continue prompts.
 
 ## Decisions
 
-- Sprint planning is not a backlog dump; it must preserve sprint goal, ordered story batch, decision-source map, validation/evidence plan, and deferred/blocked reasons before build.
-- Explicit sprint planning intent outranks generic validation/quality wording.
+- Mechanical story loops must expose the full start/resume -> implement -> check -> review -> evidence -> done -> next-story/ready-gate contract in JSON, not only prose.
+- Compact recovery must prioritize Read First over long command maps so fresh chats stay usable under small context budgets.
 
 ## Checks
 
@@ -49,9 +49,8 @@ Closed the sprint-planning guidance gap: plan-sprint now has a compact source-aw
 ## Touched Files
 
 - skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/references/workflow-plan-sprint.md
-- skills/forge-method/facilitation/story-lifecycle.md
-- skills/forge-method/templates/sprint-plan-artifact.md
+- skills/forge-method/references/workflow-build-story.md
+- skills/forge-method/templates/build-story-work-order.md
 - skills/forge-method/catalog/workflows.json
 - skills/forge-method/fixtures/guidance-parity-replay.json
 - tests/test_runtime.py
@@ -61,7 +60,7 @@ Closed the sprint-planning guidance gap: plan-sprint now has a compact source-aw
 - .forge-method/context/capability-index.json
 - CHANGELOG.md
 
-## Artifacts
+## Artifa
 [checkpoint truncated]
 
 ## Recovery Signals
@@ -100,16 +99,16 @@ Closed the sprint-planning guidance gap: plan-sprint now has a compact source-aw
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260615-043802-validation-brainstorming-depth-validation.md
 - .forge-method/evidence/20260615-045622-validation-cis-facilitation-depth-validation.md
 - .forge-method/evidence/20260615-051116-validation-agent-compactness-guard-validation.md
 - .forge-method/evidence/20260615-052906-validation-story-decision-source-gate-validation.md
 - .forge-method/evidence/20260615-054633-validation-sprint-planning-depth-validation.md
+- .forge-method/evidence/20260615-060843-validation-build-story-autonomy-depth-validation.md
 
 ## Recent Artifacts
 
-- internal-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD Forge systematic parity audit - Updated with Sprint Planning Depth: plan-sprint now has template metadata, modes, story-lifecycle facilitation depth, Guidance Engine precedence, and replay proof.
-- internal-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic parity plan - Updated immediate progress with Sprint Planning Depth and clarified remaining transcript-hardening work.
-- internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine internal benchmark - Updated sprint planning parity target and fixture workflow list for plan-sprint.
-- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability Index - Regenerated after Sprint Planning Depth to include plan-sprint template, modes, and outputs.
-- changelog [active/durable]: CHANGELOG.md - CHANGELOG - Added Unreleased note for Sprint Planning Depth.
+- internal-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD Forge systematic parity audit - Updated with Build Story Autonomy Depth: build-story now has structured work order, loop, command map, no-procedural-prompt contract, and replay proof.
+- internal-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic parity plan - Updated immediate progress with Build Story Autonomy Depth and clarified remaining transcript-hardening work.
+- internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine internal benchmark - Updated mechanical build benchmark target for structured work orders and no-procedural-prompt autonomy.
+- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability Index - Regenerated after Build Story Autonomy Depth to include build-story template, modes, and outputs.
+- changelog [active/durable]: CHANGELOG.md - CHANGELOG - Added Unreleased note for Build Story Autonomy Depth.

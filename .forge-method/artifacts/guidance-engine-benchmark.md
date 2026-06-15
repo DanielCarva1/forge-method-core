@@ -67,6 +67,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Story Decision Source Gate should be enforced at story add/import/start and audit time, so mechanical build never starts from an unmapped story.
 - Sprint planning should not be a backlog dump; it must create an executable batch with source map, validation map, deferred work, and a next story.
 - Mechanical build loops should continue through story start/review/fix/evidence/ready gate without asking for procedural "ok" once stories are ready.
+- Mechanical build work orders should expose the full loop, command map, stop-only conditions, and anti-prompt rules in JSON so agents do not infer autonomy from chat prose.
 - Fresh chat, network drop, reload, or context-reset messages should route to context-recovery and expose a compact context boundary: trust launcher output and durable state, load only read-first files, then run Guidance Engine for fresh human intent.
 - Runtime outputs must remain compact JSON/state-machine artifacts for agents, while non-JSON guidance can be human, direct, and useful.
 - Builder Factory outputs must keep coached human creation in facilitation packs and compact agent contracts in workflow refs, templates, catalog metadata, and validation reports.

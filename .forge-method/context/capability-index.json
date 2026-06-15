@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T05:39:31+00:00",
+  "generated_at": "2026-06-15T05:57:37+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -630,16 +630,29 @@
       "template": "brainstorming-artifact"
     },
     {
+      "facilitation_pack": "story-lifecycle",
       "followed_by": [
+        "code-review",
+        "test-review",
         "ready-release"
       ],
       "id": "build-story",
+      "modes": [
+        "start",
+        "continue",
+        "review",
+        "evidence",
+        "headless"
+      ],
       "outputs": [
         "implementation",
-        "evidence"
+        "review findings",
+        "validation evidence",
+        "updated sprint/story state"
       ],
       "phase": "4-build-verify",
-      "required": true
+      "required": true,
+      "template": "build-story-work-order"
     },
     {
       "followed_by": [

@@ -802,6 +802,8 @@
     "expected_classification": "mechanical-build",
     "expected_phase": "4-build-verify",
     "expected_workflow": "build-story",
+    "expected_facilitation_pack": "skill:facilitation/story-lifecycle.md",
+    "expected_template": "build-story-work-order",
     "state_update_required": false
   }
 ]
