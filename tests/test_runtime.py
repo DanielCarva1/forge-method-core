@@ -565,6 +565,8 @@ class RuntimeTests(unittest.TestCase):
                     case.get("expected_facilitation_pack"),
                     f"skill:facilitation/{workflow['facilitation_pack']}.md",
                 )
+            if workflow.get("template") and case["expected_classification"] != "mechanical-build":
+                self.assertEqual(case.get("expected_template"), workflow["template"])
 
     def test_parity_replay_command_validates_fixture_matrix(self) -> None:
         payload = json.loads(run_cmd("parity", "replay", "--json").stdout)
@@ -589,6 +591,22 @@ class RuntimeTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         failures = "\n".join("\n".join(item["failures"]) for item in payload["failures"])
         self.assertIn("fixture must declare expected_facilitation_pack", failures)
+
+    def test_parity_replay_requires_template_assertions_for_human_guidance(self) -> None:
+        fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
+        case = next(item for item in fixtures if item["id"] == "forge_experience_not_example_project").copy()
+        case.pop("expected_template", None)
+
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Path(raw) / "fixture.json"
+            fixture.write_text(json.dumps([case]), encoding="utf-8")
+
+            result = run_cmd("parity", "replay", "--fixture", str(fixture), "--json", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        failures = "\n".join("\n".join(item["failures"]) for item in payload["failures"])
+        self.assertIn("fixture must declare expected_template", failures)
 
     def test_packaged_reality_workflows_are_available(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

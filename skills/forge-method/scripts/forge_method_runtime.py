@@ -9087,6 +9087,12 @@ def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[
     metadata = payload.get("workflow_metadata") or {}
     expect_equal("workflow_metadata.id", metadata.get("id"), case.get("expected_workflow"))
     expect_equal("workflow_metadata.template", metadata.get("template"), case.get("expected_template"))
+    if (
+        metadata.get("template")
+        and case.get("expected_classification") != "mechanical-build"
+        and not case.get("expected_template")
+    ):
+        failures.append("fixture must declare expected_template for human-facing guided cases")
     expected_command = case.get("expected_command")
     if expected_command and expected_command not in command_names(payload.get("commands") or []):
         failures.append(f"commands: expected {expected_command!r}, got {command_names(payload.get('commands') or [])!r}")

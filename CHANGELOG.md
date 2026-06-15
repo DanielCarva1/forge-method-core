@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- require parity replay fixtures to assert `expected_template` for human-facing guided cases with catalog templates, protecting compact agent handoff artifacts from route-only regressions
 - require parity replay fixtures to assert `expected_facilitation_pack` for human-facing guided cases, closing weak transcript coverage where correct routes could pass without protecting rich human guidance
 - add Stale Guidance Guard to `artifact verify` so active parity/audit/plan artifacts warn on old mixed-verdict markers, and clean post-parity audit/plan wording that could route agents back to closed work
 - fold presentation-master requests into `storytelling` with a `presentation-craft` Persona Lens, pitch/deck structure fields, and replay proof while keeping visual deck production deferred

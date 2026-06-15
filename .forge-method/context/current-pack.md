@@ -4,35 +4,35 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: replay-facilitation-contract-hardened
+- status: replay-template-contract-hardened
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Continue post-parity Forge polish by looking for transcript-backed gaps where rich human guidance, persona lenses, templates, or automation outputs are not asserted by replay or gate coverage.
+- next_action: Continue post-parity Forge polish by checking persona lens and command/automation assertions; a route only counts when human guidance, compact artifact shape, and required automation handoff are protected by replay or gate evidence.
 
 ## Latest Checkpoint
 
-# Replay Facilitation Contract hardened
+# Replay Template Contract hardened
 
-- created_at: 2026-06-15T13:11:32+00:00
+- created_at: 2026-06-15T13:28:41+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: replay-facilitation-contract-hardened
+- status: replay-template-contract-hardened
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed weak transcript coverage where help/confusion/correct-course replay cases verified routes but not the rich facilitation packs. Replay now requires pack assertions for human-facing guided cases, fixtures declare the packs/templates, and tests cover the negative failure path.
+Closed the remaining human-facing replay gap where correct-course routing asserted pack but not the compact artifact template. Replay now requires template assertions for guided cases with catalog templates, and tests cover fixture/catalog consistency plus negative replay failure.
 
 ## Decisions
 
-- Human-facing replay cases must protect rich guidance output, not only route/workflow classification.
+- Route parity must include the compact agent artifact shape when the catalog defines one; otherwise a green transcript can still drop handoff quality.
 
 ## Checks
 
-- targeted replay fixture tests: 3 OK
+- targeted replay template tests: 3 OK
 - parity replay: 89/89 passed
-- python -m unittest discover -s tests: 80 tests OK
+- python -m unittest discover -s tests: 81 tests OK
 - artifact verify --root .: passed
 - smoke-runtime.ps1: passed
 - verify-fast.ps1: passed
@@ -47,16 +47,16 @@ Closed weak transcript coverage where help/confusion/correct-course replay cases
 - skills/forge-method/scripts/forge_method_runtime.py
 - skills/forge-method/fixtures/guidance-parity-replay.json
 - tests/test_runtime.py
-- .forge-method/artifacts/20260615-replay-facilitation-contract.md
+- .forge-method/artifacts/20260615-replay-template-contract.md
 
 ## Artifacts
 
-- .forge-method/artifacts/20260615-replay-facilitation-contract.md
-- .forge-method/evidence/20260615-131108-validation-replay-facilitation-contract-validation.md
+- .forge-method/artifacts/20260615-replay-template-contract.md
+- .forge-method/evidence/20260615-132818-validation-replay-template-contract-validation.md
 
 ## Next Action
 
-Continue post-parity Forge polish by looking for transcript-backed gaps where rich human guidance, persona lenses, templates, or automation outputs are not asserted by replay or gate coverage.
+Continue post-parity Forge polish by checking persona lens and command/automation assertions; a route only counts when human guidance, compact artifact shape, and required automation handoff are protected by replay or gate evidence.
 
 ## Recovery Signals
 
@@ -67,17 +67,17 @@ Continue post-parity Forge polish by looking for transcript-backed gaps where ri
 ### Touched Files
 
 - skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/catalog/workflows.json
-- skills/forge-method/facilitation/evidence-research.md
-- skills/forge-method/templates/research-scan-artifact.md
-- skills/forge-method/fixtures/guidance-parity-replay.json
-- tests/test_runtime.py
 - skills/forge-method/personas/overlays.json
 - skills/forge-method/facilitation/storytelling.md
 - skills/forge-method/references/workflow-storytelling.md
 - skills/forge-method/templates/storytelling-artifact.md
+- skills/forge-method/fixtures/guidance-parity-replay.json
+- tests/test_runtime.py
 - .forge-method/artifacts/20260615-post-parity-polish-audit.md
 - .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
+- .forge-method/artifacts/20260613-systematic-parity-plan.md
+- .forge-method/artifacts/20260615-replay-facilitation-contract.md
+- .forge-method/artifacts/20260615-replay-template-contract.md
 
 ## Open Human Inputs
 
@@ -94,16 +94,16 @@ Continue post-parity Forge polish by looking for transcript-backed gaps where ri
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260615-110943-validation-research-guidance-depth-validation.md
 - .forge-method/evidence/20260615-115018-validation-game-brief-sprint-depth-validation.md
 - .forge-method/evidence/20260615-122252-validation-presentation-craft-fold-in-validation.md
 - .forge-method/evidence/20260615-125002-validation-stale-guidance-guard-validation.md
 - .forge-method/evidence/20260615-131108-validation-replay-facilitation-contract-validation.md
+- .forge-method/evidence/20260615-132818-validation-replay-template-contract-validation.md
 
 ## Recent Artifacts
 
-- changelog [active/durable]: CHANGELOG.md - CHANGELOG - Unreleased notes include Stale Guidance Guard and post-parity audit cleanup behavior.
-- internal-audit [active/durable]: .forge-method/artifacts/20260615-post-parity-polish-audit.md - Post-Parity Polish Audit - Audited facilitation packs, compact workflow refs, and active guidance artifacts; added Stale Guidance Guard without storing forbidden stale markers in active guidance text.
 - internal-audit [active/durable]: .forge-method/artifacts/20260615-post-parity-polish-audit.md - Post-Parity Polish Audit - Audited facilitation packs, compact workflow refs, and active guidance artifacts; added Stale Guidance Guard and documented current post-parity polish without stale marker text.
 - changelog [active/durable]: CHANGELOG.md - CHANGELOG - Unreleased notes include the replay facilitation contract requiring pack assertions for human-facing guided parity cases.
 - internal-audit [active/durable]: .forge-method/artifacts/20260615-replay-facilitation-contract.md - Replay Facilitation Contract - Strengthened parity replay so human-facing guided cases must assert expected facilitation packs, preventing route-only passes from hiding rich human guidance regressions.
+- internal-audit [active/durable]: .forge-method/artifacts/20260615-replay-template-contract.md - Replay Template Contract - Strengthened parity replay so human-facing guided cases must assert expected artifact templates when catalog workflows define them, protecting compact agent handoff artifacts.
+- changelog [active/durable]: CHANGELOG.md - CHANGELOG - Unreleased notes include the replay template contract requiring expected_template assertions for human-facing guided parity cases.

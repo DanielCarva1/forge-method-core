@@ -259,6 +259,7 @@
     "expected_phase": "6-evolve",
     "expected_workflow": "correct-course",
     "expected_facilitation_pack": "skill:facilitation/correct-course.md",
+    "expected_template": "correct-course-artifact",
     "expected_command": "correct-course",
     "state_update_required": true
   },
