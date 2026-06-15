@@ -17,7 +17,8 @@ steps:
   3. choose harnesses and data strategy from the accepted stack
   4. define fixture architecture: pure helper, framework wrapper, composition surface, cleanup, and evidence
   5. record command contract, semantic locator policy, limitations, and maintenance rules
-  6. run `artifact test-check --path <test-framework-artifact>`
+  6. run artifact test-framework with fixture architecture, commands, evidence, repair policy, and next_workflow
+  7. run `artifact test-check --path <test-framework-artifact>`
 
 outputs:
   - test framework plan
@@ -31,6 +32,7 @@ done_when:
   - test layers and commands are explicit
   - fixture architecture is framework-neutral or stack-bound by decision
   - first checks are tied to risk
+  - artifact test-framework registered the durable framework artifact
   - test-check proof passes or waiver is explicit
   - limitations are documented
 

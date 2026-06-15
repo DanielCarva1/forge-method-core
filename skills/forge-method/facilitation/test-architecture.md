@@ -27,6 +27,7 @@ conversation_stages:
   - engagement_model: "Choose advice, design, implementation, review, audit, or gate before writing the artifact."
   - fixture_design: "Prefer pure helpers, thin framework wrappers, explicit composition, lifecycle cleanup, and command evidence."
   - generated_test_design: "Prefer existing framework APIs, semantic UI locators, visible outcome assertions, independent tests, and no hardcoded waits."
+  - generator_contract: "Use artifact test-framework, artifact test-automation, or artifact game-e2e-scaffold when the workflow is narrow enough."
   - evidence_design: "Define the proof path: examples, fixtures, commands, CI gates, traces, or waivers."
   - command_map: "Split local, fast, full, release, and investigation commands."
   - operating_model: "Decide how the team or agent will create, run, maintain, and trust the tests."
@@ -57,6 +58,7 @@ quality_bar:
   - "Traceability distinguishes planned coverage from release evidence."
   - "Waivers name owner, rationale, expiry/revisit trigger, and release impact."
   - "A future agent can run or inspect the proof without asking what quality means here."
+  - "artifact test-framework and artifact test-automation register durable quality handoffs before downstream review or gates."
   - "Generated test artifacts name detected framework, API/E2E scenarios, run-and-fix result, evidence links, and failure repair policy."
 
 anti_patterns:
@@ -68,7 +70,7 @@ anti_patterns:
   - "Do not hide weak evidence behind a green-sounding recommendation."
 
 paths:
-  fast_path: "Classify quality mode, select the specific workflow, and write one artifact with gaps and next action."
+  fast_path: "Classify quality mode, select the specific workflow, run the matching artifact generator when available, and record gaps plus next action."
   deep_path: "Run engagement model, framework, ATDD/automation, review, NFR audit, and traceability gate in order."
 
 checkpoint_options:
@@ -97,6 +99,7 @@ domain_examples:
 
 artifact_rules:
   Persist risk mapping, engagement mode, detected framework, selected scenarios, commands, run/fix result, evidence status, gate decision, waivers, and follow-up stories.
+  Use artifact test-framework, artifact test-automation, or artifact game-e2e-scaffold for their narrow handoffs.
   Use the narrow workflow template when available; use `skill:templates/test-architecture-artifact.md` only for legacy or mixed-mode quality artifacts.
 
 headless:

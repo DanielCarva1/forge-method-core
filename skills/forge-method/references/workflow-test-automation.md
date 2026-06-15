@@ -17,7 +17,8 @@ steps:
   3. define API checks, E2E workflows, fixtures, data setup, semantic locators, assertions, and command scope
   4. implement or plan independent checks with no hardcoded waits and visible-outcome assertions
   5. run or specify run-and-fix result, evidence links, manual remainders, and gate impact
-  6. run `artifact test-check --path <test-automation-artifact>`
+  6. run artifact test-automation with scenarios, checks, locators, assertions, commands, evidence, and next_workflow
+  7. run `artifact test-check --path <test-automation-artifact>`
 
 outputs:
   - automation plan or changes
@@ -32,6 +33,7 @@ done_when:
   - API/E2E checks use maintainable framework patterns
   - tests are independent and avoid hardcoded waits
   - run-and-fix result or waiver is recorded
+  - artifact test-automation registered the durable automation artifact
   - evidence path is clear
   - remaining manual checks or waivers are explicit
 

@@ -16,7 +16,8 @@ steps:
   2. scaffold or specify setup, action, assertion, teardown, and deterministic success signal
   3. decide automated, semi-automated, or manual evidence mode
   4. record command, evidence capture, failure repair policy, and release/readiness gate link
-  5. run `artifact test-check --path <game-e2e-artifact>`
+  5. run artifact game-e2e-scaffold with launch command, smoke path, evidence mode, gate link, and next_workflow
+  6. run `artifact test-check --path <game-e2e-artifact>`
 
 outputs:
   - game E2E scaffold
@@ -30,6 +31,7 @@ done_when:
   - observable success signal is stable
   - check mode and evidence are clear
   - release/readiness gate can consume the result
+  - artifact game-e2e-scaffold registered the durable smoke artifact
   - test-check proof passes or waiver is explicit
 
 blocked_when:

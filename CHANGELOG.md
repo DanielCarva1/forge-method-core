@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add first-class test utility generators with `artifact test-framework`, `artifact test-automation`, and `artifact game-e2e-scaffold`, Test Architecture/game lifecycle handoffs, tests, and source/install smoke coverage
 - add first-class game artifact generators with `artifact game-brief` and `artifact game-sprint-plan`, game facilitation/workflow handoffs, tests, and source/install smoke coverage
 - add first-class research scan generator with `artifact research-scan` for market/domain/technical evidence closeouts, Evidence Research guidance, workflow handoffs, tests, and source/install smoke coverage
 - add first-class spec kernel generator with `artifact spec-kernel`, write-spec workflow handoff, product-planning guidance, source/install smoke coverage, and phase-closeout generator audit

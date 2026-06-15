@@ -2352,6 +2352,171 @@ class RuntimeTests(unittest.TestCase):
             game_pass = run_cmd("artifact", "test-check", "--root", str(root), "--path", str(game_e2e_artifact))
             self.assertIn("Test utility check passed.", game_pass.stdout)
 
+    def test_artifact_test_generators_create_framework_automation_and_game_e2e(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+
+            framework = run_cmd(
+                "artifact",
+                "test-framework",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/test-framework-generated.md",
+                "--stack",
+                "TypeScript web app",
+                "--detected-framework",
+                "Playwright",
+                "--framework-detection",
+                "package.json has @playwright/test and playwright.config.ts",
+                "--package-or-config-files",
+                "package.json, playwright.config.ts",
+                "--test-levels",
+                "unit, API, E2E",
+                "--fixture-architecture",
+                "pure builders feed Playwright fixtures",
+                "--pure-helpers",
+                "data builders for users and orders",
+                "--framework-wrappers",
+                "Playwright fixtures wrap login/session setup",
+                "--composition-surface",
+                "test.extend composes auth, page objects, and seeded data",
+                "--cleanup-lifecycle",
+                "per-test database cleanup after assertions",
+                "--data-strategy",
+                "seed isolated records per scenario",
+                "--semantic-locator-policy",
+                "roles, labels, and visible text",
+                "--command-contract",
+                "npm run test:e2e",
+                "--commands",
+                "npm run test:e2e",
+                "--first-checks",
+                "checkout smoke and payment decline",
+                "--evidence-links",
+                ".forge-method/evidence/playwright-run.md",
+                "--failure-repair-policy",
+                "fix flaky setup or assertions before widening coverage",
+                "--maintenance-rules",
+                "keep helpers pure and wrappers thin",
+                "--limitations",
+                "visual diffs remain manual",
+                "--next-workflow",
+                "test-automation",
+                "--eval",
+            ).stdout
+            self.assertIn(".forge-method/artifacts/test-framework-generated.md", framework)
+            self.assertIn("Test utility check passed.", framework)
+            framework_text = (root / ".forge-method" / "artifacts" / "test-framework-generated.md").read_text(encoding="utf-8")
+            self.assertIn("workflow: test-framework", framework_text)
+            self.assertIn("validation: artifact test-check --path .forge-method/artifacts/test-framework-generated.md", framework_text)
+            self.assertTrue((root / ".forge-method" / "evals" / "artifact-forge-method-artifacts-test-framework-generated-md-exists.yaml").exists())
+
+            automation = run_cmd(
+                "artifact",
+                "test-automation",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/test-automation-generated.md",
+                "--framework",
+                "Playwright",
+                "--target-behaviors",
+                "checkout success and payment decline",
+                "--selected-scenarios",
+                "checkout success, payment decline, cart recovery",
+                "--risk-reason",
+                "checkout is the revenue path",
+                "--risk-priority",
+                "checkout revenue path first",
+                "--test-level",
+                "API plus browser E2E",
+                "--api-checks",
+                "create cart and payment intent contract checks",
+                "--e2e-workflows",
+                "browser checkout with saved card and visible receipt",
+                "--fixtures",
+                "seeded user, cart, payment method",
+                "--data-setup",
+                "fresh cart per test",
+                "--semantic-locator-policy",
+                "roles, labels, and visible text",
+                "--assertions",
+                "receipt heading and order id",
+                "--visible-outcome-assertions",
+                "receipt heading and order id are visible",
+                "--independent-test-policy",
+                "each scenario creates its own data",
+                "--no-hardcoded-waits",
+                "true",
+                "--commands",
+                "npm run test:e2e",
+                "--evidence-links",
+                ".forge-method/evidence/e2e-run.md",
+                "--run-and-fix-result",
+                "npm run test:e2e passed after selector repair",
+                "--failure-repair-policy",
+                "repair failing test or record waiver before gate",
+                "--manual-remainders",
+                "visual polish remains manual",
+                "--gate-impact",
+                "release gate consumes E2E evidence",
+                "--next-workflow",
+                "test-review",
+                "--eval",
+            ).stdout
+            self.assertIn(".forge-method/artifacts/test-automation-generated.md", automation)
+            self.assertIn("Test utility check passed.", automation)
+            automation_text = (root / ".forge-method" / "artifacts" / "test-automation-generated.md").read_text(encoding="utf-8")
+            self.assertIn("workflow: test-automation", automation_text)
+            self.assertIn("no_hardcoded_waits: true", automation_text)
+            self.assertTrue((root / ".forge-method" / "evals" / "artifact-forge-method-artifacts-test-automation-generated-md-exists.yaml").exists())
+
+            game_e2e = run_cmd(
+                "artifact",
+                "game-e2e-scaffold",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/game-e2e-generated.md",
+                "--playable-slice",
+                "first arena encounter",
+                "--engine-profile",
+                "browser canvas with deterministic seed",
+                "--launch-command",
+                "npm run game:test",
+                "--smoke-path",
+                "launch scene, start encounter, win, reset save",
+                "--setup-action-assertion-teardown",
+                "launch scene, start encounter, assert win banner, reset save",
+                "--observable-success-signal",
+                "win banner and score event are captured",
+                "--evidence-mode",
+                "screenshot plus command log",
+                "--commands",
+                "npm run game:test",
+                "--evidence-links",
+                ".forge-method/evidence/game-e2e.md",
+                "--release-gate-link",
+                "release-readiness playable smoke gate",
+                "--failure-repair-policy",
+                "fix launch/action/assertion before marking readiness",
+                "--manual-remainders",
+                "feel tuning remains playtest",
+                "--next-workflow",
+                "game-qa-review",
+                "--eval",
+            ).stdout
+            self.assertIn(".forge-method/artifacts/game-e2e-generated.md", game_e2e)
+            self.assertIn("Test utility check passed.", game_e2e)
+            game_e2e_text = (root / ".forge-method" / "artifacts" / "game-e2e-generated.md").read_text(encoding="utf-8")
+            self.assertIn("workflow: game-e2e-scaffold", game_e2e_text)
+            self.assertIn("release_gate_link: release-readiness playable smoke gate", game_e2e_text)
+            self.assertTrue((root / ".forge-method" / "evals" / "artifact-forge-method-artifacts-game-e2e-generated-md-exists.yaml").exists())
+            check = run_cmd("artifact", "test-check", "--root", str(root), "--path", ".forge-method/artifacts/game-e2e-generated.md").stdout
+            self.assertIn("Test utility check passed.", check)
+
     def test_artifact_game_check_validates_brief_and_sprint_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -3150,6 +3315,26 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("api", by_id["test-automation"].get("modes", []))
         self.assertIn("e2e", by_id["test-automation"].get("modes", []))
         self.assertIn("run-and-fix", by_id["test-automation"].get("modes", []))
+        test_architecture_pack = (
+            ROOT / "skills" / "forge-method" / "facilitation" / "test-architecture.md"
+        ).read_text(encoding="utf-8")
+        test_framework_workflow = (
+            ROOT / "skills" / "forge-method" / "references" / "workflow-test-framework.md"
+        ).read_text(encoding="utf-8")
+        test_automation_workflow = (
+            ROOT / "skills" / "forge-method" / "references" / "workflow-test-automation.md"
+        ).read_text(encoding="utf-8")
+        game_e2e_workflow = (
+            ROOT / "skills" / "forge-method" / "references" / "workflow-game-e2e-scaffold.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("artifact test-framework", test_architecture_pack)
+        self.assertIn("artifact test-automation", test_architecture_pack)
+        self.assertIn("artifact test-framework", test_framework_workflow)
+        self.assertIn("fixture architecture", test_framework_workflow)
+        self.assertIn("artifact test-automation", test_automation_workflow)
+        self.assertIn("no hardcoded waits", test_automation_workflow)
+        self.assertIn("artifact game-e2e-scaffold", game_e2e_workflow)
+        self.assertIn("launch-to-result", game_e2e_workflow)
         self.assertIn("review", by_id["test-review"].get("modes", []))
         self.assertIn("waiver", by_id["nfr-evidence-audit"].get("modes", []))
         self.assertIn("phase-2", by_id["traceability-gate"].get("modes", []))

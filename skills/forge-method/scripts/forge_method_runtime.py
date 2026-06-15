@@ -1561,6 +1561,20 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
             "guardrail": "A conversa pode ser rica; workflow refs, state, JSON e handoff continuam compactos.",
         }
     if classification == "quality-flow":
+        if workflow == "test-framework":
+            return {
+                "decision_summary": "Isto e arquitetura de teste: detectar ou escolher o harness, separar fixture pura de wrapper e deixar comando/prova duravel.",
+                "next_move": "Extrair detected_framework, fixture architecture, command_contract, first checks, evidence e failure_repair_policy para `artifact test-framework`.",
+                "human_question": first_guidance_question(classification, workflow),
+                "guardrail": "Framework de teste sem comando, cleanup e evidencia vira exemplo bonito que o proximo agente nao consegue confiar.",
+            }
+        if workflow == "test-automation":
+            return {
+                "decision_summary": "Isto e automacao de teste: escolher cenarios por risco e provar comportamento observavel sem fragilidade gratuita.",
+                "next_move": "Extrair scenarios, API/E2E checks, locators, assertions, no_hardcoded_waits, run_and_fix_result e evidence para `artifact test-automation`.",
+                "human_question": first_guidance_question(classification, workflow),
+                "guardrail": "Automacao boa reduz risco de release; teste que passa sem observar resultado visivel nao vale muito.",
+            }
         return {
             "decision_summary": "Isto e qualidade guiada: escolher o tipo de ajuda antes de inventar teste ou gate.",
             "next_move": "Definir risco, prova, ownership e decisao de gate ou waiver.",
@@ -1601,7 +1615,7 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
             },
             "game-e2e-scaffold": {
                 "decision_summary": "Isto e smoke jogavel: provar do launch ate um resultado observavel.",
-                "next_move": "Definir setup, acao do jogador, assert, teardown, evidencia e gate que consome essa prova.",
+                "next_move": "Definir setup, acao do jogador, assert, teardown, evidencia e gate para `artifact game-e2e-scaffold`.",
                 "human_question": "Qual e o caminho mais curto que demonstra que o slice realmente roda e responde?",
                 "guardrail": "E2E de jogo precisa verificar resultado jogavel, nao so abrir uma janela.",
             },
@@ -2625,6 +2639,43 @@ TEST_UTILITY_WORKFLOWS = {
     "game-test-framework",
     "game-test-automation",
     "game-e2e-scaffold",
+}
+TEST_FRAMEWORK_MODES = {
+    "create",
+    "fixtures",
+    "headless",
+    "validate",
+}
+TEST_FRAMEWORK_NEXT_WORKFLOWS = {
+    "atdd-plan",
+    "ci-quality-pipeline",
+    "test-automation",
+    "test-review",
+}
+TEST_AUTOMATION_MODES = {
+    "api",
+    "create",
+    "e2e",
+    "headless",
+    "run-and-fix",
+    "validate",
+}
+TEST_AUTOMATION_NEXT_WORKFLOWS = {
+    "build-story",
+    "test-review",
+    "traceability-gate",
+}
+GAME_E2E_SCAFFOLD_MODES = {
+    "automated",
+    "create",
+    "manual-proof",
+    "semi-automated",
+    "validate",
+}
+GAME_E2E_SCAFFOLD_NEXT_WORKFLOWS = {
+    "game-qa-review",
+    "game-test-automation",
+    "release-readiness",
 }
 
 GAME_ARTIFACT_WORKFLOWS = {
@@ -4406,6 +4457,41 @@ def write_game_sprint_plan_artifact(
     )
     if warnings:
         append_ledger(root, "artifact.game_sprint_plan.warning", {"path": rel, "warnings": join_list(warnings)})
+    return rel
+
+
+def write_test_utility_artifact(
+    root: Path,
+    *,
+    path: str,
+    title: str,
+    summary: str,
+    kind: str,
+    fields: list[tuple[str, str]],
+    force: bool = False,
+) -> str:
+    artifact_path, rel = project_path(root, path)
+    if artifact_path.exists() and not force:
+        raise SystemExit(f"Test utility artifact already exists: {rel}. Use --force to replace it.")
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    normalized_fields = [(key, f"artifact test-check --path {rel}" if key == "validation" and not value else value) for key, value in fields]
+    lines = [f"# {title}", ""]
+    lines.extend(f"{key}: {one_line(value)}" for key, value in normalized_fields)
+    artifact_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    errors, warnings = test_utility_findings(root, artifact_path)
+    if errors:
+        artifact_path.unlink(missing_ok=True)
+        raise SystemExit("Test utility generation failed validation:\n" + "\n".join(f"- {error}" for error in errors))
+    rel = write_artifact(
+        root,
+        kind=kind,
+        title=title,
+        summary=summary,
+        path=rel,
+        lifecycle="durable",
+    )
+    if warnings:
+        append_ledger(root, "artifact.test_utility.warning", {"path": rel, "warnings": join_list(warnings)})
     return rel
 
 
@@ -6347,6 +6433,130 @@ def cmd_artifact_game_sprint_plan(args: argparse.Namespace) -> int:
         write_artifact_eval(root, rel, title=args.title, summary=args.summary)
     print(rel)
     print("Game artifact check passed.")
+    print(f"Next workflow: {args.next_workflow}")
+    return 0
+
+
+def cmd_artifact_test_framework(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    rel = write_test_utility_artifact(
+        root,
+        path=args.path,
+        title=args.title,
+        summary=args.summary,
+        kind="test-framework",
+        fields=[
+            ("workflow", "test-framework"),
+            ("mode", args.mode),
+            ("stack", args.stack),
+            ("detected_framework", args.detected_framework),
+            ("framework_detection", args.framework_detection),
+            ("package_or_config_files", args.package_or_config_files),
+            ("test_levels", args.test_levels),
+            ("fixture_architecture", args.fixture_architecture),
+            ("pure_helpers", args.pure_helpers),
+            ("framework_wrappers", args.framework_wrappers),
+            ("composition_surface", args.composition_surface),
+            ("cleanup_lifecycle", args.cleanup_lifecycle),
+            ("data_strategy", args.data_strategy),
+            ("semantic_locator_policy", args.semantic_locator_policy),
+            ("command_contract", args.command_contract),
+            ("commands", args.commands),
+            ("first_checks", args.first_checks),
+            ("evidence_links", args.evidence_links),
+            ("failure_repair_policy", args.failure_repair_policy),
+            ("maintenance_rules", args.maintenance_rules),
+            ("limitations", args.limitations),
+            ("validation", args.validation),
+            ("next_workflow", args.next_workflow),
+        ],
+        force=args.force,
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title=args.title, summary=args.summary)
+    print(rel)
+    print("Test utility check passed.")
+    print(f"Next workflow: {args.next_workflow}")
+    return 0
+
+
+def cmd_artifact_test_automation(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    rel = write_test_utility_artifact(
+        root,
+        path=args.path,
+        title=args.title,
+        summary=args.summary,
+        kind="test-automation",
+        fields=[
+            ("workflow", "test-automation"),
+            ("mode", args.mode),
+            ("framework", args.framework),
+            ("target_behaviors", args.target_behaviors),
+            ("selected_scenarios", args.selected_scenarios),
+            ("risk_reason", args.risk_reason),
+            ("risk_priority", args.risk_priority),
+            ("test_level", args.test_level),
+            ("api_checks", args.api_checks),
+            ("e2e_workflows", args.e2e_workflows),
+            ("fixtures", args.fixtures),
+            ("data_setup", args.data_setup),
+            ("semantic_locator_policy", args.semantic_locator_policy),
+            ("assertions", args.assertions),
+            ("visible_outcome_assertions", args.visible_outcome_assertions),
+            ("independent_test_policy", args.independent_test_policy),
+            ("no_hardcoded_waits", args.no_hardcoded_waits),
+            ("commands", args.commands),
+            ("evidence_links", args.evidence_links),
+            ("run_and_fix_result", args.run_and_fix_result),
+            ("failure_repair_policy", args.failure_repair_policy),
+            ("manual_remainders", args.manual_remainders),
+            ("gate_impact", args.gate_impact),
+            ("validation", args.validation),
+            ("next_workflow", args.next_workflow),
+        ],
+        force=args.force,
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title=args.title, summary=args.summary)
+    print(rel)
+    print("Test utility check passed.")
+    print(f"Next workflow: {args.next_workflow}")
+    return 0
+
+
+def cmd_artifact_game_e2e_scaffold(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    rel = write_test_utility_artifact(
+        root,
+        path=args.path,
+        title=args.title,
+        summary=args.summary,
+        kind="game-e2e-scaffold",
+        fields=[
+            ("workflow", "game-e2e-scaffold"),
+            ("mode", args.mode),
+            ("playable_slice", args.playable_slice),
+            ("engine_profile", args.engine_profile),
+            ("launch_command", args.launch_command),
+            ("smoke_path", args.smoke_path),
+            ("setup_action_assertion_teardown", args.setup_action_assertion_teardown),
+            ("observable_success_signal", args.observable_success_signal),
+            ("evidence_mode", args.evidence_mode),
+            ("commands", args.commands),
+            ("evidence_links", args.evidence_links),
+            ("release_gate_link", args.release_gate_link),
+            ("failure_repair_policy", args.failure_repair_policy),
+            ("manual_remainders", args.manual_remainders),
+            ("validation", args.validation),
+            ("next_workflow", args.next_workflow),
+        ],
+        force=args.force,
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title=args.title, summary=args.summary)
+    print(rel)
+    print("Test utility check passed.")
     print(f"Next workflow: {args.next_workflow}")
     return 0
 
@@ -13360,6 +13570,103 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_game_sprint_plan.add_argument("--force", action="store_true")
     artifact_game_sprint_plan.add_argument("--eval", action="store_true")
     artifact_game_sprint_plan.set_defaults(func=cmd_artifact_game_sprint_plan, record_guidance=True)
+
+    artifact_test_framework = artifact_sub.add_parser(
+        "test-framework",
+        help="write and validate a test framework and fixture architecture artifact",
+    )
+    artifact_test_framework.add_argument("--root", default=".")
+    artifact_test_framework.add_argument("--path", default=".forge-method/artifacts/test-framework.md")
+    artifact_test_framework.add_argument("--title", default="Test Framework")
+    artifact_test_framework.add_argument("--summary", default="Test framework plan with fixture architecture, command contract, evidence, and repair policy.")
+    artifact_test_framework.add_argument("--mode", choices=sorted(TEST_FRAMEWORK_MODES), default="create")
+    artifact_test_framework.add_argument("--stack", default="")
+    artifact_test_framework.add_argument("--detected-framework", required=True)
+    artifact_test_framework.add_argument("--framework-detection", required=True)
+    artifact_test_framework.add_argument("--package-or-config-files", default="")
+    artifact_test_framework.add_argument("--test-levels", default="")
+    artifact_test_framework.add_argument("--fixture-architecture", default="")
+    artifact_test_framework.add_argument("--pure-helpers", required=True)
+    artifact_test_framework.add_argument("--framework-wrappers", required=True)
+    artifact_test_framework.add_argument("--composition-surface", required=True)
+    artifact_test_framework.add_argument("--cleanup-lifecycle", required=True)
+    artifact_test_framework.add_argument("--data-strategy", default="")
+    artifact_test_framework.add_argument("--semantic-locator-policy", default="")
+    artifact_test_framework.add_argument("--command-contract", required=True)
+    artifact_test_framework.add_argument("--commands", required=True)
+    artifact_test_framework.add_argument("--first-checks", default="")
+    artifact_test_framework.add_argument("--evidence-links", required=True)
+    artifact_test_framework.add_argument("--failure-repair-policy", required=True)
+    artifact_test_framework.add_argument("--maintenance-rules", default="")
+    artifact_test_framework.add_argument("--limitations", default="")
+    artifact_test_framework.add_argument("--validation", default="")
+    artifact_test_framework.add_argument("--next-workflow", choices=sorted(TEST_FRAMEWORK_NEXT_WORKFLOWS), default="test-automation")
+    artifact_test_framework.add_argument("--force", action="store_true")
+    artifact_test_framework.add_argument("--eval", action="store_true")
+    artifact_test_framework.set_defaults(func=cmd_artifact_test_framework, record_guidance=True)
+
+    artifact_test_automation = artifact_sub.add_parser(
+        "test-automation",
+        help="write and validate an automated test scenario artifact",
+    )
+    artifact_test_automation.add_argument("--root", default=".")
+    artifact_test_automation.add_argument("--path", default=".forge-method/artifacts/test-automation.md")
+    artifact_test_automation.add_argument("--title", default="Test Automation")
+    artifact_test_automation.add_argument("--summary", default="Test automation artifact with risk-ranked scenarios, API/E2E checks, commands, evidence, and repair policy.")
+    artifact_test_automation.add_argument("--mode", choices=sorted(TEST_AUTOMATION_MODES), default="create")
+    artifact_test_automation.add_argument("--framework", default="")
+    artifact_test_automation.add_argument("--target-behaviors", default="")
+    artifact_test_automation.add_argument("--selected-scenarios", required=True)
+    artifact_test_automation.add_argument("--risk-reason", default="")
+    artifact_test_automation.add_argument("--risk-priority", required=True)
+    artifact_test_automation.add_argument("--test-level", default="")
+    artifact_test_automation.add_argument("--api-checks", required=True)
+    artifact_test_automation.add_argument("--e2e-workflows", required=True)
+    artifact_test_automation.add_argument("--fixtures", default="")
+    artifact_test_automation.add_argument("--data-setup", default="")
+    artifact_test_automation.add_argument("--semantic-locator-policy", required=True)
+    artifact_test_automation.add_argument("--assertions", default="")
+    artifact_test_automation.add_argument("--visible-outcome-assertions", required=True)
+    artifact_test_automation.add_argument("--independent-test-policy", required=True)
+    artifact_test_automation.add_argument("--no-hardcoded-waits", required=True)
+    artifact_test_automation.add_argument("--commands", required=True)
+    artifact_test_automation.add_argument("--evidence-links", required=True)
+    artifact_test_automation.add_argument("--run-and-fix-result", required=True)
+    artifact_test_automation.add_argument("--failure-repair-policy", required=True)
+    artifact_test_automation.add_argument("--manual-remainders", default="")
+    artifact_test_automation.add_argument("--gate-impact", default="")
+    artifact_test_automation.add_argument("--validation", default="")
+    artifact_test_automation.add_argument("--next-workflow", choices=sorted(TEST_AUTOMATION_NEXT_WORKFLOWS), default="test-review")
+    artifact_test_automation.add_argument("--force", action="store_true")
+    artifact_test_automation.add_argument("--eval", action="store_true")
+    artifact_test_automation.set_defaults(func=cmd_artifact_test_automation, record_guidance=True)
+
+    artifact_game_e2e_scaffold = artifact_sub.add_parser(
+        "game-e2e-scaffold",
+        help="write and validate a game launch-to-result E2E scaffold artifact",
+    )
+    artifact_game_e2e_scaffold.add_argument("--root", default=".")
+    artifact_game_e2e_scaffold.add_argument("--path", default=".forge-method/artifacts/game-e2e.md")
+    artifact_game_e2e_scaffold.add_argument("--title", default="Game E2E Scaffold")
+    artifact_game_e2e_scaffold.add_argument("--summary", default="Game E2E scaffold with launch command, setup/action/assertion/teardown, evidence mode, and gate link.")
+    artifact_game_e2e_scaffold.add_argument("--mode", choices=sorted(GAME_E2E_SCAFFOLD_MODES), default="create")
+    artifact_game_e2e_scaffold.add_argument("--playable-slice", default="")
+    artifact_game_e2e_scaffold.add_argument("--engine-profile", default="")
+    artifact_game_e2e_scaffold.add_argument("--launch-command", required=True)
+    artifact_game_e2e_scaffold.add_argument("--smoke-path", default="")
+    artifact_game_e2e_scaffold.add_argument("--setup-action-assertion-teardown", required=True)
+    artifact_game_e2e_scaffold.add_argument("--observable-success-signal", required=True)
+    artifact_game_e2e_scaffold.add_argument("--evidence-mode", required=True)
+    artifact_game_e2e_scaffold.add_argument("--commands", required=True)
+    artifact_game_e2e_scaffold.add_argument("--evidence-links", required=True)
+    artifact_game_e2e_scaffold.add_argument("--release-gate-link", required=True)
+    artifact_game_e2e_scaffold.add_argument("--failure-repair-policy", required=True)
+    artifact_game_e2e_scaffold.add_argument("--manual-remainders", default="")
+    artifact_game_e2e_scaffold.add_argument("--validation", default="")
+    artifact_game_e2e_scaffold.add_argument("--next-workflow", choices=sorted(GAME_E2E_SCAFFOLD_NEXT_WORKFLOWS), default="game-qa-review")
+    artifact_game_e2e_scaffold.add_argument("--force", action="store_true")
+    artifact_game_e2e_scaffold.add_argument("--eval", action="store_true")
+    artifact_game_e2e_scaffold.set_defaults(func=cmd_artifact_game_e2e_scaffold, record_guidance=True)
 
     artifact_capture = artifact_sub.add_parser("capture", help="capture an artifact result and optionally delete it")
     artifact_capture.add_argument("--root", default=".")

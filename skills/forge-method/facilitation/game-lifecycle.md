@@ -55,6 +55,7 @@ quality_bar:
   - "The route advances the game lifecycle instead of looping in ideation."
   - "Sprint planning preserves playable slice goal, decision sources, ordered story batch, validation plan, deferred scope, next story, and sprint update."
   - "artifact game-sprint-plan registers the playable-slice sprint before game-story-creation or build-story consumes it."
+  - "artifact game-e2e-scaffold registers launch-to-result proof before QA or release-readiness consumes it."
   - "Game E2E proof has a stable launch command, observable success signal, evidence capture mode, and release gate handoff."
 
 anti_patterns:
@@ -112,6 +113,7 @@ domain_examples:
 artifact_rules:
   Persist lifecycle stage, source docs, decisions, parked scope, validation evidence, E2E smoke proof, next story/workflow, and unresolved risks.
   Use artifact game-sprint-plan for game-sprint-planning handoffs.
+  Use artifact game-e2e-scaffold for launch-to-result smoke handoffs.
   Use `skill:templates/game-lifecycle-artifact.md` as the default artifact shape unless a narrower project template exists.
 
 headless:
