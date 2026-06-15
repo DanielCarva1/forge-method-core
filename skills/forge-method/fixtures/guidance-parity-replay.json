@@ -39,6 +39,20 @@
     "expected_classification": "brainstorm",
     "expected_phase": "1-discovery",
     "expected_workflow": "brainstorming",
+    "expected_facilitation_pack": "skill:facilitation/brainstorming.md",
+    "expected_template": "brainstorming-artifact",
+    "state_update_required": false
+  },
+  {
+    "id": "broad_idea_needs_guided_divergence",
+    "family": "brainstorm",
+    "state": "discovery",
+    "question": "tenho uma ideia ampla mas ainda nao sei a direcao; quero explorar opcoes, criterios, descartes e riscos antes de virar PRD",
+    "expected_classification": "brainstorm",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "brainstorming",
+    "expected_facilitation_pack": "skill:facilitation/brainstorming.md",
+    "expected_template": "brainstorming-artifact",
     "state_update_required": false
   },
   {

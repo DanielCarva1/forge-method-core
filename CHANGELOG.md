@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add Brainstorming Depth with richer guided divergence/convergence facilitation, option lanes, taste and anti-reference pressure testing, discard pile, compact artifact template, catalog modes, and replay proof for broad ideas before PRD
 - add Context Boundary Recovery for fresh chats, network drops, reloads, and stale context: `reload`, `resume`, Help Oracle JSON, and post-command ledger now expose compact context boundaries, with a context-recovery facilitation pack/template and replay proof
 - add Architecture Guidance Depth with architecture artifact template, create/update/validate/tradeoff metadata, deeper PRD/UX/security/interface/test-hook/story-impact facilitation, and Guidance Engine precedence for product architecture over generic quality routing
 - add post-command Help Oracle guidance for progress-changing runtime commands: interactive mutations now print the next required workflow, alternatives, and stale-state guard, while path-output commands record the same compact contract in `ledger.ndjson`

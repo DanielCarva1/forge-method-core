@@ -87,6 +87,7 @@ P0 through P1.7 are closed:
 - Post-command Help Oracle: implemented after 1.29.0 so progress-changing commands record compact next-workflow guidance in `ledger.ndjson`, and interactive mutations print the next required workflow, alternatives, and stale-state guard.
 - Architecture Guidance Depth: implemented after 1.29.0 with architecture artifact template, create/update/validate/tradeoff metadata, deeper PRD/UX/security/interface/test-hook/story-impact facilitation, and replay precedence over generic quality routing.
 - Context Boundary Recovery: implemented after 1.29.0 with fresh-chat boundary metadata in reload/resume/Help Oracle, context-recovery pack/template, compact recovery contract, and replay coverage for interrupted chat/network context.
+- Brainstorming Depth: implemented after 1.29.0 with richer guided divergence/convergence facilitation, option lanes, taste and anti-reference pressure testing, discard pile, compact brainstorming artifact, modes, and replay proof before PRD.
 - Human facilitation coverage gate: implemented and validated.
 - PRD/UX/Quick Dev depth: implemented with workflows, packs, templates, routes, and fixtures.
 - Story lifecycle proof: implemented with `story-creation`, decision-source guard, and mechanical no-procedural-confirmation tests.

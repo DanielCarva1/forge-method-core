@@ -52,7 +52,8 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `guide --question --json` must classify the latest human message against durable state and available workflows.
 - Human frustration or rejection of the current route must override stale `next_action` and route to `correct-course` or `6-evolve`.
 - Corrections about the method's own experience must route to `correct-course` first; `runtime-builder` is the repair path after the failed behavior is named.
-- Broad ideas should receive a guided discovery, brainstorm, research, game, creative, quality, or builder workflow before technical implementation plans.
+- Broad ideas should receive a guided discovery, brainstorm, research, game, creative, quality, or builder workflow before technical implementation plans; option-generation language should route to brainstorming before generic confusion, while taste-heavy creative requests still route to creative-session.
+- Brainstorming should preserve option lanes, selection criteria, taste anchors, anti-goals, discard pile, risk/evidence needs, top candidates, and next workflow in a compact artifact.
 - Confusion should produce one recommended route and a small set of alternatives.
 - Mechanical build requests should continue autonomously when decision artifacts and stories are already ready.
 - Method/runtime audit requests should route to runtime-builder instead of generic operate/support, especially when they mention scripts, dead code, misleading docs, agent behavior, or human-guided experience.

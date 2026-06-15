@@ -6918,11 +6918,6 @@ def build_guidance_decision(
             ("build-story", "when the next ready story should be implemented"),
         )
         reason = "The message asks for sprint status, so the status ritual outranks generic confusion about next steps."
-    elif has_question and "confusion" in signal_set:
-        classification = "confusion"
-        recommended_workflow = routed_problem_workflow(question)
-        recommended_action, human_prompt, alternatives = problem_guidance_text(recommended_workflow)
-        reason = "The message asks for orientation or indicates uncertainty."
     elif has_question and "creative-flow" in signal_set:
         classification = "creative-flow"
         recommended_workflow = "creative-session"
@@ -6932,13 +6927,19 @@ def build_guidance_decision(
     elif has_question and "brainstorm" in signal_set:
         classification = "brainstorm"
         recommended_workflow = "brainstorming"
-        recommended_action = "generate and compare options before committing to specification"
-        human_prompt = "I should keep this divergent until the direction is chosen."
+        recommended_action = "generate, stretch, pressure-test, and compare options before committing to specification"
+        human_prompt = "I should keep this divergent until real options, criteria, and rejects exist."
         alternatives = guidance_alternatives(
-            ("concept-selection", "choose between candidate directions"),
-            ("reality-evidence-gate", "filter impossible or risky promises"),
+            ("concept-selection", "choose between candidate directions after divergence"),
+            ("reality-evidence-gate", "filter impossible, unsafe, or evidence-dependent promises"),
+            ("problem-solving", "use when the issue is a symptom or blocker rather than option generation"),
         )
-        reason = "The message asks for ideas, options, or exploration."
+        reason = "Option-generation language outranks generic confusion because the human needs guided divergence before deciding."
+    elif has_question and "confusion" in signal_set:
+        classification = "confusion"
+        recommended_workflow = routed_problem_workflow(question)
+        recommended_action, human_prompt, alternatives = problem_guidance_text(recommended_workflow)
+        reason = "The message asks for orientation or indicates uncertainty."
     elif has_question and "document-utility" in signal_set and routed_document_workflow(question) == "adversarial-review":
         classification = "document-utility"
         recommended_workflow = "adversarial-review"

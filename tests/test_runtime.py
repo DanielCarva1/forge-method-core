@@ -1488,6 +1488,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "playtest-plan-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "performance-plan-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "game-qa-review-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "brainstorming-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "test-architecture-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "teach-testing-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "test-strategy-artifact.md",
@@ -1534,6 +1535,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "facilitation" / "ux-design.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "architecture-planning.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "context-boundary.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "brainstorming.md",
         ]:
             self.assertIn("domain_examples:", pack_path.read_text(encoding="utf-8"))
         catalog = json.loads((ROOT / "skills" / "forge-method" / "catalog" / "workflows.json").read_text(encoding="utf-8"))
@@ -1565,6 +1567,7 @@ class RuntimeTests(unittest.TestCase):
             "working-backwards-challenge",
             "ux-plan",
             "quick-dev",
+            "brainstorming",
             "story-creation",
             "sprint-status",
             "architecture",
@@ -1618,6 +1621,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["ux-plan"].get("template"), "ux-design-artifact")
         self.assertEqual(by_id["architecture"].get("template"), "architecture-artifact")
         self.assertEqual(by_id["quick-dev"].get("template"), "quick-dev-artifact")
+        self.assertEqual(by_id["brainstorming"].get("template"), "brainstorming-artifact")
         self.assertEqual(by_id["story-creation"].get("template"), "story-creation-artifact")
         self.assertEqual(by_id["sprint-status"].get("template"), "sprint-status-artifact")
         self.assertEqual(by_id["module-ideation"].get("template"), "builder-factory-artifact")
@@ -1663,6 +1667,8 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("tradeoff", by_id["architecture"].get("modes", []))
         self.assertIn("readiness-check", by_id["architecture"].get("followed_by", []))
         self.assertIn("spec-lite", by_id["quick-dev"].get("modes", []))
+        self.assertIn("converge", by_id["brainstorming"].get("modes", []))
+        self.assertIn("concept-selection", by_id["brainstorming"].get("followed_by", []))
         self.assertIn("validate", by_id["story-creation"].get("modes", []))
         self.assertIn("status", by_id["sprint-status"].get("modes", []))
         self.assertIn("ideate", by_id["module-ideation"].get("modes", []))

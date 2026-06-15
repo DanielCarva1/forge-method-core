@@ -77,7 +77,7 @@ The product direction is therefore:
 | `bmad-help` project-aware guidance | `preflight`, `start`, `resume`, `guide`, Guidance Engine, post-command Help Oracle ledger | translated | Post-command guidance now records the next required workflow, alternatives, and stale-state guard for progress-changing commands; interactive mutations also print it. | Keep real-use transcript hardening focused on places where the agent still ignores the emitted or recorded next workflow. |
 | Workflow status / workflow map | `.forge-method/state.yaml`, `sprint.yaml`, `status`, `snapshot`, `context plan` | strong | Human explanation can still be dry compared to BMAD Help. | Keep compact JSON, improve human summaries and status affordances. |
 | Planning tracks: Quick Flow / Method / Enterprise | Forge modules plus `track-decision` | translated/partial | P1.4 adds a route decision artifact and required workflow map, but deeper track-specific doc trees can still improve. | Expand track-specific required/optional docs as future module depth is translated. |
-| Analysis: brainstorming | `brainstorming` workflow + facilitation pack | strong-ish | Need transcript tests for richer guided divergence, not just route. | Add fixtures for option generation, constraint capture, rejected directions. |
+| Analysis: brainstorming | `brainstorming` workflow + facilitation pack/template | translated | Brainstorming Depth adds guided divergence, taste/anti-reference prompts, pressure testing, discard pile, selection criteria, compact artifact template, modes, and replay proof for broad ideas before PRD. | Add richer live transcript examples only if sessions still collapse too early. |
 | Analysis: market/domain/technical research | `market-scan`, `domain-scan`, `technical-feasibility-scan`, Reality/Evidence Gate, `research-closeout` | translated/strong | P1.4 adds research closeout handoff with sources, confidence, decision impact, uncertainty, and next workflow. | Add richer source-quality examples as research depth grows. |
 | Product brief / PRFAQ | `discover-intent`, `product-requirements`, `working-backwards-challenge`, `reality-evidence-gate` | translated | P1.7 adds a working-backwards challenge workflow for customer-promise, FAQ objection, evidence gap, and decision-impact stress testing before PRD/UX/architecture harden the promise. | Add richer transcript examples only if real product sessions show weak coaching. |
 | PRD create/update/validate | `product-requirements`, `write-spec`, `spec-distillation`, `grill-gate` | translated | Product requirements now has create/update/validate/addendum modes, decision/addendum log, validation findings, template metadata, facilitation depth, and replay coverage. | Add richer transcript examples only if live product sessions expose weak coaching. |
@@ -113,7 +113,7 @@ The product direction is therefore:
 | Progressive disclosure pattern | Skill instructions and context plan | partial | Principle exists, not audited across every pack/workflow. | Add compactness verifier for workflows/facilitation refs. |
 | Subagent orchestration patterns | optional agent profiles, council | partial/missing | No systematic parallel/hierarchical subagent patterns for Forge tasks. | Add orchestration guidance and tests only where Codex supports it. |
 | Persistent memory agents | file-backed project state | non-goal | P2 decision: Forge owns project-local durable state, artifacts, checkpoints, context packs, and ledgers, not broad personal companion memory. | Revisit only for a separate personal workspace product. |
-| CIS brainstorming | `brainstorming` pack plus Brainstorming Coach lens | strong-ish | Coach routing and techniques exist; richer option-generation transcripts are still future depth. | Add examples for option generation, constraints, and convergence. |
+| CIS brainstorming | `brainstorming` pack plus Brainstorming Coach lens | translated | Brainstorming Depth adds option lanes, constraint inversion, taste contrast, discard pile, convergence criteria, template, and replay proof while preserving coach lens routing. | Keep future examples focused on real use where humans still feel stuck. |
 | CIS design thinking | `design-thinking` pack plus Design Thinking Coach lens | strong-ish | Route and lens proof exist; deeper outputs can still improve. | Expand examples and artifact expectations when design-thinking becomes a larger workflow. |
 | CIS innovation strategy | `innovation-strategy` plus Innovation Strategist lens | partial | Lens route exists, but no facilitation pack. | Add pack and transcript fixtures. |
 | CIS problem solving | `problem-solving` pack plus Creative Problem Solver lens | strong-ish | Coach route exists; more stuck/frustrated transcripts would improve proof. | Add fixtures for messy constraints and recovery. |
@@ -180,7 +180,7 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | Source token | Forge-native target | Status |
 | --- | --- | --- |
 | `bmad-help` | `preflight`, `start`, `resume`, `guide`, Guidance Engine, post-command Help Oracle | translated |
-| `bmad-brainstorming` | `brainstorming` | strong-ish |
+| `bmad-brainstorming` | `brainstorming` with guided divergence/convergence artifact | translated |
 | `bmad-market-research` | `market-scan` | strong-ish |
 | `bmad-domain-research` | `domain-scan` | strong-ish |
 | `bmad-technical-research` | `technical-feasibility-scan` | strong-ish |
@@ -225,7 +225,7 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | `bmad-module-builder` | `module-ideation`, `module-builder`, `module-validate` | translated |
 | `bmad-eval-runner` | `eval run`, smoke scripts, future eval runner | partial |
 | `bmad-session-prep` | `session-prep`, `context plan`, `context recover` | translated |
-| `/cis-brainstorm` | `brainstorming` | strong-ish |
+| `/cis-brainstorm` | `brainstorming` | translated |
 | `/cis-design-thinking` | `design-thinking` | partial |
 | `/cis-innovation-strategy` | `innovation-strategy` plus future pack | partial |
 | `/cis-problem-solving` | `problem-solving` | strong-ish |

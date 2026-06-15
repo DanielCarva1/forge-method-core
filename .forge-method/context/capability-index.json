@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T04:06:56+00:00",
+  "generated_at": "2026-06-15T04:20:26+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -605,14 +605,29 @@
     {
       "facilitation_pack": "brainstorming",
       "followed_by": [
-        "concept-selection"
+        "concept-selection",
+        "reality-evidence-gate",
+        "product-requirements",
+        "game-brief"
       ],
       "id": "brainstorming",
+      "modes": [
+        "diverge",
+        "explore",
+        "converge",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "option set"
+        "option set",
+        "selection criteria",
+        "rejected patterns",
+        "top candidates",
+        "next workflow"
       ],
       "phase": "1-discovery",
-      "required": false
+      "required": false,
+      "template": "brainstorming-artifact"
     },
     {
       "followed_by": [
