@@ -31,6 +31,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Track decisions should preserve the chosen route, rejected routes, source signals, and required next workflows before more artifacts are created.
 - Session prep should create read order, blockers, first command, state mutation rules, and continuation handoff for the next agent/session.
 - Narrow guided workflows should be executable next steps: when selected inside an existing project, the route should include a state transition command instead of only restating the recommendation.
+- Progressive disclosure should be machine-checked: agent-facing workflow refs stay compact state machines, human facilitation packs hold the richer coaching surface, and validation fails if the two layers blur.
 - Correct-course is a first-class recovery path when the conversation shows the current route is wrong.
 - Transcript corrections such as "do not solve the example project; understand the Forge experience" must be treated as method correct-course, even when they also mention runtime, Forge, benchmark, or guided flows.
 - Runtime audit requests should be treated as guided builder work when the human asks about dead code, misleading agent docs, stale workflow behavior, or whether the guided experience is truly comparable.
@@ -55,6 +56,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Broad ideas should receive a guided discovery, brainstorm, research, game, creative, quality, or builder workflow before technical implementation plans; option-generation language should route to brainstorming before generic confusion, while taste-heavy broad creative requests still route to creative-session and specific CIS strategy/story/design requests route to their narrow packs.
 - Brainstorming should preserve option lanes, selection criteria, taste anchors, anti-goals, discard pile, risk/evidence needs, top candidates, and next workflow in a compact artifact.
 - CIS Facilitation Depth should preserve design-thinking user/opportunity/prototype proof, innovation option/evidence/adoption/reversibility proof, and storytelling audience/pressure/payoff/rejected-path proof in compact artifacts while the human pack stays rich.
+- Agent Compactness Guard should expose a deterministic `workflow compactness` check and wire it into normal workflow validation, runtime smoke, audit, and unit coverage.
 - Confusion should produce one recommended route and a small set of alternatives.
 - Mechanical build requests should continue autonomously when decision artifacts and stories are already ready.
 - Method/runtime audit requests should route to runtime-builder instead of generic operate/support, especially when they mention scripts, dead code, misleading docs, agent behavior, or human-guided experience.

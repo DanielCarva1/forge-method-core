@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add Agent Compactness Guard with `workflow compactness`, stricter workflow/facilitation shape checks, audit integration, smoke-runtime coverage, and unit proof for progressive disclosure
 - add CIS Facilitation Depth with dedicated design-thinking, innovation-strategy, and storytelling packs/templates/modes plus narrow creative routing and replay proof
 - add Brainstorming Depth with richer guided divergence/convergence facilitation, option lanes, taste and anti-reference pressure testing, discard pile, compact artifact template, catalog modes, and replay proof for broad ideas before PRD
 - add Context Boundary Recovery for fresh chats, network drops, reloads, and stale context: `reload`, `resume`, Help Oracle JSON, and post-command ledger now expose compact context boundaries, with a context-recovery facilitation pack/template and replay proof

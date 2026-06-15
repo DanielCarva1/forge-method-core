@@ -1413,6 +1413,8 @@ class RuntimeTests(unittest.TestCase):
             run_cmd("module", "recommend", "--objective", "build a web app with an API", "--json").stdout
         )
         validation = run_cmd("workflow", "validate").stdout
+        compactness_text = run_cmd("workflow", "compactness").stdout
+        compactness = json.loads(run_cmd("workflow", "compactness", "--json").stdout)
         workflow_list = run_cmd("workflow", "list").stdout
         guide = json.loads(
             run_cmd(
@@ -1429,6 +1431,18 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(modules_json["modules"])
         self.assertEqual(module_recommendation["recommended"][0]["id"], "software-builder")
         self.assertIn("Workflow validation passed.", validation)
+        self.assertIn("Compactness guard passed.", compactness_text)
+        self.assertGreaterEqual(compactness["workflow_count"], 90)
+        self.assertGreaterEqual(compactness["facilitation_pack_count"], 20)
+        self.assertLessEqual(
+            compactness["workflow_max"]["lines"],
+            compactness["workflow_limits"]["max_lines"],
+        )
+        self.assertLessEqual(
+            compactness["workflow_max"]["words"],
+            compactness["workflow_limits"]["max_words"],
+        )
+        self.assertFalse(compactness["errors"])
         self.assertIn("workflow-validate", workflow_list)
         for workflow_id in [
             "game-story-creation",

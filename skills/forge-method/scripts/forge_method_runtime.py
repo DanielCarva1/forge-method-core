@@ -117,6 +117,37 @@ WORKFLOW_REQUIRED_SECTIONS = [
     "handoff:",
 ]
 
+WORKFLOW_ALLOWED_ROOT_SECTIONS = {
+    "title",
+    "trigger",
+    "inputs",
+    "state",
+    "steps",
+    "outputs",
+    "done_when",
+    "blocked_when",
+    "handoff",
+}
+WORKFLOW_FORBIDDEN_ROOT_SECTIONS = {
+    "purpose",
+    "open_floor",
+    "source_material",
+    "follow_up_batches",
+    "conversation_stages",
+    "elicitation_options",
+    "facilitator_moves",
+    "quality_bar",
+    "anti_patterns",
+    "paths",
+    "checkpoint_options",
+    "artifact_rules",
+    "domain_examples",
+    "headless",
+}
+WORKFLOW_COMPACTNESS_MAX_LINES = 80
+WORKFLOW_COMPACTNESS_MAX_WORDS = 420
+WORKFLOW_COMPACTNESS_MAX_BULLETS = 40
+
 FACILITATION_REQUIRED_SECTIONS = [
     "purpose:",
     "open_floor:",
@@ -132,6 +163,19 @@ FACILITATION_REQUIRED_SECTIONS = [
     "artifact_rules:",
     "headless:",
 ]
+
+FACILITATION_FORBIDDEN_ROOT_SECTIONS = {
+    "trigger",
+    "inputs",
+    "steps",
+    "outputs",
+    "done_when",
+    "blocked_when",
+    "handoff",
+}
+FACILITATION_COMPACTNESS_MAX_LINES = 140
+FACILITATION_COMPACTNESS_MAX_WORDS = 1400
+FACILITATION_MIN_BULLETS = 12
 
 PARITY_REPLAY_REQUIRED_FAMILIES = {
     "help",
@@ -2791,6 +2835,20 @@ def reference_workflow_paths(root: Path | None = None) -> list[Path]:
     return paths
 
 
+def facilitation_pack_paths(root: Path | None = None) -> list[Path]:
+    paths: list[Path] = []
+    if FACILITATION_DIR.exists():
+        paths.extend(sorted(FACILITATION_DIR.glob("*.md")))
+    if root is not None:
+        project_packs = method_dir(root) / "facilitation"
+        if project_packs.exists():
+            paths.extend(sorted(project_packs.glob("*.md")))
+    unique: dict[str, Path] = {}
+    for path in paths:
+        unique[str(path.resolve())] = path
+    return list(unique.values())
+
+
 def workflow_id_from_path(path: Path) -> str:
     stem = path.stem
     if stem.startswith("workflow-"):
@@ -2931,16 +2989,95 @@ def validate_workflow_catalog(root: Path | None = None) -> list[str]:
     return errors
 
 
+def validate_facilitation_packs(root: Path | None = None) -> list[str]:
+    errors: list[str] = []
+    for path in facilitation_pack_paths(root):
+        errors.extend(validate_facilitation_pack(path))
+    return errors
+
+
 def validate_facilitation_pack(path: Path) -> list[str]:
     if not path.exists():
         return [f"missing facilitation pack: {path}"]
     text = path.read_text(encoding="utf-8")
     errors = []
+    errors.extend(validate_facilitation_compactness(path, text))
     for section in FACILITATION_REQUIRED_SECTIONS:
         if section not in text:
             errors.append(f"{path.name}: missing facilitation section `{section}`")
-    if text.count("\n  - ") < 12:
+    if text.count("\n  - ") < FACILITATION_MIN_BULLETS:
         errors.append(f"{path.name}: too thin for a human-facing facilitation pack")
+    return errors
+
+
+def markdown_root_sections(text: str) -> list[str]:
+    sections: list[str] = []
+    for line in text.splitlines():
+        if not line or line.startswith((" ", "\t", "#", "-", "*")):
+            continue
+        stripped = line.strip()
+        if stripped.endswith(":") and " " not in stripped[:-1]:
+            sections.append(stripped[:-1])
+    return sections
+
+
+def markdown_doc_stats(text: str) -> dict[str, int]:
+    lines = text.splitlines()
+    return {
+        "lines": len(lines),
+        "words": sum(len(line.split()) for line in lines),
+        "bullets": sum(1 for line in lines if line.startswith("  - ")),
+    }
+
+
+def validate_workflow_compactness(path: Path, text: str) -> list[str]:
+    errors: list[str] = []
+    stats = markdown_doc_stats(text)
+    if not text.lstrip().startswith("# workflow:"):
+        errors.append(f"{path.name}: workflow reference must start with `# workflow:`")
+    if stats["lines"] > WORKFLOW_COMPACTNESS_MAX_LINES:
+        errors.append(
+            f"{path.name}: too long for an agent-facing workflow "
+            f"({stats['lines']} lines > {WORKFLOW_COMPACTNESS_MAX_LINES})"
+        )
+    if stats["words"] > WORKFLOW_COMPACTNESS_MAX_WORDS:
+        errors.append(
+            f"{path.name}: too verbose for an agent-facing workflow "
+            f"({stats['words']} words > {WORKFLOW_COMPACTNESS_MAX_WORDS})"
+        )
+    if stats["bullets"] > WORKFLOW_COMPACTNESS_MAX_BULLETS:
+        errors.append(
+            f"{path.name}: too many bullets for an agent-facing workflow "
+            f"({stats['bullets']} > {WORKFLOW_COMPACTNESS_MAX_BULLETS})"
+        )
+    roots = set(markdown_root_sections(text))
+    forbidden = sorted(roots & WORKFLOW_FORBIDDEN_ROOT_SECTIONS)
+    if forbidden:
+        errors.append(f"{path.name}: workflow contains human facilitation root sections: {', '.join(forbidden)}")
+    unexpected = sorted(roots - WORKFLOW_ALLOWED_ROOT_SECTIONS)
+    if unexpected:
+        errors.append(f"{path.name}: workflow contains unexpected root sections: {', '.join(unexpected)}")
+    return errors
+
+
+def validate_facilitation_compactness(path: Path, text: str) -> list[str]:
+    errors: list[str] = []
+    stats = markdown_doc_stats(text)
+    if not text.lstrip().startswith("# facilitation:"):
+        errors.append(f"{path.name}: facilitation pack must start with `# facilitation:`")
+    if stats["lines"] > FACILITATION_COMPACTNESS_MAX_LINES:
+        errors.append(
+            f"{path.name}: facilitation pack is too long for progressive disclosure "
+            f"({stats['lines']} lines > {FACILITATION_COMPACTNESS_MAX_LINES})"
+        )
+    if stats["words"] > FACILITATION_COMPACTNESS_MAX_WORDS:
+        errors.append(
+            f"{path.name}: facilitation pack is too verbose for progressive disclosure "
+            f"({stats['words']} words > {FACILITATION_COMPACTNESS_MAX_WORDS})"
+        )
+    forbidden = sorted(set(markdown_root_sections(text)) & FACILITATION_FORBIDDEN_ROOT_SECTIONS)
+    if forbidden:
+        errors.append(f"{path.name}: facilitation pack contains workflow state-machine root sections: {', '.join(forbidden)}")
     return errors
 
 
@@ -2949,11 +3086,10 @@ def validate_workflow_file(path: Path) -> list[str]:
         return [f"missing workflow file: {path}"]
     text = path.read_text(encoding="utf-8")
     errors = []
+    errors.extend(validate_workflow_compactness(path, text))
     for section in WORKFLOW_REQUIRED_SECTIONS:
         if section not in text:
             errors.append(f"{path.name}: missing section `{section}`")
-    if len(text.splitlines()) > 120:
-        errors.append(f"{path.name}: too long for an agent-facing workflow")
     return errors
 
 
@@ -8177,12 +8313,88 @@ def cmd_workflow_validate(args: argparse.Namespace) -> int:
         errors.extend(validate_workflow_file(path))
     if not args.path:
         errors.extend(validate_workflow_catalog(root))
+        errors.extend(validate_facilitation_packs(root))
     if errors:
         print("Workflow validation failed:")
         for error in errors:
             print(f"- {error}")
         return 1
     print("Workflow validation passed.")
+    return 0
+
+
+def compactness_summary(root: Path | None = None) -> dict[str, Any]:
+    workflow_rows: list[dict[str, Any]] = []
+    pack_rows: list[dict[str, Any]] = []
+    errors: list[str] = []
+    for path in reference_workflow_paths(root):
+        text = path.read_text(encoding="utf-8")
+        stats = markdown_doc_stats(text)
+        row = {"path": str(path), "kind": "workflow", **stats}
+        workflow_rows.append(row)
+        errors.extend(validate_workflow_file(path))
+    for path in facilitation_pack_paths(root):
+        text = path.read_text(encoding="utf-8")
+        stats = markdown_doc_stats(text)
+        row = {"path": str(path), "kind": "facilitation", **stats}
+        pack_rows.append(row)
+        errors.extend(validate_facilitation_pack(path))
+    return {
+        "workflow_count": len(workflow_rows),
+        "facilitation_pack_count": len(pack_rows),
+        "workflow_limits": {
+            "max_lines": WORKFLOW_COMPACTNESS_MAX_LINES,
+            "max_words": WORKFLOW_COMPACTNESS_MAX_WORDS,
+            "max_bullets": WORKFLOW_COMPACTNESS_MAX_BULLETS,
+        },
+        "facilitation_limits": {
+            "max_lines": FACILITATION_COMPACTNESS_MAX_LINES,
+            "max_words": FACILITATION_COMPACTNESS_MAX_WORDS,
+            "min_bullets": FACILITATION_MIN_BULLETS,
+        },
+        "workflow_max": {
+            "lines": max((row["lines"] for row in workflow_rows), default=0),
+            "words": max((row["words"] for row in workflow_rows), default=0),
+            "bullets": max((row["bullets"] for row in workflow_rows), default=0),
+        },
+        "facilitation_max": {
+            "lines": max((row["lines"] for row in pack_rows), default=0),
+            "words": max((row["words"] for row in pack_rows), default=0),
+            "bullets": max((row["bullets"] for row in pack_rows), default=0),
+        },
+        "errors": errors,
+    }
+
+
+def cmd_workflow_compactness(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_none(resolve_root(args.root))
+    summary = compactness_summary(root)
+    if args.json:
+        print(json.dumps(summary, indent=2, sort_keys=True))
+    else:
+        print("Workflow Compactness Guard")
+        print(f"Workflows: {summary['workflow_count']}")
+        print(f"Facilitation packs: {summary['facilitation_pack_count']}")
+        print(
+            "Workflow max: "
+            f"{summary['workflow_max']['lines']} lines, "
+            f"{summary['workflow_max']['words']} words, "
+            f"{summary['workflow_max']['bullets']} bullets"
+        )
+        print(
+            "Facilitation max: "
+            f"{summary['facilitation_max']['lines']} lines, "
+            f"{summary['facilitation_max']['words']} words, "
+            f"{summary['facilitation_max']['bullets']} bullets"
+        )
+    if summary["errors"]:
+        if not args.json:
+            print("Compactness guard failed:")
+            for error in summary["errors"]:
+                print(f"- {error}")
+        return 1
+    if not args.json:
+        print("Compactness guard passed.")
     return 0
 
 
@@ -9090,6 +9302,7 @@ def workflow_validation_errors(root: Path | None = None) -> list[str]:
     errors: list[str] = []
     for path in reference_workflow_paths(root):
         errors.extend(validate_workflow_file(path))
+    errors.extend(validate_facilitation_packs(root))
     return errors
 
 
@@ -10129,6 +10342,10 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_validate.add_argument("--root", default=".")
     workflow_validate.add_argument("--path")
     workflow_validate.set_defaults(func=cmd_workflow_validate)
+    workflow_compactness = workflow_sub.add_parser("compactness", help="verify progressive disclosure compactness")
+    workflow_compactness.add_argument("--root", default=".")
+    workflow_compactness.add_argument("--json", action="store_true")
+    workflow_compactness.set_defaults(func=cmd_workflow_compactness)
     workflow_create = workflow_sub.add_parser("create", help="create a project workflow state machine")
     workflow_create.add_argument("--root", default=".")
     workflow_create.add_argument("--id", required=True)

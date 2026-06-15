@@ -68,6 +68,7 @@ Run $pythonExe $runtime project list --root $projectParentTmp
 Run $pythonExe $runtime preflight --root $projectParentTmp
 Run $pythonExe $runtime gate --root $generatedProjectTmp --require-evals
 Run $pythonExe $runtime workflow validate
+Run $pythonExe $runtime workflow compactness
 Run $pythonExe $runtime workflow create --root $tmp --id smoke-flow --title "Smoke Flow" --trigger "state.status == smoke" --input "smoke input" --step "perform smoke step" --output "smoke output" --done "smoke output exists" --blocked "smoke input missing" --handoff "preserve smoke result" --eval-query "run smoke flow"
 Run $pythonExe $runtime module create --root $tmp --id smoke-module --title "Smoke Module" --purpose "Exercise project module creation." --phase-span "1-discovery" --workflow smoke-flow
 Run $pythonExe $runtime workflow validate --root $tmp
