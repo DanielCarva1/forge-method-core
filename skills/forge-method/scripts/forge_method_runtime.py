@@ -3279,26 +3279,42 @@ def persona_lens_summary(overlay: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def normalized_phrase_in_text(phrase: str, text: str) -> bool:
+    if not phrase:
+        return False
+    return bool(re.search(rf"(?<![a-z0-9]){re.escape(phrase)}(?![a-z0-9])", text))
+
+
 def persona_alias_score(overlay: dict[str, Any], question: str) -> int:
     normalized = normalize_text(question)
+    raw_tokens = set(re.findall(r"[a-z0-9]+", normalized))
     tokens = objective_tokens(question)
     score = 0
     persona_id = str(overlay.get("id", ""))
+    persona_id_tokens = set(re.findall(r"[a-z0-9]+", normalize_text(persona_id)))
     title = normalize_text(str(overlay.get("title", "")))
-    if persona_id and persona_id in normalized:
+    role_terms = {"lens", "lente", "persona", "role", "papel", "coach", "perspectiva", "visao"}
+    explicit_architect_terms = role_terms | {"architect", "arquiteto"}
+    if (
+        persona_id == "architect"
+        and ("before architecture" in normalized or "antes de arquitetura" in normalized)
+        and not (tokens & explicit_architect_terms)
+    ):
+        return 0
+    if persona_id_tokens and persona_id_tokens <= tokens:
         score += 12
-    if title and title in normalized:
+    if normalized_phrase_in_text(title, normalized):
         score += 10
     for alias in overlay.get("aliases", []):
         alias_norm = normalize_text(str(alias))
         if not alias_norm:
             continue
-        alias_tokens = objective_tokens(alias_norm)
-        if alias_norm in normalized:
-            score += 8 + len(alias_tokens)
-        elif alias_tokens and alias_tokens <= tokens:
-            score += 5 + len(alias_tokens)
-    role_terms = {"lens", "lente", "persona", "role", "papel", "coach", "perspectiva", "visao"}
+        alias_tokens = set(re.findall(r"[a-z0-9]+", alias_norm))
+        alias_score_tokens = objective_tokens(alias_norm)
+        if normalized_phrase_in_text(alias_norm, normalized):
+            score += 8 + len(alias_score_tokens or alias_tokens)
+        elif alias_tokens and alias_tokens <= raw_tokens:
+            score += 5 + len(alias_score_tokens or alias_tokens)
     if score and tokens & role_terms:
         score += 3
     return score
@@ -9064,6 +9080,13 @@ def command_names(commands: list[dict[str, Any]]) -> list[str]:
     return [str(item.get("name", "")) for item in commands]
 
 
+def persona_lens_id_for_payload(payload: dict[str, Any]) -> str:
+    persona_lens = payload.get("persona_lens") or {}
+    if isinstance(persona_lens, dict):
+        return str(persona_lens.get("id") or "")
+    return str(persona_lens)
+
+
 def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[str]:
     failures: list[str] = []
 
@@ -9082,8 +9105,10 @@ def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[
         and not case.get("expected_facilitation_pack")
     ):
         failures.append("fixture must declare expected_facilitation_pack for human-facing guided cases")
-    persona_lens = payload.get("persona_lens") or {}
-    expect_equal("persona_lens.id", persona_lens.get("id"), case.get("expected_persona_lens"))
+    persona_lens_id = persona_lens_id_for_payload(payload)
+    if persona_lens_id and not case.get("expected_persona_lens"):
+        failures.append("fixture must declare expected_persona_lens when guidance returns a persona lens")
+    expect_equal("persona_lens.id", persona_lens_id, case.get("expected_persona_lens"))
     metadata = payload.get("workflow_metadata") or {}
     expect_equal("workflow_metadata.id", metadata.get("id"), case.get("expected_workflow"))
     expect_equal("workflow_metadata.template", metadata.get("template"), case.get("expected_template"))
@@ -9136,7 +9161,7 @@ def run_parity_replay(*, fixture_path: Path, max_chars: int) -> dict[str, Any]:
                     "recommended_workflow": payload.get("recommended_workflow"),
                     "facilitation_pack": payload.get("facilitation_pack"),
                     "template": (payload.get("workflow_metadata") or {}).get("template"),
-                    "persona_lens": (payload.get("persona_lens") or {}).get("id"),
+                    "persona_lens": persona_lens_id_for_payload(payload),
                     "state_update_required": payload.get("state_update_required"),
                     "commands": command_names(payload.get("commands") or []),
                 },

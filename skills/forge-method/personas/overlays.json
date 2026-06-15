@@ -15,7 +15,7 @@
     {
       "id": "architect",
       "title": "Architect Lens",
-      "aliases": ["architect", "architecture lens", "arquiteto", "lente de arquitetura"],
+      "aliases": ["architect", "architecture", "architecture lens", "arquiteto", "arquitetura", "lente de arquitetura"],
       "primary_agent": "spec-architect",
       "agent_ids": ["spec-architect", "implementer", "quality-reviewer"],
       "workflows": ["architecture", "technical-feasibility-scan", "readiness-check"],
@@ -48,7 +48,7 @@
     {
       "id": "qa-strategist",
       "title": "QA Strategist Lens",
-      "aliases": ["qa", "quality", "test architect", "lente de qa", "lente de qualidade"],
+      "aliases": ["qa", "quality", "test architect", "test architecture", "fixture architecture", "test framework", "lente de qa", "lente de qualidade"],
       "primary_agent": "quality-reviewer",
       "agent_ids": ["quality-reviewer", "planner", "implementer"],
       "workflows": ["test-strategy", "traceability-gate", "nfr-evidence-audit"],
@@ -125,7 +125,7 @@
     {
       "id": "creative-problem-solver",
       "title": "Creative Problem Solver",
-      "aliases": ["creative problem solver", "problem solving coach", "problem solver", "resolvedor criativo"],
+      "aliases": ["creative problem solver", "problem solving coach", "problem solver", "problem-solving", "stuck", "unblock", "travado", "destravar", "resolvedor criativo"],
       "primary_agent": "facilitator",
       "agent_ids": ["facilitator", "quality-reviewer", "planner"],
       "workflows": ["problem-solving", "correct-course", "brainstorming"],

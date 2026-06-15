@@ -608,6 +608,22 @@ class RuntimeTests(unittest.TestCase):
         failures = "\n".join("\n".join(item["failures"]) for item in payload["failures"])
         self.assertIn("fixture must declare expected_template", failures)
 
+    def test_parity_replay_requires_persona_lens_assertions(self) -> None:
+        fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
+        case = next(item for item in fixtures if item["id"] == "architecture_after_prd_request").copy()
+        case.pop("expected_persona_lens", None)
+
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Path(raw) / "fixture.json"
+            fixture.write_text(json.dumps([case]), encoding="utf-8")
+
+            result = run_cmd("parity", "replay", "--fixture", str(fixture), "--json", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        failures = "\n".join("\n".join(item["failures"]) for item in payload["failures"])
+        self.assertIn("fixture must declare expected_persona_lens", failures)
+
     def test_packaged_reality_workflows_are_available(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

@@ -1,6 +1,6 @@
-# Replay Persona Lens Contract finalized
+# Replay Persona Lens Contract hardened
 
-- created_at: 2026-06-15T14:25:44+00:00
+- created_at: 2026-06-15T14:12:46+00:00
 - project: forge-method-core
 - phase: 6-evolve
 - status: replay-persona-lens-contract-hardened
@@ -9,11 +9,11 @@
 
 ## Summary
 
-Persona Lens replay assertions and alias scoring are finalized after the raw-token guard: generic words like strategist/designer no longer select QA/UX by accident, while explicit QA/UX and test-framework signals still route correctly.
+Parity replay now treats Persona Lens output as a protected human-guidance contract. The runtime requires expected_persona_lens when a lens is returned, and alias scoring avoids substring architecture hijacks while preserving QA/problem-solving precedence.
 
 ## Decisions
 
-- Persona ID and alias subset scoring must preserve short role tokens such as qa and ux, so generic words do not hijack the human guidance lens.
+- Route-only success is not enough for persona-guided flows; replay fixtures must assert the selected Persona Lens whenever guidance returns one.
 
 ## Checks
 
@@ -22,7 +22,6 @@ Persona Lens replay assertions and alias scoring are finalized after the raw-tok
 - powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-runtime.ps1: passed
 - powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1: passed
 - powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-install.ps1: passed
-- python skills\\forge-method\\scripts\\forge_method_runtime.py artifact verify --root .: passed
 - python skills\\forge-method\\scripts\\forge_method_runtime.py gate --root . --require-evals: passed (9/9 evals)
 
 ## Failed Checks
@@ -40,7 +39,7 @@ Persona Lens replay assertions and alias scoring are finalized after the raw-tok
 ## Artifacts
 
 - .forge-method/artifacts/20260615-replay-persona-lens-contract.md
-- .forge-method/evidence/20260615-142530-validation-replay-persona-lens-contract-final-validation.md
+- .forge-method/evidence/20260615-141222-validation-replay-persona-lens-contract-validation.md
 
 ## Next Action
 
