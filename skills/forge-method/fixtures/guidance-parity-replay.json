@@ -612,7 +612,7 @@
     "expected_phase": "4-build-verify",
     "expected_workflow": "game-e2e-scaffold",
     "expected_facilitation_pack": "skill:facilitation/game-lifecycle.md",
-    "expected_template": "game-lifecycle-artifact",
+    "expected_template": "game-e2e-artifact",
     "state_update_required": true,
     "expected_command": "transition-workflow"
   },
@@ -697,6 +697,19 @@
     "family": "tea",
     "state": "discovery",
     "question": "automate high risk QA checks with fixtures data setup assertions commands evidence links and manual remainders",
+    "expected_classification": "quality-flow",
+    "expected_phase": "4-build-verify",
+    "expected_workflow": "test-automation",
+    "expected_facilitation_pack": "skill:facilitation/test-architecture.md",
+    "expected_template": "test-automation-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "qa_generate_e2e_tests_request",
+    "family": "tea",
+    "state": "discovery",
+    "question": "generate E2E tests for checkout using the existing Playwright framework with semantic locators visible outcome assertions independent tests no hardcoded waits and run and fix failures",
     "expected_classification": "quality-flow",
     "expected_phase": "4-build-verify",
     "expected_workflow": "test-automation",

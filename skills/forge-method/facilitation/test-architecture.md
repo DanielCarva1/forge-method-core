@@ -17,6 +17,7 @@ follow_up_batches:
   - traceability_phase: "Are we mapping planned coverage, or making a release decision from actual evidence?"
   - proof: "What evidence would prove the claim, and what evidence exists now?"
   - automation: "Which checks should be automated, manual, semi-automated, or waived?"
+  - generated_tests: "Which framework exists, which API/E2E scenarios are highest risk, and what run-and-fix proof will show the tests actually work?"
   - waiver: "Who owns a gap, why can it ship, when is it revisited, and what release impact remains?"
   - gate: "What pass/concerns/fail/missing-evidence/waived decision should downstream agents consume?"
 
@@ -25,6 +26,7 @@ conversation_stages:
   - risk_model: "Map user-visible risks and engineering risks before choosing test types."
   - engagement_model: "Choose advice, design, implementation, review, audit, or gate before writing the artifact."
   - fixture_design: "Prefer pure helpers, thin framework wrappers, explicit composition, lifecycle cleanup, and command evidence."
+  - generated_test_design: "Prefer existing framework APIs, semantic UI locators, visible outcome assertions, independent tests, and no hardcoded waits."
   - evidence_design: "Define the proof path: examples, fixtures, commands, CI gates, traces, or waivers."
   - command_map: "Split local, fast, full, release, and investigation commands."
   - operating_model: "Decide how the team or agent will create, run, maintain, and trust the tests."
@@ -55,11 +57,13 @@ quality_bar:
   - "Traceability distinguishes planned coverage from release evidence."
   - "Waivers name owner, rationale, expiry/revisit trigger, and release impact."
   - "A future agent can run or inspect the proof without asking what quality means here."
+  - "Generated test artifacts name detected framework, API/E2E scenarios, run-and-fix result, evidence links, and failure repair policy."
 
 anti_patterns:
   - "Do not list generic test types without mapping them to product risk."
   - "Do not treat CI setup, ATDD, automation, review, NFR audit, and traceability as the same workflow."
   - "Do not turn framework examples into separate Forge entrypoints."
+  - "Do not generate tests against a guessed framework or brittle selectors when the repo exposes a real harness."
   - "Do not call a gate passed when high-risk evidence is missing."
   - "Do not hide weak evidence behind a green-sounding recommendation."
 
@@ -86,13 +90,13 @@ domain_examples:
   - test-framework: "A stack exists but checks are scattered; define layers, fixture architecture, data setup, command contract, and first risk checks."
   - ci-quality-pipeline: "Local checks exist but release is manual; map fast/full/release checks to CI jobs, artifacts, local parity, and failure policy."
   - atdd-plan: "Story acceptance is vague; write examples, edge cases, risk coverage, and proof paths before implementation."
-  - test-automation: "A high-risk behavior is manual-only; choose repeatable targets by risk, fixtures, data setup, assertions, commands, and evidence."
+  - test-automation: "A high-risk behavior is manual-only; detect the existing framework, choose API/E2E scenarios by risk, use semantic locators and visible assertions, run/fix or record waiver, and attach evidence."
   - test-review: "Tests pass but confidence is unclear; compare assertions against acceptance and risks, then issue findings and gate recommendation."
   - nfr-evidence-audit: "Release claims performance/security/reliability/accessibility/compliance; map each claim to evidence, gap, waiver, or block."
   - traceability-gate: "Release needs proof; phase 1 maps requirements/risks to checks, phase 2 decides pass/concerns/fail/missing-evidence/waived."
 
 artifact_rules:
-  Persist risk mapping, engagement mode, commands, evidence status, gate decision, waivers, and follow-up stories.
+  Persist risk mapping, engagement mode, detected framework, selected scenarios, commands, run/fix result, evidence status, gate decision, waivers, and follow-up stories.
   Use the narrow workflow template when available; use `skill:templates/test-architecture-artifact.md` only for legacy or mixed-mode quality artifacts.
 
 headless:

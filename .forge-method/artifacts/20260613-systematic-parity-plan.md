@@ -107,6 +107,7 @@ P0 through P1.7 are closed:
 - Document Review Depth: implemented with specialized `editorial-review` and `edge-case-review` templates, modes, document-utility facilitation depth, Guidance Engine precedence over generic quality review, and replay proof for prose/structure/tone plus boundary/failure/misuse review.
 - Council Orchestration Depth: implemented with dedicated `council-decision` pack/template/modes, party-mode Guidance Engine routing, richer live debate output, compact dissent/orchestration artifact contract, JSON orchestration plan, and replay proof.
 - Document Utility Freshness Depth: implemented with `artifact doc-check`, source fingerprint/mtime fields, index/shard stale-check modes, original document decision, precedence rule, stale waiver, and replay proof for index/shard freshness routing.
+- E2E/Test Automation Depth: implemented with `artifact test-check`, detected framework and fixture architecture proof, API/E2E scenario contracts, semantic locator and visible outcome assertion fields, independent/no-hardcoded-wait policy, run/fix results, failure repair policy, game E2E smoke proof, and replay coverage for generated E2E requests.
 
 The remaining work is a planned sequence, not ad hoc patching.
 
@@ -432,7 +433,7 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release, Architecture Guidance Depth cleanup, Context Boundary Recovery, Brainstorming Depth, CIS Facilitation Depth, Agent Compactness Guard, Story Decision Source Gate, Sprint Planning Depth, Build Story Autonomy Depth, Document Review Depth, Council Orchestration Depth, and Correct-Course/Problem-Solving Depth.
 
-Current next focus: Document Utility Freshness Depth now adds source-of-truth/stale-doc proof for index/shard flows. Continue residual strong-ish/partial rows with real-use transcript proof; deferred API/browser or eval-runner surfaces should only expand if repeated projects justify them.
+Current next focus: E2E/Test Automation Depth now adds framework detection and generated E2E proof without creating a generic API/browser utility surface. Continue residual strong-ish/partial rows with real-use transcript proof; deferred API/browser or eval-runner surfaces should only expand if repeated projects justify them.
 
 Do not tag or publish from a partial test run. Start from this plan:
 

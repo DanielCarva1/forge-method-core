@@ -16,6 +16,7 @@ follow_up_batches:
   - playable_slice: "What can the player actually do when this stage is done?"
   - production_scope: "What is MVP, what is parked, and what must be rejected now?"
   - evidence: "Which playtest, automation, E2E, or manual proof shows this is real?"
+  - e2e_smoke: "What is the shortest launch-to-result path, and what signal proves the player outcome happened?"
   - next_slice: "Which story or workflow moves the playable slice forward?"
 
 conversation_stages:
@@ -32,6 +33,7 @@ elicitation_options:
   - risk_cut: "Identify which uncertainty should be proven before more content is created."
   - engine_profile_check: "Compare Godot/Unity/Unreal/Phaser or custom-engine constraints only when engine choice affects the next step."
   - playtest_signal: "Convert subjective fun/feel into observable tasks, signals, and design decisions."
+  - e2e_scaffold: "Separate launch command, setup, player action, assertion, teardown, evidence mode, and release gate link."
   - retrospective_loop: "Convert observed play/build pain into next sprint decisions."
 
 facilitator_moves:
@@ -46,11 +48,13 @@ quality_bar:
   - "The output is stage-specific and executable by the next agent."
   - "Player experience, production constraints, and validation are all visible."
   - "The route advances the game lifecycle instead of looping in ideation."
+  - "Game E2E proof has a stable launch command, observable success signal, evidence capture mode, and release gate handoff."
 
 anti_patterns:
   - "Do not collapse UX, PRD, story creation, status, and test requests into generic game-brief."
   - "Do not create implementation stories that lack player proof or acceptance evidence."
   - "Do not let engine details erase the intended player feeling."
+  - "Do not call an E2E scaffold done without setup/action/assertion/teardown and evidence mode."
 
 paths:
   fast_path: "Choose the specific game workflow, produce a compact artifact with assumptions, and route the next story."
@@ -93,10 +97,10 @@ domain_examples:
   - game-qa-review: "A slice/story needs review; inspect playability, feedback, stability, performance, scope, evidence, and repair route."
   - game-test-framework: "Engine exists but QA is ad hoc; define test layers for mechanics, saves, UI, content, and multiplayer if relevant."
   - game-test-automation: "Manual playtest found a repeatable failure; select deterministic setup, command, assertion, and evidence path."
-  - game-e2e-scaffold: "Release needs launch-to-result proof; define the shortest smoke path and whether it is automated or manual."
+  - game-e2e-scaffold: "Release needs launch-to-result proof; define launch command, setup/action/assertion/teardown, observable success signal, evidence mode, and readiness gate link."
 
 artifact_rules:
-  Persist lifecycle stage, source docs, decisions, parked scope, validation evidence, next story/workflow, and unresolved risks.
+  Persist lifecycle stage, source docs, decisions, parked scope, validation evidence, E2E smoke proof, next story/workflow, and unresolved risks.
   Use `skill:templates/game-lifecycle-artifact.md` as the default artifact shape unless a narrower project template exists.
 
 headless:

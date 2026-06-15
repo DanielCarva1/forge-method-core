@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T08:56:04+00:00",
+  "generated_at": "2026-06-15T09:25:31+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -1157,15 +1157,19 @@
       "id": "game-e2e-scaffold",
       "modes": [
         "create",
+        "automated",
+        "semi-automated",
+        "manual-proof",
         "validate"
       ],
       "outputs": [
         "game E2E scaffold",
-        "smoke path"
+        "smoke path",
+        "release gate proof"
       ],
       "phase": "4-build-verify",
       "required": false,
-      "template": "game-lifecycle-artifact"
+      "template": "game-e2e-artifact"
     },
     {
       "facilitation_pack": "game-lifecycle",
@@ -2169,12 +2173,15 @@
       "id": "test-automation",
       "modes": [
         "create",
-        "update",
+        "api",
+        "e2e",
+        "run-and-fix",
         "validate",
         "headless"
       ],
       "outputs": [
         "automation plan",
+        "API/E2E checks",
         "test commands",
         "evidence links"
       ],

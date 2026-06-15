@@ -2424,6 +2424,14 @@ DOCUMENT_UTILITY_WORKFLOWS = {
     "spec-distillation",
 }
 
+TEST_UTILITY_WORKFLOWS = {
+    "test-framework",
+    "test-automation",
+    "game-test-framework",
+    "game-test-automation",
+    "game-e2e-scaffold",
+}
+
 
 def parse_markdown_artifact_fields(path: Path) -> dict[str, str]:
     fields: dict[str, str] = {}
@@ -2506,6 +2514,63 @@ def document_utility_findings(root: Path, artifact_path: Path) -> tuple[list[str
         precedence = normalize_text(fields.get("precedence_rule", ""))
         if decision.startswith("keep") and not ("whole" in precedence or "source" in precedence):
             warnings.append("doc-shard keep decision should name which source wins during future reads")
+    return errors, warnings
+
+
+def test_utility_findings(root: Path, artifact_path: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not artifact_path.exists():
+        return [f"test utility artifact not found: {artifact_path}"], warnings
+    fields = parse_markdown_artifact_fields(artifact_path)
+    workflow = fields.get("workflow", "")
+    if workflow not in TEST_UTILITY_WORKFLOWS:
+        errors.append(f"workflow must be one of {', '.join(sorted(TEST_UTILITY_WORKFLOWS))}")
+    for key in ["commands", "evidence_links", "failure_repair_policy"]:
+        if not fields.get(key, ""):
+            errors.append(f"missing test utility field: {key}")
+    if workflow == "test-framework":
+        for key in [
+            "detected_framework",
+            "framework_detection",
+            "pure_helpers",
+            "framework_wrappers",
+            "composition_surface",
+            "cleanup_lifecycle",
+            "command_contract",
+        ]:
+            if not fields.get(key, ""):
+                errors.append(f"test-framework requires {key}")
+    if workflow == "test-automation":
+        for key in [
+            "selected_scenarios",
+            "risk_priority",
+            "api_checks",
+            "e2e_workflows",
+            "semantic_locator_policy",
+            "visible_outcome_assertions",
+            "independent_test_policy",
+            "no_hardcoded_waits",
+            "run_and_fix_result",
+        ]:
+            if not fields.get(key, ""):
+                errors.append(f"test-automation requires {key}")
+    if workflow == "game-e2e-scaffold":
+        for key in [
+            "launch_command",
+            "setup_action_assertion_teardown",
+            "observable_success_signal",
+            "evidence_mode",
+            "release_gate_link",
+        ]:
+            if not fields.get(key, ""):
+                errors.append(f"game-e2e-scaffold requires {key}")
+    locator_policy = normalize_text(fields.get("semantic_locator_policy", ""))
+    if locator_policy and "css" in locator_policy and "waiver" not in locator_policy:
+        warnings.append("semantic_locator_policy should prefer roles, labels, or visible text unless CSS has a waiver")
+    waits = normalize_text(fields.get("no_hardcoded_waits", ""))
+    if waits and waits in {"false", "no", "nao", "não"}:
+        errors.append("no_hardcoded_waits must reject sleeps or document a waiver")
     return errors, warnings
 
 
@@ -5209,6 +5274,25 @@ def cmd_artifact_doc_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_artifact_test_check(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    artifact_path, rel = project_path(root, args.path)
+    errors, warnings = test_utility_findings(root, artifact_path)
+    if errors:
+        print("Test utility check failed:")
+        for error in errors:
+            print(f"- {error}")
+    if warnings:
+        print("Test utility check warnings:")
+        for warning in warnings:
+            print(f"- {warning}")
+    if errors or (args.strict and warnings):
+        return 1
+    print("Test utility check passed.")
+    print(f"Artifact: {rel}")
+    return 0
+
+
 def cmd_artifact_link_story(args: argparse.Namespace) -> int:
     root, _ = load_state_or_fail(resolve_root(args.root))
     link_artifact_to_story(root, args.path, args.story)
@@ -6498,7 +6582,16 @@ def routed_quality_workflow(question: str) -> str:
         return "nfr-evidence-audit"
     if {"ci", "pipeline", "burnin", "burn-in"} & tokens or "ci quality" in normalized or "selective testing" in normalized:
         return "ci-quality-pipeline"
-    if {"automation", "automacao", "automate", "automatizar"} & tokens:
+    if (
+        {"automation", "automacao", "automate", "automatizar", "e2e", "api", "browser"} & tokens
+        or "end to end" in normalized
+        or "end-to-end" in normalized
+        or "generate e2e" in normalized
+        or "generate tests" in normalized
+        or "generated tests" in normalized
+        or "run and fix" in normalized
+        or "run-and-fix" in normalized
+    ):
         return "test-automation"
     if {"framework", "harness", "fixture", "fixtures"} & tokens or "fixture architecture" in normalized:
         return "test-framework"
@@ -6534,8 +6627,8 @@ def quality_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, st
         )
     if workflow_id == "test-framework":
         return (
-            "run test-framework to define test layers, fixture architecture, data strategy, commands, and first risk checks",
-            "I should separate reusable helpers, framework wrappers, fixture composition, cleanup, and commands before scaffolding tests.",
+            "run test-framework to detect or choose the harness, then define test layers, fixture architecture, data strategy, commands, and first risk checks",
+            "I should separate framework detection, reusable helpers, wrappers, fixture composition, cleanup, and commands before scaffolding tests.",
             guidance_alternatives(
                 ("ci-quality-pipeline", "use when CI wiring is the blocker"),
                 ("atdd-plan", "use when story examples should drive the checks"),
@@ -6564,8 +6657,8 @@ def quality_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, st
         )
     if workflow_id == "test-automation":
         return (
-            "run test-automation to choose repeatable checks by risk, fixtures, assertions, commands, evidence, and manual remainders",
-            "I should automate the checks that reduce meaningful risk and leave manual gaps explicit.",
+            "run test-automation to detect the existing framework, choose API/E2E scenarios by risk, use semantic locators, assert visible outcomes, run/fix tests, and preserve evidence",
+            "I should automate checks against the real harness, avoid brittle waits/selectors, and leave failures or manual gaps explicit.",
             guidance_alternatives(
                 ("atdd-plan", "use when examples are not clear yet"),
                 ("test-review", "use when tests exist but confidence is unknown"),
@@ -11324,6 +11417,15 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_doc_check.add_argument("--path", required=True)
     artifact_doc_check.add_argument("--strict", action="store_true")
     artifact_doc_check.set_defaults(func=cmd_artifact_doc_check)
+
+    artifact_test_check = artifact_sub.add_parser(
+        "test-check",
+        help="validate test framework, automation, and E2E scaffold proof",
+    )
+    artifact_test_check.add_argument("--root", default=".")
+    artifact_test_check.add_argument("--path", required=True)
+    artifact_test_check.add_argument("--strict", action="store_true")
+    artifact_test_check.set_defaults(func=cmd_artifact_test_check)
 
     artifact_list = artifact_sub.add_parser("list", help="list recent artifacts")
     artifact_list.add_argument("--root", default=".")
