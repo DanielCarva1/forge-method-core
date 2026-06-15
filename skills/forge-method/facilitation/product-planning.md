@@ -24,7 +24,7 @@ follow_up_batches:
 conversation_stages:
   - orient: "Load discovery/evidence and state the planning mode."
   - mode_select: "Choose spec-kernel, PRD create/update/validate, quick-dev, or addendum before writing requirements."
-  - kernel_cut: "For spec-kernel, separate why, capabilities, constraints, non-goals, success signal, assumptions, and open questions."
+  - kernel_cut: "For spec-kernel, separate source_artifacts, why, capabilities, constraints, non-goals, success signal, assumptions, open questions, preservation_map, validation_verdict, and next_workflow."
   - elicit_outcomes: "Pull out users, jobs, pain, taste, success, and constraints."
   - structure_requirements: "Turn outcomes into requirements, non-goals, assumptions, and acceptance evidence."
   - decision_log: "Record accepted, rejected, replaced, and deferred decisions with reason."
@@ -72,7 +72,7 @@ anti_patterns:
   - "Do not treat implementation tasks as requirements unless they express user-observable behavior."
 
 paths:
-  fast_path: "Write a compact spec kernel, run spec-check, and route the next workflow."
+  fast_path: "Batch the spec-kernel fields into one guided answer, run `artifact spec-kernel`, run spec-check, and route the next workflow."
   deep_path: "Create/update/validate requirements with decision log, UX handoff, architecture handoff, and Grill Gate."
 
 checkpoint_options:
@@ -84,7 +84,7 @@ checkpoint_options:
   - create-epics
 
 artifact_rules:
-  Persist users, jobs, requirements, non-goals, acceptance evidence, decisions, conflicts, and next workflow.
+  Use `artifact spec-kernel` for write-spec closeout with source_artifacts, why, capabilities, constraints, non_goals, success_signal, assumptions, open_questions, preservation_map, validation_verdict, and next_workflow. Persist richer PRD requirements, conflicts, and acceptance evidence only when the chosen workflow is product-requirements.
 
 domain_examples:
   - spec_kernel: "Distill mixed notes into a lean WHAT contract with capabilities, constraints, non-goals, success signal, companions, assumptions, and open questions."

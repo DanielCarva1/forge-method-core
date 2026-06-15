@@ -2028,6 +2028,47 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("non_goals must be explicit", result.stdout)
 
+    def test_artifact_spec_kernel_generates_and_validates_kernel(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            output = run_cmd(
+                "artifact",
+                "spec-kernel",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/spec-kernel-generated.md",
+                "--source-artifacts",
+                ".forge-method/artifacts/discovery-intent.md",
+                "--why",
+                "Operators need a compact WHAT contract before architecture and story planning.",
+                "--capabilities",
+                "CAP-1 intent: user can distill accepted discovery into a spec kernel; success: spec-check validates the kernel",
+                "--constraints",
+                "Keep the kernel compact and preserve load-bearing source claims.",
+                "--non-goals",
+                "Does not choose implementation architecture or create sprint stories.",
+                "--success-signal",
+                "A future agent can plan architecture from CAP-1 without reading chat history.",
+                "--preservation-map",
+                "source claim absorbed into CAP-1; bulky examples moved to companion if needed",
+                "--next-workflow",
+                "architecture",
+                "--eval",
+            ).stdout
+            artifact = root / ".forge-method" / "artifacts" / "spec-kernel-generated.md"
+            text = artifact.read_text(encoding="utf-8")
+            check = run_cmd("artifact", "spec-check", "--root", str(root), "--path", ".forge-method/artifacts/spec-kernel-generated.md").stdout
+
+            self.assertIn(".forge-method/artifacts/spec-kernel-generated.md", output)
+            self.assertIn("Spec kernel check passed.", output)
+            self.assertIn("workflow: write-spec", text)
+            self.assertIn("CAP-1 intent", text)
+            self.assertIn("next_workflow: architecture", text)
+            self.assertIn("Spec kernel check passed.", check)
+            self.assertTrue((root / ".forge-method" / "evals" / "artifact-forge-method-artifacts-spec-kernel-generated-md-exists.yaml").exists())
+
     def test_artifact_research_check_validates_scan_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -2609,6 +2650,17 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("non_goals", discover_pack)
         self.assertIn("success_signal", discover_pack)
         self.assertIn("open_questions", discover_pack)
+        product_pack = (
+            ROOT / "skills" / "forge-method" / "facilitation" / "product-planning.md"
+        ).read_text(encoding="utf-8")
+        write_spec_ref = (
+            ROOT / "skills" / "forge-method" / "references" / "workflow-write-spec.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("artifact spec-kernel", product_pack)
+        self.assertIn("source_artifacts", product_pack)
+        self.assertIn("preservation_map", product_pack)
+        self.assertIn("artifact spec-kernel", write_spec_ref)
+        self.assertIn("artifact spec-check", write_spec_ref)
         self.assertEqual(by_id["write-spec"].get("template"), "spec-kernel-artifact")
         self.assertEqual(by_id["market-scan"].get("template"), "research-scan-artifact")
         self.assertEqual(by_id["domain-scan"].get("template"), "research-scan-artifact")

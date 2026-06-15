@@ -472,6 +472,19 @@ DISCOVERY_CLOSEOUT_NEXT_WORKFLOWS = {
     "quick-dev",
     "write-spec",
 }
+SPEC_KERNEL_MODES = {
+    "create",
+    "distill",
+    "update",
+    "validate",
+}
+SPEC_KERNEL_NEXT_WORKFLOWS = {
+    "architecture",
+    "plan-sprint",
+    "product-requirements",
+    "quick-dev",
+    "ux-plan",
+}
 MECHANICAL_ACTIONS = {
     "start_next_story",
     "continue_active_story",
@@ -1442,6 +1455,13 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
             "next_move": "Extrair audience, outcome, constraints, non_goals, success_signal, open_questions, Grill Gate handoff e next_workflow para `artifact discovery-closeout`.",
             "human_question": DISCOVERY_CLOSEOUT_FIRST_QUESTION,
             "guardrail": "Nao pule para arquitetura, risco ou stories enquanto o closeout de discovery nao puder passar no discovery-check.",
+        }
+    if workflow == "write-spec":
+        return {
+            "decision_summary": "Isto e fechamento de spec: transformar discovery aceito em um kernel compacto antes de arquitetura, sprint ou quick-dev.",
+            "next_move": "Extrair source_artifacts, why, capabilities com CAP ids, constraints, non_goals, success_signal, preservation_map, validation_verdict e next_workflow para `artifact spec-kernel`.",
+            "human_question": first_guidance_question(classification, workflow),
+            "guardrail": "Nao use PRD verboso quando o proximo agente precisa primeiro de um contrato WHAT compacto e validavel.",
         }
     if classification == "correct-course":
         return {
@@ -4027,6 +4047,74 @@ def write_discovery_closeout_artifact(
     return rel
 
 
+def write_spec_kernel_artifact(
+    root: Path,
+    *,
+    path: str,
+    title: str,
+    summary: str,
+    workflow: str,
+    mode: str,
+    spec_id: str,
+    source_artifacts: str,
+    companions: str,
+    absorbed_sources: str,
+    decision_log: str,
+    why: str,
+    capabilities: str,
+    constraints: str,
+    non_goals: str,
+    success_signal: str,
+    assumptions: str,
+    open_questions: str,
+    preservation_map: str,
+    validation_verdict: str,
+    next_workflow: str,
+    force: bool = False,
+) -> str:
+    artifact_path, rel = project_path(root, path)
+    if artifact_path.exists() and not force:
+        raise SystemExit(f"Spec kernel artifact already exists: {rel}. Use --force to replace it.")
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    fields = [
+        ("workflow", workflow),
+        ("mode", mode),
+        ("spec_id", spec_id),
+        ("source_artifacts", source_artifacts),
+        ("companions", companions),
+        ("absorbed_sources", absorbed_sources),
+        ("decision_log", decision_log),
+        ("why", why),
+        ("capabilities", capabilities),
+        ("constraints", constraints),
+        ("non_goals", non_goals),
+        ("success_signal", success_signal),
+        ("assumptions", assumptions),
+        ("open_questions", open_questions),
+        ("preservation_map", preservation_map),
+        ("validation_verdict", validation_verdict),
+        ("next_workflow", next_workflow),
+    ]
+    lines = [f"# {title}", ""]
+    lines.extend(f"{key}: {one_line(value)}" for key, value in fields)
+    artifact_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    errors, warnings = spec_kernel_findings(root, artifact_path)
+    if errors:
+        artifact_path.unlink(missing_ok=True)
+        raise SystemExit("Spec kernel generation failed validation:\n" + "\n".join(f"- {error}" for error in errors))
+    rel = write_artifact(
+        root,
+        kind="spec",
+        title=title,
+        summary=summary,
+        path=rel,
+        lifecycle="durable",
+    )
+    if warnings:
+        append_ledger(root, "artifact.spec_kernel.warning", {"path": rel, "warnings": join_list(warnings)})
+    return rel
+
+
 def capture_artifact(
     root: Path,
     *,
@@ -5816,6 +5904,40 @@ def cmd_artifact_discovery_closeout(args: argparse.Namespace) -> int:
         write_artifact_eval(root, rel, title=args.title, summary=args.summary)
     print(rel)
     print("Discovery closeout check passed.")
+    print(f"Next workflow: {args.next_workflow}")
+    return 0
+
+
+def cmd_artifact_spec_kernel(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    rel = write_spec_kernel_artifact(
+        root,
+        path=args.path,
+        title=args.title,
+        summary=args.summary,
+        workflow=args.workflow,
+        mode=args.mode,
+        spec_id=args.spec_id,
+        source_artifacts=args.source_artifacts,
+        companions=args.companions,
+        absorbed_sources=args.absorbed_sources,
+        decision_log=args.decision_log,
+        why=args.why,
+        capabilities=args.capabilities,
+        constraints=args.constraints,
+        non_goals=args.non_goals,
+        success_signal=args.success_signal,
+        assumptions=args.assumptions,
+        open_questions=args.open_questions,
+        preservation_map=args.preservation_map,
+        validation_verdict=args.validation_verdict,
+        next_workflow=args.next_workflow,
+        force=args.force,
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title=args.title, summary=args.summary)
+    print(rel)
+    print("Spec kernel check passed.")
     print(f"Next workflow: {args.next_workflow}")
     return 0
 
@@ -12700,6 +12822,35 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_discovery_closeout.add_argument("--force", action="store_true")
     artifact_discovery_closeout.add_argument("--eval", action="store_true")
     artifact_discovery_closeout.set_defaults(func=cmd_artifact_discovery_closeout, record_guidance=True)
+
+    artifact_spec_kernel = artifact_sub.add_parser(
+        "spec-kernel",
+        help="write and validate a compact spec kernel before architecture, sprint planning, or quick-dev",
+    )
+    artifact_spec_kernel.add_argument("--root", default=".")
+    artifact_spec_kernel.add_argument("--path", default=".forge-method/artifacts/spec-kernel.md")
+    artifact_spec_kernel.add_argument("--title", default="Spec Kernel")
+    artifact_spec_kernel.add_argument("--summary", default="Compact spec kernel with source preservation and next workflow handoff.")
+    artifact_spec_kernel.add_argument("--workflow", choices=sorted(SPEC_KERNEL_WORKFLOWS), default="write-spec")
+    artifact_spec_kernel.add_argument("--mode", choices=sorted(SPEC_KERNEL_MODES), default="distill")
+    artifact_spec_kernel.add_argument("--spec-id", default="SPEC-main")
+    artifact_spec_kernel.add_argument("--source-artifacts", required=True)
+    artifact_spec_kernel.add_argument("--companions", default="none")
+    artifact_spec_kernel.add_argument("--absorbed-sources", default="")
+    artifact_spec_kernel.add_argument("--decision-log", default="spec kernel generated from accepted discovery and source artifacts")
+    artifact_spec_kernel.add_argument("--why", required=True)
+    artifact_spec_kernel.add_argument("--capabilities", required=True)
+    artifact_spec_kernel.add_argument("--constraints", required=True)
+    artifact_spec_kernel.add_argument("--non-goals", required=True)
+    artifact_spec_kernel.add_argument("--success-signal", required=True)
+    artifact_spec_kernel.add_argument("--assumptions", default="none blocking")
+    artifact_spec_kernel.add_argument("--open-questions", default="none blocking")
+    artifact_spec_kernel.add_argument("--preservation-map", required=True)
+    artifact_spec_kernel.add_argument("--validation-verdict", default="coherent and preservation-complete")
+    artifact_spec_kernel.add_argument("--next-workflow", choices=sorted(SPEC_KERNEL_NEXT_WORKFLOWS), default="architecture")
+    artifact_spec_kernel.add_argument("--force", action="store_true")
+    artifact_spec_kernel.add_argument("--eval", action="store_true")
+    artifact_spec_kernel.set_defaults(func=cmd_artifact_spec_kernel, record_guidance=True)
 
     artifact_capture = artifact_sub.add_parser("capture", help="capture an artifact result and optionally delete it")
     artifact_capture.add_argument("--root", default=".")

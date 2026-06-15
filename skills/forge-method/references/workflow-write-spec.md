@@ -17,11 +17,12 @@ steps:
   1. choose create, update, distill, or validate mode
   2. separate load-bearing source claims from wrapper prose
   3. preserve or assign stable capability IDs
-  4. write why, capabilities, constraints, non-goals, and success signal
+  4. derive artifact spec-kernel arguments: source_artifacts, why, capabilities, constraints, non_goals, success_signal, preservation_map, validation_verdict, and next_workflow
   5. move bulky load-bearing detail into companions or adopted source refs
   6. record assumptions, open questions, preservation map, and decision log
-  7. run `artifact spec-check`
-  8. route the next workflow
+  7. run `artifact spec-kernel` to write the compact spec artifact
+  8. run `artifact spec-check --path <spec-kernel-artifact>`
+  9. route the next workflow
 
 outputs:
   - spec kernel artifact

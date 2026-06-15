@@ -167,6 +167,10 @@ Assert-Contains $projectCloseoutText "Discovery closeout check passed." "project
 Run $pythonExe $runtime artifact discovery-check --root $generatedProjectTmp --path ".forge-method/artifacts/discovery-intent.md"
 $projectCloseoutTransitionText = Run-Capture $pythonExe $runtime transition --root $generatedProjectTmp --phase 2-specification --status specification-ready --workflow write-spec
 Assert-Contains $projectCloseoutTransitionText "Transition written." "project discovery closeout transition output"
+$projectSpecKernelText = Run-Capture $pythonExe $runtime artifact spec-kernel --root $generatedProjectTmp --path ".forge-method/artifacts/spec-kernel.md" --source-artifacts ".forge-method/artifacts/discovery-intent.md" --why "Teachers need a compact WHAT contract before architecture or stories." --capabilities "CAP-1 intent: teacher can turn vague class ideas into a reviewable plan; success: spec-check validates the kernel" --constraints "browser-first prototype, no login in first pass, preserve simple language" --non-goals "no scheduling marketplace, no automated grading, no implementation architecture yet" --success-signal "a teacher can review the kernel and see what will be built without reading chat history" --preservation-map "source claim absorbed into CAP-1 from discovery-intent; open questions preserved as none blocking" --next-workflow "architecture" --eval
+Assert-Contains $projectSpecKernelText ".forge-method/artifacts/spec-kernel.md" "project spec kernel output"
+Assert-Contains $projectSpecKernelText "Spec kernel check passed." "project spec kernel output"
+Run $pythonExe $runtime artifact spec-check --root $generatedProjectTmp --path ".forge-method/artifacts/spec-kernel.md"
 Run $pythonExe $runtime gate --root $generatedProjectTmp --require-evals
 Run $pythonExe $runtime workflow validate
 Run $pythonExe $runtime workflow compactness
@@ -186,7 +190,8 @@ Run $pythonExe $runtime input add --root $tmp --id smoke-audience --prompt "Who 
 Run $pythonExe $runtime input list --root $tmp --status open
 Run $pythonExe $runtime input answer --root $tmp --id smoke-audience --answer "Runtime smoke users" --next-action "continue smoke discovery"
 Run $pythonExe $runtime transition --root $tmp --phase 2-specification --status specification-ready --workflow write-spec
-Run $pythonExe $runtime artifact add --root $tmp --kind spec --title "Smoke specification" --summary "The smoke project requires durable state, evidence, and ready gate validation." --path ".forge-method/artifacts/smoke-spec.md" --eval
+Run $pythonExe $runtime artifact spec-kernel --root $tmp --path ".forge-method/artifacts/smoke-spec.md" --source-artifacts ".forge-method/inputs/smoke-audience.yaml" --why "The smoke project requires durable state, evidence, and ready gate validation." --capabilities "CAP-1 intent: runtime can preserve state through discovery, spec, plan, build, and ready; success: smoke-runtime.ps1 reaches ready" --constraints "Use only local files and deterministic runtime commands." --non-goals "No external service, deployment, or product implementation." --success-signal "The smoke project reaches ready with artifact verify, audit, and gate passing." --preservation-map "source input answer absorbed into CAP-1; command evidence remains in smoke output" --next-workflow "plan-sprint" --eval
+Run $pythonExe $runtime artifact spec-check --root $tmp --path ".forge-method/artifacts/smoke-spec.md"
 Run $pythonExe $runtime transition --root $tmp --phase 3-plan --status planning-ready --workflow plan-sprint
 Run $pythonExe $runtime transition --root $tmp --phase 4-build-verify --status build-ready --workflow build-story
 Run $pythonExe $runtime story add --root $tmp --id story-1 --title "Prove runtime loop" --acceptance "status can be reconstructed from files" --acceptance "done stories require evidence"

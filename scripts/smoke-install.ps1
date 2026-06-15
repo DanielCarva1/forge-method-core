@@ -142,6 +142,9 @@ Run $pythonExe $installedRuntime agent validate
 Run $pythonExe $installedRuntime example list
 Run $pythonExe $installedRuntime example create --root $exampleTmp --module software-builder
 Run $pythonExe $installedRuntime gate --root $exampleTmp --require-evals
+Run $pythonExe $installedRuntime artifact spec-kernel --root $exampleTmp --path ".forge-method/artifacts/install-spec-kernel.md" --source-artifacts ".forge-method/artifacts/example-brief.md" --why "Installed runtime needs a compact spec kernel proof before downstream workflows." --capabilities "CAP-1 intent: installed runtime can generate a spec kernel; success: spec-check validates the installed artifact" --constraints "Use installed skill files and local project state only." --non-goals "No external services, deployment, or implementation story generation." --success-signal "The installed artifact passes spec-check and gate." --preservation-map "source claim absorbed from example brief into CAP-1; install proof remains in smoke output" --next-workflow "plan-sprint" --eval
+Run $pythonExe $installedRuntime artifact spec-check --root $exampleTmp --path ".forge-method/artifacts/install-spec-kernel.md"
+Run $pythonExe $installedRuntime gate --root $exampleTmp --require-evals
 $installedProjectCreateText = Run-Capture $pythonExe $installedRuntime project create --root $projectParentTmp --name "Installed Generated" --module software-builder --objective "Verify installed project scaffolding."
 Assert-Contains $installedProjectCreateText "Story: <none - facilitation required>" "installed project create output"
 Assert-Contains $installedProjectCreateText "required_next_workflow: discover-intent" "installed project create output"
