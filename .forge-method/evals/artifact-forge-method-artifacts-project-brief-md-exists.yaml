@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-15T14:26:14+00:00"
+updated_at: "2026-06-15T14:58:15+00:00"
 id: "artifact-forge-method-artifacts-project-brief-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/project-brief.md"
 query: "Project: forge-method-core. Module: runtime-builder. Project type: brownfield existing codebase. Objective: Improve Forge Method Core as a Codex-native self-hosting runtime: refine workflow state machines, plugin install behavior, brownfield discovery, project isolation, context recovery, evidence, and readiness gates. Module purpose: Create new workflows, modules, skills, scripts, and validations for Forge Method projects.. Workflow set: runtime-builder | workflow-validate | build-story."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-15T14:26:14+00:00"
+last_run_at: "2026-06-15T14:58:15+00:00"
 last_error: ""

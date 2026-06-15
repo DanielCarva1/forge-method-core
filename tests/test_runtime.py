@@ -444,6 +444,11 @@ class RuntimeTests(unittest.TestCase):
             "facilitation_pack",
             "persona_lens",
         }
+        payload_required_keys = required_keys | {
+            "council_recommended",
+            "codex_goal_handoff",
+            "mechanical_work_order",
+        }
         for case in fixtures:
             with self.subTest(case=case["id"]):
                 with tempfile.TemporaryDirectory() as raw:
@@ -454,7 +459,7 @@ class RuntimeTests(unittest.TestCase):
                         run_cmd("guide", "--root", str(root), "--question", case["question"], "--json").stdout
                     )
 
-                    self.assertTrue(required_keys <= payload.keys())
+                    self.assertTrue(payload_required_keys <= payload.keys())
                     self.assertTrue(required_keys <= payload["guidance_engine"].keys())
                     self.assertEqual(payload["intent_classification"], case["expected_classification"])
                     self.assertEqual(payload["recommended_workflow"], case["expected_workflow"])
@@ -473,6 +478,18 @@ class RuntimeTests(unittest.TestCase):
                         self.assertEqual(payload["persona_lens"].get("id"), case["expected_persona_lens"])
                     elif case["id"] in {"confused_user", "brainstorm_request", "mixed_bmad_parity_runtime_request"}:
                         self.assertTrue(payload["facilitation_pack"].startswith("skill:facilitation/"))
+                    if "expected_council_recommended" in case:
+                        self.assertEqual(payload["council_recommended"], case["expected_council_recommended"])
+                    if "expected_codex_goal_handoff_recommended" in case:
+                        self.assertEqual(
+                            payload["codex_goal_handoff"].get("recommended"),
+                            case["expected_codex_goal_handoff_recommended"],
+                        )
+                    if "expected_mechanical_work_order_autonomous" in case:
+                        self.assertEqual(
+                            payload["mechanical_work_order"].get("autonomous"),
+                            case["expected_mechanical_work_order_autonomous"],
+                        )
                     if case["id"] == "method_frustration_ready":
                         self.assertNotIn("publish current batch", payload["recommended_action"])
                         command_names = [item["name"] for item in payload["commands"]]
@@ -623,6 +640,54 @@ class RuntimeTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         failures = "\n".join("\n".join(item["failures"]) for item in payload["failures"])
         self.assertIn("fixture must declare expected_persona_lens", failures)
+
+    def test_parity_replay_requires_council_assertions(self) -> None:
+        fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
+        case = next(item for item in fixtures if item["id"] == "lifecycle_party_mode_council_request").copy()
+        case.pop("expected_council_recommended", None)
+
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Path(raw) / "fixture.json"
+            fixture.write_text(json.dumps([case]), encoding="utf-8")
+
+            result = run_cmd("parity", "replay", "--fixture", str(fixture), "--json", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        failures = "\n".join("\n".join(item["failures"]) for item in payload["failures"])
+        self.assertIn("fixture must declare expected_council_recommended", failures)
+
+    def test_parity_replay_requires_codex_goal_handoff_assertions(self) -> None:
+        fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
+        case = next(item for item in fixtures if item["id"] == "mechanical_build").copy()
+        case.pop("expected_codex_goal_handoff_recommended", None)
+
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Path(raw) / "fixture.json"
+            fixture.write_text(json.dumps([case]), encoding="utf-8")
+
+            result = run_cmd("parity", "replay", "--fixture", str(fixture), "--json", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        failures = "\n".join("\n".join(item["failures"]) for item in payload["failures"])
+        self.assertIn("fixture must declare expected_codex_goal_handoff_recommended", failures)
+
+    def test_parity_replay_requires_mechanical_work_order_assertions(self) -> None:
+        fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
+        case = next(item for item in fixtures if item["id"] == "mechanical_build").copy()
+        case.pop("expected_mechanical_work_order_autonomous", None)
+
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Path(raw) / "fixture.json"
+            fixture.write_text(json.dumps([case]), encoding="utf-8")
+
+            result = run_cmd("parity", "replay", "--fixture", str(fixture), "--json", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        failures = "\n".join("\n".join(item["failures"]) for item in payload["failures"])
+        self.assertIn("fixture must declare expected_mechanical_work_order_autonomous", failures)
 
     def test_packaged_reality_workflows_are_available(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

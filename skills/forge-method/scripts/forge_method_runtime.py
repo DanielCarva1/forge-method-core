@@ -6485,6 +6485,24 @@ def detect_guidance_signals(question: str) -> list[str]:
             "config inspect",
             "systematic parity plan",
             "parity plan",
+            "parity replay",
+            "replay contract",
+            "replay contracts",
+            "contrato de replay",
+            "contratos de replay",
+            "route-only success",
+            "route only success",
+            "sucesso so de rota",
+            "sucesso apenas de rota",
+            "handoff assertion",
+            "handoff assertions",
+            "automation assertion",
+            "automation assertions",
+            "council assertion",
+            "council assertions",
+            "persona handoff",
+            "persona handoff assertion",
+            "persona handoff assertions",
             "p1.4",
             "p1.5",
             "p1.6",
@@ -6675,6 +6693,11 @@ def detect_guidance_signals(question: str) -> list[str]:
             "packs",
             "parity",
             "paridade",
+            "replay",
+            "contract",
+            "contracts",
+            "assertion",
+            "assertions",
             "p1",
         },
         "mechanical-build": {"implementar", "implementa", "implement", "build", "corrigir", "fix", "rodar", "story", "historia", "testes", "tests"},
@@ -7814,6 +7837,24 @@ def is_strong_builder_intent(question: str) -> bool:
         "module ideation",
         "validate module",
         "check module",
+        "parity replay",
+        "replay contract",
+        "replay contracts",
+        "contrato de replay",
+        "contratos de replay",
+        "route-only success",
+        "route only success",
+        "sucesso so de rota",
+        "sucesso apenas de rota",
+        "handoff assertion",
+        "handoff assertions",
+        "automation assertion",
+        "automation assertions",
+        "council assertion",
+        "council assertions",
+        "persona handoff",
+        "persona handoff assertion",
+        "persona handoff assertions",
     ]
     if any(phrase in normalized for phrase in strong_phrases):
         return True
@@ -7858,6 +7899,18 @@ def is_strong_builder_intent(question: str) -> bool:
         "override",
         "capability",
     }
+    replay_contract_tokens = {
+        "assertion",
+        "assertions",
+        "contract",
+        "contracts",
+        "handoff",
+        "replay",
+        "parity",
+        "paridade",
+    }
+    if tokens & replay_contract_tokens:
+        return True
     factory_tokens = {"workflow", "workflows", "module", "modules", "modulo", "modulos", "agent", "agents", "agente", "agentes", "skill", "skills"}
     return bool((tokens & action_tokens) and (tokens & (runtime_tokens | factory_tokens)))
 
@@ -8782,6 +8835,27 @@ def build_guidance_decision(
     }
 
 
+def council_recommended_for_guidance(question: str, guidance: dict[str, Any]) -> bool:
+    if not question.strip():
+        return False
+    if guidance.get("recommended_workflow") == "council-decision":
+        return True
+    normalized = normalize_text(question)
+    explicit_council_phrases = [
+        "party mode",
+        "party-mode",
+        "agent council",
+        "council decision",
+        "multi-agent discussion",
+        "multi agent discussion",
+        "agent team",
+        "agent-team",
+        "subagent orchestration",
+        "subagent plan",
+    ]
+    return any(phrase in normalized for phrase in explicit_council_phrases)
+
+
 def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[str, Any]:
     state_root, state = load_state_or_none(root)
     if not state_root:
@@ -8819,6 +8893,9 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
             "state_update_required": guidance["state_update_required"],
             "state_updates": guidance["state_updates"],
             "commands": preflight.get("commands", []) + guidance["commands"],
+            "mechanical_work_order": {},
+            "codex_goal_handoff": {},
+            "council_recommended": council_recommended_for_guidance(question, guidance),
         }
     snapshot = build_snapshot(state_root, state)
     track = track_by_id(state.get("track", "")) or default_track_for_module(state.get("module", "software-builder"))
@@ -8869,7 +8946,7 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
         "grill_gate_required": snapshot["resume"].get("grill_gate_required", False),
         "mechanical_work_order": snapshot["resume"].get("mechanical_work_order", {}),
         "codex_goal_handoff": snapshot["resume"].get("codex_goal_handoff", {}),
-        "council_recommended": bool(question and (state.get("readiness") == "ready" or guidance.get("persona_lens"))),
+        "council_recommended": council_recommended_for_guidance(question, guidance),
     }
 
 
@@ -9109,6 +9186,28 @@ def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[
     if persona_lens_id and not case.get("expected_persona_lens"):
         failures.append("fixture must declare expected_persona_lens when guidance returns a persona lens")
     expect_equal("persona_lens.id", persona_lens_id, case.get("expected_persona_lens"))
+    council_recommended = bool(payload.get("council_recommended"))
+    if council_recommended and "expected_council_recommended" not in case:
+        failures.append("fixture must declare expected_council_recommended when guidance recommends council")
+    expect_equal("council_recommended", council_recommended, case.get("expected_council_recommended"))
+    goal_handoff = payload.get("codex_goal_handoff") or {}
+    goal_handoff_recommended = bool(goal_handoff.get("recommended"))
+    if goal_handoff_recommended and "expected_codex_goal_handoff_recommended" not in case:
+        failures.append("fixture must declare expected_codex_goal_handoff_recommended when guidance recommends Codex Goal handoff")
+    expect_equal(
+        "codex_goal_handoff.recommended",
+        goal_handoff_recommended,
+        case.get("expected_codex_goal_handoff_recommended"),
+    )
+    mechanical_work_order = payload.get("mechanical_work_order") or {}
+    mechanical_work_order_autonomous = bool(mechanical_work_order.get("autonomous"))
+    if mechanical_work_order_autonomous and "expected_mechanical_work_order_autonomous" not in case:
+        failures.append("fixture must declare expected_mechanical_work_order_autonomous when guidance returns an autonomous work order")
+    expect_equal(
+        "mechanical_work_order.autonomous",
+        mechanical_work_order_autonomous,
+        case.get("expected_mechanical_work_order_autonomous"),
+    )
     metadata = payload.get("workflow_metadata") or {}
     expect_equal("workflow_metadata.id", metadata.get("id"), case.get("expected_workflow"))
     expect_equal("workflow_metadata.template", metadata.get("template"), case.get("expected_template"))
@@ -9162,6 +9261,9 @@ def run_parity_replay(*, fixture_path: Path, max_chars: int) -> dict[str, Any]:
                     "facilitation_pack": payload.get("facilitation_pack"),
                     "template": (payload.get("workflow_metadata") or {}).get("template"),
                     "persona_lens": persona_lens_id_for_payload(payload),
+                    "council_recommended": bool(payload.get("council_recommended")),
+                    "codex_goal_handoff_recommended": bool((payload.get("codex_goal_handoff") or {}).get("recommended")),
+                    "mechanical_work_order_autonomous": bool((payload.get("mechanical_work_order") or {}).get("autonomous")),
                     "state_update_required": payload.get("state_update_required"),
                     "commands": command_names(payload.get("commands") or []),
                 },

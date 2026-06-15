@@ -238,7 +238,9 @@
     "expected_facilitation_pack": "skill:facilitation/story-lifecycle.md",
     "expected_template": "sprint-status-artifact",
     "state_update_required": true,
-    "expected_command": "transition-workflow"
+    "expected_command": "transition-workflow",
+    "expected_codex_goal_handoff_recommended": true,
+    "expected_mechanical_work_order_autonomous": true
   },
   {
     "id": "method_frustration_ready",
@@ -291,7 +293,9 @@
     "expected_facilitation_pack": "skill:facilitation/correct-course.md",
     "expected_template": "correct-course-artifact",
     "expected_command": "correct-course",
-    "state_update_required": true
+    "state_update_required": true,
+    "expected_codex_goal_handoff_recommended": true,
+    "expected_mechanical_work_order_autonomous": true
   },
   {
     "id": "builder_workflow_analysis_request",
@@ -316,6 +320,20 @@
     "expected_workflow": "runtime-builder",
     "expected_facilitation_pack": "skill:facilitation/runtime-builder.md",
     "state_update_required": false
+  },
+  {
+    "id": "runtime_auxiliary_assertions_audit_request",
+    "family": "builder",
+    "state": "evolve_runtime",
+    "question": "check remaining automation council persona handoff assertions and replay contracts so route-only success does not count as parity",
+    "expected_classification": "builder-flow",
+    "expected_phase": "6-evolve",
+    "expected_workflow": "runtime-builder",
+    "expected_facilitation_pack": "skill:facilitation/runtime-builder.md",
+    "state_update_required": false,
+    "expected_council_recommended": false,
+    "expected_codex_goal_handoff_recommended": false,
+    "expected_mechanical_work_order_autonomous": false
   },
   {
     "id": "module_ideation_request",
@@ -578,7 +596,9 @@
     "expected_facilitation_pack": "skill:facilitation/game-lifecycle.md",
     "expected_template": "game-sprint-status-artifact",
     "state_update_required": true,
-    "expected_command": "transition-workflow"
+    "expected_command": "transition-workflow",
+    "expected_codex_goal_handoff_recommended": true,
+    "expected_mechanical_work_order_autonomous": true
   },
   {
     "id": "game_dev_story_ready_request",
@@ -590,7 +610,9 @@
     "expected_workflow": "build-story",
     "expected_facilitation_pack": "skill:facilitation/story-lifecycle.md",
     "expected_template": "build-story-work-order",
-    "state_update_required": false
+    "state_update_required": false,
+    "expected_codex_goal_handoff_recommended": true,
+    "expected_mechanical_work_order_autonomous": true
   },
   {
     "id": "game_context_request",
@@ -695,7 +717,9 @@
     "expected_facilitation_pack": "skill:facilitation/game-lifecycle.md",
     "expected_template": "game-qa-review-artifact",
     "state_update_required": true,
-    "expected_command": "transition-workflow"
+    "expected_command": "transition-workflow",
+    "expected_codex_goal_handoff_recommended": true,
+    "expected_mechanical_work_order_autonomous": true
   },
   {
     "id": "game_test_framework_request",
@@ -1013,7 +1037,8 @@
     "expected_facilitation_pack": "skill:facilitation/council-decision.md",
     "expected_template": "council-decision-artifact",
     "state_update_required": true,
-    "expected_command": "transition-workflow"
+    "expected_command": "transition-workflow",
+    "expected_council_recommended": true
   },
   {
     "id": "lifecycle_document_project_request",
@@ -1065,7 +1090,9 @@
     "expected_facilitation_pack": "skill:facilitation/lifecycle-closure.md",
     "expected_template": "code-review-artifact",
     "state_update_required": true,
-    "expected_command": "transition-workflow"
+    "expected_command": "transition-workflow",
+    "expected_codex_goal_handoff_recommended": true,
+    "expected_mechanical_work_order_autonomous": true
   },
   {
     "id": "lifecycle_retrospective_request",
@@ -1154,6 +1181,8 @@
     "expected_workflow": "build-story",
     "expected_facilitation_pack": "skill:facilitation/story-lifecycle.md",
     "expected_template": "build-story-work-order",
-    "state_update_required": false
+    "state_update_required": false,
+    "expected_codex_goal_handoff_recommended": true,
+    "expected_mechanical_work_order_autonomous": true
   }
 ]
