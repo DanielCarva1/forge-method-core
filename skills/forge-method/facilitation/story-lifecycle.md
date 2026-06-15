@@ -45,12 +45,14 @@ quality_bar:
   - "Mechanical work can continue from compact state without chat memory."
   - "Ready/release claims have evidence, checks, and next-operation guidance."
   - "Every ready build story has a decision-source map and validation map."
+  - "When multiple decision artifacts exist, each ready story names the exact `decision_sources` that justify it."
 
 anti_patterns:
   - "Do not use stories as a substitute for discovery or spec."
   - "Do not mark ready because code changed; require evidence."
   - "Do not let stale next_action override sprint/story reality."
   - "Do not turn all planned ideas into ready stories."
+  - "Do not let a ready story inherit a vague global source when several artifacts could justify different slices."
 
 paths:
   fast_path: "Create or route the smallest story batch with checks and evidence expectations."
@@ -72,6 +74,7 @@ domain_examples:
   - story_creation: "Create implementation-ready stories only after accepted PRD/spec/UX/architecture/test sources exist."
   - mechanical_loop: "When a story is ready in build phase, continue through start, implementation, review, fixes, checks, evidence, and ready gate without asking for procedural permission."
   - readiness_guard: "If a ready story lacks source artifacts or validation map, block with story-creation/readiness-check instead of starting build."
+  - source_disambiguation: "When PRD, UX, architecture, and test artifacts all exist, pass the specific source that justifies each story."
 
 headless:
   Continue mechanical story work when artifacts are approved. Stop only for real blockers: missing decisions, access, destructive approval, unavailable services, or explicit scope change.

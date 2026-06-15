@@ -90,6 +90,7 @@ P0 through P1.7 are closed:
 - Brainstorming Depth: implemented after 1.29.0 with richer guided divergence/convergence facilitation, option lanes, taste and anti-reference pressure testing, discard pile, compact brainstorming artifact, modes, and replay proof before PRD.
 - CIS Facilitation Depth: implemented after 1.29.0 with dedicated design-thinking, innovation-strategy, and storytelling templates/packs/modes plus narrow creative routing so specific CIS requests do not collapse into generic creative-session.
 - Agent Compactness Guard: implemented after 1.29.0 with `workflow compactness`, stricter workflow/facilitation shape checks, audit integration, smoke-runtime coverage, and unit proof that compact agent state machines stay separate from rich human packs.
+- Story Decision Source Gate: implemented after 1.29.0 so implementation-ready stories in `4-build-verify` require approved decision artifacts, persist explicit `decision_sources`, autoattach a single clear source, require `--source` for ambiguous sources, and fail audit if the source map is missing.
 - Human facilitation coverage gate: implemented and validated.
 - PRD/UX/Quick Dev depth: implemented with workflows, packs, templates, routes, and fixtures.
 - Story lifecycle proof: implemented with `story-creation`, decision-source guard, and mechanical no-procedural-confirmation tests.
@@ -424,7 +425,7 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 ## Immediate Next Step
 
-Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release, Architecture Guidance Depth cleanup, Context Boundary Recovery, Brainstorming Depth, CIS Facilitation Depth, and Agent Compactness Guard.
+Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release, Architecture Guidance Depth cleanup, Context Boundary Recovery, Brainstorming Depth, CIS Facilitation Depth, Agent Compactness Guard, and Story Decision Source Gate.
 
 Do not tag or publish from a partial test run. Start from this plan:
 

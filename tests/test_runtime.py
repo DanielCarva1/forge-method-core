@@ -638,6 +638,28 @@ class RuntimeTests(unittest.TestCase):
             run_cmd("init", "--project", "Example Project", "--root", str(root))
             for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
                 run_cmd("transition", "--root", str(root), "--phase", phase, "--force")
+            blocked_add = run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-1",
+                "--title",
+                "Build thing",
+                "--acceptance",
+                "thing works",
+                check=False,
+            )
+
+            blocked = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+
+            self.assertNotEqual(blocked_add.returncode, 0)
+            self.assertIn("requires an approved decision artifact", blocked_add.stderr)
+            self.assertTrue(blocked["quality"]["audit"]["passed"])
+            self.assertEqual(blocked["stories"]["counts"]["ready"], 0)
+
+            source = add_decision_source(root)
             run_cmd(
                 "story",
                 "add",
@@ -650,21 +672,61 @@ class RuntimeTests(unittest.TestCase):
                 "--acceptance",
                 "thing works",
             )
-
-            blocked = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
-
-            self.assertFalse(blocked["quality"]["audit"]["passed"])
-            self.assertIn("decision artifact source", "\n".join(blocked["quality"]["audit"]["errors"]))
-            self.assertEqual(blocked["route"]["recommendation"], "repair_project_state")
-            self.assertEqual(blocked["resume"]["action"], "repair_project_state")
-            self.assertEqual(blocked["help_oracle"]["required_next_workflow"], "context-recovery")
-
-            add_decision_source(root)
             released = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+            story_text = (root / ".forge-method" / "stories" / "story-1.yaml").read_text(encoding="utf-8")
 
             self.assertTrue(released["quality"]["audit"]["passed"])
             self.assertEqual(released["route"]["recommendation"], "start_next_story")
             self.assertEqual(released["help_oracle"]["required_next_workflow"], "build-story")
+            self.assertIn(f'decision_sources: "{source}"', story_text)
+
+            second_source = run_cmd(
+                "artifact",
+                "add",
+                "--root",
+                str(root),
+                "--kind",
+                "architecture",
+                "--title",
+                "Second decision source",
+                "--summary",
+                "A second accepted decision source makes story source selection ambiguous.",
+                "--path",
+                ".forge-method/artifacts/second-decision-source.md",
+            ).stdout.strip()
+            ambiguous_add = run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-2",
+                "--title",
+                "Build second thing",
+                "--acceptance",
+                "second thing works",
+                check=False,
+            )
+
+            self.assertNotEqual(ambiguous_add.returncode, 0)
+            self.assertIn("multiple decision artifacts exist", ambiguous_add.stderr)
+
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "story-2",
+                "--title",
+                "Build second thing",
+                "--acceptance",
+                "second thing works",
+                "--source",
+                second_source,
+            )
+            story_2_text = (root / ".forge-method" / "stories" / "story-2.yaml").read_text(encoding="utf-8")
+            self.assertIn(f'decision_sources: "{second_source}"', story_2_text)
 
     def test_status_brief_surfaces_actionable_runtime_state(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -882,6 +944,7 @@ class RuntimeTests(unittest.TestCase):
             run_cmd("transition", "--root", str(root), "--phase", "2-specification")
             run_cmd("transition", "--root", str(root), "--phase", "3-plan")
             run_cmd("transition", "--root", str(root), "--phase", "4-build-verify")
+            add_decision_source(root)
             run_cmd(
                 "story",
                 "add",
@@ -966,6 +1029,7 @@ class RuntimeTests(unittest.TestCase):
             run_cmd("transition", "--root", str(root), "--phase", "2-specification")
             run_cmd("transition", "--root", str(root), "--phase", "3-plan")
             run_cmd("transition", "--root", str(root), "--phase", "4-build-verify")
+            add_decision_source(root)
             run_cmd(
                 "story",
                 "add",
@@ -2506,6 +2570,7 @@ class RuntimeTests(unittest.TestCase):
             run_cmd("init", "--project", "Example Project", "--root", str(root))
             for phase in ["1-discovery", "2-specification", "3-plan", "4-build-verify"]:
                 run_cmd("transition", "--root", str(root), "--phase", phase)
+            add_decision_source(root)
             run_cmd("story", "add", "--root", str(root), "--id", "story-a", "--title", "Build A", "--acceptance", "A works")
             run_cmd("story", "start", "--root", str(root), "--id", "story-a")
             run_cmd("story", "done", "--root", str(root), "--id", "story-a", "--summary", "A works.", "--check", "unit")

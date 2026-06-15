@@ -42,6 +42,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Architecture requests should route to architecture planning that connects accepted product decisions to technical constraints, interfaces, risks, tradeoffs, validation hooks, and story boundaries; product architecture with PRD/UX trace should outrank generic quality routing even when the human mentions test hooks.
 - Quick Dev / Quick Flow requests should route to a spec-lite workflow that clarifies scope, implements or hands off mechanically, reviews, validates, writes evidence, and names the next workflow.
 - Story lifecycle requests should route to story-creation/readiness flows that require accepted decision sources, acceptance criteria, checks, evidence expectations, and a validation map before build-story.
+- Implementation-ready stories should persist explicit `decision_sources`; story creation must block without approved decision artifacts and require a specific source when multiple artifacts could justify the story.
 - Sprint status requests should route to a status ritual that names story counts, active/blocked/review items, evidence gaps, and the next executable action.
 - Investigation requests should diagnose symptom, hypotheses, probes, findings, and next reversible action before repair work.
 - Adversarial review requests should attack assumptions and route repair, waiver, evidence, or rejection rather than hiding critique inside generic edge cases.
@@ -62,6 +63,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Method/runtime audit requests should route to runtime-builder instead of generic operate/support, especially when they mention scripts, dead code, misleading docs, agent behavior, or human-guided experience.
 - Product planning, UX design, and quick-dev requests should route to narrow executable workflows rather than generic build-story or stale state.
 - Story creation requests should not create ready build stories from vague intent; they need accepted source artifacts and a validation map.
+- Story Decision Source Gate should be enforced at story add/import/start and audit time, so mechanical build never starts from an unmapped story.
 - Mechanical build loops should continue through story start/review/fix/evidence/ready gate without asking for procedural "ok" once stories are ready.
 - Fresh chat, network drop, reload, or context-reset messages should route to context-recovery and expose a compact context boundary: trust launcher output and durable state, load only read-first files, then run Guidance Engine for fresh human intent.
 - Runtime outputs must remain compact JSON/state-machine artifacts for agents, while non-JSON guidance can be human, direct, and useful.

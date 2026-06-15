@@ -2257,22 +2257,77 @@ def story_decision_artifact_sources(root: Path) -> list[str]:
     return sorted(set(sources))
 
 
+def story_attached_decision_sources(
+    root: Path,
+    story: dict[str, str],
+    sources: list[str] | None = None,
+) -> list[str]:
+    available = set(sources if sources is not None else story_decision_artifact_sources(root))
+    candidates = [*split_list(story.get("decision_sources")), *split_list(story.get("artifacts"))]
+    return sorted({candidate for candidate in candidates if candidate in available})
+
+
 def story_is_implementation_ready_candidate(story: dict[str, str]) -> bool:
     if story.get("status", "") not in {"ready", "in_progress", "review"}:
         return False
     return story.get("phase", "") == "4-build-verify"
 
 
+def prepare_story_decision_sources(
+    root: Path,
+    story: dict[str, str],
+    *,
+    requested_sources: list[str] | None = None,
+) -> dict[str, str]:
+    if not story_is_implementation_ready_candidate(story):
+        return story
+    available = story_decision_artifact_sources(root)
+    available_set = set(available)
+    requested = []
+    for raw_source in requested_sources or []:
+        if not str(raw_source).strip():
+            continue
+        _, rel = project_path(root, str(raw_source))
+        requested.append(rel)
+    if requested:
+        invalid = sorted(source for source in requested if source not in available_set)
+        if invalid:
+            raise SystemExit(
+                f"{story.get('id')}: source is not an approved decision artifact: {', '.join(invalid)}"
+            )
+        current = split_list(story.get("decision_sources"))
+        for source in requested:
+            if source not in current:
+                current.append(source)
+        story["decision_sources"] = join_list(current)
+        return story
+    attached = story_attached_decision_sources(root, story, available)
+    if attached:
+        story["decision_sources"] = join_list(attached)
+        return story
+    if len(available) == 1:
+        story["decision_sources"] = available[0]
+        return story
+    if not available:
+        raise SystemExit(
+            f"{story.get('id')}: implementation-ready story requires an approved decision artifact "
+            "(run story-creation/readiness-check or add/link PRD, spec, UX, architecture, test, or validation artifact)"
+        )
+    raise SystemExit(
+        f"{story.get('id')}: multiple decision artifacts exist; pass --source with the artifact that justifies this story"
+    )
+
+
 def story_decision_source_errors(root: Path, story: dict[str, str], sources: list[str] | None = None) -> list[str]:
     if not story_is_implementation_ready_candidate(story):
         return []
     available = sources if sources is not None else story_decision_artifact_sources(root)
-    if available:
+    if story_attached_decision_sources(root, story, available):
         return []
     return [
         (
-            f"{story.get('id')}: implementation-ready story has no decision artifact source "
-            "(run story-creation/readiness-check or add/link PRD, spec, UX, architecture, test, or validation artifact)"
+            f"{story.get('id')}: implementation-ready story has no explicit decision source "
+            "(run story-creation/readiness-check, link a decision artifact, or pass --source when adding/importing the story)"
         )
     ]
 
@@ -4498,10 +4553,12 @@ def cmd_story_add(args: argparse.Namespace) -> int:
         "status": args.status,
         "phase": state.get("phase", "0-route"),
         "acceptance_criteria": join_list(args.acceptance or []),
+        "decision_sources": join_list(args.source or []),
         "evidence": "",
         "checks": "",
         "blocker": "",
     }
+    story = prepare_story_decision_sources(root, story, requested_sources=args.source or [])
     save_story(root, story)
     update_sprint(root)
     append_ledger(root, "story.added", {"id": story_id, "status": args.status})
@@ -4527,6 +4584,7 @@ def story_export_item(story: dict[str, str]) -> dict[str, Any]:
         "status": story.get("status", "ready"),
         "phase": story.get("phase", ""),
         "acceptance_criteria": split_list(story.get("acceptance_criteria")),
+        "decision_sources": split_list(story.get("decision_sources")),
         "checks": split_list(story.get("checks")),
         "evidence": split_list(story.get("evidence")),
         "artifacts": split_list(story.get("artifacts")),
@@ -4555,6 +4613,7 @@ def normalize_story_import_item(item: dict[str, Any], state: dict[str, str]) -> 
         "status": status,
         "phase": str(item.get("phase") or state.get("phase", "0-route")),
         "acceptance_criteria": list_field("acceptance_criteria"),
+        "decision_sources": list_field("decision_sources"),
         "evidence": list_field("evidence"),
         "checks": list_field("checks"),
         "artifacts": list_field("artifacts"),
@@ -4601,6 +4660,7 @@ def cmd_story_import(args: argparse.Namespace) -> int:
         if not isinstance(raw_item, dict):
             raise SystemExit("Imported story entries must be objects.")
         story = normalize_story_import_item(raw_item, state)
+        story = prepare_story_decision_sources(root, story, requested_sources=split_list(story.get("decision_sources")))
         path = story_path(root, story["id"])
         if path.exists() and not args.force:
             raise SystemExit(f"Story already exists: {story['id']}")
@@ -4627,6 +4687,7 @@ def set_story_status(root: Path, story_id: str, target: str, *, force: bool = Fa
         story["checks"] = join_list(existing_checks)
     if blocker:
         story["blocker"] = blocker
+    story = prepare_story_decision_sources(root, story)
     save_story(root, story)
     update_sprint(root)
     append_ledger(root, "story.status_changed", {"id": story.get("id"), "from": current, "to": target})
@@ -7632,6 +7693,7 @@ def prepare_parity_replay_state(root: Path, state_kind: str) -> None:
                 "phase": "4-build-verify",
                 "acceptance_criteria": "target works",
                 "checks": "python -m unittest discover -s tests",
+                "decision_sources": decision_source,
                 "artifacts": decision_source,
                 "evidence": "",
                 "blocker": "",
@@ -10137,6 +10199,7 @@ def build_parser() -> argparse.ArgumentParser:
     story_add.add_argument("--id")
     story_add.add_argument("--title", required=True)
     story_add.add_argument("--acceptance", action="append")
+    story_add.add_argument("--source", action="append", help="decision artifact path that justifies the story")
     story_add.add_argument("--status", choices=STORY_STATUSES, default="ready")
     story_add.add_argument("--force", action="store_true")
     story_add.set_defaults(func=cmd_story_add, record_guidance=True, emit_guidance=True)

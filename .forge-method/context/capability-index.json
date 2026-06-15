@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T05:04:43+00:00",
+  "generated_at": "2026-06-15T05:19:06+00:00",
   "modules": [
     {
       "id": "core-runtime",

@@ -12,11 +12,12 @@ inputs:
   - acceptance criteria and evidence expectations
 
 steps:
-  1. verify decision sources exist before writing implementation stories
-  2. map each story to user value, source artifact, constraints, acceptance criteria, checks, and evidence
-  3. separate implementation-ready stories from planned/deferred discovery or design work
-  4. write or update story files and the story-creation artifact
-  5. run readiness-check before build-story starts
+  1. verify approved decision sources exist before writing implementation stories
+  2. attach explicit `decision_sources` to each ready story
+  3. map each story to user value, source artifact, constraints, acceptance criteria, checks, and evidence
+  4. separate implementation-ready stories from planned/deferred discovery or design work
+  5. write or update story files and the story-creation artifact
+  6. run readiness-check before build-story starts
 
 outputs:
   - implementation-ready story files
@@ -26,7 +27,7 @@ outputs:
   - next build-story target
 
 done_when:
-  - every ready story has acceptance criteria, checks, and a decision source
+  - every ready story has acceptance criteria, checks, and explicit decision_sources
   - stories are sequenced by dependency, risk, and user-visible value
   - missing decision work is blocked or routed before build
   - next workflow is readiness-check or build-story

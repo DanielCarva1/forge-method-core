@@ -4,30 +4,30 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: agent-compactness-guard-hardened
+- status: story-decision-source-gate-hardened
 - workflow: runtime-builder
 - active_story: <none>
 - next_action: Continue real-use transcript hardening for remaining partial and strong-ish rows; run completion audit and live transcript review before claiming full guided-flow parity.
 
 ## Latest Checkpoint
 
-# Agent Compactness Guard hardened
+# Story Decision Source Gate hardened
 
-- created_at: 2026-06-15T05:11:16+00:00
+- created_at: 2026-06-15T05:29:06+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: agent-compactness-guard-hardened
+- status: story-decision-source-gate-hardened
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed the progressive-disclosure audit row. Workflow refs now have compactness limits, forbidden human-pack sections, root-section checks, and heading checks; facilitation packs have shape and size checks; workflow compactness, workflow validate, audit, smoke-runtime, and unit tests prove the split between compact agent docs and rich human packs.
+Closed the epics/stories decision-source invariant gap. Story add/import/start now prevents implementation-ready build stories without approved source artifacts, autoattaches a single clear source, requires --source when several artifacts could justify different stories, persists decision_sources, and audit verifies the source map before build-story.
 
 ## Decisions
 
-- Progressive disclosure must be deterministic: agent workflow refs stay compact state machines, while human richness lives in facilitation packs.
-- The guard should fail normal validation and audit when the layers blur, not depend on review taste.
+- Stories are not a substitute for accepted decisions; build-ready stories must carry explicit decision_sources.
+- Automation can continue only after the source map is durable; ambiguous sources require explicit selection.
 
 ## Checks
 
@@ -49,7 +49,8 @@ Closed the progressive-disclosure audit row. Workflow refs now have compactness 
 ## Touched Files
 
 - skills/forge-method/scripts/forge_method_runtime.py
-- scripts/smoke-runtime.ps1
+- skills/forge-method/references/workflow-story-creation.md
+- skills/forge-method/facilitation/story-lifecycle.md
 - tests/test_runtime.py
 - .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
 - .forge-method/artifacts/20260613-systematic-parity-plan.md
@@ -60,8 +61,7 @@ Closed the progressive-disclosure audit row. Workflow refs now have compactness 
 ## Artifacts
 
 - .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
-- .forge-method/artifacts/20260613-systematic-parity-plan.md
-- .forge-method/artifacts/guidance-engine-benc
+- .forge-method/artifacts/20260613-sys
 [checkpoint truncated]
 
 ## Recovery Signals
@@ -73,9 +73,9 @@ Closed the progressive-disclosure audit row. Workflow refs now have compactness 
 ### Touched Files
 
 - skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/references/workflow-architecture.md
-- skills/forge-method/facilitation/architecture-planning.md
-- skills/forge-method/templates/architecture-artifact.md
+- skills/forge-method/references/workflow-context-recovery.md
+- skills/forge-method/facilitation/context-boundary.md
+- skills/forge-method/templates/context-recovery-artifact.md
 - skills/forge-method/catalog/workflows.json
 - skills/forge-method/fixtures/guidance-parity-replay.json
 - tests/test_runtime.py
@@ -100,16 +100,16 @@ Closed the progressive-disclosure audit row. Workflow refs now have compactness 
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260615-035510-validation-architecture-guidance-depth-validation.md
 - .forge-method/evidence/20260615-041351-validation-context-boundary-recovery-validation.md
 - .forge-method/evidence/20260615-043802-validation-brainstorming-depth-validation.md
 - .forge-method/evidence/20260615-045622-validation-cis-facilitation-depth-validation.md
 - .forge-method/evidence/20260615-051116-validation-agent-compactness-guard-validation.md
+- .forge-method/evidence/20260615-052906-validation-story-decision-source-gate-validation.md
 
 ## Recent Artifacts
 
-- internal-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD Forge systematic parity audit - Updated with Agent Compactness Guard: progressive disclosure is now enforced by workflow compactness, workflow validate, smoke runtime, and audit.
-- internal-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic parity plan - Updated immediate progress with Agent Compactness Guard and clarified remaining transcript-hardening work.
-- benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine benchmark - Added progressive disclosure benchmark target for compact workflow refs and rich facilitation packs.
-- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability Index - Regenerated after adding workflow compactness guard.
-- changelog [active/durable]: CHANGELOG.md - CHANGELOG - Added Unreleased note for Agent Compactness Guard.
+- internal-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD Forge systematic parity audit - Updated with Story Decision Source Gate: build-ready stories now require approved explicit decision sources before mechanical build.
+- internal-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic parity plan - Updated immediate progress with Story Decision Source Gate and clarified remaining transcript-hardening work.
+- benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine benchmark - Added story decision-source benchmark target for explicit source maps before build-story.
+- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability Index - Regenerated after Story Decision Source Gate.
+- changelog [active/durable]: CHANGELOG.md - CHANGELOG - Added Unreleased note for Story Decision Source Gate.
