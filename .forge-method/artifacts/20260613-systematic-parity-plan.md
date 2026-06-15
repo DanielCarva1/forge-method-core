@@ -434,13 +434,13 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 ## Immediate Next Step
 
-Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release, Architecture Guidance Depth cleanup, Context Boundary Recovery, Brainstorming Depth, CIS Facilitation Depth, Agent Compactness Guard, Story Decision Source Gate, Sprint Planning Depth, Build Story Autonomy Depth, Document Review Depth, Council Orchestration Depth, and Correct-Course/Problem-Solving Depth.
+Next implementation batch: post-parity Forge polish. Audit facilitation packs for thin or generic human guidance, compact workflow refs for misleading or bloated agent instructions, and active artifacts for stale guidance that could send future agents back into closed work.
 
-Current next focus: Presentation Craft Fold-In closes `/cis-agent-presentation-master` as pitch/deck narrative through `storytelling` plus `presentation-craft`, while visual deck production stays deferred. Next, begin post-parity Forge polish: audit facilitation packs for thin/generic human guidance and compact workflow refs for misleading or bloated agent instructions.
+Current next focus: Stale Guidance Guard and post-parity polish audit. Presentation Craft Fold-In already closes `/cis-agent-presentation-master` as pitch/deck narrative through `storytelling` plus `presentation-craft`, while visual deck production stays deferred.
 
 Do not tag or publish from a partial test run. Start from this plan:
 
-1. collect or synthesize focused transcripts for the next partial row;
-2. add the smallest guidance/runtime/packs change that makes the transcript route and feel correct;
-3. prove it with parity replay, unit coverage, runtime smoke, and install smoke when packaging is touched;
-4. record evidence, checkpoint, state, and changelog notes without claiming full parity until the completion audit passes.
+1. scan active artifacts, packs, refs, and runtime routes for stale or misleading guidance;
+2. add the smallest guard or doc correction that prevents future agents from following closed work;
+3. prove it with artifact verification, targeted unit coverage, workflow validation, and fast verification as scope requires;
+4. record evidence, checkpoint, state, and changelog notes without claiming full goal completion until the completion audit passes.

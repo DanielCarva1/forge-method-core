@@ -4,36 +4,40 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: presentation-craft-fold-in-hardened
+- status: stale-guidance-guard-hardened
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Begin post-parity Forge polish: audit facilitation packs for thin or generic human guidance and compact workflow refs for misleading or bloated agent instructions.
+- next_action: Continue post-parity Forge polish with transcript-derived improvements only; keep artifact verify clean and avoid reopening closed parity rows without a failing transcript.
 
 ## Latest Checkpoint
 
-# Presentation Craft Fold-In hardened
+# Stale Guidance Guard hardened
 
-- created_at: 2026-06-15T12:23:39+00:00
+- created_at: 2026-06-15T12:50:22+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: presentation-craft-fold-in-hardened
+- status: stale-guidance-guard-hardened
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Resolved the /cis-agent-presentation-master parity contradiction by folding pitch/deck narrative into storytelling with a presentation-craft Persona Lens. Added presentation routing signals, precedence over document/game routes, medium/presentation_outline/call_to_action fields, richer storytelling facilitation, replay fixture, audit/P2/benchmark/changelog updates, and capability index regeneration.
+Post-parity polish audit found structurally healthy packs/refs and stale internal guidance as the main agentic risk. Added Stale Guidance Guard to artifact verification, cleaned active parity audit/plan wording, recorded a durable polish audit, and validated source plus installed runtime.
 
 ## Decisions
 
-- Do not create a visual deck-production workflow now. Forge supports pitch/deck narrative through storytelling and keeps visual deck production deferred until it becomes explicit Forge project scope.
+- Guard active parity/audit/plan/benchmark artifacts against stale closed-work markers instead of relying on future agents to notice contradictions manually.
 
 ## Checks
 
-- parity replay 89/89 passed
-- python -m unittest discover -s tests => 78 tests OK
-- smoke-runtime and smoke-install passed
-- verify-fast passed
+- artifact verify --root .: passed
+- workflow validate: passed
+- workflow compactness: passed
+- parity replay: 89/89 passed
+- python -m unittest discover -s tests: 79 tests OK
+- smoke-runtime.ps1: passed
+- verify-fast.ps1: passed
+- smoke-install.ps1: passed
 
 ## Failed Checks
 
@@ -42,23 +46,19 @@ Resolved the /cis-agent-presentation-master parity contradiction by folding pitc
 ## Touched Files
 
 - skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/personas/overlays.json
-- skills/forge-method/facilitation/storytelling.md
-- skills/forge-method/references/workflow-storytelling.md
-- skills/forge-method/templates/storytelling-artifact.md
-- skills/forge-method/fixtures/guidance-parity-replay.json
 - tests/test_runtime.py
+- .forge-method/artifacts/20260615-post-parity-polish-audit.md
+- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
+- .forge-method/artifacts/20260613-systematic-parity-plan.md
 
 ## Artifacts
 
-- .forge-method/evidence/20260615-122252-validation-presentation-craft-fold-in-validation.md
-- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
-- .forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md
+- .forge-method/artifacts/20260615-post-parity-polish-audit.md
+- .forge-method/evidence/20260615-125002-validation-stale-guidance-guard-validation.md
 
 ## Next Action
 
-Begin post-parity Forge polish: audit facilitation packs for thin or generic human guidance an
-[checkpoint truncated]
+Continue post-parity Forge polish with transcript-derived improvements only; keep artifact verify clean and avoid reopening closed parity rows without a failing transcript.
 
 ## Recovery Signals
 
@@ -70,16 +70,16 @@ Begin post-parity Forge polish: audit facilitation packs for thin or generic hum
 
 - skills/forge-method/scripts/forge_method_runtime.py
 - skills/forge-method/catalog/workflows.json
-- skills/forge-method/references
-- skills/forge-method/facilitation
-- skills/forge-method/templates
-- skills/forge-method/fixtures/guidance-parity-replay.json
-- tests/test_runtime.py
 - skills/forge-method/references/workflow-write-spec.md
 - skills/forge-method/facilitation/product-planning.md
 - skills/forge-method/templates/spec-kernel-artifact.md
+- skills/forge-method/fixtures/guidance-parity-replay.json
+- tests/test_runtime.py
 - skills/forge-method/facilitation/evidence-research.md
 - skills/forge-method/templates/research-scan-artifact.md
+- skills/forge-method/personas/overlays.json
+- skills/forge-method/facilitation/storytelling.md
+- skills/forge-method/references/workflow-storytelling.md
 
 ## Open Human Inputs
 
@@ -96,16 +96,16 @@ Begin post-parity Forge polish: audit facilitation packs for thin or generic hum
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260615-101549-validation-enterprise-artifact-map-depth-validation.md
 - .forge-method/evidence/20260615-103921-validation-spec-kernel-depth-validation.md
 - .forge-method/evidence/20260615-110943-validation-research-guidance-depth-validation.md
 - .forge-method/evidence/20260615-115018-validation-game-brief-sprint-depth-validation.md
 - .forge-method/evidence/20260615-122252-validation-presentation-craft-fold-in-validation.md
+- .forge-method/evidence/20260615-125002-validation-stale-guidance-guard-validation.md
 
 ## Recent Artifacts
 
-- parity-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - Presentation Craft Fold-In audit update - Resolved presentation-master contradiction: pitch/deck narrative routes to storytelling with presentation-craft lens while visual deck production remains deferred.
-- benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance benchmark updated for presentation craft - Recorded presentation-master fold-in target for storytelling and presentation-craft lens.
-- changelog [active/durable]: CHANGELOG.md - Presentation Craft Fold-In changelog - Recorded the unreleased presentation-master fold-in increment.
-- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability index refreshed for presentation craft - Regenerated effective capability index with 14 persona lenses including presentation-craft.
-- parity-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic parity plan updated for presentation craft - Updated current next focus after folding presentation-master into storytelling with presentation-craft and moving post-parity polish to the next work.
+- parity-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD Forge Systematic Parity Audit - Cleaned stale mixed-verdict guidance after post-parity audit: Planning Tracks is translated, old missing-pack notes are replaced with current coverage, and future work is transcript-derived polish.
+- internal-parity-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic Parity Plan - Updated immediate next step to post-parity Forge polish and Stale Guidance Guard work instead of old partial-row batches already closed by current evidence.
+- changelog [active/durable]: CHANGELOG.md - CHANGELOG - Unreleased notes include Stale Guidance Guard and post-parity audit cleanup behavior.
+- internal-audit [active/durable]: .forge-method/artifacts/20260615-post-parity-polish-audit.md - Post-Parity Polish Audit - Audited facilitation packs, compact workflow refs, and active guidance artifacts; added Stale Guidance Guard without storing forbidden stale markers in active guidance text.
+- internal-audit [active/durable]: .forge-method/artifacts/20260615-post-parity-polish-audit.md - Post-Parity Polish Audit - Audited facilitation packs, compact workflow refs, and active guidance artifacts; added Stale Guidance Guard and documented current post-parity polish without stale marker text.

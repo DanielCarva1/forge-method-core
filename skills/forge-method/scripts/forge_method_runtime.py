@@ -2310,6 +2310,26 @@ def artifact_summaries(root: Path) -> dict[str, str]:
     return summaries
 
 
+STALE_GUIDANCE_MARKERS = {
+    "remaining partial/strong-ish": "replace old open-gap wording with the current concrete next focus",
+    "Add missing packs/templates": "replace with current coverage status or a specific missing artifact",
+    "translated/partial": "choose one current parity state instead of preserving a stale mixed verdict",
+}
+
+
+def stale_guidance_warnings(path: str, text: str) -> list[str]:
+    if not path.startswith(".forge-method/artifacts/"):
+        return []
+    lower_path = path.lower()
+    if not any(token in lower_path for token in ["parity", "audit", "plan", "benchmark"]):
+        return []
+    warnings: list[str] = []
+    for marker, repair in STALE_GUIDANCE_MARKERS.items():
+        if marker in text:
+            warnings.append(f"artifact guidance may be stale: {path} contains '{marker}'; {repair}")
+    return warnings
+
+
 def story_decision_artifact_sources(root: Path) -> list[str]:
     sources: list[str] = []
     for entry in artifact_states(root).values():
@@ -2427,6 +2447,7 @@ def artifact_findings(root: Path) -> tuple[list[str], list[str]]:
             modified_at = dt.datetime.fromtimestamp(target.stat().st_mtime, tz=dt.timezone.utc)
             if modified_at > indexed_at + dt.timedelta(seconds=1):
                 warnings.append(f"artifact summary may be stale: {path}")
+        warnings.extend(stale_guidance_warnings(path, target.read_text(encoding="utf-8")))
     return errors, warnings
 
 

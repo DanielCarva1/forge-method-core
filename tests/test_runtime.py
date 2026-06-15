@@ -1488,6 +1488,39 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Example spec", pack.read_text(encoding="utf-8"))
             self.assertIn("Artifact summary.", pack.read_text(encoding="utf-8"))
 
+    def test_artifact_verify_warns_on_stale_parity_guidance_markers(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            artifact = run_cmd(
+                "artifact",
+                "add",
+                "--root",
+                str(root),
+                "--kind",
+                "internal-parity-audit",
+                "--title",
+                "Parity Audit",
+                "--summary",
+                "Parity audit.",
+            ).stdout.strip()
+            (root / artifact).write_text(
+                "\n".join(
+                    [
+                        "# Parity Audit",
+                        "",
+                        "Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_cmd("artifact", "verify", "--root", str(root))
+
+            self.assertIn("Artifact verification warnings:", result.stdout)
+            self.assertIn("artifact guidance may be stale", result.stdout)
+            self.assertIn("remaining partial/strong-ish", result.stdout)
+
     def test_document_utility_doc_check_detects_stale_sources_and_shard_ambiguity(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

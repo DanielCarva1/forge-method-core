@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add Stale Guidance Guard to `artifact verify` so active parity/audit/plan artifacts warn on old mixed-verdict markers, and clean post-parity audit/plan wording that could route agents back to closed work
 - fold presentation-master requests into `storytelling` with a `presentation-craft` Persona Lens, pitch/deck structure fields, and replay proof while keeping visual deck production deferred
 - add Game Brief & Sprint Depth with living `game-brief` template/modes, `game-sprint-planning`, `artifact game-check`, richer game facilitation prompts, game-specific sprint planning routing, and replay coverage
 - add Research Guidance Depth with specific market/domain/technical routing, `research-scan-artifact`, source-quality and contradiction fields, `artifact research-check`, and replay coverage

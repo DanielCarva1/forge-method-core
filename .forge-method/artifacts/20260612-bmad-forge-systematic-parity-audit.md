@@ -76,7 +76,7 @@ The product direction is therefore:
 | --- | --- | --- | --- | --- |
 | `bmad-help` project-aware guidance | `preflight`, `start`, `resume`, `guide`, Guidance Engine, post-command Help Oracle ledger | translated | Post-command guidance now records the next required workflow, alternatives, and stale-state guard for progress-changing commands; interactive mutations also print it. | Keep real-use transcript hardening focused on places where the agent still ignores the emitted or recorded next workflow. |
 | Workflow status / workflow map | `.forge-method/state.yaml`, `sprint.yaml`, `status`, `snapshot`, `context plan` | strong | Human explanation can still be dry compared to BMAD Help. | Keep compact JSON, improve human summaries and status affordances. |
-| Planning tracks: Quick Flow / Method / Enterprise | Forge modules plus `track-decision` | translated/partial | P1.4 adds a route decision artifact and required workflow map, but deeper track-specific doc trees can still improve. | Expand track-specific required/optional docs as future module depth is translated. |
+| Planning tracks: Quick Flow / Method / Enterprise | Forge modules plus `track-decision` | translated | P1.4 adds a route decision artifact, required workflow map, Help Oracle routing, and transcript replay coverage. Optional track-specific doc trees are post-parity polish, not a parity blocker. | Keep future track docs evidence-driven and avoid reopening closed parity rows without a failing transcript. |
 | Analysis: brainstorming | `brainstorming` workflow + facilitation pack/template | translated | Brainstorming Depth adds guided divergence, taste/anti-reference prompts, pressure testing, discard pile, selection criteria, compact artifact template, modes, and replay proof for broad ideas before PRD. | Add richer live transcript examples only if sessions still collapse too early. |
 | Analysis: market/domain/technical research | `market-scan`, `domain-scan`, `technical-feasibility-scan`, Reality/Evidence Gate, `research-closeout`, `artifact research-check` | translated | Research Guidance Depth adds specific market/domain/technical routing, source-quality and contradiction facilitation, shared research-scan template, deterministic research-check, and replay coverage. | Keep future examples transcript-derived rather than expanding generic prose. |
 | Product brief / PRFAQ | `discover-intent`, `product-requirements`, `working-backwards-challenge`, `reality-evidence-gate` | translated | P1.7 adds a working-backwards challenge workflow for customer-promise, FAQ objection, evidence gap, and decision-impact stress testing before PRD/UX/architecture harden the promise. | Add richer transcript examples only if real product sessions show weak coaching. |
@@ -282,7 +282,7 @@ Use these as implementation increments. Each item must ship with workflow metada
 
 - Add workflow validation that flags human-facing workflows without facilitation packs.
 - Define which workflows are agent-only and which require rich human facilitation.
-- Add missing packs/templates for `product-requirements`, `ux-plan`, `architecture`, `gdd`, `innovation-strategy`, `storytelling`, `create-epics`, and `readiness-check`; `plan-sprint` now has Sprint Planning Depth coverage.
+- Coverage now exists for `product-requirements`, `ux-plan`, `architecture`, `gdd`, `innovation-strategy`, `storytelling`, `create-epics`, `readiness-check`, and `plan-sprint`; future work should improve only transcript-proven weak spots.
 
 ### P0.3 PRD/UX/Quick Dev parity
 
