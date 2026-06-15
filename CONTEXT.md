@@ -92,6 +92,30 @@ The deterministic customization contract that applies Project Configuration over
 
 A generated compact summary of effective Forge capabilities for future agents. It is derived from packaged metadata plus valid Project Configuration, and should be regenerated instead of edited by hand.
 
+## Lifecycle Closure
+
+A guided workflow family that turns major project moments into durable next-step artifacts: track choice, project context, session prep, readiness, code review, retrospective, and research closeout. It wraps low-level runtime helpers with a human-facing ritual and a compact agent handoff.
+
+## Track Decision Artifact
+
+A durable artifact that records why one Forge track/module is the right route for the project or increment. It maps the selected track to required artifacts, optional workflows, rejected tracks, and the next workflow.
+
+## Project Context Artifact
+
+A durable source-of-truth summary for an existing or evolving project. It captures purpose, architecture shape, conventions, important artifacts, validation commands, and agent handoff boundaries without replacing the generated Context Pack.
+
+## Session Prep Artifact
+
+A compact continuation brief for the next working session. It uses current state, checkpoints, open inputs, review findings, and load-plan guidance to name the exact next workflow and files to read.
+
+## Readiness Matrix
+
+A cross-artifact implementation readiness map linking PRD/spec, UX, architecture, risk, stories, validation, open inputs, and review findings. It proves whether build can start without hidden decisions.
+
+## Research Closeout
+
+A compact handoff after evidence work. It records sources, confidence, decision impact, unresolved uncertainty, rejected paths, and the next workflow so research does not remain as loose notes.
+
 ## Guided Depth Family
 
 A related set of specialized workflows that deepens a broad track without changing the single Forge entrypoint. Current depth families include game lifecycle, test architecture, builder utility, and document utility. Each family keeps compact workflow state machines for agents and a separate facilitation pack for human conversation.

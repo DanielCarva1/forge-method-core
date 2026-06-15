@@ -328,3 +328,12 @@
 {"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260615-001238-validation-p1-3-final-validation-after-builder-persona-rout.md", "story": ""}, "ts": "2026-06-15T00:12:38+00:00"}
 {"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260615-001250-p1-3-persona-lens-and-elicitation-layer-closed.md"}, "ts": "2026-06-15T00:12:50+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-15T00:12:50+00:00"}
+{"event": "artifact.added", "payload": {"kind": "internal-benchmark", "lifecycle": "durable", "path": ".forge-method/artifacts/guidance-engine-benchmark.md"}, "ts": "2026-06-15T00:36:13+00:00"}
+{"event": "artifact.added", "payload": {"kind": "audit", "lifecycle": "durable", "path": ".forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md"}, "ts": "2026-06-15T00:36:19+00:00"}
+{"event": "artifact.added", "payload": {"kind": "plan", "lifecycle": "durable", "path": ".forge-method/artifacts/20260613-systematic-parity-plan.md"}, "ts": "2026-06-15T00:36:27+00:00"}
+{"event": "artifact.added", "payload": {"kind": "grill", "lifecycle": "durable", "path": ".forge-method/artifacts/20260615-lifecycle-closure-grill.md"}, "ts": "2026-06-15T00:36:33+00:00"}
+{"event": "artifact.added", "payload": {"kind": "capability-index", "lifecycle": "durable", "path": ".forge-method/context/capability-index.json"}, "ts": "2026-06-15T00:36:39+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260615-003700-validation-p1-4-lifecycle-closure-validation.md", "story": ""}, "ts": "2026-06-15T00:37:00+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260615-003711-p1-4-lifecycle-closure-closed.md"}, "ts": "2026-06-15T00:37:11+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-15T00:37:11+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "p1-lifecycle-closure-done"}, "ts": "2026-06-15T00:37:19+00:00"}

@@ -147,6 +147,7 @@ PARITY_REPLAY_REQUIRED_FAMILIES = {
     "builder",
     "config",
     "persona",
+    "lifecycle",
     "cis",
     "game",
     "tea",
@@ -4950,6 +4951,31 @@ def detect_guidance_signals(question: str) -> list[str]:
         "research-needed": ["deep research", "pesquisa profunda", "consultar documentacao", "ler docs", "benchmark"],
         "document-utility": ["index docs", "shard document", "editorial review", "edge case", "spec distillation"],
         "quality-flow": ["teach me testing"],
+        "lifecycle-flow": [
+            "track decision",
+            "choose track",
+            "which track",
+            "project context",
+            "document project",
+            "document this project",
+            "generate project context",
+            "session prep",
+            "prep next session",
+            "prepare next session",
+            "next session",
+            "code review",
+            "review this code",
+            "review the code",
+            "review diff",
+            "retro this increment",
+            "retrospective",
+            "research closeout",
+            "close research",
+            "research handoff",
+            "readiness matrix",
+            "implementation readiness",
+            "ready to build",
+        ],
         "persona-lens": [
             "pm lens",
             "product manager",
@@ -5048,6 +5074,11 @@ def detect_guidance_signals(question: str) -> list[str]:
             "config index",
             "config validate",
             "config inspect",
+            "systematic parity plan",
+            "parity plan",
+            "p1.4",
+            "p1.5",
+            "p1.6",
         ],
     }
     for signal, phrases in phrase_signals.items():
@@ -5076,6 +5107,7 @@ def detect_guidance_signals(question: str) -> list[str]:
         "creative-flow": {"creative", "criativo", "cis", "storytelling", "marca", "campanha", "conceito"},
         "game-flow": {"game", "jogo", "jogar", "player", "mecanica", "rpg", "mesa", "dice", "engine"},
         "quality-flow": {"test", "testing", "teste", "qa", "qualidade", "risco", "nfr", "gate", "review"},
+        "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness"},
         "persona-lens": {"lens", "lente", "persona", "coach", "perspectiva", "visao", "pm", "architect", "arquiteto", "analyst", "analista", "ux", "qa", "writer", "storyteller"},
         "story-flow": {"backlog", "epic", "epics", "sprint", "stories", "story", "historia", "historias"},
         "product-flow": {
@@ -5144,6 +5176,7 @@ def detect_guidance_signals(question: str) -> list[str]:
             "packs",
             "parity",
             "paridade",
+            "p1",
         },
         "mechanical-build": {"implementar", "implementa", "implement", "build", "corrigir", "fix", "rodar", "story", "historia", "testes", "tests"},
         "operate-support": {"publicar", "publish", "release", "suporte", "support", "operar", "operate"},
@@ -5245,6 +5278,233 @@ def routed_story_workflow(question: str) -> str:
     if {"readiness", "ready"} & tokens or "implementation ready" in normalized or "implementation-ready" in normalized:
         return "readiness-check"
     return "story-creation"
+
+
+def routed_lifecycle_workflow(question: str) -> str:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    if (
+        "track decision" in normalized
+        or "choose track" in normalized
+        or "which track" in normalized
+        or "decidir trilha" in normalized
+        or "qual trilha" in normalized
+        or ({"track", "trilha"} & tokens and {"choose", "escolher", "decidir", "decision"} & tokens)
+    ):
+        return "track-decision"
+    if (
+        "project context" in normalized
+        or "generate project context" in normalized
+        or "document project" in normalized
+        or "document this project" in normalized
+        or "documentar projeto" in normalized
+        or "documentar este projeto" in normalized
+    ):
+        return "project-context"
+    if (
+        "session prep" in normalized
+        or "prep next session" in normalized
+        or "prepare next session" in normalized
+        or "next session" in normalized
+        or "next chat" in normalized
+        or "handoff" in tokens
+        or "preparar proxima sessao" in normalized
+    ):
+        return "session-prep"
+    if (
+        "code review" in normalized
+        or "review this code" in normalized
+        or "review the code" in normalized
+        or "review diff" in normalized
+        or "revisar codigo" in normalized
+        or "revisao de codigo" in normalized
+    ):
+        return "code-review"
+    if {"retro", "retrospective", "retrospectiva"} & tokens or "retro this increment" in normalized:
+        return "retrospective"
+    if (
+        "research closeout" in normalized
+        or "close research" in normalized
+        or "research handoff" in normalized
+        or "fechar pesquisa" in normalized
+        or "handoff de pesquisa" in normalized
+    ):
+        return "research-closeout"
+    if (
+        "readiness matrix" in normalized
+        or "implementation readiness" in normalized
+        or "ready to build" in normalized
+        or "can implement" in normalized
+        or "pronto para implementar" in normalized
+    ):
+        return "readiness-check"
+    return "project-context"
+
+
+def lifecycle_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "track-decision":
+        return (
+            "run track-decision to select the module/track, preserve rejected routes, and map required next workflows",
+            "I should make the route decision durable before creating more artifacts.",
+            guidance_alternatives(
+                ("project-context", "use after the track is chosen and the project needs source-of-truth context"),
+                ("session-prep", "use when the next agent needs a compact start"),
+                ("readiness-check", "use when the question is whether build can start"),
+            ),
+        )
+    if workflow_id == "project-context":
+        return (
+            "run project-context to document source-of-truth, conventions, important paths, validation commands, and agent handoff",
+            "I should create a compact project context artifact, not dump the whole repo into recovery.",
+            guidance_alternatives(
+                ("session-prep", "use when the context exists and the next session needs a start plan"),
+                ("readiness-check", "use when implementation readiness is the next question"),
+                ("doc-index", "use when the immediate job is navigation across many docs"),
+            ),
+        )
+    if workflow_id == "session-prep":
+        return (
+            "run session-prep to write the next-session read order, blockers, first command, and next workflow",
+            "I should make the next session start from files instead of chat memory.",
+            guidance_alternatives(
+                ("context-recovery", "use when state or context is stale or overloaded"),
+                ("project-context", "use when source-of-truth context is missing"),
+                ("retrospective", "use when the session needs learning/action closeout first"),
+            ),
+        )
+    if workflow_id == "code-review":
+        return (
+            "run code-review to inspect changed behavior, create actionable findings, and route repair or readiness",
+            "I should review the code/diff directly and store actionable issues as durable findings.",
+            guidance_alternatives(
+                ("test-review", "use when the question is only test coverage"),
+                ("readiness-check", "use after findings are resolved and build/release readiness is the question"),
+                ("build-story", "use when an accepted story is ready for repair work"),
+            ),
+        )
+    if workflow_id == "retrospective":
+        return (
+            "run retrospective to convert evidence and feedback into keep/change/stop/try actions and next workflow",
+            "I should turn the finished increment into durable learning and route the next evolution.",
+            guidance_alternatives(
+                ("evolve-project", "use when retro actions start a new evolution cycle"),
+                ("plan-sprint", "use when actions are ready to sequence into stories"),
+                ("session-prep", "use when the main need is handoff"),
+            ),
+        )
+    if workflow_id == "research-closeout":
+        return (
+            "run research-closeout to preserve sources, confidence, decision impact, uncertainty, and next workflow",
+            "I should close the research into a decision handoff before planning or building.",
+            guidance_alternatives(
+                ("product-requirements", "use when research changes requirements or scope"),
+                ("architecture", "use when research changes technical direction"),
+                ("readiness-check", "use when research confirms build can start"),
+            ),
+        )
+    return (
+        "run readiness-check to produce a readiness matrix across sources, stories, risks, validation, inputs, and findings",
+        "I should prove implementation readiness with a matrix, not confidence from memory.",
+        guidance_alternatives(
+            ("story-creation", "use when implementation-ready stories are missing"),
+            ("code-review", "use when changed code needs findings before readiness"),
+            ("build-story", "use when readiness is proven and a story can start"),
+        ),
+    )
+
+
+def is_strong_builder_intent(question: str) -> bool:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    strong_phrases = [
+        "systematic parity plan",
+        "parity plan",
+        "p1.4",
+        "p1.5",
+        "p1.6",
+        "audit runtime",
+        "audit scripts",
+        "codigo morto",
+        "dead code",
+        "doc misleading",
+        "docs misleading",
+        "misleading doc",
+        "misleading docs",
+        "missleading doc",
+        "missleading docs",
+        "doc enganoso",
+        "docs enganosos",
+        "documentacao enganosa",
+        "parte guiada",
+        "experiencia guiada",
+        "guided flow",
+        "human guidance",
+        "config customization",
+        "customize forge",
+        "customizar forge",
+        "capability index",
+        "project configuration",
+        "build a workflow",
+        "create workflow",
+        "design workflow",
+        "workflow builder",
+        "build an agent",
+        "create an agent",
+        "design an agent",
+        "agent builder",
+        "build module",
+        "create module",
+        "package module",
+        "module builder",
+        "module ideation",
+        "validate module",
+        "check module",
+    ]
+    if any(phrase in normalized for phrase in strong_phrases):
+        return True
+    if "p1" in tokens:
+        return True
+
+    action_tokens = {
+        "analyze",
+        "analise",
+        "analisar",
+        "audit",
+        "auditoria",
+        "build",
+        "create",
+        "criar",
+        "design",
+        "desenhar",
+        "scaffold",
+        "convert",
+        "converter",
+        "validate",
+        "validar",
+        "package",
+        "customize",
+        "customizar",
+        "override",
+    }
+    runtime_tokens = {
+        "forge",
+        "method",
+        "bmad",
+        "runtime",
+        "plugin",
+        "guidance",
+        "router",
+        "catalog",
+        "catalogo",
+        "metadata",
+        "config",
+        "configuration",
+        "customization",
+        "override",
+        "capability",
+    }
+    factory_tokens = {"workflow", "workflows", "module", "modules", "modulo", "modulos", "agent", "agents", "agente", "agentes", "skill", "skills"}
+    return bool((tokens & action_tokens) and (tokens & (runtime_tokens | factory_tokens)))
 
 
 def routed_builder_workflow(question: str) -> str:
@@ -5475,7 +5735,7 @@ def should_transition_to_guided_workflow(
         return False
     if recommended_workflow == state.get("active_workflow", ""):
         return False
-    return classification in {"game-flow", "quality-flow", "builder-flow", "document-utility", "product-flow", "story-flow", "creative-flow", "persona-lens"}
+    return classification in {"game-flow", "quality-flow", "builder-flow", "document-utility", "product-flow", "story-flow", "creative-flow", "lifecycle-flow", "persona-lens"}
 
 
 def build_guidance_decision(
@@ -5527,6 +5787,15 @@ def build_guidance_decision(
             recommended_action = "create a creative-studio project, then explore and select a creative direction"
             human_prompt = "I should preserve taste, constraints, and rejected directions before writing a spec."
             reason = "The first intent is taste-heavy or creative."
+        elif "lifecycle-flow" in signal_set:
+            classification = "lifecycle-flow"
+            recommended_phase = "1-discovery"
+            recommended_workflow = routed_lifecycle_workflow(question)
+            action_text, prompt_text, lifecycle_alternatives = lifecycle_guidance_text(recommended_workflow)
+            recommended_action = f"create the project, then {action_text}"
+            human_prompt = prompt_text
+            alternatives = lifecycle_alternatives
+            reason = "The first intent asks for lifecycle closure or context handoff."
         elif "document-utility" in signal_set:
             classification = "document-utility"
             recommended_phase = "1-discovery"
@@ -5685,7 +5954,12 @@ def build_guidance_decision(
                 recommended_action,
             )
         )
-    elif has_question and phase == "5-ready-operate" and "builder-flow" in signal_set:
+    elif (
+        has_question
+        and phase == "5-ready-operate"
+        and "builder-flow" in signal_set
+        and ("lifecycle-flow" not in signal_set or is_strong_builder_intent(question))
+    ):
         classification = "evolution-request"
         recommended_phase = "6-evolve"
         recommended_workflow = "evolve-project"
@@ -5714,11 +5988,21 @@ def build_guidance_decision(
                 recommended_action,
             )
         )
-    elif has_question and "builder-flow" in signal_set and (module_id == "runtime-builder" or phase == "6-evolve"):
+    elif (
+        has_question
+        and "builder-flow" in signal_set
+        and (module_id == "runtime-builder" or phase == "6-evolve")
+        and ("lifecycle-flow" not in signal_set or is_strong_builder_intent(question))
+    ):
         classification = "builder-flow"
         recommended_workflow = routed_builder_workflow(question)
         recommended_action, human_prompt, alternatives = builder_guidance_text(recommended_workflow)
         reason = "Runtime-builder context and builder signals outrank domain words; explicit create/analyze/convert/validate words select the narrow builder workflow."
+    elif has_question and "lifecycle-flow" in signal_set:
+        classification = "lifecycle-flow"
+        recommended_workflow = routed_lifecycle_workflow(question)
+        recommended_action, human_prompt, alternatives = lifecycle_guidance_text(recommended_workflow)
+        reason = "The message asks for lifecycle closure, project context, handoff, review, readiness, retro, or research closeout."
     elif has_question and "confusion" in signal_set:
         classification = "confusion"
         recommended_workflow = "problem-solving"

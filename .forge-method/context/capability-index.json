@@ -117,14 +117,14 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T00:01:10+00:00",
+  "generated_at": "2026-06-15T00:30:02+00:00",
   "modules": [
     {
       "id": "core-runtime",
       "phase_span": "0-route | 1-discovery | 2-specification | 3-plan | 4-build-verify | 5-ready-operate | 6-evolve",
       "purpose": "Route projects, preserve durable state, recover context, and enforce phase transitions.",
       "title": "Core Runtime",
-      "workflows": "start-runtime | discover-intent | guide-route | guidance-engine | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | grill-gate | council-decision | context-recovery | ready-release | evolve-project | correct-course"
+      "workflows": "start-runtime | discover-intent | guide-route | guidance-engine | track-decision | project-context | session-prep | research-closeout | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | grill-gate | council-decision | context-recovery | ready-release | evolve-project | correct-course"
     },
     {
       "id": "creative-studio",
@@ -138,7 +138,7 @@
       "phase_span": "2-specification | 3-plan | 4-build-verify | 5-ready-operate | 6-evolve",
       "purpose": "Plan security, privacy, compliance, DevOps, observability, risk, and release readiness for production-grade work.",
       "title": "Enterprise",
-      "workflows": "guidance-engine | discover-intent | reality-evidence-gate | domain-scan | technical-feasibility-scan | security-plan | privacy-data-plan | devops-deployment-plan | ci-quality-pipeline | compliance-checklist | observability-plan | nfr-evidence-audit | traceability-gate | risk-register | release-readiness | grill-gate"
+      "workflows": "guidance-engine | discover-intent | project-context | session-prep | research-closeout | reality-evidence-gate | domain-scan | technical-feasibility-scan | security-plan | privacy-data-plan | devops-deployment-plan | ci-quality-pipeline | compliance-checklist | observability-plan | nfr-evidence-audit | traceability-gate | risk-register | readiness-check | code-review | retrospective | release-readiness | grill-gate"
     },
     {
       "id": "game-studio",
@@ -152,28 +152,28 @@
       "phase_span": "4-build-verify | 5-ready-operate | 6-evolve",
       "purpose": "Move a project into ready/operate, preserve release evidence, and route future evolution.",
       "title": "Launch Ops",
-      "workflows": "guidance-engine | discover-intent | ready-release | release-readiness | observability-plan | devops-deployment-plan | evolve-project | context-recovery"
+      "workflows": "guidance-engine | discover-intent | project-context | session-prep | code-review | retrospective | ready-release | release-readiness | observability-plan | devops-deployment-plan | evolve-project | context-recovery"
     },
     {
       "id": "runtime-builder",
       "phase_span": "1-discovery | 2-specification | 3-plan | 4-build-verify | 6-evolve",
       "purpose": "Create new workflows, modules, skills, scripts, and validations for Forge Method projects.",
       "title": "Runtime Builder",
-      "workflows": "guidance-engine | discover-intent | runtime-builder | module-ideation | agent-builder | workflow-builder | module-builder | module-validate | builder-scaffold | agent-analyze | workflow-analyze | skill-convert | config-customization | reality-evidence-gate | technical-feasibility-scan | doc-index | doc-shard | editorial-review | edge-case-review | spec-distillation | eval-design | workflow-validate | build-story | grill-gate"
+      "workflows": "guidance-engine | discover-intent | runtime-builder | module-ideation | agent-builder | workflow-builder | module-builder | module-validate | builder-scaffold | agent-analyze | workflow-analyze | skill-convert | config-customization | track-decision | project-context | session-prep | research-closeout | reality-evidence-gate | technical-feasibility-scan | doc-index | doc-shard | editorial-review | edge-case-review | spec-distillation | code-review | retrospective | eval-design | workflow-validate | build-story | grill-gate"
     },
     {
       "id": "software-builder",
       "phase_span": "2-specification | 3-plan | 4-build-verify | 5-ready-operate",
       "purpose": "Turn specifications into implementation stories, code changes, checks, review, and evidence.",
       "title": "Software Builder",
-      "workflows": "guidance-engine | discover-intent | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | spec-distillation | product-requirements | ux-plan | quick-dev | architecture | create-epics | story-creation | doc-index | doc-shard | editorial-review | edge-case-review | readiness-check | grill-gate | build-story | ready-release | correct-course"
+      "workflows": "guidance-engine | discover-intent | track-decision | project-context | session-prep | research-closeout | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | spec-distillation | product-requirements | ux-plan | quick-dev | architecture | create-epics | story-creation | doc-index | doc-shard | editorial-review | edge-case-review | readiness-check | code-review | retrospective | grill-gate | build-story | ready-release | correct-course"
     },
     {
       "id": "test-architect",
       "phase_span": "2-specification | 3-plan | 4-build-verify | 5-ready-operate",
       "purpose": "Define validation strategy, risk checks, review gates, and evidence expectations.",
       "title": "Test Architect",
-      "workflows": "guidance-engine | discover-intent | reality-evidence-gate | domain-scan | technical-feasibility-scan | test-strategy | teach-testing | test-engagement-model | test-framework | ci-quality-pipeline | atdd-plan | test-automation | test-review | nfr-evidence-audit | traceability-gate | risk-register | readiness-check | release-readiness | build-story | ready-release | grill-gate"
+      "workflows": "guidance-engine | discover-intent | project-context | session-prep | research-closeout | reality-evidence-gate | domain-scan | technical-feasibility-scan | test-strategy | teach-testing | test-engagement-model | test-framework | ci-quality-pipeline | atdd-plan | test-automation | test-review | code-review | nfr-evidence-audit | traceability-gate | risk-register | readiness-check | release-readiness | build-story | ready-release | grill-gate"
     }
   ],
   "override_precedence": [
@@ -616,6 +616,27 @@
       "phase": "3-plan | 5-ready-operate",
       "required": false,
       "template": "test-architecture-artifact"
+    },
+    {
+      "facilitation_pack": "lifecycle-closure",
+      "followed_by": [
+        "build-story",
+        "readiness-check",
+        "retrospective"
+      ],
+      "id": "code-review",
+      "modes": [
+        "review",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "code review findings",
+        "repair or gate recommendation"
+      ],
+      "phase": "4-build-verify | 6-evolve",
+      "required": false,
+      "template": "code-review-artifact"
     },
     {
       "facilitation_pack": "enterprise-readiness",
@@ -1324,6 +1345,27 @@
       "template": "product-requirements-artifact"
     },
     {
+      "facilitation_pack": "lifecycle-closure",
+      "followed_by": [
+        "session-prep",
+        "readiness-check"
+      ],
+      "id": "project-context",
+      "modes": [
+        "document",
+        "update",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "project context artifact",
+        "source map"
+      ],
+      "phase": "anytime",
+      "required": false,
+      "template": "project-context-artifact"
+    },
+    {
       "facilitation_pack": "quick-dev",
       "followed_by": [
         "build-story",
@@ -1363,11 +1405,19 @@
         "build-story"
       ],
       "id": "readiness-check",
+      "modes": [
+        "create",
+        "validate",
+        "matrix",
+        "headless"
+      ],
       "outputs": [
-        "readiness report"
+        "readiness report",
+        "readiness matrix"
       ],
       "phase": "3-plan",
-      "required": true
+      "required": true,
+      "template": "readiness-matrix-artifact"
     },
     {
       "facilitation_pack": "story-lifecycle",
@@ -1407,6 +1457,51 @@
       "required": true
     },
     {
+      "facilitation_pack": "lifecycle-closure",
+      "followed_by": [
+        "product-requirements",
+        "architecture",
+        "readiness-check"
+      ],
+      "id": "research-closeout",
+      "modes": [
+        "closeout",
+        "handoff",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "research closeout",
+        "decision impact",
+        "next workflow"
+      ],
+      "phase": "1-discovery | 2-specification | 6-evolve",
+      "required": false,
+      "template": "research-closeout-artifact"
+    },
+    {
+      "facilitation_pack": "lifecycle-closure",
+      "followed_by": [
+        "evolve-project",
+        "plan-sprint",
+        "session-prep"
+      ],
+      "id": "retrospective",
+      "modes": [
+        "create",
+        "update",
+        "headless"
+      ],
+      "outputs": [
+        "retrospective notes",
+        "action items",
+        "next workflow"
+      ],
+      "phase": "5-ready-operate | 6-evolve",
+      "required": false,
+      "template": "retrospective-artifact"
+    },
+    {
       "facilitation_pack": "enterprise-readiness",
       "id": "risk-register",
       "outputs": [
@@ -1444,6 +1539,28 @@
       ],
       "phase": "3-plan",
       "required": true
+    },
+    {
+      "facilitation_pack": "lifecycle-closure",
+      "followed_by": [
+        "guidance-engine",
+        "build-story"
+      ],
+      "id": "session-prep",
+      "modes": [
+        "prep",
+        "handoff",
+        "resume",
+        "headless"
+      ],
+      "outputs": [
+        "session prep artifact",
+        "compact read order",
+        "first command"
+      ],
+      "phase": "anytime",
+      "required": false,
+      "template": "session-prep-artifact"
     },
     {
       "facilitation_pack": "builder-utility",
@@ -1677,6 +1794,27 @@
       "phase": "4-build-verify | 5-ready-operate",
       "required": false,
       "template": "test-architecture-artifact"
+    },
+    {
+      "facilitation_pack": "lifecycle-closure",
+      "followed_by": [
+        "project-context",
+        "product-requirements",
+        "runtime-builder"
+      ],
+      "id": "track-decision",
+      "modes": [
+        "decide",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "track decision artifact",
+        "required workflow map"
+      ],
+      "phase": "0-route | 1-discovery | 6-evolve",
+      "required": false,
+      "template": "track-decision-artifact"
     },
     {
       "facilitation_pack": "ux-design",

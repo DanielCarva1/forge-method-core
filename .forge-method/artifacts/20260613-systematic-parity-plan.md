@@ -81,7 +81,7 @@ The full parity goal is complete only when every audit row is `translated`, `str
 
 ## Current Status
 
-P0 through P1.3 are closed:
+P0 through P1.4 are closed:
 
 - Help/Next-Step Oracle: implemented and validated.
 - Human facilitation coverage gate: implemented and validated.
@@ -91,6 +91,7 @@ P0 through P1.3 are closed:
 - Builder Factory: implemented with `module-ideation`, `agent-builder`, `workflow-builder`, `module-builder`, `module-validate`, `builder-factory` facilitation, templates, Guidance Engine routes, and parity replay coverage.
 - Customization and Capability Index: implemented with Project Configuration, Override Model, Capability Index, `config index`, config validation, replay coverage, install smoke proof, and evidence.
 - Persona and Elicitation Layer: implemented with Persona Lens overlays, elicitation technique index, persona facilitation pack, Guidance Engine `persona_lens` output, council participant routing, replay coverage, compactness guards, and evidence.
+- Lifecycle Closure: implemented with `track-decision`, `project-context`, `session-prep`, `code-review`, `retrospective`, `research-closeout`, readiness matrix template, lifecycle facilitation, Guidance Engine routes, replay coverage, compact workflow refs, and Capability Index exposure.
 
 The remaining work is a planned sequence, not ad hoc patching.
 
@@ -208,6 +209,8 @@ Done when:
 
 ### P1.4 Product, Context, Review, And Retrospective Closure
 
+Status: translated in the 2026-06-15 Lifecycle Closure batch.
+
 Scope:
 
 - track decision artifact;
@@ -237,8 +240,8 @@ Deliverables:
 
 Done when:
 
-- a future user can ask "document this project", "prep next session", "review this code", or "retro this increment" and Forge routes correctly;
-- output is durable and compact enough for a future agent.
+- a future user can ask "document this project", "prep next session", "review this code", or "retro this increment" and Forge routes correctly: done;
+- output is durable and compact enough for a future agent: done.
 
 ### P1.5 Game Studio Depth
 
@@ -371,12 +374,12 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 ## Immediate Next Step
 
-Next implementation batch: P1.4 Product, Context, Review, And Retrospective Closure after P1.3 validation evidence is recorded.
+Next implementation batch: P1.5 Game Studio Depth after P1.4 validation evidence is recorded.
 
-Do not start P1.4 as an ad hoc implementation. Start P1.4 from this plan:
+Do not start P1.5 as an ad hoc implementation. Start P1.5 from this plan:
 
-1. identify product/context/review/retrospective rows from the audit;
-2. define workflow boundaries for project-context, session-prep, retrospective, code-review, readiness matrix, and research closeout;
-3. add compact workflow refs, facilitation packs, templates, routes, and replay fixtures;
+1. identify game-studio depth rows from the audit;
+2. define accepted scope for game project context, GDD, narrative, mechanics, prototype, playtest, performance, and game QA depth;
+3. add or expand compact workflow refs, facilitation packs, templates, routes, and replay fixtures;
 4. validate source and installed behavior;
 5. record evidence and checkpoint.

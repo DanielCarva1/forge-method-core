@@ -28,6 +28,7 @@ PARITY_REQUIRED_FAMILIES = {
     "cis",
     "game",
     "tea",
+    "lifecycle",
 }
 
 
@@ -1349,6 +1350,12 @@ class RuntimeTests(unittest.TestCase):
             "ux-plan",
             "quick-dev",
             "story-creation",
+            "track-decision",
+            "project-context",
+            "session-prep",
+            "code-review",
+            "retrospective",
+            "research-closeout",
         ]:
             self.assertIn(workflow_id, workflow_list)
         for template_path in [
@@ -1363,6 +1370,13 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "ux-design-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "quick-dev-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "story-creation-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "track-decision-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "project-context-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "session-prep-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "code-review-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "retrospective-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "readiness-matrix-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "research-closeout-artifact.md",
         ]:
             self.assertTrue(template_path.exists())
         for pack_path in [
@@ -1418,6 +1432,12 @@ class RuntimeTests(unittest.TestCase):
             "module-builder",
             "module-validate",
             "config-customization",
+            "track-decision",
+            "project-context",
+            "session-prep",
+            "code-review",
+            "retrospective",
+            "research-closeout",
         }
         by_id = {item["id"]: item for item in catalog["workflows"]}
         for workflow_id in human_facing_required:
@@ -1432,6 +1452,13 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["module-builder"].get("template"), "module-builder-artifact")
         self.assertEqual(by_id["module-validate"].get("template"), "module-validation-report")
         self.assertEqual(by_id["config-customization"].get("template"), "config-customization-artifact")
+        self.assertEqual(by_id["track-decision"].get("template"), "track-decision-artifact")
+        self.assertEqual(by_id["project-context"].get("template"), "project-context-artifact")
+        self.assertEqual(by_id["session-prep"].get("template"), "session-prep-artifact")
+        self.assertEqual(by_id["code-review"].get("template"), "code-review-artifact")
+        self.assertEqual(by_id["retrospective"].get("template"), "retrospective-artifact")
+        self.assertEqual(by_id["readiness-check"].get("template"), "readiness-matrix-artifact")
+        self.assertEqual(by_id["research-closeout"].get("template"), "research-closeout-artifact")
         self.assertIn("validate", by_id["product-requirements"].get("modes", []))
         self.assertIn("validate", by_id["ux-plan"].get("modes", []))
         self.assertIn("spec-lite", by_id["quick-dev"].get("modes", []))
@@ -1442,6 +1469,13 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("package", by_id["module-builder"].get("modes", []))
         self.assertIn("validate", by_id["module-validate"].get("modes", []))
         self.assertIn("index", by_id["config-customization"].get("modes", []))
+        self.assertIn("decide", by_id["track-decision"].get("modes", []))
+        self.assertIn("document", by_id["project-context"].get("modes", []))
+        self.assertIn("prep", by_id["session-prep"].get("modes", []))
+        self.assertIn("review", by_id["code-review"].get("modes", []))
+        self.assertIn("create", by_id["retrospective"].get("modes", []))
+        self.assertIn("matrix", by_id["readiness-check"].get("modes", []))
+        self.assertIn("closeout", by_id["research-closeout"].get("modes", []))
         for pack_id in pack_ids:
             pack_text = (ROOT / "skills" / "forge-method" / "facilitation" / f"{pack_id}.md").read_text(
                 encoding="utf-8"
@@ -1626,6 +1660,133 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("[Spec Architect]", council)
             self.assertIn("[Quality Reviewer]", council)
             self.assertTrue((root / snapshot["state"]["last_council_artifact"]).exists())
+
+    def test_lifecycle_closure_guidance_and_compact_contracts(self) -> None:
+        lifecycle_cases = [
+            (
+                "document this project and generate project context for future agents",
+                "project-context",
+                "project-context-artifact",
+                "1-discovery",
+            ),
+            (
+                "which track should this project use and what workflows are required",
+                "track-decision",
+                "track-decision-artifact",
+                "1-discovery",
+            ),
+            (
+                "create a readiness matrix linking PRD UX architecture risk stories validation and findings",
+                "readiness-check",
+                "readiness-matrix-artifact",
+                "3-plan",
+            ),
+        ]
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Lifecycle Project", "--root", str(root))
+            run_cmd("transition", "--root", str(root), "--phase", "1-discovery")
+
+            for question, workflow, template, phase in lifecycle_cases:
+                with self.subTest(workflow=workflow):
+                    guide = json.loads(
+                        run_cmd("guide", "--root", str(root), "--question", question, "--json").stdout
+                    )
+
+                    self.assertEqual(guide["intent_classification"], "lifecycle-flow")
+                    self.assertEqual(guide["recommended_workflow"], workflow)
+                    self.assertEqual(guide["recommended_phase"], phase)
+                    self.assertEqual(guide["workflow_metadata"].get("template"), template)
+                    self.assertEqual(
+                        guide["facilitation_pack"],
+                        "skill:facilitation/lifecycle-closure.md"
+                        if workflow != "readiness-check"
+                        else "skill:facilitation/story-lifecycle.md",
+                    )
+                    self.assertTrue(guide["state_update_required"])
+                    self.assertIn("transition-workflow", [item["name"] for item in guide["commands"]])
+
+            index_payload = json.loads(run_cmd("config", "index", "--root", str(root), "--json").stdout)
+            workflow_ids = {item["id"] for item in index_payload["workflows"]}
+            self.assertTrue(
+                {
+                    "track-decision",
+                    "project-context",
+                    "session-prep",
+                    "code-review",
+                    "retrospective",
+                    "research-closeout",
+                    "readiness-check",
+                }
+                <= workflow_ids
+            )
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            prepare_guidance_fixture(root, "build_story_ready")
+            review = json.loads(
+                run_cmd(
+                    "guide",
+                    "--root",
+                    str(root),
+                    "--question",
+                    "review this code diff and create actionable findings before readiness",
+                    "--json",
+                ).stdout
+            )
+
+            self.assertEqual(review["intent_classification"], "lifecycle-flow")
+            self.assertEqual(review["recommended_workflow"], "code-review")
+            self.assertEqual(review["recommended_phase"], "4-build-verify")
+            self.assertEqual(review["workflow_metadata"].get("template"), "code-review-artifact")
+            self.assertEqual(review["facilitation_pack"], "skill:facilitation/lifecycle-closure.md")
+            self.assertTrue(review["state_update_required"])
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            prepare_guidance_fixture(root, "evolve_runtime")
+            session = json.loads(
+                run_cmd(
+                    "guide",
+                    "--root",
+                    str(root),
+                    "--question",
+                    "prep next session with read order blockers first command and next workflow",
+                    "--json",
+                ).stdout
+            )
+            p14 = json.loads(
+                run_cmd(
+                    "guide",
+                    "--root",
+                    str(root),
+                    "--question",
+                    "continue P1.4 Product Context Review Retrospective Closure from the systematic parity plan",
+                    "--json",
+                ).stdout
+            )
+
+            self.assertEqual(session["intent_classification"], "lifecycle-flow")
+            self.assertEqual(session["recommended_workflow"], "session-prep")
+            self.assertEqual(session["workflow_metadata"].get("template"), "session-prep-artifact")
+            self.assertTrue(session["state_update_required"])
+            self.assertEqual(p14["intent_classification"], "builder-flow")
+            self.assertEqual(p14["recommended_workflow"], "runtime-builder")
+            self.assertEqual(p14["facilitation_pack"], "skill:facilitation/runtime-builder.md")
+            self.assertFalse(p14["state_update_required"])
+
+        for ref_name in [
+            "workflow-track-decision.md",
+            "workflow-project-context.md",
+            "workflow-session-prep.md",
+            "workflow-code-review.md",
+            "workflow-retrospective.md",
+            "workflow-research-closeout.md",
+        ]:
+            ref_text = (ROOT / "skills" / "forge-method" / "references" / ref_name).read_text(encoding="utf-8")
+            self.assertIn("trigger:", ref_text, ref_name)
+            self.assertIn("handoff:", ref_text, ref_name)
+            self.assertLess(len(ref_text), 1400, ref_name)
 
     def test_tracks_guide_council_builder_and_config_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

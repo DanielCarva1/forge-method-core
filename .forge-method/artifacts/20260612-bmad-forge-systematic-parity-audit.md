@@ -76,25 +76,25 @@ The product direction is therefore:
 | --- | --- | --- | --- | --- |
 | `bmad-help` project-aware guidance | `preflight`, `start`, `resume`, `guide`, Guidance Engine | partial | Guide exists, but "runs after every workflow and always recommends the next required workflow" is not enforced as a universal runtime invariant. | Add end-of-workflow guidance contract: every state-changing command returns/records next required workflow, alternatives, and stale-state guard. |
 | Workflow status / workflow map | `.forge-method/state.yaml`, `sprint.yaml`, `status`, `snapshot`, `context plan` | strong | Human explanation can still be dry compared to BMAD Help. | Keep compact JSON, improve human summaries and status affordances. |
-| Planning tracks: Quick Flow / Method / Enterprise | Forge modules: software-builder, enterprise, runtime-builder, launch-ops, game-studio, test-architect | partial | Tracks exist but route depth is not as explicit as BMAD's track decision tree and required docs per track. | Add route decision artifact and track-specific required/optional workflow map. |
+| Planning tracks: Quick Flow / Method / Enterprise | Forge modules plus `track-decision` | translated/partial | P1.4 adds a route decision artifact and required workflow map, but deeper track-specific doc trees can still improve. | Expand track-specific required/optional docs as future module depth is translated. |
 | Analysis: brainstorming | `brainstorming` workflow + facilitation pack | strong-ish | Need transcript tests for richer guided divergence, not just route. | Add fixtures for option generation, constraint capture, rejected directions. |
-| Analysis: market/domain/technical research | `market-scan`, `domain-scan`, `technical-feasibility-scan`, Reality/Evidence Gate | strong | Need stronger "research closeout recommends next workflow" invariant. | Add research completion handoff template. |
+| Analysis: market/domain/technical research | `market-scan`, `domain-scan`, `technical-feasibility-scan`, Reality/Evidence Gate, `research-closeout` | translated/strong | P1.4 adds research closeout handoff with sources, confidence, decision impact, uncertainty, and next workflow. | Add richer source-quality examples as research depth grows. |
 | Product brief / PRFAQ | `discover-intent`, `product-requirements`, `reality-evidence-gate` | partial | No full PRFAQ/working-backwards stress-test workflow. Product brief is less coached. | Add `prfaq` or `working-backwards-challenge` workflow and rich facilitation pack. |
 | PRD create/update/validate | `product-requirements`, `write-spec`, `spec-distillation`, `grill-gate` | partial | Missing BMAD-like create/update/validate modes, addendum, decision log, HTML/findings-style validation. | Expand product requirements pack and workflow metadata with modes and validation artifact. |
 | Advanced elicitation | facilitation packs, `council-decision`, `grill-gate`, elicitation technique index | translated | P1.3 adds a validated compact technique index and exposes technique ids through Persona Lens guidance without bloating state. | Expand technique use inside future deep packs as they are translated. |
 | UX design | `ux-plan`, some game UX | partial | No rich UX designer workflow equivalent with EXPERIENCE/DESIGN style outputs and human taste calibration across product work. | Add UX facilitation pack, UX artifact template, transcript fixtures. |
 | Architecture | `architecture`, `engine-architecture`, `security-plan`, enterprise plans | partial | Core architecture exists but less agent/persona guided and less tied to PRD validation. | Add architecture pack and readiness checks linking PRD/UX/security/story plan. |
-| Project context generation | `context plan`, `context recover`, `current-pack`, `AGENTS.md` | advantage/partial | Forge has better runtime context packs, but lacks a user-facing `generate-project-context` workflow for existing/new code. | Add project-context artifact workflow that captures tech conventions for future agents. |
+| Project context generation | `project-context`, `context plan`, `context recover`, `current-pack`, `AGENTS.md` | translated/advantage | P1.4 adds a user-facing project-context workflow while preserving Forge's compact runtime context packs. | Add domain-specific context variants only when a module needs them. |
 | Epics and stories after architecture | `create-epics`, `plan-sprint`, `game-story-creation` | partial | Previous bug created stories too early; fixed for new projects. Need stronger invariant that story generation requires approved decision artifacts. | Add tests/gate preventing stories before required track artifacts. |
-| Implementation readiness | `readiness-check`, `gate`, `ready`, `release-readiness` | partial | Checks exist but not as cohesive multi-doc "can implement" review. | Add readiness matrix across spec, architecture, UX, risk, stories, validation. |
+| Implementation readiness | `readiness-check`, readiness matrix, `gate`, `ready`, `release-readiness` | translated | P1.4 adds readiness matrix output across spec, architecture, UX, risk, stories, validation, inputs, and findings. | Add stricter source coverage gates if future story creation finds gaps. |
 | Sprint planning/status | `plan-sprint`, `sprint.yaml`, `game-sprint-status`, `resume` | partial | Sprint lifecycle is compact but not as human-guided as BMAD's sprint planning/status rituals. | Add sprint planning facilitation pack and status transcript tests. |
 | Create story | `story add`, `create-epics`, `game-story-creation` | partial | Generic story creation is more CLI-like than coached story authoring. | Add story-creation workflow with readiness checklist and acceptance/evidence guidance. |
 | Dev story / implementation | `build-story`, mechanical work order, Codex Goal handoff | advantage/partial | Forge has better mechanical handoff; needs fewer procedural pauses in live Codex and better "continue until done" invariant. | Add transcript tests for no "ok/continue" on ready story loops. |
-| Code review | `review` commands, `test-review`, `game-qa-review`, quality-reviewer | partial | No direct `code-review` workflow equivalent with findings triage + repair loop. | Add code-review workflow or map build-story review stage more explicitly. |
-| Retrospective | `game-retrospective`, checkpoints, release evidence | partial | Game retrospective exists; general epic/project retro is missing. | Add `retrospective` workflow for software/runtime/product increments. |
+| Code review | `code-review`, `review` commands, `test-review`, `game-qa-review`, quality-reviewer | translated | P1.4 adds a direct code-review workflow with findings triage and repair/readiness routing. | Add richer diff examples if future review quality needs proof. |
+| Retrospective | `retrospective`, `game-retrospective`, checkpoints, release evidence | translated | P1.4 adds a general retrospective workflow for software/runtime/product increments. | Keep game-specific retro depth in the game module. |
 | Correct course | `correct-course`, Guidance Engine override | strong after latest patch | Needs more transcript coverage for scope/taste/implementation contradictions. | Add fixtures across ready/evolve/build/discovery. |
 | Quick Dev / Quick Flow | mechanical autonomy + `build-story`; no full quick-dev workflow | partial/missing | Forge lacks a single guided "clarify -> spec-lite -> implement -> review" flow for small changes. | Add `quick-dev` workflow with human path and headless mechanical path. |
-| Document project | `doc-index`, `spec-distillation`, `context plan` | partial | No explicit brownfield document-project flow matching BMAD analyst discovery. | Add brownfield project-documentation artifact and tests. |
+| Document project | `project-context`, `doc-index`, `spec-distillation`, `context plan` | translated | P1.4 maps document-project intent to a compact project context artifact plus source map and session handoff. | Add brownfield-specific examples when project-context depth is expanded. |
 | Index/shard docs | `doc-index`, `doc-shard` | strong | Need more validation for source-of-truth and stale docs. | Add doc utility fixtures and artifact checks. |
 | Editorial review prose/structure | `editorial-review` | strong-ish | Good catalog mapping; needs richer human review examples. | Add pack examples and tests. |
 | Adversarial / edge case review | `edge-case-review`, `grill-gate` | partial | General adversarial review is narrower than BMAD utility set. | Add adversarial review mode to edge-case/grill. |
@@ -109,7 +109,7 @@ The product direction is therefore:
 | BMAD Builder: create module/package | `module-builder`, module manifest template, install/smoke validation path | translated | P1.1 adds module assembly workflow, manifest template, followed_by metadata, and validation handoff. | Future customization batch handles richer override/index behavior. |
 | BMAD Builder: validate module | `module-validate`, `builder validate`, `workflow-validate`, parity replay | translated | P1.1 adds whole-extension validation workflow, validation report template, and structural plus quality checklist. | Keep install smoke as the packaging proof for changed packaged behavior. |
 | Eval runner / Docker runner | Forge evals and smoke scripts | partial | Forge has local evals/smokes but not a BMAD-like eval runner or isolated runner story. | Add eval runner design or keep deferred if Codex-native local is enough. |
-| Session prep | Context packs/checkpoints | partial | Need a first-class session prep workflow that loads only what a future agent needs. | Add `session-prep` alias/workflow using context plan/current pack. |
+| Session prep | `session-prep`, context packs/checkpoints | translated | P1.4 adds first-class session prep with read order, blockers, first command, next workflow, and load hints. | Add transcript examples for interrupted/changing sessions if needed. |
 | Progressive disclosure pattern | Skill instructions and context plan | partial | Principle exists, not audited across every pack/workflow. | Add compactness verifier for workflows/facilitation refs. |
 | Subagent orchestration patterns | optional agent profiles, council | partial/missing | No systematic parallel/hierarchical subagent patterns for Forge tasks. | Add orchestration guidance and tests only where Codex supports it. |
 | Persistent memory agents | file-backed project state | different/partial | Forge stores project state, not personal companion memory. | Decide if this is in scope; if yes, translate as project memory only, not broad personal memory. |
@@ -188,18 +188,18 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | `bmad-spec` | `write-spec`, future `quick-dev` | partial |
 | `bmad-ux` | `ux-plan` plus future UX pack/template | partial |
 | `bmad-create-architecture` | `architecture` | partial |
-| `bmad-generate-project-context` | future `project-context` workflow, `context plan` | partial |
+| `bmad-generate-project-context` | `project-context`, `context plan` | translated |
 | `bmad-create-epics-and-stories` | `create-epics` | partial |
-| `bmad-check-implementation-readiness` | `readiness-check` | partial |
+| `bmad-check-implementation-readiness` | `readiness-check` with readiness matrix | translated |
 | `bmad-sprint-planning` | `plan-sprint`, `sprint.yaml` | partial |
 | `bmad-sprint-status` | `status`, `snapshot`, `resume`, `game-sprint-status` | partial |
 | `bmad-create-story` | future story-creation pack, `story add`, `game-story-creation` | partial |
 | `bmad-dev-story` | `build-story`, mechanical work order, Codex Goal handoff | partial/advantage |
-| `bmad-code-review` | future `code-review`, current `review`, `test-review`, `game-qa-review` | partial |
-| `bmad-retrospective` | future general `retrospective`, current `game-retrospective` | partial |
+| `bmad-code-review` | `code-review`, `review`, `test-review`, `game-qa-review` | translated |
+| `bmad-retrospective` | `retrospective`, `game-retrospective` | translated |
 | `bmad-correct-course` | `correct-course`, Guidance Engine override | strong |
 | `bmad-quick-dev` | future `quick-dev` | missing |
-| `bmad-document-project` | future `document-project`, current `doc-index`, `context plan` | partial |
+| `bmad-document-project` | `project-context`, `doc-index`, `context plan` | translated |
 | `bmad-index-docs` | `doc-index` | strong-ish |
 | `bmad-shard-doc` | `doc-shard` | strong-ish |
 | `bmad-editorial-review-prose` | `editorial-review` mode | partial |
@@ -222,7 +222,7 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | `bmad-workflow-builder` | `workflow-builder`, `workflow-analyze`, `skill-convert`, `workflow-validate` | translated |
 | `bmad-module-builder` | `module-ideation`, `module-builder`, `module-validate` | translated |
 | `bmad-eval-runner` | `eval run`, smoke scripts, future eval runner | partial |
-| `bmad-session-prep` | `context plan`, `context recover`, future `session-prep` | partial |
+| `bmad-session-prep` | `session-prep`, `context plan`, `context recover` | translated |
 | `/cis-brainstorm` | `brainstorming` | strong-ish |
 | `/cis-design-thinking` | `design-thinking` | partial |
 | `/cis-innovation-strategy` | `innovation-strategy` plus future pack | partial |
@@ -318,7 +318,14 @@ Use these as implementation increments. Each item must ship with workflow metada
 - Added a compact elicitation technique index, persona facilitation pack, Guidance Engine `persona_lens` output, replay cases, council participant routing, Capability Index exposure, and compactness guards.
 - Agent profiles, state, workflow refs, and default recommendations remain compact.
 
-### P1.4 Game and TEA depth
+### P1.4 Lifecycle closure
+
+- Status: translated in the Lifecycle Closure batch.
+- Added `track-decision`, `project-context`, `session-prep`, `code-review`, `retrospective`, `research-closeout`, and readiness matrix output.
+- Added lifecycle facilitation, compact workflow refs, templates, catalog/module metadata, Guidance Engine routes, replay coverage, and Capability Index exposure.
+- Added precedence guard so runtime-builder/systematic parity batch names outrank loose domain words while handoff/context/review/retro requests still route to Lifecycle Closure.
+
+### P1.5 Game and TEA depth
 
 - Add game project context and engine setup workflows.
 - Expand GDD, mechanics, narrative, playtest, performance, and game QA packs.
@@ -337,6 +344,6 @@ The full objective is complete only when:
 
 ## Current status
 
-This audit remains the gap map for the full objective. P0.1 through P0.5, P1.1, P1.2, and P1.3 are now implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. The execution plan is `.forge-method/artifacts/20260613-systematic-parity-plan.md`. This is not full parity completion: P1.4+ lifecycle, game, TEA depth, and explicit deferral/waiver decisions still remain.
+This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.4 are now implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. The execution plan is `.forge-method/artifacts/20260613-systematic-parity-plan.md`. This is not full parity completion: P1.5+ game, TEA depth, and explicit deferral/waiver decisions still remain.
 
-Immediate next step: implement P1.4 Product, Context, Review, And Retrospective Closure from the systematic plan unless a new audit shows a higher-severity regression.
+Immediate next step: implement P1.5 Game Studio Depth from the systematic plan unless a new audit shows a higher-severity regression.
