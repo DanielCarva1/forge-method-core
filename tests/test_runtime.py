@@ -3888,6 +3888,52 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("First question: what outcome, constraint, and proof should shape the next pass?", answer_guide_text)
             self.assertNotIn("Prompt: Let's use", answer_guide_text)
             self.assertNotIn("build-story", answer_guide_text)
+            blocked_transition = run_cmd(
+                "transition",
+                "--root",
+                str(root),
+                "--phase",
+                "2-specification",
+                "--status",
+                "specification-ready",
+                "--workflow",
+                "write-spec",
+                check=False,
+            )
+            self.assertNotEqual(blocked_transition.returncode, 0)
+            self.assertIn(
+                "Discovery closeout required before specification",
+                blocked_transition.stderr + blocked_transition.stdout,
+            )
+            self.assertIn('phase: "1-discovery"', state.read_text(encoding="utf-8"))
+            discovery_closeout = run_cmd(
+                "artifact",
+                "add",
+                "--root",
+                str(root),
+                "--kind",
+                "discovery-intent",
+                "--title",
+                "Accepted discovery intent",
+                "--summary",
+                "Accepted first facilitation answer for specification.",
+                "--path",
+                ".forge-method/artifacts/discovery-intent.md",
+            ).stdout
+            transition = run_cmd(
+                "transition",
+                "--root",
+                str(root),
+                "--phase",
+                "2-specification",
+                "--status",
+                "specification-ready",
+                "--workflow",
+                "write-spec",
+            ).stdout
+            self.assertIn(".forge-method/artifacts/discovery-intent.md", discovery_closeout)
+            self.assertIn("Transition written.", transition)
+            self.assertIn('phase: "2-specification"', state.read_text(encoding="utf-8"))
 
     def test_project_create_brownfield_starts_with_discovery(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

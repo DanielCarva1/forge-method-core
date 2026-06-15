@@ -27,6 +27,27 @@ function Run-Capture {
   return $output
 }
 
+function Run-Fails-Capture {
+  param(
+    [Parameter(Mandatory=$true)]
+    [string]$Exe,
+    [Parameter(ValueFromRemainingArguments=$true)]
+    [string[]]$Args
+  )
+  $previousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $output = & $Exe @Args 2>&1 | Out-String
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
+  if ($exitCode -eq 0) {
+    throw "$Exe unexpectedly succeeded: $($Args -join ' ')`n$output"
+  }
+  return $output
+}
+
 function Assert-Contains {
   param(
     [Parameter(Mandatory=$true)]
@@ -138,6 +159,12 @@ Assert-Contains $projectGuideText "Grill Gate: required" "project first answer g
 Assert-Contains $projectGuideText "First question: what outcome, constraint, and proof should shape the next pass?" "project first answer guide output"
 Assert-NotContains $projectGuideText "Prompt: Let's use" "project first answer guide output"
 Assert-NotContains $projectGuideText "build-story" "project first answer guide output"
+$blockedProjectTransitionText = Run-Fails-Capture $pythonExe $runtime transition --root $generatedProjectTmp --phase 2-specification --status specification-ready --workflow write-spec
+Assert-Contains $blockedProjectTransitionText "Discovery closeout required before specification" "project first answer transition guard output"
+$projectCloseoutText = Run-Capture $pythonExe $runtime artifact add --root $generatedProjectTmp --kind discovery-intent --title "Accepted discovery intent" --summary "Accepted first facilitation answer for specification." --path ".forge-method/artifacts/discovery-intent.md"
+Assert-Contains $projectCloseoutText ".forge-method/artifacts/discovery-intent.md" "project discovery closeout output"
+$projectCloseoutTransitionText = Run-Capture $pythonExe $runtime transition --root $generatedProjectTmp --phase 2-specification --status specification-ready --workflow write-spec
+Assert-Contains $projectCloseoutTransitionText "Transition written." "project discovery closeout transition output"
 Run $pythonExe $runtime gate --root $generatedProjectTmp --require-evals
 Run $pythonExe $runtime workflow validate
 Run $pythonExe $runtime workflow compactness

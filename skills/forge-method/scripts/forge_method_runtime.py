@@ -443,6 +443,19 @@ CONFIG_OVERRIDE_PRECEDENCE = ["packaged defaults", ".forge-method/config/team.ya
 AUTONOMY_MODES = {"auto", "manual"}
 COMMIT_POLICIES = {"off", "story", "epic"}
 GRILL_GATE_PHASES = {"1-discovery", "2-specification", "3-plan"}
+DISCOVERY_CLOSEOUT_KINDS = {
+    "accepted-intent",
+    "discovery",
+    "discovery-brief",
+    "discovery-closeout",
+    "discovery-intent",
+}
+DISCOVERY_CLOSEOUT_PATH_HINTS = {
+    "accepted-intent",
+    "discovery-brief",
+    "discovery-closeout",
+    "discovery-intent",
+}
 MECHANICAL_ACTIONS = {
     "start_next_story",
     "continue_active_story",
@@ -2319,6 +2332,30 @@ def artifact_summaries(root: Path) -> dict[str, str]:
     return summaries
 
 
+def initial_facilitation_answered(root: Path) -> bool:
+    path = human_input_path(root, "initial-facilitation")
+    if not path.exists():
+        return False
+    item = read_flat_yaml(path)
+    return item.get("status") == "answered" and bool(str(item.get("answer", "")).strip())
+
+
+def discovery_closeout_artifacts(root: Path) -> list[str]:
+    artifacts: list[str] = []
+    for entry in artifact_states(root).values():
+        if entry.get("status", "active") == "captured":
+            continue
+        if entry.get("lifecycle", "durable") != "durable":
+            continue
+        kind = slugify(str(entry.get("kind", "")))
+        path = str(entry.get("path", ""))
+        title = normalize_text(str(entry.get("title", "")))
+        haystack = normalize_text(f"{kind} {path} {title}")
+        if kind in DISCOVERY_CLOSEOUT_KINDS or any(hint in haystack for hint in DISCOVERY_CLOSEOUT_PATH_HINTS):
+            artifacts.append(path)
+    return sorted(set(artifacts))
+
+
 STALE_GUIDANCE_MARKERS = {
     "remaining partial/strong-ish": "replace old open-gap wording with the current concrete next focus",
     "Add missing packs/templates": "replace with current coverage status or a specific missing artifact",
@@ -4017,6 +4054,23 @@ def validate_phase_transition(current: str, target: str, *, force: bool = False)
         raise SystemExit(f"Invalid phase transition: {current} -> {target}")
 
 
+def enforce_discovery_closeout_before_specification(root: Path, state: dict[str, str], target: str, *, force: bool) -> None:
+    if force:
+        return
+    if state.get("phase") != "1-discovery" or target != "2-specification":
+        return
+    if not initial_facilitation_answered(root):
+        return
+    if discovery_closeout_artifacts(root):
+        return
+    raise SystemExit(
+        "Discovery closeout required before specification: add a durable discovery-intent artifact "
+        "from the accepted human input, then transition. Example: artifact add --kind discovery-intent "
+        '--title "Accepted discovery intent" --summary "Accepted first facilitation answer." '
+        '--path ".forge-method/artifacts/discovery-intent.md"'
+    )
+
+
 def validate_story_transition(current: str, target: str, *, force: bool = False) -> None:
     if target not in STORY_STATUSES:
         raise SystemExit(f"Invalid story status: {target}")
@@ -5146,6 +5200,7 @@ def cmd_transition(args: argparse.Namespace) -> int:
     current_phase = state.get("phase", "0-route")
     if args.phase:
         validate_phase_transition(current_phase, args.phase, force=args.force)
+        enforce_discovery_closeout_before_specification(root, state, args.phase, force=args.force)
         state["phase"] = args.phase
         if not args.next_action:
             state["next_action"] = NEXT_BY_PHASE.get(args.phase, "inspect state and choose next workflow")
