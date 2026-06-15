@@ -121,9 +121,25 @@ Run $pythonExe $installedRuntime agent validate
 Run $pythonExe $installedRuntime example list
 Run $pythonExe $installedRuntime example create --root $exampleTmp --module software-builder
 Run $pythonExe $installedRuntime gate --root $exampleTmp --require-evals
-Run $pythonExe $installedRuntime project create --root $projectParentTmp --name "Installed Generated" --module software-builder --objective "Verify installed project scaffolding."
-Run $pythonExe $installedRuntime project list --root $projectParentTmp
-Run $pythonExe $installedRuntime preflight --root $projectParentTmp
+$installedProjectCreateText = Run-Capture $pythonExe $installedRuntime project create --root $projectParentTmp --name "Installed Generated" --module software-builder --objective "Verify installed project scaffolding."
+Assert-Contains $installedProjectCreateText "Story: <none - facilitation required>" "installed project create output"
+Assert-Contains $installedProjectCreateText "required_next_workflow: discover-intent" "installed project create output"
+Assert-Contains $installedProjectCreateText "initial-facilitation" "installed project create output"
+Assert-Contains $installedProjectCreateText "Antes de criar stories ou desenvolver" "installed project create output"
+Assert-NotContains $installedProjectCreateText "Story: project-kickoff" "installed project create output"
+$installedProjectListText = Run-Capture $pythonExe $installedRuntime project list --root $projectParentTmp
+Assert-Contains $installedProjectListText "installed-generated" "installed project list output"
+Assert-Contains $installedProjectListText "waiting-human-input" "installed project list output"
+$installedProjectPreflightText = Run-Capture $pythonExe $installedRuntime preflight --root $projectParentTmp
+Assert-Contains $installedProjectPreflightText "Route: workspace-with-projects" "installed project parent preflight output"
+Assert-Contains $installedProjectPreflightText "Known projects:" "installed project parent preflight output"
+Assert-Contains $installedProjectPreflightText "Next question: Which existing project should be opened" "installed project parent preflight output"
+Assert-Contains $installedProjectPreflightText "Open Installed Generated" "installed project parent preflight output"
+$installedProjectReloadText = Run-Capture $pythonExe $installedRuntime reload --root $projectParentTmp
+Assert-Contains $installedProjectReloadText "Forge Reload" "installed project parent reload output"
+Assert-Contains $installedProjectReloadText "Route: workspace-with-projects" "installed project parent reload output"
+Assert-Contains $installedProjectReloadText "Known projects:" "installed project parent reload output"
+Assert-Contains $installedProjectReloadText "Next: relay the route opening above" "installed project parent reload output"
 Run $pythonExe $installedRuntime gate --root $generatedProjectTmp --require-evals
 Run $pythonExe $installedRuntime workflow validate
 Run $pythonExe $installedRuntime parity replay

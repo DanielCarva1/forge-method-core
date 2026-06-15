@@ -13,6 +13,48 @@ function Run {
   }
 }
 
+function Run-Capture {
+  param(
+    [Parameter(Mandatory=$true)]
+    [string]$Exe,
+    [Parameter(ValueFromRemainingArguments=$true)]
+    [string[]]$Args
+  )
+  $output = & $Exe @Args 2>&1 | Out-String
+  if ($LASTEXITCODE -ne 0) {
+    throw "$Exe failed with exit code ${LASTEXITCODE}: $($Args -join ' ')`n$output"
+  }
+  return $output
+}
+
+function Assert-Contains {
+  param(
+    [Parameter(Mandatory=$true)]
+    [string]$Text,
+    [Parameter(Mandatory=$true)]
+    [string]$Expected,
+    [Parameter(Mandatory=$true)]
+    [string]$Label
+  )
+  if (-not $Text.Contains($Expected)) {
+    throw "$Label did not contain expected text: $Expected`n$Text"
+  }
+}
+
+function Assert-NotContains {
+  param(
+    [Parameter(Mandatory=$true)]
+    [string]$Text,
+    [Parameter(Mandatory=$true)]
+    [string]$Unexpected,
+    [Parameter(Mandatory=$true)]
+    [string]$Label
+  )
+  if ($Text.Contains($Unexpected)) {
+    throw "$Label contained unexpected text: $Unexpected`n$Text"
+  }
+}
+
 function Resolve-Python {
   if ($env:PYTHON) {
     return $env:PYTHON
@@ -63,9 +105,25 @@ Run $pythonExe $runtime agent recommend --root $tmp
 Run $pythonExe $runtime example list --root $tmp
 Run $pythonExe $runtime example create --root $exampleTmp --module software-builder
 Run $pythonExe $runtime gate --root $exampleTmp --require-evals
-Run $pythonExe $runtime project create --root $projectParentTmp --name "Generated Smoke" --module software-builder --objective "Verify project scaffolding."
-Run $pythonExe $runtime project list --root $projectParentTmp
-Run $pythonExe $runtime preflight --root $projectParentTmp
+$projectCreateText = Run-Capture $pythonExe $runtime project create --root $projectParentTmp --name "Generated Smoke" --module software-builder --objective "Verify project scaffolding."
+Assert-Contains $projectCreateText "Story: <none - facilitation required>" "project create output"
+Assert-Contains $projectCreateText "required_next_workflow: discover-intent" "project create output"
+Assert-Contains $projectCreateText "initial-facilitation" "project create output"
+Assert-Contains $projectCreateText "Antes de criar stories ou desenvolver" "project create output"
+Assert-NotContains $projectCreateText "Story: project-kickoff" "project create output"
+$projectListText = Run-Capture $pythonExe $runtime project list --root $projectParentTmp
+Assert-Contains $projectListText "generated-smoke" "project list output"
+Assert-Contains $projectListText "waiting-human-input" "project list output"
+$projectPreflightText = Run-Capture $pythonExe $runtime preflight --root $projectParentTmp
+Assert-Contains $projectPreflightText "Route: workspace-with-projects" "project parent preflight output"
+Assert-Contains $projectPreflightText "Known projects:" "project parent preflight output"
+Assert-Contains $projectPreflightText "Next question: Which existing project should be opened" "project parent preflight output"
+Assert-Contains $projectPreflightText "Open Generated Smoke" "project parent preflight output"
+$projectReloadText = Run-Capture $pythonExe $runtime reload --root $projectParentTmp
+Assert-Contains $projectReloadText "Forge Reload" "project parent reload output"
+Assert-Contains $projectReloadText "Route: workspace-with-projects" "project parent reload output"
+Assert-Contains $projectReloadText "Known projects:" "project parent reload output"
+Assert-Contains $projectReloadText "Next: relay the route opening above" "project parent reload output"
 Run $pythonExe $runtime gate --root $generatedProjectTmp --require-evals
 Run $pythonExe $runtime workflow validate
 Run $pythonExe $runtime workflow compactness
