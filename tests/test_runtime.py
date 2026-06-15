@@ -578,7 +578,7 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(snapshot["runtime_version"], "1.28.0")
+            self.assertEqual(snapshot["runtime_version"], "1.29.0")
             self.assertEqual(snapshot["state"]["phase"], "4-build-verify")
             self.assertEqual(snapshot["stories"]["next"]["id"], "story-1")
             self.assertEqual(snapshot["route"]["recommendation"], "start_next_story")
@@ -1257,7 +1257,7 @@ class RuntimeTests(unittest.TestCase):
                 encoding="utf-8",
             )
             manifest_path.write_text(
-                json.dumps({"name": "forge-method-core", "version": "1.28.0", "skills": "./skills/"}),
+                json.dumps({"name": "forge-method-core", "version": "1.29.0", "skills": "./skills/"}),
                 encoding="utf-8",
             )
             skill_path.write_text("---\nname: forge-method\n---\n", encoding="utf-8")
@@ -1269,7 +1269,7 @@ class RuntimeTests(unittest.TestCase):
             plugin = payload["plugin_installation"]
             self.assertTrue(plugin["available"])
             self.assertEqual(plugin["status"], "ready")
-            self.assertEqual(plugin["installed_version"], "1.28.0")
+            self.assertEqual(plugin["installed_version"], "1.29.0")
             self.assertEqual(plugin["plugin_path"], str(plugin_root.resolve()))
             self.assertEqual(plugin["repair_commands"]["windows"], [])
             self.assertIn("codex://plugins/forge-method-core?marketplacePath=", plugin["codex_deeplink"])
@@ -1653,7 +1653,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("facilitator", agents)
         self.assertIn("quality-reviewer", agents)
         self.assertIn("Agent profile validation passed.", agent_validation)
-        self.assertEqual(version.strip(), "1.28.0")
+        self.assertEqual(version.strip(), "1.29.0")
 
     def test_skill_requires_launcher_on_every_invocation(self) -> None:
         skill_text = (ROOT / "skills" / "forge-method" / "SKILL.md").read_text(encoding="utf-8")
@@ -1706,7 +1706,7 @@ class RuntimeTests(unittest.TestCase):
             selected_paths = [item["path"] for item in plan["selected"]]
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
 
-            self.assertEqual(plan["runtime_version"], "1.28.0")
+            self.assertEqual(plan["runtime_version"], "1.29.0")
             self.assertEqual(plan["state"]["phase"], "4-build-verify")
             self.assertIn(".forge-method/state.yaml", selected_paths)
             self.assertIn(".forge-method/sprint.yaml", selected_paths)
@@ -2445,6 +2445,17 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("software-builder", readme.read_text(encoding="utf-8"))
             self.assertIn("Gate passed.", gate)
             self.assertIn("Evals: 1/1 passed", gate)
+
+            launch_root = Path(raw) / "launch-example"
+            run_cmd("example", "create", "--root", str(launch_root), "--module", "launch-ops")
+            launch_gate = run_cmd("gate", "--root", str(launch_root), "--require-evals").stdout
+            launch_story = launch_root / ".forge-method" / "stories" / "example-start.yaml"
+            launch_decision_source = launch_root / ".forge-method" / "artifacts" / "example-validation-map.md"
+
+            self.assertTrue(launch_decision_source.exists())
+            self.assertIn(".forge-method/artifacts/example-validation-map.md", launch_story.read_text(encoding="utf-8"))
+            self.assertIn("Gate passed.", launch_gate)
+            self.assertIn("Evals: 1/1 passed", launch_gate)
 
     def test_project_create_seeds_real_module_project(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

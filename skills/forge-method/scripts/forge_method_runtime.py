@@ -19,7 +19,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.28.0"
+RUNTIME_VERSION = "1.29.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 WORKFLOW_CATALOG_PATH = SKILL_DIR / "catalog" / "workflows.json"
@@ -7726,6 +7726,22 @@ def cmd_example_create(args: argparse.Namespace) -> int:
     )
     link_artifact_to_story(root, artifact, story_id)
     eval_path_rel = write_artifact_eval(root, artifact, title=f"{title} example brief", summary=summary)
+    checkpoint_artifacts = [artifact]
+    if first_phase == "4-build-verify":
+        decision_summary = (
+            f"Accepted validation map for the seeded {module_id} example story. "
+            "This keeps build/verify examples compatible with the decision-source guard."
+        )
+        decision_artifact = write_artifact(
+            root,
+            kind="validation-map",
+            title=f"{title} example validation map",
+            summary=decision_summary,
+            path=".forge-method/artifacts/example-validation-map.md",
+            lifecycle="durable",
+        )
+        link_artifact_to_story(root, decision_artifact, story_id)
+        checkpoint_artifacts.append(decision_artifact)
     checkpoint = write_checkpoint(
         root,
         state,
@@ -7734,8 +7750,8 @@ def cmd_example_create(args: argparse.Namespace) -> int:
         decisions=[f"Use packaged module {module_id} as the initial route."],
         checks=["gate --require-evals"],
         failed_checks=[],
-        touched=[STATE_FILE, SPRINT_FILE, "README.md", story_path(root, story_id).relative_to(root).as_posix(), artifact],
-        artifacts=[artifact],
+        touched=[STATE_FILE, SPRINT_FILE, "README.md", story_path(root, story_id).relative_to(root).as_posix(), *checkpoint_artifacts],
+        artifacts=checkpoint_artifacts,
         next_action=state["next_action"],
     )
     write_context_pack(root, state, out=method_dir(root) / "context" / "current-pack.md", max_chars=args.max_chars)

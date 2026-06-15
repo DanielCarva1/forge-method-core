@@ -1,15 +1,15 @@
 {
-  "version": "1.28.0",
-  "date": "2026-06-12",
-  "title": "Guidance audit hardening",
-  "summary": "Forge Method now routes runtime audit and human-guidance quality concerns through runtime-builder, diagnoses stale plugin installs with repair commands, and tightens install/smoke script validation.",
+  "version": "1.29.0",
+  "date": "2026-06-15",
+  "title": "Guided workflow depth",
+  "summary": "Forge Method now ships a broad guided-workflow depth batch: richer human routing, compact agent contracts, parity replay coverage, closure utilities, game and quality depth, builder factory workflows, persona lenses, and validated install behavior.",
   "highlights": [
-    "Guidance Engine recognizes method/runtime audit requests, dead-code concerns, misleading agent docs, and human-guided experience questions as runtime-builder work.",
-    "A transcript fixture now locks the runtime audit routing behavior.",
-    "Doctor output now includes repair commands when the local plugin installation is stale or broken.",
-    "Install and smoke scripts were audited with Ruff, Vulture, Radon, ShellCheck, and PSScriptAnalyzer.",
-    "Shell and PowerShell smoke scripts received small lint fixes without changing their product surface.",
-    "The internal audit artifact records current parity limits, complexity hotspots, market hook/tracing references, and isolated experiment plans."
+    "Guidance Engine and Help Oracle now route more human intent through explicit workflow decisions instead of stale state.",
+    "Builder Factory, Project Configuration, Capability Index, Persona Lens, Lifecycle Closure, Game Studio Depth, and Test Architecture Depth are packaged as a coherent runtime increment.",
+    "Guided closure utilities add investigation, working-backwards challenge, sprint status, checkpoint preview, and adversarial review workflows.",
+    "Parity replay now covers 58 route fixtures and runs during install smoke so packaged behavior matches source behavior.",
+    "Human-facing guidance is richer while workflow references, JSON state, templates, evidence, and handoffs stay compact for future agents.",
+    "Release evidence covers unit tests, workflow validation, runtime smoke, fast verification, install smoke, artifact verification, audit, and config validation."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.28.0.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.29.0.md"
 }

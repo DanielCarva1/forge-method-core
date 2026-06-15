@@ -384,3 +384,9 @@
 {"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "p1-parity-closure-utilities-done"}, "ts": "2026-06-15T02:33:49+00:00"}
 {"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260615-023458-p1-7-parity-closure-utilities-closed.md"}, "ts": "2026-06-15T02:34:58+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-15T02:34:58+00:00"}
+{"event": "artifact.added", "payload": {"kind": "patch-notes", "lifecycle": "durable", "path": "CHANGELOG.md"}, "ts": "2026-06-15T02:59:53+00:00"}
+{"event": "artifact.added", "payload": {"kind": "release-notes", "lifecycle": "durable", "path": "release-notes/1.29.0.md"}, "ts": "2026-06-15T03:00:01+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260615-030025-validation-forge-method-1-29-0-release-validation.md", "story": ""}, "ts": "2026-06-15T03:00:25+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "v1.29.0-release-prepared"}, "ts": "2026-06-15T03:00:32+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260615-030106-forge-method-1-29-0-release-prepared.md"}, "ts": "2026-06-15T03:01:06+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-15T03:01:06+00:00"}
