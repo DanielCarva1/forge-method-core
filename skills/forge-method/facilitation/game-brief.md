@@ -25,7 +25,7 @@ conversation_stages:
   - play_shape: "Extract player fantasy, repeated loop, verbs, risks, rewards, and the moment-to-moment promise."
   - scope_cut: "Separate dream game, vertical slice, and smallest playable proof without shaming ambition."
   - living_contract: "Record decision log, rejected directions, assumptions, open questions, and research needed."
-  - commit: "Write/update/validate game-brief-artifact, run game-check, and choose next workflow."
+  - commit: "Run artifact game-brief, run artifact game-check, and choose next workflow."
 
 elicitation_options:
   - reference_compare: "Pick two reference games and ask what to take, refuse, and improve."
@@ -46,6 +46,7 @@ quality_bar:
   - "The brief can feed GDD, UX, PRD, prototype, and story creation without re-discovery."
   - "The MVP proves the core fantasy instead of a random technical slice."
   - "The artifact names player fantasy, loop, verbs, pillars, references, playable proof, parked scope, decision log, assumptions, open questions, and next workflow."
+  - "artifact game-brief registers the living brief before downstream game production uses it."
   - "artifact game-check passes before the brief becomes input to GDD, prototype, or sprint planning."
 
 anti_patterns:
@@ -56,7 +57,7 @@ anti_patterns:
   - "Do not delete ambitious ideas; park them with revisit triggers."
 
 paths:
-  fast_path: "Draft/update game-brief-artifact with [ASSUMPTION] tags, run artifact game-check, and ask for correction."
+  fast_path: "Draft/update the brief with [ASSUMPTION] tags, run artifact game-brief, run artifact game-check, and ask for correction."
   deep_path: "Run domain/market/technical research, compare references, validate the living brief, then route GDD, prototype, or game-sprint-planning."
 
 checkpoint_options:
@@ -68,7 +69,7 @@ checkpoint_options:
   - council
 
 artifact_rules:
-  Persist source material, player fantasy, core loop, player verbs, pillars, references, dream game, vertical slice, MVP playable proof, parked scope, rejected alternatives, decision log, assumptions, open questions, validation verdict, and next workflow.
+  Use artifact game-brief for durable brief output; persist source_material, player_fantasy, core_loop, player_verbs, pillars, references, dream_game, vertical_slice, mvp_playable_proof, parked_scope, rejected alternatives, decision_log, assumptions, open_questions, validation_verdict, and next_workflow.
 
 domain_examples:
   - tabletop: "Fantasy, loop, rules surface, player roles, table flow, reference systems, first playable session, and parked sourcebook depth."

@@ -6,18 +6,19 @@ trigger:
   - next playable slice must become an executable story batch
 
 inputs:
-  - game brief, GDD, prototype, playtest, architecture, or prior sprint status
+  - brief, GDD, prototype, playtest, architecture, or sprint status
   - playable slice goal
-  - candidate stories, risks, dependencies, engine or asset constraints
-  - validation and manual playtest expectations
+  - stories, risks, dependencies, engine/asset constraints
+  - validation and playtest expectations
 
 steps:
   1. choose the playable_slice_goal and decision_sources
   2. order stories by player_value_order, risk_order, dependencies, and proof value
   3. separate deferred_scope, blocked_items, and engine_or_asset_constraints
   4. define validation_plan, manual_playtest_plan, next_story, and sprint_update
-  5. write game-sprint-plan-artifact and run artifact game-check
-  6. route to game-story-creation, build-story, quick-prototype, or game-sprint-status
+  5. run artifact game-sprint-plan with required fields and next_workflow
+  6. run artifact game-check --path <game-sprint-plan-artifact>
+  7. route to game-story-creation, build-story, quick-prototype, or game-sprint-status
 
 outputs:
   - playable slice sprint plan
@@ -27,8 +28,9 @@ outputs:
 
 done_when:
   - story order protects the player fantasy and playable slice goal
-  - every ready story has decision sources and validation evidence expectations
+  - ready stories have decision sources and validation expectations
   - deferred and blocked scope are explicit
+  - artifact game-sprint-plan registered the durable sprint plan
   - artifact game-check passes
 
 blocked_when:
@@ -37,4 +39,4 @@ blocked_when:
   - validation cannot prove player-facing success
 
 handoff:
-  - preserve plan path, playable slice goal, decision sources, ordered story batch, deferred scope, validation plan, next story, sprint update, and next workflow
+  - preserve plan path, slice goal, sources, story order, deferred scope, validation, next story, sprint update, and next workflow

@@ -2438,6 +2438,119 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("mvp_playable_proof must name", result.stdout)
 
+    def test_artifact_game_generators_create_brief_and_sprint_plan(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+
+            brief = run_cmd(
+                "artifact",
+                "game-brief",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/game-brief-generated.md",
+                "--source-material",
+                "discovery transcript and reference notes",
+                "--player-fantasy",
+                "Be a tactical GM running a living tabletop battle.",
+                "--core-loop",
+                "prepare scene, adjudicate player decisions, roll outcomes, reveal consequences, earn campaign progress",
+                "--player-verbs",
+                "prepare, place, roll, adjudicate, reveal",
+                "--target-player",
+                "remote tabletop RPG group and GM",
+                "--platform-or-engine",
+                "browser-first web app",
+                "--pillars",
+                "fast table flow, cited rules support, GM control",
+                "--references",
+                "Foundry, Fantasy Grounds, tabletop maps",
+                "--mvp-playable-proof",
+                "one GM hosts a scene and resolves one cited rules interaction",
+                "--dream-game",
+                "every sourcebook becomes a reviewed rules assistant",
+                "--vertical-slice",
+                "one system, one map, one combat turn",
+                "--playable-slice",
+                "GM can host a room and resolve one turn",
+                "--parked-scope",
+                "universal sourcebook ingestion and full automation",
+                "--rejected-directions",
+                "clone every VTT feature before rules proof",
+                "--decision-log",
+                ".forge-method/artifacts/game-brief-decisions.md",
+                "--assumptions",
+                "private legal source use only",
+                "--open-questions",
+                "first open-license system",
+                "--research-needed",
+                "licensing and technical feasibility",
+                "--next-workflow",
+                "game-sprint-planning",
+                "--eval",
+            ).stdout
+            self.assertIn(".forge-method/artifacts/game-brief-generated.md", brief)
+            self.assertIn("Game artifact check passed.", brief)
+            brief_text = (root / ".forge-method" / "artifacts" / "game-brief-generated.md").read_text(encoding="utf-8")
+            self.assertIn("workflow: game-brief", brief_text)
+            self.assertIn("validation: artifact game-check --path .forge-method/artifacts/game-brief-generated.md", brief_text)
+            self.assertTrue((root / ".forge-method" / "evals" / "artifact-forge-method-artifacts-game-brief-generated-md-exists.yaml").exists())
+            check_brief = run_cmd("artifact", "game-check", "--root", str(root), "--path", ".forge-method/artifacts/game-brief-generated.md").stdout
+            self.assertIn("Game artifact check passed.", check_brief)
+
+            sprint = run_cmd(
+                "artifact",
+                "game-sprint-plan",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/game-sprint-plan-generated.md",
+                "--source-material",
+                ".forge-method/artifacts/game-brief-generated.md",
+                "--player-fantasy",
+                "Be a tactical GM running a living tabletop battle.",
+                "--playable-slice",
+                "GM can host a room and resolve one turn",
+                "--playable-slice-goal",
+                "first playable remote table scene",
+                "--decision-sources",
+                "game brief, prototype notes, engine setup",
+                "--story-batch",
+                "room setup, map placement, dice outcome, rules citation",
+                "--player-value-order",
+                "host room before rules citation polish",
+                "--risk-order",
+                "realtime state before visual polish",
+                "--dependencies",
+                "room state before dice outcome",
+                "--engine-or-asset-constraints",
+                "browser canvas with placeholder tokens",
+                "--validation-plan",
+                "manual playtest plus smoke command",
+                "--manual-playtest-plan",
+                "GM creates scene and resolves one turn",
+                "--deferred-scope",
+                "universal sourcebook ingestion",
+                "--blocked-items",
+                "none blocking",
+                "--next-story",
+                "story-room-setup",
+                "--sprint-update",
+                "set active slice sprint with first story ready",
+                "--next-workflow",
+                "game-story-creation",
+                "--eval",
+            ).stdout
+            self.assertIn(".forge-method/artifacts/game-sprint-plan-generated.md", sprint)
+            self.assertIn("Game artifact check passed.", sprint)
+            sprint_text = (root / ".forge-method" / "artifacts" / "game-sprint-plan-generated.md").read_text(encoding="utf-8")
+            self.assertIn("workflow: game-sprint-planning", sprint_text)
+            self.assertIn("next_workflow: game-story-creation", sprint_text)
+            self.assertTrue((root / ".forge-method" / "evals" / "artifact-forge-method-artifacts-game-sprint-plan-generated-md-exists.yaml").exists())
+            check_sprint = run_cmd("artifact", "game-check", "--root", str(root), "--path", ".forge-method/artifacts/game-sprint-plan-generated.md").stdout
+            self.assertIn("Game artifact check passed.", check_sprint)
+
     def test_artifact_enterprise_check_validates_track_and_readiness_maps(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -2880,6 +2993,24 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["game-story-creation"].get("template"), "game-story-artifact")
         self.assertEqual(by_id["game-sprint-status"].get("template"), "game-sprint-status-artifact")
         self.assertEqual(by_id["game-qa-review"].get("template"), "game-qa-review-artifact")
+        game_brief_pack = (
+            ROOT / "skills" / "forge-method" / "facilitation" / "game-brief.md"
+        ).read_text(encoding="utf-8")
+        game_lifecycle_pack = (
+            ROOT / "skills" / "forge-method" / "facilitation" / "game-lifecycle.md"
+        ).read_text(encoding="utf-8")
+        game_brief_workflow = (
+            ROOT / "skills" / "forge-method" / "references" / "workflow-game-brief.md"
+        ).read_text(encoding="utf-8")
+        game_sprint_workflow = (
+            ROOT / "skills" / "forge-method" / "references" / "workflow-game-sprint-planning.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("artifact game-brief", game_brief_pack)
+        self.assertIn("mvp_playable_proof", game_brief_pack)
+        self.assertIn("artifact game-sprint-plan", game_lifecycle_pack)
+        self.assertIn("playable_slice_goal", game_sprint_workflow)
+        self.assertIn("artifact game-brief", game_brief_workflow)
+        self.assertIn("artifact game-sprint-plan", game_sprint_workflow)
         self.assertIn("validate", by_id["product-requirements"].get("modes", []))
         self.assertIn("prfaq", by_id["working-backwards-challenge"].get("modes", []))
         self.assertIn("validate", by_id["ux-plan"].get("modes", []))

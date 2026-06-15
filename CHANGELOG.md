@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add first-class game artifact generators with `artifact game-brief` and `artifact game-sprint-plan`, game facilitation/workflow handoffs, tests, and source/install smoke coverage
 - add first-class research scan generator with `artifact research-scan` for market/domain/technical evidence closeouts, Evidence Research guidance, workflow handoffs, tests, and source/install smoke coverage
 - add first-class spec kernel generator with `artifact spec-kernel`, write-spec workflow handoff, product-planning guidance, source/install smoke coverage, and phase-closeout generator audit
 - improve discover-intent human guidance so first facilitation answers are shaped into `artifact discovery-closeout` fields before specification

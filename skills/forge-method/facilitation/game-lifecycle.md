@@ -26,6 +26,7 @@ conversation_stages:
   - engine_context: "Record the engine profile only where it changes structure, commands, assets, tests, or performance."
   - ask_stage_questions: "Ask only the questions that unlock the selected stage, not the whole game again."
   - plan_slice: "For sprint planning, order stories by player value, risk, dependencies, proof value, and deferred scope."
+  - sprint_contract: "For game-sprint-planning, shape fields for artifact game-sprint-plan before story creation."
   - produce_handoff: "Create the lifecycle artifact, story order, status, retrospective, or test plan with source links."
   - transition: "Recommend the next workflow and whether durable state should enter it."
 
@@ -53,6 +54,7 @@ quality_bar:
   - "Player experience, production constraints, and validation are all visible."
   - "The route advances the game lifecycle instead of looping in ideation."
   - "Sprint planning preserves playable slice goal, decision sources, ordered story batch, validation plan, deferred scope, next story, and sprint update."
+  - "artifact game-sprint-plan registers the playable-slice sprint before game-story-creation or build-story consumes it."
   - "Game E2E proof has a stable launch command, observable success signal, evidence capture mode, and release gate handoff."
 
 anti_patterns:
@@ -109,6 +111,7 @@ domain_examples:
 
 artifact_rules:
   Persist lifecycle stage, source docs, decisions, parked scope, validation evidence, E2E smoke proof, next story/workflow, and unresolved risks.
+  Use artifact game-sprint-plan for game-sprint-planning handoffs.
   Use `skill:templates/game-lifecycle-artifact.md` as the default artifact shape unless a narrower project template exists.
 
 headless:

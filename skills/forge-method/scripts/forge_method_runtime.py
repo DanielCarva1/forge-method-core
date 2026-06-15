@@ -507,6 +507,35 @@ RESEARCH_SCAN_NEXT_WORKFLOWS = {
     "research-closeout",
     "write-spec",
 }
+GAME_BRIEF_MODES = {
+    "create",
+    "headless",
+    "update",
+    "validate",
+}
+GAME_BRIEF_NEXT_WORKFLOWS = {
+    "domain-scan",
+    "game-context",
+    "game-prd",
+    "game-sprint-planning",
+    "game-ux-design",
+    "gdd",
+    "market-scan",
+    "quick-prototype",
+    "technical-feasibility-scan",
+}
+GAME_SPRINT_PLAN_MODES = {
+    "headless",
+    "plan",
+    "rebalance",
+    "validate",
+}
+GAME_SPRINT_PLAN_NEXT_WORKFLOWS = {
+    "build-story",
+    "game-sprint-status",
+    "game-story-creation",
+    "quick-prototype",
+}
 MECHANICAL_ACTIONS = {
     "start_next_story",
     "continue_active_story",
@@ -1542,7 +1571,7 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
         game_copy = {
             "game-brief": {
                 "decision_summary": "Isto e brief de jogo: preservar a fantasia do jogador e cortar escopo sem matar a graca.",
-                "next_move": "Capturar loop, verbos, pilares, referencias, prova jogavel, escopo estacionado, decisoes e perguntas abertas.",
+                "next_move": "Capturar loop, verbos, pilares, referencias, prova jogavel, escopo estacionado, decisoes e perguntas abertas para `artifact game-brief`.",
                 "human_question": "Qual e a menor cena jogavel que ainda faz a pessoa reconhecer esse jogo?",
                 "guardrail": "Genero, engine e feature list nao sao brief; sem loop e prova jogavel o agente vai inventar direcao.",
             },
@@ -1554,7 +1583,7 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
             },
             "game-sprint-planning": {
                 "decision_summary": "Isto e planejamento de sprint de jogo: ordenar trabalho por slice jogavel, valor do jogador e risco.",
-                "next_move": "Mapear fontes aceitas, batch de stories, dependencias, riscos, validacao, escopo deferred e proxima story.",
+                "next_move": "Mapear fontes aceitas, batch de stories, dependencias, riscos, validacao, escopo deferred e proxima story para `artifact game-sprint-plan`.",
                 "human_question": "O que o jogador conseguira fazer quando esse sprint acabar, e qual story prova isso primeiro?",
                 "guardrail": "Sprint de jogo nao e backlog generico; cada story precisa proteger a experiencia ou queimar risco de producao.",
             },
@@ -4226,6 +4255,160 @@ def write_research_scan_artifact(
     return rel
 
 
+def write_game_brief_artifact(
+    root: Path,
+    *,
+    path: str,
+    title: str,
+    summary: str,
+    mode: str,
+    source_material: str,
+    player_fantasy: str,
+    core_loop: str,
+    player_verbs: str,
+    target_player: str,
+    platform_or_engine: str,
+    pillars: str,
+    references: str,
+    mvp_playable_proof: str,
+    dream_game: str,
+    vertical_slice: str,
+    playable_slice: str,
+    parked_scope: str,
+    rejected_directions: str,
+    decision_log: str,
+    assumptions: str,
+    open_questions: str,
+    research_needed: str,
+    validation: str,
+    validation_verdict: str,
+    next_workflow: str,
+    force: bool = False,
+) -> str:
+    artifact_path, rel = project_path(root, path)
+    if artifact_path.exists() and not force:
+        raise SystemExit(f"Game brief artifact already exists: {rel}. Use --force to replace it.")
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    validation_text = validation or f"artifact game-check --path {rel}"
+    fields = [
+        ("workflow", "game-brief"),
+        ("mode", mode),
+        ("source_material", source_material),
+        ("player_fantasy", player_fantasy),
+        ("core_loop", core_loop),
+        ("player_verbs", player_verbs),
+        ("target_player", target_player),
+        ("platform_or_engine", platform_or_engine),
+        ("pillars", pillars),
+        ("references", references),
+        ("mvp_playable_proof", mvp_playable_proof),
+        ("dream_game", dream_game),
+        ("vertical_slice", vertical_slice),
+        ("playable_slice", playable_slice),
+        ("parked_scope", parked_scope),
+        ("rejected_directions", rejected_directions),
+        ("decision_log", decision_log),
+        ("assumptions", assumptions),
+        ("open_questions", open_questions),
+        ("research_needed", research_needed),
+        ("validation", validation_text),
+        ("validation_verdict", validation_verdict),
+        ("next_workflow", next_workflow),
+    ]
+    lines = [f"# {title}", ""]
+    lines.extend(f"{key}: {one_line(value)}" for key, value in fields)
+    artifact_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    errors, warnings = game_artifact_findings(root, artifact_path)
+    if errors:
+        artifact_path.unlink(missing_ok=True)
+        raise SystemExit("Game brief generation failed validation:\n" + "\n".join(f"- {error}" for error in errors))
+    rel = write_artifact(
+        root,
+        kind="game-brief",
+        title=title,
+        summary=summary,
+        path=rel,
+        lifecycle="durable",
+    )
+    if warnings:
+        append_ledger(root, "artifact.game_brief.warning", {"path": rel, "warnings": join_list(warnings)})
+    return rel
+
+
+def write_game_sprint_plan_artifact(
+    root: Path,
+    *,
+    path: str,
+    title: str,
+    summary: str,
+    mode: str,
+    source_material: str,
+    player_fantasy: str,
+    playable_slice: str,
+    playable_slice_goal: str,
+    decision_sources: str,
+    story_batch: str,
+    player_value_order: str,
+    risk_order: str,
+    dependencies: str,
+    engine_or_asset_constraints: str,
+    validation_plan: str,
+    manual_playtest_plan: str,
+    deferred_scope: str,
+    blocked_items: str,
+    next_story: str,
+    sprint_update: str,
+    validation: str,
+    next_workflow: str,
+    force: bool = False,
+) -> str:
+    artifact_path, rel = project_path(root, path)
+    if artifact_path.exists() and not force:
+        raise SystemExit(f"Game sprint plan artifact already exists: {rel}. Use --force to replace it.")
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    validation_text = validation or f"artifact game-check --path {rel}"
+    fields = [
+        ("workflow", "game-sprint-planning"),
+        ("mode", mode),
+        ("source_material", source_material),
+        ("player_fantasy", player_fantasy),
+        ("playable_slice", playable_slice),
+        ("playable_slice_goal", playable_slice_goal),
+        ("decision_sources", decision_sources),
+        ("story_batch", story_batch),
+        ("player_value_order", player_value_order),
+        ("risk_order", risk_order),
+        ("dependencies", dependencies),
+        ("engine_or_asset_constraints", engine_or_asset_constraints),
+        ("validation_plan", validation_plan),
+        ("manual_playtest_plan", manual_playtest_plan),
+        ("deferred_scope", deferred_scope),
+        ("blocked_items", blocked_items),
+        ("next_story", next_story),
+        ("sprint_update", sprint_update),
+        ("validation", validation_text),
+        ("next_workflow", next_workflow),
+    ]
+    lines = [f"# {title}", ""]
+    lines.extend(f"{key}: {one_line(value)}" for key, value in fields)
+    artifact_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    errors, warnings = game_artifact_findings(root, artifact_path)
+    if errors:
+        artifact_path.unlink(missing_ok=True)
+        raise SystemExit("Game sprint plan generation failed validation:\n" + "\n".join(f"- {error}" for error in errors))
+    rel = write_artifact(
+        root,
+        kind="game-sprint-plan",
+        title=title,
+        summary=summary,
+        path=rel,
+        lifecycle="durable",
+    )
+    if warnings:
+        append_ledger(root, "artifact.game_sprint_plan.warning", {"path": rel, "warnings": join_list(warnings)})
+    return rel
+
+
 def capture_artifact(
     root: Path,
     *,
@@ -6089,6 +6272,81 @@ def cmd_artifact_research_scan(args: argparse.Namespace) -> int:
         write_artifact_eval(root, rel, title=args.title, summary=args.summary)
     print(rel)
     print("Research scan check passed.")
+    print(f"Next workflow: {args.next_workflow}")
+    return 0
+
+
+def cmd_artifact_game_brief(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    rel = write_game_brief_artifact(
+        root,
+        path=args.path,
+        title=args.title,
+        summary=args.summary,
+        mode=args.mode,
+        source_material=args.source_material,
+        player_fantasy=args.player_fantasy,
+        core_loop=args.core_loop,
+        player_verbs=args.player_verbs,
+        target_player=args.target_player,
+        platform_or_engine=args.platform_or_engine,
+        pillars=args.pillars,
+        references=args.references,
+        mvp_playable_proof=args.mvp_playable_proof,
+        dream_game=args.dream_game,
+        vertical_slice=args.vertical_slice,
+        playable_slice=args.playable_slice,
+        parked_scope=args.parked_scope,
+        rejected_directions=args.rejected_directions,
+        decision_log=args.decision_log,
+        assumptions=args.assumptions,
+        open_questions=args.open_questions,
+        research_needed=args.research_needed,
+        validation=args.validation,
+        validation_verdict=args.validation_verdict,
+        next_workflow=args.next_workflow,
+        force=args.force,
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title=args.title, summary=args.summary)
+    print(rel)
+    print("Game artifact check passed.")
+    print(f"Next workflow: {args.next_workflow}")
+    return 0
+
+
+def cmd_artifact_game_sprint_plan(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    rel = write_game_sprint_plan_artifact(
+        root,
+        path=args.path,
+        title=args.title,
+        summary=args.summary,
+        mode=args.mode,
+        source_material=args.source_material,
+        player_fantasy=args.player_fantasy,
+        playable_slice=args.playable_slice,
+        playable_slice_goal=args.playable_slice_goal,
+        decision_sources=args.decision_sources,
+        story_batch=args.story_batch,
+        player_value_order=args.player_value_order,
+        risk_order=args.risk_order,
+        dependencies=args.dependencies,
+        engine_or_asset_constraints=args.engine_or_asset_constraints,
+        validation_plan=args.validation_plan,
+        manual_playtest_plan=args.manual_playtest_plan,
+        deferred_scope=args.deferred_scope,
+        blocked_items=args.blocked_items,
+        next_story=args.next_story,
+        sprint_update=args.sprint_update,
+        validation=args.validation,
+        next_workflow=args.next_workflow,
+        force=args.force,
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title=args.title, summary=args.summary)
+    print(rel)
+    print("Game artifact check passed.")
     print(f"Next workflow: {args.next_workflow}")
     return 0
 
@@ -13037,6 +13295,71 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_research_scan.add_argument("--force", action="store_true")
     artifact_research_scan.add_argument("--eval", action="store_true")
     artifact_research_scan.set_defaults(func=cmd_artifact_research_scan, record_guidance=True)
+
+    artifact_game_brief = artifact_sub.add_parser(
+        "game-brief",
+        help="write and validate a living game brief artifact",
+    )
+    artifact_game_brief.add_argument("--root", default=".")
+    artifact_game_brief.add_argument("--path", default=".forge-method/artifacts/game-brief.md")
+    artifact_game_brief.add_argument("--title", default="Game Brief")
+    artifact_game_brief.add_argument("--summary", default="Living game brief with player fantasy, loop, playable proof, parked scope, and next workflow handoff.")
+    artifact_game_brief.add_argument("--mode", choices=sorted(GAME_BRIEF_MODES), default="create")
+    artifact_game_brief.add_argument("--source-material", required=True)
+    artifact_game_brief.add_argument("--player-fantasy", required=True)
+    artifact_game_brief.add_argument("--core-loop", required=True)
+    artifact_game_brief.add_argument("--player-verbs", required=True)
+    artifact_game_brief.add_argument("--target-player", required=True)
+    artifact_game_brief.add_argument("--platform-or-engine", required=True)
+    artifact_game_brief.add_argument("--pillars", required=True)
+    artifact_game_brief.add_argument("--references", required=True)
+    artifact_game_brief.add_argument("--mvp-playable-proof", required=True)
+    artifact_game_brief.add_argument("--dream-game", required=True)
+    artifact_game_brief.add_argument("--vertical-slice", default="")
+    artifact_game_brief.add_argument("--playable-slice", required=True)
+    artifact_game_brief.add_argument("--parked-scope", required=True)
+    artifact_game_brief.add_argument("--rejected-directions", default="")
+    artifact_game_brief.add_argument("--decision-log", default=".forge-method/artifacts/game-brief-decisions.md")
+    artifact_game_brief.add_argument("--assumptions", default="none blocking")
+    artifact_game_brief.add_argument("--open-questions", default="none blocking")
+    artifact_game_brief.add_argument("--research-needed", default="none blocking")
+    artifact_game_brief.add_argument("--validation", default="")
+    artifact_game_brief.add_argument("--validation-verdict", default="coherent living brief")
+    artifact_game_brief.add_argument("--next-workflow", choices=sorted(GAME_BRIEF_NEXT_WORKFLOWS), default="game-sprint-planning")
+    artifact_game_brief.add_argument("--force", action="store_true")
+    artifact_game_brief.add_argument("--eval", action="store_true")
+    artifact_game_brief.set_defaults(func=cmd_artifact_game_brief, record_guidance=True)
+
+    artifact_game_sprint_plan = artifact_sub.add_parser(
+        "game-sprint-plan",
+        help="write and validate a playable-slice game sprint plan artifact",
+    )
+    artifact_game_sprint_plan.add_argument("--root", default=".")
+    artifact_game_sprint_plan.add_argument("--path", default=".forge-method/artifacts/game-sprint-plan.md")
+    artifact_game_sprint_plan.add_argument("--title", default="Game Sprint Plan")
+    artifact_game_sprint_plan.add_argument("--summary", default="Playable-slice sprint plan with ordered stories, decision sources, validation, and next story handoff.")
+    artifact_game_sprint_plan.add_argument("--mode", choices=sorted(GAME_SPRINT_PLAN_MODES), default="plan")
+    artifact_game_sprint_plan.add_argument("--source-material", required=True)
+    artifact_game_sprint_plan.add_argument("--player-fantasy", required=True)
+    artifact_game_sprint_plan.add_argument("--playable-slice", required=True)
+    artifact_game_sprint_plan.add_argument("--playable-slice-goal", required=True)
+    artifact_game_sprint_plan.add_argument("--decision-sources", required=True)
+    artifact_game_sprint_plan.add_argument("--story-batch", required=True)
+    artifact_game_sprint_plan.add_argument("--player-value-order", required=True)
+    artifact_game_sprint_plan.add_argument("--risk-order", required=True)
+    artifact_game_sprint_plan.add_argument("--dependencies", default="none blocking")
+    artifact_game_sprint_plan.add_argument("--engine-or-asset-constraints", default="none blocking")
+    artifact_game_sprint_plan.add_argument("--validation-plan", required=True)
+    artifact_game_sprint_plan.add_argument("--manual-playtest-plan", default="manual playtest after first playable slice")
+    artifact_game_sprint_plan.add_argument("--deferred-scope", required=True)
+    artifact_game_sprint_plan.add_argument("--blocked-items", default="none blocking")
+    artifact_game_sprint_plan.add_argument("--next-story", required=True)
+    artifact_game_sprint_plan.add_argument("--sprint-update", required=True)
+    artifact_game_sprint_plan.add_argument("--validation", default="")
+    artifact_game_sprint_plan.add_argument("--next-workflow", choices=sorted(GAME_SPRINT_PLAN_NEXT_WORKFLOWS), default="game-story-creation")
+    artifact_game_sprint_plan.add_argument("--force", action="store_true")
+    artifact_game_sprint_plan.add_argument("--eval", action="store_true")
+    artifact_game_sprint_plan.set_defaults(func=cmd_artifact_game_sprint_plan, record_guidance=True)
 
     artifact_capture = artifact_sub.add_parser("capture", help="capture an artifact result and optionally delete it")
     artifact_capture.add_argument("--root", default=".")
