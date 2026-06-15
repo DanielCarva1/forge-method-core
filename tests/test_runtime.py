@@ -529,6 +529,16 @@ class RuntimeTests(unittest.TestCase):
             self.assertLess(frustration_text.index("Isto e correcao de rota"), frustration_text.index("Workspace:"))
             self.assertNotIn("Reality/Evidence Gate", frustration_text)
 
+            stuck_question = "estou travado com restricoes conflitantes e nao sei se o problema e escopo, arquitetura ou teste"
+            stuck = json.loads(run_cmd("guide", "--root", str(root), "--question", stuck_question, "--json").stdout)
+            stuck_text = run_cmd("guide", "--root", str(root), "--question", stuck_question).stdout
+
+            self.assertEqual(stuck["intent_classification"], "confusion")
+            self.assertEqual(stuck["recommended_workflow"], "problem-solving")
+            self.assertEqual(stuck["workflow_metadata"].get("template"), "problem-solving-artifact")
+            self.assertIn("problema observavel", stuck_text)
+            self.assertIn("probe reversivel", stuck_text)
+
     def test_guidance_parity_replay_fixture_covers_required_families(self) -> None:
         fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
         families = {case["family"] for case in fixtures}
@@ -1554,6 +1564,8 @@ class RuntimeTests(unittest.TestCase):
             "retrospective",
             "research-closeout",
             "investigation",
+            "problem-solving",
+            "correct-course",
             "adversarial-review",
         ]:
             self.assertIn(workflow_id, workflow_list)
@@ -1567,6 +1579,8 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "performance-plan-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "game-qa-review-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "brainstorming-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "problem-solving-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "correct-course-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "test-architecture-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "teach-testing-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "test-strategy-artifact.md",
@@ -1658,6 +1672,7 @@ class RuntimeTests(unittest.TestCase):
             "ux-plan",
             "quick-dev",
             "brainstorming",
+            "problem-solving",
             "design-thinking",
             "innovation-strategy",
             "storytelling",
@@ -1669,6 +1684,7 @@ class RuntimeTests(unittest.TestCase):
             "plan-sprint",
             "readiness-check",
             "investigation",
+            "correct-course",
             "gdd",
             "test-strategy",
             "teach-testing",
@@ -1719,6 +1735,8 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["architecture"].get("template"), "architecture-artifact")
         self.assertEqual(by_id["quick-dev"].get("template"), "quick-dev-artifact")
         self.assertEqual(by_id["brainstorming"].get("template"), "brainstorming-artifact")
+        self.assertEqual(by_id["problem-solving"].get("template"), "problem-solving-artifact")
+        self.assertEqual(by_id["correct-course"].get("template"), "correct-course-artifact")
         self.assertEqual(by_id["design-thinking"].get("template"), "design-thinking-artifact")
         self.assertEqual(by_id["innovation-strategy"].get("template"), "innovation-strategy-artifact")
         self.assertEqual(by_id["storytelling"].get("template"), "storytelling-artifact")
@@ -1774,6 +1792,10 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("spec-lite", by_id["quick-dev"].get("modes", []))
         self.assertIn("converge", by_id["brainstorming"].get("modes", []))
         self.assertIn("concept-selection", by_id["brainstorming"].get("followed_by", []))
+        self.assertIn("root-cause", by_id["problem-solving"].get("modes", []))
+        self.assertIn("probe", by_id["problem-solving"].get("modes", []))
+        self.assertIn("impact", by_id["correct-course"].get("modes", []))
+        self.assertIn("insert", by_id["correct-course"].get("modes", []))
         self.assertIn("prototype", by_id["design-thinking"].get("modes", []))
         self.assertIn("evidence", by_id["innovation-strategy"].get("modes", []))
         self.assertIn("payoff", by_id["storytelling"].get("modes", []))

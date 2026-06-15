@@ -58,12 +58,12 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 
 - `guide --question --json` must classify the latest human message against durable state and available workflows.
 - Human frustration or rejection of the current route must override stale `next_action` and route to `correct-course` or `6-evolve`.
-- Corrections about the method's own experience must route to `correct-course` first; `runtime-builder` is the repair path after the failed behavior is named.
+- Corrections about the method's own experience, scope, taste, or implementation contradiction must route to `correct-course` first; `runtime-builder`, `plan-sprint`, `build-story`, or `readiness-check` are repair paths after the failed behavior is named.
 - Broad ideas should receive a guided discovery, brainstorm, research, game, creative, quality, or builder workflow before technical implementation plans; option-generation language should route to brainstorming before generic confusion, while taste-heavy broad creative requests still route to creative-session and specific CIS strategy/story/design requests route to their narrow packs.
 - Brainstorming should preserve option lanes, selection criteria, taste anchors, anti-goals, discard pile, risk/evidence needs, top candidates, and next workflow in a compact artifact.
 - CIS Facilitation Depth should preserve design-thinking user/opportunity/prototype proof, innovation option/evidence/adoption/reversibility proof, and storytelling audience/pressure/payoff/rejected-path proof in compact artifacts while the human pack stays rich.
 - Agent Compactness Guard should expose a deterministic `workflow compactness` check and wire it into normal workflow validation, runtime smoke, audit, and unit coverage.
-- Confusion should produce one recommended route and a small set of alternatives.
+- Confusion and stuckness should enter `problem-solving`, capture current vs desired behavior, bound symptoms, compare candidate causes, and choose one reversible probe instead of asking the human to pick from a technical menu.
 - Mechanical build requests should continue autonomously when decision artifacts and stories are already ready.
 - Method/runtime audit requests should route to runtime-builder instead of generic operate/support, especially when they mention scripts, dead code, misleading docs, agent behavior, or human-guided experience.
 - Product planning, UX design, and quick-dev requests should route to narrow executable workflows rather than generic build-story or stale state.

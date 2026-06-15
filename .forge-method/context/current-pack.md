@@ -4,30 +4,29 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: council-orchestration-depth-hardened
+- status: correct-course-problem-solving-depth-hardened
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Continue real-use transcript hardening for remaining strong-ish rows; next inspect correct-course breadth, problem-solving depth, and any game/code-review examples that still feel generic before claiming full guided-flow parity.
+- next_action: Continue residual parity transcript hardening: inspect game dev-story/review examples, package/distribution depth, doc utility validation, and deferred API/browser or eval-runner surfaces only if repeated projects justify them.
 
 ## Latest Checkpoint
 
-# Council Orchestration Depth hardened
+# Correct Course and Problem Solving Depth hardened
 
-- created_at: 2026-06-15T06:57:40+00:00
+- created_at: 2026-06-15T07:28:21+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: council-orchestration-depth-hardened
+- status: correct-course-problem-solving-depth-hardened
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed party-mode and subagent-orchestration parity gaps: council-decision now has a dedicated pack/template/modes, natural Guidance Engine routing, richer live debate rounds, compact dissent/orchestration artifact contract, JSON worker/merge plan, catalog/fixture/test coverage, regenerated capability index, and validation evidence.
+Closed the remaining human-guidance depth gap for correction and stuck/problem-solving flows: correct-course and problem-solving now have compact templates, catalog modes, richer facilitation packs, stronger Guidance Engine signals/text, and replay fixtures covering scope, human-experience, implementation contradiction, and messy constraints.
 
 ## Decisions
 
-- Council is Human Experience first: show useful live specialist debate to the human, but persist only compact decision, dissent, evidence, worker-output, merge, and next-action contracts.
-- Subagent/parallel mode changes orchestration style only; artifact contracts stay stable and the runtime falls back to sequential council when real subagents are unavailable or outputs are not independent.
+- Keep rich human recovery guidance in facilitation packs and guide output while compact agent contracts live in workflow refs, catalog metadata, templates, state, and replay fixtures.
 
 ## Checks
 
@@ -48,7 +47,11 @@ Closed party-mode and subagent-orchestration parity gaps: council-decision now h
 
 - skills/forge-method/scripts/forge_method_runtime.py
 - skills/forge-method/catalog/workflows.json
-- skills/forge-method/references/workflow-council-decision
+- skills/forge-method/facilitation/correct-course.md
+- skills/forge-method/facilitation/problem-solving.md
+- skills/forge-method/templates/correct-course-artifact.md
+- skills/forge-method/templates/problem-solving-artifact.md
+- skills/fo
 [checkpoint truncated]
 
 ## Recovery Signals
@@ -60,17 +63,17 @@ Closed party-mode and subagent-orchestration parity gaps: council-decision now h
 ### Touched Files
 
 - skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/references/workflow-story-creation.md
+- skills/forge-method/references/workflow-plan-sprint.md
 - skills/forge-method/facilitation/story-lifecycle.md
+- skills/forge-method/templates/sprint-plan-artifact.md
+- skills/forge-method/catalog/workflows.json
+- skills/forge-method/fixtures/guidance-parity-replay.json
 - tests/test_runtime.py
 - .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
 - .forge-method/artifacts/20260613-systematic-parity-plan.md
 - .forge-method/artifacts/guidance-engine-benchmark.md
 - .forge-method/context/capability-index.json
 - CHANGELOG.md
-- skills/forge-method/references/workflow-plan-sprint.md
-- skills/forge-method/templates/sprint-plan-artifact.md
-- skills/forge-method/catalog/workflows.json
 
 ## Open Human Inputs
 
@@ -87,11 +90,11 @@ Closed party-mode and subagent-orchestration parity gaps: council-decision now h
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260615-052906-validation-story-decision-source-gate-validation.md
 - .forge-method/evidence/20260615-054633-validation-sprint-planning-depth-validation.md
 - .forge-method/evidence/20260615-060843-validation-build-story-autonomy-depth-validation.md
 - .forge-method/evidence/20260615-063437-validation-document-review-depth-validation.md
 - .forge-method/evidence/20260615-065658-validation-council-orchestration-depth-validation.md
+- .forge-method/evidence/20260615-072752-validation-correct-course-and-problem-solving-depth-validat.md
 
 ## Recent Artifacts
 

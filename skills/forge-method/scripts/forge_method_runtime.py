@@ -1404,10 +1404,10 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
         }
     if classification == "confusion":
         return {
-            "decision_summary": "Voce nao precisa adivinhar fase, trilha ou workflow. O guia reduz a incerteza a uma rota recomendada e poucas alternativas.",
-            "next_move": "Explicar a rota, fazer uma pergunta util, e evitar despejar catalogo.",
-            "human_question": "Voce quer destravar direcao, comparar opcoes, ou continuar o trabalho mecanico ja aprovado?",
-            "guardrail": "Confusao do humano e sinal de facilitacao, nao de mais metadado.",
+            "decision_summary": "Voce nao precisa adivinhar fase, trilha ou workflow. Quando a situacao esta embolada, o metodo primeiro transforma isso em problema observavel.",
+            "next_move": "Separar atual vs desejado, sintomas vs causas, restricoes reais vs assumidas, e escolher um probe reversivel.",
+            "human_question": "O que esta mais travando agora: nao saber a rota, restricoes em conflito, sintoma sem causa, ou falta de opcoes?",
+            "guardrail": "Confusao do humano e sinal de facilitacao diagnostica, nao desculpa para despejar catalogo.",
         }
     if classification == "brainstorm":
         return {
@@ -5486,6 +5486,10 @@ def detect_guidance_signals(question: str) -> list[str]:
             "curso errado",
             "wrong direction",
             "back up",
+            "scope changed",
+            "escopo mudou",
+            "fora de escopo",
+            "fora da premissa",
             "voltar atras",
             "nao era pra",
             "nao e pra",
@@ -5495,12 +5499,23 @@ def detect_guidance_signals(question: str) -> list[str]:
             "nao conduziu",
             "nao conduz",
             "cedo demais",
+            "contradiz",
+            "contradicao",
+            "contradiction",
         ],
         "confusion": [
             "nao sei",
             "não sei",
             "em duvida",
             "em dúvida",
+            "estou travado",
+            "estou travada",
+            "me ajuda a destravar",
+            "restricoes conflitantes",
+            "restricoes em conflito",
+            "conflicting constraints",
+            "stuck",
+            "blocked",
             "what should",
             "o que fazer",
             "proximo passo",
@@ -5776,9 +5791,12 @@ def detect_guidance_signals(question: str) -> list[str]:
             "ignorou",
             "escapar",
             "quebrado",
+            "contradiz",
+            "contradicao",
+            "contradiction",
         },
         "frustration": {"frustrado", "frustrante", "cansado", "vergonha", "burro", "merda", "pessimo", "horrivel", "inaceitavel"},
-        "confusion": {"duvida", "confuso", "perdido", "incerto", "ajuda", "orientar", "guiar", "investigate", "investigar", "diagnose", "diagnosticar", "triage"},
+        "confusion": {"duvida", "confuso", "perdido", "incerto", "ajuda", "orientar", "guiar", "travado", "travada", "destravar", "bloqueado", "bloqueada", "stuck", "blocked", "investigate", "investigar", "diagnose", "diagnosticar", "triage"},
         "brainstorm": {"brainstorm", "ideia", "ideias", "ideation", "explorar", "opcoes", "alternativas"},
         "research-needed": {"pesquisa", "research", "mercado", "documentacao", "docs", "evidencia", "fontes", "benchmark"},
         "creative-flow": {
@@ -6771,12 +6789,12 @@ def problem_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, st
             ),
         )
     return (
-        "frame the confusion, identify candidate routes, and ask one high-leverage question",
-        "I should orient you with one recommendation and two alternatives, not dump the workflow catalog.",
+        "run problem-solving to capture current vs desired behavior, bound the symptoms, compare candidate causes, and choose one reversible probe",
+        "I should diagnose why you are stuck before asking you to pick a workflow or accepting a repair.",
         guidance_alternatives(
-            ("guide-route", "if the route is merely unclear"),
-            ("brainstorming", "if you need options before deciding"),
-            ("investigation", "if there is a symptom, failure, or root-cause question"),
+            ("investigation", "use when the symptom needs evidence gathering or root-cause proof"),
+            ("correct-course", "use when the diagnosis shows the current route or artifact is wrong"),
+            ("brainstorming", "use when the blocker is lack of options rather than a failure mode"),
         ),
     )
 

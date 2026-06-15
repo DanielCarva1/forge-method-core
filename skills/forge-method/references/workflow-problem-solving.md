@@ -2,24 +2,30 @@
 
 trigger:
   - user has a stuck, ambiguous, or messy problem
+  - user is frustrated but has not identified the wrong route yet
   - direct implementation would be premature
 
 inputs:
+  - raw user description
   - problem statement
   - symptoms
   - constraints
   - known failed attempts
 
 steps:
-  1. separate symptom from cause
-  2. generate candidate explanations
-  3. choose tests or probes
-  4. define the next reversible action
+  1. capture current vs desired behavior
+  2. bound where the problem appears and does not appear
+  3. separate symptoms, likely causes, and unknowns
+  4. generate candidate explanations
+  5. choose one reversible probe or repair
+  6. define success signal and next workflow
 
 outputs:
-  - clarified problem
+  - problem-solving artifact
+  - current vs desired frame
   - candidate causes
-  - next test or action
+  - chosen probe
+  - next action
 
 done_when:
   - next action is reversible

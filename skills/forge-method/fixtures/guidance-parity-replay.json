@@ -78,6 +78,18 @@
     "state_update_required": false
   },
   {
+    "id": "problem_solving_messy_constraints",
+    "family": "confusion",
+    "state": "discovery",
+    "question": "estou travado com restricoes conflitantes: nao sei se o problema e escopo, arquitetura ou teste, me ajuda a destravar com causas e um probe reversivel",
+    "expected_classification": "confusion",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "problem-solving",
+    "expected_facilitation_pack": "skill:facilitation/problem-solving.md",
+    "expected_template": "problem-solving-artifact",
+    "state_update_required": false
+  },
+  {
     "id": "product_requirements_validate_request",
     "family": "prd",
     "state": "discovery",
@@ -202,6 +214,32 @@
     "expected_phase": "6-evolve",
     "expected_workflow": "correct-course",
     "expected_facilitation_pack": "skill:facilitation/correct-course.md",
+    "expected_command": "correct-course",
+    "state_update_required": true
+  },
+  {
+    "id": "correct_course_scope_contradiction_discovery",
+    "family": "correct-course",
+    "state": "discovery",
+    "question": "o escopo mudou: nao era pra seguir com esse MVP, ficou fora da premissa e precisa voltar para o ponto valido",
+    "expected_classification": "correct-course",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "correct-course",
+    "expected_facilitation_pack": "skill:facilitation/correct-course.md",
+    "expected_template": "correct-course-artifact",
+    "expected_command": "correct-course",
+    "state_update_required": true
+  },
+  {
+    "id": "correct_course_implementation_contradicts_spec",
+    "family": "correct-course",
+    "state": "build_story_ready",
+    "question": "a implementacao contradiz a spec aceita e os testes verdes estao enganando, precisamos corrigir o rumo antes de continuar build",
+    "expected_classification": "correct-course",
+    "expected_phase": "4-build-verify",
+    "expected_workflow": "correct-course",
+    "expected_facilitation_pack": "skill:facilitation/correct-course.md",
+    "expected_template": "correct-course-artifact",
     "expected_command": "correct-course",
     "state_update_required": true
   },
