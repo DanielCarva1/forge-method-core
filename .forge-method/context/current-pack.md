@@ -4,39 +4,36 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: research-guidance-depth-hardened
+- status: game-brief-sprint-depth-hardened
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Continue residual game guidance hardening, especially game-brief, brainstorm-game, and game sprint planning transcript proof.
+- next_action: Decide whether /cis-agent-presentation-master becomes a Forge workflow, folds into storytelling/presentation craft, or is explicitly deferred; keep deferred API/browser or eval-runner surfaces out unless repeated projects justify them.
 
 ## Latest Checkpoint
 
-# Research Guidance Depth hardened
+# Game Brief Sprint Depth finalized
 
-- created_at: 2026-06-15T11:10:04+00:00
+- created_at: 2026-06-15T11:51:38+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: research-guidance-depth-hardened
+- status: game-brief-sprint-depth-hardened
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed market/domain/technical research strong-ish rows with narrow research routing, richer evidence-research human guidance, research-scan template, artifact research-check, replay cases, and validation proof.
+State finalized after Game Brief & Sprint Depth hardening. Runtime now routes game brief as a living guided workflow, uses dedicated game-sprint-planning for playable-slice planning, validates both with artifact game-check, and proves the guidance matrix with 88/88 parity replay plus full repo validation.
 
 ## Decisions
 
-- Research requests now route by uncertainty type: market for alternatives/adoption/demand, domain for rules/risks/review, technical feasibility for capability/data/proof path.
-- Research scan artifacts must preserve decision_to_unlock, source quality, contradictions/falsifiers, uncertainty, stance, next workflow, and research-check validation.
+- Residual game brief, brainstorm-game, and game sprint planning rows are no longer treated as strong-ish; next parity decision is /cis-agent-presentation-master or explicit deferral.
 
 ## Checks
 
-- targeted unittest passed
-- parity replay 85/85 passed
-- python -m unittest discover -s tests passed: 77 tests
-- smoke-runtime.ps1 passed
-- smoke-install.ps1 passed
-- verify-fast.ps1 passed
+- python -m unittest discover -s tests => 78 tests OK
+- powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1 => passed
+- powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1 => passed
+- powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1 => passed
 
 ## Failed Checks
 
@@ -44,20 +41,15 @@ Closed market/domain/technical research strong-ish rows with narrow research rou
 
 ## Touched Files
 
-- skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/catalog/workflows.json
-- skills/forge-method/facilitation/evidence-research.md
-- skills/forge-method/templates/research-scan-artifact.md
-- skills/forge-method/fixtures/guidance-parity-replay.json
-- tests/test_runtime.py
+- none
 
 ## Artifacts
 
-- .forge-method/evidence/20260615-110943-validation-research-guidance-depth-validation.md
+- .forge-method/evidence/20260615-115018-validation-game-brief-sprint-depth-validation.md
 
 ## Next Action
 
-Continue residual game guidance hardening, especially game-brief, brainstorm-game, and game sprint planning transcript proof.
+Decide whether /cis-agent-presentation-master becomes a Forge workflow, folds into storytelling/presentation craft, or is explicitly deferred; keep deferred API/browser or eval-runner surfaces out unless repeated projects justify them.
 
 ## Recovery Signals
 
@@ -67,8 +59,6 @@ Continue residual game guidance hardening, especially game-brief, brainstorm-gam
 
 ### Touched Files
 
-- Guidance Engine document routing, artifact doc-check runtime command, doc-index/doc-shard workflows, document-utility pack/template, catalog modes, replay fixtures, benchmark/audit/plan/changelog, and runtime tests.
-- Guidance Engine quality routing, artifact test-check runtime command, test framework/automation/game E2E workflows and templates, game/test facilitation packs, workflow catalog, replay fixture, benchmark/audit/plan/changelog, runtime tests, capability index
 - skills/forge-method/scripts/forge_method_runtime.py
 - skills/forge-method/catalog/workflows.json
 - skills/forge-method/references
@@ -79,6 +69,8 @@ Continue residual game guidance hardening, especially game-brief, brainstorm-gam
 - skills/forge-method/references/workflow-write-spec.md
 - skills/forge-method/facilitation/product-planning.md
 - skills/forge-method/templates/spec-kernel-artifact.md
+- skills/forge-method/facilitation/evidence-research.md
+- skills/forge-method/templates/research-scan-artifact.md
 
 ## Open Human Inputs
 
@@ -95,16 +87,16 @@ Continue residual game guidance hardening, especially game-brief, brainstorm-gam
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260615-090424-validation-document-utility-freshness-validation.md
 - .forge-method/evidence/20260615-093459-validation-e2e-test-automation-depth-validation.md
 - .forge-method/evidence/20260615-101549-validation-enterprise-artifact-map-depth-validation.md
 - .forge-method/evidence/20260615-103921-validation-spec-kernel-depth-validation.md
 - .forge-method/evidence/20260615-110943-validation-research-guidance-depth-validation.md
+- .forge-method/evidence/20260615-115018-validation-game-brief-sprint-depth-validation.md
 
 ## Recent Artifacts
 
-- internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine benchmark - Internal Guidance Engine benchmark updated with Research Guidance Depth expectations and research workflow IDs.
-- audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD Forge systematic parity audit - Parity audit updated: market/domain/technical research rows translated via research-scan artifact, research-check, routing, and replay proof; residual focus moves to game strong-ish rows.
-- plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic parity plan - Systematic parity plan updated with Research Guidance Depth completion and next residual game guidance focus.
-- index [active/durable]: .forge-method/context/capability-index.json - Capability index - Capability index regenerated after research scan catalog/template metadata changes.
-- changelog [active/durable]: CHANGELOG.md - Changelog - Changelog records Research Guidance Depth in Unreleased.
+- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability index refreshed - Regenerated capability index after adding game-sprint-planning workflow and game brief/sprint templates.
+- changelog [active/durable]: CHANGELOG.md - Game Brief Sprint Depth changelog - Recorded the unreleased Game Brief & Sprint Depth increment.
+- parity-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - Game Brief Sprint Depth audit update - Marked residual game brainstorm, game brief, and game sprint planning rows translated after living brief, game-sprint-planning, game-check, and replay proof.
+- benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance benchmark updated for game sprint planning - Added game-sprint-planning to internal Guidance Engine benchmark targets and fixture workflow IDs.
+- parity-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic parity plan updated - Updated next focus after closing residual game brief, brainstorm-game, and game sprint planning rows.

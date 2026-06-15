@@ -1739,6 +1739,92 @@ class RuntimeTests(unittest.TestCase):
             game_pass = run_cmd("artifact", "test-check", "--root", str(root), "--path", str(game_e2e_artifact))
             self.assertIn("Test utility check passed.", game_pass.stdout)
 
+    def test_artifact_game_check_validates_brief_and_sprint_contracts(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            artifacts_dir = root / ".forge-method" / "artifacts"
+            brief_artifact = artifacts_dir / "game-brief-proof.md"
+            brief_artifact.write_text(
+                "\n".join(
+                    [
+                        "# Game Brief Artifact",
+                        "workflow: game-brief",
+                        "mode: validate",
+                        "source_material: discovery transcript and reference notes",
+                        "player_fantasy: Be a tactical GM running a living tabletop battle.",
+                        "core_loop: prepare scene, adjudicate player decisions, roll outcomes, reveal consequences, earn campaign progress",
+                        "player_verbs: prepare, place, roll, adjudicate, reveal",
+                        "target_player: remote tabletop RPG group and GM",
+                        "platform_or_engine: browser-first web app",
+                        "pillars: fast table flow, cited rules support, GM control",
+                        "references: Foundry, Fantasy Grounds, tabletop maps",
+                        "mvp_playable_proof: one GM hosts a scene and resolves one cited rules interaction",
+                        "dream_game: every sourcebook becomes a reviewed rules assistant",
+                        "vertical_slice: one system, one map, one combat turn",
+                        "playable_slice: GM can host a room and resolve one turn",
+                        "parked_scope: universal book ingestion and full automation",
+                        "rejected_directions: clone every VTT feature before rules proof",
+                        "decision_log: .forge-method/artifacts/game-brief-decisions.md",
+                        "assumptions: private legal source use only",
+                        "open_questions: first open-license system",
+                        "research_needed: licensing and technical feasibility",
+                        "validation: artifact game-check --path .forge-method/artifacts/game-brief-proof.md",
+                        "validation_verdict: coherent living brief",
+                        "next_workflow: game-sprint-planning",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            brief_pass = run_cmd("artifact", "game-check", "--root", str(root), "--path", str(brief_artifact))
+            self.assertIn("Game artifact check passed.", brief_pass.stdout)
+
+            sprint_artifact = artifacts_dir / "game-sprint-plan-proof.md"
+            sprint_artifact.write_text(
+                "\n".join(
+                    [
+                        "# Game Sprint Plan Artifact",
+                        "workflow: game-sprint-planning",
+                        "mode: plan",
+                        "source_material: .forge-method/artifacts/game-brief-proof.md",
+                        "player_fantasy: Be a tactical GM running a living tabletop battle.",
+                        "playable_slice: GM can host a room and resolve one turn",
+                        "playable_slice_goal: first playable remote table scene",
+                        "decision_sources: game brief, prototype notes, engine setup",
+                        "story_batch: room setup, map placement, dice outcome, rules citation",
+                        "player_value_order: host room before rules citation polish",
+                        "risk_order: realtime state before visual polish",
+                        "dependencies: room state before dice outcome",
+                        "engine_or_asset_constraints: browser canvas with placeholder tokens",
+                        "validation_plan: manual playtest plus smoke command",
+                        "manual_playtest_plan: GM creates scene and resolves one turn",
+                        "deferred_scope: universal sourcebook ingestion",
+                        "blocked_items: none blocking",
+                        "next_story: story-room-setup",
+                        "sprint_update: set active slice sprint with first story ready",
+                        "validation: artifact game-check --path .forge-method/artifacts/game-sprint-plan-proof.md",
+                        "next_workflow: game-story-creation",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            sprint_pass = run_cmd("artifact", "game-check", "--root", str(root), "--path", str(sprint_artifact))
+            self.assertIn("Game artifact check passed.", sprint_pass.stdout)
+
+            broken = artifacts_dir / "game-brief-broken.md"
+            broken.write_text(
+                brief_artifact.read_text(encoding="utf-8").replace(
+                    "mvp_playable_proof: one GM hosts a scene and resolves one cited rules interaction",
+                    "mvp_playable_proof: none",
+                ),
+                encoding="utf-8",
+            )
+            result = run_cmd("artifact", "game-check", "--root", str(root), "--path", str(broken), check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("mvp_playable_proof must name", result.stdout)
+
     def test_artifact_enterprise_check_validates_track_and_readiness_maps(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -1842,6 +1928,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("workflow-validate", workflow_list)
         for workflow_id in [
             "game-story-creation",
+            "game-sprint-planning",
             "game-context",
             "gdd",
             "narrative-design",
@@ -1894,6 +1981,8 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn(workflow_id, workflow_list)
         for template_path in [
             ROOT / "skills" / "forge-method" / "templates" / "game-lifecycle-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "game-brief-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "game-sprint-plan-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "game-story-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "game-sprint-status-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "game-context-artifact.md",
@@ -2067,12 +2156,14 @@ class RuntimeTests(unittest.TestCase):
             "domain-scan",
             "technical-feasibility-scan",
             "game-context",
+            "game-brief",
             "gdd",
             "narrative-design",
             "mechanics-design",
             "engine-setup",
             "engine-architecture",
             "quick-prototype",
+            "game-sprint-planning",
             "playtest-plan",
             "performance-plan",
             "game-qa-review",
@@ -2143,6 +2234,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["observability-plan"].get("template"), "observability-plan")
         self.assertEqual(by_id["release-readiness"].get("template"), "release-readiness-artifact")
         self.assertEqual(by_id["game-context"].get("template"), "game-context-artifact")
+        self.assertEqual(by_id["game-brief"].get("template"), "game-brief-artifact")
         self.assertEqual(by_id["gdd"].get("template"), "gdd")
         self.assertEqual(by_id["narrative-design"].get("template"), "narrative-bible")
         self.assertEqual(by_id["mechanics-design"].get("template"), "mechanics-matrix")
@@ -2151,6 +2243,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["quick-prototype"].get("template"), "quick-prototype-artifact")
         self.assertEqual(by_id["playtest-plan"].get("template"), "playtest-plan-artifact")
         self.assertEqual(by_id["performance-plan"].get("template"), "performance-plan-artifact")
+        self.assertEqual(by_id["game-sprint-planning"].get("template"), "game-sprint-plan-artifact")
         self.assertEqual(by_id["game-story-creation"].get("template"), "game-story-artifact")
         self.assertEqual(by_id["game-sprint-status"].get("template"), "game-sprint-status-artifact")
         self.assertEqual(by_id["game-qa-review"].get("template"), "game-qa-review-artifact")
@@ -2271,6 +2364,8 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("signals", by_id["observability-plan"].get("modes", []))
         self.assertIn("gate", by_id["release-readiness"].get("modes", []))
         self.assertIn("document", by_id["game-context"].get("modes", []))
+        self.assertIn("update", by_id["game-brief"].get("modes", []))
+        self.assertIn("validate", by_id["game-brief"].get("modes", []))
         self.assertIn("create", by_id["gdd"].get("modes", []))
         self.assertIn("create", by_id["narrative-design"].get("modes", []))
         self.assertIn("balance", by_id["mechanics-design"].get("modes", []))
@@ -2279,6 +2374,17 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("prove", by_id["quick-prototype"].get("modes", []))
         self.assertIn("run", by_id["playtest-plan"].get("modes", []))
         self.assertIn("measure", by_id["performance-plan"].get("modes", []))
+        self.assertIn("rebalance", by_id["game-sprint-planning"].get("modes", []))
+        game_brief_template = (
+            ROOT / "skills" / "forge-method" / "templates" / "game-brief-artifact.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("player_fantasy", game_brief_template)
+        self.assertIn("mvp_playable_proof", game_brief_template)
+        game_sprint_template = (
+            ROOT / "skills" / "forge-method" / "templates" / "game-sprint-plan-artifact.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("playable_slice_goal", game_sprint_template)
+        self.assertIn("decision_sources", game_sprint_template)
         self.assertIn("headless", by_id["game-story-creation"].get("modes", []))
         self.assertIn("risk", by_id["game-sprint-status"].get("modes", []))
         self.assertIn("review", by_id["game-qa-review"].get("modes", []))
@@ -2630,6 +2736,12 @@ class RuntimeTests(unittest.TestCase):
     def test_game_studio_depth_guidance_and_compact_contracts(self) -> None:
         game_cases = [
             (
+                "create and validate a living game brief with player fantasy core loop verbs pillars references mvp playable proof parked scope decision log assumptions open questions and next workflow",
+                "game-brief",
+                "game-brief-artifact",
+                "1-discovery",
+            ),
+            (
                 "generate game project context with player fantasy loop engine profile playable slice and next workflow",
                 "game-context",
                 "game-context-artifact",
@@ -2672,6 +2784,12 @@ class RuntimeTests(unittest.TestCase):
                 "3-plan",
             ),
             (
+                "game sprint planning for the next playable slice: order story batch by player value decision sources dependencies production risk validation plan deferred scope and next story",
+                "game-sprint-planning",
+                "game-sprint-plan-artifact",
+                "3-plan",
+            ),
+            (
                 "game sprint status for the playable slice: done active review blocked deferred evidence gaps scope pressure risks and next story",
                 "game-sprint-status",
                 "game-sprint-status-artifact",
@@ -2710,7 +2828,12 @@ class RuntimeTests(unittest.TestCase):
                     self.assertEqual(guide["intent_classification"], "game-flow")
                     self.assertEqual(guide["recommended_workflow"], workflow)
                     self.assertEqual(guide["recommended_phase"], phase)
-                    self.assertEqual(guide["facilitation_pack"], "skill:facilitation/game-lifecycle.md")
+                    expected_pack = (
+                        "skill:facilitation/game-brief.md"
+                        if workflow == "game-brief"
+                        else "skill:facilitation/game-lifecycle.md"
+                    )
+                    self.assertEqual(guide["facilitation_pack"], expected_pack)
                     self.assertEqual(guide["workflow_metadata"].get("template"), template)
                     self.assertTrue(guide["state_update_required"])
                     self.assertIn("transition-workflow", [item["name"] for item in guide["commands"]])
@@ -2760,6 +2883,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertFalse(p15["state_update_required"])
 
         for ref_name in [
+            "workflow-game-brief.md",
             "workflow-game-context.md",
             "workflow-engine-setup.md",
             "workflow-gdd.md",
@@ -2768,6 +2892,7 @@ class RuntimeTests(unittest.TestCase):
             "workflow-playtest-plan.md",
             "workflow-performance-plan.md",
             "workflow-game-story-creation.md",
+            "workflow-game-sprint-planning.md",
             "workflow-game-sprint-status.md",
             "workflow-game-qa-review.md",
             "workflow-game-test-framework.md",

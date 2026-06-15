@@ -273,6 +273,7 @@ HUMAN_FACING_REQUIRED_WORKFLOWS = {
     "engine-architecture",
     "quick-prototype",
     "game-story-creation",
+    "game-sprint-planning",
     "game-sprint-status",
     "game-retrospective",
     "game-test-framework",
@@ -1446,11 +1447,23 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
         }
     if classification == "game-flow":
         game_copy = {
+            "game-brief": {
+                "decision_summary": "Isto e brief de jogo: preservar a fantasia do jogador e cortar escopo sem matar a graca.",
+                "next_move": "Capturar loop, verbos, pilares, referencias, prova jogavel, escopo estacionado, decisoes e perguntas abertas.",
+                "human_question": "Qual e a menor cena jogavel que ainda faz a pessoa reconhecer esse jogo?",
+                "guardrail": "Genero, engine e feature list nao sao brief; sem loop e prova jogavel o agente vai inventar direcao.",
+            },
             "game-story-creation": {
                 "decision_summary": "Isto e producao de jogo: transformar um slice aceito em stories jogaveis, nao em backlog generico.",
                 "next_move": "Fixar valor do jogador, contexto da feature, notas de engine, assets assumidos, criterios e prova antes do build-story.",
                 "human_question": "Qual story prova o slice primeiro: acao principal, feedback, conteudo minimo, UI/HUD, ou infraestrutura de engine?",
                 "guardrail": "Story de jogo sem experiencia observavel vira tarefa tecnica solta.",
+            },
+            "game-sprint-planning": {
+                "decision_summary": "Isto e planejamento de sprint de jogo: ordenar trabalho por slice jogavel, valor do jogador e risco.",
+                "next_move": "Mapear fontes aceitas, batch de stories, dependencias, riscos, validacao, escopo deferred e proxima story.",
+                "human_question": "O que o jogador conseguira fazer quando esse sprint acabar, e qual story prova isso primeiro?",
+                "guardrail": "Sprint de jogo nao e backlog generico; cada story precisa proteger a experiencia ou queimar risco de producao.",
             },
             "game-sprint-status": {
                 "decision_summary": "Isto e status de producao de jogo: progresso precisa ser lido contra o slice jogavel.",
@@ -2446,6 +2459,11 @@ TEST_UTILITY_WORKFLOWS = {
     "game-e2e-scaffold",
 }
 
+GAME_ARTIFACT_WORKFLOWS = {
+    "game-brief",
+    "game-sprint-planning",
+}
+
 ENTERPRISE_ARTIFACT_WORKFLOWS = {
     "track-decision",
     "readiness-check",
@@ -2699,6 +2717,69 @@ def test_utility_findings(root: Path, artifact_path: Path) -> tuple[list[str], l
     waits = normalize_text(fields.get("no_hardcoded_waits", ""))
     if waits and waits in {"false", "no", "nao", "não"}:
         errors.append("no_hardcoded_waits must reject sleeps or document a waiver")
+    return errors, warnings
+
+
+def game_artifact_findings(root: Path, artifact_path: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not artifact_path.exists():
+        return [f"game artifact not found: {artifact_path}"], warnings
+    fields = parse_markdown_artifact_fields(artifact_path)
+    workflow = fields.get("workflow", "")
+    if workflow not in GAME_ARTIFACT_WORKFLOWS:
+        errors.append(f"workflow must be one of {', '.join(sorted(GAME_ARTIFACT_WORKFLOWS))}")
+    for key in ["source_material", "player_fantasy", "playable_slice", "validation", "next_workflow"]:
+        if not fields.get(key, ""):
+            errors.append(f"game artifact requires {key}")
+    weak_values = {"none", "n/a", "na", "tbd", "unknown"}
+    if normalize_text(fields.get("player_fantasy", "")) in weak_values:
+        errors.append("player_fantasy must be concrete enough for future agents")
+    if normalize_text(fields.get("playable_slice", "")) in weak_values:
+        errors.append("playable_slice must name what the player can actually do")
+    if workflow == "game-brief":
+        for key in [
+            "core_loop",
+            "player_verbs",
+            "target_player",
+            "platform_or_engine",
+            "pillars",
+            "references",
+            "mvp_playable_proof",
+            "dream_game",
+            "parked_scope",
+            "decision_log",
+            "assumptions",
+            "open_questions",
+            "validation_verdict",
+        ]:
+            if not fields.get(key, ""):
+                errors.append(f"game-brief requires {key}")
+        if normalize_text(fields.get("core_loop", "")) in weak_values:
+            errors.append("core_loop must name repeated player action, decision, risk, and reward")
+        if normalize_text(fields.get("mvp_playable_proof", "")) in weak_values:
+            errors.append("mvp_playable_proof must name the smallest proof of the fantasy")
+    if workflow == "game-sprint-planning":
+        for key in [
+            "playable_slice_goal",
+            "story_batch",
+            "decision_sources",
+            "player_value_order",
+            "risk_order",
+            "validation_plan",
+            "deferred_scope",
+            "next_story",
+            "sprint_update",
+        ]:
+            if not fields.get(key, ""):
+                errors.append(f"game-sprint-planning requires {key}")
+        if normalize_text(fields.get("decision_sources", "")) in weak_values:
+            errors.append("decision_sources must link brief, GDD, prototype, playtest, or architecture decisions")
+        if normalize_text(fields.get("next_story", "")) in weak_values:
+            errors.append("next_story must identify the next executable game story or blocked reason")
+    validation = normalize_text(fields.get("validation", ""))
+    if validation and "game-check" not in validation:
+        warnings.append("validation should include artifact game-check")
     return errors, warnings
 
 
@@ -5535,6 +5616,25 @@ def cmd_artifact_test_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_artifact_game_check(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    artifact_path, rel = project_path(root, args.path)
+    errors, warnings = game_artifact_findings(root, artifact_path)
+    if errors:
+        print("Game artifact check failed:")
+        for error in errors:
+            print(f"- {error}")
+    if warnings:
+        print("Game artifact check warnings:")
+        for warning in warnings:
+            print(f"- {warning}")
+    if errors or (args.strict and warnings):
+        return 1
+    print("Game artifact check passed.")
+    print(f"Artifact: {rel}")
+    return 0
+
+
 def cmd_artifact_enterprise_check(args: argparse.Namespace) -> int:
     root, _ = load_state_or_fail(resolve_root(args.root))
     artifact_path, rel = project_path(root, args.path)
@@ -6717,8 +6817,19 @@ def routed_game_workflow(question: str) -> str:
         return "game-prd"
     if {"architecture", "arquitetura"} & tokens or "engine architecture" in normalized:
         return "engine-architecture"
+    if "game brief" in normalized or ({"brief"} & tokens and {"game", "jogo"} & tokens):
+        return "game-brief"
     if {"prototype", "prototipo"} & tokens or "quick prototype" in normalized or "playable proof" in normalized or "first playable" in normalized:
         return "quick-prototype"
+    if (
+        "game sprint planning" in normalized
+        or "sprint planning" in normalized
+        or "plan sprint" in normalized
+        or "planejar sprint" in normalized
+        or "planejamento de sprint" in normalized
+        or ({"sprint"} & tokens and {"plan", "planning", "planejar", "planejamento"} & tokens)
+    ):
+        return "game-sprint-planning"
     if "sprint status" in normalized or {"status"} & tokens:
         return "game-sprint-status"
     if {"retro", "retrospective", "retrospectiva"} & tokens:
@@ -6765,6 +6876,16 @@ def is_game_dev_story_intent(question: str) -> bool:
 
 
 def game_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "game-brief":
+        return (
+            "run game-brief to create, update, or validate a living game brief with player fantasy, core loop, verbs, pillars, references, MVP playable proof, parked scope, decision log, assumptions, open questions, and game-check proof",
+            "I should let the human dump the whole game first, then turn it into a brief they recognize before GDD, architecture, sprint planning, or build.",
+            guidance_alternatives(
+                ("brainstorming", "use when the game still needs divergent option lanes before committing to a brief"),
+                ("research-closeout", "use when reference/domain/market research must close before the brief is accepted"),
+                ("game-sprint-planning", "use when the brief is accepted and the next job is ordering a playable slice"),
+            ),
+        )
     if workflow_id == "game-context":
         return (
             "run game-context to preserve player fantasy, loop, engine profile, playable slice, source artifacts, validation proof, and next game workflow",
@@ -6863,6 +6984,16 @@ def game_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]
                 ("game-sprint-status", "use when existing game stories need progress, blockers, and next action summarized"),
                 ("build-story", "use only when a game story is already ready for implementation"),
                 ("game-qa-review", "use when a playable slice needs review before more stories"),
+            ),
+        )
+    if workflow_id == "game-sprint-planning":
+        return (
+            "run game-sprint-planning to order the next playable slice by player value, decision sources, dependencies, production risk, validation evidence, deferred scope, next story, sprint update, and game-check proof",
+            "I should plan this as a playable game slice, not as a generic backlog dump.",
+            guidance_alternatives(
+                ("game-story-creation", "use when the slice goal is clear but implementation-ready stories are missing"),
+                ("quick-prototype", "use when the riskiest player action still needs proof before a sprint"),
+                ("game-sprint-status", "use when a sprint already exists and needs current progress/readiness"),
             ),
         )
     if workflow_id == "game-sprint-status":
@@ -11860,6 +11991,15 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_test_check.add_argument("--path", required=True)
     artifact_test_check.add_argument("--strict", action="store_true")
     artifact_test_check.set_defaults(func=cmd_artifact_test_check)
+
+    artifact_game_check = artifact_sub.add_parser(
+        "game-check",
+        help="validate game brief and game sprint planning proof",
+    )
+    artifact_game_check.add_argument("--root", default=".")
+    artifact_game_check.add_argument("--path", required=True)
+    artifact_game_check.add_argument("--strict", action="store_true")
+    artifact_game_check.set_defaults(func=cmd_artifact_game_check)
 
     artifact_enterprise_check = artifact_sub.add_parser(
         "enterprise-check",

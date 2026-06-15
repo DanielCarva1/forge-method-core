@@ -83,7 +83,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Council Orchestration Depth outputs must route party-mode/council/subagent orchestration requests to `council-decision`, show a richer live debate to humans, and persist only compact participant, dissent, worker-output, merge, evidence, and next-action contracts.
 - Lifecycle Closure outputs must preserve route, source material, findings, decisions, checks, next workflow, and load hints without storing full transcripts.
 - Runtime-builder/systematic parity batch names must outrank loose domain words such as "product", "context", "review", or "retro" when the state is `6-evolve` or runtime-builder.
-- Game Studio Depth outputs must route game-specific requests to game-context, engine-setup, GDD, narrative, mechanics, game-story-creation, game-sprint-status, build-story, game-test-framework, game-e2e-scaffold, quick-prototype, playtest, performance, or game QA workflows before generic software planning; artifacts must preserve player fantasy, engine profile, playable-slice proof, story order, sprint progress, decision sources, and validation evidence compactly.
+- Game Studio Depth outputs must route game-specific requests to game-context, engine-setup, GDD, narrative, mechanics, game-story-creation, game-sprint-planning, game-sprint-status, build-story, game-test-framework, game-e2e-scaffold, quick-prototype, playtest, performance, or game QA workflows before generic software planning; artifacts must preserve player fantasy, engine profile, playable-slice proof, story order, sprint progress, decision sources, and validation evidence compactly.
 - Test Architecture Enterprise Depth outputs must route quality requests to the right engagement mode and workflow, preserve fixture architecture and command contracts, and make gate outcomes distinguish pass, concerns, fail, missing evidence, and explicit waiver.
 - E2E/Test Automation Depth outputs must detect the existing framework, select API/E2E scenarios by risk, prefer semantic locators and visible outcome assertions, require independent tests with no hardcoded waits, and preserve run/fix result, evidence links, failure repair policy, and gate impact before generated tests count as done.
 - Enterprise Artifact Map Depth outputs must make enterprise track decisions produce required/conditional artifact maps, including risk, security, privacy, quality/NFR, CI, traceability, release, conditional DevOps/compliance/observability, evidence status, waiver policy, and readiness/release gate consumers.
@@ -128,6 +128,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `context-recovery`
 - `creative-session`
 - `game-story-creation`
+- `game-sprint-planning`
 - `traceability-gate`
 - `teach-testing`
 - `test-strategy`

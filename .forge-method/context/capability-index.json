@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T10:54:15+00:00",
+  "generated_at": "2026-06-15T11:35:25+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -145,7 +145,7 @@
       "phase_span": "1-discovery | 2-specification | 3-plan | 4-build-verify",
       "purpose": "Preserve game-specific concept, mechanic, prototype, design, engine, and vertical-slice decisions.",
       "title": "Game Studio",
-      "workflows": "guidance-engine | discover-intent | game-project | game-brief | game-context | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | gdd | narrative-design | mechanics-design | game-ux-design | game-prd | engine-setup | engine-architecture | game-story-creation | game-sprint-status | game-retrospective | game-test-framework | game-test-automation | game-e2e-scaffold | quick-prototype | playtest-plan | performance-plan | game-qa-review | build-story | grill-gate"
+      "workflows": "guidance-engine | discover-intent | game-project | game-brief | game-context | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | gdd | narrative-design | mechanics-design | game-ux-design | game-prd | engine-setup | engine-architecture | game-story-creation | game-sprint-planning | game-sprint-status | game-retrospective | game-test-framework | game-test-automation | game-e2e-scaffold | quick-prototype | playtest-plan | performance-plan | game-qa-review | build-story | grill-gate"
     },
     {
       "id": "launch-ops",
@@ -1158,15 +1158,25 @@
         "gdd",
         "game-ux-design",
         "game-prd",
-        "quick-prototype"
+        "quick-prototype",
+        "game-sprint-planning"
       ],
       "id": "game-brief",
+      "modes": [
+        "create",
+        "update",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "game brief",
-        "decision log"
+        "living game brief",
+        "decision log",
+        "parked scope",
+        "playable proof"
       ],
       "phase": "1-discovery",
-      "required": true
+      "required": true,
+      "template": "game-brief-artifact"
     },
     {
       "facilitation_pack": "game-lifecycle",
@@ -1293,6 +1303,31 @@
       "phase": "5-ready-operate | 6-evolve",
       "required": false,
       "template": "game-lifecycle-artifact"
+    },
+    {
+      "facilitation_pack": "game-lifecycle",
+      "followed_by": [
+        "game-story-creation",
+        "build-story",
+        "game-sprint-status",
+        "quick-prototype"
+      ],
+      "id": "game-sprint-planning",
+      "modes": [
+        "plan",
+        "rebalance",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "playable slice sprint plan",
+        "story order",
+        "decision-source map",
+        "validation plan"
+      ],
+      "phase": "3-plan",
+      "required": false,
+      "template": "game-sprint-plan-artifact"
     },
     {
       "facilitation_pack": "game-lifecycle",

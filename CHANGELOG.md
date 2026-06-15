@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add Game Brief & Sprint Depth with living `game-brief` template/modes, `game-sprint-planning`, `artifact game-check`, richer game facilitation prompts, game-specific sprint planning routing, and replay coverage
 - add Research Guidance Depth with specific market/domain/technical routing, `research-scan-artifact`, source-quality and contradiction fields, `artifact research-check`, and replay coverage
 - add Spec Kernel Depth with `artifact spec-check`, `write-spec` spec-kernel template/modes, stable capability ID and preservation-map contract, companion/decision-log fields, product-planning facilitation depth, and replay coverage for create/update/validate/distill spec requests
 - add Enterprise Artifact Map Depth with `artifact enterprise-check`, required and conditional artifact maps for enterprise track decisions, readiness and release gate consumption, waiver policy fields, enterprise templates, and replay coverage

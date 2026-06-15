@@ -12,6 +12,7 @@ source_material:
 follow_up_batches:
   - lifecycle_stage: "Are we shaping, planning, building, validating, or learning from a finished slice?"
   - player_proof: "What player behavior or feeling must this stage protect?"
+  - sprint_plan: "Which playable slice goal, story order, decision sources, and validation plan define this sprint?"
   - engine_profile: "Which engine/profile assumptions shape structure, commands, assets, and performance?"
   - playable_slice: "What can the player actually do when this stage is done?"
   - production_scope: "What is MVP, what is parked, and what must be rejected now?"
@@ -24,11 +25,13 @@ conversation_stages:
   - load_sources: "Read the existing brief, GDD, mechanics, UX, PRD, architecture, sprint, and evidence relevant to that stage."
   - engine_context: "Record the engine profile only where it changes structure, commands, assets, tests, or performance."
   - ask_stage_questions: "Ask only the questions that unlock the selected stage, not the whole game again."
+  - plan_slice: "For sprint planning, order stories by player value, risk, dependencies, proof value, and deferred scope."
   - produce_handoff: "Create the lifecycle artifact, story order, status, retrospective, or test plan with source links."
   - transition: "Recommend the next workflow and whether durable state should enter it."
 
 elicitation_options:
   - playable_slice: "Ask what the player can actually do at the end of this stage."
+  - sprint_order: "Rank candidate stories by player value, uncertainty burned down, dependencies, and evidence produced."
   - dependency_walk: "Trace mechanics, UX, content, engine, assets, tests, and story dependencies."
   - risk_cut: "Identify which uncertainty should be proven before more content is created."
   - engine_profile_check: "Compare Godot/Unity/Unreal/Phaser or custom-engine constraints only when engine choice affects the next step."
@@ -39,6 +42,7 @@ elicitation_options:
 facilitator_moves:
   - "Do not re-run discovery when the user asks for a production-stage artifact."
   - "Tie every story or test back to player behavior or production risk."
+  - "Treat game sprint planning as playable-slice planning, not generic backlog grooming."
   - "Keep game-specific context in the handoff so build-story does not become generic software work."
   - "Treat engine setup as a profile and proof contract, not as a reason to multiply Forge entrypoints."
   - "Use playable slice language instead of vague vertical-slice ambition when the next build must be testable."
@@ -48,10 +52,12 @@ quality_bar:
   - "The output is stage-specific and executable by the next agent."
   - "Player experience, production constraints, and validation are all visible."
   - "The route advances the game lifecycle instead of looping in ideation."
+  - "Sprint planning preserves playable slice goal, decision sources, ordered story batch, validation plan, deferred scope, next story, and sprint update."
   - "Game E2E proof has a stable launch command, observable success signal, evidence capture mode, and release gate handoff."
 
 anti_patterns:
   - "Do not collapse UX, PRD, story creation, status, and test requests into generic game-brief."
+  - "Do not route game sprint planning to generic plan-sprint when player slice order and source decisions matter."
   - "Do not create implementation stories that lack player proof or acceptance evidence."
   - "Do not let engine details erase the intended player feeling."
   - "Do not call an E2E scaffold done without setup/action/assertion/teardown and evidence mode."
@@ -73,6 +79,7 @@ checkpoint_options:
   - performance-plan
   - game-qa-review
   - game-story-creation
+  - game-sprint-planning
   - game-sprint-status
   - game-retrospective
   - game-test-framework
@@ -90,6 +97,7 @@ domain_examples:
   - game-prd: "GDD has ideas but no implementation boundaries; convert pillars into MVP requirements, parked scope, and acceptance evidence."
   - quick-prototype: "A big idea needs proof; choose the smallest playable player action, asset stubs, proof command/manual check, and next decision."
   - game-story-creation: "Next playable slice is clear; create stories with player value, engine notes, asset assumptions, and checks."
+  - game-sprint-planning: "A slice needs sequencing; order story batch by player value, risk, dependencies, decision sources, validation, deferred scope, and next story."
   - game-sprint-status: "Team asks what is actually playable; summarize done/blocked/deferred stories against the slice target."
   - game-retrospective: "Playtest or sprint finished; convert learning into keep/change/stop actions and backlog updates."
   - playtest-plan: "Prototype exists; define target players, tasks, observation method, pass/fail signals, and decision map."

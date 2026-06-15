@@ -263,7 +263,7 @@ Done when:
 
 ### P1.5 Game Studio Depth
 
-Status: translated in the 2026-06-15 Game Studio Depth batch.
+Status: translated in the 2026-06-15 Game Studio Depth and Game Brief & Sprint Depth batches.
 
 Scope:
 
@@ -287,6 +287,7 @@ Deliverables:
 
 - game-context and engine-setup workflows: done;
 - expanded packs/templates for GDD, narrative, mechanics, prototype, playtest, performance, and game QA: done;
+- living game brief, game sprint planning, and game-check proof: done;
 - replay fixture coverage for game lifecycle routes: done;
 - optional smoke example without heavy engine setup: deferred until a specific lightweight engine/app fixture exists.
 
@@ -435,7 +436,7 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release, Architecture Guidance Depth cleanup, Context Boundary Recovery, Brainstorming Depth, CIS Facilitation Depth, Agent Compactness Guard, Story Decision Source Gate, Sprint Planning Depth, Build Story Autonomy Depth, Document Review Depth, Council Orchestration Depth, and Correct-Course/Problem-Solving Depth.
 
-Current next focus: Research Guidance Depth now closes the market/domain/technical research rows with specific Guidance Engine routing, `research-scan-artifact`, source-quality/contradiction facilitation, `artifact research-check`, and replay coverage. Continue residual strong-ish rows with real-use transcript proof, especially game-brief, brainstorm-game, and game sprint planning; deferred API/browser or eval-runner surfaces should only expand if repeated projects justify them.
+Current next focus: Game Brief & Sprint Depth now closes the residual game-brief, brainstorm-game, and game sprint planning rows with a living brief pack, `game-sprint-planning`, `artifact game-check`, and replay coverage. Next, decide `/cis-agent-presentation-master` scope and keep deferred API/browser or eval-runner surfaces out unless repeated projects justify them.
 
 Do not tag or publish from a partial test run. Start from this plan:
 

@@ -472,7 +472,34 @@
     "expected_classification": "game-flow",
     "expected_phase": "1-discovery",
     "expected_workflow": "game-brief",
+    "expected_facilitation_pack": "skill:facilitation/game-brief.md",
+    "expected_template": "game-brief-artifact",
     "state_update_required": false
+  },
+  {
+    "id": "brainstorm_game_concept_request",
+    "family": "game",
+    "state": "discovery",
+    "question": "brainstorm game concepts para um RPG online: explorar fantasia do jogador referencias loop riscos opcoes rejeitadas e depois virar game brief",
+    "expected_classification": "brainstorm",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "brainstorming",
+    "expected_facilitation_pack": "skill:facilitation/brainstorming.md",
+    "expected_template": "brainstorming-artifact",
+    "state_update_required": false
+  },
+  {
+    "id": "game_brief_living_validate_request",
+    "family": "game",
+    "state": "discovery",
+    "question": "create and validate a living game brief with player fantasy core loop verbs pillars references mvp playable proof parked scope decision log assumptions open questions and next workflow",
+    "expected_classification": "game-flow",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "game-brief",
+    "expected_facilitation_pack": "skill:facilitation/game-brief.md",
+    "expected_template": "game-brief-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
   },
   {
     "id": "game_story_lifecycle_request",
@@ -497,6 +524,19 @@
     "expected_workflow": "game-story-creation",
     "expected_facilitation_pack": "skill:facilitation/game-lifecycle.md",
     "expected_template": "game-story-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "game_sprint_planning_request",
+    "family": "game",
+    "state": "discovery",
+    "question": "game sprint planning for the next playable slice: order story batch by player value decision sources dependencies production risk validation plan deferred scope and next story",
+    "expected_classification": "game-flow",
+    "expected_phase": "3-plan",
+    "expected_workflow": "game-sprint-planning",
+    "expected_facilitation_pack": "skill:facilitation/game-lifecycle.md",
+    "expected_template": "game-sprint-plan-artifact",
     "state_update_required": true,
     "expected_command": "transition-workflow"
   },
