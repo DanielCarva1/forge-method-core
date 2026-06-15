@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T03:45:32+00:00",
+  "generated_at": "2026-06-15T04:06:56+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -750,12 +750,28 @@
       "template": "config-customization-artifact"
     },
     {
+      "facilitation_pack": "context-boundary",
+      "followed_by": [
+        "guidance-engine",
+        "session-prep",
+        "checkpoint-preview"
+      ],
       "id": "context-recovery",
+      "modes": [
+        "recover",
+        "fresh-chat",
+        "handoff",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "recovery brief"
+        "recovery brief",
+        "fresh chat boundary",
+        "compact read order"
       ],
       "phase": "anytime",
-      "required": false
+      "required": false,
+      "template": "context-recovery-artifact"
     },
     {
       "facilitation_pack": "correct-course",

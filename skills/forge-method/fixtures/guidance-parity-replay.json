@@ -20,6 +20,18 @@
     "state_update_required": false
   },
   {
+    "id": "fresh_chat_context_recovery_request",
+    "family": "context-recovery",
+    "state": "discovery",
+    "question": "caiu a internet e abri um novo chat; quero continuar sem usar memoria velha, qual contexto carregar e qual workflow seguir?",
+    "expected_classification": "confusion",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "context-recovery",
+    "expected_facilitation_pack": "skill:facilitation/context-boundary.md",
+    "expected_template": "context-recovery-artifact",
+    "state_update_required": false
+  },
+  {
     "id": "brainstorm_request",
     "family": "brainstorm",
     "state": "discovery",

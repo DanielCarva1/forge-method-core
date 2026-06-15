@@ -231,6 +231,10 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(payload["route"], "existing-method-project")
             self.assertEqual(payload["project_root"], str(root.resolve()))
             self.assertTrue(payload["bootstrap_contract"]["do_not_replay_chat_state"])
+            self.assertIn("Fresh chat boundary:", text)
+            self.assertEqual(payload["context_boundary"]["mode"], "resume-first")
+            self.assertEqual(payload["context_boundary"]["current_workflow"], "start-runtime")
+            self.assertIn(".forge-method/state.yaml", payload["context_boundary"]["read_first"])
             self.assertIn("resume", [command["name"] for command in payload["commands"]])
             self.assertFalse((root / ".forge-method" / "context" / "load-plan.json").exists())
 
@@ -801,6 +805,8 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(snapshot["resume"]["action"], "operate_or_evolve")
             self.assertEqual(snapshot["help_oracle"]["required_next_workflow"], "guidance-engine")
             self.assertEqual(resume["help_oracle"]["required_next_workflow"], "guidance-engine")
+            self.assertEqual(snapshot["help_oracle"]["context_boundary"]["mode"], "resume-first")
+            self.assertIn(".forge-method/state.yaml", snapshot["help_oracle"]["context_boundary"]["read_first"])
             self.assertIn("Ready projects must route", snapshot["help_oracle"]["reason"])
             self.assertIn("Next required workflow: guidance-engine", next_text)
             self.assertNotIn("publish current batch", next_text)
@@ -865,6 +871,7 @@ class RuntimeTests(unittest.TestCase):
             latest = events[-1]["payload"]
             self.assertEqual(latest["required_next_workflow"], "discover-intent")
             self.assertIn("stale_state_guard", latest)
+            self.assertEqual(latest["context_boundary"]["mode"], "resume-first")
             self.assertTrue(latest["alternatives"])
 
     def test_story_block_routes_without_fake_human_input(self) -> None:
@@ -1514,6 +1521,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "research-closeout-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "investigation-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "adversarial-review-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "context-recovery-artifact.md",
         ]:
             self.assertTrue(template_path.exists())
         for pack_path in [
@@ -1525,6 +1533,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "facilitation" / "product-planning.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "ux-design.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "architecture-planning.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "context-boundary.md",
         ]:
             self.assertIn("domain_examples:", pack_path.read_text(encoding="utf-8"))
         catalog = json.loads((ROOT / "skills" / "forge-method" / "catalog" / "workflows.json").read_text(encoding="utf-8"))
@@ -1589,6 +1598,7 @@ class RuntimeTests(unittest.TestCase):
             "retrospective",
             "research-closeout",
             "adversarial-review",
+            "context-recovery",
             "game-context",
             "gdd",
             "narrative-design",
@@ -1626,6 +1636,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["research-closeout"].get("template"), "research-closeout-artifact")
         self.assertEqual(by_id["investigation"].get("template"), "investigation-artifact")
         self.assertEqual(by_id["adversarial-review"].get("template"), "adversarial-review-artifact")
+        self.assertEqual(by_id["context-recovery"].get("template"), "context-recovery-artifact")
         self.assertEqual(by_id["test-strategy"].get("template"), "test-strategy-artifact")
         self.assertEqual(by_id["teach-testing"].get("template"), "teach-testing-artifact")
         self.assertEqual(by_id["test-engagement-model"].get("template"), "test-engagement-artifact")
@@ -1663,6 +1674,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("decide", by_id["track-decision"].get("modes", []))
         self.assertIn("document", by_id["project-context"].get("modes", []))
         self.assertIn("prep", by_id["session-prep"].get("modes", []))
+        self.assertIn("fresh-chat", by_id["context-recovery"].get("modes", []))
         self.assertIn("preview", by_id["checkpoint-preview"].get("modes", []))
         self.assertIn("review", by_id["code-review"].get("modes", []))
         self.assertIn("create", by_id["retrospective"].get("modes", []))

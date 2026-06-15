@@ -59,6 +59,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Product planning, UX design, and quick-dev requests should route to narrow executable workflows rather than generic build-story or stale state.
 - Story creation requests should not create ready build stories from vague intent; they need accepted source artifacts and a validation map.
 - Mechanical build loops should continue through story start/review/fix/evidence/ready gate without asking for procedural "ok" once stories are ready.
+- Fresh chat, network drop, reload, or context-reset messages should route to context-recovery and expose a compact context boundary: trust launcher output and durable state, load only read-first files, then run Guidance Engine for fresh human intent.
 - Runtime outputs must remain compact JSON/state-machine artifacts for agents, while non-JSON guidance can be human, direct, and useful.
 - Builder Factory outputs must keep coached human creation in facilitation packs and compact agent contracts in workflow refs, templates, catalog metadata, and validation reports.
 - Project Configuration outputs must make customization visible through inspect, Guidance Engine metadata, validation, and the generated Capability Index.
@@ -95,6 +96,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `quick-dev`
 - `story-creation`
 - `sprint-status`
+- `context-recovery`
 - `creative-session`
 - `game-story-creation`
 - `traceability-gate`

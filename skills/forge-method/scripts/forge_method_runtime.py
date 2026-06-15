@@ -1791,6 +1791,12 @@ def build_reload_payload(root: Path, *, scan_depth: int) -> dict[str, Any]:
         "runtime_root": str(runtime_root) if runtime_root else "",
     }
     if state_root:
+        reload_resume = {
+            "action": "continue_current_workflow",
+            "read": [".forge-method/state.yaml", ".forge-method/sprint.yaml"],
+            "next_command": preflight_command("resume", "resume", "--root", state_root, "--json")["command"],
+            "summary": state.get("next_action", ""),
+        }
         commands.extend(
             [
                 preflight_command("resume", "resume", "--root", state_root, "--json"),
@@ -1806,6 +1812,7 @@ def build_reload_payload(root: Path, *, scan_depth: int) -> dict[str, Any]:
                 "status": state.get("status", ""),
                 "workflow": state.get("active_workflow", ""),
                 "human_experience": human_experience_for_route("existing-method-project"),
+                "context_boundary": build_context_boundary(state_root, state, reload_resume, state.get("active_workflow", "")),
                 "decision_required": False,
                 "question": "",
                 "commands": commands,
@@ -1834,6 +1841,16 @@ def build_reload_payload(root: Path, *, scan_depth: int) -> dict[str, Any]:
         {
             "route": route,
             "human_experience": human_experience_for_route(route),
+            "context_boundary": {
+                "mode": "route-required",
+                "current_workflow": "start-runtime",
+                "reason": "No authoritative project state is selected yet.",
+                "read_first": ["active SKILL.md", "launcher/runtime output"],
+                "first_command": commands[0]["command"] if commands else "",
+                "fresh_chat_entrypoint": "run preflight and start before reading project docs; choose or create a project before resume",
+                "recovery_triggers": ["stale chat instructions", "ambiguous workspace route", "missing project state"],
+                "do_not": ["do not infer project progress from chat memory", "do not scan broadly before route selection"],
+            },
             "reality_evidence_gate": reality_evidence_assessment(""),
             "decision_required": True,
             "question": question,
@@ -1854,6 +1871,9 @@ def print_reload(payload: dict[str, Any]) -> None:
     print("Budget: read only the active skill and launcher output before route; avoid broad project reads.")
     print(f"Stale reply guard: {contract['stale_reply_policy']}")
     print(f"Route: {payload.get('route', '')}")
+    boundary = payload.get("context_boundary") or {}
+    if boundary:
+        print(f"Fresh chat boundary: {boundary.get('mode', '')}; first command: {boundary.get('first_command', '')}")
     if payload.get("route") == "existing-method-project":
         print(f"Project root: {payload.get('project_root', '')}")
         print(f"Project: {payload.get('project', '')}")
@@ -3933,6 +3953,47 @@ def help_oracle_workflow_for_resume(state: dict[str, str], resume: dict[str, Any
     return active_workflow or default_workflow_for_phase(phase), "Use durable state and resume action to choose the next workflow."
 
 
+def build_context_boundary(
+    root: Path,
+    state: dict[str, str],
+    resume: dict[str, Any],
+    workflow_id: str,
+) -> dict[str, Any]:
+    action = resume.get("action", "")
+    read_first = resume.get("read", []) or [".forge-method/state.yaml", ".forge-method/sprint.yaml"]
+    if action == "repair_project_state":
+        mode = "recovery-required"
+        first_command = preflight_command("context-recover", "context", "recover", "--root", root, "--compact")["command"]
+        reason = "State or context is not trustworthy enough for normal continuation."
+    elif action in {"start_next_story", "continue_active_story", "review_active_story", "run_ready_gate"}:
+        mode = "fresh-chat-safe"
+        first_command = resume.get("next_command", "")
+        reason = "Durable state contains enough execution context to continue mechanically."
+    else:
+        mode = "resume-first"
+        first_command = resume.get("next_command", "") or preflight_command("resume", "resume", "--root", root, "--json")["command"]
+        reason = "A fresh chat should resume from durable state before reading broader context."
+    return {
+        "mode": mode,
+        "current_workflow": workflow_id or state.get("active_workflow", ""),
+        "reason": reason,
+        "read_first": read_first[:6],
+        "first_command": first_command,
+        "fresh_chat_entrypoint": "run preflight, start, resume --json; if the human supplied new intent, run guide --question --json before following old next_action",
+        "recovery_triggers": [
+            "chat, network, or tool context was interrupted",
+            "state, sprint, story, or latest checkpoint contradict each other",
+            "the agent is relying on old chat memory instead of launcher output",
+            "context health is compact or blocked",
+        ],
+        "do_not": [
+            "do not replay prior chat as source of truth",
+            "do not read broad project docs before route and read_first are known",
+            "do not follow stale next_action when the human supplied fresh intent",
+        ],
+    }
+
+
 def build_help_oracle(
     root: Path,
     state: dict[str, str],
@@ -3953,6 +4014,7 @@ def build_help_oracle(
     if workflow_id and active_workflow and active_workflow != workflow_id and action in {"repair_project_state", "resolve_story_blocker"}:
         state_update_required = True
         state_updates["active_workflow"] = workflow_id
+    context_boundary = build_context_boundary(root, state, resume, workflow_id)
     return {
         "source": "help-oracle",
         "required_next_workflow": workflow_id,
@@ -3965,6 +4027,7 @@ def build_help_oracle(
         "state_update_required": state_update_required,
         "state_updates": state_updates,
         "stale_state_guard": "Help Oracle is derived from current state, open inputs/findings, stories, audit status, and catalog metadata; do not follow stale chat next steps.",
+        "context_boundary": context_boundary,
         "alternatives": guidance_alternatives(
             ("guide-route", "orient the human when intent is unclear"),
             ("guidance-engine", "classify fresh human intent before continuing stale state"),
@@ -3992,6 +4055,7 @@ def compact_help_oracle_event(oracle: dict[str, Any]) -> dict[str, Any]:
         "state_update_required": oracle.get("state_update_required", False),
         "state_updates": oracle.get("state_updates", {}),
         "stale_state_guard": oracle.get("stale_state_guard", ""),
+        "context_boundary": oracle.get("context_boundary", {}),
         "alternatives": alternatives,
     }
 
@@ -4009,6 +4073,9 @@ def print_post_command_guidance(event: dict[str, Any]) -> None:
     if alternatives:
         print(f"- alternatives: {', '.join(alternatives)}")
     print(f"- stale_state_guard: {event.get('stale_state_guard', '')}")
+    boundary = event.get("context_boundary") or {}
+    if boundary:
+        print(f"- context_boundary: {boundary.get('mode', '')} -> {boundary.get('current_workflow', '')}")
 
 
 def build_post_command_help_oracle(root: Path, state: dict[str, str], *, validate: bool = False) -> dict[str, Any]:
@@ -4224,6 +4291,9 @@ def print_resume_guidance(root: Path, resume: dict[str, Any]) -> None:
         print(f"- reason: {help_oracle.get('reason', '')}")
         if help_oracle.get("facilitation_pack"):
             print(f"- facilitation: {help_oracle.get('facilitation_pack')}")
+        boundary = help_oracle.get("context_boundary") or {}
+        if boundary:
+            print(f"- context_boundary: {boundary.get('mode', '')} -> {boundary.get('current_workflow', '')}")
     work_order = resume.get("mechanical_work_order", {})
     if work_order.get("autonomous"):
         print("Mechanical Work Order:")
@@ -5150,6 +5220,18 @@ def detect_guidance_signals(question: str) -> list[str]:
             "what should",
             "o que fazer",
             "proximo passo",
+            "chat caiu",
+            "caiu a internet",
+            "novo chat",
+            "new chat",
+            "fresh chat",
+            "context reset",
+            "contexto caiu",
+            "contexto velho",
+            "contexto stale",
+            "stale context",
+            "forge reload",
+            "forge-reload",
             "próximo passo",
             "investigate",
             "investigar",
@@ -5963,9 +6045,31 @@ def routed_story_workflow(question: str) -> str:
     return "story-creation"
 
 
+def is_context_recovery_intent(question: str) -> bool:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    return bool(
+        {"reload"} & tokens
+        or "chat caiu" in normalized
+        or "caiu a internet" in normalized
+        or "novo chat" in normalized
+        or "new chat" in normalized
+        or "fresh chat" in normalized
+        or "context reset" in normalized
+        or "contexto caiu" in normalized
+        or "contexto velho" in normalized
+        or "contexto stale" in normalized
+        or "stale context" in normalized
+        or "forge reload" in normalized
+        or "forge-reload" in normalized
+    )
+
+
 def routed_lifecycle_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
+    if is_context_recovery_intent(question):
+        return "context-recovery"
     if (
         "checkpoint preview" in normalized
         or "preview checkpoint" in normalized
@@ -6034,6 +6138,8 @@ def routed_lifecycle_workflow(question: str) -> str:
 def routed_problem_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
+    if is_context_recovery_intent(question):
+        return "context-recovery"
     if (
         {"investigate", "investigar", "diagnose", "diagnosticar", "triage"} & tokens
         or "root cause" in normalized
@@ -6073,6 +6179,16 @@ def lifecycle_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, 
                 ("context-recovery", "use when state or context is stale or overloaded"),
                 ("project-context", "use when source-of-truth context is missing"),
                 ("retrospective", "use when the session needs learning/action closeout first"),
+            ),
+        )
+    if workflow_id == "context-recovery":
+        return (
+            "run context-recovery to discard stale chat memory, inspect state/sprint/checkpoint, refresh compact recovery, and route any fresh human intent through Guidance Engine",
+            "I should re-anchor on durable files and launcher output before trusting prior chat context.",
+            guidance_alternatives(
+                ("session-prep", "use when recovery is healthy and the next chat needs a start plan"),
+                ("checkpoint-preview", "use when durable memory needs review before writing a checkpoint"),
+                ("project-context", "use when source-of-truth project docs are missing"),
             ),
         )
     if workflow_id == "checkpoint-preview":
@@ -6127,6 +6243,16 @@ def lifecycle_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, 
 
 
 def problem_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "context-recovery":
+        return (
+            "run context-recovery to discard stale chat memory, inspect state/sprint/checkpoint, refresh compact recovery, and route any fresh human intent through Guidance Engine",
+            "I should re-anchor on durable files and launcher output before trusting prior chat context.",
+            guidance_alternatives(
+                ("session-prep", "use when recovery is healthy and the next chat needs a start plan"),
+                ("checkpoint-preview", "use when durable memory needs review before writing a checkpoint"),
+                ("guide-route", "use when the route is unclear but state/context is healthy"),
+            ),
+        )
     if workflow_id == "investigation":
         return (
             "run investigation to separate symptom from cause, list hypotheses, choose probes, and route the next reversible repair",
@@ -6766,6 +6892,11 @@ def build_guidance_decision(
         recommended_workflow = routed_builder_workflow(question)
         recommended_action, human_prompt, alternatives = builder_guidance_text(recommended_workflow)
         reason = "Runtime-builder context and builder signals outrank domain words; explicit create/analyze/convert/validate words select the narrow builder workflow."
+    elif has_question and is_context_recovery_intent(question):
+        classification = "confusion"
+        recommended_workflow = "context-recovery"
+        recommended_action, human_prompt, alternatives = problem_guidance_text(recommended_workflow)
+        reason = "The message says the chat, network, or context was interrupted, so recovery must re-anchor on durable state before lifecycle routing."
     elif has_question and "game-flow" in signal_set and "lifecycle-flow" in signal_set and routed_game_workflow(question) != "game-brief":
         classification = "game-flow"
         recommended_workflow = routed_game_workflow(question)

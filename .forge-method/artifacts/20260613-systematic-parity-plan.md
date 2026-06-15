@@ -86,6 +86,7 @@ P0 through P1.7 are closed:
 - Help/Next-Step Oracle: implemented and validated.
 - Post-command Help Oracle: implemented after 1.29.0 so progress-changing commands record compact next-workflow guidance in `ledger.ndjson`, and interactive mutations print the next required workflow, alternatives, and stale-state guard.
 - Architecture Guidance Depth: implemented after 1.29.0 with architecture artifact template, create/update/validate/tradeoff metadata, deeper PRD/UX/security/interface/test-hook/story-impact facilitation, and replay precedence over generic quality routing.
+- Context Boundary Recovery: implemented after 1.29.0 with fresh-chat boundary metadata in reload/resume/Help Oracle, context-recovery pack/template, compact recovery contract, and replay coverage for interrupted chat/network context.
 - Human facilitation coverage gate: implemented and validated.
 - PRD/UX/Quick Dev depth: implemented with workflows, packs, templates, routes, and fixtures.
 - Story lifecycle proof: implemented with `story-creation`, decision-source guard, and mechanical no-procedural-confirmation tests.
@@ -420,7 +421,7 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 ## Immediate Next Step
 
-Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release and Architecture Guidance Depth cleanup.
+Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release, Architecture Guidance Depth cleanup, and Context Boundary Recovery.
 
 Do not tag or publish from a partial test run. Start from this plan:
 
