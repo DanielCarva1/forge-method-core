@@ -1,6 +1,7 @@
 import json
 import os
 import hashlib
+import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -76,6 +77,15 @@ def add_decision_source(root: Path, *, title: str = "Approved spec") -> str:
         "--path",
         ".forge-method/artifacts/test-decision-source.md",
     ).stdout.strip()
+
+
+def load_runtime_module():
+    spec = importlib.util.spec_from_file_location("forge_runtime_under_test", RUNTIME)
+    if not spec or not spec.loader:
+        raise AssertionError("Could not load Forge runtime module")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def ledger_events(root: Path, event: str) -> list[dict[str, object]]:
@@ -644,6 +654,79 @@ class RuntimeTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         failures = "\n".join("\n".join(item["failures"]) for item in payload["failures"])
         self.assertIn("fixture must declare expected_persona_lens", failures)
+
+    def test_parity_replay_requires_persona_lens_route_reason_marker(self) -> None:
+        runtime = load_runtime_module()
+        case = {
+            "expected_classification": "persona-lens",
+            "expected_phase": "1-discovery",
+            "expected_workflow": "design-thinking",
+            "expected_persona_lens": "design-thinking-coach",
+            "expected_facilitation_pack": "skill:facilitation/design-thinking.md",
+            "expected_template": "design-thinking-artifact",
+            "state_update_required": True,
+        }
+        route_reason = "The message asks for Design Thinking Coach guidance."
+        payload = {
+            "intent_classification": "persona-lens",
+            "recommended_phase": "1-discovery",
+            "recommended_workflow": "design-thinking",
+            "state_update_required": True,
+            "facilitation_pack": "skill:facilitation/design-thinking.md",
+            "persona_lens": {"id": "design-thinking-coach"},
+            "workflow_metadata": {"id": "design-thinking", "template": "design-thinking-artifact"},
+            "commands": [{"name": "transition-workflow"}],
+            "signals": ["persona-lens"],
+            "recommended_action": "run design-thinking",
+            "human_prompt": "Use a design-thinking lens.",
+            "alternatives": [],
+            "guidance_engine": {"route_reason": route_reason},
+            "state_updates": {
+                "last_intent_classification": "persona-lens",
+                "active_guidance_mode": "design-thinking",
+                "last_route_reason": route_reason,
+            },
+        }
+
+        failures = runtime.parity_case_failures(case, payload)
+
+        self.assertIn("route_reason must include persona lens selected marker", failures)
+
+    def test_parity_replay_requires_state_update_handoff_coherence(self) -> None:
+        runtime = load_runtime_module()
+        route_reason = "Route reason."
+        case = {
+            "expected_classification": "product-flow",
+            "expected_phase": "2-specification",
+            "expected_workflow": "write-spec",
+            "expected_facilitation_pack": "skill:facilitation/product-planning.md",
+            "expected_template": "spec-kernel-artifact",
+            "state_update_required": True,
+        }
+        payload = {
+            "intent_classification": "product-flow",
+            "recommended_phase": "2-specification",
+            "recommended_workflow": "write-spec",
+            "state_update_required": True,
+            "facilitation_pack": "skill:facilitation/product-planning.md",
+            "persona_lens": {},
+            "workflow_metadata": {"id": "write-spec", "template": "spec-kernel-artifact"},
+            "commands": [{"name": "transition-workflow"}],
+            "signals": ["product-flow"],
+            "recommended_action": "write the spec",
+            "human_prompt": "Use product planning.",
+            "alternatives": [],
+            "guidance_engine": {"route_reason": route_reason},
+            "state_updates": {
+                "last_intent_classification": "product-flow",
+                "active_guidance_mode": "architecture",
+                "last_route_reason": route_reason,
+            },
+        }
+
+        failures = runtime.parity_case_failures(case, payload)
+
+        self.assertIn("state_updates.active_guidance_mode: expected 'write-spec', got 'architecture'", failures)
 
     def test_parity_replay_requires_council_assertions(self) -> None:
         fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))

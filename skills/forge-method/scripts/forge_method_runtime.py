@@ -8773,7 +8773,10 @@ def build_guidance_decision(
         classification = "persona-lens"
         recommended_workflow = str((persona_lens.get("workflows") or [recommended_workflow])[0])
         recommended_action, human_prompt, alternatives = persona_guidance_text(persona_lens, recommended_workflow)
-        reason = f"The message asks for {persona_lens.get('title')} guidance, and no stronger workflow intent was detected."
+        reason = (
+            f"The message asks for {persona_lens.get('title')} guidance, and no stronger workflow intent was detected. "
+            f"Persona lens selected: {persona_lens.get('id')}."
+        )
     elif has_question and persona_lens and classification not in {"correct-course", "mechanical-build"}:
         recommended_action, human_prompt, persona_alternatives = persona_guidance_text(persona_lens, recommended_workflow)
         if persona_alternatives:
@@ -9193,6 +9196,28 @@ def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[
     if persona_lens_id and not case.get("expected_persona_lens"):
         failures.append("fixture must declare expected_persona_lens when guidance returns a persona lens")
     expect_equal("persona_lens.id", persona_lens_id, case.get("expected_persona_lens"))
+    guidance = payload.get("guidance_engine") or {}
+    route_reason = str(guidance.get("route_reason") or "")
+    state_updates = payload.get("state_updates") or {}
+    if not route_reason:
+        failures.append("route_reason is empty")
+    expect_equal(
+        "state_updates.last_intent_classification",
+        state_updates.get("last_intent_classification"),
+        payload.get("intent_classification"),
+    )
+    expect_equal(
+        "state_updates.active_guidance_mode",
+        state_updates.get("active_guidance_mode"),
+        payload.get("recommended_workflow"),
+    )
+    expect_equal(
+        "state_updates.last_route_reason",
+        state_updates.get("last_route_reason"),
+        route_reason,
+    )
+    if persona_lens_id and f"Persona lens selected: {persona_lens_id}" not in route_reason:
+        failures.append("route_reason must include persona lens selected marker")
     council_recommended = bool(payload.get("council_recommended"))
     if council_recommended and "expected_council_recommended" not in case:
         failures.append("fixture must declare expected_council_recommended when guidance recommends council")
@@ -9284,6 +9309,8 @@ def run_parity_replay(*, fixture_path: Path, max_chars: int) -> dict[str, Any]:
                     "facilitation_pack": payload.get("facilitation_pack"),
                     "template": (payload.get("workflow_metadata") or {}).get("template"),
                     "persona_lens": persona_lens_id_for_payload(payload),
+                    "route_reason": (payload.get("guidance_engine") or {}).get("route_reason"),
+                    "state_updates": payload.get("state_updates") or {},
                     "council_recommended": bool(payload.get("council_recommended")),
                     "codex_goal_handoff_recommended": bool((payload.get("codex_goal_handoff") or {}).get("recommended")),
                     "mechanical_work_order_autonomous": bool((payload.get("mechanical_work_order") or {}).get("autonomous")),
