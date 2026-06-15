@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- surface guided first questions as dedicated non-JSON `guide` output lines and render mechanical-build prompts as autonomous `Status:` text
 - add workflow-specific first questions for guided replay coverage and require mechanical-build prompts to use autonomous status/evidence wording
 - require parity replay to validate human-facing facilitated prompts with concrete first questions and compact `Signals:`/`Route:` reason summaries
 - require parity replay to validate `state_updates` handoff coherence and Persona Lens route-reason markers, including replay output for `route_reason` and `state_updates`

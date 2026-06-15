@@ -1,6 +1,6 @@
-# Guide CLI first question output finalized
+# Guide CLI first question output hardened
 
-- created_at: 2026-06-15T17:35:29+00:00
+- created_at: 2026-06-15T17:33:22+00:00
 - project: forge-method-core
 - phase: 6-evolve
 - status: guide-cli-first-question-output-hardened
@@ -9,11 +9,11 @@
 
 ## Summary
 
-Finalized the non-JSON guide output contract: facilitated workflows now print Guidance and First question lines, mechanical-build prints Status text, JSON parity remains unchanged, and CHANGELOG artifact tracking is current.
+Separated facilitated guide text output into Guidance and First question lines, and rendered mechanical-build human prompts as Status text while preserving the JSON Guidance Engine payload.
 
 ## Decisions
 
-- The live CLI text is validated as part of the human guidance surface, not just JSON replay fixtures.
+- Non-JSON guide output is part of the human experience contract; facilitated workflows must expose the first question directly, while mechanical-build remains autonomous status.
 
 ## Checks
 
@@ -24,7 +24,6 @@ Finalized the non-JSON guide output contract: facilitated workflows now print Gu
 - powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1
 - powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1
 - python skills/forge-method/scripts/forge_method_runtime.py artifact verify --root .
-- python skills/forge-method/scripts/forge_method_runtime.py gate --root . --require-evals
 
 ## Failed Checks
 
@@ -37,13 +36,11 @@ Finalized the non-JSON guide output contract: facilitated workflows now print Gu
 - CHANGELOG.md
 - .forge-method/artifacts/20260615-guide-cli-first-question-output-contract.md
 - .forge-method/evidence/20260615-173256-validation-guide-cli-first-question-output-validation.md
-- .forge-method/artifacts/index.ndjson
 - .forge-method/state.yaml
 
 ## Artifacts
 
 - .forge-method/artifacts/20260615-guide-cli-first-question-output-contract.md
-- CHANGELOG.md
 
 ## Next Action
 

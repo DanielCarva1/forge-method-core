@@ -9131,6 +9131,30 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
     }
 
 
+def split_guidance_first_question(prompt: str) -> tuple[str, str]:
+    marker = "First question:"
+    if marker not in prompt:
+        return prompt.strip(), ""
+    guidance, first_question = prompt.split(marker, 1)
+    return guidance.strip(), first_question.strip()
+
+
+def print_guidance_human_prompt(guidance: dict[str, Any]) -> None:
+    prompt = str(guidance.get("human_prompt") or "").strip()
+    if not prompt:
+        return
+    if guidance.get("intent_classification") == "mechanical-build":
+        print(f"Status: {prompt}")
+        return
+    guidance_text, first_question = split_guidance_first_question(prompt)
+    if first_question:
+        if guidance_text:
+            print(f"Guidance: {guidance_text}")
+        print(f"First question: {first_question}")
+        return
+    print(f"Prompt: {prompt}")
+
+
 def print_guidance_engine_summary(payload: dict[str, Any]) -> None:
     guidance = payload.get("guidance_engine") or {}
     if not guidance:
@@ -9158,8 +9182,7 @@ def print_guidance_engine_summary(payload: dict[str, Any]) -> None:
         print(f"Signals: {join_list(signals)}")
     if guidance.get("route_reason"):
         print(f"Route reason: {guidance.get('route_reason')}")
-    if guidance.get("human_prompt"):
-        print(f"Prompt: {guidance.get('human_prompt')}")
+    print_guidance_human_prompt(guidance)
     alternatives = guidance.get("alternatives") or []
     if alternatives:
         print("Alternatives:")

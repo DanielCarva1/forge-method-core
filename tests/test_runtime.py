@@ -552,6 +552,12 @@ class RuntimeTests(unittest.TestCase):
                 self.assertIn(key, human)
             self.assertIn("Isto e trabalho no motor do Forge", polish_text)
             self.assertIn("A conversa pode ser rica", polish_text)
+            self.assertIn("Guidance: Let's use `runtime-builder` as the guided path.", polish_text)
+            self.assertIn(
+                "First question: what human behavior should improve, what compact agent contract should exist, and which test would catch regression?",
+                polish_text,
+            )
+            self.assertNotIn("Prompt: Let's use `runtime-builder`", polish_text)
             self.assertLess(polish_text.index("Isto e trabalho no motor do Forge"), polish_text.index("Workspace:"))
             self.assertNotIn("Reality/Evidence Gate", polish_text)
             self.assertLess(len(json.dumps(human, sort_keys=True)), 1800)
@@ -3584,6 +3590,7 @@ class RuntimeTests(unittest.TestCase):
 
             resume = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
             guide = json.loads(run_cmd("guide", "--root", str(root), "--json").stdout)
+            guide_text = run_cmd("guide", "--root", str(root)).stdout
             next_text = run_cmd("next", "--root", str(root)).stdout
             config_validation = run_cmd("config", "validate", "--root", str(root)).stdout
 
@@ -3611,6 +3618,9 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(guide["mechanical_work_order"]["next_mechanical_step"], work_order["next_mechanical_step"])
             self.assertEqual(guide["workflow_metadata"].get("template"), "build-story-work-order")
             self.assertEqual(guide["facilitation_pack"], "skill:facilitation/story-lifecycle.md")
+            self.assertIn("Status: Build is ready:", guide_text)
+            self.assertNotIn("First question:", guide_text)
+            self.assertNotIn("Prompt: Build is ready:", guide_text)
             self.assertIn("Goal recommended", next_text)
             self.assertNotIn("ok?", next_text.lower())
             self.assertNotIn("continue?", next_text.lower())
