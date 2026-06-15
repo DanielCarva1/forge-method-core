@@ -65,7 +65,59 @@
     }
   ],
   "custom_capabilities": [],
-  "generated_at": "2026-06-14T23:35:09+00:00",
+  "elicitation_techniques": [
+    {
+      "id": "assumption-spotlight",
+      "title": "Assumption Spotlight",
+      "when": "A plan depends on hidden beliefs, market guesses, or unproven user behavior."
+    },
+    {
+      "id": "tradeoff-map",
+      "title": "Tradeoff Map",
+      "when": "The human is choosing between viable directions with different costs."
+    },
+    {
+      "id": "acceptance-slice",
+      "title": "Acceptance Slice",
+      "when": "A broad idea needs a testable first version or implementation boundary."
+    },
+    {
+      "id": "experience-walkthrough",
+      "title": "Experience Walkthrough",
+      "when": "UX, onboarding, game feel, support flow, or human guidance quality is the main risk."
+    },
+    {
+      "id": "evidence-ladder",
+      "title": "Evidence Ladder",
+      "when": "Research, market, technical, or quality confidence is too vague."
+    },
+    {
+      "id": "risk-inversion",
+      "title": "Risk Inversion",
+      "when": "A plan looks plausible but weak proof could hide serious failure modes."
+    },
+    {
+      "id": "story-spine",
+      "title": "Story Spine",
+      "when": "A narrative, campaign, brand, or product promise needs a coherent arc."
+    },
+    {
+      "id": "constraint-remix",
+      "title": "Constraint Remix",
+      "when": "Brainstorming is stuck or producing generic options."
+    },
+    {
+      "id": "implementation-trace",
+      "title": "Implementation Trace",
+      "when": "A decision needs to become stories, code, checks, and evidence."
+    },
+    {
+      "id": "quality-crosscheck",
+      "title": "Quality Crosscheck",
+      "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
+    }
+  ],
+  "generated_at": "2026-06-15T00:01:10+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -128,6 +180,307 @@
     "packaged defaults",
     ".forge-method/config/team.yaml",
     ".forge-method/config/local.yaml"
+  ],
+  "persona_lenses": [
+    {
+      "agent_ids": [
+        "facilitator",
+        "planner",
+        "spec-architect"
+      ],
+      "facilitation_pack": "skill:facilitation/persona-lenses.md",
+      "human_prompt": "Use a product lens: clarify the promise, expose assumptions, choose the smallest valuable slice, and preserve rejected scope.",
+      "id": "product-manager",
+      "primary_agent": "planner",
+      "techniques": [
+        "assumption-spotlight",
+        "tradeoff-map",
+        "acceptance-slice"
+      ],
+      "title": "Product Manager Lens",
+      "when": "Product promise, scope, value, roadmap, tradeoff, or acceptance uncertainty.",
+      "workflows": [
+        "product-requirements",
+        "quick-dev",
+        "readiness-check"
+      ]
+    },
+    {
+      "agent_ids": [
+        "spec-architect",
+        "implementer",
+        "quality-reviewer"
+      ],
+      "facilitation_pack": "skill:facilitation/persona-lenses.md",
+      "human_prompt": "Use an architecture lens: connect accepted decisions to interfaces, constraints, risks, and build boundaries before stories.",
+      "id": "architect",
+      "primary_agent": "spec-architect",
+      "techniques": [
+        "implementation-trace",
+        "risk-inversion",
+        "tradeoff-map"
+      ],
+      "title": "Architect Lens",
+      "when": "Technical shape, interfaces, constraints, migration, performance, or implementation boundaries.",
+      "workflows": [
+        "architecture",
+        "technical-feasibility-scan",
+        "readiness-check"
+      ]
+    },
+    {
+      "agent_ids": [
+        "researcher",
+        "facilitator",
+        "spec-architect"
+      ],
+      "facilitation_pack": "skill:facilitation/persona-lenses.md",
+      "human_prompt": "Use a research lens: separate facts from guesses, pick the source that changes the decision, and preserve uncertainty.",
+      "id": "analyst-researcher",
+      "primary_agent": "researcher",
+      "techniques": [
+        "evidence-ladder",
+        "assumption-spotlight",
+        "tradeoff-map"
+      ],
+      "title": "Analyst Researcher Lens",
+      "when": "Evidence, benchmark, market, domain, feasibility, or uncertainty needs grounding.",
+      "workflows": [
+        "domain-scan",
+        "market-scan",
+        "technical-feasibility-scan"
+      ]
+    },
+    {
+      "agent_ids": [
+        "facilitator",
+        "spec-architect",
+        "quality-reviewer"
+      ],
+      "facilitation_pack": "skill:facilitation/persona-lenses.md",
+      "human_prompt": "Use a UX lens: walk the real experience, reject generic interaction, and define proof for the desired feeling.",
+      "id": "ux-designer",
+      "primary_agent": "facilitator",
+      "techniques": [
+        "experience-walkthrough",
+        "constraint-remix",
+        "acceptance-slice"
+      ],
+      "title": "UX Designer Lens",
+      "when": "Taste, journey, interaction model, onboarding, states, accessibility, or human guidance quality.",
+      "workflows": [
+        "ux-plan",
+        "design-thinking",
+        "game-ux-design"
+      ]
+    },
+    {
+      "agent_ids": [
+        "quality-reviewer",
+        "planner",
+        "implementer"
+      ],
+      "facilitation_pack": "skill:facilitation/persona-lenses.md",
+      "human_prompt": "Use a QA lens: map risk to checks, demand evidence, and name the waiver or gate decision explicitly.",
+      "id": "qa-strategist",
+      "primary_agent": "quality-reviewer",
+      "techniques": [
+        "quality-crosscheck",
+        "risk-inversion",
+        "implementation-trace"
+      ],
+      "title": "QA Strategist Lens",
+      "when": "Quality, risk, test strategy, traceability, NFR, CI, evidence, or release confidence.",
+      "workflows": [
+        "test-strategy",
+        "traceability-gate",
+        "nfr-evidence-audit"
+      ]
+    },
+    {
+      "agent_ids": [
+        "facilitator",
+        "spec-architect",
+        "researcher"
+      ],
+      "facilitation_pack": "skill:facilitation/persona-lenses.md",
+      "human_prompt": "Use a game lens: make the player fantasy concrete, test the loop, and cut to a playable proof.",
+      "id": "game-designer",
+      "primary_agent": "facilitator",
+      "techniques": [
+        "experience-walkthrough",
+        "constraint-remix",
+        "acceptance-slice"
+      ],
+      "title": "Game Designer Lens",
+      "when": "Player fantasy, loop, mechanics, content, fun proof, game UX, or first playable slice.",
+      "workflows": [
+        "game-brief",
+        "gdd",
+        "mechanics-design"
+      ]
+    },
+    {
+      "agent_ids": [
+        "facilitator",
+        "planner",
+        "quality-reviewer"
+      ],
+      "facilitation_pack": "skill:facilitation/persona-lenses.md",
+      "human_prompt": "Use a builder lens: split human guidance from agent contract, define proof, then patch the smallest runtime surface.",
+      "id": "builder",
+      "primary_agent": "planner",
+      "techniques": [
+        "implementation-trace",
+        "risk-inversion",
+        "acceptance-slice"
+      ],
+      "title": "Builder Lens",
+      "when": "Forge runtime, workflow, module, skill, agent, template, eval, or plugin behavior.",
+      "workflows": [
+        "runtime-builder",
+        "module-ideation",
+        "workflow-builder"
+      ]
+    },
+    {
+      "agent_ids": [
+        "spec-architect",
+        "researcher",
+        "quality-reviewer"
+      ],
+      "facilitation_pack": "skill:facilitation/persona-lenses.md",
+      "human_prompt": "Use a tech-writing lens: identify source of truth, remove misleading prose, and leave a compact handoff.",
+      "id": "tech-writer",
+      "primary_agent": "spec-architect",
+      "techniques": [
+        "implementation-trace",
+        "evidence-ladder",
+        "acceptance-slice"
+      ],
+      "title": "Tech Writer Lens",
+      "when": "Documentation, source-of-truth, editorial clarity, onboarding, or compact agent handoff.",
+      "workflows": [
+        "doc-index",
+        "editorial-review",
+        "spec-distillation"
+      ]
+    },
+    {
+      "agent_ids": [
+        "facilitator",
+        "researcher",
+        "planner"
+      ],
+      "facilitation_pack": "skill:facilitation/persona-lenses.md",
+      "human_prompt": "Use a brainstorming coach: widen the option set, change constraints deliberately, then converge on a defensible direction.",
+      "id": "brainstorming-coach",
+      "primary_agent": "facilitator",
+      "techniques": [
+        "constraint-remix",
+        "tradeoff-map",
+        "assumption-spotlight"
+      ],
+      "title": "Brainstorming Coach",
+      "when": "The human needs divergent options before selecting a direction.",
+      "workflows": [
+        "brainstorming",
+        "concept-selection",
+        "reality-evidence-gate"
+      ]
+    },
+    {
+      "agent_ids": [
+        "facilitator",
+        "researcher",
+        "spec-architect"
+      ],
+      "facilitation_pack": "skill:facilitation/persona-lenses.md",
+      "human_prompt": "Use a design-thinking coach: ground the problem in a real human, reframe it, and make the prototype proof explicit.",
+      "id": "design-thinking-coach",
+      "primary_agent": "facilitator",
+      "techniques": [
+        "experience-walkthrough",
+        "assumption-spotlight",
+        "acceptance-slice"
+      ],
+      "title": "Design Thinking Coach",
+      "when": "The problem needs empathy, reframing, ideation, prototype shape, or human-centered proof.",
+      "workflows": [
+        "design-thinking",
+        "ux-plan",
+        "problem-solving"
+      ]
+    },
+    {
+      "agent_ids": [
+        "facilitator",
+        "planner",
+        "researcher"
+      ],
+      "facilitation_pack": "skill:facilitation/persona-lenses.md",
+      "human_prompt": "Use an innovation lens: compare options by evidence, adoption friction, strategic fit, and reversibility.",
+      "id": "innovation-strategist",
+      "primary_agent": "planner",
+      "techniques": [
+        "tradeoff-map",
+        "evidence-ladder",
+        "constraint-remix"
+      ],
+      "title": "Innovation Strategist",
+      "when": "The human is exploring novel directions, market posture, or strategic option sets.",
+      "workflows": [
+        "innovation-strategy",
+        "market-scan",
+        "concept-selection"
+      ]
+    },
+    {
+      "agent_ids": [
+        "facilitator",
+        "quality-reviewer",
+        "planner"
+      ],
+      "facilitation_pack": "skill:facilitation/persona-lenses.md",
+      "human_prompt": "Use a problem-solving lens: name the failure mode, invert the risk, and choose the next reversible move.",
+      "id": "creative-problem-solver",
+      "primary_agent": "facilitator",
+      "techniques": [
+        "risk-inversion",
+        "constraint-remix",
+        "tradeoff-map"
+      ],
+      "title": "Creative Problem Solver",
+      "when": "The human is stuck, frustrated, correcting course, or dealing with a messy constraint.",
+      "workflows": [
+        "problem-solving",
+        "correct-course",
+        "brainstorming"
+      ]
+    },
+    {
+      "agent_ids": [
+        "spec-architect",
+        "facilitator",
+        "researcher"
+      ],
+      "facilitation_pack": "skill:facilitation/persona-lenses.md",
+      "human_prompt": "Use a storytelling lens: shape the arc, pressure, payoff, and rejected alternate direction before specification.",
+      "id": "storyteller",
+      "primary_agent": "spec-architect",
+      "techniques": [
+        "story-spine",
+        "constraint-remix",
+        "experience-walkthrough"
+      ],
+      "title": "Storyteller Lens",
+      "when": "Narrative, brand story, campaign, content arc, character, or thematic coherence matters.",
+      "workflows": [
+        "storytelling",
+        "creative-session",
+        "concept-selection"
+      ]
+    }
   ],
   "project_conventions": [],
   "runtime": "forge-method",

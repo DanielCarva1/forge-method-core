@@ -25,6 +25,9 @@ PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 WORKFLOW_CATALOG_PATH = SKILL_DIR / "catalog" / "workflows.json"
 FACILITATION_DIR = SKILL_DIR / "facilitation"
 TEMPLATES_DIR = SKILL_DIR / "templates"
+PERSONA_DIR = SKILL_DIR / "personas"
+PERSONA_OVERLAYS_PATH = PERSONA_DIR / "overlays.json"
+ELICITATION_TECHNIQUES_PATH = PERSONA_DIR / "elicitation-techniques.json"
 PARITY_REPLAY_FIXTURE_PATH = SKILL_DIR / "fixtures" / "guidance-parity-replay.json"
 
 STATE_DIR = ".forge-method"
@@ -143,6 +146,7 @@ PARITY_REPLAY_REQUIRED_FAMILIES = {
     "correct-course",
     "builder",
     "config",
+    "persona",
     "cis",
     "game",
     "tea",
@@ -2438,6 +2442,193 @@ def recommended_agent_profiles(
     return recommendations
 
 
+def load_json_object(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def elicitation_techniques_payload() -> dict[str, Any]:
+    payload = load_json_object(ELICITATION_TECHNIQUES_PATH)
+    techniques = payload.get("techniques", [])
+    if not isinstance(techniques, list):
+        payload["techniques"] = []
+    return payload
+
+
+def elicitation_techniques() -> dict[str, dict[str, str]]:
+    techniques: dict[str, dict[str, str]] = {}
+    for item in elicitation_techniques_payload().get("techniques", []):
+        if not isinstance(item, dict):
+            continue
+        technique_id = slugify(str(item.get("id", "")))
+        if technique_id:
+            techniques[technique_id] = {str(key): str(value) for key, value in item.items() if isinstance(value, (str, int, float, bool))}
+            techniques[technique_id]["id"] = technique_id
+    return techniques
+
+
+def persona_overlays_payload() -> dict[str, Any]:
+    payload = load_json_object(PERSONA_OVERLAYS_PATH)
+    personas = payload.get("personas", [])
+    if not isinstance(personas, list):
+        payload["personas"] = []
+    return payload
+
+
+def persona_overlays(root: Path | None = None) -> list[dict[str, Any]]:
+    overlays: list[dict[str, Any]] = []
+    for item in persona_overlays_payload().get("personas", []):
+        if not isinstance(item, dict):
+            continue
+        persona_id = slugify(str(item.get("id", "")))
+        if not persona_id:
+            continue
+        overlay = dict(item)
+        overlay["id"] = persona_id
+        overlay["aliases"] = [str(alias).strip() for alias in item.get("aliases", []) if str(alias).strip()]
+        overlay["agent_ids"] = [slugify(str(agent_id)) for agent_id in item.get("agent_ids", []) if str(agent_id).strip()]
+        overlay["workflows"] = [slugify(str(workflow_id)) for workflow_id in item.get("workflows", []) if str(workflow_id).strip()]
+        overlay["techniques"] = [slugify(str(technique_id)) for technique_id in item.get("techniques", []) if str(technique_id).strip()]
+        overlay["primary_agent"] = slugify(str(item.get("primary_agent", "")))
+        overlays.append(overlay)
+    return overlays
+
+
+def persona_lens_summary(overlay: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": overlay.get("id", ""),
+        "title": overlay.get("title", ""),
+        "primary_agent": overlay.get("primary_agent", ""),
+        "agent_ids": overlay.get("agent_ids", []),
+        "workflows": overlay.get("workflows", []),
+        "techniques": overlay.get("techniques", []),
+        "when": overlay.get("when", ""),
+        "human_prompt": overlay.get("human_prompt", ""),
+        "facilitation_pack": "skill:facilitation/persona-lenses.md",
+    }
+
+
+def persona_alias_score(overlay: dict[str, Any], question: str) -> int:
+    normalized = normalize_text(question)
+    tokens = objective_tokens(question)
+    score = 0
+    persona_id = str(overlay.get("id", ""))
+    title = normalize_text(str(overlay.get("title", "")))
+    if persona_id and persona_id in normalized:
+        score += 12
+    if title and title in normalized:
+        score += 10
+    for alias in overlay.get("aliases", []):
+        alias_norm = normalize_text(str(alias))
+        if not alias_norm:
+            continue
+        alias_tokens = objective_tokens(alias_norm)
+        if alias_norm in normalized:
+            score += 8 + len(alias_tokens)
+        elif alias_tokens and alias_tokens <= tokens:
+            score += 5 + len(alias_tokens)
+    role_terms = {"lens", "lente", "persona", "role", "papel", "coach", "perspectiva", "visao"}
+    if score and tokens & role_terms:
+        score += 3
+    return score
+
+
+def persona_lens_for_question(root: Path | None, question: str) -> dict[str, Any]:
+    if not question.strip():
+        return {}
+    scored: list[tuple[int, str, dict[str, Any]]] = []
+    for overlay in persona_overlays(root):
+        score = persona_alias_score(overlay, question)
+        if score:
+            scored.append((score, str(overlay.get("id", "")), overlay))
+    if not scored:
+        return {}
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return persona_lens_summary(scored[0][2])
+
+
+def persona_guidance_text(persona_lens: dict[str, Any], workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    title = persona_lens.get("title") or "Persona Lens"
+    techniques = persona_lens.get("techniques") or []
+    technique_text = join_list([str(item) for item in techniques[:3]])
+    action = f"run {workflow_id} through {title}; use {technique_text} to guide the human without bloating runtime state"
+    prompt = str(persona_lens.get("human_prompt") or f"Use {title} to frame the next decision.")
+    alternatives = guidance_alternatives(
+        *[(candidate, f"alternate workflow for {title}") for candidate in persona_lens.get("workflows", [])[1:4]]
+    )
+    return action, prompt, alternatives
+
+
+def validate_elicitation_techniques() -> list[str]:
+    errors: list[str] = []
+    payload = elicitation_techniques_payload()
+    if payload.get("schema_version") != "forge-elicitation-techniques.v1":
+        errors.append("elicitation techniques missing schema_version forge-elicitation-techniques.v1")
+    seen: set[str] = set()
+    for item in payload.get("techniques", []):
+        if not isinstance(item, dict):
+            errors.append("elicitation technique entry is not an object")
+            continue
+        technique_id = slugify(str(item.get("id", "")))
+        if not technique_id:
+            errors.append("elicitation technique missing id")
+            continue
+        if technique_id in seen:
+            errors.append(f"elicitation technique duplicate id: {technique_id}")
+        seen.add(technique_id)
+        for field in ["title", "when", "prompt"]:
+            if not str(item.get(field, "")).strip():
+                errors.append(f"elicitation technique {technique_id} missing {field}")
+        if len(str(item.get("prompt", ""))) > 240:
+            errors.append(f"elicitation technique {technique_id} prompt is too long for compact guidance")
+    return errors
+
+
+def validate_persona_overlays(root: Path | None = None) -> list[str]:
+    errors: list[str] = []
+    errors.extend(validate_facilitation_pack(FACILITATION_DIR / "persona-lenses.md"))
+    payload = persona_overlays_payload()
+    if payload.get("schema_version") != "forge-persona-overlays.v1":
+        errors.append("persona overlays missing schema_version forge-persona-overlays.v1")
+    technique_ids = set(elicitation_techniques())
+    agent_ids = known_agent_profile_ids(root)
+    workflow_ids = set(workflow_catalog_entries(root))
+    seen: set[str] = set()
+    for overlay in persona_overlays(root):
+        persona_id = str(overlay.get("id", ""))
+        if persona_id in seen:
+            errors.append(f"persona overlay duplicate id: {persona_id}")
+        seen.add(persona_id)
+        for field in ["title", "primary_agent", "agent_ids", "workflows", "techniques", "when", "human_prompt"]:
+            if not overlay.get(field):
+                errors.append(f"persona overlay {persona_id} missing {field}")
+        if overlay.get("primary_agent") and overlay.get("primary_agent") not in agent_ids:
+            errors.append(f"persona overlay {persona_id} references unknown primary agent: {overlay.get('primary_agent')}")
+        for agent_id in overlay.get("agent_ids", []):
+            if agent_id not in agent_ids:
+                errors.append(f"persona overlay {persona_id} references unknown agent: {agent_id}")
+        for workflow_id in overlay.get("workflows", []):
+            if workflow_id not in workflow_ids:
+                errors.append(f"persona overlay {persona_id} references unknown workflow: {workflow_id}")
+        for technique_id in overlay.get("techniques", []):
+            if technique_id not in technique_ids:
+                errors.append(f"persona overlay {persona_id} references unknown technique: {technique_id}")
+        if len(str(overlay.get("human_prompt", ""))) > 240:
+            errors.append(f"persona overlay {persona_id} human_prompt is too long for compact guidance")
+        if len(str(overlay.get("when", ""))) > 180:
+            errors.append(f"persona overlay {persona_id} when is too long for compact guidance")
+    required = {"product-manager", "architect", "analyst-researcher", "ux-designer", "qa-strategist", "game-designer", "builder", "tech-writer"}
+    missing = sorted(required - {str(item.get("id", "")) for item in persona_overlays(root)})
+    if missing:
+        errors.append(f"persona overlays missing required role lens: {', '.join(missing)}")
+    return errors
+
+
 def reference_workflow_paths(root: Path | None = None) -> list[Path]:
     paths: list[Path] = []
     refs = SKILL_DIR / "references"
@@ -3665,6 +3856,8 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     audit_errors = audit_project(root)
     artifact_errors, artifact_warnings = artifact_findings(root)
     agent_errors = agent_profile_validation_errors(root)
+    agent_errors.extend(validate_elicitation_techniques())
+    agent_errors.extend(validate_persona_overlays(root))
     config_errors = config_validation_errors(root)
     evals = list_evals(root)
     eval_counts: dict[str, int] = {"total": len(evals), "passed": 0, "failed": 0, "pending": 0}
@@ -4677,6 +4870,8 @@ def cmd_agent_recommend(args: argparse.Namespace) -> int:
 def cmd_agent_validate(args: argparse.Namespace) -> int:
     root, _ = load_state_or_none(resolve_root(args.root))
     errors = agent_profile_validation_errors(root)
+    errors.extend(validate_elicitation_techniques())
+    errors.extend(validate_persona_overlays(root))
     if errors:
         print("Agent profile validation failed:")
         for error in errors:
@@ -4755,6 +4950,27 @@ def detect_guidance_signals(question: str) -> list[str]:
         "research-needed": ["deep research", "pesquisa profunda", "consultar documentacao", "ler docs", "benchmark"],
         "document-utility": ["index docs", "shard document", "editorial review", "edge case", "spec distillation"],
         "quality-flow": ["teach me testing"],
+        "persona-lens": [
+            "pm lens",
+            "product manager",
+            "architecture lens",
+            "ux designer",
+            "qa lens",
+            "game designer",
+            "tech writer",
+            "brainstorming coach",
+            "design thinking coach",
+            "innovation strategist",
+            "creative problem solver",
+            "storyteller",
+            "lente de produto",
+            "lente de arquitetura",
+            "lente de ux",
+            "lente de qa",
+            "lente de game",
+            "lente de jogo",
+            "lente de documentacao",
+        ],
         "story-flow": [
             "story lifecycle",
             "story creation",
@@ -4842,7 +5058,6 @@ def detect_guidance_signals(question: str) -> list[str]:
             "errado",
             "falhou",
             "falha",
-            "problema",
             "corrigir",
             "faltando",
             "pular",
@@ -4861,6 +5076,7 @@ def detect_guidance_signals(question: str) -> list[str]:
         "creative-flow": {"creative", "criativo", "cis", "storytelling", "marca", "campanha", "conceito"},
         "game-flow": {"game", "jogo", "jogar", "player", "mecanica", "rpg", "mesa", "dice", "engine"},
         "quality-flow": {"test", "testing", "teste", "qa", "qualidade", "risco", "nfr", "gate", "review"},
+        "persona-lens": {"lens", "lente", "persona", "coach", "perspectiva", "visao", "pm", "architect", "arquiteto", "analyst", "analista", "ux", "qa", "writer", "storyteller"},
         "story-flow": {"backlog", "epic", "epics", "sprint", "stories", "story", "historia", "historias"},
         "product-flow": {
             "prd",
@@ -5259,7 +5475,7 @@ def should_transition_to_guided_workflow(
         return False
     if recommended_workflow == state.get("active_workflow", ""):
         return False
-    return classification in {"game-flow", "quality-flow", "builder-flow", "document-utility", "product-flow", "story-flow", "creative-flow"}
+    return classification in {"game-flow", "quality-flow", "builder-flow", "document-utility", "product-flow", "story-flow", "creative-flow", "persona-lens"}
 
 
 def build_guidance_decision(
@@ -5271,6 +5487,9 @@ def build_guidance_decision(
     next_story: dict[str, Any] | None,
 ) -> dict[str, Any]:
     signals = detect_guidance_signals(question)
+    persona_lens = persona_lens_for_question(root, question)
+    if persona_lens and "persona-lens" not in signals:
+        signals.append("persona-lens")
     signal_set = set(signals)
     phase = state.get("phase", "") if state else ""
     module_id = state.get("module", "") if state else ""
@@ -5352,6 +5571,15 @@ def build_guidance_decision(
             human_prompt = prompt_text
             alternatives = builder_alternatives
             reason = "The first intent is about runtime, workflow, skill, or plugin behavior."
+        elif persona_lens:
+            classification = "persona-lens"
+            recommended_workflow = str((persona_lens.get("workflows") or ["discover-intent"])[0])
+            recommended_phase = "1-discovery"
+            action_text, prompt_text, persona_alternatives = persona_guidance_text(persona_lens, recommended_workflow)
+            recommended_action = f"create the project, then {action_text}"
+            human_prompt = prompt_text
+            alternatives = persona_alternatives
+            reason = f"The first intent asks for {persona_lens.get('title')} guidance, so the first workflow should use that lens."
     elif has_question and ({"correct-course", "frustration"} & signal_set):
         classification = "correct-course"
         recommended_phase = "6-evolve" if phase == "5-ready-operate" else phase
@@ -5617,6 +5845,17 @@ def build_guidance_decision(
         human_prompt = "The approved decision work is done; I should continue mechanically and write evidence."
         reason = "A build-ready story exists in build/verify."
 
+    if has_question and persona_lens and classification == "operate-support":
+        classification = "persona-lens"
+        recommended_workflow = str((persona_lens.get("workflows") or [recommended_workflow])[0])
+        recommended_action, human_prompt, alternatives = persona_guidance_text(persona_lens, recommended_workflow)
+        reason = f"The message asks for {persona_lens.get('title')} guidance, and no stronger workflow intent was detected."
+    elif has_question and persona_lens and classification not in {"correct-course", "mechanical-build"}:
+        recommended_action, human_prompt, persona_alternatives = persona_guidance_text(persona_lens, recommended_workflow)
+        if persona_alternatives:
+            alternatives = persona_alternatives
+        reason = f"{reason} Persona lens selected: {persona_lens.get('id')}."
+
     workflow_metadata = workflow_catalog_entry(recommended_workflow, root)
     facilitation_pack = facilitation_pack_for_workflow(recommended_workflow, root)
     if workflow_metadata:
@@ -5660,6 +5899,7 @@ def build_guidance_decision(
         "recommended_action": recommended_action,
         "human_prompt": human_prompt,
         "alternatives": alternatives,
+        "persona_lens": persona_lens,
         "state_update_required": state_update_required,
         "state_updates": {
             "last_intent_classification": classification,
@@ -5701,6 +5941,7 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
             "recommended_workflow": guidance["recommended_workflow"],
             "workflow_metadata": guidance["workflow_metadata"],
             "facilitation_pack": guidance["facilitation_pack"],
+            "persona_lens": guidance.get("persona_lens", {}),
             "recommended_action": guidance["recommended_action"],
             "human_prompt": guidance["human_prompt"],
             "alternatives": guidance["alternatives"],
@@ -5743,6 +5984,7 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
         "recommended_workflow": guidance["recommended_workflow"],
         "workflow_metadata": guidance["workflow_metadata"],
         "facilitation_pack": guidance["facilitation_pack"],
+        "persona_lens": guidance.get("persona_lens", {}),
         "recommended_action": guidance["recommended_action"],
         "human_prompt": guidance["human_prompt"],
         "alternatives": guidance["alternatives"],
@@ -5752,7 +5994,7 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
         "grill_gate_required": snapshot["resume"].get("grill_gate_required", False),
         "mechanical_work_order": snapshot["resume"].get("mechanical_work_order", {}),
         "codex_goal_handoff": snapshot["resume"].get("codex_goal_handoff", {}),
-        "council_recommended": bool(question and state.get("readiness") == "ready"),
+        "council_recommended": bool(question and (state.get("readiness") == "ready" or guidance.get("persona_lens"))),
     }
 
 
@@ -5771,6 +6013,13 @@ def print_guidance_engine_summary(payload: dict[str, Any]) -> None:
         print(f"Workflow metadata: {required}; outputs: {outputs}")
     if guidance.get("facilitation_pack"):
         print(f"Facilitation: {guidance.get('facilitation_pack')}")
+    persona_lens = guidance.get("persona_lens") or {}
+    if persona_lens:
+        agents = join_list([str(item) for item in persona_lens.get("agent_ids", [])])
+        techniques = join_list([str(item) for item in persona_lens.get("techniques", [])[:3]])
+        print(f"Persona lens: {persona_lens.get('title')} ({agents})")
+        if techniques:
+            print(f"Elicitation: {techniques}")
     signals = guidance.get("signals") or []
     if signals:
         print(f"Signals: {join_list(signals)}")
@@ -5965,6 +6214,8 @@ def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[
     expect_equal("recommended_phase", payload.get("recommended_phase"), case.get("expected_phase"))
     expect_equal("state_update_required", payload.get("state_update_required"), case.get("state_update_required"))
     expect_equal("facilitation_pack", payload.get("facilitation_pack"), case.get("expected_facilitation_pack"))
+    persona_lens = payload.get("persona_lens") or {}
+    expect_equal("persona_lens.id", persona_lens.get("id"), case.get("expected_persona_lens"))
     metadata = payload.get("workflow_metadata") or {}
     expect_equal("workflow_metadata.id", metadata.get("id"), case.get("expected_workflow"))
     expect_equal("workflow_metadata.template", metadata.get("template"), case.get("expected_template"))
@@ -6011,6 +6262,7 @@ def run_parity_replay(*, fixture_path: Path, max_chars: int) -> dict[str, Any]:
                     "recommended_workflow": payload.get("recommended_workflow"),
                     "facilitation_pack": payload.get("facilitation_pack"),
                     "template": (payload.get("workflow_metadata") or {}).get("template"),
+                    "persona_lens": (payload.get("persona_lens") or {}).get("id"),
                     "state_update_required": payload.get("state_update_required"),
                     "commands": command_names(payload.get("commands") or []),
                 },
@@ -6064,10 +6316,11 @@ def cmd_parity_replay(args: argparse.Namespace) -> int:
     return 0 if not payload["failures"] else 1
 
 
-def council_participants(root: Path, raw_agents: list[str] | None) -> list[dict[str, str]]:
+def council_participants(root: Path, raw_agents: list[str] | None, *, topic: str = "") -> list[dict[str, str]]:
     ids = [slugify(item) for item in (raw_agents or []) if item.strip()]
     if not ids:
-        ids = COUNCIL_DEFAULT_AGENTS
+        persona_lens = persona_lens_for_question(root, topic)
+        ids = [str(item) for item in persona_lens.get("agent_ids", [])] if persona_lens else COUNCIL_DEFAULT_AGENTS
     participants: list[dict[str, str]] = []
     for profile_id in ids:
         match = agent_profile_by_id(root, profile_id)
@@ -6091,11 +6344,14 @@ def council_decision_summary(topic: str, participants: list[dict[str, str]]) -> 
 def cmd_council_run(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     topic = args.topic or state.get("next_action") or "current Forge Method decision"
-    participants = council_participants(root, args.agent)
+    persona_lens = {} if args.agent else persona_lens_for_question(root, topic)
+    participants = council_participants(root, args.agent, topic=topic)
     if not participants:
         raise SystemExit("No council participants available.")
     print("Forge Agent Council")
     print(f"Topic: {topic}")
+    if persona_lens:
+        print(f"Persona lens: {persona_lens.get('title')}")
     print("Mode: live transcript on screen; compact decision persisted.")
     print("")
     for profile in participants:
@@ -6123,7 +6379,12 @@ def cmd_council_run(args: argparse.Namespace) -> int:
     append_ledger(
         root,
         "council.run",
-        {"topic": topic, "artifact": rel, "participants": [item.get("id", "") for item in participants]},
+        {
+            "topic": topic,
+            "artifact": rel,
+            "participants": [item.get("id", "") for item in participants],
+            "persona_lens": persona_lens.get("id", ""),
+        },
     )
     print(f"Persisted decision artifact: {rel}")
     print(f"Next: {state['next_action']}")
@@ -6231,6 +6492,15 @@ def capability_index_payload(root: Path) -> dict[str, Any]:
 
     modules = [module_summary(module) for module, _ in module_manifests(root)]
     agents = [agent_profile_summary(profile) for profile, _ in agent_profiles(root)]
+    personas = [persona_lens_summary(overlay) for overlay in persona_overlays(root)]
+    techniques = [
+        {
+            "id": item.get("id", ""),
+            "title": item.get("title", ""),
+            "when": item.get("when", ""),
+        }
+        for item in elicitation_techniques().values()
+    ]
     conventions = [
         {"id": item_id, "value": value}
         for key, value in sorted(config.items())
@@ -6246,6 +6516,8 @@ def capability_index_payload(root: Path) -> dict[str, Any]:
         "workflows": workflows,
         "modules": modules,
         "agents": agents,
+        "persona_lenses": personas,
+        "elicitation_techniques": techniques,
         "custom_capabilities": capability_config_entries(config),
         "project_conventions": conventions,
     }
@@ -6275,6 +6547,8 @@ def cmd_config_index(args: argparse.Namespace) -> int:
     print(f"Workflows: {len(payload['workflows'])}")
     print(f"Modules: {len(payload['modules'])}")
     print(f"Agents: {len(payload['agents'])}")
+    print(f"Persona lenses: {len(payload['persona_lenses'])}")
+    print(f"Elicitation techniques: {len(payload['elicitation_techniques'])}")
     print(f"Custom capabilities: {len(payload['custom_capabilities'])}")
     if written_path:
         print(f"Wrote: {written_path}")
@@ -6388,6 +6662,8 @@ def cmd_builder_validate(args: argparse.Namespace) -> int:
     errors: list[str] = []
     errors.extend(workflow_validation_errors(root))
     errors.extend(agent_profile_validation_errors(root))
+    errors.extend(validate_elicitation_techniques())
+    errors.extend(validate_persona_overlays(root))
     errors.extend(config_validation_errors(root))
     for skill_path in sorted((method_dir(root) / "skills").glob("*/SKILL.md")):
         text = skill_path.read_text(encoding="utf-8")

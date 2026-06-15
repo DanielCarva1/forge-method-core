@@ -229,6 +229,31 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "product_manager_lens_prd_request",
+    "family": "persona",
+    "state": "discovery",
+    "question": "quero uma lente de PM para validar o PRD, decidir escopo e cortar o MVP certo",
+    "expected_classification": "product-flow",
+    "expected_phase": "2-specification",
+    "expected_workflow": "product-requirements",
+    "expected_persona_lens": "product-manager",
+    "expected_facilitation_pack": "skill:facilitation/product-planning.md",
+    "expected_template": "product-requirements-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "design_thinking_coach_request",
+    "family": "persona",
+    "state": "discovery",
+    "question": "usa um design thinking coach para reframar esse problema antes de solucao",
+    "expected_classification": "persona-lens",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "design-thinking",
+    "expected_persona_lens": "design-thinking-coach",
+    "state_update_required": false
+  },
+  {
     "id": "cis_creative_direction_request",
     "family": "cis",
     "state": "discovery",

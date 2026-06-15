@@ -36,7 +36,7 @@ Extraction notes:
 - CIS docs expose 5 core creative workflows plus 6 named creative agents.
 - Game Dev Studio docs expose 11 slash workflow commands plus engine setup, project context, game-specific lifecycle, playtest/performance/testing patterns.
 - TEA docs are much larger than the others and focus on engagement models, fixture architecture, quality workflows, traceability/gates, NFR, CI, automation, API/browser utilities, and enterprise quality governance.
-- Forge currently exposes 77 catalog workflows, 8 modules, 7 generic agent profiles, 11 facilitation packs, runtime state, ledger, checkpoints, evidence, evals, smoke scripts, install smoke, and Guidance Engine routing.
+- Forge currently exposes 77 catalog workflows, 8 modules, 7 compact agent profiles, 24 facilitation packs, runtime state, ledger, checkpoints, evidence, evals, smoke scripts, install smoke, persona lenses, elicitation techniques, and Guidance Engine routing.
 
 ## Audit method
 
@@ -81,7 +81,7 @@ The product direction is therefore:
 | Analysis: market/domain/technical research | `market-scan`, `domain-scan`, `technical-feasibility-scan`, Reality/Evidence Gate | strong | Need stronger "research closeout recommends next workflow" invariant. | Add research completion handoff template. |
 | Product brief / PRFAQ | `discover-intent`, `product-requirements`, `reality-evidence-gate` | partial | No full PRFAQ/working-backwards stress-test workflow. Product brief is less coached. | Add `prfaq` or `working-backwards-challenge` workflow and rich facilitation pack. |
 | PRD create/update/validate | `product-requirements`, `write-spec`, `spec-distillation`, `grill-gate` | partial | Missing BMAD-like create/update/validate modes, addendum, decision log, HTML/findings-style validation. | Expand product requirements pack and workflow metadata with modes and validation artifact. |
-| Advanced elicitation | facilitation packs, `council-decision`, `grill-gate` | partial | Techniques are not consistently exposed as selectable moves in every discovery/planning flow. | Add facilitation technique index and routeable elicitation options in packs. |
+| Advanced elicitation | facilitation packs, `council-decision`, `grill-gate`, elicitation technique index | translated | P1.3 adds a validated compact technique index and exposes technique ids through Persona Lens guidance without bloating state. | Expand technique use inside future deep packs as they are translated. |
 | UX design | `ux-plan`, some game UX | partial | No rich UX designer workflow equivalent with EXPERIENCE/DESIGN style outputs and human taste calibration across product work. | Add UX facilitation pack, UX artifact template, transcript fixtures. |
 | Architecture | `architecture`, `engine-architecture`, `security-plan`, enterprise plans | partial | Core architecture exists but less agent/persona guided and less tied to PRD validation. | Add architecture pack and readiness checks linking PRD/UX/security/story plan. |
 | Project context generation | `context plan`, `context recover`, `current-pack`, `AGENTS.md` | advantage/partial | Forge has better runtime context packs, but lacks a user-facing `generate-project-context` workflow for existing/new code. | Add project-context artifact workflow that captures tech conventions for future agents. |
@@ -98,8 +98,8 @@ The product direction is therefore:
 | Index/shard docs | `doc-index`, `doc-shard` | strong | Need more validation for source-of-truth and stale docs. | Add doc utility fixtures and artifact checks. |
 | Editorial review prose/structure | `editorial-review` | strong-ish | Good catalog mapping; needs richer human review examples. | Add pack examples and tests. |
 | Adversarial / edge case review | `edge-case-review`, `grill-gate` | partial | General adversarial review is narrower than BMAD utility set. | Add adversarial review mode to edge-case/grill. |
-| Party mode / multi-agent discussion | `council-decision` | partial | Forge council is compact but lacks BMAD's richer named multi-agent experience. | Add council participant routing and richer human transcript mode while keeping compact decision artifact. |
-| Named agents/personas | 7 generic profiles | partial | BMAD has named PM/Architect/Analyst/Dev/UX/Tech Writer plus module agents; Forge has roles but little human personality or specialization. | Add optional persona layer for human experience; keep agent profiles compact. |
+| Party mode / multi-agent discussion | `council-decision`, Persona Lens participant routing | partial/stronger | P1.3 adds lens-based council participants and compact artifacts; richer live transcript style is still future human-experience depth. | Add transcript examples where council discussion quality matters, while keeping the durable artifact compact. |
+| Named agents/personas | 7 compact profiles plus 13 Persona Lenses | translated | P1.3 adds PM, Architect, Analyst/Researcher, UX, QA, Game, Builder, Tech Writer, and CIS coach lenses while keeping default agent profiles compact. | Add more domain examples only when future packs need them. |
 | Fresh chats per workflow | Context recovery, checkpoints, compact packs | partial | Forge does not enforce/teach fresh chat boundaries the same way; Codex-native context can still drift. | Add hot-start/context-boundary guidance per workflow and recovery triggers. |
 | Customization: per-agent/workflow overrides | `config-customization`, Project Configuration, Override Model | translated | P1.2 adds validated workflow metadata, facilitation/template, agent metadata, convention, and custom capability overrides with package/team/local precedence. | Keep override surface narrow; route new runtime behavior through Builder Factory instead of freeform config. |
 | Central config / module help registry | `config index`, `modules/*.yaml`, `catalog/workflows.json` | translated | P1.2 adds generated Capability Index from effective workflows, modules, agents, conventions, and custom capabilities. | Keep generated index compact and install-safe; add richer module registration later if needed. |
@@ -113,11 +113,11 @@ The product direction is therefore:
 | Progressive disclosure pattern | Skill instructions and context plan | partial | Principle exists, not audited across every pack/workflow. | Add compactness verifier for workflows/facilitation refs. |
 | Subagent orchestration patterns | optional agent profiles, council | partial/missing | No systematic parallel/hierarchical subagent patterns for Forge tasks. | Add orchestration guidance and tests only where Codex supports it. |
 | Persistent memory agents | file-backed project state | different/partial | Forge stores project state, not personal companion memory. | Decide if this is in scope; if yes, translate as project memory only, not broad personal memory. |
-| CIS brainstorming | `brainstorming` pack | strong-ish | Need richer named coach/tone optionality. | Add examples and facilitation techniques. |
-| CIS design thinking | `design-thinking` pack | partial | Needs stages and outputs closer to CIS, without copying voice. | Expand pack and workflow tests. |
-| CIS innovation strategy | `innovation-strategy` | partial | No facilitation pack. | Add pack and transcript fixtures. |
-| CIS problem solving | `problem-solving` pack | strong-ish | Needs route coverage for stuck/frustrated human beyond current fixture. | Add fixtures. |
-| CIS storytelling | `storytelling` | partial | No rich pack. | Add storytelling pack and output template. |
+| CIS brainstorming | `brainstorming` pack plus Brainstorming Coach lens | strong-ish | Coach routing and techniques exist; richer option-generation transcripts are still future depth. | Add examples for option generation, constraints, and convergence. |
+| CIS design thinking | `design-thinking` pack plus Design Thinking Coach lens | strong-ish | Route and lens proof exist; deeper outputs can still improve. | Expand examples and artifact expectations when design-thinking becomes a larger workflow. |
+| CIS innovation strategy | `innovation-strategy` plus Innovation Strategist lens | partial | Lens route exists, but no facilitation pack. | Add pack and transcript fixtures. |
+| CIS problem solving | `problem-solving` pack plus Creative Problem Solver lens | strong-ish | Coach route exists; more stuck/frustrated transcripts would improve proof. | Add fixtures for messy constraints and recovery. |
+| CIS storytelling | `storytelling` plus Storyteller lens | partial | Lens route exists, but no rich pack. | Add storytelling pack and output template. |
 | CIS presentation master | no equivalent | missing | Forge has no presentation/communication craft workflow. | Add only if Forge scope includes pitch/deck narrative; otherwise document non-goal. |
 | Game project context | context pack + game workflows | partial | Missing explicit game project-context generation. | Add game project context artifact workflow. |
 | Game engine setup (Godot/Unity/Phaser) | `engine-architecture`, maybe tech feasibility | missing/partial | No engine-specific setup guides or templates. | Add engine setup workflows/templates only if game module remains product goal. |
@@ -210,12 +210,12 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | `bmad-qa-generate-e2e-tests` | `test-automation`, `game-e2e-scaffold` | partial |
 | `bmad-checkpoint-preview` | `checkpoint`, `context recover`, future preview command | partial |
 | `bmad-party-mode` | `council-decision` | partial |
-| `bmad-agent-analyst` | `researcher` + `facilitator` profiles, optional persona layer | partial |
-| `bmad-agent-pm` | `planner` + product requirements workflows, optional persona layer | partial |
-| `bmad-agent-architect` | `spec-architect`, architecture workflows | partial |
+| `bmad-agent-analyst` | `analyst-researcher` Persona Lens over `researcher` + `facilitator` profiles | translated |
+| `bmad-agent-pm` | `product-manager` Persona Lens over product requirements workflows | translated |
+| `bmad-agent-architect` | `architect` Persona Lens over `spec-architect` and architecture workflows | translated |
 | `bmad-agent-dev` | `implementer`, build-story | partial |
-| `bmad-agent-ux-designer` | future UX persona/workflow pack | partial/missing |
-| `bmad-agent-tech-writer` | document utility workflows, future tech writer persona | partial |
+| `bmad-agent-ux-designer` | `ux-designer` Persona Lens over UX workflows | translated |
+| `bmad-agent-tech-writer` | `tech-writer` Persona Lens over document utility workflows | translated |
 | `bmad-customize` | `config-customization`, Project Configuration, Capability Index | translated |
 | `bmad-bmb-setup` | install/setup scripts, future module registration workflow | partial |
 | `bmad-agent-builder` | `agent-builder` plus `agent-analyze` | translated |
@@ -228,11 +228,11 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | `/cis-innovation-strategy` | `innovation-strategy` plus future pack | partial |
 | `/cis-problem-solving` | `problem-solving` | strong-ish |
 | `/cis-storytelling` | `storytelling` plus future pack | partial |
-| `/cis-agent-brainstorming-coach` | optional persona over `brainstorming` | partial/missing |
-| `/cis-agent-design-thinking-coach` | optional persona over `design-thinking` | partial/missing |
-| `/cis-agent-innovation-strategist` | optional persona over `innovation-strategy` | partial/missing |
-| `/cis-agent-creative-problem-solver` | optional persona over `problem-solving` | partial/missing |
-| `/cis-agent-storyteller` | optional persona over `storytelling` | partial/missing |
+| `/cis-agent-brainstorming-coach` | `brainstorming-coach` Persona Lens over `brainstorming` | translated |
+| `/cis-agent-design-thinking-coach` | `design-thinking-coach` Persona Lens over `design-thinking` | translated |
+| `/cis-agent-innovation-strategist` | `innovation-strategist` Persona Lens over `innovation-strategy` | translated |
+| `/cis-agent-creative-problem-solver` | `creative-problem-solver` Persona Lens over `problem-solving` | translated |
+| `/cis-agent-storyteller` | `storyteller` Persona Lens over `storytelling` | translated |
 | `/cis-agent-presentation-master` | future presentation/story craft workflow or non-goal | missing |
 | `/bmgd-generate-project-context` | future game project-context workflow | partial/missing |
 | `/bmgd-brainstorm-game` | `brainstorming`, `game-brief` | partial |
@@ -313,9 +313,10 @@ Use these as implementation increments. Each item must ship with workflow metada
 
 ### P1.3 Persona layer
 
-- Keep agent profiles compact for runtime.
-- Add optional human-facing persona descriptors for PM/Architect/Researcher/UX/QA/Game/Builder roles.
-- Do not let persona text bloat state or workflow docs.
+- Status: translated in the Persona Lens and Elicitation Layer batch.
+- Added validated persona overlays for PM, Architect, Analyst/Researcher, UX, QA, Game, Builder, Tech Writer, and CIS coach roles.
+- Added a compact elicitation technique index, persona facilitation pack, Guidance Engine `persona_lens` output, replay cases, council participant routing, Capability Index exposure, and compactness guards.
+- Agent profiles, state, workflow refs, and default recommendations remain compact.
 
 ### P1.4 Game and TEA depth
 
@@ -336,6 +337,6 @@ The full objective is complete only when:
 
 ## Current status
 
-This audit remains the gap map for the full objective. P0.1 through P0.5 are now implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. The execution plan is `.forge-method/artifacts/20260613-systematic-parity-plan.md`. This is not full parity completion: P1 capability depth and explicit deferral/waiver decisions still remain.
+This audit remains the gap map for the full objective. P0.1 through P0.5, P1.1, P1.2, and P1.3 are now implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. The execution plan is `.forge-method/artifacts/20260613-systematic-parity-plan.md`. This is not full parity completion: P1.4+ lifecycle, game, TEA depth, and explicit deferral/waiver decisions still remain.
 
-Immediate next step: implement P1.1 Builder Factory from the systematic plan unless a new audit shows a higher-severity regression. The next batch should translate module ideation, agent builder, workflow builder, module builder, and module validation into Forge-native workflows, packs, templates, scripts/tests, and install validation.
+Immediate next step: implement P1.4 Product, Context, Review, And Retrospective Closure from the systematic plan unless a new audit shows a higher-severity regression.

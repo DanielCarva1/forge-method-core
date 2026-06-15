@@ -25,6 +25,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Testing education requests should route to an applied teaching workflow before test strategy when the user is trying to learn or choose a quality approach.
 - Builder utility flows analyze agents/workflows and convert skill material before scaffolding new runtime artifacts.
 - Customization flows select team/local scope, choose supported override keys, validate merged behavior, and expose an effective capability index instead of relying on hidden prose.
+- Persona/coach requests select a human-facing lens and elicitation technique set without copying long persona prose into agent profiles, state, or compact workflow docs.
 - Documentation utility flows index, shard, review, stress-test, and distill source material before agents consume it.
 - Narrow guided workflows should be executable next steps: when selected inside an existing project, the route should include a state transition command instead of only restating the recommendation.
 - Correct-course is a first-class recovery path when the conversation shows the current route is wrong.
@@ -53,6 +54,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Runtime outputs must remain compact JSON/state-machine artifacts for agents, while non-JSON guidance can be human, direct, and useful.
 - Builder Factory outputs must keep coached human creation in facilitation packs and compact agent contracts in workflow refs, templates, catalog metadata, and validation reports.
 - Project Configuration outputs must make customization visible through inspect, Guidance Engine metadata, validation, and the generated Capability Index.
+- Persona Lens outputs must preserve a compact `persona_lens` object, route PM/Architect/UX/QA/Game/Builder/Tech Writer and coach requests, and keep default agent recommendations compact.
 
 ## Fixture workflow ids
 
@@ -80,6 +82,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `module-validate`
 - `config-customization`
 - `doc-index`
+- `design-thinking`
 
 ## Non-goals
 

@@ -240,6 +240,14 @@ Human Experience uses Guidance Engine output to decide what to say next. It shou
 
 The Human Experience policy applied to non-JSON guidance. It makes Forge warm, direct, opinionated, and adaptive while keeping machine-readable runtime surfaces compact.
 
+## Persona Lens
+
+A human-facing role or coach overlay that shapes live guidance, council participant selection, and elicitation technique choice. It references compact Agent Profiles and workflows, but it is not itself an Agent Profile.
+
+## Elicitation Technique
+
+A named facilitation move used by a Persona Lens or Facilitation Pack to help a human think, decide, challenge, or converge. It is compact metadata for guidance, not long prompt narration or required future state.
+
 ## Adaptive Energy
 
 The Forge behavior of matching the user's conversational energy without attacking the user. It may be playful, blunt, or profane toward ideas, bugs, and process when appropriate.

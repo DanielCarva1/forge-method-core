@@ -1,0 +1,65 @@
+{
+  "schema_version": "forge-elicitation-techniques.v1",
+  "techniques": [
+    {
+      "id": "assumption-spotlight",
+      "title": "Assumption Spotlight",
+      "when": "A plan depends on hidden beliefs, market guesses, or unproven user behavior.",
+      "prompt": "Name the assumption, the cheapest disproof, and the decision that changes if it is false."
+    },
+    {
+      "id": "tradeoff-map",
+      "title": "Tradeoff Map",
+      "when": "The human is choosing between viable directions with different costs.",
+      "prompt": "Compare options by user value, risk, effort, reversibility, and evidence."
+    },
+    {
+      "id": "acceptance-slice",
+      "title": "Acceptance Slice",
+      "when": "A broad idea needs a testable first version or implementation boundary.",
+      "prompt": "State the smallest slice that proves the promise and the acceptance checks it must satisfy."
+    },
+    {
+      "id": "experience-walkthrough",
+      "title": "Experience Walkthrough",
+      "when": "UX, onboarding, game feel, support flow, or human guidance quality is the main risk.",
+      "prompt": "Walk one real user through the moment-by-moment experience, including failure and recovery states."
+    },
+    {
+      "id": "evidence-ladder",
+      "title": "Evidence Ladder",
+      "when": "Research, market, technical, or quality confidence is too vague.",
+      "prompt": "Rank evidence from anecdote to proof, then choose the next source that changes the decision."
+    },
+    {
+      "id": "risk-inversion",
+      "title": "Risk Inversion",
+      "when": "A plan looks plausible but weak proof could hide serious failure modes.",
+      "prompt": "Assume this failed in production; identify the most likely cause and the prevention check."
+    },
+    {
+      "id": "story-spine",
+      "title": "Story Spine",
+      "when": "A narrative, campaign, brand, or product promise needs a coherent arc.",
+      "prompt": "Write the setup, pressure, turning point, payoff, and rejected alternate arc."
+    },
+    {
+      "id": "constraint-remix",
+      "title": "Constraint Remix",
+      "when": "Brainstorming is stuck or producing generic options.",
+      "prompt": "Change one constraint at a time: audience, time, budget, medium, rule, or forbidden pattern."
+    },
+    {
+      "id": "implementation-trace",
+      "title": "Implementation Trace",
+      "when": "A decision needs to become stories, code, checks, and evidence.",
+      "prompt": "Trace the decision through artifact, story, implementation step, validation command, and evidence."
+    },
+    {
+      "id": "quality-crosscheck",
+      "title": "Quality Crosscheck",
+      "when": "Release confidence depends on requirements, risks, tests, and waivers lining up.",
+      "prompt": "Map requirement to risk, test, evidence, owner, and waiver status."
+    }
+  ]
+}

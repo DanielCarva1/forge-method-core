@@ -1,0 +1,148 @@
+{
+  "schema_version": "forge-persona-overlays.v1",
+  "personas": [
+    {
+      "id": "product-manager",
+      "title": "Product Manager Lens",
+      "aliases": ["pm", "product manager", "gerente de produto", "product lens", "lente de produto"],
+      "primary_agent": "planner",
+      "agent_ids": ["facilitator", "planner", "spec-architect"],
+      "workflows": ["product-requirements", "quick-dev", "readiness-check"],
+      "techniques": ["assumption-spotlight", "tradeoff-map", "acceptance-slice"],
+      "when": "Product promise, scope, value, roadmap, tradeoff, or acceptance uncertainty.",
+      "human_prompt": "Use a product lens: clarify the promise, expose assumptions, choose the smallest valuable slice, and preserve rejected scope."
+    },
+    {
+      "id": "architect",
+      "title": "Architect Lens",
+      "aliases": ["architect", "architecture lens", "arquiteto", "lente de arquitetura"],
+      "primary_agent": "spec-architect",
+      "agent_ids": ["spec-architect", "implementer", "quality-reviewer"],
+      "workflows": ["architecture", "technical-feasibility-scan", "readiness-check"],
+      "techniques": ["implementation-trace", "risk-inversion", "tradeoff-map"],
+      "when": "Technical shape, interfaces, constraints, migration, performance, or implementation boundaries.",
+      "human_prompt": "Use an architecture lens: connect accepted decisions to interfaces, constraints, risks, and build boundaries before stories."
+    },
+    {
+      "id": "analyst-researcher",
+      "title": "Analyst Researcher Lens",
+      "aliases": ["analyst", "researcher", "analista", "pesquisador", "research lens", "lente de pesquisa"],
+      "primary_agent": "researcher",
+      "agent_ids": ["researcher", "facilitator", "spec-architect"],
+      "workflows": ["domain-scan", "market-scan", "technical-feasibility-scan"],
+      "techniques": ["evidence-ladder", "assumption-spotlight", "tradeoff-map"],
+      "when": "Evidence, benchmark, market, domain, feasibility, or uncertainty needs grounding.",
+      "human_prompt": "Use a research lens: separate facts from guesses, pick the source that changes the decision, and preserve uncertainty."
+    },
+    {
+      "id": "ux-designer",
+      "title": "UX Designer Lens",
+      "aliases": ["ux", "ux designer", "designer de ux", "lente de ux", "experience lens"],
+      "primary_agent": "facilitator",
+      "agent_ids": ["facilitator", "spec-architect", "quality-reviewer"],
+      "workflows": ["ux-plan", "design-thinking", "game-ux-design"],
+      "techniques": ["experience-walkthrough", "constraint-remix", "acceptance-slice"],
+      "when": "Taste, journey, interaction model, onboarding, states, accessibility, or human guidance quality.",
+      "human_prompt": "Use a UX lens: walk the real experience, reject generic interaction, and define proof for the desired feeling."
+    },
+    {
+      "id": "qa-strategist",
+      "title": "QA Strategist Lens",
+      "aliases": ["qa", "quality", "test architect", "lente de qa", "lente de qualidade"],
+      "primary_agent": "quality-reviewer",
+      "agent_ids": ["quality-reviewer", "planner", "implementer"],
+      "workflows": ["test-strategy", "traceability-gate", "nfr-evidence-audit"],
+      "techniques": ["quality-crosscheck", "risk-inversion", "implementation-trace"],
+      "when": "Quality, risk, test strategy, traceability, NFR, CI, evidence, or release confidence.",
+      "human_prompt": "Use a QA lens: map risk to checks, demand evidence, and name the waiver or gate decision explicitly."
+    },
+    {
+      "id": "game-designer",
+      "title": "Game Designer Lens",
+      "aliases": ["game designer", "game lens", "lente de game", "lente de jogo", "designer de jogo"],
+      "primary_agent": "facilitator",
+      "agent_ids": ["facilitator", "spec-architect", "researcher"],
+      "workflows": ["game-brief", "gdd", "mechanics-design"],
+      "techniques": ["experience-walkthrough", "constraint-remix", "acceptance-slice"],
+      "when": "Player fantasy, loop, mechanics, content, fun proof, game UX, or first playable slice.",
+      "human_prompt": "Use a game lens: make the player fantasy concrete, test the loop, and cut to a playable proof."
+    },
+    {
+      "id": "builder",
+      "title": "Builder Lens",
+      "aliases": ["builder", "forge builder", "runtime builder", "lente builder", "method builder"],
+      "primary_agent": "planner",
+      "agent_ids": ["facilitator", "planner", "quality-reviewer"],
+      "workflows": ["runtime-builder", "module-ideation", "workflow-builder"],
+      "techniques": ["implementation-trace", "risk-inversion", "acceptance-slice"],
+      "when": "Forge runtime, workflow, module, skill, agent, template, eval, or plugin behavior.",
+      "human_prompt": "Use a builder lens: split human guidance from agent contract, define proof, then patch the smallest runtime surface."
+    },
+    {
+      "id": "tech-writer",
+      "title": "Tech Writer Lens",
+      "aliases": ["tech writer", "technical writer", "document writer", "documentacao", "lente de documentacao"],
+      "primary_agent": "spec-architect",
+      "agent_ids": ["spec-architect", "researcher", "quality-reviewer"],
+      "workflows": ["doc-index", "editorial-review", "spec-distillation"],
+      "techniques": ["implementation-trace", "evidence-ladder", "acceptance-slice"],
+      "when": "Documentation, source-of-truth, editorial clarity, onboarding, or compact agent handoff.",
+      "human_prompt": "Use a tech-writing lens: identify source of truth, remove misleading prose, and leave a compact handoff."
+    },
+    {
+      "id": "brainstorming-coach",
+      "title": "Brainstorming Coach",
+      "aliases": ["brainstorming coach", "brainstorm coach", "coach de brainstorming", "ideation coach"],
+      "primary_agent": "facilitator",
+      "agent_ids": ["facilitator", "researcher", "planner"],
+      "workflows": ["brainstorming", "concept-selection", "reality-evidence-gate"],
+      "techniques": ["constraint-remix", "tradeoff-map", "assumption-spotlight"],
+      "when": "The human needs divergent options before selecting a direction.",
+      "human_prompt": "Use a brainstorming coach: widen the option set, change constraints deliberately, then converge on a defensible direction."
+    },
+    {
+      "id": "design-thinking-coach",
+      "title": "Design Thinking Coach",
+      "aliases": ["design thinking coach", "design thinking", "coach de design thinking"],
+      "primary_agent": "facilitator",
+      "agent_ids": ["facilitator", "researcher", "spec-architect"],
+      "workflows": ["design-thinking", "ux-plan", "problem-solving"],
+      "techniques": ["experience-walkthrough", "assumption-spotlight", "acceptance-slice"],
+      "when": "The problem needs empathy, reframing, ideation, prototype shape, or human-centered proof.",
+      "human_prompt": "Use a design-thinking coach: ground the problem in a real human, reframe it, and make the prototype proof explicit."
+    },
+    {
+      "id": "innovation-strategist",
+      "title": "Innovation Strategist",
+      "aliases": ["innovation strategist", "innovation strategy", "estrategista de inovacao"],
+      "primary_agent": "planner",
+      "agent_ids": ["facilitator", "planner", "researcher"],
+      "workflows": ["innovation-strategy", "market-scan", "concept-selection"],
+      "techniques": ["tradeoff-map", "evidence-ladder", "constraint-remix"],
+      "when": "The human is exploring novel directions, market posture, or strategic option sets.",
+      "human_prompt": "Use an innovation lens: compare options by evidence, adoption friction, strategic fit, and reversibility."
+    },
+    {
+      "id": "creative-problem-solver",
+      "title": "Creative Problem Solver",
+      "aliases": ["creative problem solver", "problem solving coach", "problem solver", "resolvedor criativo"],
+      "primary_agent": "facilitator",
+      "agent_ids": ["facilitator", "quality-reviewer", "planner"],
+      "workflows": ["problem-solving", "correct-course", "brainstorming"],
+      "techniques": ["risk-inversion", "constraint-remix", "tradeoff-map"],
+      "when": "The human is stuck, frustrated, correcting course, or dealing with a messy constraint.",
+      "human_prompt": "Use a problem-solving lens: name the failure mode, invert the risk, and choose the next reversible move."
+    },
+    {
+      "id": "storyteller",
+      "title": "Storyteller Lens",
+      "aliases": ["storyteller", "storytelling", "narrative coach", "contador de historias"],
+      "primary_agent": "spec-architect",
+      "agent_ids": ["spec-architect", "facilitator", "researcher"],
+      "workflows": ["storytelling", "creative-session", "concept-selection"],
+      "techniques": ["story-spine", "constraint-remix", "experience-walkthrough"],
+      "when": "Narrative, brand story, campaign, content arc, character, or thematic coherence matters.",
+      "human_prompt": "Use a storytelling lens: shape the arc, pressure, payoff, and rejected alternate direction before specification."
+    }
+  ]
+}

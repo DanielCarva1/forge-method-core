@@ -24,6 +24,7 @@ PARITY_REQUIRED_FAMILIES = {
     "correct-course",
     "builder",
     "config",
+    "persona",
     "cis",
     "game",
     "tea",
@@ -413,6 +414,7 @@ class RuntimeTests(unittest.TestCase):
             "commands",
             "workflow_metadata",
             "facilitation_pack",
+            "persona_lens",
         }
         for case in fixtures:
             with self.subTest(case=case["id"]):
@@ -439,6 +441,8 @@ class RuntimeTests(unittest.TestCase):
                         self.assertEqual(payload["facilitation_pack"], case["expected_facilitation_pack"])
                     if case.get("expected_template"):
                         self.assertEqual(payload["workflow_metadata"].get("template"), case["expected_template"])
+                    if case.get("expected_persona_lens"):
+                        self.assertEqual(payload["persona_lens"].get("id"), case["expected_persona_lens"])
                     elif case["id"] in {"confused_user", "brainstorm_request", "mixed_bmad_parity_runtime_request"}:
                         self.assertTrue(payload["facilitation_pack"].startswith("skill:facilitation/"))
                     if case["id"] == "method_frustration_ready":
@@ -1560,6 +1564,68 @@ class RuntimeTests(unittest.TestCase):
                 "Recommended Agent Profiles",
                 (root / ".forge-method" / "context" / "current-pack.md").read_text(encoding="utf-8"),
             )
+
+    def test_persona_lens_guidance_council_and_compact_runtime_contracts(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Persona Project", "--root", str(root))
+            run_cmd("transition", "--root", str(root), "--phase", "1-discovery")
+
+            pm_guide = json.loads(
+                run_cmd(
+                    "guide",
+                    "--root",
+                    str(root),
+                    "--question",
+                    "quero uma lente de PM para validar o PRD e cortar escopo",
+                    "--json",
+                ).stdout
+            )
+            qa_guide = json.loads(
+                run_cmd(
+                    "guide",
+                    "--root",
+                    str(root),
+                    "--question",
+                    "usa um QA lens para traceability gate antes do release",
+                    "--json",
+                ).stdout
+            )
+            index_payload = json.loads(run_cmd("config", "index", "--root", str(root), "--json").stdout)
+            council = run_cmd(
+                "council",
+                "run",
+                "--root",
+                str(root),
+                "--topic",
+                "usar UX designer lens para calibrar jornada",
+                "--next-action",
+                "continue persona lens proof",
+            ).stdout
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+
+            self.assertEqual(pm_guide["persona_lens"]["id"], "product-manager")
+            self.assertEqual(pm_guide["recommended_workflow"], "product-requirements")
+            self.assertEqual(pm_guide["intent_classification"], "product-flow")
+            self.assertIn("assumption-spotlight", pm_guide["persona_lens"]["techniques"])
+            self.assertNotIn("persona", pm_guide["recommended_agents"][0])
+            self.assertLess(len(json.dumps(pm_guide["persona_lens"], sort_keys=True)), 900)
+
+            self.assertEqual(qa_guide["persona_lens"]["id"], "qa-strategist")
+            self.assertEqual(qa_guide["recommended_workflow"], "traceability-gate")
+            self.assertIn("quality-crosscheck", qa_guide["persona_lens"]["techniques"])
+
+            lens_ids = {item["id"] for item in index_payload["persona_lenses"]}
+            technique_ids = {item["id"] for item in index_payload["elicitation_techniques"]}
+            self.assertTrue({"product-manager", "architect", "ux-designer", "qa-strategist", "game-designer", "builder", "tech-writer"} <= lens_ids)
+            self.assertIn("risk-inversion", technique_ids)
+            self.assertNotIn("persona", index_payload["agents"][0])
+
+            self.assertIn("Persona lens: UX Designer Lens", council)
+            self.assertIn("[Facilitator]", council)
+            self.assertIn("[Spec Architect]", council)
+            self.assertIn("[Quality Reviewer]", council)
+            self.assertTrue((root / snapshot["state"]["last_council_artifact"]).exists())
 
     def test_tracks_guide_council_builder_and_config_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -81,7 +81,7 @@ The full parity goal is complete only when every audit row is `translated`, `str
 
 ## Current Status
 
-P0 and P1.1 are closed:
+P0 through P1.3 are closed:
 
 - Help/Next-Step Oracle: implemented and validated.
 - Human facilitation coverage gate: implemented and validated.
@@ -89,6 +89,8 @@ P0 and P1.1 are closed:
 - Story lifecycle proof: implemented with `story-creation`, decision-source guard, and mechanical no-procedural-confirmation tests.
 - Parity replay harness: implemented as packaged `parity replay`; installed smoke validates the packaged replay matrix.
 - Builder Factory: implemented with `module-ideation`, `agent-builder`, `workflow-builder`, `module-builder`, `module-validate`, `builder-factory` facilitation, templates, Guidance Engine routes, and parity replay coverage.
+- Customization and Capability Index: implemented with Project Configuration, Override Model, Capability Index, `config index`, config validation, replay coverage, install smoke proof, and evidence.
+- Persona and Elicitation Layer: implemented with Persona Lens overlays, elicitation technique index, persona facilitation pack, Guidance Engine `persona_lens` output, council participant routing, replay coverage, compactness guards, and evidence.
 
 The remaining work is a planned sequence, not ad hoc patching.
 
@@ -169,9 +171,11 @@ Done when:
 Status:
 
 - implemented in P1.2 with Project Configuration, Override Model, Capability Index, `config index`, `config-customization` facilitation, replay fixture, and targeted tests;
-- validation evidence must be recorded before moving to P1.3.
+- validation evidence recorded.
 
 ### P1.3 Persona And Elicitation Layer
+
+Status: translated in the 2026-06-14 Persona Lens and Elicitation Layer batch.
 
 Scope:
 
@@ -199,8 +203,8 @@ Deliverables:
 
 Done when:
 
-- humans can ask for a PM/Architect/UX/QA/Game/Builder lens and get a useful route;
-- future agents still receive compact profiles and workflow contracts.
+- humans can ask for a PM/Architect/UX/QA/Game/Builder lens and get a useful route: done;
+- future agents still receive compact profiles and workflow contracts: done.
 
 ### P1.4 Product, Context, Review, And Retrospective Closure
 
@@ -367,14 +371,12 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 ## Immediate Next Step
 
-Next implementation batch: P1.3 Persona Layer after P1.2 validation evidence is recorded.
+Next implementation batch: P1.4 Product, Context, Review, And Retrospective Closure after P1.3 validation evidence is recorded.
 
-Do not start P1.2 as an ad hoc implementation. Start P1.2 from this plan:
+Do not start P1.4 as an ad hoc implementation. Start P1.4 from this plan:
 
-1. identify customization and capability-index rows from the audit;
-2. define override precedence and allowed keys;
-3. add validation and conflict reporting;
-4. generate a compact capability index;
-5. add fixtures for valid, conflicting, and stale customization;
-6. validate source and installed behavior;
-7. record evidence and checkpoint.
+1. identify product/context/review/retrospective rows from the audit;
+2. define workflow boundaries for project-context, session-prep, retrospective, code-review, readiness matrix, and research closeout;
+3. add compact workflow refs, facilitation packs, templates, routes, and replay fixtures;
+4. validate source and installed behavior;
+5. record evidence and checkpoint.
