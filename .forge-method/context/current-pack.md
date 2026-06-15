@@ -4,37 +4,36 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: stale-guidance-guard-hardened
+- status: replay-facilitation-contract-hardened
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Continue post-parity Forge polish with transcript-derived improvements only; keep artifact verify clean and avoid reopening closed parity rows without a failing transcript.
+- next_action: Continue post-parity Forge polish by looking for transcript-backed gaps where rich human guidance, persona lenses, templates, or automation outputs are not asserted by replay or gate coverage.
 
 ## Latest Checkpoint
 
-# Stale Guidance Guard hardened
+# Replay Facilitation Contract hardened
 
-- created_at: 2026-06-15T12:50:22+00:00
+- created_at: 2026-06-15T13:11:32+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: stale-guidance-guard-hardened
+- status: replay-facilitation-contract-hardened
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Post-parity polish audit found structurally healthy packs/refs and stale internal guidance as the main agentic risk. Added Stale Guidance Guard to artifact verification, cleaned active parity audit/plan wording, recorded a durable polish audit, and validated source plus installed runtime.
+Closed weak transcript coverage where help/confusion/correct-course replay cases verified routes but not the rich facilitation packs. Replay now requires pack assertions for human-facing guided cases, fixtures declare the packs/templates, and tests cover the negative failure path.
 
 ## Decisions
 
-- Guard active parity/audit/plan/benchmark artifacts against stale closed-work markers instead of relying on future agents to notice contradictions manually.
+- Human-facing replay cases must protect rich guidance output, not only route/workflow classification.
 
 ## Checks
 
-- artifact verify --root .: passed
-- workflow validate: passed
-- workflow compactness: passed
+- targeted replay fixture tests: 3 OK
 - parity replay: 89/89 passed
-- python -m unittest discover -s tests: 79 tests OK
+- python -m unittest discover -s tests: 80 tests OK
+- artifact verify --root .: passed
 - smoke-runtime.ps1: passed
 - verify-fast.ps1: passed
 - smoke-install.ps1: passed
@@ -46,19 +45,18 @@ Post-parity polish audit found structurally healthy packs/refs and stale interna
 ## Touched Files
 
 - skills/forge-method/scripts/forge_method_runtime.py
+- skills/forge-method/fixtures/guidance-parity-replay.json
 - tests/test_runtime.py
-- .forge-method/artifacts/20260615-post-parity-polish-audit.md
-- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
-- .forge-method/artifacts/20260613-systematic-parity-plan.md
+- .forge-method/artifacts/20260615-replay-facilitation-contract.md
 
 ## Artifacts
 
-- .forge-method/artifacts/20260615-post-parity-polish-audit.md
-- .forge-method/evidence/20260615-125002-validation-stale-guidance-guard-validation.md
+- .forge-method/artifacts/20260615-replay-facilitation-contract.md
+- .forge-method/evidence/20260615-131108-validation-replay-facilitation-contract-validation.md
 
 ## Next Action
 
-Continue post-parity Forge polish with transcript-derived improvements only; keep artifact verify clean and avoid reopening closed parity rows without a failing transcript.
+Continue post-parity Forge polish by looking for transcript-backed gaps where rich human guidance, persona lenses, templates, or automation outputs are not asserted by replay or gate coverage.
 
 ## Recovery Signals
 
@@ -70,16 +68,16 @@ Continue post-parity Forge polish with transcript-derived improvements only; kee
 
 - skills/forge-method/scripts/forge_method_runtime.py
 - skills/forge-method/catalog/workflows.json
-- skills/forge-method/references/workflow-write-spec.md
-- skills/forge-method/facilitation/product-planning.md
-- skills/forge-method/templates/spec-kernel-artifact.md
-- skills/forge-method/fixtures/guidance-parity-replay.json
-- tests/test_runtime.py
 - skills/forge-method/facilitation/evidence-research.md
 - skills/forge-method/templates/research-scan-artifact.md
+- skills/forge-method/fixtures/guidance-parity-replay.json
+- tests/test_runtime.py
 - skills/forge-method/personas/overlays.json
 - skills/forge-method/facilitation/storytelling.md
 - skills/forge-method/references/workflow-storytelling.md
+- skills/forge-method/templates/storytelling-artifact.md
+- .forge-method/artifacts/20260615-post-parity-polish-audit.md
+- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
 
 ## Open Human Inputs
 
@@ -96,16 +94,16 @@ Continue post-parity Forge polish with transcript-derived improvements only; kee
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260615-103921-validation-spec-kernel-depth-validation.md
 - .forge-method/evidence/20260615-110943-validation-research-guidance-depth-validation.md
 - .forge-method/evidence/20260615-115018-validation-game-brief-sprint-depth-validation.md
 - .forge-method/evidence/20260615-122252-validation-presentation-craft-fold-in-validation.md
 - .forge-method/evidence/20260615-125002-validation-stale-guidance-guard-validation.md
+- .forge-method/evidence/20260615-131108-validation-replay-facilitation-contract-validation.md
 
 ## Recent Artifacts
 
-- parity-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD Forge Systematic Parity Audit - Cleaned stale mixed-verdict guidance after post-parity audit: Planning Tracks is translated, old missing-pack notes are replaced with current coverage, and future work is transcript-derived polish.
-- internal-parity-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic Parity Plan - Updated immediate next step to post-parity Forge polish and Stale Guidance Guard work instead of old partial-row batches already closed by current evidence.
 - changelog [active/durable]: CHANGELOG.md - CHANGELOG - Unreleased notes include Stale Guidance Guard and post-parity audit cleanup behavior.
 - internal-audit [active/durable]: .forge-method/artifacts/20260615-post-parity-polish-audit.md - Post-Parity Polish Audit - Audited facilitation packs, compact workflow refs, and active guidance artifacts; added Stale Guidance Guard without storing forbidden stale markers in active guidance text.
 - internal-audit [active/durable]: .forge-method/artifacts/20260615-post-parity-polish-audit.md - Post-Parity Polish Audit - Audited facilitation packs, compact workflow refs, and active guidance artifacts; added Stale Guidance Guard and documented current post-parity polish without stale marker text.
+- changelog [active/durable]: CHANGELOG.md - CHANGELOG - Unreleased notes include the replay facilitation contract requiring pack assertions for human-facing guided parity cases.
+- internal-audit [active/durable]: .forge-method/artifacts/20260615-replay-facilitation-contract.md - Replay Facilitation Contract - Strengthened parity replay so human-facing guided cases must assert expected facilitation packs, preventing route-only passes from hiding rich human guidance regressions.

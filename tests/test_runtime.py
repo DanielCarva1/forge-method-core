@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "skills" / "forge-method" / "scripts" / "forge_method_runtime.py"
 GUIDANCE_FIXTURES = ROOT / "skills" / "forge-method" / "fixtures" / "guidance-parity-replay.json"
 GUIDANCE_BENCHMARK = ROOT / ".forge-method" / "artifacts" / "guidance-engine-benchmark.md"
+WORKFLOW_CATALOG = ROOT / "skills" / "forge-method" / "catalog" / "workflows.json"
 PARITY_REQUIRED_FAMILIES = {
     "help",
     "confusion",
@@ -549,6 +550,8 @@ class RuntimeTests(unittest.TestCase):
 
     def test_guidance_parity_replay_fixture_covers_required_families(self) -> None:
         fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
+        catalog = json.loads(WORKFLOW_CATALOG.read_text(encoding="utf-8"))
+        workflows = {item["id"]: item for item in catalog["workflows"]}
         families = {case["family"] for case in fixtures}
 
         self.assertTrue(PARITY_REQUIRED_FAMILIES <= families)
@@ -556,6 +559,12 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("expected_classification", case)
             self.assertIn("expected_workflow", case)
             self.assertNotIn("bmad-", case["expected_workflow"])
+            workflow = workflows[case["expected_workflow"]]
+            if workflow.get("facilitation_pack") and case["expected_classification"] != "mechanical-build":
+                self.assertEqual(
+                    case.get("expected_facilitation_pack"),
+                    f"skill:facilitation/{workflow['facilitation_pack']}.md",
+                )
 
     def test_parity_replay_command_validates_fixture_matrix(self) -> None:
         payload = json.loads(run_cmd("parity", "replay", "--json").stdout)
@@ -564,6 +573,22 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(payload["missing_families"], [])
         self.assertTrue(PARITY_REQUIRED_FAMILIES <= set(payload["covered_families"]))
         self.assertEqual(payload["passed"], payload["total"])
+
+    def test_parity_replay_requires_pack_assertions_for_human_guidance(self) -> None:
+        fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
+        case = next(item for item in fixtures if item["id"] == "help_next_step_orientation").copy()
+        case.pop("expected_facilitation_pack", None)
+
+        with tempfile.TemporaryDirectory() as raw:
+            fixture = Path(raw) / "fixture.json"
+            fixture.write_text(json.dumps([case]), encoding="utf-8")
+
+            result = run_cmd("parity", "replay", "--fixture", str(fixture), "--json", check=False)
+
+        self.assertNotEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        failures = "\n".join("\n".join(item["failures"]) for item in payload["failures"])
+        self.assertIn("fixture must declare expected_facilitation_pack", failures)
 
     def test_packaged_reality_workflows_are_available(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

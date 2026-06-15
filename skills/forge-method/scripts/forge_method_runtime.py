@@ -9076,6 +9076,12 @@ def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[
     expect_equal("recommended_phase", payload.get("recommended_phase"), case.get("expected_phase"))
     expect_equal("state_update_required", payload.get("state_update_required"), case.get("state_update_required"))
     expect_equal("facilitation_pack", payload.get("facilitation_pack"), case.get("expected_facilitation_pack"))
+    if (
+        payload.get("facilitation_pack")
+        and case.get("expected_classification") != "mechanical-build"
+        and not case.get("expected_facilitation_pack")
+    ):
+        failures.append("fixture must declare expected_facilitation_pack for human-facing guided cases")
     persona_lens = payload.get("persona_lens") or {}
     expect_equal("persona_lens.id", persona_lens.get("id"), case.get("expected_persona_lens"))
     metadata = payload.get("workflow_metadata") or {}

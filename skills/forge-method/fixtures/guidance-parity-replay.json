@@ -7,6 +7,8 @@
     "expected_classification": "confusion",
     "expected_phase": "1-discovery",
     "expected_workflow": "problem-solving",
+    "expected_facilitation_pack": "skill:facilitation/problem-solving.md",
+    "expected_template": "problem-solving-artifact",
     "state_update_required": false
   },
   {
@@ -17,6 +19,8 @@
     "expected_classification": "confusion",
     "expected_phase": "1-discovery",
     "expected_workflow": "problem-solving",
+    "expected_facilitation_pack": "skill:facilitation/problem-solving.md",
+    "expected_template": "problem-solving-artifact",
     "state_update_required": false
   },
   {
@@ -240,6 +244,8 @@
     "expected_classification": "correct-course",
     "expected_phase": "6-evolve",
     "expected_workflow": "correct-course",
+    "expected_facilitation_pack": "skill:facilitation/correct-course.md",
+    "expected_template": "correct-course-artifact",
     "state_update_required": true,
     "expected_command": "correct-course",
     "forbidden_action_terms": ["publish current batch"]
