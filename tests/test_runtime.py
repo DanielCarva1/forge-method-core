@@ -1523,6 +1523,9 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "investigation-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "adversarial-review-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "context-recovery-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "design-thinking-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "innovation-strategy-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "storytelling-artifact.md",
         ]:
             self.assertTrue(template_path.exists())
         for pack_path in [
@@ -1536,6 +1539,9 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "facilitation" / "architecture-planning.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "context-boundary.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "brainstorming.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "design-thinking.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "innovation-strategy.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "storytelling.md",
         ]:
             self.assertIn("domain_examples:", pack_path.read_text(encoding="utf-8"))
         catalog = json.loads((ROOT / "skills" / "forge-method" / "catalog" / "workflows.json").read_text(encoding="utf-8"))
@@ -1568,6 +1574,10 @@ class RuntimeTests(unittest.TestCase):
             "ux-plan",
             "quick-dev",
             "brainstorming",
+            "design-thinking",
+            "innovation-strategy",
+            "storytelling",
+            "creative-session",
             "story-creation",
             "sprint-status",
             "architecture",
@@ -1622,6 +1632,9 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["architecture"].get("template"), "architecture-artifact")
         self.assertEqual(by_id["quick-dev"].get("template"), "quick-dev-artifact")
         self.assertEqual(by_id["brainstorming"].get("template"), "brainstorming-artifact")
+        self.assertEqual(by_id["design-thinking"].get("template"), "design-thinking-artifact")
+        self.assertEqual(by_id["innovation-strategy"].get("template"), "innovation-strategy-artifact")
+        self.assertEqual(by_id["storytelling"].get("template"), "storytelling-artifact")
         self.assertEqual(by_id["story-creation"].get("template"), "story-creation-artifact")
         self.assertEqual(by_id["sprint-status"].get("template"), "sprint-status-artifact")
         self.assertEqual(by_id["module-ideation"].get("template"), "builder-factory-artifact")
@@ -1669,6 +1682,9 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("spec-lite", by_id["quick-dev"].get("modes", []))
         self.assertIn("converge", by_id["brainstorming"].get("modes", []))
         self.assertIn("concept-selection", by_id["brainstorming"].get("followed_by", []))
+        self.assertIn("prototype", by_id["design-thinking"].get("modes", []))
+        self.assertIn("evidence", by_id["innovation-strategy"].get("modes", []))
+        self.assertIn("payoff", by_id["storytelling"].get("modes", []))
         self.assertIn("validate", by_id["story-creation"].get("modes", []))
         self.assertIn("status", by_id["sprint-status"].get("modes", []))
         self.assertIn("ideate", by_id["module-ideation"].get("modes", []))

@@ -4,36 +4,36 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: brainstorming-depth-hardened
+- status: cis-facilitation-depth-hardened
 - workflow: runtime-builder
 - active_story: <none>
 - next_action: Continue real-use transcript hardening for remaining partial and strong-ish rows; run completion audit and live transcript review before claiming full guided-flow parity.
 
 ## Latest Checkpoint
 
-# Brainstorming Depth hardened
+# CIS Facilitation Depth hardened
 
-- created_at: 2026-06-15T04:38:02+00:00
+- created_at: 2026-06-15T04:56:23+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: brainstorming-depth-hardened
+- status: cis-facilitation-depth-hardened
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed the Brainstorming Depth parity gap. Brainstorming now has guided divergence, taste and anti-reference prompts, pressure testing, discard pile, selection criteria, compact template, catalog modes, replay proof, and install/runtime validation.
+Closed CIS design-thinking, innovation-strategy, and storytelling guidance gaps. Specific CIS requests now route to narrow workflows with dedicated rich packs, compact templates, modes, Capability Index exposure, and replay proof; broad creative direction still stays in creative-session.
 
 ## Decisions
 
-- Option-generation language outranks generic confusion so broad ideas receive guided divergence before PRD or architecture.
-- Taste-heavy creative direction still routes to creative-session before generic brainstorming.
+- Specific CIS strategy/story/design requests should not collapse into generic creative-session; only broad taste/direction work remains there.
+- Human facilitation depth lives in packs, while compact templates and workflow metadata serve future agents.
 
 ## Checks
 
 - python -m unittest discover -s tests: 71 tests OK
 - workflow validate: passed
-- parity replay: 61/61 passed
+- parity replay: 63/63 passed
 - config validate --root .: passed
 - smoke-runtime.ps1: passed
 - verify-fast.ps1: passed
@@ -48,25 +48,17 @@ Closed the Brainstorming Depth parity gap. Brainstorming now has guided divergen
 ## Touched Files
 
 - skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/facilitation/brainstorming.md
-- skills/forge-method/templates/brainstorming-artifact.md
 - skills/forge-method/catalog/workflows.json
+- skills/forge-method/facilitation/design-thinking.md
+- skills/forge-method/facilitation/innovation-strategy.md
+- skills/forge-method/facilitation/storytelling.md
+- skills/forge-method/templates/design-thinking-artifact.md
+- skills/forge-method/templates/innovation-strategy-artifact.md
+- skills/forge-method/templates/storytelling-artifact.md
 - skills/forge-method/fixtures/guidance-parity-replay.json
 - tests/test_runtime.py
 - .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
-- .forge-method/artifacts/20260613-systematic-parity-plan.md
-- .forge-method/artifacts/guidance-engine-benchmark.md
-- CHANGELOG.md
-
-## Artifacts
-
-- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
-- .forge-method/artifacts/20260613-systematic-parity-plan.md
-- .forge-method/artifacts/guidance-engine-benchmark.md
-
-## Next Action
-
-Co
+- .forge-method/artifacts/20260613-system
 [checkpoint truncated]
 
 ## Recovery Signals
@@ -77,7 +69,6 @@ Co
 
 ### Touched Files
 
-- .forge-method/state.yaml
 - skills/forge-method/scripts/forge_method_runtime.py
 - tests/test_runtime.py
 - .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
@@ -89,6 +80,7 @@ Co
 - skills/forge-method/catalog/workflows.json
 - skills/forge-method/fixtures/guidance-parity-replay.json
 - .forge-method/artifacts/guidance-engine-benchmark.md
+- .forge-method/context/capability-index.json
 
 ## Open Human Inputs
 
@@ -105,16 +97,16 @@ Co
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260615-030535-validation-forge-method-1-29-0-published-clone-smoke.md
 - .forge-method/evidence/20260615-032848-validation-post-command-help-oracle-hardening-validation.md
 - .forge-method/evidence/20260615-035510-validation-architecture-guidance-depth-validation.md
 - .forge-method/evidence/20260615-041351-validation-context-boundary-recovery-validation.md
 - .forge-method/evidence/20260615-043802-validation-brainstorming-depth-validation.md
+- .forge-method/evidence/20260615-045622-validation-cis-facilitation-depth-validation.md
 
 ## Recent Artifacts
 
-- internal-parity-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD to Forge systematic parity audit - Audit updated after Brainstorming Depth: brainstorming and CIS brainstorm rows now reflect guided divergence/convergence pack, compact template, modes, and replay proof.
-- internal-parity-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic parity plan - Plan updated with Brainstorming Depth and remaining transcript hardening work.
-- internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine internal benchmark - Benchmark updated so option-generation language routes to brainstorming before generic confusion while taste-heavy creative requests remain creative-session.
-- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability Index - Generated capability index refreshed with Brainstorming Depth workflow template, modes, outputs, and followed-by metadata.
-- patch-notes [active/durable]: CHANGELOG.md - Forge Method changelog - Unreleased notes updated with Brainstorming Depth.
+- internal-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD Forge systematic parity audit - Updated with CIS Facilitation Depth: design-thinking, innovation-strategy, and storytelling now have narrow routing, packs, templates, modes, and replay proof.
+- internal-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic parity plan - Updated immediate progress with CIS Facilitation Depth and clarified remaining transcript-hardening work.
+- benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine benchmark - Updated CIS/creative targets so broad creative direction remains creative-session while design-thinking, innovation strategy, and storytelling route to narrow workflows.
+- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability Index - Regenerated after adding CIS facilitation templates, packs, and workflow metadata.
+- changelog [active/durable]: CHANGELOG.md - CHANGELOG - Added Unreleased note for CIS Facilitation Depth.

@@ -59,5 +59,11 @@ checkpoint_options:
 artifact_rules:
   Persist user frame, journey, opportunity, prototype hypothesis, and test criteria.
 
+domain_examples:
+  - product_discovery: "Reframe a feature request into user, context, need, insight, and testable opportunity."
+  - ux_repair: "Walk the broken journey before proposing screens or implementation."
+  - service_flow: "Identify the before/during/after moments that make an operation painful."
+  - runtime_improvement: "Treat agent guidance failure as a human experience defect before patching code."
+
 headless:
   Draft the frame from supplied evidence and tag assumptions visibly.

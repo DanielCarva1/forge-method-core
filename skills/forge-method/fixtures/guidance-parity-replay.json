@@ -330,7 +330,38 @@
     "expected_phase": "1-discovery",
     "expected_workflow": "design-thinking",
     "expected_persona_lens": "design-thinking-coach",
-    "state_update_required": false
+    "expected_facilitation_pack": "skill:facilitation/design-thinking.md",
+    "expected_template": "design-thinking-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "cis_innovation_strategy_request",
+    "family": "cis",
+    "state": "discovery",
+    "question": "CIS innovation strategy: quero comparar opcoes de produto por evidencia, adocao, reversibilidade e aposta estrategica",
+    "expected_classification": "creative-flow",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "innovation-strategy",
+    "expected_persona_lens": "innovation-strategist",
+    "expected_facilitation_pack": "skill:facilitation/innovation-strategy.md",
+    "expected_template": "innovation-strategy-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "cis_storytelling_request",
+    "family": "cis",
+    "state": "discovery",
+    "question": "CIS storytelling: preciso construir uma narrativa de marca com arco, tensao, payoff e rejeitar caminhos obvios",
+    "expected_classification": "creative-flow",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "storytelling",
+    "expected_persona_lens": "storyteller",
+    "expected_facilitation_pack": "skill:facilitation/storytelling.md",
+    "expected_template": "storytelling-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
   },
   {
     "id": "cis_creative_direction_request",

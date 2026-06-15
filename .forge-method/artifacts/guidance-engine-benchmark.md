@@ -45,15 +45,16 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Investigation requests should diagnose symptom, hypotheses, probes, findings, and next reversible action before repair work.
 - Adversarial review requests should attack assumptions and route repair, waiver, evidence, or rejection rather than hiding critique inside generic edge cases.
 - Checkpoint preview requests should verify durable memory content before writing or handing off context.
-- CIS/creative requests should route to creative-session/concept-selection style flows before converging on specification.
+- CIS/creative requests should route to the narrowest useful creative workflow before converging on specification: broad taste/direction requests stay in creative-session, design-thinking coach requests enter design-thinking, innovation strategy requests enter innovation-strategy, and storytelling requests enter storytelling.
 
 ## Forge parity targets
 
 - `guide --question --json` must classify the latest human message against durable state and available workflows.
 - Human frustration or rejection of the current route must override stale `next_action` and route to `correct-course` or `6-evolve`.
 - Corrections about the method's own experience must route to `correct-course` first; `runtime-builder` is the repair path after the failed behavior is named.
-- Broad ideas should receive a guided discovery, brainstorm, research, game, creative, quality, or builder workflow before technical implementation plans; option-generation language should route to brainstorming before generic confusion, while taste-heavy creative requests still route to creative-session.
+- Broad ideas should receive a guided discovery, brainstorm, research, game, creative, quality, or builder workflow before technical implementation plans; option-generation language should route to brainstorming before generic confusion, while taste-heavy broad creative requests still route to creative-session and specific CIS strategy/story/design requests route to their narrow packs.
 - Brainstorming should preserve option lanes, selection criteria, taste anchors, anti-goals, discard pile, risk/evidence needs, top candidates, and next workflow in a compact artifact.
+- CIS Facilitation Depth should preserve design-thinking user/opportunity/prototype proof, innovation option/evidence/adoption/reversibility proof, and storytelling audience/pressure/payoff/rejected-path proof in compact artifacts while the human pack stays rich.
 - Confusion should produce one recommended route and a small set of alternatives.
 - Mechanical build requests should continue autonomously when decision artifacts and stories are already ready.
 - Method/runtime audit requests should route to runtime-builder instead of generic operate/support, especially when they mention scripts, dead code, misleading docs, agent behavior, or human-guided experience.

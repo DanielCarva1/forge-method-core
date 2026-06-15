@@ -5462,7 +5462,18 @@ def detect_guidance_signals(question: str) -> list[str]:
         "confusion": {"duvida", "confuso", "perdido", "incerto", "ajuda", "orientar", "guiar", "investigate", "investigar", "diagnose", "diagnosticar", "triage"},
         "brainstorm": {"brainstorm", "ideia", "ideias", "ideation", "explorar", "opcoes", "alternativas"},
         "research-needed": {"pesquisa", "research", "mercado", "documentacao", "docs", "evidencia", "fontes", "benchmark"},
-        "creative-flow": {"creative", "criativo", "cis", "storytelling", "marca", "campanha", "conceito"},
+        "creative-flow": {
+            "creative",
+            "criativo",
+            "cis",
+            "storytelling",
+            "narrativa",
+            "marca",
+            "campanha",
+            "conceito",
+            "inovacao",
+            "innovation",
+        },
         "game-flow": {
             "game",
             "jogo",
@@ -5609,6 +5620,79 @@ def detect_guidance_signals(question: str) -> list[str]:
 
 def guidance_alternatives(*items: tuple[str, str]) -> list[dict[str, str]]:
     return [{"workflow": workflow, "reason": reason} for workflow, reason in items]
+
+
+def routed_creative_workflow(question: str) -> str:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    if (
+        "creative direction" in normalized
+        or "direcao criativa" in normalized
+        or "select creative direction" in normalized
+        or "selecionar direcao" in normalized
+        or "escolher direcao" in normalized
+    ):
+        return "creative-session"
+    if "design thinking" in normalized or {"empathy", "empatia", "prototype", "prototipo"} & tokens:
+        return "design-thinking"
+    if (
+        "innovation strategy" in normalized
+        or "innovation strategist" in normalized
+        or "estrategia de inovacao" in normalized
+        or {"innovation", "inovacao", "adoption", "adocao", "reversibility", "reversibilidade"} & tokens
+    ):
+        return "innovation-strategy"
+    if (
+        "storytelling" in normalized
+        or "story spine" in normalized
+        or "story arc" in normalized
+        or "narrativa" in normalized
+        or {"arc", "arco", "payoff", "tensao", "narrative"} & tokens
+    ):
+        return "storytelling"
+    return "creative-session"
+
+
+def creative_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "design-thinking":
+        return (
+            "run design-thinking to ground the problem in a real human moment, reframe the opportunity, and define a cheap prototype proof",
+            "I should understand the human situation before choosing product shape or implementation.",
+            guidance_alternatives(
+                ("ux-plan", "use when the next job is interaction design and experience states"),
+                ("brainstorming", "use when the opportunity needs divergent solution options"),
+                ("problem-solving", "use when the pain is still ambiguous or causal"),
+            ),
+        )
+    if workflow_id == "innovation-strategy":
+        return (
+            "run innovation-strategy to compare option bets by evidence, adoption friction, strategic fit, reversibility, and next proof",
+            "I should turn novelty into an option portfolio with evidence, not a vague brainstorm.",
+            guidance_alternatives(
+                ("market-scan", "use when adoption, alternatives, or market evidence are weak"),
+                ("concept-selection", "use when options exist and the decision is selection"),
+                ("product-requirements", "use when the chosen bet is ready to become requirements"),
+            ),
+        )
+    if workflow_id == "storytelling":
+        return (
+            "run storytelling to shape audience shift, arc, pressure, payoff, voice, rejected story paths, and next workflow",
+            "I should make the narrative do work before turning it into copy, product spec, or implementation.",
+            guidance_alternatives(
+                ("creative-session", "use when taste direction is still broader than the story"),
+                ("concept-selection", "use when multiple arcs need a decision"),
+                ("write-spec", "use when the story contract is ready to become a specification"),
+            ),
+        )
+    return (
+        "explore and select a creative direction before specification",
+        "I should help choose the creative mode and preserve rejected directions compactly.",
+        guidance_alternatives(
+            ("brainstorming", "use when options need more divergence"),
+            ("innovation-strategy", "use when novelty, adoption, and strategic fit are the decision"),
+            ("storytelling", "use when narrative arc, audience shift, or voice is the decision"),
+        ),
+    )
 
 
 def routed_game_workflow(question: str) -> str:
@@ -6677,10 +6761,12 @@ def build_guidance_decision(
         elif "creative-flow" in signal_set:
             classification = "creative-flow"
             recommended_phase = "1-discovery"
-            recommended_workflow = "creative-session"
-            recommended_action = "create a creative-studio project, then explore and select a creative direction"
-            human_prompt = "I should preserve taste, constraints, and rejected directions before writing a spec."
-            reason = "The first intent is taste-heavy or creative."
+            recommended_workflow = routed_creative_workflow(question)
+            action_text, prompt_text, creative_alternatives = creative_guidance_text(recommended_workflow)
+            recommended_action = f"create a creative-studio project, then {action_text}"
+            human_prompt = prompt_text
+            alternatives = creative_alternatives
+            reason = "The first intent is taste-heavy or creative, so the creative router chooses the narrowest useful facilitation workflow."
         elif "lifecycle-flow" in signal_set:
             classification = "lifecycle-flow"
             recommended_phase = "1-discovery"
@@ -6918,12 +7004,11 @@ def build_guidance_decision(
             ("build-story", "when the next ready story should be implemented"),
         )
         reason = "The message asks for sprint status, so the status ritual outranks generic confusion about next steps."
-    elif has_question and "creative-flow" in signal_set:
+    elif has_question and "creative-flow" in signal_set and "game-flow" not in signal_set:
         classification = "creative-flow"
-        recommended_workflow = "creative-session"
-        recommended_action = "explore and select a creative direction before specification"
-        human_prompt = "I should help choose the creative mode and preserve rejected directions compactly."
-        reason = "The message is taste-heavy or creative."
+        recommended_workflow = routed_creative_workflow(question)
+        recommended_action, human_prompt, alternatives = creative_guidance_text(recommended_workflow)
+        reason = "The message is taste-heavy or creative, so the creative router chooses the narrowest useful facilitation workflow."
     elif has_question and "brainstorm" in signal_set:
         classification = "brainstorm"
         recommended_workflow = "brainstorming"

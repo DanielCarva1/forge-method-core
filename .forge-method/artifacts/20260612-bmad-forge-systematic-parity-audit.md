@@ -114,10 +114,10 @@ The product direction is therefore:
 | Subagent orchestration patterns | optional agent profiles, council | partial/missing | No systematic parallel/hierarchical subagent patterns for Forge tasks. | Add orchestration guidance and tests only where Codex supports it. |
 | Persistent memory agents | file-backed project state | non-goal | P2 decision: Forge owns project-local durable state, artifacts, checkpoints, context packs, and ledgers, not broad personal companion memory. | Revisit only for a separate personal workspace product. |
 | CIS brainstorming | `brainstorming` pack plus Brainstorming Coach lens | translated | Brainstorming Depth adds option lanes, constraint inversion, taste contrast, discard pile, convergence criteria, template, and replay proof while preserving coach lens routing. | Keep future examples focused on real use where humans still feel stuck. |
-| CIS design thinking | `design-thinking` pack plus Design Thinking Coach lens | strong-ish | Route and lens proof exist; deeper outputs can still improve. | Expand examples and artifact expectations when design-thinking becomes a larger workflow. |
-| CIS innovation strategy | `innovation-strategy` plus Innovation Strategist lens | partial | Lens route exists, but no facilitation pack. | Add pack and transcript fixtures. |
+| CIS design thinking | `design-thinking` pack plus Design Thinking Coach lens | translated | CIS Facilitation Depth adds a compact design-thinking template, modes, domain examples, and replay proof that coach requests enter the workflow instead of staying as a loose lens. | Add real-use examples only if human sessions expose thin guidance. |
+| CIS innovation strategy | `innovation-strategy` plus Innovation Strategist lens | translated | CIS Facilitation Depth adds a dedicated pack, compact template, modes, narrow creative router, and replay proof for evidence/adoption/reversibility strategy work. | Add real-use examples only if strategy sessions expose thin guidance. |
 | CIS problem solving | `problem-solving` pack plus Creative Problem Solver lens | strong-ish | Coach route exists; more stuck/frustrated transcripts would improve proof. | Add fixtures for messy constraints and recovery. |
-| CIS storytelling | `storytelling` plus Storyteller lens | partial | Lens route exists, but no rich pack. | Add storytelling pack and output template. |
+| CIS storytelling | `storytelling` plus Storyteller lens | translated | CIS Facilitation Depth adds a dedicated pack, compact template, modes, narrow creative router, and replay proof for arc, pressure, payoff, voice, and rejected story paths. | Add real-use examples only if storytelling sessions expose thin guidance. |
 | CIS presentation master | future creative/pitch workflow | deferred | P2 decision: deck craft is not required for the current Codex-native method runtime. | Revisit if launch/pitch/deck workflows become part of Forge project scope. |
 | Game project context | `game-context` plus game lifecycle pack | translated | P1.5 adds explicit game context generation with player fantasy, loop, engine profile, source material, and playable-slice handoff. | Add domain examples only when real game projects expose gaps. |
 | Game engine setup (Godot/Unity/Phaser) | `engine-setup`, `engine-architecture` | translated | P1.5 uses a compact engine profile instead of separate engine-specific public entrypoints, preserving engine assumptions, folder/runtime decisions, first-run check, and validation evidence. | Add engine-specific examples when a project needs them; avoid heavy engine smoke by default. |
@@ -226,10 +226,10 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | `bmad-eval-runner` | `eval run`, smoke scripts, future eval runner | partial |
 | `bmad-session-prep` | `session-prep`, `context plan`, `context recover` | translated |
 | `/cis-brainstorm` | `brainstorming` | translated |
-| `/cis-design-thinking` | `design-thinking` | partial |
-| `/cis-innovation-strategy` | `innovation-strategy` plus future pack | partial |
+| `/cis-design-thinking` | `design-thinking` | translated |
+| `/cis-innovation-strategy` | `innovation-strategy` | translated |
 | `/cis-problem-solving` | `problem-solving` | strong-ish |
-| `/cis-storytelling` | `storytelling` plus future pack | partial |
+| `/cis-storytelling` | `storytelling` | translated |
 | `/cis-agent-brainstorming-coach` | `brainstorming-coach` Persona Lens over `brainstorming` | translated |
 | `/cis-agent-design-thinking-coach` | `design-thinking-coach` Persona Lens over `design-thinking` | translated |
 | `/cis-agent-innovation-strategist` | `innovation-strategist` Persona Lens over `innovation-strategy` | translated |
@@ -362,6 +362,6 @@ The full objective is complete only when:
 
 ## Current status
 
-This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.7 are implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. Forge Method 1.29.0 is published, post-command Help Oracle hardening adds a runtime-level record/emit contract for progress-changing commands, Architecture Guidance Depth closes the stale product/UX/architecture audit rows, and Context Boundary Recovery closes the fresh-chat/context-reset row with reload, Help Oracle, pack/template, and replay proof. P2 scope decisions are recorded in `.forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md`. This is not full goal completion: real-use transcript hardening and the remaining partial/strong-ish rows still need proof.
+This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.7 are implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. Forge Method 1.29.0 is published, post-command Help Oracle hardening adds a runtime-level record/emit contract for progress-changing commands, Architecture Guidance Depth closes the stale product/UX/architecture audit rows, Context Boundary Recovery closes the fresh-chat/context-reset row with reload, Help Oracle, pack/template, and replay proof, Brainstorming Depth closes the broad-option divergence row, and CIS Facilitation Depth closes the design-thinking, innovation-strategy, and storytelling rows with narrow routing, packs, templates, modes, and replay proof. P2 scope decisions are recorded in `.forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md`. This is not full goal completion: real-use transcript hardening and the remaining partial/strong-ish rows still need proof.
 
 Immediate next step: continue real-use transcript hardening against the remaining partial/strong-ish rows, starting with human guidance depth where the runtime routes correctly but the conversation still feels thin.

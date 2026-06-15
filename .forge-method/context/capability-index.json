@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T04:20:26+00:00",
+  "generated_at": "2026-06-15T04:49:11+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -837,12 +837,29 @@
     },
     {
       "facilitation_pack": "design-thinking",
+      "followed_by": [
+        "brainstorming",
+        "ux-plan",
+        "problem-solving"
+      ],
       "id": "design-thinking",
+      "modes": [
+        "empathize",
+        "define",
+        "ideate",
+        "prototype",
+        "test",
+        "headless"
+      ],
       "outputs": [
-        "user problem frame"
+        "user problem frame",
+        "opportunity question",
+        "prototype hypothesis",
+        "test criteria"
       ],
       "phase": "1-discovery",
-      "required": false
+      "required": false,
+      "template": "design-thinking-artifact"
     },
     {
       "facilitation_pack": "enterprise-readiness",
@@ -1322,13 +1339,32 @@
       "required": false
     },
     {
-      "facilitation_pack": "creative-direction",
+      "facilitation_pack": "innovation-strategy",
+      "followed_by": [
+        "market-scan",
+        "concept-selection",
+        "product-requirements"
+      ],
       "id": "innovation-strategy",
+      "modes": [
+        "frame",
+        "diverge",
+        "compare",
+        "evidence",
+        "select",
+        "headless"
+      ],
       "outputs": [
-        "innovation options"
+        "innovation thesis",
+        "option portfolio",
+        "evidence ladder",
+        "adoption friction",
+        "reversibility plan",
+        "next workflow"
       ],
       "phase": "1-discovery",
-      "required": false
+      "required": false,
+      "template": "innovation-strategy-artifact"
     },
     {
       "facilitation_pack": "problem-solving",
@@ -1947,13 +1983,32 @@
       "template": "story-creation-artifact"
     },
     {
-      "facilitation_pack": "creative-direction",
-      "id": "storytelling",
-      "outputs": [
-        "narrative arc"
+      "facilitation_pack": "storytelling",
+      "followed_by": [
+        "creative-session",
+        "concept-selection",
+        "write-spec"
       ],
-      "phase": "2-specification",
-      "required": false
+      "id": "storytelling",
+      "modes": [
+        "arc",
+        "voice",
+        "pressure",
+        "payoff",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "narrative arc",
+        "audience shift",
+        "pressure point",
+        "payoff",
+        "rejected story paths",
+        "next workflow"
+      ],
+      "phase": "1-discovery | 2-specification",
+      "required": false,
+      "template": "storytelling-artifact"
     },
     {
       "facilitation_pack": "test-architecture",
