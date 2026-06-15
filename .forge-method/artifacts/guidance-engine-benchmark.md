@@ -27,6 +27,8 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Customization flows select team/local scope, choose supported override keys, validate merged behavior, and expose an effective capability index instead of relying on hidden prose.
 - Persona/coach requests select a human-facing lens and elicitation technique set without copying long persona prose into agent profiles, state, or compact workflow docs.
 - Documentation utility flows index, shard, review, stress-test, and distill source material before agents consume it.
+- Editorial review separates reader job, prose/structure/tone issues, unsupported claims, and source-of-truth boundaries before applying scoped edits.
+- Edge-case review enumerates boundary conditions, failure modes, misuse cases, missing checks, waivers, and follow-up stories instead of collapsing into generic adversarial critique.
 - Lifecycle closure flows should turn project context, session handoff, track choice, code review, retrospectives, readiness, and research closeout into durable compact artifacts instead of relying on chat memory.
 - Track decisions should preserve the chosen route, rejected routes, source signals, and required next workflows before more artifacts are created.
 - Session prep should create read order, blockers, first command, state mutation rules, and continuation handoff for the next agent/session.
@@ -77,6 +79,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Runtime-builder/systematic parity batch names must outrank loose domain words such as "product", "context", "review", or "retro" when the state is `6-evolve` or runtime-builder.
 - Game Studio Depth outputs must route game-specific requests to game-context, engine-setup, GDD, narrative, mechanics, quick-prototype, playtest, performance, or game QA workflows before generic software planning; artifacts must preserve player fantasy, engine profile, playable-slice proof, decision sources, and validation evidence compactly.
 - Test Architecture Enterprise Depth outputs must route quality requests to the right engagement mode and workflow, preserve fixture architecture and command contracts, and make gate outcomes distinguish pass, concerns, fail, missing evidence, and explicit waiver.
+- Document Review Depth outputs must route prose/structure/tone requests to `editorial-review` and boundary/failure/misuse requests to `edge-case-review`, each with a narrow compact artifact rather than the generic document utility shape.
 
 ## Fixture workflow ids
 
@@ -127,6 +130,8 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `module-validate`
 - `config-customization`
 - `doc-index`
+- `editorial-review`
+- `edge-case-review`
 - `adversarial-review`
 - `design-thinking`
 - `track-decision`

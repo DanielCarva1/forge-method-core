@@ -1601,6 +1601,8 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "readiness-matrix-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "research-closeout-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "investigation-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "editorial-review-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "edge-case-review-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "adversarial-review-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "context-recovery-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "design-thinking-artifact.md",
@@ -1690,6 +1692,8 @@ class RuntimeTests(unittest.TestCase):
             "code-review",
             "retrospective",
             "research-closeout",
+            "editorial-review",
+            "edge-case-review",
             "adversarial-review",
             "context-recovery",
             "game-context",
@@ -1734,6 +1738,8 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["readiness-check"].get("template"), "readiness-matrix-artifact")
         self.assertEqual(by_id["research-closeout"].get("template"), "research-closeout-artifact")
         self.assertEqual(by_id["investigation"].get("template"), "investigation-artifact")
+        self.assertEqual(by_id["editorial-review"].get("template"), "editorial-review-artifact")
+        self.assertEqual(by_id["edge-case-review"].get("template"), "edge-case-review-artifact")
         self.assertEqual(by_id["adversarial-review"].get("template"), "adversarial-review-artifact")
         self.assertEqual(by_id["context-recovery"].get("template"), "context-recovery-artifact")
         self.assertEqual(by_id["test-strategy"].get("template"), "test-strategy-artifact")
@@ -1787,6 +1793,8 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("matrix", by_id["readiness-check"].get("modes", []))
         self.assertIn("closeout", by_id["research-closeout"].get("modes", []))
         self.assertIn("investigate", by_id["investigation"].get("modes", []))
+        self.assertIn("tone", by_id["editorial-review"].get("modes", []))
+        self.assertIn("failure", by_id["edge-case-review"].get("modes", []))
         self.assertIn("red-team", by_id["adversarial-review"].get("modes", []))
         self.assertIn("validate", by_id["test-strategy"].get("modes", []))
         self.assertIn("teach", by_id["teach-testing"].get("modes", []))

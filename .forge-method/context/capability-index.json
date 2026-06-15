@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T05:57:37+00:00",
+  "generated_at": "2026-06-15T06:24:05+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -956,36 +956,47 @@
       ],
       "id": "edge-case-review",
       "modes": [
-        "analyze",
-        "validate"
+        "boundary",
+        "failure",
+        "misuse",
+        "validate",
+        "headless"
       ],
       "outputs": [
         "edge-case findings",
+        "missing checks",
+        "waivers",
         "follow-up stories"
       ],
       "phase": "anytime",
       "required": false,
-      "template": "document-utility-artifact"
+      "template": "edge-case-review-artifact"
     },
     {
       "facilitation_pack": "document-utility",
       "followed_by": [
         "doc-index",
-        "edge-case-review"
+        "edge-case-review",
+        "spec-distillation"
       ],
       "id": "editorial-review",
       "modes": [
-        "analyze",
+        "prose",
+        "structure",
+        "tone",
         "edit",
-        "validate"
+        "validate",
+        "headless"
       ],
       "outputs": [
         "editorial findings",
-        "scoped edits"
+        "source-boundary notes",
+        "scoped edits",
+        "reader-job handoff"
       ],
       "phase": "anytime",
       "required": false,
-      "template": "document-utility-artifact"
+      "template": "editorial-review-artifact"
     },
     {
       "facilitation_pack": "game-lifecycle",

@@ -654,6 +654,32 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "document_utility_editorial_review_request",
+    "family": "document-utility",
+    "state": "discovery",
+    "question": "fazer editorial review de prose, estrutura, clareza, tom e unsupported claims sem mudar source of truth",
+    "expected_classification": "document-utility",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "editorial-review",
+    "expected_facilitation_pack": "skill:facilitation/document-utility.md",
+    "expected_template": "editorial-review-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "document_utility_edge_case_hunter_request",
+    "family": "document-utility",
+    "state": "discovery",
+    "question": "run edge case hunter com boundary conditions, failure modes, misuse cases, missing checks, waivers e follow-up stories",
+    "expected_classification": "document-utility",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "edge-case-review",
+    "expected_facilitation_pack": "skill:facilitation/document-utility.md",
+    "expected_template": "edge-case-review-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
     "id": "document_utility_adversarial_review_request",
     "family": "document-utility",
     "state": "discovery",

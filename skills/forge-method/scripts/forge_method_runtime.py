@@ -5531,7 +5531,25 @@ def detect_guidance_signals(question: str) -> list[str]:
             "index docs",
             "shard document",
             "editorial review",
+            "prose review",
+            "clarity review",
+            "structure review",
+            "tone review",
+            "copyedit",
+            "copy edit",
+            "revisao editorial",
+            "revisao de texto",
+            "clareza",
+            "tom do texto",
             "edge case",
+            "edge-case review",
+            "edge case hunter",
+            "boundary review",
+            "boundary conditions",
+            "failure mode",
+            "failure modes",
+            "misuse case",
+            "misuse cases",
             "spec distillation",
             "adversarial review",
             "red team",
@@ -5856,6 +5874,11 @@ def detect_guidance_signals(question: str) -> list[str]:
             "prose",
             "estrutura",
             "structure",
+            "clarity",
+            "clareza",
+            "tone",
+            "tom",
+            "copyedit",
             "distill",
             "distillation",
             "adversarial",
@@ -5863,6 +5886,10 @@ def detect_guidance_signals(question: str) -> list[str]:
             "red-team",
             "stress",
             "edge",
+            "boundary",
+            "boundaries",
+            "failure",
+            "misuse",
         },
         "builder-flow": {
             "forge",
@@ -6309,6 +6336,76 @@ def is_strong_game_quality_intent(question: str) -> bool:
         or "game review" in normalized
         or "playable slice" in normalized
     )
+
+
+def is_strong_quality_intent(question: str) -> bool:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    return bool(
+        {
+            "atdd",
+            "acceptance",
+            "test",
+            "tests",
+            "testing",
+            "teste",
+            "testes",
+            "qa",
+            "ci",
+            "pipeline",
+            "fixture",
+            "fixtures",
+            "framework",
+            "harness",
+            "automation",
+            "automacao",
+            "automate",
+            "quality",
+            "qualidade",
+            "traceability",
+            "traceabilidade",
+            "nfr",
+        }
+        & tokens
+        or "acceptance test" in normalized
+        or "test design" in normalized
+        or "quality gate" in normalized
+        or "gate decision" in normalized
+        or "test architecture" in normalized
+        or "fixture architecture" in normalized
+    )
+
+
+def is_explicit_document_review_intent(question: str) -> bool:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    return bool(
+        {"editorial", "prose", "clarity", "clareza", "tone", "tom", "copyedit"} & tokens
+        or "editorial review" in normalized
+        or "prose review" in normalized
+        or "clarity review" in normalized
+        or "structure review" in normalized
+        or "tone review" in normalized
+        or "copy edit" in normalized
+        or "revisao editorial" in normalized
+        or "revisao de texto" in normalized
+        or "edge case hunter" in normalized
+        or "edge-case review" in normalized
+        or "boundary review" in normalized
+        or "adversarial review" in normalized
+        or "assumption attack" in normalized
+        or "red team" in normalized
+        or "red-team" in normalized
+    )
+
+
+def document_review_outranks_quality(question: str) -> bool:
+    workflow_id = routed_document_workflow(question)
+    if workflow_id not in {"adversarial-review", "edge-case-review", "editorial-review"}:
+        return False
+    if is_explicit_document_review_intent(question):
+        return True
+    return not is_strong_quality_intent(question)
 
 
 def routed_product_workflow(question: str) -> str:
@@ -6955,20 +7052,79 @@ def routed_document_workflow(question: str) -> str:
         or "red team" in normalized
         or "red-team" in normalized
         or "assumption attack" in normalized
-        or "stress test" in normalized
     ):
         return "adversarial-review"
+    if (
+        {"edge", "boundary", "boundaries", "misuse"} & tokens
+        or "edge case" in normalized
+        or "edge-case" in normalized
+        or "failure mode" in normalized
+        or "failure modes" in normalized
+        or "boundary condition" in normalized
+        or "misuse case" in normalized
+        or "stress test" in normalized
+    ):
+        return "edge-case-review"
     if {"shard", "split", "quebrar", "dividir"} & tokens:
         return "doc-shard"
-    if {"editorial", "prose", "estrutura", "structure"} & tokens:
+    if (
+        {"editorial", "prose", "estrutura", "structure", "clarity", "clareza", "tone", "tom", "copyedit"} & tokens
+        or "prose review" in normalized
+        or "clarity review" in normalized
+        or "structure review" in normalized
+        or "tone review" in normalized
+        or "copy edit" in normalized
+        or "revisao editorial" in normalized
+        or "revisao de texto" in normalized
+    ):
         return "editorial-review"
-    if {"edge"} & tokens or "edge case" in normalized:
-        return "edge-case-review"
     if {"distill", "distillation", "kernel"} & tokens or "spec distillation" in normalized:
         return "spec-distillation"
     if {"index", "map", "mapa"} & tokens:
         return "doc-index"
     return "doc-index"
+
+
+def document_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "editorial-review":
+        return (
+            "run editorial-review to check audience fit, structure, tone, unsupported claims, source boundaries, and scoped edits",
+            "I should review the document as a communication artifact without changing the underlying product truth.",
+            guidance_alternatives(
+                ("doc-index", "when the main issue is finding the right docs"),
+                ("edge-case-review", "when the concern is failure modes rather than prose"),
+                ("spec-distillation", "when messy notes need a compact source-of-truth artifact"),
+            ),
+        )
+    if workflow_id == "edge-case-review":
+        return (
+            "run edge-case-review to enumerate boundary conditions, failure modes, misuse cases, missing checks, and follow-up stories or waivers",
+            "I should hunt practical breakpoints and make each finding actionable instead of doing a generic review.",
+            guidance_alternatives(
+                ("adversarial-review", "when assumptions or the whole premise need red-team attack"),
+                ("risk-register", "when findings should become owned risks"),
+                ("build-story", "when fixes are implementation-ready"),
+            ),
+        )
+    if workflow_id == "adversarial-review":
+        return (
+            "run adversarial-review to attack assumptions, failure paths, missing evidence, and route repair, waiver, or rejection",
+            "I should stress-test the artifact before a generic review or build makes weak assumptions harder to reverse.",
+            guidance_alternatives(
+                ("edge-case-review", "when the concern is boundary behavior rather than assumptions"),
+                ("risk-register", "when findings should become risk ownership"),
+                ("correct-course", "when the attack proves the current route is wrong"),
+            ),
+        )
+    return (
+        f"run {workflow_id} to make the document set usable for humans and future agents",
+        "I should clarify the document job and source-of-truth boundary before editing docs.",
+        guidance_alternatives(
+            ("editorial-review", "when clarity, tone, or structure is the main problem"),
+            ("adversarial-review", "when the artifact needs assumption attack or red-team stress testing"),
+            ("spec-distillation", "when messy notes must become a compact machine contract"),
+        ),
+    )
 
 
 def catalog_phase_options(metadata: dict[str, Any]) -> list[str]:
@@ -7316,17 +7472,11 @@ def build_guidance_decision(
         recommended_workflow = routed_problem_workflow(question)
         recommended_action, human_prompt, alternatives = problem_guidance_text(recommended_workflow)
         reason = "The message asks for orientation or indicates uncertainty."
-    elif has_question and "document-utility" in signal_set and routed_document_workflow(question) == "adversarial-review":
+    elif has_question and "document-utility" in signal_set and document_review_outranks_quality(question):
         classification = "document-utility"
-        recommended_workflow = "adversarial-review"
-        recommended_action = "run adversarial-review to attack assumptions, failure paths, missing evidence, and route repair, waiver, or rejection"
-        human_prompt = "I should stress-test the artifact before a generic review or build makes weak assumptions harder to reverse."
-        alternatives = guidance_alternatives(
-            ("edge-case-review", "when the concern is boundary behavior rather than assumptions"),
-            ("risk-register", "when findings should become risk ownership"),
-            ("correct-course", "when the attack proves the current route is wrong"),
-        )
-        reason = "The message asks for adversarial or red-team review, which should attack assumptions before quality or build routing."
+        recommended_workflow = routed_document_workflow(question)
+        recommended_action, human_prompt, alternatives = document_guidance_text(recommended_workflow)
+        reason = "The message asks for a specialized document review, which should preserve document intent before generic quality review routing."
     elif has_question and is_product_architecture_intent(question) and "game-flow" not in signal_set:
         classification = "product-flow"
         recommended_workflow = "architecture"
@@ -7357,13 +7507,7 @@ def build_guidance_decision(
     elif has_question and "document-utility" in signal_set:
         classification = "document-utility"
         recommended_workflow = routed_document_workflow(question)
-        recommended_action = f"run {recommended_workflow} to make the document set usable for humans and future agents"
-        human_prompt = "I should clarify the document job and source-of-truth boundary before editing docs."
-        alternatives = guidance_alternatives(
-            ("editorial-review", "when clarity, tone, or structure is the main problem"),
-            ("adversarial-review", "when the artifact needs assumption attack or red-team stress testing"),
-            ("spec-distillation", "when messy notes must become a compact machine contract"),
-        )
+        recommended_action, human_prompt, alternatives = document_guidance_text(recommended_workflow)
         reason = "The message is documentation utility work rather than general research."
     elif has_question and "research-needed" in signal_set:
         classification = "research-needed"
