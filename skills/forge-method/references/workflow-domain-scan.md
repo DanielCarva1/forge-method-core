@@ -16,8 +16,9 @@ steps:
   2. identify domain constraints, norms, duties, risks_or_harms, and trust requirements
   3. separate primary source evidence, expert judgment, inference, and assumption
   4. decide whether qualified or expert_review_needed blocks downstream work
-  5. write research-scan-artifact and run artifact research-check
-  6. route to research-closeout, product-requirements, architecture, or correct-course
+  5. run artifact research-scan with domain_constraints, risks_or_harms, expert_review_needed, contradictions_or_falsifiers, uncertainty, stance, and next_workflow
+  6. run artifact research-check --path <research-scan-artifact>
+  7. route to research-closeout, product-requirements, architecture, or correct-course
 
 outputs:
   - domain scan artifact
@@ -29,6 +30,7 @@ done_when:
   - major constraints, harms, and accepted/rejected patterns are explicit
   - source quality and unresolved uncertainty are labeled
   - unsafe, illegal, or incoherent directions are blocked or reframed
+  - artifact research-scan has registered the durable scan
   - artifact research-check passes
 
 blocked_when:

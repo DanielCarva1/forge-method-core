@@ -485,6 +485,28 @@ SPEC_KERNEL_NEXT_WORKFLOWS = {
     "quick-dev",
     "ux-plan",
 }
+RESEARCH_SCAN_MODES = {
+    "auto",
+    "domain",
+    "headless",
+    "market",
+    "technical",
+    "validate",
+}
+RESEARCH_SCAN_DEFAULT_MODE = {
+    "domain-scan": "domain",
+    "market-scan": "market",
+    "technical-feasibility-scan": "technical",
+}
+RESEARCH_SCAN_NEXT_WORKFLOWS = {
+    "architecture",
+    "concept-selection",
+    "correct-course",
+    "product-requirements",
+    "quick-prototype",
+    "research-closeout",
+    "write-spec",
+}
 MECHANICAL_ACTIONS = {
     "start_next_story",
     "continue_active_story",
@@ -1485,6 +1507,13 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
             "guardrail": "Brainstorm termina em decisao, nao em uma pilha solta de ideias.",
         }
     if classification == "research-needed":
+        if workflow in {"market-scan", "domain-scan", "technical-feasibility-scan"}:
+            return {
+                "decision_summary": "Isto e pesquisa com decisao: enquadrar a claim, coletar evidencia suficiente e fechar com stance antes de planejar.",
+                "next_move": "Extrair research_question, decision_to_unlock, claim, sources, evidence_grade, findings, contradictions_or_falsifiers, uncertainty, stance e next_workflow para `artifact research-scan`.",
+                "human_question": first_guidance_question(classification, workflow),
+                "guardrail": "Nao transforme pesquisa em lista de links; a saida precisa mudar uma decisao ou dizer que ainda nao da.",
+            }
         return {
             "decision_summary": "A decisao depende de evidencia. Pesquisa vem antes de plano quando a pergunta pede docs, benchmark, fontes ou viabilidade.",
             "next_move": "Coletar fontes, separar fato de inferencia, e fechar com impacto na decisao.",
@@ -4115,6 +4144,88 @@ def write_spec_kernel_artifact(
     return rel
 
 
+def write_research_scan_artifact(
+    root: Path,
+    *,
+    path: str,
+    title: str,
+    summary: str,
+    workflow: str,
+    mode: str,
+    research_question: str,
+    decision_to_unlock: str,
+    claim: str,
+    sources: str,
+    source_gaps: str,
+    evidence_grade: str,
+    findings: str,
+    contradictions_or_falsifiers: str,
+    uncertainty: str,
+    stance: str,
+    alternatives: str,
+    adoption_friction: str,
+    demand_signal: str,
+    domain_constraints: str,
+    risks_or_harms: str,
+    expert_review_needed: str,
+    feasibility_stance: str,
+    riskiest_unknowns: str,
+    proof_path: str,
+    validation: str,
+    next_workflow: str,
+    force: bool = False,
+) -> str:
+    artifact_path, rel = project_path(root, path)
+    if artifact_path.exists() and not force:
+        raise SystemExit(f"Research scan artifact already exists: {rel}. Use --force to replace it.")
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    selected_mode = RESEARCH_SCAN_DEFAULT_MODE.get(workflow, "market") if mode == "auto" else mode
+    validation_text = validation or f"artifact research-check --path {rel}"
+    fields = [
+        ("workflow", workflow),
+        ("mode", selected_mode),
+        ("research_question", research_question),
+        ("decision_to_unlock", decision_to_unlock),
+        ("claim", claim),
+        ("sources", sources),
+        ("source_gaps", source_gaps),
+        ("evidence_grade", evidence_grade),
+        ("findings", findings),
+        ("contradictions_or_falsifiers", contradictions_or_falsifiers),
+        ("uncertainty", uncertainty),
+        ("stance", stance),
+        ("alternatives", alternatives),
+        ("adoption_friction", adoption_friction),
+        ("demand_signal", demand_signal),
+        ("domain_constraints", domain_constraints),
+        ("risks_or_harms", risks_or_harms),
+        ("expert_review_needed", expert_review_needed),
+        ("feasibility_stance", feasibility_stance),
+        ("riskiest_unknowns", riskiest_unknowns),
+        ("proof_path", proof_path),
+        ("validation", validation_text),
+        ("next_workflow", next_workflow),
+    ]
+    lines = [f"# {title}", ""]
+    lines.extend(f"{key}: {one_line(value)}" for key, value in fields)
+    artifact_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    errors, warnings = research_scan_findings(root, artifact_path)
+    if errors:
+        artifact_path.unlink(missing_ok=True)
+        raise SystemExit("Research scan generation failed validation:\n" + "\n".join(f"- {error}" for error in errors))
+    rel = write_artifact(
+        root,
+        kind="research-scan",
+        title=title,
+        summary=summary,
+        path=rel,
+        lifecycle="durable",
+    )
+    if warnings:
+        append_ledger(root, "artifact.research_scan.warning", {"path": rel, "warnings": join_list(warnings)})
+    return rel
+
+
 def capture_artifact(
     root: Path,
     *,
@@ -5938,6 +6049,46 @@ def cmd_artifact_spec_kernel(args: argparse.Namespace) -> int:
         write_artifact_eval(root, rel, title=args.title, summary=args.summary)
     print(rel)
     print("Spec kernel check passed.")
+    print(f"Next workflow: {args.next_workflow}")
+    return 0
+
+
+def cmd_artifact_research_scan(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    rel = write_research_scan_artifact(
+        root,
+        path=args.path,
+        title=args.title,
+        summary=args.summary,
+        workflow=args.workflow,
+        mode=args.mode,
+        research_question=args.research_question,
+        decision_to_unlock=args.decision_to_unlock,
+        claim=args.claim,
+        sources=args.sources,
+        source_gaps=args.source_gaps,
+        evidence_grade=args.evidence_grade,
+        findings=args.findings,
+        contradictions_or_falsifiers=args.contradictions_or_falsifiers,
+        uncertainty=args.uncertainty,
+        stance=args.stance,
+        alternatives=args.alternatives,
+        adoption_friction=args.adoption_friction,
+        demand_signal=args.demand_signal,
+        domain_constraints=args.domain_constraints,
+        risks_or_harms=args.risks_or_harms,
+        expert_review_needed=args.expert_review_needed,
+        feasibility_stance=args.feasibility_stance,
+        riskiest_unknowns=args.riskiest_unknowns,
+        proof_path=args.proof_path,
+        validation=args.validation,
+        next_workflow=args.next_workflow,
+        force=args.force,
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title=args.title, summary=args.summary)
+    print(rel)
+    print("Research scan check passed.")
     print(f"Next workflow: {args.next_workflow}")
     return 0
 
@@ -12851,6 +13002,41 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_spec_kernel.add_argument("--force", action="store_true")
     artifact_spec_kernel.add_argument("--eval", action="store_true")
     artifact_spec_kernel.set_defaults(func=cmd_artifact_spec_kernel, record_guidance=True)
+
+    artifact_research_scan = artifact_sub.add_parser(
+        "research-scan",
+        help="write and validate a market, domain, or technical research scan artifact",
+    )
+    artifact_research_scan.add_argument("--root", default=".")
+    artifact_research_scan.add_argument("--path", default=".forge-method/artifacts/research-scan.md")
+    artifact_research_scan.add_argument("--title", default="Research Scan")
+    artifact_research_scan.add_argument("--summary", default="Research scan with evidence grade, uncertainty, stance, and next workflow handoff.")
+    artifact_research_scan.add_argument("--workflow", choices=sorted(RESEARCH_SCAN_WORKFLOWS), default="market-scan")
+    artifact_research_scan.add_argument("--mode", choices=sorted(RESEARCH_SCAN_MODES), default="auto")
+    artifact_research_scan.add_argument("--research-question", required=True)
+    artifact_research_scan.add_argument("--decision-to-unlock", required=True)
+    artifact_research_scan.add_argument("--claim", required=True)
+    artifact_research_scan.add_argument("--sources", required=True)
+    artifact_research_scan.add_argument("--source-gaps", default="")
+    artifact_research_scan.add_argument("--evidence-grade", required=True)
+    artifact_research_scan.add_argument("--findings", required=True)
+    artifact_research_scan.add_argument("--contradictions-or-falsifiers", required=True)
+    artifact_research_scan.add_argument("--uncertainty", required=True)
+    artifact_research_scan.add_argument("--stance", required=True)
+    artifact_research_scan.add_argument("--alternatives", default="")
+    artifact_research_scan.add_argument("--adoption-friction", default="")
+    artifact_research_scan.add_argument("--demand-signal", default="")
+    artifact_research_scan.add_argument("--domain-constraints", default="")
+    artifact_research_scan.add_argument("--risks-or-harms", default="")
+    artifact_research_scan.add_argument("--expert-review-needed", default="")
+    artifact_research_scan.add_argument("--feasibility-stance", default="")
+    artifact_research_scan.add_argument("--riskiest-unknowns", default="")
+    artifact_research_scan.add_argument("--proof-path", default="")
+    artifact_research_scan.add_argument("--validation", default="")
+    artifact_research_scan.add_argument("--next-workflow", choices=sorted(RESEARCH_SCAN_NEXT_WORKFLOWS), default="research-closeout")
+    artifact_research_scan.add_argument("--force", action="store_true")
+    artifact_research_scan.add_argument("--eval", action="store_true")
+    artifact_research_scan.set_defaults(func=cmd_artifact_research_scan, record_guidance=True)
 
     artifact_capture = artifact_sub.add_parser("capture", help="capture an artifact result and optionally delete it")
     artifact_capture.add_argument("--root", default=".")

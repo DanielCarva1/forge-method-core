@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add first-class research scan generator with `artifact research-scan` for market/domain/technical evidence closeouts, Evidence Research guidance, workflow handoffs, tests, and source/install smoke coverage
 - add first-class spec kernel generator with `artifact spec-kernel`, write-spec workflow handoff, product-planning guidance, source/install smoke coverage, and phase-closeout generator audit
 - improve discover-intent human guidance so first facilitation answers are shaped into `artifact discovery-closeout` fields before specification
 - add first-class discovery closeout generator with `artifact discovery-closeout`, packaged `discovery-closeout-artifact` template, workflow metadata, and source/install smoke coverage

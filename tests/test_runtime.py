@@ -2116,6 +2116,152 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("contradictions_or_falsifiers must name", result.stdout)
 
+    def test_artifact_research_scan_generates_market_domain_and_technical_scans(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+
+            market = run_cmd(
+                "artifact",
+                "research-scan",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/market-scan-generated.md",
+                "--workflow",
+                "market-scan",
+                "--research-question",
+                "Would teams switch from spreadsheets for this workflow?",
+                "--decision-to-unlock",
+                "decide whether this idea deserves PRD scope",
+                "--claim",
+                "Teams have adoption pain worth solving.",
+                "--sources",
+                "primary interviews, competitor docs, pricing pages",
+                "--source-gaps",
+                "no paid analyst report available",
+                "--evidence-grade",
+                "recency current, authority mixed, directness high, bias noted",
+                "--findings",
+                "alternatives exist but switching cost is high.",
+                "--contradictions-or-falsifiers",
+                "if interviews show no switching pain, shrink scope.",
+                "--uncertainty",
+                "pricing willingness remains weak.",
+                "--stance",
+                "continue to PRD with adoption risk explicit",
+                "--alternatives",
+                "spreadsheets, generic task tools, incumbent SaaS",
+                "--adoption-friction",
+                "migration cost and trust barrier",
+                "--demand-signal",
+                "repeated manual workaround in interviews",
+                "--next-workflow",
+                "research-closeout",
+                "--eval",
+            ).stdout
+            self.assertIn(".forge-method/artifacts/market-scan-generated.md", market)
+            self.assertIn("Research scan check passed.", market)
+            market_text = (root / ".forge-method" / "artifacts" / "market-scan-generated.md").read_text(encoding="utf-8")
+            self.assertIn("mode: market", market_text)
+            self.assertIn("validation: artifact research-check --path .forge-method/artifacts/market-scan-generated.md", market_text)
+            self.assertTrue((root / ".forge-method" / "evals" / "artifact-forge-method-artifacts-market-scan-generated-md-exists.yaml").exists())
+
+            domain = run_cmd(
+                "artifact",
+                "research-scan",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/domain-scan-generated.md",
+                "--workflow",
+                "domain-scan",
+                "--research-question",
+                "Which domain constraints shape safe use?",
+                "--decision-to-unlock",
+                "decide whether expert review blocks product requirements",
+                "--claim",
+                "The workflow can be supported if domain duties stay explicit.",
+                "--sources",
+                "primary policy docs, expert notes, operator transcript",
+                "--source-gaps",
+                "no formal legal opinion in this pass",
+                "--evidence-grade",
+                "recency current, authority high, directness medium, bias noted",
+                "--findings",
+                "domain duties constrain automation and require review checkpoints.",
+                "--contradictions-or-falsifiers",
+                "if the rules forbid private use, block downstream planning.",
+                "--uncertainty",
+                "edge cases need qualified review before release.",
+                "--stance",
+                "continue with review needs explicit",
+                "--domain-constraints",
+                "privacy duties, consent boundaries, and source material limits",
+                "--risks-or-harms",
+                "incorrect advice, leakage, and misplaced trust",
+                "--expert-review-needed",
+                "qualified review required before public release",
+                "--next-workflow",
+                "research-closeout",
+            ).stdout
+            self.assertIn("Research scan check passed.", domain)
+            domain_text = (root / ".forge-method" / "artifacts" / "domain-scan-generated.md").read_text(encoding="utf-8")
+            self.assertIn("mode: domain", domain_text)
+            self.assertIn("expert_review_needed: qualified review required before public release", domain_text)
+
+            technical = run_cmd(
+                "artifact",
+                "research-scan",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/technical-scan-generated.md",
+                "--workflow",
+                "technical-feasibility-scan",
+                "--research-question",
+                "Can the riskiest automation promise be proven cheaply?",
+                "--decision-to-unlock",
+                "decide whether architecture should include a prototype slice",
+                "--claim",
+                "The core automation is technically plausible with bounded inputs.",
+                "--sources",
+                "official API docs, prototype notes, vendor limits",
+                "--source-gaps",
+                "no scale benchmark yet",
+                "--evidence-grade",
+                "recency current, authority high, directness high, bias noted",
+                "--findings",
+                "the tools support the narrow flow but not broad unattended automation.",
+                "--contradictions-or-falsifiers",
+                "if the API cannot preserve citations, shrink the automation scope.",
+                "--uncertainty",
+                "latency and cost remain unproven.",
+                "--stance",
+                "continue to prototype the narrow proof path",
+                "--feasibility-stance",
+                "plausible for a bounded prototype",
+                "--riskiest-unknowns",
+                "latency, citation fidelity, and failure recovery",
+                "--proof-path",
+                "build a fixture replay against official API limits",
+                "--next-workflow",
+                "quick-prototype",
+            ).stdout
+            self.assertIn("Research scan check passed.", technical)
+            technical_text = (root / ".forge-method" / "artifacts" / "technical-scan-generated.md").read_text(encoding="utf-8")
+            self.assertIn("mode: technical", technical_text)
+            self.assertIn("next_workflow: quick-prototype", technical_text)
+            check = run_cmd(
+                "artifact",
+                "research-check",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/technical-scan-generated.md",
+            ).stdout
+            self.assertIn("Research scan check passed.", check)
+
     def test_artifact_test_check_validates_test_automation_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -2838,6 +2984,27 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("capabilities", spec_kernel_template)
         self.assertIn("preservation_map", spec_kernel_template)
         self.assertIn("validation_verdict", spec_kernel_template)
+        evidence_research = (
+            ROOT / "skills" / "forge-method" / "facilitation" / "evidence-research.md"
+        ).read_text(encoding="utf-8")
+        market_scan_workflow = (
+            ROOT / "skills" / "forge-method" / "references" / "workflow-market-scan.md"
+        ).read_text(encoding="utf-8")
+        domain_scan_workflow = (
+            ROOT / "skills" / "forge-method" / "references" / "workflow-domain-scan.md"
+        ).read_text(encoding="utf-8")
+        technical_scan_workflow = (
+            ROOT / "skills" / "forge-method" / "references" / "workflow-technical-feasibility-scan.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("artifact research-scan", evidence_research)
+        self.assertIn("research_question", evidence_research)
+        self.assertIn("contradictions_or_falsifiers", evidence_research)
+        self.assertIn("artifact research-scan", market_scan_workflow)
+        self.assertIn("adoption_friction", market_scan_workflow)
+        self.assertIn("artifact research-scan", domain_scan_workflow)
+        self.assertIn("expert_review_needed", domain_scan_workflow)
+        self.assertIn("artifact research-scan", technical_scan_workflow)
+        self.assertIn("proof_path", technical_scan_workflow)
         self.assertIn("investigate", by_id["investigation"].get("modes", []))
         self.assertIn("tone", by_id["editorial-review"].get("modes", []))
         self.assertIn("failure", by_id["edge-case-review"].get("modes", []))

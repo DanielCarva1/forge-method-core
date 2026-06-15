@@ -16,8 +16,9 @@ steps:
   2. map alternatives, substitutes, switching costs, and adoption friction
   3. separate demand signal, inference, speculation, and taste
   4. grade sources by recency, authority, directness, and bias
-  5. write research-scan-artifact and run artifact research-check
-  6. route to research-closeout, product-requirements, concept-selection, or correct-course
+  5. run artifact research-scan with alternatives, adoption_friction, demand_signal, contradictions_or_falsifiers, uncertainty, stance, and next_workflow
+  6. run artifact research-check --path <research-scan-artifact>
+  7. route to research-closeout, product-requirements, concept-selection, or correct-course
 
 outputs:
   - market scan artifact
@@ -29,6 +30,7 @@ done_when:
   - audience, alternatives, adoption friction, and demand signal are explicit
   - weak or missing demand evidence is labeled as uncertainty
   - contradictions_or_falsifiers and next workflow are concrete
+  - artifact research-scan has registered the durable scan
   - artifact research-check passes
 
 blocked_when:

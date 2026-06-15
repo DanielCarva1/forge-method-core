@@ -16,8 +16,9 @@ steps:
   2. check physical possibility, tool capability, data availability, permission limits, and operational cost
   3. name feasibility_stance, riskiest_unknowns, and cheapest proof_path
   4. grade sources by recency, authority, directness, and bias
-  5. write research-scan-artifact and run artifact research-check
-  6. route to research-closeout, architecture, quick-prototype, or correct-course
+  5. run artifact research-scan with feasibility_stance, riskiest_unknowns, proof_path, contradictions_or_falsifiers, uncertainty, stance, and next_workflow
+  6. run artifact research-check --path <research-scan-artifact>
+  7. route to research-closeout, architecture, quick-prototype, or correct-course
 
 outputs:
   - technical feasibility artifact
@@ -29,6 +30,7 @@ done_when:
   - impossible or unsafe promises are blocked before planning
   - plausible promises have a concrete proof_path or prototype slice
   - required data, tools, permissions, and limits are explicit
+  - artifact research-scan has registered the durable scan
   - artifact research-check passes
 
 blocked_when:

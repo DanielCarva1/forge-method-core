@@ -23,6 +23,7 @@ conversation_stages:
   - choose_lens: "Pick reality gate, market scan, domain scan, or technical feasibility scan; do not default every research request to domain."
   - gather_evidence: "Collect sources, examples, constraints, and alternatives without drifting into implementation."
   - challenge_claim: "Separate evidence, inference, speculation, and taste."
+  - scan_shape: "Extract the artifact research-scan fields the next agent can validate."
   - stance: "Say continue, pivot, prototype, more research, or block; explain why."
   - route_next: "Persist the stance, open questions, and next workflow."
 
@@ -45,6 +46,7 @@ quality_bar:
   - "The next workflow can act without rereading every source."
   - "The human understands what changed because of the evidence."
   - "Market scans name alternatives and adoption friction; domain scans name risks and review needs; technical scans name proof paths."
+  - "artifact research-scan writes research_question, decision_to_unlock, claim, sources/source_gaps, evidence_grade, findings, contradictions_or_falsifiers, uncertainty, stance, workflow-specific fields, validation, and next_workflow."
   - "artifact research-check passes before downstream planning uses the scan as evidence."
 
 anti_patterns:
@@ -55,7 +57,7 @@ anti_patterns:
   - "Do not cite weak secondary summaries as if they prove primary behavior."
 
 paths:
-  fast_path: "Run the narrowest scan, write research-scan-artifact, run artifact research-check, record stance and next workflow."
+  fast_path: "Run the narrowest scan, run artifact research-scan, run artifact research-check, record stance and next workflow."
   deep_path: "Run reality gate, domain/market/technical scans, close with research-closeout, then Grill Gate before spec."
 
 checkpoint_options:
@@ -67,7 +69,7 @@ checkpoint_options:
   - correct-course
 
 artifact_rules:
-  Persist claim, source links, evidence grade, contradictions, stance, open questions, and next workflow.
+  Use artifact research-scan for durable scan output; persist claim, source links, evidence grade, contradictions, stance, workflow-specific proof fields, open questions, validation, and next workflow.
 
 domain_examples:
   market: "Alternatives, switching cost, adoption friction, demand signal, pricing pressure, trust barrier."
