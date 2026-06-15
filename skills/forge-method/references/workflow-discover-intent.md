@@ -14,8 +14,9 @@ steps:
   1. identify the creation type: software, product, creative, game, automation, or runtime module
   2. capture user, problem, desired outcome, constraints, and non-goals
   3. convert vague terms into concrete project language
-  4. write a concise intent artifact under `.forge-method/artifacts/`
-  5. update state next action toward specification
+  4. run `artifact discovery-closeout` to write the accepted discovery artifact
+  5. run `artifact discovery-check --path <discovery-closeout-artifact>`
+  6. update state next action toward specification
 
 outputs:
   - intent artifact
@@ -26,6 +27,7 @@ outputs:
 done_when:
   - project intent can be explained in one paragraph
   - success criteria exist
+  - discovery closeout artifact passes `artifact discovery-check`
   - next specification workflow is known
 
 blocked_when:
@@ -33,5 +35,4 @@ blocked_when:
   - missing user/audience changes the entire product
 
 handoff:
-  - preserve intent, constraints, success criteria, and next workflow
-
+  - preserve discovery closeout artifact path, constraints, non-goals, success criteria, Grill Gate handoff, and next workflow

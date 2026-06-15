@@ -177,23 +177,9 @@ Assert-NotContains $installedProjectGuideText "Prompt: Let's use" "installed pro
 Assert-NotContains $installedProjectGuideText "build-story" "installed project first answer guide output"
 $installedBlockedTransitionText = Run-Fails-Capture $pythonExe $installedRuntime transition --root $generatedProjectTmp --phase 2-specification --status specification-ready --workflow write-spec
 Assert-Contains $installedBlockedTransitionText "Discovery closeout required before specification" "installed project first answer transition guard output"
-$installedProjectCloseoutPath = Join-Path $generatedProjectTmp ".forge-method\artifacts\discovery-intent.md"
-@(
-  "# Accepted Discovery Intent",
-  "workflow: discover-intent",
-  "source_input: initial-facilitation",
-  "audience: independent teachers planning flexible lessons",
-  "outcome: create a guided planning product that turns vague class ideas into reviewable plans",
-  "constraints: browser-first prototype, no login in the first pass, preserve simple language",
-  "non_goals: no scheduling marketplace, no automated grading, no implementation architecture yet",
-  "success_signal: a teacher can produce a reviewable brief with constraints and proof in ten minutes",
-  "open_questions: none blocking; pricing and collaboration can wait",
-  "grill_gate_handoff: Grill Gate required before spec; check outcome, constraints, non_goals, and success_signal.",
-  "decision_log: first answer accepted as discovery source, not as implementation permission",
-  "next_workflow: write-spec"
-) | Set-Content -LiteralPath $installedProjectCloseoutPath -Encoding UTF8
-$installedProjectCloseoutText = Run-Capture $pythonExe $installedRuntime artifact add --root $generatedProjectTmp --kind discovery-intent --title "Accepted discovery intent" --summary "Accepted first facilitation answer for specification." --path ".forge-method/artifacts/discovery-intent.md"
+$installedProjectCloseoutText = Run-Capture $pythonExe $installedRuntime artifact discovery-closeout --root $generatedProjectTmp --path ".forge-method/artifacts/discovery-intent.md" --audience "independent teachers planning flexible lessons" --outcome "create a guided planning product that turns vague class ideas into reviewable plans" --constraints "browser-first prototype, no login in the first pass, preserve simple language" --non-goals "no scheduling marketplace, no automated grading, no implementation architecture yet" --success-signal "a teacher can produce a reviewable brief with constraints and proof in ten minutes" --open-questions "none blocking; pricing and collaboration can wait"
 Assert-Contains $installedProjectCloseoutText ".forge-method/artifacts/discovery-intent.md" "installed project discovery closeout output"
+Assert-Contains $installedProjectCloseoutText "Discovery closeout check passed." "installed project discovery closeout output"
 Run $pythonExe $installedRuntime artifact discovery-check --root $generatedProjectTmp --path ".forge-method/artifacts/discovery-intent.md"
 $installedProjectCloseoutTransitionText = Run-Capture $pythonExe $installedRuntime transition --root $generatedProjectTmp --phase 2-specification --status specification-ready --workflow write-spec
 Assert-Contains $installedProjectCloseoutTransitionText "Transition written." "installed project discovery closeout transition output"

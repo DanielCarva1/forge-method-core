@@ -3953,6 +3953,68 @@ def write_artifact_eval(root: Path, artifact_path: str, *, title: str, summary: 
     )
 
 
+def one_line(value: str) -> str:
+    return " ".join(str(value).split())
+
+
+def write_discovery_closeout_artifact(
+    root: Path,
+    *,
+    path: str,
+    title: str,
+    summary: str,
+    workflow: str,
+    source_input: str,
+    source_answer: str,
+    audience: str,
+    outcome: str,
+    constraints: str,
+    non_goals: str,
+    success_signal: str,
+    open_questions: str,
+    grill_gate_handoff: str,
+    decision_log: str,
+    next_workflow: str,
+    force: bool = False,
+) -> str:
+    artifact_path, rel = project_path(root, path)
+    if artifact_path.exists() and not force:
+        raise SystemExit(f"Discovery closeout artifact already exists: {rel}. Use --force to replace it.")
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    fields = [
+        ("workflow", workflow),
+        ("source_input", source_input),
+        ("source_answer", source_answer),
+        ("audience", audience),
+        ("outcome", outcome),
+        ("constraints", constraints),
+        ("non_goals", non_goals),
+        ("success_signal", success_signal),
+        ("open_questions", open_questions),
+        ("grill_gate_handoff", grill_gate_handoff),
+        ("decision_log", decision_log),
+        ("next_workflow", next_workflow),
+    ]
+    lines = [f"# {title}", ""]
+    lines.extend(f"{key}: {one_line(value)}" for key, value in fields)
+    artifact_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    errors, warnings = discovery_closeout_findings(root, artifact_path)
+    if errors:
+        artifact_path.unlink(missing_ok=True)
+        raise SystemExit("Discovery closeout generation failed validation:\n" + "\n".join(f"- {error}" for error in errors))
+    rel = write_artifact(
+        root,
+        kind="discovery-intent",
+        title=title,
+        summary=summary,
+        path=rel,
+        lifecycle="durable",
+    )
+    if warnings:
+        append_ledger(root, "artifact.discovery_closeout.warning", {"path": rel, "warnings": join_list(warnings)})
+    return rel
+
+
 def capture_artifact(
     root: Path,
     *,
@@ -5704,6 +5766,45 @@ def cmd_artifact_add(args: argparse.Namespace) -> int:
     if args.eval:
         write_artifact_eval(root, rel, title=args.title, summary=args.summary)
     print(rel)
+    return 0
+
+
+def cmd_artifact_discovery_closeout(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    source_input = args.source_input or args.from_input
+    source_answer = ""
+    if args.from_input:
+        input_path = human_input_path(root, args.from_input)
+        if not input_path.exists():
+            raise SystemExit(f"Human input not found for discovery closeout: {args.from_input}")
+        item = read_flat_yaml(input_path)
+        if item.get("status") != "answered":
+            raise SystemExit(f"Human input must be answered before discovery closeout: {args.from_input}")
+        source_answer = item.get("answer", "")
+    rel = write_discovery_closeout_artifact(
+        root,
+        path=args.path,
+        title=args.title,
+        summary=args.summary,
+        workflow=args.workflow,
+        source_input=source_input,
+        source_answer=source_answer,
+        audience=args.audience,
+        outcome=args.outcome,
+        constraints=args.constraints,
+        non_goals=args.non_goals,
+        success_signal=args.success_signal,
+        open_questions=args.open_questions,
+        grill_gate_handoff=args.grill_gate_handoff,
+        decision_log=args.decision_log,
+        next_workflow=args.next_workflow,
+        force=args.force,
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title=args.title, summary=args.summary)
+    print(rel)
+    print("Discovery closeout check passed.")
+    print(f"Next workflow: {args.next_workflow}")
     return 0
 
 
@@ -12559,6 +12660,33 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_add.add_argument("--story")
     artifact_add.add_argument("--eval", action="store_true")
     artifact_add.set_defaults(func=cmd_artifact_add, record_guidance=True)
+
+    artifact_discovery_closeout = artifact_sub.add_parser(
+        "discovery-closeout",
+        help="write and validate the accepted discovery closeout artifact before specification",
+    )
+    artifact_discovery_closeout.add_argument("--root", default=".")
+    artifact_discovery_closeout.add_argument("--path", default=".forge-method/artifacts/discovery-intent.md")
+    artifact_discovery_closeout.add_argument("--title", default="Accepted Discovery Intent")
+    artifact_discovery_closeout.add_argument("--summary", default="Accepted discovery intent with Grill Gate handoff before specification.")
+    artifact_discovery_closeout.add_argument("--workflow", choices=sorted(DISCOVERY_CLOSEOUT_WORKFLOWS), default="discover-intent")
+    artifact_discovery_closeout.add_argument("--from-input", default="initial-facilitation")
+    artifact_discovery_closeout.add_argument("--source-input")
+    artifact_discovery_closeout.add_argument("--audience", required=True)
+    artifact_discovery_closeout.add_argument("--outcome", required=True)
+    artifact_discovery_closeout.add_argument("--constraints", required=True)
+    artifact_discovery_closeout.add_argument("--non-goals", required=True)
+    artifact_discovery_closeout.add_argument("--success-signal", required=True)
+    artifact_discovery_closeout.add_argument("--open-questions", default="none blocking")
+    artifact_discovery_closeout.add_argument(
+        "--grill-gate-handoff",
+        default="Grill Gate required before spec; check outcome, constraints, non_goals, success_signal, and open_questions.",
+    )
+    artifact_discovery_closeout.add_argument("--decision-log", default="initial-facilitation answer accepted as discovery source, not implementation permission")
+    artifact_discovery_closeout.add_argument("--next-workflow", choices=sorted(DISCOVERY_CLOSEOUT_NEXT_WORKFLOWS), default="write-spec")
+    artifact_discovery_closeout.add_argument("--force", action="store_true")
+    artifact_discovery_closeout.add_argument("--eval", action="store_true")
+    artifact_discovery_closeout.set_defaults(func=cmd_artifact_discovery_closeout, record_guidance=True)
 
     artifact_capture = artifact_sub.add_parser("capture", help="capture an artifact result and optionally delete it")
     artifact_capture.add_argument("--root", default=".")

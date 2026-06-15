@@ -2444,6 +2444,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "module-distribution-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "module-validation-report.md",
             ROOT / "skills" / "forge-method" / "templates" / "document-utility-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "discovery-closeout-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "spec-kernel-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "research-scan-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "product-requirements-artifact.md",
@@ -2598,6 +2599,7 @@ class RuntimeTests(unittest.TestCase):
         by_id = {item["id"]: item for item in catalog["workflows"]}
         for workflow_id in human_facing_required:
             self.assertIn("facilitation_pack", by_id[workflow_id], workflow_id)
+        self.assertEqual(by_id["discover-intent"].get("template"), "discovery-closeout-artifact")
         self.assertEqual(by_id["write-spec"].get("template"), "spec-kernel-artifact")
         self.assertEqual(by_id["market-scan"].get("template"), "research-scan-artifact")
         self.assertEqual(by_id["domain-scan"].get("template"), "research-scan-artifact")
@@ -2689,6 +2691,12 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("decision_to_unlock", research_scan_template)
         self.assertIn("contradictions_or_falsifiers", research_scan_template)
         self.assertIn("proof_path", research_scan_template)
+        discovery_closeout_template = (
+            ROOT / "skills" / "forge-method" / "templates" / "discovery-closeout-artifact.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("source_input", discovery_closeout_template)
+        self.assertIn("grill_gate_handoff", discovery_closeout_template)
+        self.assertIn("next_workflow", discovery_closeout_template)
         self.assertIn("spec-lite", by_id["quick-dev"].get("modes", []))
         self.assertIn("converge", by_id["brainstorming"].get("modes", []))
         self.assertIn("concept-selection", by_id["brainstorming"].get("followed_by", []))
@@ -3949,40 +3957,25 @@ class RuntimeTests(unittest.TestCase):
                 "Discovery closeout quality required before specification",
                 weak_transition.stderr + weak_transition.stdout,
             )
-            valid_closeout_path = root / ".forge-method" / "artifacts" / "discovery-intent-accepted.md"
-            valid_closeout_path.write_text(
-                "\n".join(
-                    [
-                        "# Accepted Discovery Intent",
-                        "workflow: discover-intent",
-                        "source_input: initial-facilitation",
-                        "audience: independent teachers planning flexible lessons",
-                        "outcome: create a guided planning product that turns vague class ideas into reviewable plans",
-                        "constraints: browser-first prototype, no login in the first pass, preserve simple language",
-                        "non_goals: no scheduling marketplace, no automated grading, no implementation architecture yet",
-                        "success_signal: a teacher can produce a reviewable brief with constraints and proof in ten minutes",
-                        "open_questions: none blocking; pricing and collaboration can wait",
-                        "grill_gate_handoff: Grill Gate required before spec; check outcome, constraints, non_goals, and success_signal.",
-                        "decision_log: first answer accepted as discovery source, not as implementation permission",
-                        "next_workflow: write-spec",
-                    ]
-                )
-                + "\n",
-                encoding="utf-8",
-            )
             discovery_closeout = run_cmd(
                 "artifact",
-                "add",
+                "discovery-closeout",
                 "--root",
                 str(root),
-                "--kind",
-                "discovery-intent",
-                "--title",
-                "Accepted discovery intent quality gate",
-                "--summary",
-                "Accepted first facilitation answer with outcome, constraints, proof, and Grill Gate handoff.",
                 "--path",
                 ".forge-method/artifacts/discovery-intent-accepted.md",
+                "--audience",
+                "independent teachers planning flexible lessons",
+                "--outcome",
+                "create a guided planning product that turns vague class ideas into reviewable plans",
+                "--constraints",
+                "browser-first prototype, no login in the first pass, preserve simple language",
+                "--non-goals",
+                "no scheduling marketplace, no automated grading, no implementation architecture yet",
+                "--success-signal",
+                "a teacher can produce a reviewable brief with constraints and proof in ten minutes",
+                "--open-questions",
+                "none blocking; pricing and collaboration can wait",
             ).stdout
             discovery_check = run_cmd(
                 "artifact",
@@ -4004,6 +3997,7 @@ class RuntimeTests(unittest.TestCase):
                 "write-spec",
             ).stdout
             self.assertIn(".forge-method/artifacts/discovery-intent-accepted.md", discovery_closeout)
+            self.assertIn("Discovery closeout check passed.", discovery_closeout)
             self.assertIn("Discovery closeout check passed.", discovery_check)
             self.assertIn("Transition written.", transition)
             self.assertIn('phase: "2-specification"', state.read_text(encoding="utf-8"))

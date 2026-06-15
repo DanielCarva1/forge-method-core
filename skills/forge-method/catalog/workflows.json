@@ -2,7 +2,7 @@
   "schema_version": "forge-workflow-catalog.v1",
   "workflows": [
     {"id": "start-runtime", "reference": "start", "phase": "0-route", "required": true, "followed_by": ["guide-route", "discover-intent"], "outputs": ["route decision", "project state"]},
-    {"id": "discover-intent", "phase": "1-discovery", "required": true, "followed_by": ["reality-evidence-gate", "write-spec"], "outputs": ["intent", "constraints", "success criteria"], "facilitation_pack": "discover-intent"},
+    {"id": "discover-intent", "phase": "1-discovery", "required": true, "followed_by": ["reality-evidence-gate", "write-spec"], "outputs": ["intent", "constraints", "success criteria"], "facilitation_pack": "discover-intent", "template": "discovery-closeout-artifact"},
     {"id": "guide-route", "phase": "anytime", "required": false, "followed_by": ["guidance-engine"], "outputs": ["route recommendation"]},
     {"id": "guidance-engine", "phase": "anytime", "required": true, "outputs": ["intent classification", "recommended workflow", "commands"]},
     {"id": "reality-evidence-gate", "phase": "1-discovery", "required": true, "followed_by": ["market-scan", "domain-scan", "technical-feasibility-scan"], "outputs": ["feasibility stance", "evidence needs"], "facilitation_pack": "evidence-research"},
