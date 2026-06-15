@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add Council Orchestration Depth with a dedicated `council-decision` pack/template/modes, party-mode routing, richer live debate output, compact dissent/orchestration artifacts, and JSON worker/merge contracts
 - add Document Review Depth with specialized `editorial-review` and `edge-case-review` templates, modes, document-utility facilitation, Guidance Engine precedence over generic quality review, and replay proof
 - add Build Story Autonomy Depth with a structured `build-story` work order template, start/continue/review/evidence modes, full mechanical command map, JSON `loop` and `do_not_prompt` fields, and no-procedural-prompt Codex Goal handoff
 - add Sprint Planning Depth with a dedicated `plan-sprint` artifact template, sequence/rebalance/validate modes, richer story-lifecycle guidance for sprint goals/deferred work, Guidance Engine precedence over generic quality wording, and replay proof

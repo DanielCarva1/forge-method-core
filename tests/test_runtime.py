@@ -1593,6 +1593,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "sprint-status-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "build-story-work-order.md",
             ROOT / "skills" / "forge-method" / "templates" / "track-decision-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "council-decision-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "project-context-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "session-prep-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "checkpoint-preview-artifact.md",
@@ -1619,6 +1620,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "facilitation" / "product-planning.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "ux-design.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "architecture-planning.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "council-decision.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "context-boundary.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "brainstorming.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "design-thinking.md",
@@ -1686,6 +1688,7 @@ class RuntimeTests(unittest.TestCase):
             "module-validate",
             "config-customization",
             "track-decision",
+            "council-decision",
             "project-context",
             "session-prep",
             "checkpoint-preview",
@@ -1730,6 +1733,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["module-validate"].get("template"), "module-validation-report")
         self.assertEqual(by_id["config-customization"].get("template"), "config-customization-artifact")
         self.assertEqual(by_id["track-decision"].get("template"), "track-decision-artifact")
+        self.assertEqual(by_id["council-decision"].get("template"), "council-decision-artifact")
         self.assertEqual(by_id["project-context"].get("template"), "project-context-artifact")
         self.assertEqual(by_id["session-prep"].get("template"), "session-prep-artifact")
         self.assertEqual(by_id["checkpoint-preview"].get("template"), "checkpoint-preview-artifact")
@@ -1784,6 +1788,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("validate", by_id["module-validate"].get("modes", []))
         self.assertIn("index", by_id["config-customization"].get("modes", []))
         self.assertIn("decide", by_id["track-decision"].get("modes", []))
+        self.assertIn("parallel", by_id["council-decision"].get("modes", []))
         self.assertIn("document", by_id["project-context"].get("modes", []))
         self.assertIn("prep", by_id["session-prep"].get("modes", []))
         self.assertIn("fresh-chat", by_id["context-recovery"].get("modes", []))
@@ -1996,10 +2001,15 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotIn("persona", index_payload["agents"][0])
 
             self.assertIn("Persona lens: UX Designer Lens", council)
+            self.assertIn("Round 1: Specialist Takes", council)
+            self.assertIn("Agent Orchestration", council)
             self.assertIn("[Facilitator]", council)
             self.assertIn("[Spec Architect]", council)
             self.assertIn("[Quality Reviewer]", council)
             self.assertTrue((root / snapshot["state"]["last_council_artifact"]).exists())
+            artifact_text = (root / snapshot["state"]["last_council_artifact"]).read_text(encoding="utf-8")
+            self.assertIn("Orchestration:", artifact_text)
+            self.assertIn("Dissent to preserve", artifact_text)
 
     def test_lifecycle_closure_guidance_and_compact_contracts(self) -> None:
         lifecycle_cases = [
@@ -2391,6 +2401,19 @@ class RuntimeTests(unittest.TestCase):
                 "Should this decision use a council?",
                 "--eval",
             ).stdout
+            council_json = json.loads(
+                run_cmd(
+                    "council",
+                    "run",
+                    "--root",
+                    str(root),
+                    "--topic",
+                    "split architecture quality and implementation checks into parallel subagents",
+                    "--mode",
+                    "parallel",
+                    "--json",
+                ).stdout
+            )
             workflow_path = run_cmd(
                 "builder",
                 "scaffold",
@@ -2414,7 +2437,15 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(guide["track"]["id"], "standard-product")
             self.assertIn("Track set: game-studio", set_track)
             self.assertIn("Forge Agent Council", council)
+            self.assertIn("Decision Frame", council)
+            self.assertIn("Round 2: Convergence", council)
+            self.assertIn("Agent Orchestration", council)
             self.assertIn("Persisted decision artifact:", council)
+            self.assertEqual(council_json["workflow"], "council-decision")
+            self.assertEqual(council_json["mode"], "parallel")
+            self.assertEqual(council_json["orchestration_plan"]["execution"], "parallel")
+            self.assertTrue(council_json["orchestration_plan"]["workers"])
+            self.assertIn("do_not_persist", council_json["orchestration_plan"]["merge"])
             self.assertEqual(snapshot["state"]["track"], "game-studio")
             self.assertEqual(snapshot["state"]["module"], "game-studio")
             self.assertTrue((root / snapshot["state"]["last_council_artifact"]).exists())

@@ -105,6 +105,7 @@ P0 through P1.7 are closed:
 - Sprint Planning Depth: implemented with `plan-sprint` template metadata, sequence/rebalance/validate modes, story-lifecycle facilitation depth for sprint goals and deferred work, Guidance Engine precedence over generic quality wording, and parity replay coverage.
 - Build Story Autonomy Depth: implemented with `build-story` template metadata, start/continue/review/evidence modes, full mechanical command map, JSON loop/do_not_prompt contract, and Codex Goal no-procedural-prompt handoff.
 - Document Review Depth: implemented with specialized `editorial-review` and `edge-case-review` templates, modes, document-utility facilitation depth, Guidance Engine precedence over generic quality review, and replay proof for prose/structure/tone plus boundary/failure/misuse review.
+- Council Orchestration Depth: implemented with dedicated `council-decision` pack/template/modes, party-mode Guidance Engine routing, richer live debate output, compact dissent/orchestration artifact contract, JSON orchestration plan, and replay proof.
 
 The remaining work is a planned sequence, not ad hoc patching.
 
@@ -428,9 +429,9 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 ## Immediate Next Step
 
-Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release, Architecture Guidance Depth cleanup, Context Boundary Recovery, Brainstorming Depth, CIS Facilitation Depth, Agent Compactness Guard, Story Decision Source Gate, Sprint Planning Depth, Build Story Autonomy Depth, and Document Review Depth.
+Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release, Architecture Guidance Depth cleanup, Context Boundary Recovery, Brainstorming Depth, CIS Facilitation Depth, Agent Compactness Guard, Story Decision Source Gate, Sprint Planning Depth, Build Story Autonomy Depth, Document Review Depth, and Council Orchestration Depth.
 
-Current next focus: inspect party-mode/council and subagent orchestration gaps, then add proof only where Codex actually benefits from multi-participant guidance.
+Current next focus: continue the remaining strong-ish rows with real-use transcript proof; likely candidates are correct-course breadth, problem-solving depth, and any residual game/code-review examples that still feel generic.
 
 Do not tag or publish from a partial test run. Start from this plan:
 

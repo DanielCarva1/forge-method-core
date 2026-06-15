@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T06:24:05+00:00",
+  "generated_at": "2026-06-15T06:48:23+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -815,12 +815,34 @@
       "required": false
     },
     {
+      "facilitation_pack": "council-decision",
+      "followed_by": [
+        "track-decision",
+        "concept-selection",
+        "story-creation",
+        "correct-course",
+        "risk-register"
+      ],
       "id": "council-decision",
+      "modes": [
+        "debate",
+        "decision",
+        "parallel",
+        "agent-team",
+        "subagent",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "council decision"
+        "live council debate",
+        "compact council decision",
+        "orchestration plan",
+        "dissent map",
+        "next action"
       ],
       "phase": "anytime",
-      "required": false
+      "required": false,
+      "template": "council-decision-artifact"
     },
     {
       "facilitation_pack": "story-lifecycle",

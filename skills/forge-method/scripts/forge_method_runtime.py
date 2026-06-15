@@ -5614,6 +5614,16 @@ def detect_guidance_signals(question: str) -> list[str]:
             "checkpoint preview",
             "preview checkpoint",
             "preview de checkpoint",
+            "party mode",
+            "party-mode",
+            "agent council",
+            "council decision",
+            "multi-agent discussion",
+            "multi agent discussion",
+            "subagent orchestration",
+            "subagent plan",
+            "agent team",
+            "agent-team",
             "readiness matrix",
             "implementation readiness",
             "ready to build",
@@ -5843,7 +5853,7 @@ def detect_guidance_signals(question: str) -> list[str]:
             "automate",
             "auditoria",
         },
-        "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness", "checkpoint"},
+        "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness", "checkpoint", "council", "party", "subagent", "subagents"},
         "persona-lens": {"lens", "lente", "persona", "coach", "perspectiva", "visao", "pm", "architect", "arquiteto", "analyst", "analista", "ux", "qa", "writer", "storyteller"},
         "story-flow": {"backlog", "epic", "epics", "sprint", "stories", "story", "historia", "historias"},
         "product-flow": {
@@ -6550,6 +6560,20 @@ def routed_lifecycle_workflow(question: str) -> str:
     ):
         return "checkpoint-preview"
     if (
+        "party mode" in normalized
+        or "party-mode" in normalized
+        or "agent council" in normalized
+        or "council decision" in normalized
+        or "multi-agent discussion" in normalized
+        or "multi agent discussion" in normalized
+        or "subagent orchestration" in normalized
+        or "subagent plan" in normalized
+        or "agent team" in normalized
+        or "agent-team" in normalized
+        or {"council", "party", "subagent", "subagents"} & tokens
+    ):
+        return "council-decision"
+    if (
         "track decision" in normalized
         or "choose track" in normalized
         or "which track" in normalized
@@ -6623,6 +6647,17 @@ def routed_problem_workflow(question: str) -> str:
 
 
 def lifecycle_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "council-decision":
+        return (
+            "run council-decision to stage a live multi-perspective debate, preserve dissent, and write a compact decision plus orchestration plan",
+            "I should make the discussion useful for the human without making future agents load a long transcript.",
+            guidance_alternatives(
+                ("track-decision", "use when the council is really choosing project/module route"),
+                ("concept-selection", "use when options are already generated and need convergence"),
+                ("risk-register", "use when dissent should become owned risk"),
+                ("story-creation", "use when the decision is ready to become implementation work"),
+            ),
+        )
     if workflow_id == "track-decision":
         return (
             "run track-decision to select the module/track, preserve rejected routes, and map required next workflows",
@@ -8088,14 +8123,122 @@ def council_participants(root: Path, raw_agents: list[str] | None, *, topic: str
     return participants
 
 
-def council_decision_summary(topic: str, participants: list[dict[str, str]]) -> str:
+def council_mode_for_topic(topic: str, requested_mode: str = "auto") -> str:
+    normalized = normalize_text(topic)
+    tokens = objective_tokens(topic)
+    if requested_mode and requested_mode != "auto":
+        return requested_mode
+    if (
+        {"parallel", "subagent", "subagents", "workers", "worker", "orchestrate", "orchestration", "split"} & tokens
+        or "agent team" in normalized
+        or "agent-team" in normalized
+        or "run in parallel" in normalized
+        or "parallel subagent" in normalized
+    ):
+        return "parallel"
+    if {"decide", "decision", "choose", "choice", "tradeoff", "dissent"} & tokens:
+        return "decision"
+    return "debate"
+
+
+def council_participant_view(topic: str, profile: dict[str, str]) -> dict[str, str]:
+    profile_id = profile.get("id", "")
+    defaults = {
+        "facilitator": (
+            "Name the actual human decision and the confidence level needed.",
+            "Do not let a vague feeling masquerade as a decision.",
+        ),
+        "planner": (
+            "Find the smallest reversible sequence and the dependency that can block it.",
+            "Do not turn discussion into an unowned backlog.",
+        ),
+        "researcher": (
+            "Separate known facts, stale assumptions, and the one source that would change the decision.",
+            "Do not let benchmark vibes replace evidence.",
+        ),
+        "spec-architect": (
+            "Protect the source-of-truth boundary, interfaces, and acceptance criteria.",
+            "Do not let taste or ambition erase implementation constraints.",
+        ),
+        "quality-reviewer": (
+            "Challenge proof, missing checks, release risk, and waiver language.",
+            "Do not accept consensus without evidence.",
+        ),
+        "implementer": (
+            "Expose build cost, blast radius, and the concrete next patch path.",
+            "Do not approve a plan that cannot become a checked change.",
+        ),
+        "operator": (
+            "Check supportability, monitoring, feedback, and future evolution.",
+            "Do not ship a decision with no operation path.",
+        ),
+    }
+    move, dissent = defaults.get(
+        profile_id,
+        (
+            profile.get("council_role") or profile.get("purpose") or "Bring a specialist perspective.",
+            "Do not add perspective without changing the decision quality.",
+        ),
+    )
+    return {
+        "id": profile_id,
+        "title": profile.get("title", profile_id),
+        "role": profile.get("council_role") or profile.get("purpose", ""),
+        "opening": profile.get("persona") or profile.get("purpose", ""),
+        "move": move,
+        "dissent": dissent,
+        "handoff": profile.get("handoff", ""),
+    }
+
+
+def council_orchestration_plan(topic: str, participants: list[dict[str, str]], mode: str) -> dict[str, Any]:
+    execution = "parallel" if mode in {"parallel", "agent-team", "subagent"} else "sequential"
+    workers = []
+    for profile in participants:
+        view = council_participant_view(topic, profile)
+        workers.append(
+            {
+                "agent": view["id"],
+                "title": view["title"],
+                "job": view["move"],
+                "output": f"{view['id']}: finding, dissent, evidence_needed, next_action",
+            }
+        )
+    return {
+        "mode": mode,
+        "execution": execution,
+        "runtime_policy": "Use real Codex subagents only when available and the jobs are independent; otherwise run the same roles serially.",
+        "workers": workers,
+        "merge": {
+            "owner": "facilitator",
+            "contract": "recommendation + dissent + risks + evidence_needed + next_action",
+            "do_not_persist": "live transcript",
+        },
+    }
+
+
+def council_decision_summary(
+    topic: str,
+    participants: list[dict[str, str]],
+    *,
+    mode: str = "debate",
+    plan: dict[str, Any] | None = None,
+) -> str:
     names = ", ".join(profile.get("title", profile.get("id", "")) for profile in participants)
-    return (
-        f"Topic: {topic}. Participants: {names}. Recommendation: run the smallest reversible next step, "
-        "preserve dissent as risk, and update state/evidence before implementation continues. "
-        "Agreements: keep one public entrypoint and separate Human Experience from Agent Runtime. "
-        "Risks: cost, context growth, unclear ownership, and false consensus. "
-        "Next action: convert the decision into a story or explicit human input."
+    plan = plan or council_orchestration_plan(topic, participants, mode)
+    workers = "; ".join(f"{worker['agent']} -> {worker['output']}" for worker in plan.get("workers", []))
+    return "\n".join(
+        [
+            f"Topic: {topic}.",
+            f"Mode: {mode}; execution: {plan.get('execution', 'sequential')}.",
+            f"Participants: {names}.",
+            "Recommendation: run the smallest reversible next step, preserve dissent as risk, and update state/evidence before implementation continues.",
+            "Agreements: keep one public entrypoint and separate Human Experience from Agent Runtime.",
+            "Dissent to preserve: cost, context growth, unclear ownership, false consensus, and weak evidence.",
+            f"Orchestration: {plan.get('runtime_policy', '')}",
+            f"Worker outputs: {workers}",
+            "Next action: convert the decision into a story, artifact, explicit human input, or validation command.",
+        ]
     )
 
 
@@ -8106,21 +8249,10 @@ def cmd_council_run(args: argparse.Namespace) -> int:
     participants = council_participants(root, args.agent, topic=topic)
     if not participants:
         raise SystemExit("No council participants available.")
-    print("Forge Agent Council")
-    print(f"Topic: {topic}")
-    if persona_lens:
-        print(f"Persona lens: {persona_lens.get('title')}")
-    print("Mode: live transcript on screen; compact decision persisted.")
-    print("")
-    for profile in participants:
-        title = profile.get("title", profile.get("id", "Agent"))
-        persona = profile.get("persona", profile.get("purpose", "Focused specialist."))
-        print(f"[{title}]")
-        print(f"{persona}")
-        print(f"View: {profile.get('purpose', '')}")
-        print(f"Guardrail: {profile.get('handoff', '')}")
-        print("")
-    summary = council_decision_summary(topic, participants)
+    mode = council_mode_for_topic(topic, getattr(args, "mode", "auto"))
+    plan = council_orchestration_plan(topic, participants, mode)
+    views = [council_participant_view(topic, profile) for profile in participants]
+    summary = council_decision_summary(topic, participants, mode=mode, plan=plan)
     rel = write_artifact(
         root,
         kind="council-decision",
@@ -8142,10 +8274,56 @@ def cmd_council_run(args: argparse.Namespace) -> int:
             "artifact": rel,
             "participants": [item.get("id", "") for item in participants],
             "persona_lens": persona_lens.get("id", ""),
+            "mode": mode,
+            "execution": plan.get("execution", ""),
         },
     )
-    print(f"Persisted decision artifact: {rel}")
-    print(f"Next: {state['next_action']}")
+    payload = {
+        "runtime": RUNTIME_NAME,
+        "workflow": "council-decision",
+        "topic": topic,
+        "mode": mode,
+        "persona_lens": persona_lens,
+        "participants": views,
+        "orchestration_plan": plan,
+        "artifact": rel,
+        "next_action": state["next_action"],
+    }
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2))
+    else:
+        print("Forge Agent Council")
+        print(f"Topic: {topic}")
+        if persona_lens:
+            print(f"Persona lens: {persona_lens.get('title')}")
+        print(f"Mode: {mode}; live debate on screen, compact decision persisted.")
+        print("")
+        print("Decision Frame")
+        print("- What decision is actually being made?")
+        print("- Which dissent would change the next action?")
+        print("- What proof would make this safe to continue?")
+        print("")
+        print("Round 1: Specialist Takes")
+        for view in views:
+            print(f"[{view['title']}]")
+            print(view["opening"])
+            print(f"Move: {view['move']}")
+            print(f"Dissent: {view['dissent']}")
+            print(f"Handoff: {view['handoff']}")
+            print("")
+        print("Round 2: Convergence")
+        print("Recommendation: run the smallest reversible next step, preserve dissent as risk, and update state/evidence before implementation continues.")
+        print("Dissent to keep visible: cost, context growth, unclear ownership, false consensus, and weak evidence.")
+        print("")
+        print("Agent Orchestration")
+        print(f"Execution: {plan['execution']}")
+        print(plan["runtime_policy"])
+        for worker in plan["workers"]:
+            print(f"- {worker['agent']}: {worker['job']} -> {worker['output']}")
+        print(f"Merge: {plan['merge']['contract']}")
+        print("")
+        print(f"Persisted decision artifact: {rel}")
+        print(f"Next: {state['next_action']}")
     return 0
 
 
@@ -10429,8 +10607,10 @@ def build_parser() -> argparse.ArgumentParser:
     council_run.add_argument("--root", default=".")
     council_run.add_argument("--topic")
     council_run.add_argument("--agent", action="append")
+    council_run.add_argument("--mode", choices=["auto", "debate", "decision", "parallel", "agent-team", "subagent"], default="auto")
     council_run.add_argument("--next-action")
     council_run.add_argument("--eval", action="store_true")
+    council_run.add_argument("--json", action="store_true")
     council_run.set_defaults(func=cmd_council_run, record_guidance=True, emit_guidance=True)
 
     correct_course = sub.add_parser("correct-course", help="write a compact correct-course continuation artifact")
@@ -10879,7 +11059,10 @@ def main(argv: list[str] | None = None) -> int:
     if getattr(args, "command", "") == "config" and getattr(args, "config_command", "") == "index" and not getattr(args, "write", False):
         record_guidance = False
     if result == 0 and record_guidance:
-        record_post_command_guidance(resolve_root(args.root), emit=getattr(args, "emit_guidance", False))
+        emit_guidance = getattr(args, "emit_guidance", False)
+        if getattr(args, "command", "") == "council" and getattr(args, "json", False):
+            emit_guidance = False
+        record_post_command_guidance(resolve_root(args.root), emit=emit_guidance)
     return result
 
 

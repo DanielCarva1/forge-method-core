@@ -706,6 +706,19 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "lifecycle_party_mode_council_request",
+    "family": "lifecycle",
+    "state": "discovery",
+    "question": "run party mode agent council with subagent orchestration for product research architecture quality and implementation dissent",
+    "expected_classification": "lifecycle-flow",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "council-decision",
+    "expected_facilitation_pack": "skill:facilitation/council-decision.md",
+    "expected_template": "council-decision-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
     "id": "lifecycle_document_project_request",
     "family": "lifecycle",
     "state": "discovery",

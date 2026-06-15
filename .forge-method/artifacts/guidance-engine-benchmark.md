@@ -26,6 +26,8 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Builder utility flows analyze agents/workflows and convert skill material before scaffolding new runtime artifacts.
 - Customization flows select team/local scope, choose supported override keys, validate merged behavior, and expose an effective capability index instead of relying on hidden prose.
 - Persona/coach requests select a human-facing lens and elicitation technique set without copying long persona prose into agent profiles, state, or compact workflow docs.
+- Party-mode requests invite a small set of relevant specialist perspectives, keep the discussion useful for the human, preserve dissent, and avoid turning the full debate into future agent memory.
+- Subagent-capable flows separate orchestration mode from artifact contract: parallel, agent-team, or subagent execution can speed independent work, but the merged output schema stays stable.
 - Documentation utility flows index, shard, review, stress-test, and distill source material before agents consume it.
 - Editorial review separates reader job, prose/structure/tone issues, unsupported claims, and source-of-truth boundaries before applying scoped edits.
 - Edge-case review enumerates boundary conditions, failure modes, misuse cases, missing checks, waivers, and follow-up stories instead of collapsing into generic adversarial critique.
@@ -75,6 +77,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Builder Factory outputs must keep coached human creation in facilitation packs and compact agent contracts in workflow refs, templates, catalog metadata, and validation reports.
 - Project Configuration outputs must make customization visible through inspect, Guidance Engine metadata, validation, and the generated Capability Index.
 - Persona Lens outputs must preserve a compact `persona_lens` object, route PM/Architect/UX/QA/Game/Builder/Tech Writer and coach requests, and keep default agent recommendations compact.
+- Council Orchestration Depth outputs must route party-mode/council/subagent orchestration requests to `council-decision`, show a richer live debate to humans, and persist only compact participant, dissent, worker-output, merge, evidence, and next-action contracts.
 - Lifecycle Closure outputs must preserve route, source material, findings, decisions, checks, next workflow, and load hints without storing full transcripts.
 - Runtime-builder/systematic parity batch names must outrank loose domain words such as "product", "context", "review", or "retro" when the state is `6-evolve` or runtime-builder.
 - Game Studio Depth outputs must route game-specific requests to game-context, engine-setup, GDD, narrative, mechanics, quick-prototype, playtest, performance, or game QA workflows before generic software planning; artifacts must preserve player fantasy, engine profile, playable-slice proof, decision sources, and validation evidence compactly.
@@ -135,6 +138,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `adversarial-review`
 - `design-thinking`
 - `track-decision`
+- `council-decision`
 - `project-context`
 - `session-prep`
 - `checkpoint-preview`
