@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T02:24:23+00:00",
+  "generated_at": "2026-06-15T03:45:32+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -484,7 +484,7 @@
   ],
   "project_conventions": [],
   "runtime": "forge-method",
-  "runtime_version": "1.28.0",
+  "runtime_version": "1.29.0",
   "sources": [],
   "workflows": [
     {
@@ -556,14 +556,29 @@
     {
       "facilitation_pack": "architecture-planning",
       "followed_by": [
-        "create-epics"
+        "test-strategy",
+        "security-plan",
+        "create-epics",
+        "story-creation",
+        "readiness-check"
       ],
       "id": "architecture",
+      "modes": [
+        "create",
+        "update",
+        "validate",
+        "tradeoff",
+        "headless"
+      ],
       "outputs": [
-        "architecture notes"
+        "architecture decisions",
+        "interface contracts",
+        "story impact",
+        "validation hooks"
       ],
       "phase": "3-plan",
-      "required": true
+      "required": true,
+      "template": "architecture-artifact"
     },
     {
       "facilitation_pack": "test-architecture",

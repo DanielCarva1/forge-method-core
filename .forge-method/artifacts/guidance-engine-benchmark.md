@@ -38,7 +38,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - PRD requests should route to a create/update/validate product-requirements workflow with decision log, addendum, validation findings, and next workflow.
 - PRFAQ and working-backwards requests should route to a customer-promise challenge before PRD, UX, architecture, or stories harden an untested promise.
 - UX requests should route to UX planning with taste calibration, journeys, interaction model, accessibility, rejection log, and proof target before stories.
-- Architecture requests should route to architecture planning that connects accepted product decisions to technical constraints, interfaces, risks, and story boundaries.
+- Architecture requests should route to architecture planning that connects accepted product decisions to technical constraints, interfaces, risks, tradeoffs, validation hooks, and story boundaries; product architecture with PRD/UX trace should outrank generic quality routing even when the human mentions test hooks.
 - Quick Dev / Quick Flow requests should route to a spec-lite workflow that clarifies scope, implements or hands off mechanically, reviews, validates, writes evidence, and names the next workflow.
 - Story lifecycle requests should route to story-creation/readiness flows that require accepted decision sources, acceptance criteria, checks, evidence expectations, and a validation map before build-story.
 - Sprint status requests should route to a status ritual that names story counts, active/blocked/review items, evidence gaps, and the next executable action.

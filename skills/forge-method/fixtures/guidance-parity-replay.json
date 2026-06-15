@@ -99,7 +99,22 @@
     "expected_phase": "3-plan",
     "expected_workflow": "architecture",
     "expected_facilitation_pack": "skill:facilitation/architecture-planning.md",
-    "state_update_required": false
+    "expected_template": "architecture-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "architecture_tradeoff_validation_request",
+    "family": "architecture",
+    "state": "discovery",
+    "question": "preciso validar arquitetura com tradeoffs, source trace do PRD e UX, riscos de seguranca, interfaces, test hooks e impacto nas stories antes de build",
+    "expected_classification": "product-flow",
+    "expected_phase": "3-plan",
+    "expected_workflow": "architecture",
+    "expected_facilitation_pack": "skill:facilitation/architecture-planning.md",
+    "expected_template": "architecture-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
   },
   {
     "id": "quick_dev_small_change_request",

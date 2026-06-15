@@ -5891,6 +5891,62 @@ def routed_product_workflow(question: str) -> str:
     return "product-requirements"
 
 
+def is_product_architecture_intent(question: str) -> bool:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    if not ({"architecture", "architectural", "arquitetura"} & tokens):
+        return False
+    if (
+        "test architecture" in normalized
+        or "fixture architecture" in normalized
+        or "antes de arquitetura" in normalized
+        or "before architecture" in normalized
+    ):
+        return False
+    product_context_tokens = {
+        "prd",
+        "product",
+        "produto",
+        "requirements",
+        "requisitos",
+        "ux",
+        "ui",
+        "story",
+        "stories",
+        "interface",
+        "interfaces",
+        "tradeoff",
+        "tradeoffs",
+        "decision",
+        "decisions",
+        "risk",
+        "risks",
+        "risco",
+        "riscos",
+        "security",
+        "seguranca",
+        "privacy",
+        "privacidade",
+        "source",
+        "trace",
+        "handoff",
+        "build",
+        "implementation",
+        "implementacao",
+        "hooks",
+    }
+    product_context_phrases = (
+        "source trace",
+        "test hooks",
+        "impacto nas stories",
+        "story impact",
+        "before build",
+        "antes de build",
+        "antes de implementar",
+    )
+    return bool(product_context_tokens & tokens or any(phrase in normalized for phrase in product_context_phrases))
+
+
 def routed_story_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
@@ -6763,6 +6819,17 @@ def build_guidance_decision(
             ("correct-course", "when the attack proves the current route is wrong"),
         )
         reason = "The message asks for adversarial or red-team review, which should attack assumptions before quality or build routing."
+    elif has_question and is_product_architecture_intent(question) and "game-flow" not in signal_set:
+        classification = "product-flow"
+        recommended_workflow = "architecture"
+        recommended_action = "run architecture to connect accepted product decisions to technical constraints, interfaces, risks, validation hooks, and story boundaries"
+        human_prompt = "I should validate the architecture against PRD, UX, risk, interfaces, and story impact before build."
+        alternatives = guidance_alternatives(
+            ("product-requirements", "when the product promise, scope, or acceptance criteria still need a PRD"),
+            ("ux-plan", "when journey, interface states, accessibility, or taste are still unresolved"),
+            ("test-strategy", "when the main job is QA coverage rather than product architecture"),
+        )
+        reason = "The message asks for product architecture with PRD/UX trace, tradeoffs, risks, interfaces, validation hooks, or story impact."
     elif has_question and "quality-flow" in signal_set and not is_strong_game_quality_intent(question):
         classification = "quality-flow"
         recommended_workflow = routed_quality_workflow(question)
@@ -6811,6 +6878,7 @@ def build_guidance_decision(
             ("product-requirements", "when product promise, scope, or acceptance criteria need a PRD"),
             ("working-backwards-challenge", "when the customer promise needs PRFAQ-style stress testing"),
             ("ux-plan", "when taste, journey, interface, states, or accessibility are the main uncertainty"),
+            ("architecture", "when accepted PRD/UX decisions need technical tradeoffs, interfaces, and story impact"),
         )
         reason = "The message asks for product requirements, UX design, PRD validation, or a quick guided build path."
     elif next_story and phase == "4-build-verify" and (not has_question or "mechanical-build" in signal_set or "operate-support" in signal_set):

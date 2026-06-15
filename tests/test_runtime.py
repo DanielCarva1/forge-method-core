@@ -1500,6 +1500,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "product-requirements-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "working-backwards-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "ux-design-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "architecture-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "quick-dev-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "story-creation-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "sprint-status-artifact.md",
@@ -1523,6 +1524,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "facilitation" / "document-utility.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "product-planning.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "ux-design.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "architecture-planning.md",
         ]:
             self.assertIn("domain_examples:", pack_path.read_text(encoding="utf-8"))
         catalog = json.loads((ROOT / "skills" / "forge-method" / "catalog" / "workflows.json").read_text(encoding="utf-8"))
@@ -1604,6 +1606,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["product-requirements"].get("template"), "product-requirements-artifact")
         self.assertEqual(by_id["working-backwards-challenge"].get("template"), "working-backwards-artifact")
         self.assertEqual(by_id["ux-plan"].get("template"), "ux-design-artifact")
+        self.assertEqual(by_id["architecture"].get("template"), "architecture-artifact")
         self.assertEqual(by_id["quick-dev"].get("template"), "quick-dev-artifact")
         self.assertEqual(by_id["story-creation"].get("template"), "story-creation-artifact")
         self.assertEqual(by_id["sprint-status"].get("template"), "sprint-status-artifact")
@@ -1646,6 +1649,8 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("validate", by_id["product-requirements"].get("modes", []))
         self.assertIn("prfaq", by_id["working-backwards-challenge"].get("modes", []))
         self.assertIn("validate", by_id["ux-plan"].get("modes", []))
+        self.assertIn("tradeoff", by_id["architecture"].get("modes", []))
+        self.assertIn("readiness-check", by_id["architecture"].get("followed_by", []))
         self.assertIn("spec-lite", by_id["quick-dev"].get("modes", []))
         self.assertIn("validate", by_id["story-creation"].get("modes", []))
         self.assertIn("status", by_id["sprint-status"].get("modes", []))

@@ -80,10 +80,10 @@ The product direction is therefore:
 | Analysis: brainstorming | `brainstorming` workflow + facilitation pack | strong-ish | Need transcript tests for richer guided divergence, not just route. | Add fixtures for option generation, constraint capture, rejected directions. |
 | Analysis: market/domain/technical research | `market-scan`, `domain-scan`, `technical-feasibility-scan`, Reality/Evidence Gate, `research-closeout` | translated/strong | P1.4 adds research closeout handoff with sources, confidence, decision impact, uncertainty, and next workflow. | Add richer source-quality examples as research depth grows. |
 | Product brief / PRFAQ | `discover-intent`, `product-requirements`, `working-backwards-challenge`, `reality-evidence-gate` | translated | P1.7 adds a working-backwards challenge workflow for customer-promise, FAQ objection, evidence gap, and decision-impact stress testing before PRD/UX/architecture harden the promise. | Add richer transcript examples only if real product sessions show weak coaching. |
-| PRD create/update/validate | `product-requirements`, `write-spec`, `spec-distillation`, `grill-gate` | partial | Missing BMAD-like create/update/validate modes, addendum, decision log, HTML/findings-style validation. | Expand product requirements pack and workflow metadata with modes and validation artifact. |
+| PRD create/update/validate | `product-requirements`, `write-spec`, `spec-distillation`, `grill-gate` | translated | Product requirements now has create/update/validate/addendum modes, decision/addendum log, validation findings, template metadata, facilitation depth, and replay coverage. | Add richer transcript examples only if live product sessions expose weak coaching. |
 | Advanced elicitation | facilitation packs, `council-decision`, `grill-gate`, elicitation technique index | translated | P1.3 adds a validated compact technique index and exposes technique ids through Persona Lens guidance without bloating state. | Expand technique use inside future deep packs as they are translated. |
-| UX design | `ux-plan`, some game UX | partial | No rich UX designer workflow equivalent with EXPERIENCE/DESIGN style outputs and human taste calibration across product work. | Add UX facilitation pack, UX artifact template, transcript fixtures. |
-| Architecture | `architecture`, `engine-architecture`, `security-plan`, enterprise plans | partial | Core architecture exists but less agent/persona guided and less tied to PRD validation. | Add architecture pack and readiness checks linking PRD/UX/security/story plan. |
+| UX design | `ux-plan`, some game UX | translated | UX plan now has taste calibration, journeys, interaction states, accessibility, rejection log, proof target, template metadata, facilitation depth, and replay coverage. | Add richer transcript examples only if live UX sessions still feel generic. |
+| Architecture | `architecture`, `engine-architecture`, `security-plan`, enterprise plans | translated | Product architecture now has create/update/validate/tradeoff modes, source trace to PRD/UX, security/privacy/ops/test-hook prompts, story impact, template metadata, and replay precedence over generic quality routing. | Keep story/readiness gates aligned with architecture sources as real projects expose gaps. |
 | Project context generation | `project-context`, `context plan`, `context recover`, `current-pack`, `AGENTS.md` | translated/advantage | P1.4 adds a user-facing project-context workflow while preserving Forge's compact runtime context packs. | Add domain-specific context variants only when a module needs them. |
 | Epics and stories after architecture | `create-epics`, `plan-sprint`, `game-story-creation` | partial | Previous bug created stories too early; fixed for new projects. Need stronger invariant that story generation requires approved decision artifacts. | Add tests/gate preventing stories before required track artifacts. |
 | Implementation readiness | `readiness-check`, readiness matrix, `gate`, `ready`, `release-readiness` | translated | P1.4 adds readiness matrix output across spec, architecture, UX, risk, stories, validation, inputs, and findings. | Add stricter source coverage gates if future story creation finds gaps. |
@@ -184,12 +184,12 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | `bmad-market-research` | `market-scan` | strong-ish |
 | `bmad-domain-research` | `domain-scan` | strong-ish |
 | `bmad-technical-research` | `technical-feasibility-scan` | strong-ish |
-| `bmad-product-brief` | `discover-intent`, `product-requirements` | partial |
+| `bmad-product-brief` | `discover-intent`, `product-requirements` | translated |
 | `bmad-prfaq` | `working-backwards-challenge` | translated |
-| `bmad-prd` | `product-requirements` with create/update/validate modes | partial |
+| `bmad-prd` | `product-requirements` with create/update/validate/addendum modes | translated |
 | `bmad-spec` | `write-spec`, `quick-dev` | partial |
-| `bmad-ux` | `ux-plan` plus future UX pack/template | partial |
-| `bmad-create-architecture` | `architecture` | partial |
+| `bmad-ux` | `ux-plan` plus UX pack/template | translated |
+| `bmad-create-architecture` | `architecture` with trace/tradeoff/validation modes | translated |
 | `bmad-generate-project-context` | `project-context`, `context plan` | translated |
 | `bmad-create-epics-and-stories` | `create-epics` | partial |
 | `bmad-check-implementation-readiness` | `readiness-check` with readiness matrix | translated |
@@ -362,6 +362,6 @@ The full objective is complete only when:
 
 ## Current status
 
-This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.7 are implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. Forge Method 1.29.0 is published, and the post-command Help Oracle hardening adds a runtime-level record/emit contract for progress-changing commands. P2 scope decisions are recorded in `.forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md`. This is not full goal completion: real-use transcript hardening and the remaining partial/strong-ish rows still need proof.
+This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.7 are implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. Forge Method 1.29.0 is published, post-command Help Oracle hardening adds a runtime-level record/emit contract for progress-changing commands, and Architecture Guidance Depth closes the stale product/UX/architecture audit rows with template, mode, facilitation, and replay proof. P2 scope decisions are recorded in `.forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md`. This is not full goal completion: real-use transcript hardening and the remaining partial/strong-ish rows still need proof.
 
 Immediate next step: continue real-use transcript hardening against the remaining partial/strong-ish rows, starting with human guidance depth where the runtime routes correctly but the conversation still feels thin.
