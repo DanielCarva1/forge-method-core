@@ -8288,6 +8288,79 @@ def should_transition_to_guided_workflow(
     return classification in {"game-flow", "quality-flow", "builder-flow", "document-utility", "product-flow", "story-flow", "creative-flow", "lifecycle-flow", "persona-lens"}
 
 
+def humanize_guidance_sentence(prompt: str) -> str:
+    text = " ".join(str(prompt or "").split())
+    if text.startswith("I should "):
+        text = "I will " + text[len("I should ") :]
+    if text.startswith("The approved decision work is done; I should "):
+        text = "The approved decision work is done; I will " + text[len("The approved decision work is done; I should ") :]
+    text = text.replace("I should ", "I will ")
+    return text.rstrip(".")
+
+
+def first_guidance_question(classification: str, workflow_id: str) -> str:
+    if workflow_id == "correct-course" or classification == "correct-course":
+        return "what felt wrong, what should have happened instead, and what evidence would prove the correction worked?"
+    if workflow_id in {"context-recovery", "problem-solving", "investigation"} or classification == "confusion":
+        return "what symptom, recent change, and desired end state should anchor the diagnosis?"
+    if workflow_id == "brainstorming" or classification == "brainstorm":
+        return "what option lanes, taste constraints, and obviously bad ideas should we explore or reject?"
+    if classification == "research-needed" or workflow_id.endswith("-scan"):
+        return "which claim would be risky to assume, and what evidence would change the decision?"
+    if classification == "builder-flow":
+        return "what human behavior should improve, what compact agent contract should exist, and which test would catch regression?"
+    if classification == "game-flow":
+        return "what player fantasy, first playable moment, and hard constraint should lead the design?"
+    if classification == "creative-flow" or workflow_id in {"creative-session", "design-thinking", "innovation-strategy", "storytelling"}:
+        return "what feeling, audience shift, and rejected direction should shape this pass?"
+    if classification == "quality-flow":
+        return "what failure would be expensive to miss, and what proof should block release if it fails?"
+    if classification == "document-utility":
+        return "what source is authoritative, what job should the document do, and what must not be changed?"
+    if classification == "story-flow":
+        return "which accepted decision sources, story boundary, and validation proof should drive the next batch?"
+    if classification in {"product-flow", "persona-lens"}:
+        return "what must stay true for the user, what is out of scope, and how will we know it worked?"
+    if classification == "lifecycle-flow":
+        return "what should be preserved, what can be closed, and what next owner or workflow needs the handoff?"
+    return "what outcome, constraint, and proof should shape the next pass?"
+
+
+def rich_human_prompt_for_guidance(
+    *,
+    prompt: str,
+    classification: str,
+    workflow_id: str,
+    facilitation_pack: str,
+) -> str:
+    if not facilitation_pack or classification == "mechanical-build":
+        return prompt
+    base = humanize_guidance_sentence(prompt)
+    if not base:
+        base = f"I will use {workflow_id} to guide the next decision"
+    if "First question:" in base and "?" in base:
+        return base
+    return f"Let's use `{workflow_id}` as the guided path. {base}. First question: {first_guidance_question(classification, workflow_id)}"
+
+
+def specific_route_reason(
+    *,
+    reason: str,
+    signals: list[str],
+    phase: str,
+    classification: str,
+    workflow_id: str,
+) -> str:
+    text = " ".join(str(reason or "").split())
+    if text and not text.endswith("."):
+        text += "."
+    signal_text = ", ".join(signals[:5]) if signals else "none"
+    route = f"Signals: {signal_text}. Route: {phase or 'no-state'} / {classification} -> {workflow_id}."
+    if "Signals:" in text and "Route:" in text:
+        return text
+    return f"{text} {route}".strip()
+
+
 def build_guidance_decision(
     root: Path,
     state: dict[str, str] | None,
@@ -8813,6 +8886,19 @@ def build_guidance_decision(
             )
         )
         reason = f"{reason} The selected catalog workflow is narrow and executable, so the runtime should enter it before continuing."
+    human_prompt = rich_human_prompt_for_guidance(
+        prompt=human_prompt,
+        classification=classification,
+        workflow_id=recommended_workflow,
+        facilitation_pack=facilitation_pack,
+    )
+    reason = specific_route_reason(
+        reason=reason,
+        signals=signals,
+        phase=phase,
+        classification=classification,
+        workflow_id=recommended_workflow,
+    )
     if not commands:
         commands = [preflight_command("guide", "guide", "--root", root, "--question", question or "<question>", "--json")]
     return {
@@ -9201,6 +9287,8 @@ def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[
     state_updates = payload.get("state_updates") or {}
     if not route_reason:
         failures.append("route_reason is empty")
+    if "Signals:" not in route_reason or "Route:" not in route_reason:
+        failures.append("route_reason must include Signals and Route summary")
     expect_equal(
         "state_updates.last_intent_classification",
         state_updates.get("last_intent_classification"),
@@ -9278,6 +9366,21 @@ def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[
         failures.append("recommended_action is empty")
     if not payload.get("human_prompt"):
         failures.append("human_prompt is empty")
+    if payload.get("facilitation_pack") and case.get("expected_classification") != "mechanical-build":
+        prompt = str(payload.get("human_prompt") or "")
+        if "First question:" not in prompt or "?" not in prompt:
+            failures.append("human_prompt must include a human-facing first question for facilitated guidance")
+        internal_prefixes = (
+            "I should ",
+            "This ready project ",
+            "This is new intent ",
+            "The approved decision work ",
+            "The game story is ready ",
+        )
+        if prompt.startswith(internal_prefixes):
+            failures.append("human_prompt must not start as an internal agent note")
+        if "I should " in prompt:
+            failures.append("human_prompt must not contain internal 'I should' phrasing")
     if not isinstance(payload.get("alternatives"), list):
         failures.append("alternatives is not a list")
     return failures
@@ -9309,6 +9412,7 @@ def run_parity_replay(*, fixture_path: Path, max_chars: int) -> dict[str, Any]:
                     "facilitation_pack": payload.get("facilitation_pack"),
                     "template": (payload.get("workflow_metadata") or {}).get("template"),
                     "persona_lens": persona_lens_id_for_payload(payload),
+                    "human_prompt": payload.get("human_prompt"),
                     "route_reason": (payload.get("guidance_engine") or {}).get("route_reason"),
                     "state_updates": payload.get("state_updates") or {},
                     "council_recommended": bool(payload.get("council_recommended")),

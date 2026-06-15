@@ -666,7 +666,7 @@ class RuntimeTests(unittest.TestCase):
             "expected_template": "design-thinking-artifact",
             "state_update_required": True,
         }
-        route_reason = "The message asks for Design Thinking Coach guidance."
+        route_reason = "The message asks for Design Thinking Coach guidance. Signals: persona-lens. Route: 1-discovery / persona-lens -> design-thinking."
         payload = {
             "intent_classification": "persona-lens",
             "recommended_phase": "1-discovery",
@@ -678,7 +678,7 @@ class RuntimeTests(unittest.TestCase):
             "commands": [{"name": "transition-workflow"}],
             "signals": ["persona-lens"],
             "recommended_action": "run design-thinking",
-            "human_prompt": "Use a design-thinking lens.",
+            "human_prompt": "Let's use `design-thinking` as the guided path. Use a design-thinking lens. First question: what must stay true for the user?",
             "alternatives": [],
             "guidance_engine": {"route_reason": route_reason},
             "state_updates": {
@@ -694,7 +694,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_parity_replay_requires_state_update_handoff_coherence(self) -> None:
         runtime = load_runtime_module()
-        route_reason = "Route reason."
+        route_reason = "Route reason. Signals: product-flow. Route: 2-specification / product-flow -> write-spec."
         case = {
             "expected_classification": "product-flow",
             "expected_phase": "2-specification",
@@ -714,7 +714,7 @@ class RuntimeTests(unittest.TestCase):
             "commands": [{"name": "transition-workflow"}],
             "signals": ["product-flow"],
             "recommended_action": "write the spec",
-            "human_prompt": "Use product planning.",
+            "human_prompt": "Let's use `write-spec` as the guided path. Use product planning. First question: what must stay true for the user?",
             "alternatives": [],
             "guidance_engine": {"route_reason": route_reason},
             "state_updates": {
@@ -727,6 +727,80 @@ class RuntimeTests(unittest.TestCase):
         failures = runtime.parity_case_failures(case, payload)
 
         self.assertIn("state_updates.active_guidance_mode: expected 'write-spec', got 'architecture'", failures)
+
+    def test_parity_replay_requires_human_facing_facilitated_prompt(self) -> None:
+        runtime = load_runtime_module()
+        route_reason = "Route reason. Signals: brainstorm. Route: 1-discovery / brainstorm -> brainstorming."
+        case = {
+            "expected_classification": "brainstorm",
+            "expected_phase": "1-discovery",
+            "expected_workflow": "brainstorming",
+            "expected_facilitation_pack": "skill:facilitation/brainstorming.md",
+            "expected_template": "brainstorming-artifact",
+            "state_update_required": True,
+        }
+        payload = {
+            "intent_classification": "brainstorm",
+            "recommended_phase": "1-discovery",
+            "recommended_workflow": "brainstorming",
+            "state_update_required": True,
+            "facilitation_pack": "skill:facilitation/brainstorming.md",
+            "persona_lens": {},
+            "workflow_metadata": {"id": "brainstorming", "template": "brainstorming-artifact"},
+            "commands": [{"name": "transition-workflow"}],
+            "signals": ["brainstorm"],
+            "recommended_action": "run brainstorming",
+            "human_prompt": "I should keep this divergent until options exist.",
+            "alternatives": [],
+            "guidance_engine": {"route_reason": route_reason},
+            "state_updates": {
+                "last_intent_classification": "brainstorm",
+                "active_guidance_mode": "brainstorming",
+                "last_route_reason": route_reason,
+            },
+        }
+
+        failures = runtime.parity_case_failures(case, payload)
+
+        self.assertIn("human_prompt must include a human-facing first question for facilitated guidance", failures)
+        self.assertIn("human_prompt must not start as an internal agent note", failures)
+        self.assertIn("human_prompt must not contain internal 'I should' phrasing", failures)
+
+    def test_parity_replay_requires_route_reason_specificity(self) -> None:
+        runtime = load_runtime_module()
+        route_reason = "The message asks for orientation or indicates uncertainty."
+        case = {
+            "expected_classification": "confusion",
+            "expected_phase": "1-discovery",
+            "expected_workflow": "problem-solving",
+            "expected_facilitation_pack": "skill:facilitation/problem-solving.md",
+            "expected_template": "problem-solving-artifact",
+            "state_update_required": True,
+        }
+        payload = {
+            "intent_classification": "confusion",
+            "recommended_phase": "1-discovery",
+            "recommended_workflow": "problem-solving",
+            "state_update_required": True,
+            "facilitation_pack": "skill:facilitation/problem-solving.md",
+            "persona_lens": {},
+            "workflow_metadata": {"id": "problem-solving", "template": "problem-solving-artifact"},
+            "commands": [{"name": "transition-workflow"}],
+            "signals": ["confusion"],
+            "recommended_action": "run problem-solving",
+            "human_prompt": "Let's use `problem-solving` as the guided path. Diagnose first. First question: what symptom should anchor the diagnosis?",
+            "alternatives": [],
+            "guidance_engine": {"route_reason": route_reason},
+            "state_updates": {
+                "last_intent_classification": "confusion",
+                "active_guidance_mode": "problem-solving",
+                "last_route_reason": route_reason,
+            },
+        }
+
+        failures = runtime.parity_case_failures(case, payload)
+
+        self.assertIn("route_reason must include Signals and Route summary", failures)
 
     def test_parity_replay_requires_council_assertions(self) -> None:
         fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))

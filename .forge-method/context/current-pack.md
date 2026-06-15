@@ -4,35 +4,35 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: replay-state-update-route-reason-contract-hardened
+- status: replay-human-prompt-route-specificity-hardened
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Continue post-parity Forge polish by auditing human_prompt quality and route_reason specificity against the rich-human compact-agent contract.
+- next_action: Continue post-parity Forge polish by auditing workflow-specific first-question quality and mechanical-build human/status wording.
 
 ## Latest Checkpoint
 
-# Replay state update route reason contract hardened
+# Replay human prompt route specificity hardened
 
-- created_at: 2026-06-15T16:02:36+00:00
+- created_at: 2026-06-15T16:39:49+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: replay-state-update-route-reason-contract-hardened
+- status: replay-human-prompt-route-specificity-hardened
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Added parity replay checks that state_updates mirror classification, workflow, and route_reason, and that Persona Lens route reasons persist the selected lens marker for compact agent handoff.
+Added Guidance Engine normalization so facilitated routes ask a concrete human first question, remove internal I-should phrasing, and append compact Signals/Route summaries for agent handoff.
 
 ## Decisions
 
-- Guidance replay must prove compact state-update handoff coherence, not just route and phase.
+- Guided human prompts are part of the runtime contract, not decorative copy; parity replay must fail when facilitated guidance reads like internal agent notes.
 
 ## Checks
 
 - python -m unittest discover -s tests -v
 - python skills/forge-method/scripts/forge_method_runtime.py parity replay
-- manual replay audit: missing_persona_route_reason_markers [] and state_update_coherence_issues []
+- manual replay audit: cases 90, facilitated 88, missing_first_question 0, internal_i_should 0, missing_signals_route 0
 - powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1
 - powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1
 - powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1
@@ -47,16 +47,16 @@ Added parity replay checks that state_updates mirror classification, workflow, a
 - skills/forge-method/scripts/forge_method_runtime.py
 - tests/test_runtime.py
 - CHANGELOG.md
-- .forge-method/artifacts/20260615-replay-state-update-route-reason-contract.md
+- .forge-method/artifacts/20260615-replay-human-prompt-route-specificity-contract.md
 - .forge-method/state.yaml
 
 ## Artifacts
 
-- .forge-method/artifacts/20260615-replay-state-update-route-reason-contract.md
+- .forge-method/artifacts/20260615-replay-human-prompt-route-specificity-contract.md
 
 ## Next Action
 
-Continue post-parity Forge polish by auditing human_prompt quality and route_reason specificity against the rich-human compact-agent contract.
+Continue post-parity Forge polish by auditing workflow-specific first-question quality and mechanical-build human/status wording.
 
 ## Recovery Signals
 
@@ -69,7 +69,7 @@ Continue post-parity Forge polish by auditing human_prompt quality and route_rea
 - skills/forge-method/scripts/forge_method_runtime.py
 - tests/test_runtime.py
 - CHANGELOG.md
-- .forge-method/artifacts/20260615-replay-state-update-route-reason-contract.md
+- .forge-method/artifacts/20260615-replay-human-prompt-route-specificity-contract.md
 - .forge-method/state.yaml
 
 ## Open Human Inputs
@@ -87,16 +87,16 @@ Continue post-parity Forge polish by auditing human_prompt quality and route_rea
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260615-141222-validation-replay-persona-lens-contract-validation.md
 - .forge-method/evidence/20260615-142530-validation-replay-persona-lens-contract-final-validation.md
 - .forge-method/evidence/20260615-145721-validation-replay-auxiliary-guidance-contract-validation.md
 - .forge-method/evidence/20260615-152414-validation-replay-mutating-command-contract-validation.md
 - .forge-method/evidence/20260615-160212-validation-replay-state-update-route-reason-contract-valida.md
+- .forge-method/evidence/20260615-163924-validation-replay-human-prompt-route-specificity-contract-v.md
 
 ## Recent Artifacts
 
-- changelog [active/durable]: CHANGELOG.md - Unreleased changelog - auxiliary replay assertions - Documented replay assertions for council, Codex Goal handoff, autonomous work orders, and runtime-builder meta-audit routing.
-- internal-audit [active/durable]: .forge-method/artifacts/20260615-replay-mutating-command-contract.md - Replay Mutating Command Contract - Parity replay now requires full mutating command sequences when guidance returns multiple state-changing commands.
 - changelog [active/durable]: CHANGELOG.md - Unreleased changelog - mutating command replay assertions - Documented expected_commands replay contract for multiple state-changing Guidance Engine commands.
 - internal-audit [active/durable]: .forge-method/artifacts/20260615-replay-state-update-route-reason-contract.md - Replay State Update Route Reason Contract - Parity replay now validates compact state_update handoff coherence and Persona Lens route_reason markers.
 - changelog [active/durable]: CHANGELOG.md - Unreleased changelog - state update route reason replay assertions - Documented replay checks for state update handoff coherence and Persona Lens route reason markers.
+- internal-audit [active/durable]: .forge-method/artifacts/20260615-replay-human-prompt-route-specificity-contract.md - Replay Human Prompt Route Specificity Contract - Parity replay now validates facilitated human prompts and compact signal/route reason summaries.
+- changelog [active/durable]: CHANGELOG.md - Unreleased changelog - human prompt route specificity replay assertions - Documented replay checks for facilitated human prompts and signal/route reason summaries.
