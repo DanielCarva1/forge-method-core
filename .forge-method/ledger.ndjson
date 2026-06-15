@@ -356,3 +356,11 @@
 {"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260615-013202-p1-6-test-architecture-enterprise-depth-closed.md"}, "ts": "2026-06-15T01:32:02+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-15T01:32:02+00:00"}
 {"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "p1-tea-depth-done"}, "ts": "2026-06-15T01:32:10+00:00"}
+{"event": "artifact.added", "payload": {"kind": "scope-decision", "lifecycle": "durable", "path": ".forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md"}, "ts": "2026-06-15T01:35:53+00:00"}
+{"event": "artifact.added", "payload": {"kind": "audit", "lifecycle": "durable", "path": ".forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md"}, "ts": "2026-06-15T01:35:53+00:00"}
+{"event": "artifact.added", "payload": {"kind": "plan", "lifecycle": "durable", "path": ".forge-method/artifacts/20260613-systematic-parity-plan.md"}, "ts": "2026-06-15T01:35:53+00:00"}
+{"event": "artifact.added", "payload": {"kind": "patch-notes", "lifecycle": "durable", "path": "CHANGELOG.md"}, "ts": "2026-06-15T01:35:54+00:00"}
+{"event": "evidence.added", "payload": {"kind": "planning", "path": ".forge-method/evidence/20260615-013605-planning-p2-scope-decisions-recorded.md", "story": ""}, "ts": "2026-06-15T01:36:05+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260615-013618-p2-scope-decisions-recorded.md"}, "ts": "2026-06-15T01:36:18+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-15T01:36:18+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "p2-scope-decisions-done"}, "ts": "2026-06-15T01:36:26+00:00"}

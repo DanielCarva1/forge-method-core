@@ -318,19 +318,19 @@ Done when:
 
 ## P2 Decisions
 
-P2 items are not implementation blockers, but each needs a recorded decision:
+P2 items are not implementation blockers. Decisions are recorded in `.forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md`:
 
 - Persistent personal memory agents:
-  - likely non-goal as broad personal memory;
-  - possible Forge translation is project-local durable memory only.
+  - non-goal as broad personal memory;
+  - Forge translation is project-local durable memory only.
 - Presentation/deck craft:
-  - defer unless Forge scope expands into pitch/deck workflows.
+  - deferred unless Forge scope expands into pitch/deck workflows.
 - Isolated Docker eval runner:
-  - defer unless local evals need untrusted execution or reproducibility beyond Codex runtime.
+  - deferred unless local evals need untrusted execution or reproducibility beyond Codex runtime.
 - Hook wrappers:
-  - defer for future standalone Forge app/runtime; avoid adding Codex overhead now.
+  - deferred for future standalone Forge app/runtime; avoid adding Codex overhead now.
 - API/browser utility layer:
-  - defer as generic utility layer; translate only through provider-specific test workflows when needed.
+  - deferred as generic utility layer; translate only through provider-specific test workflows when needed.
 
 ## Execution Rules
 
@@ -380,12 +380,12 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 ## Immediate Next Step
 
-Next implementation batch: P2 scope decisions and Forge experience polish after P1.6 validation evidence is recorded.
+Next implementation batch: Forge experience polish after P2 scope decisions and P1.6 validation evidence are recorded.
 
 Do not start the post-parity polish as an ad hoc implementation. Start from this plan:
 
-1. resolve remaining P2 scope decisions as translated, deferred, or non-goal with rationale;
-2. audit the translated parity surface for human-experience richness and agent compactness;
-3. add or refine facilitation packs, compact refs, scripts, and fixtures where the audit finds weak experience;
+1. audit the translated parity surface for human-experience richness and agent compactness;
+2. add or refine facilitation packs, compact refs, scripts, and fixtures where the audit finds weak experience;
+3. prepare patch notes and release plan for a coherent versioned batch;
 4. validate source and installed behavior;
 5. record evidence and checkpoint.

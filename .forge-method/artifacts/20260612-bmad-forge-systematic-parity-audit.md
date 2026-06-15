@@ -108,17 +108,17 @@ The product direction is therefore:
 | BMAD Builder: build workflow | `workflow-builder`, `workflow-analyze`, `skill-convert`, `workflow-validate` | translated | P1.1 adds coached workflow build route with compact state-machine, pack/template, catalog, and proof plan. | Add generated-workflow examples as future modules use the factory. |
 | BMAD Builder: create module/package | `module-builder`, module manifest template, install/smoke validation path | translated | P1.1 adds module assembly workflow, manifest template, followed_by metadata, and validation handoff. | Future customization batch handles richer override/index behavior. |
 | BMAD Builder: validate module | `module-validate`, `builder validate`, `workflow-validate`, parity replay | translated | P1.1 adds whole-extension validation workflow, validation report template, and structural plus quality checklist. | Keep install smoke as the packaging proof for changed packaged behavior. |
-| Eval runner / Docker runner | Forge evals and smoke scripts | partial | Forge has local evals/smokes but not a BMAD-like eval runner or isolated runner story. | Add eval runner design or keep deferred if Codex-native local is enough. |
+| Eval runner / Docker runner | Forge evals, parity replay, smoke scripts, CI | deferred | P2 decision: local evals/smokes cover the current plugin; Docker isolation waits until untrusted execution or reproducible cross-machine evals require it. | Revisit for standalone app/runtime or untrusted eval execution. |
 | Session prep | `session-prep`, context packs/checkpoints | translated | P1.4 adds first-class session prep with read order, blockers, first command, next workflow, and load hints. | Add transcript examples for interrupted/changing sessions if needed. |
 | Progressive disclosure pattern | Skill instructions and context plan | partial | Principle exists, not audited across every pack/workflow. | Add compactness verifier for workflows/facilitation refs. |
 | Subagent orchestration patterns | optional agent profiles, council | partial/missing | No systematic parallel/hierarchical subagent patterns for Forge tasks. | Add orchestration guidance and tests only where Codex supports it. |
-| Persistent memory agents | file-backed project state | different/partial | Forge stores project state, not personal companion memory. | Decide if this is in scope; if yes, translate as project memory only, not broad personal memory. |
+| Persistent memory agents | file-backed project state | non-goal | P2 decision: Forge owns project-local durable state, artifacts, checkpoints, context packs, and ledgers, not broad personal companion memory. | Revisit only for a separate personal workspace product. |
 | CIS brainstorming | `brainstorming` pack plus Brainstorming Coach lens | strong-ish | Coach routing and techniques exist; richer option-generation transcripts are still future depth. | Add examples for option generation, constraints, and convergence. |
 | CIS design thinking | `design-thinking` pack plus Design Thinking Coach lens | strong-ish | Route and lens proof exist; deeper outputs can still improve. | Expand examples and artifact expectations when design-thinking becomes a larger workflow. |
 | CIS innovation strategy | `innovation-strategy` plus Innovation Strategist lens | partial | Lens route exists, but no facilitation pack. | Add pack and transcript fixtures. |
 | CIS problem solving | `problem-solving` pack plus Creative Problem Solver lens | strong-ish | Coach route exists; more stuck/frustrated transcripts would improve proof. | Add fixtures for messy constraints and recovery. |
 | CIS storytelling | `storytelling` plus Storyteller lens | partial | Lens route exists, but no rich pack. | Add storytelling pack and output template. |
-| CIS presentation master | no equivalent | missing | Forge has no presentation/communication craft workflow. | Add only if Forge scope includes pitch/deck narrative; otherwise document non-goal. |
+| CIS presentation master | future creative/pitch workflow | deferred | P2 decision: deck craft is not required for the current Codex-native method runtime. | Revisit if launch/pitch/deck workflows become part of Forge project scope. |
 | Game project context | `game-context` plus game lifecycle pack | translated | P1.5 adds explicit game context generation with player fantasy, loop, engine profile, source material, and playable-slice handoff. | Add domain examples only when real game projects expose gaps. |
 | Game engine setup (Godot/Unity/Phaser) | `engine-setup`, `engine-architecture` | translated | P1.5 uses a compact engine profile instead of separate engine-specific public entrypoints, preserving engine assumptions, folder/runtime decisions, first-run check, and validation evidence. | Add engine-specific examples when a project needs them; avoid heavy engine smoke by default. |
 | Game brainstorm/brief/GDD | `game-brief`, `gdd`, `brainstorming` | translated | P1.5 expands GDD template and game lifecycle prompts so broad ideas stay in guided game discovery before architecture/build. | Add richer transcript examples for messy ideation later. |
@@ -136,7 +136,7 @@ The product direction is therefore:
 | API/browser utilities | project-specific test utilities under `test-framework` | deferred | Forge relies on Codex/browser/plugins and records provider-specific utility patterns inside project artifacts instead of making generic public utility workflows. | Revisit if repeated projects need reusable browser/API utility workflows. |
 | Enterprise security/privacy/devops/compliance | enterprise module workflows | partial/strong | Good coverage, but not fully tied into track decision and readiness. | Add enterprise track required artifact map. |
 | Package/distribution docs | install scripts, smoke-install, plugin-local scripts | strong-ish | Good Codex packaging; no BMAD-style custom module marketplace generator. | Add module builder if Forge supports external modules. |
-| Hooks and local runtime helpers | launcher, updater, install/smoke scripts | partial | No systematic hook wrapper after experiment archival. | Revisit hooks only as future app/runtime need; avoid Codex overhead. |
+| Hooks and local runtime helpers | launcher, updater, install/smoke scripts | deferred | P2 decision: hook experiments are archived reference; plugin keeps current launcher/runtime surface to avoid Codex overhead. | Revisit for a standalone Forge app or concrete lifecycle hook need. |
 
 ## Severity summary
 
@@ -164,12 +164,13 @@ P1 maturity batches are now translated:
 4. Game engine setup/project context and TEA fixture/traceability depth.
 5. General retrospective, project documentation, and session prep workflows.
 
-P2 gaps are optional or scope-dependent:
+P2 decisions are now explicit:
 
-1. Persistent personal memory agents.
-2. Presentation master / deck craft.
-3. Isolated Docker eval runner.
-4. Hook wrapper automation beyond the current Codex plugin needs.
+1. Persistent personal memory agents: non-goal for the current runtime; Forge keeps project-local durable memory.
+2. Presentation master / deck craft: deferred until pitch/deck workflows are an explicit Forge scope.
+3. Isolated Docker eval runner: deferred until untrusted/reproducible eval execution is required.
+4. Hook wrapper automation beyond the current Codex plugin needs: deferred for standalone app/runtime.
+5. Generic API/browser utility layer: deferred as public surface; provider-specific patterns live in test artifacts.
 
 ## Command/token parity appendix
 
@@ -353,6 +354,6 @@ The full objective is complete only when:
 
 ## Current status
 
-This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.6 are now implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. This is not full parity completion: explicit P2 deferral/non-goal decisions and post-parity Forge experience polish still remain.
+This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.6 are now implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. P2 scope decisions are recorded in `.forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md`. This is not full goal completion: post-parity Forge experience polish and release/version planning still remain.
 
-Immediate next step: resolve P2 scope decisions and then apply Forge human/agent experience polish over the translated parity surface.
+Immediate next step: apply Forge human/agent experience polish over the translated parity surface, then run release planning for a coherent versioned batch.

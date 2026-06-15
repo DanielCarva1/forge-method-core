@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- add Game Studio Depth with `game-context`, `engine-setup`, expanded GDD/narrative/mechanics/prototype/playtest/performance/game QA contracts, route fixtures, and compact game templates
+- add Test Architecture Enterprise Depth with Quality Engagement Model, Fixture Architecture, narrow quality templates, two-phase Traceability Gate semantics, waiver contract, and TEA replay fixtures
+- record P2 scope decisions: broad personal memory is non-goal, presentation/deck craft is deferred, Docker eval runner is deferred, hook wrappers are deferred, and generic API/browser utility surface is deferred into provider-specific test artifacts
 - add Builder Factory guided depth with `module-ideation`, `agent-builder`, `workflow-builder`, `module-builder`, and `module-validate` workflows, facilitation pack, templates, Guidance Engine routes, and parity replay cases
 - add Project Configuration override model and generated Capability Index with validation for workflow metadata, agent profile metadata, project conventions, and custom capability entries
 - add Persona Lens and elicitation layer with PM, Architect, Analyst/Researcher, UX, QA, Game, Builder, Tech Writer, and CIS coach routing, council participant selection, and compact `persona_lens` runtime output
