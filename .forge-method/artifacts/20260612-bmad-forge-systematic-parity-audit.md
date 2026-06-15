@@ -87,7 +87,7 @@ The product direction is therefore:
 | Project context generation | `project-context`, `context plan`, `context recover`, `current-pack`, `AGENTS.md` | translated/advantage | P1.4 adds a user-facing project-context workflow while preserving Forge's compact runtime context packs. | Add domain-specific context variants only when a module needs them. |
 | Epics and stories after architecture | `create-epics`, `plan-sprint`, `game-story-creation`, Story Decision Source Gate | translated | Story Decision Source Gate blocks implementation-ready stories in `4-build-verify` without approved decision artifacts, autoattaches the single clear source, requires explicit `--source` when multiple sources exist, persists `decision_sources`, and audits the map before build-story. | Keep expanding sprint facilitation separately; this row's invariant is now enforced. |
 | Implementation readiness | `readiness-check`, readiness matrix, `gate`, `ready`, `release-readiness` | translated | P1.4 adds readiness matrix output across spec, architecture, UX, risk, stories, validation, inputs, and findings. | Add stricter source coverage gates if future story creation finds gaps. |
-| Sprint planning/status | `plan-sprint`, `sprint-status`, `sprint.yaml`, `game-sprint-status`, `resume` | translated/partial | P1.7 adds a routeable sprint-status ritual with artifact template and replay proof; deeper sprint planning facilitation can still improve. | Expand sprint planning examples if story-cycle sessions show weak guidance. |
+| Sprint planning/status | `plan-sprint`, `sprint-status`, `sprint.yaml`, `game-sprint-status`, `resume` | translated | Sprint Planning Depth adds a `plan-sprint` artifact template, sequence/rebalance/validate modes, richer story-lifecycle prompts, explicit Guidance Engine precedence over generic quality wording, and replay proof for goal/story-batch/source-map/validation planning before build. | Add game-specific sprint transcript examples if future game sessions still feel generic. |
 | Create story | `story-creation`, `story add`, `create-epics`, `game-story-creation` | translated | P0 adds story-creation with readiness checklist, acceptance/evidence guidance, decision-source guard, and replay coverage. | Keep examples current as more project tracks use it. |
 | Dev story / implementation | `build-story`, mechanical work order, Codex Goal handoff | advantage/partial | Forge has better mechanical handoff; needs fewer procedural pauses in live Codex and better "continue until done" invariant. | Add transcript tests for no "ok/continue" on ready story loops. |
 | Code review | `code-review`, `review` commands, `test-review`, `game-qa-review`, quality-reviewer | translated | P1.4 adds a direct code-review workflow with findings triage and repair/readiness routing. | Add richer diff examples if future review quality needs proof. |
@@ -193,7 +193,7 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | `bmad-generate-project-context` | `project-context`, `context plan` | translated |
 | `bmad-create-epics-and-stories` | `create-epics`, `story-creation`, Story Decision Source Gate | translated |
 | `bmad-check-implementation-readiness` | `readiness-check` with readiness matrix | translated |
-| `bmad-sprint-planning` | `plan-sprint`, `sprint.yaml` | partial |
+| `bmad-sprint-planning` | `plan-sprint`, `sprint.yaml` | translated |
 | `bmad-sprint-status` | `sprint-status`, `status`, `snapshot`, `resume`, `game-sprint-status` | translated |
 | `bmad-create-story` | `story-creation`, `story add`, `game-story-creation` | translated |
 | `bmad-dev-story` | `build-story`, mechanical work order, Codex Goal handoff | partial/advantage |
@@ -241,7 +241,7 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | `/bmgd-game-brief` | `game-brief` | strong-ish |
 | `/bmgd-create-gdd` | `gdd` | translated |
 | `/bmgd-create-architecture` | `engine-architecture`, `engine-setup` | translated |
-| `/bmgd-sprint-planning` | `plan-sprint`, `game-story-creation` | partial |
+| `/bmgd-sprint-planning` | `plan-sprint`, `game-story-creation` | strong-ish |
 | `/bmgd-sprint-status` | `game-sprint-status`, `resume` | partial |
 | `/bmgd-create-story` | `game-story-creation` | partial |
 | `/bmgd-dev-story` | `build-story` with game artifacts | partial |
@@ -282,7 +282,7 @@ Use these as implementation increments. Each item must ship with workflow metada
 
 - Add workflow validation that flags human-facing workflows without facilitation packs.
 - Define which workflows are agent-only and which require rich human facilitation.
-- Add missing packs for `product-requirements`, `ux-plan`, `architecture`, `gdd`, `innovation-strategy`, `storytelling`, `plan-sprint`, `create-epics`, `readiness-check`.
+- Add missing packs/templates for `product-requirements`, `ux-plan`, `architecture`, `gdd`, `innovation-strategy`, `storytelling`, `create-epics`, and `readiness-check`; `plan-sprint` now has Sprint Planning Depth coverage.
 
 ### P0.3 PRD/UX/Quick Dev parity
 
@@ -362,6 +362,6 @@ The full objective is complete only when:
 
 ## Current status
 
-This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.7 are implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. Forge Method 1.29.0 is published, post-command Help Oracle hardening adds a runtime-level record/emit contract for progress-changing commands, Architecture Guidance Depth closes the stale product/UX/architecture audit rows, Context Boundary Recovery closes the fresh-chat/context-reset row with reload, Help Oracle, pack/template, and replay proof, Brainstorming Depth closes the broad-option divergence row, CIS Facilitation Depth closes the design-thinking, innovation-strategy, and storytelling rows with narrow routing, packs, templates, modes, and replay proof, Agent Compactness Guard closes the progressive-disclosure audit row with deterministic workflow/facilitation compactness validation, and Story Decision Source Gate closes the epics/story invariant row by enforcing explicit decision sources before build-ready stories. P2 scope decisions are recorded in `.forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md`. This is not full goal completion: real-use transcript hardening and the remaining partial/strong-ish rows still need proof.
+This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.7 are implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. Forge Method 1.29.0 is published, post-command Help Oracle hardening adds a runtime-level record/emit contract for progress-changing commands, Architecture Guidance Depth closes the stale product/UX/architecture audit rows, Context Boundary Recovery closes the fresh-chat/context-reset row with reload, Help Oracle, pack/template, and replay proof, Brainstorming Depth closes the broad-option divergence row, CIS Facilitation Depth closes the design-thinking, innovation-strategy, and storytelling rows with narrow routing, packs, templates, modes, and replay proof, Agent Compactness Guard closes the progressive-disclosure audit row with deterministic workflow/facilitation compactness validation, Story Decision Source Gate closes the epics/story invariant row by enforcing explicit decision sources before build-ready stories, and Sprint Planning Depth closes the sprint-planning partial row with a dedicated artifact/template/mode/replay contract. P2 scope decisions are recorded in `.forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md`. This is not full goal completion: real-use transcript hardening and the remaining partial/strong-ish rows still need proof.
 
 Immediate next step: continue real-use transcript hardening against the remaining partial/strong-ish rows, starting with human guidance depth where the runtime routes correctly but the conversation still feels thin.

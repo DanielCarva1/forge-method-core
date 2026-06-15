@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T05:19:06+00:00",
+  "generated_at": "2026-06-15T05:39:31+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -1570,12 +1570,21 @@
         "sprint-status"
       ],
       "id": "plan-sprint",
+      "modes": [
+        "sequence",
+        "rebalance",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "story plan",
-        "validation plan"
+        "sprint plan artifact",
+        "ordered story batch",
+        "decision-source map",
+        "validation and evidence plan"
       ],
       "phase": "3-plan",
-      "required": true
+      "required": true,
+      "template": "sprint-plan-artifact"
     },
     {
       "facilitation_pack": "game-lifecycle",

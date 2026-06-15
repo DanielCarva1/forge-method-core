@@ -44,6 +44,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Story lifecycle requests should route to story-creation/readiness flows that require accepted decision sources, acceptance criteria, checks, evidence expectations, and a validation map before build-story.
 - Implementation-ready stories should persist explicit `decision_sources`; story creation must block without approved decision artifacts and require a specific source when multiple artifacts could justify the story.
 - Sprint status requests should route to a status ritual that names story counts, active/blocked/review items, evidence gaps, and the next executable action.
+- Sprint planning requests should route to a guided planning workflow that defines the sprint goal, ordered story batch, decision-source map, validation/evidence plan, and deferred/blocked work before build starts.
 - Investigation requests should diagnose symptom, hypotheses, probes, findings, and next reversible action before repair work.
 - Adversarial review requests should attack assumptions and route repair, waiver, evidence, or rejection rather than hiding critique inside generic edge cases.
 - Checkpoint preview requests should verify durable memory content before writing or handing off context.
@@ -64,6 +65,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Product planning, UX design, and quick-dev requests should route to narrow executable workflows rather than generic build-story or stale state.
 - Story creation requests should not create ready build stories from vague intent; they need accepted source artifacts and a validation map.
 - Story Decision Source Gate should be enforced at story add/import/start and audit time, so mechanical build never starts from an unmapped story.
+- Sprint planning should not be a backlog dump; it must create an executable batch with source map, validation map, deferred work, and a next story.
 - Mechanical build loops should continue through story start/review/fix/evidence/ready gate without asking for procedural "ok" once stories are ready.
 - Fresh chat, network drop, reload, or context-reset messages should route to context-recovery and expose a compact context boundary: trust launcher output and durable state, load only read-first files, then run Guidance Engine for fresh human intent.
 - Runtime outputs must remain compact JSON/state-machine artifacts for agents, while non-JSON guidance can be human, direct, and useful.
@@ -101,6 +103,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `architecture`
 - `quick-dev`
 - `story-creation`
+- `plan-sprint`
 - `sprint-status`
 - `context-recovery`
 - `creative-session`

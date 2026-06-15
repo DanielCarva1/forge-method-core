@@ -771,6 +771,19 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "sprint_planning_guided_batch_request",
+    "family": "story-cycle",
+    "state": "discovery",
+    "question": "plan sprint com goal, story batch, ordem por risco, decision sources, validation plan e lista de deferred antes do build",
+    "expected_classification": "story-flow",
+    "expected_phase": "3-plan",
+    "expected_workflow": "plan-sprint",
+    "expected_facilitation_pack": "skill:facilitation/story-lifecycle.md",
+    "expected_template": "sprint-plan-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
     "id": "p1_4_runtime_batch_stays_runtime_builder",
     "family": "builder",
     "state": "evolve_runtime",

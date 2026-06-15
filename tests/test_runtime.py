@@ -1589,6 +1589,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "architecture-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "quick-dev-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "story-creation-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "sprint-plan-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "sprint-status-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "track-decision-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "project-context-artifact.md",
@@ -1714,6 +1715,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["innovation-strategy"].get("template"), "innovation-strategy-artifact")
         self.assertEqual(by_id["storytelling"].get("template"), "storytelling-artifact")
         self.assertEqual(by_id["story-creation"].get("template"), "story-creation-artifact")
+        self.assertEqual(by_id["plan-sprint"].get("template"), "sprint-plan-artifact")
         self.assertEqual(by_id["sprint-status"].get("template"), "sprint-status-artifact")
         self.assertEqual(by_id["module-ideation"].get("template"), "builder-factory-artifact")
         self.assertEqual(by_id["agent-builder"].get("template"), "builder-factory-artifact")
@@ -1764,6 +1766,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("evidence", by_id["innovation-strategy"].get("modes", []))
         self.assertIn("payoff", by_id["storytelling"].get("modes", []))
         self.assertIn("validate", by_id["story-creation"].get("modes", []))
+        self.assertIn("rebalance", by_id["plan-sprint"].get("modes", []))
         self.assertIn("status", by_id["sprint-status"].get("modes", []))
         self.assertIn("ideate", by_id["module-ideation"].get("modes", []))
         self.assertIn("create", by_id["agent-builder"].get("modes", []))

@@ -102,6 +102,7 @@ P0 through P1.7 are closed:
 - Game Studio Depth: implemented with `game-context`, `engine-setup`, expanded GDD/narrative/mechanics/prototype/playtest/performance/QA contracts, game-lifecycle facilitation, Guidance Engine routes, replay fixtures, compact workflow refs, templates, and validation coverage.
 - Test Architecture Enterprise Depth: implemented with Quality Engagement Model, Fixture Architecture, narrow TEA templates, expanded quality facilitation, two-phase Traceability Gate semantics, waiver contract, Guidance Engine routes, replay fixtures, compact workflow refs, and validation coverage.
 - Parity Closure Utilities: implemented with `investigation`, `working-backwards-challenge`, `sprint-status`, `checkpoint-preview`, `adversarial-review`, compact refs, templates, routes, module membership, and parity replay coverage.
+- Sprint Planning Depth: implemented with `plan-sprint` template metadata, sequence/rebalance/validate modes, story-lifecycle facilitation depth for sprint goals and deferred work, Guidance Engine precedence over generic quality wording, and parity replay coverage.
 
 The remaining work is a planned sequence, not ad hoc patching.
 
@@ -425,7 +426,7 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 ## Immediate Next Step
 
-Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release, Architecture Guidance Depth cleanup, Context Boundary Recovery, Brainstorming Depth, CIS Facilitation Depth, Agent Compactness Guard, and Story Decision Source Gate.
+Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release, Architecture Guidance Depth cleanup, Context Boundary Recovery, Brainstorming Depth, CIS Facilitation Depth, Agent Compactness Guard, Story Decision Source Gate, and Sprint Planning Depth.
 
 Do not tag or publish from a partial test run. Start from this plan:
 

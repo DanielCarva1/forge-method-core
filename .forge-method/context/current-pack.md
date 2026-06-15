@@ -4,37 +4,37 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: story-decision-source-gate-hardened
+- status: sprint-planning-depth-hardened
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Continue real-use transcript hardening for remaining partial and strong-ish rows; run completion audit and live transcript review before claiming full guided-flow parity.
+- next_action: Continue real-use transcript hardening for remaining partial and strong-ish rows; next inspect dev-story mechanical autonomy and no-procedural-confirmation transcript gaps before claiming full guided-flow parity.
 
 ## Latest Checkpoint
 
-# Story Decision Source Gate hardened
+# Sprint Planning Depth hardened
 
-- created_at: 2026-06-15T05:29:06+00:00
+- created_at: 2026-06-15T05:48:47+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: story-decision-source-gate-hardened
+- status: sprint-planning-depth-hardened
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed the epics/stories decision-source invariant gap. Story add/import/start now prevents implementation-ready build stories without approved source artifacts, autoattaches a single clear source, requires --source when several artifacts could justify different stories, persists decision_sources, and audit verifies the source map before build-story.
+Closed the sprint-planning guidance gap: plan-sprint now has a compact source-aware state machine, dedicated sprint plan artifact template, sequence/rebalance/validate metadata, enriched story-lifecycle facilitation, Guidance Engine precedence over generic quality wording, and parity replay coverage.
 
 ## Decisions
 
-- Stories are not a substitute for accepted decisions; build-ready stories must carry explicit decision_sources.
-- Automation can continue only after the source map is durable; ambiguous sources require explicit selection.
+- Sprint planning is not a backlog dump; it must preserve sprint goal, ordered story batch, decision-source map, validation/evidence plan, and deferred/blocked reasons before build.
+- Explicit sprint planning intent outranks generic validation/quality wording.
 
 ## Checks
 
-- python -m unittest discover -s tests: 71 tests OK
+- python -m unittest discover -s tests: passed
 - workflow validate: passed
 - workflow compactness: passed
-- parity replay: 63/63 passed
+- parity replay: passed
 - config validate --root .: passed
 - smoke-runtime.ps1: passed
 - verify-fast.ps1: passed
@@ -49,8 +49,11 @@ Closed the epics/stories decision-source invariant gap. Story add/import/start n
 ## Touched Files
 
 - skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/references/workflow-story-creation.md
+- skills/forge-method/references/workflow-plan-sprint.md
 - skills/forge-method/facilitation/story-lifecycle.md
+- skills/forge-method/templates/sprint-plan-artifact.md
+- skills/forge-method/catalog/workflows.json
+- skills/forge-method/fixtures/guidance-parity-replay.json
 - tests/test_runtime.py
 - .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
 - .forge-method/artifacts/20260613-systematic-parity-plan.md
@@ -59,9 +62,6 @@ Closed the epics/stories decision-source invariant gap. Story add/import/start n
 - CHANGELOG.md
 
 ## Artifacts
-
-- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
-- .forge-method/artifacts/20260613-sys
 [checkpoint truncated]
 
 ## Recovery Signals
@@ -73,17 +73,17 @@ Closed the epics/stories decision-source invariant gap. Story add/import/start n
 ### Touched Files
 
 - skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/references/workflow-context-recovery.md
-- skills/forge-method/facilitation/context-boundary.md
-- skills/forge-method/templates/context-recovery-artifact.md
 - skills/forge-method/catalog/workflows.json
+- skills/forge-method/facilitation/design-thinking.md
+- skills/forge-method/facilitation/innovation-strategy.md
+- skills/forge-method/facilitation/storytelling.md
+- skills/forge-method/templates/design-thinking-artifact.md
+- skills/forge-method/templates/innovation-strategy-artifact.md
+- skills/forge-method/templates/storytelling-artifact.md
 - skills/forge-method/fixtures/guidance-parity-replay.json
 - tests/test_runtime.py
 - .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
 - .forge-method/artifacts/20260613-systematic-parity-plan.md
-- .forge-method/artifacts/guidance-engine-benchmark.md
-- .forge-method/context/capability-index.json
-- CHANGELOG.md
 
 ## Open Human Inputs
 
@@ -100,16 +100,16 @@ Closed the epics/stories decision-source invariant gap. Story add/import/start n
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260615-041351-validation-context-boundary-recovery-validation.md
 - .forge-method/evidence/20260615-043802-validation-brainstorming-depth-validation.md
 - .forge-method/evidence/20260615-045622-validation-cis-facilitation-depth-validation.md
 - .forge-method/evidence/20260615-051116-validation-agent-compactness-guard-validation.md
 - .forge-method/evidence/20260615-052906-validation-story-decision-source-gate-validation.md
+- .forge-method/evidence/20260615-054633-validation-sprint-planning-depth-validation.md
 
 ## Recent Artifacts
 
-- internal-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD Forge systematic parity audit - Updated with Story Decision Source Gate: build-ready stories now require approved explicit decision sources before mechanical build.
-- internal-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic parity plan - Updated immediate progress with Story Decision Source Gate and clarified remaining transcript-hardening work.
-- benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine benchmark - Added story decision-source benchmark target for explicit source maps before build-story.
-- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability Index - Regenerated after Story Decision Source Gate.
-- changelog [active/durable]: CHANGELOG.md - CHANGELOG - Added Unreleased note for Story Decision Source Gate.
+- internal-audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD Forge systematic parity audit - Updated with Sprint Planning Depth: plan-sprint now has template metadata, modes, story-lifecycle facilitation depth, Guidance Engine precedence, and replay proof.
+- internal-plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic parity plan - Updated immediate progress with Sprint Planning Depth and clarified remaining transcript-hardening work.
+- internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine internal benchmark - Updated sprint planning parity target and fixture workflow list for plan-sprint.
+- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability Index - Regenerated after Sprint Planning Depth to include plan-sprint template, modes, and outputs.
+- changelog [active/durable]: CHANGELOG.md - CHANGELOG - Added Unreleased note for Sprint Planning Depth.

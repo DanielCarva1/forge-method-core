@@ -5539,15 +5539,22 @@ def detect_guidance_signals(question: str) -> list[str]:
             "story creation",
             "create story",
             "create stories",
+            "plan sprint",
+            "sprint planning",
             "sprint status",
             "status do sprint",
             "backlog status",
+            "story batch",
+            "story plan",
+            "validation plan",
             "implementation-ready",
             "implementation ready",
             "criar story",
             "criar stories",
             "criar historias",
             "historias prontas",
+            "planejar sprint",
+            "plano de sprint",
         ],
         "product-flow": [
             "product requirements",
@@ -7244,6 +7251,17 @@ def build_guidance_decision(
             ("test-strategy", "when the main job is QA coverage rather than product architecture"),
         )
         reason = "The message asks for product architecture with PRD/UX trace, tradeoffs, risks, interfaces, validation hooks, or story impact."
+    elif has_question and "story-flow" in signal_set and routed_story_workflow(question) == "plan-sprint" and "game-flow" not in signal_set:
+        classification = "story-flow"
+        recommended_workflow = "plan-sprint"
+        recommended_action = "run plan-sprint to define the sprint goal, order the story batch, map decision sources, separate deferred work, and attach validation evidence"
+        human_prompt = "I should turn accepted decisions into an executable sprint plan, not dump a backlog or start build prematurely."
+        alternatives = guidance_alternatives(
+            ("story-creation", "when implementation-ready story files need to be authored from accepted decisions"),
+            ("readiness-check", "when stories exist but their decision sources or validation map may be weak"),
+            ("sprint-status", "when the human needs progress, blockers, and next story orientation"),
+        )
+        reason = "The message explicitly asks for sprint planning, so story lifecycle planning outranks generic validation or quality wording."
     elif has_question and "quality-flow" in signal_set and not is_strong_game_quality_intent(question):
         classification = "quality-flow"
         recommended_workflow = routed_quality_workflow(question)
@@ -7313,6 +7331,9 @@ def build_guidance_decision(
         elif recommended_workflow == "sprint-status":
             recommended_action = "run sprint-status to summarize story counts, active/blocked/review items, validation gaps, and the next executable action"
             human_prompt = "I should give a status ritual with one next move, not make you infer sprint health from files."
+        elif recommended_workflow == "plan-sprint":
+            recommended_action = "run plan-sprint to define the sprint goal, order the story batch, map decision sources, separate deferred work, and attach validation evidence"
+            human_prompt = "I should turn accepted decisions into an executable sprint plan, not dump a backlog or start build prematurely."
         else:
             recommended_action = f"run {recommended_workflow} to plan the next story batch from accepted decision artifacts"
             human_prompt = "I should preserve story order, dependencies, acceptance, checks, and decision sources."
