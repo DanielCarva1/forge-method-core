@@ -40,6 +40,18 @@
     "state_update_required": false
   },
   {
+    "id": "investigation_request",
+    "family": "investigation",
+    "state": "discovery",
+    "question": "investigate root cause desse comportamento antes de corrigir, com hipoteses e probes",
+    "expected_classification": "confusion",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "investigation",
+    "expected_facilitation_pack": "skill:facilitation/problem-solving.md",
+    "expected_template": "investigation-artifact",
+    "state_update_required": false
+  },
+  {
     "id": "product_requirements_validate_request",
     "family": "prd",
     "state": "discovery",
@@ -49,6 +61,19 @@
     "expected_workflow": "product-requirements",
     "expected_facilitation_pack": "skill:facilitation/product-planning.md",
     "expected_template": "product-requirements-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "working_backwards_prfaq_request",
+    "family": "prd",
+    "state": "discovery",
+    "question": "preciso de PRFAQ e working backwards challenge para testar a promessa do cliente antes do PRD",
+    "expected_classification": "product-flow",
+    "expected_phase": "2-specification",
+    "expected_workflow": "working-backwards-challenge",
+    "expected_facilitation_pack": "skill:facilitation/product-planning.md",
+    "expected_template": "working-backwards-artifact",
     "state_update_required": true,
     "expected_command": "transition-workflow"
   },
@@ -99,6 +124,19 @@
     "expected_workflow": "story-creation",
     "expected_facilitation_pack": "skill:facilitation/story-lifecycle.md",
     "expected_template": "story-creation-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "sprint_status_request",
+    "family": "story-cycle",
+    "state": "build_story_ready",
+    "question": "sprint status: resume progresso, story ativa, bloqueios, findings e proximo passo",
+    "expected_classification": "story-flow",
+    "expected_phase": "4-build-verify",
+    "expected_workflow": "sprint-status",
+    "expected_facilitation_pack": "skill:facilitation/story-lifecycle.md",
+    "expected_template": "sprint-status-artifact",
     "state_update_required": true,
     "expected_command": "transition-workflow"
   },
@@ -544,6 +582,19 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "document_utility_adversarial_review_request",
+    "family": "document-utility",
+    "state": "discovery",
+    "question": "adversarial review e red team desse spec para quebrar assumptions antes de build",
+    "expected_classification": "document-utility",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "adversarial-review",
+    "expected_facilitation_pack": "skill:facilitation/document-utility.md",
+    "expected_template": "adversarial-review-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
     "id": "lifecycle_track_decision_request",
     "family": "lifecycle",
     "state": "discovery",
@@ -579,6 +630,19 @@
     "expected_workflow": "session-prep",
     "expected_facilitation_pack": "skill:facilitation/lifecycle-closure.md",
     "expected_template": "session-prep-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "lifecycle_checkpoint_preview_request",
+    "family": "lifecycle",
+    "state": "evolve_runtime",
+    "question": "preview checkpoint antes de gravar memoria: resumo, decisoes, checks, arquivos e proximo passo",
+    "expected_classification": "lifecycle-flow",
+    "expected_phase": "6-evolve",
+    "expected_workflow": "checkpoint-preview",
+    "expected_facilitation_pack": "skill:facilitation/lifecycle-closure.md",
+    "expected_template": "checkpoint-preview-artifact",
     "state_update_required": true,
     "expected_command": "transition-workflow"
   },

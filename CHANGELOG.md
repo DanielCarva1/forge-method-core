@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add Parity Closure Utilities with routeable `investigation`, `working-backwards-challenge`, `sprint-status`, `checkpoint-preview`, and `adversarial-review` workflows, templates, module membership, replay fixtures, and adversarial routing precedence
 - polish Guidance Engine human output with a contextual `guide` lede, runtime-builder routing for human-experience plus agent-doc polish, and quieter Reality/Evidence Gate behavior for correction/runtime requests
 - add Game Studio Depth with `game-context`, `engine-setup`, expanded GDD/narrative/mechanics/prototype/playtest/performance/game QA contracts, route fixtures, and compact game templates
 - add Test Architecture Enterprise Depth with Quality Engagement Model, Fixture Architecture, narrow quality templates, two-phase Traceability Gate semantics, waiver contract, and TEA replay fixtures

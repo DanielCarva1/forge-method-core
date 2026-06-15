@@ -1408,15 +1408,20 @@ class RuntimeTests(unittest.TestCase):
             "doc-index",
             "spec-distillation",
             "product-requirements",
+            "working-backwards-challenge",
             "ux-plan",
             "quick-dev",
             "story-creation",
+            "sprint-status",
             "track-decision",
             "project-context",
             "session-prep",
+            "checkpoint-preview",
             "code-review",
             "retrospective",
             "research-closeout",
+            "investigation",
+            "adversarial-review",
         ]:
             self.assertIn(workflow_id, workflow_list)
         for template_path in [
@@ -1445,16 +1450,21 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "module-validation-report.md",
             ROOT / "skills" / "forge-method" / "templates" / "document-utility-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "product-requirements-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "working-backwards-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "ux-design-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "quick-dev-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "story-creation-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "sprint-status-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "track-decision-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "project-context-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "session-prep-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "checkpoint-preview-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "code-review-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "retrospective-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "readiness-matrix-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "research-closeout-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "investigation-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "adversarial-review-artifact.md",
         ]:
             self.assertTrue(template_path.exists())
         for pack_path in [
@@ -1493,13 +1503,16 @@ class RuntimeTests(unittest.TestCase):
         self.assertGreaterEqual(len(pack_ids), 10)
         human_facing_required = {
             "product-requirements",
+            "working-backwards-challenge",
             "ux-plan",
             "quick-dev",
             "story-creation",
+            "sprint-status",
             "architecture",
             "create-epics",
             "plan-sprint",
             "readiness-check",
+            "investigation",
             "gdd",
             "test-strategy",
             "teach-testing",
@@ -1521,9 +1534,11 @@ class RuntimeTests(unittest.TestCase):
             "track-decision",
             "project-context",
             "session-prep",
+            "checkpoint-preview",
             "code-review",
             "retrospective",
             "research-closeout",
+            "adversarial-review",
             "game-context",
             "gdd",
             "narrative-design",
@@ -1539,9 +1554,11 @@ class RuntimeTests(unittest.TestCase):
         for workflow_id in human_facing_required:
             self.assertIn("facilitation_pack", by_id[workflow_id], workflow_id)
         self.assertEqual(by_id["product-requirements"].get("template"), "product-requirements-artifact")
+        self.assertEqual(by_id["working-backwards-challenge"].get("template"), "working-backwards-artifact")
         self.assertEqual(by_id["ux-plan"].get("template"), "ux-design-artifact")
         self.assertEqual(by_id["quick-dev"].get("template"), "quick-dev-artifact")
         self.assertEqual(by_id["story-creation"].get("template"), "story-creation-artifact")
+        self.assertEqual(by_id["sprint-status"].get("template"), "sprint-status-artifact")
         self.assertEqual(by_id["module-ideation"].get("template"), "builder-factory-artifact")
         self.assertEqual(by_id["agent-builder"].get("template"), "builder-factory-artifact")
         self.assertEqual(by_id["workflow-builder"].get("template"), "builder-factory-artifact")
@@ -1551,10 +1568,13 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["track-decision"].get("template"), "track-decision-artifact")
         self.assertEqual(by_id["project-context"].get("template"), "project-context-artifact")
         self.assertEqual(by_id["session-prep"].get("template"), "session-prep-artifact")
+        self.assertEqual(by_id["checkpoint-preview"].get("template"), "checkpoint-preview-artifact")
         self.assertEqual(by_id["code-review"].get("template"), "code-review-artifact")
         self.assertEqual(by_id["retrospective"].get("template"), "retrospective-artifact")
         self.assertEqual(by_id["readiness-check"].get("template"), "readiness-matrix-artifact")
         self.assertEqual(by_id["research-closeout"].get("template"), "research-closeout-artifact")
+        self.assertEqual(by_id["investigation"].get("template"), "investigation-artifact")
+        self.assertEqual(by_id["adversarial-review"].get("template"), "adversarial-review-artifact")
         self.assertEqual(by_id["test-strategy"].get("template"), "test-strategy-artifact")
         self.assertEqual(by_id["teach-testing"].get("template"), "teach-testing-artifact")
         self.assertEqual(by_id["test-engagement-model"].get("template"), "test-engagement-artifact")
@@ -1576,9 +1596,11 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["performance-plan"].get("template"), "performance-plan-artifact")
         self.assertEqual(by_id["game-qa-review"].get("template"), "game-qa-review-artifact")
         self.assertIn("validate", by_id["product-requirements"].get("modes", []))
+        self.assertIn("prfaq", by_id["working-backwards-challenge"].get("modes", []))
         self.assertIn("validate", by_id["ux-plan"].get("modes", []))
         self.assertIn("spec-lite", by_id["quick-dev"].get("modes", []))
         self.assertIn("validate", by_id["story-creation"].get("modes", []))
+        self.assertIn("status", by_id["sprint-status"].get("modes", []))
         self.assertIn("ideate", by_id["module-ideation"].get("modes", []))
         self.assertIn("create", by_id["agent-builder"].get("modes", []))
         self.assertIn("create", by_id["workflow-builder"].get("modes", []))
@@ -1588,10 +1610,13 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("decide", by_id["track-decision"].get("modes", []))
         self.assertIn("document", by_id["project-context"].get("modes", []))
         self.assertIn("prep", by_id["session-prep"].get("modes", []))
+        self.assertIn("preview", by_id["checkpoint-preview"].get("modes", []))
         self.assertIn("review", by_id["code-review"].get("modes", []))
         self.assertIn("create", by_id["retrospective"].get("modes", []))
         self.assertIn("matrix", by_id["readiness-check"].get("modes", []))
         self.assertIn("closeout", by_id["research-closeout"].get("modes", []))
+        self.assertIn("investigate", by_id["investigation"].get("modes", []))
+        self.assertIn("red-team", by_id["adversarial-review"].get("modes", []))
         self.assertIn("validate", by_id["test-strategy"].get("modes", []))
         self.assertIn("teach", by_id["teach-testing"].get("modes", []))
         self.assertIn("decide", by_id["test-engagement-model"].get("modes", []))

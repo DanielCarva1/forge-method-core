@@ -5076,9 +5076,37 @@ def detect_guidance_signals(question: str) -> list[str]:
             "nao conduz",
             "cedo demais",
         ],
-        "confusion": ["nao sei", "não sei", "em duvida", "em dúvida", "what should", "o que fazer", "proximo passo", "próximo passo"],
+        "confusion": [
+            "nao sei",
+            "não sei",
+            "em duvida",
+            "em dúvida",
+            "what should",
+            "o que fazer",
+            "proximo passo",
+            "próximo passo",
+            "investigate",
+            "investigar",
+            "root cause",
+            "causa raiz",
+            "diagnose",
+            "diagnosticar",
+            "triage",
+            "debug why",
+        ],
         "research-needed": ["deep research", "pesquisa profunda", "consultar documentacao", "ler docs", "benchmark"],
-        "document-utility": ["index docs", "shard document", "editorial review", "edge case", "spec distillation"],
+        "document-utility": [
+            "index docs",
+            "shard document",
+            "editorial review",
+            "edge case",
+            "spec distillation",
+            "adversarial review",
+            "red team",
+            "red-team",
+            "assumption attack",
+            "stress test",
+        ],
         "quality-flow": [
             "teach me testing",
             "quality engagement",
@@ -5133,6 +5161,9 @@ def detect_guidance_signals(question: str) -> list[str]:
             "research closeout",
             "close research",
             "research handoff",
+            "checkpoint preview",
+            "preview checkpoint",
+            "preview de checkpoint",
             "readiness matrix",
             "implementation readiness",
             "ready to build",
@@ -5163,6 +5194,9 @@ def detect_guidance_signals(question: str) -> list[str]:
             "story creation",
             "create story",
             "create stories",
+            "sprint status",
+            "status do sprint",
+            "backlog status",
             "implementation-ready",
             "implementation ready",
             "criar story",
@@ -5175,6 +5209,10 @@ def detect_guidance_signals(question: str) -> list[str]:
             "requisitos de produto",
             "prd",
             "prfaq",
+            "working backwards",
+            "working-backwards",
+            "press release faq",
+            "press release",
             "ux design",
             "ux plan",
             "user experience",
@@ -5273,7 +5311,7 @@ def detect_guidance_signals(question: str) -> list[str]:
             "quebrado",
         },
         "frustration": {"frustrado", "frustrante", "cansado", "vergonha", "burro", "merda", "pessimo", "horrivel", "inaceitavel"},
-        "confusion": {"duvida", "confuso", "perdido", "incerto", "ajuda", "orientar", "guiar"},
+        "confusion": {"duvida", "confuso", "perdido", "incerto", "ajuda", "orientar", "guiar", "investigate", "investigar", "diagnose", "diagnosticar", "triage"},
         "brainstorm": {"brainstorm", "ideia", "ideias", "ideation", "explorar", "opcoes", "alternativas"},
         "research-needed": {"pesquisa", "research", "mercado", "documentacao", "docs", "evidencia", "fontes", "benchmark"},
         "creative-flow": {"creative", "criativo", "cis", "storytelling", "marca", "campanha", "conceito"},
@@ -5337,12 +5375,13 @@ def detect_guidance_signals(question: str) -> list[str]:
             "automate",
             "auditoria",
         },
-        "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness"},
+        "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness", "checkpoint"},
         "persona-lens": {"lens", "lente", "persona", "coach", "perspectiva", "visao", "pm", "architect", "arquiteto", "analyst", "analista", "ux", "qa", "writer", "storyteller"},
         "story-flow": {"backlog", "epic", "epics", "sprint", "stories", "story", "historia", "historias"},
         "product-flow": {
             "prd",
             "prfaq",
+            "faq",
             "requirements",
             "requisitos",
             "produto",
@@ -5370,6 +5409,9 @@ def detect_guidance_signals(question: str) -> list[str]:
             "distill",
             "distillation",
             "adversarial",
+            "redteam",
+            "red-team",
+            "stress",
             "edge",
         },
         "builder-flow": {
@@ -5751,6 +5793,14 @@ def routed_product_workflow(question: str) -> str:
     normalized = normalize_text(question)
     padded = f" {normalized} "
     if (
+        {"prfaq"} & tokens
+        or "working backwards" in normalized
+        or "working-backwards" in normalized
+        or "press release faq" in normalized
+        or ({"press", "release", "faq"} <= tokens)
+    ):
+        return "working-backwards-challenge"
+    if (
         {"quick", "rapido", "rapida", "pequeno", "small"} & tokens
         or "quick dev" in normalized
         or "quick flow" in normalized
@@ -5778,6 +5828,8 @@ def routed_product_workflow(question: str) -> str:
 def routed_story_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
+    if "sprint status" in normalized or "status do sprint" in normalized or "backlog status" in normalized:
+        return "sprint-status"
     if "create story" in normalized or "create stories" in normalized or "criar story" in normalized or "criar stories" in normalized or "criar historias" in normalized:
         return "story-creation"
     if {"epic", "epics"} & tokens or "create epics" in normalized:
@@ -5792,6 +5844,13 @@ def routed_story_workflow(question: str) -> str:
 def routed_lifecycle_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
+    if (
+        "checkpoint preview" in normalized
+        or "preview checkpoint" in normalized
+        or "preview de checkpoint" in normalized
+        or ({"checkpoint"} & tokens and {"preview", "prever", "validar", "validate"} & tokens)
+    ):
+        return "checkpoint-preview"
     if (
         "track decision" in normalized
         or "choose track" in normalized
@@ -5850,6 +5909,19 @@ def routed_lifecycle_workflow(question: str) -> str:
     return "project-context"
 
 
+def routed_problem_workflow(question: str) -> str:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    if (
+        {"investigate", "investigar", "diagnose", "diagnosticar", "triage"} & tokens
+        or "root cause" in normalized
+        or "causa raiz" in normalized
+        or "debug why" in normalized
+    ):
+        return "investigation"
+    return "problem-solving"
+
+
 def lifecycle_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
     if workflow_id == "track-decision":
         return (
@@ -5879,6 +5951,16 @@ def lifecycle_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, 
                 ("context-recovery", "use when state or context is stale or overloaded"),
                 ("project-context", "use when source-of-truth context is missing"),
                 ("retrospective", "use when the session needs learning/action closeout first"),
+            ),
+        )
+    if workflow_id == "checkpoint-preview":
+        return (
+            "run checkpoint-preview to draft the checkpoint summary, state delta, checks, touched files, artifacts, and next action before writing memory",
+            "I should preview what durable memory will preserve before the next agent trusts it.",
+            guidance_alternatives(
+                ("session-prep", "use when the checkpoint should become a next-session handoff"),
+                ("context-recovery", "use when current state looks stale or inconsistent"),
+                ("project-context", "use when durable source-of-truth context is missing"),
             ),
         )
     if workflow_id == "code-review":
@@ -5918,6 +6000,28 @@ def lifecycle_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, 
             ("story-creation", "use when implementation-ready stories are missing"),
             ("code-review", "use when changed code needs findings before readiness"),
             ("build-story", "use when readiness is proven and a story can start"),
+        ),
+    )
+
+
+def problem_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "investigation":
+        return (
+            "run investigation to separate symptom from cause, list hypotheses, choose probes, and route the next reversible repair",
+            "I should diagnose before fixing; otherwise I risk polishing the wrong failure mode.",
+            guidance_alternatives(
+                ("problem-solving", "use when the issue is still ambiguous but not evidence-driven"),
+                ("correct-course", "use when the investigation proves the current route is wrong"),
+                ("research-closeout", "use when external evidence must close the uncertainty"),
+            ),
+        )
+    return (
+        "frame the confusion, identify candidate routes, and ask one high-leverage question",
+        "I should orient you with one recommendation and two alternatives, not dump the workflow catalog.",
+        guidance_alternatives(
+            ("guide-route", "if the route is merely unclear"),
+            ("brainstorming", "if you need options before deciding"),
+            ("investigation", "if there is a symptom, failure, or root-cause question"),
         ),
     )
 
@@ -6222,11 +6326,20 @@ def builder_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, st
 def routed_document_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
+    if (
+        {"adversarial", "redteam"} & tokens
+        or "adversarial review" in normalized
+        or "red team" in normalized
+        or "red-team" in normalized
+        or "assumption attack" in normalized
+        or "stress test" in normalized
+    ):
+        return "adversarial-review"
     if {"shard", "split", "quebrar", "dividir"} & tokens:
         return "doc-shard"
     if {"editorial", "prose", "estrutura", "structure"} & tokens:
         return "editorial-review"
-    if {"adversarial", "edge"} & tokens or "edge case" in normalized:
+    if {"edge"} & tokens or "edge case" in normalized:
         return "edge-case-review"
     if {"distill", "distillation", "kernel"} & tokens or "spec distillation" in normalized:
         return "spec-distillation"
@@ -6382,7 +6495,7 @@ def build_guidance_decision(
             human_prompt = prompt_text
             alternatives = persona_alternatives
             reason = f"The first intent asks for {persona_lens.get('title')} guidance, so the first workflow should use that lens."
-    elif has_question and ({"correct-course", "frustration"} & signal_set):
+    elif has_question and ({"correct-course", "frustration"} & signal_set) and routed_problem_workflow(question) != "investigation":
         classification = "correct-course"
         recommended_phase = "6-evolve" if phase == "5-ready-operate" else phase
         recommended_workflow = "correct-course"
@@ -6541,15 +6654,21 @@ def build_guidance_decision(
         recommended_workflow = routed_lifecycle_workflow(question)
         recommended_action, human_prompt, alternatives = lifecycle_guidance_text(recommended_workflow)
         reason = "The message asks for lifecycle closure, project context, handoff, review, readiness, retro, or research closeout."
+    elif has_question and "story-flow" in signal_set and routed_story_workflow(question) == "sprint-status":
+        classification = "story-flow"
+        recommended_workflow = "sprint-status"
+        recommended_action = "run sprint-status to summarize story counts, active/blocked/review items, validation gaps, and the next executable action"
+        human_prompt = "I should give a status ritual with one next move, not make you infer sprint health from files."
+        alternatives = guidance_alternatives(
+            ("story-creation", "when implementation-ready story files need to be authored from accepted decisions"),
+            ("readiness-check", "when stories exist but their decision sources or validation map may be weak"),
+            ("build-story", "when the next ready story should be implemented"),
+        )
+        reason = "The message asks for sprint status, so the status ritual outranks generic confusion about next steps."
     elif has_question and "confusion" in signal_set:
         classification = "confusion"
-        recommended_workflow = "problem-solving"
-        recommended_action = "frame the confusion, identify candidate routes, and ask one high-leverage question"
-        human_prompt = "I should orient you with one recommendation and two alternatives, not dump the workflow catalog."
-        alternatives = guidance_alternatives(
-            ("guide-route", "if the route is merely unclear"),
-            ("brainstorming", "if you need options before deciding"),
-        )
+        recommended_workflow = routed_problem_workflow(question)
+        recommended_action, human_prompt, alternatives = problem_guidance_text(recommended_workflow)
         reason = "The message asks for orientation or indicates uncertainty."
     elif has_question and "creative-flow" in signal_set:
         classification = "creative-flow"
@@ -6567,6 +6686,17 @@ def build_guidance_decision(
             ("reality-evidence-gate", "filter impossible or risky promises"),
         )
         reason = "The message asks for ideas, options, or exploration."
+    elif has_question and "document-utility" in signal_set and routed_document_workflow(question) == "adversarial-review":
+        classification = "document-utility"
+        recommended_workflow = "adversarial-review"
+        recommended_action = "run adversarial-review to attack assumptions, failure paths, missing evidence, and route repair, waiver, or rejection"
+        human_prompt = "I should stress-test the artifact before a generic review or build makes weak assumptions harder to reverse."
+        alternatives = guidance_alternatives(
+            ("edge-case-review", "when the concern is boundary behavior rather than assumptions"),
+            ("risk-register", "when findings should become risk ownership"),
+            ("correct-course", "when the attack proves the current route is wrong"),
+        )
+        reason = "The message asks for adversarial or red-team review, which should attack assumptions before quality or build routing."
     elif has_question and "quality-flow" in signal_set and not is_strong_game_quality_intent(question):
         classification = "quality-flow"
         recommended_workflow = routed_quality_workflow(question)
@@ -6579,7 +6709,7 @@ def build_guidance_decision(
         human_prompt = "I should clarify the document job and source-of-truth boundary before editing docs."
         alternatives = guidance_alternatives(
             ("editorial-review", "when clarity, tone, or structure is the main problem"),
-            ("edge-case-review", "when the artifact needs adversarial stress testing"),
+            ("adversarial-review", "when the artifact needs assumption attack or red-team stress testing"),
             ("spec-distillation", "when messy notes must become a compact machine contract"),
         )
         reason = "The message is documentation utility work rather than general research."
@@ -6599,6 +6729,9 @@ def build_guidance_decision(
         if recommended_workflow == "quick-dev":
             recommended_action = "run quick-dev to clarify scope, write spec-lite, implement or hand off, review, validate, and record evidence"
             human_prompt = "This sounds small enough for a fast path, but I should still lock scope, proof, and non-goals before building."
+        elif recommended_workflow == "working-backwards-challenge":
+            recommended_action = "run working-backwards-challenge to stress-test the customer promise, FAQ objections, evidence gaps, and decision impact before PRD or architecture"
+            human_prompt = "I should challenge the promise from the customer's side before treating it as accepted requirements."
         elif recommended_workflow == "ux-plan":
             recommended_action = "run ux-plan to calibrate taste, journeys, interaction model, accessibility, rejection log, and proof"
             human_prompt = "I should make the human experience concrete before implementation stories."
@@ -6610,8 +6743,8 @@ def build_guidance_decision(
             human_prompt = "I should turn product intent into testable requirements and a durable decision log before architecture or stories."
         alternatives = guidance_alternatives(
             ("product-requirements", "when product promise, scope, or acceptance criteria need a PRD"),
+            ("working-backwards-challenge", "when the customer promise needs PRFAQ-style stress testing"),
             ("ux-plan", "when taste, journey, interface, states, or accessibility are the main uncertainty"),
-            ("quick-dev", "when the change is small, bounded, and ready for spec-lite plus implementation evidence"),
         )
         reason = "The message asks for product requirements, UX design, PRD validation, or a quick guided build path."
     elif next_story and phase == "4-build-verify" and (not has_question or "mechanical-build" in signal_set or "operate-support" in signal_set):
@@ -6629,13 +6762,16 @@ def build_guidance_decision(
         elif recommended_workflow == "readiness-check":
             recommended_action = "run readiness-check to prove stories have accepted sources, acceptance criteria, checks, and evidence expectations"
             human_prompt = "I should prove the backlog is implementation-ready before build-story starts."
+        elif recommended_workflow == "sprint-status":
+            recommended_action = "run sprint-status to summarize story counts, active/blocked/review items, validation gaps, and the next executable action"
+            human_prompt = "I should give a status ritual with one next move, not make you infer sprint health from files."
         else:
             recommended_action = f"run {recommended_workflow} to plan the next story batch from accepted decision artifacts"
             human_prompt = "I should preserve story order, dependencies, acceptance, checks, and decision sources."
         alternatives = guidance_alternatives(
             ("story-creation", "when implementation-ready story files need to be authored from accepted decisions"),
             ("readiness-check", "when stories exist but their decision sources or validation map may be weak"),
-            ("plan-sprint", "when the next slice and sequencing need sprint planning"),
+            ("sprint-status", "when the human needs progress, blockers, and next story orientation"),
         )
         reason = "The message asks for story lifecycle work, so stories must be generated from accepted decision artifacts before build."
     elif has_question and "game-flow" in signal_set:

@@ -6,7 +6,7 @@
 - docs_cache: `%TEMP%/forge-bmad-docs`
 - installed_modules: bmb 1.8.1, cis 0.2.1, tea 1.19.0, gds 0.6.0
 
-Internal behavior benchmark for route-aware human guidance, correct-course, research, brainstorm, product/UX/architecture/quick-dev, story lifecycle, CIS/creative, game, builder, customization, lifecycle closure, and quality routing.
+Internal behavior benchmark for route-aware human guidance, correct-course, research, brainstorm, product/UX/architecture/quick-dev, story lifecycle, closure utilities, CIS/creative, game, builder, customization, lifecycle closure, and quality routing.
 
 ## Sources
 
@@ -36,10 +36,15 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Runtime audit requests should be treated as guided builder work when the human asks about dead code, misleading agent docs, stale workflow behavior, or whether the guided experience is truly comparable.
 - Builder creation requests should route to narrow Builder Factory workflows: module ideation before broad module build, agent builder before agent files, workflow builder before workflow files, module builder before packaging, and module validate for whole-extension checks.
 - PRD requests should route to a create/update/validate product-requirements workflow with decision log, addendum, validation findings, and next workflow.
+- PRFAQ and working-backwards requests should route to a customer-promise challenge before PRD, UX, architecture, or stories harden an untested promise.
 - UX requests should route to UX planning with taste calibration, journeys, interaction model, accessibility, rejection log, and proof target before stories.
 - Architecture requests should route to architecture planning that connects accepted product decisions to technical constraints, interfaces, risks, and story boundaries.
 - Quick Dev / Quick Flow requests should route to a spec-lite workflow that clarifies scope, implements or hands off mechanically, reviews, validates, writes evidence, and names the next workflow.
 - Story lifecycle requests should route to story-creation/readiness flows that require accepted decision sources, acceptance criteria, checks, evidence expectations, and a validation map before build-story.
+- Sprint status requests should route to a status ritual that names story counts, active/blocked/review items, evidence gaps, and the next executable action.
+- Investigation requests should diagnose symptom, hypotheses, probes, findings, and next reversible action before repair work.
+- Adversarial review requests should attack assumptions and route repair, waiver, evidence, or rejection rather than hiding critique inside generic edge cases.
+- Checkpoint preview requests should verify durable memory content before writing or handing off context.
 - CIS/creative requests should route to creative-session/concept-selection style flows before converging on specification.
 
 ## Forge parity targets
@@ -78,15 +83,18 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `performance-plan`
 - `game-qa-review`
 - `problem-solving`
+- `investigation`
 - `domain-scan`
 - `brainstorming`
 - `build-story`
 - `runtime-builder`
 - `product-requirements`
+- `working-backwards-challenge`
 - `ux-plan`
 - `architecture`
 - `quick-dev`
 - `story-creation`
+- `sprint-status`
 - `creative-session`
 - `game-story-creation`
 - `traceability-gate`
@@ -107,10 +115,12 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `module-validate`
 - `config-customization`
 - `doc-index`
+- `adversarial-review`
 - `design-thinking`
 - `track-decision`
 - `project-context`
 - `session-prep`
+- `checkpoint-preview`
 - `code-review`
 - `retrospective`
 - `research-closeout`

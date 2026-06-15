@@ -117,14 +117,14 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T01:23:47+00:00",
+  "generated_at": "2026-06-15T02:24:23+00:00",
   "modules": [
     {
       "id": "core-runtime",
       "phase_span": "0-route | 1-discovery | 2-specification | 3-plan | 4-build-verify | 5-ready-operate | 6-evolve",
       "purpose": "Route projects, preserve durable state, recover context, and enforce phase transitions.",
       "title": "Core Runtime",
-      "workflows": "start-runtime | discover-intent | guide-route | guidance-engine | track-decision | project-context | session-prep | research-closeout | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | grill-gate | council-decision | context-recovery | ready-release | evolve-project | correct-course"
+      "workflows": "start-runtime | discover-intent | guide-route | guidance-engine | track-decision | project-context | session-prep | checkpoint-preview | research-closeout | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | investigation | grill-gate | council-decision | context-recovery | ready-release | evolve-project | correct-course"
     },
     {
       "id": "creative-studio",
@@ -152,21 +152,21 @@
       "phase_span": "4-build-verify | 5-ready-operate | 6-evolve",
       "purpose": "Move a project into ready/operate, preserve release evidence, and route future evolution.",
       "title": "Launch Ops",
-      "workflows": "guidance-engine | discover-intent | project-context | session-prep | code-review | retrospective | ready-release | release-readiness | observability-plan | devops-deployment-plan | evolve-project | context-recovery"
+      "workflows": "guidance-engine | discover-intent | project-context | session-prep | checkpoint-preview | sprint-status | code-review | retrospective | ready-release | release-readiness | observability-plan | devops-deployment-plan | evolve-project | context-recovery"
     },
     {
       "id": "runtime-builder",
       "phase_span": "1-discovery | 2-specification | 3-plan | 4-build-verify | 6-evolve",
       "purpose": "Create new workflows, modules, skills, scripts, and validations for Forge Method projects.",
       "title": "Runtime Builder",
-      "workflows": "guidance-engine | discover-intent | runtime-builder | module-ideation | agent-builder | workflow-builder | module-builder | module-validate | builder-scaffold | agent-analyze | workflow-analyze | skill-convert | config-customization | track-decision | project-context | session-prep | research-closeout | reality-evidence-gate | technical-feasibility-scan | doc-index | doc-shard | editorial-review | edge-case-review | spec-distillation | code-review | retrospective | eval-design | workflow-validate | build-story | grill-gate"
+      "workflows": "guidance-engine | discover-intent | runtime-builder | module-ideation | agent-builder | workflow-builder | module-builder | module-validate | builder-scaffold | agent-analyze | workflow-analyze | skill-convert | config-customization | track-decision | project-context | session-prep | checkpoint-preview | research-closeout | reality-evidence-gate | technical-feasibility-scan | investigation | doc-index | doc-shard | editorial-review | edge-case-review | adversarial-review | spec-distillation | code-review | retrospective | eval-design | workflow-validate | build-story | grill-gate"
     },
     {
       "id": "software-builder",
       "phase_span": "2-specification | 3-plan | 4-build-verify | 5-ready-operate",
       "purpose": "Turn specifications into implementation stories, code changes, checks, review, and evidence.",
       "title": "Software Builder",
-      "workflows": "guidance-engine | discover-intent | track-decision | project-context | session-prep | research-closeout | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | spec-distillation | product-requirements | ux-plan | quick-dev | architecture | create-epics | story-creation | doc-index | doc-shard | editorial-review | edge-case-review | readiness-check | code-review | retrospective | grill-gate | build-story | ready-release | correct-course"
+      "workflows": "guidance-engine | discover-intent | track-decision | project-context | session-prep | checkpoint-preview | research-closeout | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | investigation | spec-distillation | product-requirements | working-backwards-challenge | ux-plan | quick-dev | architecture | create-epics | story-creation | sprint-status | doc-index | doc-shard | editorial-review | edge-case-review | adversarial-review | readiness-check | code-review | retrospective | grill-gate | build-story | ready-release | correct-course"
     },
     {
       "id": "test-architect",
@@ -488,6 +488,30 @@
   "sources": [],
   "workflows": [
     {
+      "facilitation_pack": "document-utility",
+      "followed_by": [
+        "edge-case-review",
+        "risk-register",
+        "correct-course",
+        "build-story"
+      ],
+      "id": "adversarial-review",
+      "modes": [
+        "review",
+        "red-team",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "adversarial findings",
+        "assumption breaks",
+        "repair route"
+      ],
+      "phase": "anytime",
+      "required": false,
+      "template": "adversarial-review-artifact"
+    },
+    {
       "facilitation_pack": "builder-utility",
       "followed_by": [
         "builder-scaffold",
@@ -598,6 +622,28 @@
       ],
       "phase": "4-build-verify",
       "required": false
+    },
+    {
+      "facilitation_pack": "lifecycle-closure",
+      "followed_by": [
+        "session-prep",
+        "context-recovery"
+      ],
+      "id": "checkpoint-preview",
+      "modes": [
+        "preview",
+        "validate",
+        "handoff",
+        "headless"
+      ],
+      "outputs": [
+        "checkpoint preview",
+        "state delta",
+        "next action"
+      ],
+      "phase": "anytime",
+      "required": false,
+      "template": "checkpoint-preview-artifact"
     },
     {
       "facilitation_pack": "test-architecture",
@@ -828,6 +874,7 @@
     {
       "facilitation_pack": "document-utility",
       "followed_by": [
+        "adversarial-review",
         "risk-register",
         "build-story"
       ],
@@ -1238,6 +1285,31 @@
       "required": false
     },
     {
+      "facilitation_pack": "problem-solving",
+      "followed_by": [
+        "problem-solving",
+        "correct-course",
+        "build-story",
+        "research-closeout"
+      ],
+      "id": "investigation",
+      "modes": [
+        "investigate",
+        "triage",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "investigation frame",
+        "hypotheses",
+        "probe plan",
+        "next reversible action"
+      ],
+      "phase": "1-discovery | 4-build-verify | 6-evolve",
+      "required": false,
+      "template": "investigation-artifact"
+    },
+    {
       "facilitation_pack": "evidence-research",
       "id": "market-scan",
       "outputs": [
@@ -1412,7 +1484,8 @@
       "facilitation_pack": "story-lifecycle",
       "followed_by": [
         "story-creation",
-        "readiness-check"
+        "readiness-check",
+        "sprint-status"
       ],
       "id": "plan-sprint",
       "outputs": [
@@ -1455,6 +1528,7 @@
     {
       "facilitation_pack": "problem-solving",
       "followed_by": [
+        "investigation",
         "correct-course",
         "runtime-builder"
       ],
@@ -1469,6 +1543,7 @@
     {
       "facilitation_pack": "product-planning",
       "followed_by": [
+        "working-backwards-challenge",
         "architecture",
         "ux-plan",
         "quick-dev"
@@ -1702,6 +1777,7 @@
     {
       "facilitation_pack": "lifecycle-closure",
       "followed_by": [
+        "checkpoint-preview",
         "guidance-engine",
         "build-story"
       ],
@@ -1764,6 +1840,30 @@
       "phase": "1-discovery | 2-specification",
       "required": false,
       "template": "document-utility-artifact"
+    },
+    {
+      "facilitation_pack": "story-lifecycle",
+      "followed_by": [
+        "story-creation",
+        "build-story",
+        "readiness-check",
+        "retrospective"
+      ],
+      "id": "sprint-status",
+      "modes": [
+        "status",
+        "resume",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "sprint status summary",
+        "blocked/next story map",
+        "next action"
+      ],
+      "phase": "3-plan | 4-build-verify | 5-ready-operate",
+      "required": false,
+      "template": "sprint-status-artifact"
     },
     {
       "followed_by": [
@@ -2069,6 +2169,29 @@
       ],
       "phase": "4-build-verify",
       "required": true
+    },
+    {
+      "facilitation_pack": "product-planning",
+      "followed_by": [
+        "product-requirements",
+        "ux-plan",
+        "architecture"
+      ],
+      "id": "working-backwards-challenge",
+      "modes": [
+        "prfaq",
+        "challenge",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "PRFAQ challenge",
+        "customer promise stress test",
+        "decision impact"
+      ],
+      "phase": "2-specification",
+      "required": false,
+      "template": "working-backwards-artifact"
     },
     {
       "facilitation_pack": "product-planning",

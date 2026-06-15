@@ -81,7 +81,7 @@ The full parity goal is complete only when every audit row is `translated`, `str
 
 ## Current Status
 
-P0 through P1.6 are closed:
+P0 through P1.7 are closed:
 
 - Help/Next-Step Oracle: implemented and validated.
 - Human facilitation coverage gate: implemented and validated.
@@ -94,6 +94,7 @@ P0 through P1.6 are closed:
 - Lifecycle Closure: implemented with `track-decision`, `project-context`, `session-prep`, `code-review`, `retrospective`, `research-closeout`, readiness matrix template, lifecycle facilitation, Guidance Engine routes, replay coverage, compact workflow refs, and Capability Index exposure.
 - Game Studio Depth: implemented with `game-context`, `engine-setup`, expanded GDD/narrative/mechanics/prototype/playtest/performance/QA contracts, game-lifecycle facilitation, Guidance Engine routes, replay fixtures, compact workflow refs, templates, and validation coverage.
 - Test Architecture Enterprise Depth: implemented with Quality Engagement Model, Fixture Architecture, narrow TEA templates, expanded quality facilitation, two-phase Traceability Gate semantics, waiver contract, Guidance Engine routes, replay fixtures, compact workflow refs, and validation coverage.
+- Parity Closure Utilities: implemented with `investigation`, `working-backwards-challenge`, `sprint-status`, `checkpoint-preview`, `adversarial-review`, compact refs, templates, routes, module membership, and parity replay coverage.
 
 The remaining work is a planned sequence, not ad hoc patching.
 
@@ -316,6 +317,43 @@ Done when:
 - quality requests route to the right quality artifact: done;
 - release gates can distinguish pass, concerns, fail, missing evidence, and explicit waiver: done.
 
+### P1.7 Parity Closure Utilities
+
+Status: translated in the 2026-06-15 Parity Closure Utilities batch.
+
+Scope:
+
+- investigation/root-cause routing;
+- working-backwards/PRFAQ-style challenge;
+- sprint status ritual;
+- checkpoint preview;
+- adversarial/red-team review.
+
+Why:
+
+The parity audit still had small but important guided-flow gaps after the larger Builder, lifecycle, game, and TEA batches. These utilities are the exact workflows humans naturally ask for when they are stuck, checking progress, challenging assumptions, or preparing a handoff.
+
+Forge translation:
+
+- Human: short, direct route prompts that make the next guided ritual obvious without requiring phase names.
+- Agent: compact workflow refs, templates, catalog/module metadata, state transition commands, and replay fixtures.
+
+Deliverables:
+
+- workflow refs for all five workflows: done;
+- artifact templates for all five workflows: done;
+- catalog and module membership: done;
+- Guidance Engine signal/routing: done;
+- parity replay cases: done;
+- adversarial precedence fix so explicit red-team requests do not fall into generic quality review: done.
+
+Done when:
+
+- route fixtures pass: done;
+- `parity replay` passes: done;
+- workflow validation passes: done;
+- full source and install validation recorded: pending final batch validation.
+
 ## P2 Decisions
 
 P2 items are not implementation blockers. Decisions are recorded in `.forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md`:
@@ -380,12 +418,11 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 ## Immediate Next Step
 
-Next implementation batch: Forge experience polish after P2 scope decisions and P1.6 validation evidence are recorded.
+Next implementation batch: release/version planning after P1.7 final validation is recorded.
 
-Do not start the post-parity polish as an ad hoc implementation. Start from this plan:
+Do not tag or publish from a partial test run. Start from this plan:
 
-1. audit the translated parity surface for human-experience richness and agent compactness;
-2. add or refine facilitation packs, compact refs, scripts, and fixtures where the audit finds weak experience;
-3. prepare patch notes and release plan for a coherent versioned batch;
-4. validate source and installed behavior;
-5. record evidence and checkpoint.
+1. run the source, runtime, fast, and install validation ladder;
+2. record evidence, checkpoint, state, and ledger for P1.7;
+3. review the Unreleased changelog as one coherent version batch;
+4. decide whether to tag/publish or continue real-use transcript hardening first.
