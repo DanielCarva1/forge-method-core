@@ -4,40 +4,33 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: game-production-depth-hardened
+- status: module-distribution-depth-hardened
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Continue residual parity hardening: inspect package/distribution depth, doc utility validation, and deferred API/browser or eval-runner surfaces only if repeated projects justify them.
+- next_action: Continue residual parity hardening with doc utility source-of-truth/stale-doc validation; defer API/browser and eval-runner surfaces until repeated projects justify them.
 
 ## Latest Checkpoint
 
-# Game Production Depth hardened
+# Module Distribution Depth hardened
 
-- created_at: 2026-06-15T08:01:47+00:00
+- created_at: 2026-06-15T08:30:40+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: game-production-depth-hardened
+- status: module-distribution-depth-hardened
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed residual game production parity gaps: game story creation and sprint status now have dedicated compact artifacts and catalog metadata; game-flow guide output has workflow-specific human copy for story/status/test/e2e/review; dev-story wording routes to mechanical build-story when a game story is ready; replay fixtures cover game create/status/dev/review/test/e2e transcripts.
+Added module-distribution as a Runtime Builder workflow for setup/config boundaries, capability/help registry, install/reinstall/upgrade proof, stale registration prevention, and legacy cleanup handoff.
 
 ## Decisions
 
-- Keep implementation in generic build-story, but carry optional Domain Context so game stories preserve playable slice, player checks, and domain evidence without a separate implementation workflow.
+- Package/distribution depth is now represented as Forge-native runtime-builder guidance rather than a loose doc-only concern.
 
 ## Checks
 
-- python -m unittest discover -s tests: passed (72 tests)
-- python skills/forge-method/scripts/forge_method_runtime.py workflow validate: passed
-- python skills/forge-method/scripts/forge_method_runtime.py workflow compactness: passed
-- python skills/forge-method/scripts/forge_method_runtime.py parity replay: passed (76/76)
-- python skills/forge-method/scripts/forge_method_runtime.py config validate --root .: passed
-- powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1: passed
-- powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1: passed
-- powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1: passed
+- unittest, workflow validation, compactness, parity replay, config validation/index, smoke-runtime, smoke-install, and verify-fast all passed.
 
 ## Failed Checks
 
@@ -45,12 +38,15 @@ Closed residual game production parity gaps: game story creation and sprint stat
 
 ## Touched Files
 
-- skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/catalog/workflows.json
-- skills/forge-method/templates/game-story-artifact.md
-- skills/forge-method/templates/game-sprint-status-artifact.md
-- skills/forge-
-[checkpoint truncated]
+- Guidance Engine routing, workflow catalog, runtime-builder module, builder facilitation, module builder/validate workflows, distribution template, benchmark/audit docs, and runtime tests.
+
+## Artifacts
+
+- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
+
+## Next Action
+
+Continue residual parity hardening with doc utility source-of-truth/stale-doc validation; defer API/browser and eval-runner surfaces until repeated projects justify them.
 
 ## Recovery Signals
 
@@ -62,15 +58,16 @@ Closed residual game production parity gaps: game story creation and sprint stat
 
 - skills/forge-method/scripts/forge_method_runtime.py
 - skills/forge-method/catalog/workflows.json
-- skills/forge-method/templates/game-story-artifact.md
-- skills/forge-method/templates/game-sprint-status-artifact.md
-- skills/forge-method/templates/build-story-work-order.md
-- skills/forge-method/references/workflow-build-story.md
+- skills/forge-method/facilitation/document-utility.md
+- skills/forge-method/references/workflow-editorial-review.md
+- skills/forge-method/references/workflow-edge-case-review.md
+- skills/forge-method/templates/editorial-review-artifact.md
+- skills/forge-method/templates/edge-case-review-artifact.md
 - skills/forge-method/fixtures/guidance-parity-replay.json
 - tests/test_runtime.py
-- .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
-- .forge-method/artifacts/guidance-engine-benchmark.md
-- CHANGELOG.md
+- skills/forge-method/references/workflow-council-decision.md
+- skills/forge-method/facilitation/council-decision.md
+- skills/forge-method/templates/council-decision-artifact.md
 
 ## Open Human Inputs
 
@@ -87,11 +84,11 @@ Closed residual game production parity gaps: game story creation and sprint stat
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260615-060843-validation-build-story-autonomy-depth-validation.md
 - .forge-method/evidence/20260615-063437-validation-document-review-depth-validation.md
 - .forge-method/evidence/20260615-065658-validation-council-orchestration-depth-validation.md
 - .forge-method/evidence/20260615-072752-validation-correct-course-and-problem-solving-depth-validat.md
 - .forge-method/evidence/20260615-080127-validation-game-production-depth-hardening-validation.md
+- .forge-method/evidence/20260615-083039-validation-module-distribution-depth-validation.md
 
 ## Recent Artifacts
 

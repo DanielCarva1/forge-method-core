@@ -75,6 +75,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Fresh chat, network drop, reload, or context-reset messages should route to context-recovery and expose a compact context boundary: trust launcher output and durable state, load only read-first files, then run Guidance Engine for fresh human intent.
 - Runtime outputs must remain compact JSON/state-machine artifacts for agents, while non-JSON guidance can be human, direct, and useful.
 - Builder Factory outputs must keep coached human creation in facilitation packs and compact agent contracts in workflow refs, templates, catalog metadata, and validation reports.
+- Module Distribution outputs must preserve distribution target, shared vs local config boundary, capability/help registry, install/reinstall/upgrade commands, legacy cleanup, smoke proof, waivers, and validation handoff before packaging is treated as done.
 - Project Configuration outputs must make customization visible through inspect, Guidance Engine metadata, validation, and the generated Capability Index.
 - Persona Lens outputs must preserve a compact `persona_lens` object, route PM/Architect/UX/QA/Game/Builder/Tech Writer and coach requests, and keep default agent recommendations compact.
 - Council Orchestration Depth outputs must route party-mode/council/subagent orchestration requests to `council-decision`, show a richer live debate to humans, and persist only compact participant, dissent, worker-output, merge, evidence, and next-action contracts.
@@ -133,6 +134,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `agent-builder`
 - `workflow-builder`
 - `module-builder`
+- `module-distribution`
 - `module-validate`
 - `config-customization`
 - `doc-index`

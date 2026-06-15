@@ -1547,6 +1547,7 @@ class RuntimeTests(unittest.TestCase):
             "agent-builder",
             "workflow-builder",
             "module-builder",
+            "module-distribution",
             "module-validate",
             "doc-index",
             "spec-distillation",
@@ -1597,6 +1598,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "builder-utility-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "builder-factory-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "module-builder-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "module-distribution-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "module-validation-report.md",
             ROOT / "skills" / "forge-method" / "templates" / "document-utility-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "product-requirements-artifact.md",
@@ -1703,6 +1705,7 @@ class RuntimeTests(unittest.TestCase):
             "agent-builder",
             "workflow-builder",
             "module-builder",
+            "module-distribution",
             "module-validate",
             "config-customization",
             "track-decision",
@@ -1750,6 +1753,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["agent-builder"].get("template"), "builder-factory-artifact")
         self.assertEqual(by_id["workflow-builder"].get("template"), "builder-factory-artifact")
         self.assertEqual(by_id["module-builder"].get("template"), "module-builder-artifact")
+        self.assertEqual(by_id["module-distribution"].get("template"), "module-distribution-artifact")
         self.assertEqual(by_id["module-validate"].get("template"), "module-validation-report")
         self.assertEqual(by_id["config-customization"].get("template"), "config-customization-artifact")
         self.assertEqual(by_id["track-decision"].get("template"), "track-decision-artifact")
@@ -1811,7 +1815,15 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("create", by_id["agent-builder"].get("modes", []))
         self.assertIn("create", by_id["workflow-builder"].get("modes", []))
         self.assertIn("package", by_id["module-builder"].get("modes", []))
+        self.assertIn("plugin", by_id["module-distribution"].get("modes", []))
+        self.assertIn("standalone", by_id["module-distribution"].get("modes", []))
         self.assertIn("validate", by_id["module-validate"].get("modes", []))
+        module_distribution_template = (
+            ROOT / "skills" / "forge-method" / "templates" / "module-distribution-artifact.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("shared_config", module_distribution_template)
+        self.assertIn("anti_stale_registration", module_distribution_template)
+        self.assertIn("legacy_cleanup", module_distribution_template)
         self.assertIn("index", by_id["config-customization"].get("modes", []))
         self.assertIn("decide", by_id["track-decision"].get("modes", []))
         self.assertIn("parallel", by_id["council-decision"].get("modes", []))

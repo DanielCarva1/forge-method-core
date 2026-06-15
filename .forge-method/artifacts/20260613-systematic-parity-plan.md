@@ -431,7 +431,7 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release, Architecture Guidance Depth cleanup, Context Boundary Recovery, Brainstorming Depth, CIS Facilitation Depth, Agent Compactness Guard, Story Decision Source Gate, Sprint Planning Depth, Build Story Autonomy Depth, Document Review Depth, Council Orchestration Depth, and Correct-Course/Problem-Solving Depth.
 
-Current next focus: correct-course breadth and problem-solving depth now have templates, modes, richer packs, stronger signals, and replay proof. Continue residual strong-ish/partial rows with real-use transcript proof, especially game dev-story/review examples, package/distribution depth, doc utility validation, and deferred API/browser or eval-runner surfaces only if repeated projects justify them.
+Current next focus: Module Distribution Depth now adds a native distribution contract, setup/config boundary, install/upgrade proof, and replay coverage. Continue residual strong-ish/partial rows with real-use transcript proof, especially doc utility validation and deferred API/browser or eval-runner surfaces only if repeated projects justify them.
 
 Do not tag or publish from a partial test run. Start from this plan:
 

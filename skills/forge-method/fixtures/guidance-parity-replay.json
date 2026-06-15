@@ -320,6 +320,19 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "module_distribution_request",
+    "family": "builder",
+    "state": "evolve_runtime",
+    "question": "distribute module com marketplace manifest, self-registering setup, shared config, user config, help registry, install smoke, upgrade e legacy cleanup",
+    "expected_classification": "builder-flow",
+    "expected_phase": "6-evolve",
+    "expected_workflow": "module-distribution",
+    "expected_facilitation_pack": "skill:facilitation/builder-factory.md",
+    "expected_template": "module-distribution-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
     "id": "module_validate_request",
     "family": "builder",
     "state": "evolve_runtime",

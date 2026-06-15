@@ -9,24 +9,26 @@ inputs:
   - workflow catalog entries
   - workflow refs, packs, templates, scripts, and tests
   - expected install or smoke command
+  - distribution contract when packaging changed
 
 steps:
   1. run structural validation for workflow refs, catalog metadata, packs, templates, and module membership
   2. inspect each routed capability for trigger accuracy, output quality, and handoff completeness
   3. compare module behavior against replay fixtures or expected scenarios
   4. record pass, fail, waivers, and required fixes in a validation report
-  5. hand off the next repair or release validation step
+  5. hand off the next repair, distribution, or release validation step
 
 outputs:
   - module validation report
   - structural findings
   - quality findings
   - pass/fail or waiver decision
+  - distribution findings when install/setup proof is weak
 
 done_when:
   - validation commands passed or findings are actionable
   - each capability has route, pack when human-facing, compact workflow, template when needed, and proof
-  - next workflow or release check is explicit
+  - next workflow, distribution repair, or release check is explicit
 
 blocked_when:
   - module files cannot be resolved
@@ -34,4 +36,4 @@ blocked_when:
   - quality findings are too broad to assign ownership
 
 handoff:
-  - preserve validation report path, command output, unresolved findings, waivers, and next repair workflow
+  - preserve validation report path, command output, distribution gaps, unresolved findings, waivers, and next repair workflow

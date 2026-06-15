@@ -15,18 +15,18 @@ steps:
   2. assemble module manifest, catalog links, setup/install notes, and generated paths
   3. confirm workflow order, followed_by relationships, outputs, templates, and packs
   4. add deterministic scripts or smoke hooks only where reliability needs them
-  5. run or schedule module validation and install proof
+  5. hand off distribution/readiness when install, publish, or upgrade behavior matters
 
 outputs:
   - module manifest
   - packaged runtime artifact list
-  - install or setup contract
+  - setup/config boundary
   - validation handoff
 
 done_when:
   - module membership resolves to packaged workflow/catalog entries
   - setup, configuration, and dependency behavior are explicit
-  - next workflow is `module-validate` or `workflow-validate`
+  - next workflow is `module-distribution`, `module-validate`, or `workflow-validate`
 
 blocked_when:
   - required artifact paths are missing
@@ -34,4 +34,4 @@ blocked_when:
   - install path cannot be validated locally
 
 handoff:
-  - preserve module manifest path, generated paths, install command, validation command, and remaining manual steps
+  - preserve module manifest path, generated paths, setup/config boundary, validation command, and remaining manual steps

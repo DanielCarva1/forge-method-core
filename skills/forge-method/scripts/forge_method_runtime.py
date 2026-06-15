@@ -6990,6 +6990,12 @@ def is_strong_builder_intent(question: str) -> bool:
         "create module",
         "package module",
         "module builder",
+        "module distribution",
+        "module setup",
+        "module install",
+        "distribution contract",
+        "publish module",
+        "distribute module",
         "module ideation",
         "validate module",
         "check module",
@@ -7073,6 +7079,16 @@ def routed_builder_workflow(question: str) -> str:
         "convention",
         "convencao",
     }
+    if module_tokens & tokens and (
+        {"distribute", "distribution", "publish", "publicar", "marketplace", "upgrade", "legacy"} & tokens
+        or "distribution contract" in normalized
+        or "module distribution" in normalized
+        or "publish module" in normalized
+        or "distribute module" in normalized
+        or "self-registering" in normalized
+        or "self registering" in normalized
+    ):
+        return "module-distribution"
     if (
         config_tokens & tokens
         or "capability index" in normalized
@@ -7169,6 +7185,7 @@ def builder_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, st
                 ("agent-builder", "use when the first artifact is clearly an agent"),
                 ("workflow-builder", "use when the first artifact is clearly a workflow"),
                 ("module-builder", "use when a plan already exists and packaging is the next step"),
+                ("module-distribution", "use when packaging exists and install/share/publish behavior is the blocker"),
             ),
         )
     if workflow_id == "agent-builder":
@@ -7197,8 +7214,19 @@ def builder_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, st
             "I should package the already-shaped artifacts into a coherent module before release-style validation.",
             guidance_alternatives(
                 ("module-ideation", "use when module architecture is still unclear"),
+                ("module-distribution", "use when setup, install, registry, or publish behavior must be hardened"),
                 ("module-validate", "use when packaging exists and needs validation"),
                 ("workflow-validate", "use when only workflow/catalog references changed"),
+            ),
+        )
+    if workflow_id == "module-distribution":
+        return (
+            "run module-distribution to define distribution target, shared vs local config, capability/help registry, install/reinstall/upgrade commands, legacy cleanup, smoke proof, waivers, and release handoff",
+            "I should make the module installable and upgradable before treating packaging as done.",
+            guidance_alternatives(
+                ("module-builder", "use when manifest, catalog, or generated paths are still missing"),
+                ("module-validate", "use when the distribution contract exists and needs structural plus quality proof"),
+                ("release-readiness", "use when install and validation evidence are already complete"),
             ),
         )
     if workflow_id == "module-validate":
@@ -7207,6 +7235,7 @@ def builder_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, st
             "I should validate the whole extension, not only individual workflow files.",
             guidance_alternatives(
                 ("workflow-validate", "use for lower-level catalog and workflow reference checks"),
+                ("module-distribution", "use when validation finds setup, install, registry, or publish gaps"),
                 ("module-builder", "use when validation finds missing packaging"),
                 ("eval-design", "use when a new replay or local eval is needed"),
             ),

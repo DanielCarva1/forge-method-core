@@ -12,8 +12,10 @@ configuration:
 dependencies:
 catalog_updates:
 followed_by_map:
+shared_config:
+local_or_user_config:
+capability_registry:
 install_or_setup_contract:
 generated_paths:
 validation_command:
 next_workflow:
-

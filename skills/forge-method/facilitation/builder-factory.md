@@ -54,6 +54,7 @@ anti_patterns:
   - "Do not put rich conversational coaching into `workflow-*.md` files."
   - "Do not let `runtime-builder` swallow all creation requests when a narrower workflow exists."
   - "Do not call a module complete without module membership, catalog metadata, workflow refs, packs, templates, and proof."
+  - "Do not call a module distributable until setup/config boundaries, capability registration, install proof, upgrade behavior, and cleanup policy are explicit."
   - "Do not copy benchmark wording into product-facing Forge docs."
   - "Do not create agents whose role is a vague personality with no outcome or handoff."
   - "Do not create workflows whose trigger overlaps another workflow without a routing rule."
@@ -67,6 +68,7 @@ checkpoint_options:
   - agent-builder
   - workflow-builder
   - module-builder
+  - module-distribution
   - module-validate
   - agent-analyze
   - workflow-analyze
@@ -77,13 +79,13 @@ domain_examples:
   - agent-builder: "The human wants a new agent; classify identity, outcome, memory, autonomy, capabilities, and validation before files."
   - workflow-builder: "The human wants a new workflow; define compact state-machine sections, pack needs, catalog metadata, and tests."
   - module-builder: "Built artifacts need packaging; assemble module manifest, setup/install contract, and followed_by relationships."
+  - module-distribution: "A module needs to be installed, shared, published, or upgraded; define distribution target, config boundary, capability registry, install smoke, and cleanup policy."
   - module-validate: "A module exists; run structural validation and LLM quality review, then write actionable findings."
   - builder-utility: "Analysis and conversion remain in `builder-utility`; creation and package lifecycle live here."
 
 artifact_rules:
   Persist artifact kind, human experience contract, agent contract, route phrases, generated paths, rejected alternatives, validation commands, and next workflow.
-  Use `skill:templates/builder-factory-artifact.md` for ideation/build plans, `skill:templates/module-builder-artifact.md` for module manifests, and `skill:templates/module-validation-report.md` for validation reports.
+  Use `skill:templates/builder-factory-artifact.md` for ideation/build plans, `skill:templates/module-builder-artifact.md` for module manifests, `skill:templates/module-distribution-artifact.md` for distribution contracts, and `skill:templates/module-validation-report.md` for validation reports.
 
 headless:
   If build intent and required inputs are clear, emit the compact plan/report and transition command. If artifact type, owner layer, or validation proof is unclear, write a blocked builder artifact instead of scaffolding.
-
