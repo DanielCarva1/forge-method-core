@@ -1,19 +1,19 @@
-# Guidance human experience polish complete
+# Guidance human experience polish
 
-- created_at: 2026-06-15T01:59:36+00:00
+- created_at: 2026-06-15T01:56:41+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: guidance-human-polish-done
+- status: p2-scope-decisions-done
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed the Guidance Engine human experience polish with contextual guide lede, runtime-builder routing for human-experience plus agent-doc polish, and quiet correction/runtime Reality/Evidence Gate behavior.
+Added contextual human lede to guide output, routed human-experience plus agent-doc polish to runtime-builder, and suppressed Reality/Evidence Gate noise for correction/runtime requests.
 
 ## Decisions
 
-- Human-facing guide output carries the rich lede; workflow refs, state, JSON, and handoffs remain compact for agents.
+- Human richness belongs in guide output and facilitation packs; agent-facing workflow refs and JSON stay compact.
 
 ## Checks
 

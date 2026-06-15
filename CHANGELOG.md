@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- polish Guidance Engine human output with a contextual `guide` lede, runtime-builder routing for human-experience plus agent-doc polish, and quieter Reality/Evidence Gate behavior for correction/runtime requests
 - add Game Studio Depth with `game-context`, `engine-setup`, expanded GDD/narrative/mechanics/prototype/playtest/performance/game QA contracts, route fixtures, and compact game templates
 - add Test Architecture Enterprise Depth with Quality Engagement Model, Fixture Architecture, narrow quality templates, two-phase Traceability Gate semantics, waiver contract, and TEA replay fixtures
 - record P2 scope decisions: broad personal memory is non-goal, presentation/deck craft is deferred, Docker eval runner is deferred, hook wrappers are deferred, and generic API/browser utility surface is deferred into provider-specific test artifacts

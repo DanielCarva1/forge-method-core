@@ -4,33 +4,36 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: p1-tea-depth-done
+- status: guidance-human-polish-done
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Audit and polish Forge human experience richness and agent compactness over the translated parity surface.
+- next_action: Review remaining post-parity polish surface and decide the next release/version batch.
 
 ## Latest Checkpoint
 
-# P2 scope decisions recorded
+# Guidance human experience polish complete
 
-- created_at: 2026-06-15T01:36:18+00:00
+- created_at: 2026-06-15T01:59:36+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: p1-tea-depth-done
+- status: guidance-human-polish-done
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed the remaining P2 parity decisions: personal memory non-goal, presentation/deck deferred, Docker eval runner deferred, hook wrappers deferred, generic API/browser utility surface deferred into project-specific test artifacts. Updated audit, plan, and Unreleased notes.
+Closed the Guidance Engine human experience polish with contextual guide lede, runtime-builder routing for human-experience plus agent-doc polish, and quiet correction/runtime Reality/Evidence Gate behavior.
 
 ## Decisions
 
-- P2 items are not implementation blockers for parity; they are recorded as non-goal/deferred with revisit triggers before Forge-specific polish begins.
+- Human-facing guide output carries the rich lede; workflow refs, state, JSON, and handoffs remain compact for agents.
 
 ## Checks
 
-- artifact verify and audit to run after checkpoint
+- python -m unittest discover -s tests: 70 tests OK
+- smoke-runtime: passed
+- verify-fast: passed
+- smoke-install: passed
 
 ## Failed Checks
 
@@ -38,16 +41,19 @@ Closed the remaining P2 parity decisions: personal memory non-goal, presentation
 
 ## Touched Files
 
-- .forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md
+- skills/forge-method/scripts/forge_method_runtime.py
+- tests/test_runtime.py
+- docs/adr/0008-guidance-engine.md
 - CHANGELOG.md
 
 ## Artifacts
 
-- .forge-method/evidence/20260615-013605-planning-p2-scope-decisions-recorded.md
+- .forge-method/artifacts/20260615-guidance-human-experience-polish.md
+- .forge-method/evidence/20260615-015628-validation-guidance-human-experience-polish-validation.md
 
 ## Next Action
 
-Audit and polish Forge human experience richness and agent compactness over the translated parity surface.
+Review remaining post-parity polish surface and decide the next release/version batch.
 
 ## Recovery Signals
 
@@ -57,16 +63,15 @@ Audit and polish Forge human experience richness and agent compactness over the 
 
 ### Touched Files
 
-- skills/forge-method/scripts/forge_method_runtime.py; skills/forge-method/personas/overlays.json; skills/forge-method/personas/elicitation-techniques.json; skills/forge-method/facilitation/persona-lenses.md; skills/forge-method/fixtures/guidance-parity-replay.json; tests/test_runtime.py; CONTEXT.md; docs/adr/0010-persona-lens-layer.md
 - skills/forge-method/scripts/forge_method_runtime.py
 - skills/forge-method/catalog/workflows.json
-- skills/forge-method/facilitation/lifecycle-closure.md
-- skills/forge-method/references/workflow-project-context.md
-- skills/forge-method/fixtures/guidance-parity-replay.json
 - skills/forge-method/facilitation/game-lifecycle.md
+- skills/forge-method/fixtures/guidance-parity-replay.json
 - skills/forge-method/facilitation/test-architecture.md
 - .forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md
 - CHANGELOG.md
+- tests/test_runtime.py
+- docs/adr/0008-guidance-engine.md
 
 ## Open Human Inputs
 
@@ -83,16 +88,16 @@ Audit and polish Forge human experience richness and agent compactness over the 
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260615-001238-validation-p1-3-final-validation-after-builder-persona-rout.md
 - .forge-method/evidence/20260615-003700-validation-p1-4-lifecycle-closure-validation.md
 - .forge-method/evidence/20260615-010242-validation-p1-5-game-studio-depth-validation.md
 - .forge-method/evidence/20260615-013149-validation-p1-6-test-architecture-enterprise-depth-validati.md
 - .forge-method/evidence/20260615-013605-planning-p2-scope-decisions-recorded.md
+- .forge-method/evidence/20260615-015628-validation-guidance-human-experience-polish-validation.md
 
 ## Recent Artifacts
 
-- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability Index - Generated capability index exposing TEA depth workflows, modes, and templates.
-- scope-decision [active/durable]: .forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md - P2 Scope Decisions And Forge Polish Plan - Recorded P2 decisions for memory, presentation, Docker eval runner, hooks, API/browser utility layer, and next Forge polish direction.
-- audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD Forge Systematic Parity Audit - Parity audit updated with P2 deferred/non-goal decisions and next post-parity polish step.
 - plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic Parity Plan - Systematic plan updated to route next work from P2 decisions into Forge human/agent experience polish and release planning.
 - patch-notes [active/durable]: CHANGELOG.md - Unreleased Patch Notes - Unreleased notes updated with Game Studio Depth, TEA Depth, and P2 scope decisions.
+- runtime-polish [active/durable]: .forge-method/artifacts/20260615-guidance-human-experience-polish.md - Guidance human experience polish - Added contextual guide lede, runtime-builder routing for human-experience plus agent-doc polish, and quieter Reality/Evidence Gate behavior for correction/runtime requests.
+- patch-notes [active/durable]: CHANGELOG.md - Unreleased Patch Notes - Unreleased notes updated with Guidance Engine human output polish, Game Studio Depth, TEA Depth, and P2 scope decisions.
+- runtime-polish [active/durable]: .forge-method/artifacts/20260615-guidance-human-experience-polish.md - Guidance human experience polish - Guidance human experience polish completed with contextual guide lede, runtime-builder routing, quieter Reality/Evidence Gate behavior, and full validation.

@@ -257,6 +257,7 @@ HUMAN_EXPERIENCE_POLICY: dict[str, Any] = {
     "adaptive_energy": "match the user's energy without attacking the user",
     "pushback": "respect the human; be ruthless with weak ideas, broken process, and bad assumptions",
     "runtime_boundary": "keep JSON, state, evidence, workflows, and recovery artifacts compact",
+    "contract_split": "rich human guidance belongs in guide output and facilitation packs; compact state machines stay in refs/state/JSON",
 }
 
 REALITY_SCAN_WORKFLOWS = [
@@ -1307,6 +1308,115 @@ def reality_evidence_assessment(text: str) -> dict[str, Any]:
     }
 
 
+def not_applicable_reality_evidence() -> dict[str, Any]:
+    return {
+        "required": False,
+        "status": "not-applicable",
+        "score": None,
+        "summary": "",
+        "workflows": REALITY_SCAN_WORKFLOWS,
+        "next_step": "",
+    }
+
+
+def reality_evidence_for_guidance(question: str, guidance: dict[str, Any]) -> dict[str, Any]:
+    assessment = reality_evidence_assessment(question)
+    if assessment.get("status") in {"blocked", "not-applicable"}:
+        return assessment
+    classification = str(guidance.get("intent_classification", ""))
+    evidence_classes = {"research-needed", "product-flow", "creative-flow", "game-flow"}
+    if classification in evidence_classes:
+        return assessment
+    return not_applicable_reality_evidence()
+
+
+def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
+    classification = str(guidance.get("intent_classification", "operate-support"))
+    workflow = str(guidance.get("recommended_workflow", "guide-route"))
+    phase = str(guidance.get("recommended_phase", ""))
+    if classification == "correct-course":
+        return {
+            "decision_summary": "Isto e correcao de rota: parar, nomear o que falhou e registrar o reparo antes de construir mais.",
+            "next_move": "Preservar o transcript, separar sintoma de causa, e so entao mandar a menor mudanca pelo workflow certo.",
+            "human_question": "Qual foi o comportamento que quebrou a confianca: rota errada, pergunta fraca, artefato cedo demais, ou estado antigo mandando no agente?",
+            "guardrail": "Nao tente compensar uma falha de guia com mais build; primeiro conserte a decisao do metodo.",
+        }
+    if classification == "confusion":
+        return {
+            "decision_summary": "Voce nao precisa adivinhar fase, trilha ou workflow. O guia reduz a incerteza a uma rota recomendada e poucas alternativas.",
+            "next_move": "Explicar a rota, fazer uma pergunta util, e evitar despejar catalogo.",
+            "human_question": "Voce quer destravar direcao, comparar opcoes, ou continuar o trabalho mecanico ja aprovado?",
+            "guardrail": "Confusao do humano e sinal de facilitacao, nao de mais metadado.",
+        }
+    if classification == "brainstorm":
+        return {
+            "decision_summary": "Isto ainda e divergente: vale abrir opcoes antes de especificar ou construir.",
+            "next_move": "Gerar alternativas, manter criterios de escolha visiveis, e preservar direcoes rejeitadas.",
+            "human_question": "Quer amplitute criativa, comparacao pragmatica, ou uma recomendacao opinativa no fim?",
+            "guardrail": "Brainstorm termina em decisao, nao em uma pilha solta de ideias.",
+        }
+    if classification == "research-needed":
+        return {
+            "decision_summary": "A decisao depende de evidencia. Pesquisa vem antes de plano quando a pergunta pede docs, benchmark, fontes ou viabilidade.",
+            "next_move": "Coletar fontes, separar fato de inferencia, e fechar com impacto na decisao.",
+            "human_question": "A pesquisa precisa responder mercado, tecnica, risco legal, benchmark de experiencia, ou todos?",
+            "guardrail": "Fonte nao vira escopo automaticamente; ela precisa mudar uma decisao.",
+        }
+    if classification == "builder-flow":
+        if workflow == "runtime-builder":
+            summary = "Isto e trabalho no motor do Forge: comportamento humano, contrato agentico, prova, patch e evidencia."
+        else:
+            summary = f"Isto e trabalho de builder no Forge: usar {workflow} antes de editar arquivos fora da fronteira certa."
+        return {
+            "decision_summary": summary,
+            "next_move": "Separar a experiencia humana rica do contrato compacto para o agente, depois provar com fixture, teste ou smoke.",
+            "human_question": "Qual comportamento do metodo precisa existir ou mudar, e qual prova falharia se ele regredir?",
+            "guardrail": "A conversa pode ser rica; workflow refs, state, JSON e handoff continuam compactos.",
+        }
+    if classification == "quality-flow":
+        return {
+            "decision_summary": "Isto e qualidade guiada: escolher o tipo de ajuda antes de inventar teste ou gate.",
+            "next_move": "Definir risco, prova, ownership e decisao de gate ou waiver.",
+            "human_question": "Voce precisa de orientacao, desenho de teste, automacao, review, auditoria, ou gate?",
+            "guardrail": "Qualidade boa muda decisao de release; nao e checklist decorativo.",
+        }
+    if classification == "game-flow":
+        return {
+            "decision_summary": "Isto e fluxo de jogo: primeiro fantasia jogavel, loop, slice e motor; depois arquitetura.",
+            "next_move": "Escolher a primeira experiencia jogavel e os limites de conteudo/sistema.",
+            "human_question": "O primeiro slice prova combate, exploracao, narrativa, mesa social, ou ferramenta de GM?",
+            "guardrail": "Jogo bom se prova jogando, nao com documento enorme cedo demais.",
+        }
+    if classification == "mechanical-build":
+        return {
+            "decision_summary": "Isto parece execucao mecanica aprovada. O agente deve construir e validar, sem pedir teatro procedural.",
+            "next_move": "Ler a story, implementar, rodar checks, registrar evidencia e continuar ate bloqueio real.",
+            "human_question": "",
+            "guardrail": "Pare so por acesso, risco destrutivo, servico externo, ou mudanca real de escopo.",
+        }
+    return {
+        "decision_summary": f"Rota escolhida: {workflow} em {phase or 'fase atual'}.",
+        "next_move": str(guidance.get("recommended_action", "seguir a rota recomendada")),
+        "human_question": str(guidance.get("human_prompt", "")),
+        "guardrail": "O estado duravel manda, mas a fala humana substantiva pode corrigir a rota.",
+    }
+
+
+def human_experience_for_guidance(base: dict[str, Any], guidance: dict[str, Any]) -> dict[str, Any]:
+    signals = [str(item) for item in guidance.get("signals", []) if item]
+    copy = guidance_human_copy(guidance)
+    return {
+        **base,
+        **copy,
+        "facilitation": str(guidance.get("facilitation_pack", "")),
+        "adaptation_signals": signals[:5],
+        "compact_contract": (
+            "guidance_engine returns intent, workflow, phase, commands, state_updates, and pack path; "
+            "rich facilitation is loaded only when needed"
+        ),
+    }
+
+
 def print_human_experience_intro(payload: dict[str, Any]) -> None:
     experience = payload.get("human_experience", {})
     if not experience:
@@ -1326,6 +1436,25 @@ def print_human_experience_intro(payload: dict[str, Any]) -> None:
         if assessment.get("next_step"):
             print(f"Reality next: {assessment.get('next_step')}")
     print("")
+
+
+def print_guidance_human_lede(payload: dict[str, Any]) -> None:
+    experience = payload.get("human_experience", {})
+    if not experience:
+        return
+    lines = [
+        experience.get("decision_summary", ""),
+        f"Agora: {experience.get('next_move', '')}" if experience.get("next_move") else "",
+        f"Pergunta util: {experience.get('human_question', '')}" if experience.get("human_question") else "",
+        f"Guardrail: {experience.get('guardrail', '')}" if experience.get("guardrail") else "",
+    ]
+    printed = False
+    for line in lines:
+        if line:
+            print(line)
+            printed = True
+    if printed:
+        print("")
 
 
 def print_missing_state_start_intro(route: str) -> None:
@@ -5094,9 +5223,20 @@ def detect_guidance_signals(question: str) -> list[str]:
             "documentacao enganosa",
             "parte guiada",
             "experiencia guiada",
+            "experiencia humana",
+            "human experience",
             "fluxo guiado",
             "guided flow",
             "human guidance",
+            "agent-facing docs",
+            "agent docs",
+            "agentic docs",
+            "docs agenticos",
+            "documentacao agentica",
+            "documentacao compacta",
+            "docs compactos",
+            "compactar docs",
+            "state machine",
             "config customization",
             "customize forge",
             "customizar forge",
@@ -5806,8 +5946,19 @@ def is_strong_builder_intent(question: str) -> bool:
         "documentacao enganosa",
         "parte guiada",
         "experiencia guiada",
+        "experiencia humana",
+        "human experience",
         "guided flow",
         "human guidance",
+        "agent-facing docs",
+        "agent docs",
+        "agentic docs",
+        "docs agenticos",
+        "documentacao agentica",
+        "documentacao compacta",
+        "docs compactos",
+        "compactar docs",
+        "state machine",
         "config customization",
         "customize forge",
         "customizar forge",
@@ -5929,7 +6080,18 @@ def routed_builder_workflow(question: str) -> str:
         or "documentacao enganosa" in normalized
         or "parte guiada" in normalized
         or "experiencia guiada" in normalized
+        or "experiencia humana" in normalized
+        or "human experience" in normalized
         or "human guidance" in normalized
+        or "agent-facing docs" in normalized
+        or "agent docs" in normalized
+        or "agentic docs" in normalized
+        or "docs agenticos" in normalized
+        or "documentacao agentica" in normalized
+        or "documentacao compacta" in normalized
+        or "docs compactos" in normalized
+        or "compactar docs" in normalized
+        or "state machine" in normalized
     ):
         return "runtime-builder"
     if {"convert", "converter", "conversion"} & tokens or "convert skill" in normalized or "converter skill" in normalized:
@@ -6582,7 +6744,7 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
             "workspace": str(root),
             "state_found": False,
             "route": preflight.get("route", ""),
-            "human_experience": preflight.get("human_experience", {}),
+            "human_experience": human_experience_for_guidance(preflight.get("human_experience", {}), guidance),
             "reality_evidence_gate": preflight.get("reality_evidence_gate", {}),
             "question": preflight.get("question", ""),
             "recommended_tracks": tracks,
@@ -6613,13 +6775,17 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
         current_next_action=current_next_action,
         next_story=next_story,
     )
+    human_experience = human_experience_for_guidance(
+        human_experience_for_route("existing-method-project", question=question),
+        guidance,
+    )
     return {
         "runtime": RUNTIME_NAME,
         "runtime_version": RUNTIME_VERSION,
         "workspace": str(root),
         "state_found": True,
-        "human_experience": human_experience_for_route("existing-method-project", question=question),
-        "reality_evidence_gate": reality_evidence_assessment(question),
+        "human_experience": human_experience,
+        "reality_evidence_gate": reality_evidence_for_guidance(question, guidance),
         "project_root": str(state_root),
         "project": state.get("project", ""),
         "track": track,
@@ -6698,6 +6864,8 @@ def cmd_guide(args: argparse.Namespace) -> int:
     if not payload.get("state_found"):
         print_human_experience_intro(payload)
     print("Forge Guide")
+    if payload.get("state_found"):
+        print_guidance_human_lede(payload)
     print(f"Workspace: {payload.get('workspace')}")
     if not payload.get("state_found"):
         print(f"Route: {payload.get('route')}")

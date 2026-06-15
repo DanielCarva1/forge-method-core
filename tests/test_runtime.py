@@ -467,6 +467,50 @@ class RuntimeTests(unittest.TestCase):
         for workflow in {case["expected_workflow"] for case in fixtures}:
             self.assertIn(workflow, text)
 
+    def test_guidance_human_lede_and_runtime_builder_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            prepare_guidance_fixture(root, "evolve_runtime")
+
+            polish_question = "quero melhorar a experiencia humana e compactar os docs agenticos"
+            polish = json.loads(
+                run_cmd("guide", "--root", str(root), "--question", polish_question, "--json").stdout
+            )
+            polish_text = run_cmd("guide", "--root", str(root), "--question", polish_question).stdout
+
+            self.assertEqual(polish["intent_classification"], "builder-flow")
+            self.assertEqual(polish["recommended_workflow"], "runtime-builder")
+            self.assertEqual(polish["facilitation_pack"], "skill:facilitation/runtime-builder.md")
+            self.assertEqual(polish["reality_evidence_gate"]["status"], "not-applicable")
+            human = polish["human_experience"]
+            for key in [
+                "decision_summary",
+                "next_move",
+                "human_question",
+                "guardrail",
+                "compact_contract",
+                "contract_split",
+            ]:
+                self.assertIn(key, human)
+            self.assertIn("Isto e trabalho no motor do Forge", polish_text)
+            self.assertIn("A conversa pode ser rica", polish_text)
+            self.assertLess(polish_text.index("Isto e trabalho no motor do Forge"), polish_text.index("Workspace:"))
+            self.assertNotIn("Reality/Evidence Gate", polish_text)
+            self.assertLess(len(json.dumps(human, sort_keys=True)), 1800)
+
+            frustration_question = "estou frustrado, nao sei se o Forge esta guiando de verdade"
+            frustration = json.loads(
+                run_cmd("guide", "--root", str(root), "--question", frustration_question, "--json").stdout
+            )
+            frustration_text = run_cmd("guide", "--root", str(root), "--question", frustration_question).stdout
+
+            self.assertEqual(frustration["intent_classification"], "correct-course")
+            self.assertEqual(frustration["recommended_workflow"], "correct-course")
+            self.assertEqual(frustration["reality_evidence_gate"]["status"], "not-applicable")
+            self.assertIn("Isto e correcao de rota", frustration_text)
+            self.assertLess(frustration_text.index("Isto e correcao de rota"), frustration_text.index("Workspace:"))
+            self.assertNotIn("Reality/Evidence Gate", frustration_text)
+
     def test_guidance_parity_replay_fixture_covers_required_families(self) -> None:
         fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
         families = {case["family"] for case in fixtures}

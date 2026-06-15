@@ -35,7 +35,7 @@ Corrections about Forge Method's own human experience have precedence over gener
 
 ## Boundaries
 
-- Human Experience uses Guidance Engine output to speak clearly, ask one useful question, and offer alternatives.
+- Human Experience uses Guidance Engine output to speak clearly, ask one useful question, offer alternatives, and print a short contextual lede before technical route metadata in non-JSON `guide` output.
 - Agent Runtime consumes the compact JSON contract and workflow references.
 - Correct-Course handles rejected routes and method failures.
 - Evolve handles new intent for ready projects.
@@ -44,5 +44,7 @@ Corrections about Forge Method's own human experience have precedence over gener
 ## Consequences
 
 Tests must cover transcript-shaped inputs, not only phase transitions. Runtime docs and skill instructions must teach agents to follow Guidance Engine output instead of stale chat state or stale `next_action`.
+
+Reality/Evidence Gate guidance should appear for idea, product, creative, game, or research decisions. It should not appear merely because a correction, runtime-builder request, or agent-doc polish question contains words like docs, evidence, or benchmark.
 
 Internal benchmark notes may inform expected behavior, but product-facing docs must describe Forge Method by its own runtime model and vocabulary.

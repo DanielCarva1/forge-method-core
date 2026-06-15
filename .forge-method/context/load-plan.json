@@ -2,7 +2,7 @@
   "budget_chars": 12000,
   "deferred": [
     {
-      "estimated_chars": 17578,
+      "estimated_chars": 29788,
       "location": "project",
       "path": ".forge-method/artifacts/index.ndjson",
       "priority": 76,
@@ -11,9 +11,9 @@
       "section": "artifact"
     }
   ],
-  "estimated_required_chars": 2634,
-  "estimated_selected_chars": 7921,
-  "generated_at": "2026-06-14T23:13:24+00:00",
+  "estimated_required_chars": 2700,
+  "estimated_selected_chars": 7228,
+  "generated_at": "2026-06-15T01:59:36+00:00",
   "over_budget": false,
   "root": "C:\\Users\\Danie\\OneDrive\\Documentos\\ody",
   "rules": [
@@ -26,7 +26,7 @@
   "runtime_version": "1.28.0",
   "selected": [
     {
-      "estimated_chars": 1072,
+      "estimated_chars": 1138,
       "location": "project",
       "path": ".forge-method/state.yaml",
       "priority": 100,
@@ -53,7 +53,7 @@
       "section": "workflow"
     },
     {
-      "estimated_chars": 1659,
+      "estimated_chars": 1171,
       "location": "project",
       "path": ".forge-method/context/latest-checkpoint.md",
       "priority": 88,
@@ -80,27 +80,27 @@
       "section": "agent-profile"
     },
     {
-      "estimated_chars": 765,
+      "estimated_chars": 584,
       "location": "project",
-      "path": ".forge-method/evidence/20260614-231253-validation-p1-1-builder-factory-validation.md",
+      "path": ".forge-method/evidence/20260615-015628-validation-guidance-human-experience-polish-validation.md",
       "priority": 68,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 758,
+      "estimated_chars": 460,
       "location": "project",
-      "path": ".forge-method/evidence/20260613-031940-planning-systematic-parity-plan-validation.md",
+      "path": ".forge-method/evidence/20260615-013605-planning-p2-scope-decisions-recorded.md",
       "priority": 67,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 806,
+      "estimated_chars": 1014,
       "location": "project",
-      "path": ".forge-method/evidence/20260613-024610-validation-parity-replay-harness-validation.md",
+      "path": ".forge-method/evidence/20260615-013149-validation-p1-6-test-architecture-enterprise-depth-validati.md",
       "priority": 66,
       "reason": "recent validation or release evidence",
       "required": false,
@@ -109,10 +109,10 @@
   ],
   "state": {
     "active_story": "",
-    "next_action": "Implement P1.2 Customization and Capability Index from the systematic parity plan.",
+    "next_action": "Review remaining post-parity polish surface and decide the next release/version batch.",
     "phase": "6-evolve",
     "project": "forge-method-core",
-    "status": "p1-builder-factory-done",
+    "status": "guidance-human-polish-done",
     "workflow": "runtime-builder"
   }
 }
