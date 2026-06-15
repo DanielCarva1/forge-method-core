@@ -156,7 +156,7 @@ if (Test-Path -LiteralPath (Join-Path $generatedProjectTmp ".forge-method\storie
 $projectGuideText = Run-Capture $pythonExe $runtime guide --root $generatedProjectTmp --question $firstFacilitationAnswer
 Assert-Contains $projectGuideText "Guidance Engine: operate-support -> discover-intent / 1-discovery" "project first answer guide output"
 Assert-Contains $projectGuideText "Grill Gate: required" "project first answer guide output"
-Assert-Contains $projectGuideText "First question: what outcome, constraint, and proof should shape the next pass?" "project first answer guide output"
+Assert-Contains $projectGuideText "First question: who is it for, what should change for them, what is fixed or out, what is still open, and what proof should close discovery?" "project first answer guide output"
 Assert-NotContains $projectGuideText "Prompt: Let's use" "project first answer guide output"
 Assert-NotContains $projectGuideText "build-story" "project first answer guide output"
 $blockedProjectTransitionText = Run-Fails-Capture $pythonExe $runtime transition --root $generatedProjectTmp --phase 2-specification --status specification-ready --workflow write-spec

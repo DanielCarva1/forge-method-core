@@ -308,6 +308,11 @@ HUMAN_EXPERIENCE_POLICY: dict[str, Any] = {
     "contract_split": "rich human guidance belongs in guide output and facilitation packs; compact state machines stay in refs/state/JSON",
 }
 
+DISCOVERY_CLOSEOUT_FIRST_QUESTION = (
+    "who is it for, what should change for them, what is fixed or out, "
+    "what is still open, and what proof should close discovery?"
+)
+
 REALITY_SCAN_WORKFLOWS = [
     "reality-evidence-gate",
     "market-scan",
@@ -1431,6 +1436,13 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
     classification = str(guidance.get("intent_classification", "operate-support"))
     workflow = str(guidance.get("recommended_workflow", "guide-route"))
     phase = str(guidance.get("recommended_phase", ""))
+    if workflow == "discover-intent":
+        return {
+            "decision_summary": "Isto ainda e discovery: guiar a conversa ate um closeout claro antes de spec ou build.",
+            "next_move": "Extrair audience, outcome, constraints, non_goals, success_signal, open_questions, Grill Gate handoff e next_workflow para `artifact discovery-closeout`.",
+            "human_question": DISCOVERY_CLOSEOUT_FIRST_QUESTION,
+            "guardrail": "Nao pule para arquitetura, risco ou stories enquanto o closeout de discovery nao puder passar no discovery-check.",
+        }
     if classification == "correct-course":
         return {
             "decision_summary": "Isto e correcao de rota: parar, nomear o que falhou e registrar o reparo antes de construir mais.",
@@ -8568,6 +8580,7 @@ WORKFLOW_FIRST_QUESTIONS = {
     "problem-solving": "what symptom, recent change, and desired end state should anchor the diagnosis?",
     "investigation": "what happened, what changed, and what evidence would separate cause from noise?",
     "brainstorming": "what option lanes, taste constraints, and obviously bad ideas should we explore or reject?",
+    "discover-intent": DISCOVERY_CLOSEOUT_FIRST_QUESTION,
     "domain-scan": "which domain rule, harm, or expert assumption could block this idea?",
     "market-scan": "which alternative, adoption friction, or switching signal would change the product bet?",
     "technical-feasibility-scan": "which technical promise is riskiest, and what is the cheapest proof path?",

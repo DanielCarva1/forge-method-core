@@ -812,6 +812,7 @@ class RuntimeTests(unittest.TestCase):
         runtime = load_runtime_module()
         workflows = [
             "write-spec",
+            "discover-intent",
             "ux-plan",
             "architecture",
             "quick-dev",
@@ -831,6 +832,7 @@ class RuntimeTests(unittest.TestCase):
         questions = [runtime.first_guidance_question("product-flow", workflow) for workflow in workflows]
 
         self.assertEqual(len(questions), len(set(questions)))
+        self.assertIn("close discovery", runtime.first_guidance_question("operate-support", "discover-intent"))
         self.assertIn("spec kernel", runtime.first_guidance_question("product-flow", "write-spec"))
         self.assertIn("engine profile", runtime.first_guidance_question("game-flow", "engine-setup"))
         self.assertIn("install", runtime.first_guidance_question("builder-flow", "module-distribution"))
@@ -2600,6 +2602,13 @@ class RuntimeTests(unittest.TestCase):
         for workflow_id in human_facing_required:
             self.assertIn("facilitation_pack", by_id[workflow_id], workflow_id)
         self.assertEqual(by_id["discover-intent"].get("template"), "discovery-closeout-artifact")
+        discover_pack = (
+            ROOT / "skills" / "forge-method" / "facilitation" / "discover-intent.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("artifact discovery-closeout", discover_pack)
+        self.assertIn("non_goals", discover_pack)
+        self.assertIn("success_signal", discover_pack)
+        self.assertIn("open_questions", discover_pack)
         self.assertEqual(by_id["write-spec"].get("template"), "spec-kernel-artifact")
         self.assertEqual(by_id["market-scan"].get("template"), "research-scan-artifact")
         self.assertEqual(by_id["domain-scan"].get("template"), "research-scan-artifact")
@@ -3890,10 +3899,16 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(answer_guide["recommended_phase"], "1-discovery")
             self.assertEqual(answer_guide["facilitation_pack"], "skill:facilitation/discover-intent.md")
             self.assertIn("First question:", answer_guide["human_prompt"])
-            self.assertEqual(answer_guide["human_experience"]["human_question"], "what outcome, constraint, and proof should shape the next pass?")
+            self.assertEqual(
+                answer_guide["human_experience"]["human_question"],
+                "who is it for, what should change for them, what is fixed or out, what is still open, and what proof should close discovery?",
+            )
             self.assertIn("Guidance Engine: operate-support -> discover-intent / 1-discovery", answer_guide_text)
             self.assertIn("Grill Gate: required", answer_guide_text)
-            self.assertIn("First question: what outcome, constraint, and proof should shape the next pass?", answer_guide_text)
+            self.assertIn(
+                "First question: who is it for, what should change for them, what is fixed or out, what is still open, and what proof should close discovery?",
+                answer_guide_text,
+            )
             self.assertNotIn("Prompt: Let's use", answer_guide_text)
             self.assertNotIn("build-story", answer_guide_text)
             blocked_transition = run_cmd(
