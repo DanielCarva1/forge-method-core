@@ -782,6 +782,32 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "document_utility_stale_doc_index_request",
+    "family": "document-utility",
+    "state": "discovery",
+    "question": "validar source-of-truth e stale docs do index de documentacao com source fingerprint e doc-check",
+    "expected_classification": "document-utility",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "doc-index",
+    "expected_facilitation_pack": "skill:facilitation/document-utility.md",
+    "expected_template": "document-utility-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "document_utility_shard_original_decision_request",
+    "family": "document-utility",
+    "state": "discovery",
+    "question": "shard a large markdown document and decide whether to archive the original so future agents do not read stale duplicate docs",
+    "expected_classification": "document-utility",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "doc-shard",
+    "expected_facilitation_pack": "skill:facilitation/document-utility.md",
+    "expected_template": "document-utility-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
     "id": "document_utility_editorial_review_request",
     "family": "document-utility",
     "state": "discovery",

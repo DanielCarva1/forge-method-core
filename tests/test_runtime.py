@@ -1,5 +1,6 @@
 import json
 import os
+import hashlib
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,7 @@ PARITY_REQUIRED_FAMILIES = {
     "game",
     "tea",
     "lifecycle",
+    "document-utility",
 }
 
 
@@ -85,6 +87,10 @@ def ledger_events(root: Path, event: str) -> list[dict[str, object]]:
         if item.get("event") == event:
             events.append(item)
     return events
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def prepare_guidance_fixture(root: Path, state_kind: str) -> None:
@@ -1480,6 +1486,79 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Example spec", pack.read_text(encoding="utf-8"))
             self.assertIn("Artifact summary.", pack.read_text(encoding="utf-8"))
 
+    def test_document_utility_doc_check_detects_stale_sources_and_shard_ambiguity(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            docs = root / "docs"
+            docs.mkdir()
+            source = docs / "guide.md"
+            source.write_text("# Guide\n\nCurrent truth.\n", encoding="utf-8")
+            artifact = root / ".forge-method" / "artifacts" / "doc-index-proof.md"
+            artifact.write_text(
+                "\n".join(
+                    [
+                        "# Document Utility Artifact",
+                        "workflow: doc-index",
+                        "audience: future agent",
+                        "doc_job: navigation",
+                        "target_docs: docs",
+                        "indexed_docs: docs/guide.md",
+                        "source_of_truth: docs/guide.md",
+                        f"source_fingerprint: {sha256(source)}",
+                        f"source_last_modified: {source.stat().st_mtime}",
+                        "navigation_rules: read docs/guide.md first",
+                        "stale_check: source hash and mtime verified",
+                        "validation: artifact doc-check --path .forge-method/artifacts/doc-index-proof.md",
+                        "next_workflow: editorial-review",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            passed = run_cmd("artifact", "doc-check", "--root", str(root), "--path", str(artifact)).stdout
+            self.assertIn("Document utility check passed.", passed)
+
+            source.write_text("# Guide\n\nChanged truth.\n", encoding="utf-8")
+            os.utime(source, (artifact.stat().st_mtime + 5, artifact.stat().st_mtime + 5))
+            stale = run_cmd("artifact", "doc-check", "--root", str(root), "--path", str(artifact), check=False)
+            self.assertNotEqual(stale.returncode, 0)
+            self.assertIn("source_of_truth is newer than artifact", stale.stdout)
+
+            shard_index = docs / "guide" / "index.md"
+            shard_index.parent.mkdir()
+            shard_index.write_text("# Guide shards\n", encoding="utf-8")
+            source.write_text("# Guide\n\nRestored truth.\n", encoding="utf-8")
+            shard_artifact = root / ".forge-method" / "artifacts" / "doc-shard-proof.md"
+            shard_artifact.write_text(
+                "\n".join(
+                    [
+                        "# Document Utility Artifact",
+                        "workflow: doc-shard",
+                        "audience: future agent",
+                        "doc_job: split large markdown",
+                        "target_docs: docs/guide.md",
+                        "source_of_truth: docs/guide.md",
+                        f"source_fingerprint: {sha256(source)}",
+                        f"source_last_modified: {source.stat().st_mtime}",
+                        "generated_or_derived_docs: docs/guide/index.md",
+                        "shard_index: docs/guide/index.md",
+                        "original_doc_decision: keep",
+                        "precedence_rule: whole source document wins until archive decision",
+                        "stale_check: source hash and shard index verified",
+                        "validation: artifact doc-check --path .forge-method/artifacts/doc-shard-proof.md",
+                        "next_workflow: doc-index",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            ambiguous = run_cmd("artifact", "doc-check", "--root", str(root), "--path", str(shard_artifact), check=False)
+            self.assertNotEqual(ambiguous.returncode, 0)
+            self.assertIn("keeping the original source requires stale_waiver", ambiguous.stdout)
+
     def test_packaged_modules_and_workflows_validate(self) -> None:
         modules = run_cmd("module", "list").stdout
         modules_json = json.loads(run_cmd("module", "list", "--json").stdout)
@@ -1716,6 +1795,8 @@ class RuntimeTests(unittest.TestCase):
             "code-review",
             "retrospective",
             "research-closeout",
+            "doc-index",
+            "doc-shard",
             "editorial-review",
             "edge-case-review",
             "adversarial-review",
@@ -1765,6 +1846,8 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["retrospective"].get("template"), "retrospective-artifact")
         self.assertEqual(by_id["readiness-check"].get("template"), "readiness-matrix-artifact")
         self.assertEqual(by_id["research-closeout"].get("template"), "research-closeout-artifact")
+        self.assertEqual(by_id["doc-index"].get("template"), "document-utility-artifact")
+        self.assertEqual(by_id["doc-shard"].get("template"), "document-utility-artifact")
         self.assertEqual(by_id["investigation"].get("template"), "investigation-artifact")
         self.assertEqual(by_id["editorial-review"].get("template"), "editorial-review-artifact")
         self.assertEqual(by_id["edge-case-review"].get("template"), "edge-case-review-artifact")
@@ -1835,6 +1918,16 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("create", by_id["retrospective"].get("modes", []))
         self.assertIn("matrix", by_id["readiness-check"].get("modes", []))
         self.assertIn("closeout", by_id["research-closeout"].get("modes", []))
+        self.assertIn("source-map", by_id["doc-index"].get("modes", []))
+        self.assertIn("stale-check", by_id["doc-index"].get("modes", []))
+        self.assertIn("archive-original", by_id["doc-shard"].get("modes", []))
+        self.assertIn("stale-check", by_id["doc-shard"].get("modes", []))
+        document_utility_template = (
+            ROOT / "skills" / "forge-method" / "templates" / "document-utility-artifact.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("source_fingerprint", document_utility_template)
+        self.assertIn("source_last_modified", document_utility_template)
+        self.assertIn("original_doc_decision", document_utility_template)
         self.assertIn("investigate", by_id["investigation"].get("modes", []))
         self.assertIn("tone", by_id["editorial-review"].get("modes", []))
         self.assertIn("failure", by_id["edge-case-review"].get("modes", []))

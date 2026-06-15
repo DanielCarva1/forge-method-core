@@ -106,6 +106,7 @@ P0 through P1.7 are closed:
 - Build Story Autonomy Depth: implemented with `build-story` template metadata, start/continue/review/evidence modes, full mechanical command map, JSON loop/do_not_prompt contract, and Codex Goal no-procedural-prompt handoff.
 - Document Review Depth: implemented with specialized `editorial-review` and `edge-case-review` templates, modes, document-utility facilitation depth, Guidance Engine precedence over generic quality review, and replay proof for prose/structure/tone plus boundary/failure/misuse review.
 - Council Orchestration Depth: implemented with dedicated `council-decision` pack/template/modes, party-mode Guidance Engine routing, richer live debate output, compact dissent/orchestration artifact contract, JSON orchestration plan, and replay proof.
+- Document Utility Freshness Depth: implemented with `artifact doc-check`, source fingerprint/mtime fields, index/shard stale-check modes, original document decision, precedence rule, stale waiver, and replay proof for index/shard freshness routing.
 
 The remaining work is a planned sequence, not ad hoc patching.
 
@@ -431,7 +432,7 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release, Architecture Guidance Depth cleanup, Context Boundary Recovery, Brainstorming Depth, CIS Facilitation Depth, Agent Compactness Guard, Story Decision Source Gate, Sprint Planning Depth, Build Story Autonomy Depth, Document Review Depth, Council Orchestration Depth, and Correct-Course/Problem-Solving Depth.
 
-Current next focus: Module Distribution Depth now adds a native distribution contract, setup/config boundary, install/upgrade proof, and replay coverage. Continue residual strong-ish/partial rows with real-use transcript proof, especially doc utility validation and deferred API/browser or eval-runner surfaces only if repeated projects justify them.
+Current next focus: Document Utility Freshness Depth now adds source-of-truth/stale-doc proof for index/shard flows. Continue residual strong-ish/partial rows with real-use transcript proof; deferred API/browser or eval-runner surfaces should only expand if repeated projects justify them.
 
 Do not tag or publish from a partial test run. Start from this plan:
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import re
 import shutil
@@ -2411,6 +2412,100 @@ def artifact_findings(root: Path) -> tuple[list[str], list[str]]:
             modified_at = dt.datetime.fromtimestamp(target.stat().st_mtime, tz=dt.timezone.utc)
             if modified_at > indexed_at + dt.timedelta(seconds=1):
                 warnings.append(f"artifact summary may be stale: {path}")
+    return errors, warnings
+
+
+DOCUMENT_UTILITY_WORKFLOWS = {
+    "doc-index",
+    "doc-shard",
+    "editorial-review",
+    "edge-case-review",
+    "adversarial-review",
+    "spec-distillation",
+}
+
+
+def parse_markdown_artifact_fields(path: Path) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        if line.startswith("- "):
+            line = line[2:].strip()
+        key, value = line.split(":", 1)
+        normalized_key = slugify(key).replace("-", "_")
+        fields[normalized_key] = value.strip().strip('"')
+    return fields
+
+
+def is_external_doc_reference(value: str) -> bool:
+    normalized = value.strip().lower()
+    if not normalized or normalized in {"none", "n/a", "na", "not-applicable", "<none>"}:
+        return True
+    return "://" in normalized or normalized.startswith(("mailto:", "external:"))
+
+
+def file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def document_utility_findings(root: Path, artifact_path: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not artifact_path.exists():
+        return [f"document utility artifact not found: {artifact_path}"], warnings
+    fields = parse_markdown_artifact_fields(artifact_path)
+    workflow = fields.get("workflow", "")
+    if workflow not in DOCUMENT_UTILITY_WORKFLOWS:
+        errors.append(f"workflow must be one of {', '.join(sorted(DOCUMENT_UTILITY_WORKFLOWS))}")
+    for key in ["source_of_truth", "doc_job", "stale_check", "validation"]:
+        if not fields.get(key, ""):
+            errors.append(f"missing document utility field: {key}")
+    source_refs = split_list(fields.get("source_of_truth", ""))
+    local_sources: list[tuple[str, Path, str]] = []
+    for source_ref in source_refs:
+        if is_external_doc_reference(source_ref):
+            continue
+        try:
+            source_path, rel = project_path(root, source_ref)
+        except SystemExit as exc:
+            errors.append(str(exc))
+            continue
+        if not source_path.exists():
+            errors.append(f"source_of_truth does not exist: {rel}")
+            continue
+        source_hash = file_sha256(source_path)
+        local_sources.append((rel, source_path, source_hash))
+        if source_path.stat().st_mtime > artifact_path.stat().st_mtime + 1:
+            errors.append(f"source_of_truth is newer than artifact: {rel}")
+    if local_sources:
+        fingerprint = fields.get("source_fingerprint", "")
+        if not fingerprint:
+            errors.append("missing document utility field: source_fingerprint")
+        elif len(local_sources) == 1 and fingerprint != local_sources[0][2]:
+            errors.append(f"source_fingerprint does not match current source: {local_sources[0][0]}")
+        elif len(local_sources) > 1:
+            for rel, _, source_hash in local_sources:
+                if source_hash not in fingerprint:
+                    errors.append(f"source_fingerprint missing current source hash: {rel}")
+        if not fields.get("source_last_modified", ""):
+            errors.append("missing document utility field: source_last_modified")
+    if workflow == "doc-index":
+        if not (fields.get("indexed_docs") or fields.get("target_docs")):
+            errors.append("doc-index requires indexed_docs or target_docs")
+        if not fields.get("navigation_rules", ""):
+            errors.append("doc-index requires navigation_rules")
+    if workflow == "doc-shard":
+        for key in ["generated_or_derived_docs", "shard_index", "original_doc_decision", "precedence_rule"]:
+            if not fields.get(key, ""):
+                errors.append(f"doc-shard requires {key}")
+        decision = normalize_text(fields.get("original_doc_decision", ""))
+        if decision.startswith("keep") and not fields.get("stale_waiver", ""):
+            errors.append("doc-shard keeping the original source requires stale_waiver")
+        precedence = normalize_text(fields.get("precedence_rule", ""))
+        if decision.startswith("keep") and not ("whole" in precedence or "source" in precedence):
+            warnings.append("doc-shard keep decision should name which source wins during future reads")
     return errors, warnings
 
 
@@ -5095,6 +5190,25 @@ def cmd_artifact_verify(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_artifact_doc_check(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    artifact_path, rel = project_path(root, args.path)
+    errors, warnings = document_utility_findings(root, artifact_path)
+    if errors:
+        print("Document utility check failed:")
+        for error in errors:
+            print(f"- {error}")
+    if warnings:
+        print("Document utility check warnings:")
+        for warning in warnings:
+            print(f"- {warning}")
+    if errors or (args.strict and warnings):
+        return 1
+    print("Document utility check passed.")
+    print(f"Artifact: {rel}")
+    return 0
+
+
 def cmd_artifact_link_story(args: argparse.Namespace) -> int:
     root, _ = load_state_or_fail(resolve_root(args.root))
     link_artifact_to_story(root, args.path, args.story)
@@ -5579,6 +5693,15 @@ def detect_guidance_signals(question: str) -> list[str]:
         "document-utility": [
             "index docs",
             "shard document",
+            "source-of-truth",
+            "source of truth",
+            "stale docs",
+            "stale doc",
+            "doc freshness",
+            "document freshness",
+            "stale-doc validation",
+            "source fingerprint",
+            "doc-check",
             "editorial review",
             "prose review",
             "clarity review",
@@ -7299,12 +7422,52 @@ def routed_document_workflow(question: str) -> str:
         return "editorial-review"
     if {"distill", "distillation", "kernel"} & tokens or "spec distillation" in normalized:
         return "spec-distillation"
-    if {"index", "map", "mapa"} & tokens:
+    if (
+        {"index", "map", "mapa", "freshness", "fingerprint"} & tokens
+        or "stale docs" in normalized
+        or "stale doc" in normalized
+        or "source-of-truth" in normalized
+        or "source of truth" in normalized
+        or "doc-check" in normalized
+    ):
         return "doc-index"
     return "doc-index"
 
 
+def is_strong_document_utility_intent(question: str) -> bool:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    return bool(
+        {"shard", "split", "index", "fingerprint"} & tokens
+        or "doc-check" in normalized
+        or "stale doc" in normalized
+        or "stale docs" in normalized
+        or "source fingerprint" in normalized
+        or "document freshness" in normalized
+    )
+
+
 def document_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "doc-index":
+        return (
+            "run doc-index to read the docs, build a compact source map, record source fingerprint/mtime, stale or duplicate notes, and artifact doc-check proof",
+            "I should make the document set navigable and trustworthy before future agents burn context scanning it.",
+            guidance_alternatives(
+                ("doc-shard", "when a source doc is too large and needs split plus original handling"),
+                ("editorial-review", "when the map is fine but the writing needs structure, tone, or claim review"),
+                ("spec-distillation", "when messy notes should become one compact source-of-truth artifact"),
+            ),
+        )
+    if workflow_id == "doc-shard":
+        return (
+            "run doc-shard to split a large markdown source, write shard index links, decide delete/archive/keep for the original, record precedence, and prove freshness with artifact doc-check",
+            "I should avoid leaving both the original and shards as ambiguous sources of truth.",
+            guidance_alternatives(
+                ("doc-index", "when the shard set needs navigation or source map updates"),
+                ("editorial-review", "when the shard content needs prose or structure review"),
+                ("context-recovery", "when sharding is only needed because the current chat context is overloaded"),
+            ),
+        )
     if workflow_id == "editorial-review":
         return (
             "run editorial-review to check audience fit, structure, tone, unsupported claims, source boundaries, and scoped edits",
@@ -7433,6 +7596,13 @@ def build_guidance_decision(
             human_prompt = prompt_text
             alternatives = creative_alternatives
             reason = "The first intent is taste-heavy or creative, so the creative router chooses the narrowest useful facilitation workflow."
+        elif "document-utility" in signal_set and is_strong_document_utility_intent(question):
+            classification = "document-utility"
+            recommended_phase = "1-discovery"
+            recommended_workflow = routed_document_workflow(question)
+            recommended_action = f"create the project, then run {recommended_workflow} to make the source material usable"
+            human_prompt = "I should clarify the document job and source-of-truth boundary before editing docs."
+            reason = "The first intent is explicit documentation utility work."
         elif "lifecycle-flow" in signal_set:
             classification = "lifecycle-flow"
             recommended_phase = "1-discovery"
@@ -7680,6 +7850,11 @@ def build_guidance_decision(
         recommended_workflow = routed_game_workflow(question)
         recommended_action, human_prompt, alternatives = game_guidance_text(recommended_workflow)
         reason = "Game-specific wording outranks generic lifecycle, story, or quality routing when the game router selects a narrow game workflow."
+    elif has_question and "document-utility" in signal_set and is_strong_document_utility_intent(question):
+        classification = "document-utility"
+        recommended_workflow = routed_document_workflow(question)
+        recommended_action, human_prompt, alternatives = document_guidance_text(recommended_workflow)
+        reason = "The message asks for explicit documentation utility work, so document routing outranks generic project-context or handoff wording."
     elif has_question and "lifecycle-flow" in signal_set:
         classification = "lifecycle-flow"
         recommended_workflow = routed_lifecycle_workflow(question)
@@ -11140,6 +11315,15 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_verify.add_argument("--root", default=".")
     artifact_verify.add_argument("--strict", action="store_true")
     artifact_verify.set_defaults(func=cmd_artifact_verify)
+
+    artifact_doc_check = artifact_sub.add_parser(
+        "doc-check",
+        help="validate document utility source-of-truth and stale-doc proof",
+    )
+    artifact_doc_check.add_argument("--root", default=".")
+    artifact_doc_check.add_argument("--path", required=True)
+    artifact_doc_check.add_argument("--strict", action="store_true")
+    artifact_doc_check.set_defaults(func=cmd_artifact_doc_check)
 
     artifact_list = artifact_sub.add_parser("list", help="list recent artifacts")
     artifact_list.add_argument("--root", default=".")

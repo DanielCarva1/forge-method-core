@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T06:48:23+00:00",
+  "generated_at": "2026-06-15T08:56:04+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -159,7 +159,7 @@
       "phase_span": "1-discovery | 2-specification | 3-plan | 4-build-verify | 6-evolve",
       "purpose": "Create new workflows, modules, skills, scripts, and validations for Forge Method projects.",
       "title": "Runtime Builder",
-      "workflows": "guidance-engine | discover-intent | runtime-builder | module-ideation | agent-builder | workflow-builder | module-builder | module-validate | builder-scaffold | agent-analyze | workflow-analyze | skill-convert | config-customization | track-decision | project-context | session-prep | checkpoint-preview | research-closeout | reality-evidence-gate | technical-feasibility-scan | investigation | doc-index | doc-shard | editorial-review | edge-case-review | adversarial-review | spec-distillation | code-review | retrospective | eval-design | workflow-validate | build-story | grill-gate"
+      "workflows": "guidance-engine | discover-intent | runtime-builder | module-ideation | agent-builder | workflow-builder | module-builder | module-distribution | module-validate | builder-scaffold | agent-analyze | workflow-analyze | skill-convert | config-customization | track-decision | project-context | session-prep | checkpoint-preview | research-closeout | reality-evidence-gate | technical-feasibility-scan | investigation | doc-index | doc-shard | editorial-review | edge-case-review | adversarial-review | spec-distillation | code-review | retrospective | eval-design | workflow-validate | build-story | grill-gate"
     },
     {
       "id": "software-builder",
@@ -805,14 +805,26 @@
       "facilitation_pack": "correct-course",
       "followed_by": [
         "runtime-builder",
-        "build-story"
+        "plan-sprint",
+        "build-story",
+        "readiness-check"
       ],
       "id": "correct-course",
+      "modes": [
+        "impact",
+        "rollback",
+        "insert",
+        "rewrite",
+        "headless"
+      ],
       "outputs": [
-        "correction artifact"
+        "correction artifact",
+        "impact map",
+        "selected repair path"
       ],
       "phase": "anytime",
-      "required": false
+      "required": false,
+      "template": "correct-course-artifact"
     },
     {
       "facilitation_pack": "council-decision",
@@ -930,11 +942,14 @@
       "modes": [
         "create",
         "update",
+        "source-map",
+        "stale-check",
         "validate"
       ],
       "outputs": [
         "doc index",
-        "navigation guidance"
+        "navigation guidance",
+        "source freshness proof"
       ],
       "phase": "anytime",
       "required": false,
@@ -950,11 +965,14 @@
       "modes": [
         "create",
         "update",
+        "archive-original",
+        "stale-check",
         "validate"
       ],
       "outputs": [
         "sharded docs",
-        "index updates"
+        "index updates",
+        "original document decision"
       ],
       "phase": "anytime",
       "required": false,
@@ -1232,20 +1250,24 @@
       "facilitation_pack": "game-lifecycle",
       "followed_by": [
         "build-story",
+        "game-qa-review",
         "game-retrospective"
       ],
       "id": "game-sprint-status",
       "modes": [
         "status",
-        "resume"
+        "resume",
+        "risk",
+        "headless"
       ],
       "outputs": [
-        "sprint status summary",
+        "game sprint status",
+        "playable-slice progress",
         "next action"
       ],
       "phase": "4-build-verify | 5-ready-operate",
       "required": false,
-      "template": "game-lifecycle-artifact"
+      "template": "game-sprint-status-artifact"
     },
     {
       "facilitation_pack": "game-lifecycle",
@@ -1257,15 +1279,18 @@
       "modes": [
         "create",
         "resume",
-        "validate"
+        "validate",
+        "headless"
       ],
       "outputs": [
         "game story files",
-        "story order"
+        "story order",
+        "player checks",
+        "sprint update"
       ],
       "phase": "3-plan",
       "required": false,
-      "template": "game-lifecycle-artifact"
+      "template": "game-story-artifact"
     },
     {
       "facilitation_pack": "game-lifecycle",
@@ -1471,6 +1496,7 @@
     {
       "facilitation_pack": "builder-factory",
       "followed_by": [
+        "module-distribution",
         "module-validate",
         "workflow-validate"
       ],
@@ -1489,6 +1515,31 @@
       "phase": "1-discovery | 6-evolve",
       "required": false,
       "template": "module-builder-artifact"
+    },
+    {
+      "facilitation_pack": "builder-factory",
+      "followed_by": [
+        "module-validate",
+        "release-readiness"
+      ],
+      "id": "module-distribution",
+      "modes": [
+        "local",
+        "team",
+        "plugin",
+        "public",
+        "standalone",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "distribution contract",
+        "setup/config registration map",
+        "install and upgrade proof"
+      ],
+      "phase": "1-discovery | 6-evolve",
+      "required": false,
+      "template": "module-distribution-artifact"
     },
     {
       "facilitation_pack": "builder-factory",
@@ -1517,6 +1568,7 @@
       "facilitation_pack": "builder-factory",
       "followed_by": [
         "workflow-validate",
+        "module-distribution",
         "eval-design"
       ],
       "id": "module-validate",
@@ -1667,15 +1719,26 @@
       "followed_by": [
         "investigation",
         "correct-course",
+        "brainstorming",
         "runtime-builder"
       ],
       "id": "problem-solving",
+      "modes": [
+        "frame",
+        "diagnose",
+        "root-cause",
+        "probe",
+        "headless"
+      ],
       "outputs": [
         "problem frame",
+        "candidate causes",
+        "selected probe",
         "next reversible action"
       ],
       "phase": "1-discovery",
-      "required": false
+      "required": false,
+      "template": "problem-solving-artifact"
     },
     {
       "facilitation_pack": "product-planning",
@@ -1888,6 +1951,7 @@
         "agent-builder",
         "workflow-builder",
         "module-builder",
+        "module-distribution",
         "module-validate",
         "builder-scaffold",
         "agent-analyze",

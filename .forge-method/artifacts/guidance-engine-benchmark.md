@@ -29,6 +29,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Party-mode requests invite a small set of relevant specialist perspectives, keep the discussion useful for the human, preserve dissent, and avoid turning the full debate into future agent memory.
 - Subagent-capable flows separate orchestration mode from artifact contract: parallel, agent-team, or subagent execution can speed independent work, but the merged output schema stays stable.
 - Documentation utility flows index, shard, review, stress-test, and distill source material before agents consume it.
+- Index/shard flows must prove freshness: read contents before describing docs, record source fingerprint/mtime, define source-of-truth precedence, and detect stale generated artifacts.
 - Editorial review separates reader job, prose/structure/tone issues, unsupported claims, and source-of-truth boundaries before applying scoped edits.
 - Edge-case review enumerates boundary conditions, failure modes, misuse cases, missing checks, waivers, and follow-up stories instead of collapsing into generic adversarial critique.
 - Lifecycle closure flows should turn project context, session handoff, track choice, code review, retrospectives, readiness, and research closeout into durable compact artifacts instead of relying on chat memory.
@@ -84,6 +85,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Game Studio Depth outputs must route game-specific requests to game-context, engine-setup, GDD, narrative, mechanics, game-story-creation, game-sprint-status, build-story, game-test-framework, game-e2e-scaffold, quick-prototype, playtest, performance, or game QA workflows before generic software planning; artifacts must preserve player fantasy, engine profile, playable-slice proof, story order, sprint progress, decision sources, and validation evidence compactly.
 - Test Architecture Enterprise Depth outputs must route quality requests to the right engagement mode and workflow, preserve fixture architecture and command contracts, and make gate outcomes distinguish pass, concerns, fail, missing evidence, and explicit waiver.
 - Document Review Depth outputs must route prose/structure/tone requests to `editorial-review` and boundary/failure/misuse requests to `edge-case-review`, each with a narrow compact artifact rather than the generic document utility shape.
+- Document Utility Freshness outputs must route explicit index/shard/stale-doc requests to `doc-index` or `doc-shard`, preserve source fingerprint/mtime, original-document handling, precedence rules, and `artifact doc-check` proof.
 
 ## Fixture workflow ids
 
@@ -138,6 +140,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `module-validate`
 - `config-customization`
 - `doc-index`
+- `doc-shard`
 - `editorial-review`
 - `edge-case-review`
 - `adversarial-review`

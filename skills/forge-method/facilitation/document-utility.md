@@ -17,6 +17,7 @@ follow_up_batches:
   - editorial: "Is the main problem promise, order, voice, unsupported claim, density, or a confusing transition?"
   - edge_cases: "What boundary, misuse, failure, or recovery case would embarrass this artifact if ignored?"
   - proof: "How will we know the doc now works: validation, smaller context pack, clearer handoff, or fewer open questions?"
+  - freshness: "What source file owns this fact, and what proof shows the index or shard was updated after that source?"
 
 conversation_stages:
   - map: "Identify authoritative docs, generated docs, stale docs, and the reader job before editing."
@@ -25,6 +26,7 @@ conversation_stages:
   - edge_case_review: "Turn boundary and failure scenarios into findings, missing checks, waivers, or follow-up stories."
   - transform: "Apply the smallest doc change that improves navigation, comprehension, or machine handoff."
   - verify: "Check links, ownership, duplicated claims, stale language, and expected artifact shape."
+  - freshness_check: "Record source fingerprint, source mtime, precedence rule, and `artifact doc-check` result when indexing or sharding."
   - handoff: "Persist changed paths, unresolved ownership, and the next workflow."
 
 elicitation_options:
@@ -46,6 +48,7 @@ facilitator_moves:
 quality_bar:
   - "The reader can find the right file and trust which claims are current."
   - "The transformed doc has a clear job and does not duplicate another source of truth."
+  - "Index and shard artifacts prove freshness with source fingerprint, source mtime, and a stale-check command."
   - "Future agents get smaller, sharper context rather than more prose to scan."
   - "Editorial findings include reader job, source boundary, severity, and scoped edit recommendation."
   - "Edge-case findings include scenario, failure mode, detectability, missing check, and follow-up route."
@@ -54,6 +57,7 @@ anti_patterns:
   - "Do not edit public docs with internal benchmark framing."
   - "Do not create new docs when one authoritative doc should be fixed."
   - "Do not hide unresolved ownership or stale claims behind nicer wording."
+  - "Do not keep a source document and shards both authoritative without a precedence rule and waiver."
   - "Do not call a general critique an edge-case review without boundary/failure scenarios."
   - "Do not rewrite style in ways that change product commitments or runtime contracts."
 
@@ -70,8 +74,8 @@ checkpoint_options:
   - workflow-validate
 
 domain_examples:
-  - doc-index: "Agents waste context finding docs; produce a compact map of source-of-truth files and read order."
-  - doc-shard: "One doc is too large for recovery; split into focused shards and update the index without orphaning facts."
+  - doc-index: "Agents waste context finding docs; read each file, produce a compact source map, record fingerprints, and prove stale docs were checked."
+  - doc-shard: "One doc is too large for recovery; split into focused shards, update the index, and decide delete/archive/keep for the original."
   - editorial-review: "Human-facing docs are unclear; preserve facts while flagging reader job, structure, tone, unsupported claims, and scoped edits."
   - editorial-structure: "A doc has the right facts but wrong order; propose a new flow and mark claims that need source ownership."
   - edge-case-review: "A plan looks plausible; stress-test boundaries, failure modes, missing checks, waivers, and follow-up stories."
@@ -79,7 +83,7 @@ domain_examples:
   - spec-distillation: "Transcript or messy brief is long; extract objective, facts, assumptions, risks, open questions, and next workflow."
 
 artifact_rules:
-  Persist target paths, source-of-truth boundaries, stale/duplicate notes, edits/findings, and next workflow.
+  Persist target paths, source-of-truth boundaries, source fingerprint, source mtime, precedence rules, stale/duplicate notes, edits/findings, validation command, and next workflow.
   Use `skill:templates/document-utility-artifact.md` as the default artifact shape unless a narrower project template exists.
 
 headless:

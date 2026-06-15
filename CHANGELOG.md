@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add Document Utility Freshness Depth with `artifact doc-check`, source fingerprint/mtime fields, index/shard stale-check modes, original-document handling, precedence rules, stale waiver, and replay coverage for doc freshness routing
 - add Module Distribution Depth with `module-distribution`, a compact distribution artifact, setup/config boundary fields, capability/help registry handoff, install/upgrade/legacy cleanup proof, and replay coverage for distributable module requests
 - harden Game Production Depth with dedicated `game-story-creation` and `game-sprint-status` artifacts, workflow-specific human microcopy, game dev-story routing to mechanical `build-story`, and replay coverage for game create/status/dev/review/test/e2e transcripts
 - add Council Orchestration Depth with a dedicated `council-decision` pack/template/modes, party-mode routing, richer live debate output, compact dissent/orchestration artifacts, and JSON worker/merge contracts
