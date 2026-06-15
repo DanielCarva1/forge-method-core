@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T10:01:41+00:00",
+  "generated_at": "2026-06-15T10:30:57+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -2524,15 +2524,28 @@
     {
       "facilitation_pack": "product-planning",
       "followed_by": [
+        "product-requirements",
+        "architecture",
         "plan-sprint",
         "quick-dev"
       ],
       "id": "write-spec",
+      "modes": [
+        "create",
+        "update",
+        "distill",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "specification artifact"
+        "spec kernel",
+        "companion map",
+        "decision log",
+        "validation verdict"
       ],
       "phase": "2-specification",
-      "required": true
+      "required": true,
+      "template": "spec-kernel-artifact"
     }
   ]
 }

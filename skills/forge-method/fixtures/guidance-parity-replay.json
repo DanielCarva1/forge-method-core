@@ -103,6 +103,19 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "spec_kernel_distillation_request",
+    "family": "spec",
+    "state": "discovery",
+    "question": "distill this into a spec kernel: create SPEC.md as a compact machine contract with stable capabilities constraints non-goals success signal preservation map and validation verdict",
+    "expected_classification": "product-flow",
+    "expected_phase": "2-specification",
+    "expected_workflow": "write-spec",
+    "expected_facilitation_pack": "skill:facilitation/product-planning.md",
+    "expected_template": "spec-kernel-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
     "id": "working_backwards_prfaq_request",
     "family": "prd",
     "state": "discovery",

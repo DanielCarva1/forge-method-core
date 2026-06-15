@@ -183,6 +183,7 @@ PARITY_REPLAY_REQUIRED_FAMILIES = {
     "confusion",
     "brainstorm",
     "research",
+    "spec",
     "prd",
     "ux",
     "architecture",
@@ -2425,6 +2426,12 @@ DOCUMENT_UTILITY_WORKFLOWS = {
     "spec-distillation",
 }
 
+SPEC_KERNEL_WORKFLOWS = {
+    "write-spec",
+    "product-requirements",
+    "spec-distillation",
+}
+
 TEST_UTILITY_WORKFLOWS = {
     "test-framework",
     "test-automation",
@@ -2538,6 +2545,45 @@ def document_utility_findings(root: Path, artifact_path: Path) -> tuple[list[str
         precedence = normalize_text(fields.get("precedence_rule", ""))
         if decision.startswith("keep") and not ("whole" in precedence or "source" in precedence):
             warnings.append("doc-shard keep decision should name which source wins during future reads")
+    return errors, warnings
+
+
+def spec_kernel_findings(root: Path, artifact_path: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not artifact_path.exists():
+        return [f"spec kernel artifact not found: {artifact_path}"], warnings
+    fields = parse_markdown_artifact_fields(artifact_path)
+    workflow = fields.get("workflow", "")
+    if workflow not in SPEC_KERNEL_WORKFLOWS:
+        errors.append(f"workflow must be one of {', '.join(sorted(SPEC_KERNEL_WORKFLOWS))}")
+    for key in [
+        "source_artifacts",
+        "why",
+        "capabilities",
+        "constraints",
+        "non_goals",
+        "success_signal",
+        "preservation_map",
+        "validation_verdict",
+        "next_workflow",
+    ]:
+        if not fields.get(key, ""):
+            errors.append(f"spec kernel requires {key}")
+    capabilities = normalize_text(fields.get("capabilities", ""))
+    if capabilities and ("cap-" not in capabilities or "intent" not in capabilities or "success" not in capabilities):
+        errors.append("capabilities must include stable CAP ids with intent and success")
+    if normalize_text(fields.get("constraints", "")) in {"none", "n/a", "na", "tbd"}:
+        errors.append("constraints must name design-bending limits or explain as open_questions")
+    if normalize_text(fields.get("non_goals", "")) in {"none", "n/a", "na", "tbd"}:
+        errors.append("non_goals must be explicit so downstream agents do not fill the vacuum")
+    if normalize_text(fields.get("success_signal", "")) in {"users love it", "good ux", "works", "tbd"}:
+        errors.append("success_signal must be demonstrable or testable")
+    preservation = normalize_text(fields.get("preservation_map", ""))
+    if preservation and not any(word in preservation for word in ["absorbed", "companion", "source", "claim"]):
+        warnings.append("preservation_map should say which source claims were absorbed or moved to companions")
+    if not fields.get("decision_log", ""):
+        warnings.append("spec kernel should preserve a decision_log path or summary")
     return errors, warnings
 
 
@@ -5374,6 +5420,25 @@ def cmd_artifact_doc_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_artifact_spec_check(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    artifact_path, rel = project_path(root, args.path)
+    errors, warnings = spec_kernel_findings(root, artifact_path)
+    if errors:
+        print("Spec kernel check failed:")
+        for error in errors:
+            print(f"- {error}")
+    if warnings:
+        print("Spec kernel check warnings:")
+        for warning in warnings:
+            print(f"- {warning}")
+    if errors or (args.strict and warnings):
+        return 1
+    print("Spec kernel check passed.")
+    print(f"Artifact: {rel}")
+    return 0
+
+
 def cmd_artifact_test_check(args: argparse.Namespace) -> int:
     root, _ = load_state_or_fail(resolve_root(args.root))
     artifact_path, rel = project_path(root, args.path)
@@ -6061,6 +6126,18 @@ def detect_guidance_signals(question: str) -> list[str]:
             "plano de sprint",
         ],
         "product-flow": [
+            "spec kernel",
+            "canonical spec",
+            "create a spec",
+            "create spec",
+            "write a spec",
+            "write spec",
+            "distill this into a spec",
+            "validate this spec",
+            "update the spec",
+            "spec.md",
+            "no-fluff spec",
+            "machine contract",
             "product requirements",
             "requisitos de produto",
             "prd",
@@ -6911,10 +6988,31 @@ def document_review_outranks_quality(question: str) -> bool:
     return not is_strong_quality_intent(question)
 
 
+def is_spec_kernel_intent(question: str) -> bool:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    return bool(
+        "spec kernel" in normalized
+        or "canonical spec" in normalized
+        or "create a spec" in normalized
+        or "create spec" in normalized
+        or "write a spec" in normalized
+        or "write spec" in normalized
+        or "distill this into a spec" in normalized
+        or "validate this spec" in normalized
+        or "update the spec" in normalized
+        or "no-fluff spec" in normalized
+        or "machine contract" in normalized
+        or ("spec" in tokens and {"kernel", "canonical", "distill", "validate", "update", "contract"} & tokens)
+    )
+
+
 def routed_product_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
     padded = f" {normalized} "
+    if is_spec_kernel_intent(question):
+        return "write-spec"
     if (
         {"prfaq"} & tokens
         or "working backwards" in normalized
@@ -8110,6 +8208,17 @@ def build_guidance_decision(
         recommended_workflow = routed_problem_workflow(question)
         recommended_action, human_prompt, alternatives = problem_guidance_text(recommended_workflow)
         reason = "The message asks for orientation or indicates uncertainty."
+    elif has_question and is_spec_kernel_intent(question) and "game-flow" not in signal_set:
+        classification = "product-flow"
+        recommended_workflow = "write-spec"
+        recommended_action = "run write-spec to distill the intent into a compact spec kernel with stable capabilities, constraints, non-goals, success signal, preservation map, and spec-check proof"
+        human_prompt = "I should lock the WHAT as a lean machine contract before PRD depth, architecture, stories, or implementation."
+        alternatives = guidance_alternatives(
+            ("product-requirements", "when the compact spec needs fuller product requirements and decision narrative"),
+            ("spec-distillation", "when the immediate job is document cleanup before product planning"),
+            ("quick-dev", "when the change is small enough for spec-lite plus implementation"),
+        )
+        reason = "The message asks to create, update, validate, or distill a compact spec kernel, which should lock the WHAT before downstream work."
     elif has_question and "document-utility" in signal_set and document_review_outranks_quality(question):
         classification = "document-utility"
         recommended_workflow = routed_document_workflow(question)
@@ -8172,10 +8281,14 @@ def build_guidance_decision(
         elif recommended_workflow == "architecture":
             recommended_action = "run architecture to connect accepted product decisions to technical constraints, interfaces, risks, and story boundaries"
             human_prompt = "I should turn accepted requirements into implementation architecture before story creation."
+        elif recommended_workflow == "write-spec":
+            recommended_action = "run write-spec to distill the intent into a compact spec kernel with stable capabilities, constraints, non-goals, success signal, preservation map, and spec-check proof"
+            human_prompt = "I should lock the WHAT as a lean machine contract before PRD depth, architecture, stories, or implementation."
         else:
             recommended_action = "run product-requirements in create/update/validate mode with decisions, addendum, findings, and next workflow"
             human_prompt = "I should turn product intent into testable requirements and a durable decision log before architecture or stories."
         alternatives = guidance_alternatives(
+            ("write-spec", "when mixed notes, a brief, or a brain dump need a compact source-of-truth contract"),
             ("product-requirements", "when product promise, scope, or acceptance criteria need a PRD"),
             ("working-backwards-challenge", "when the customer promise needs PRFAQ-style stress testing"),
             ("ux-plan", "when taste, journey, interface, states, or accessibility are the main uncertainty"),
@@ -11542,6 +11655,15 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_doc_check.add_argument("--path", required=True)
     artifact_doc_check.add_argument("--strict", action="store_true")
     artifact_doc_check.set_defaults(func=cmd_artifact_doc_check)
+
+    artifact_spec_check = artifact_sub.add_parser(
+        "spec-check",
+        help="validate spec kernel contract and preservation proof",
+    )
+    artifact_spec_check.add_argument("--root", default=".")
+    artifact_spec_check.add_argument("--path", required=True)
+    artifact_spec_check.add_argument("--strict", action="store_true")
+    artifact_spec_check.set_defaults(func=cmd_artifact_spec_check)
 
     artifact_test_check = artifact_sub.add_parser(
         "test-check",

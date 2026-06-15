@@ -17,6 +17,7 @@ PARITY_REQUIRED_FAMILIES = {
     "confusion",
     "brainstorm",
     "research",
+    "spec",
     "prd",
     "ux",
     "architecture",
@@ -1560,6 +1561,47 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotEqual(ambiguous.returncode, 0)
             self.assertIn("keeping the original source requires stale_waiver", ambiguous.stdout)
 
+    def test_artifact_spec_check_validates_kernel_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            artifacts_dir = root / ".forge-method" / "artifacts"
+            spec_artifact = artifacts_dir / "spec-kernel.md"
+            spec_artifact.write_text(
+                "\n".join(
+                    [
+                        "# Spec Kernel Artifact",
+                        "workflow: write-spec",
+                        "mode: distill",
+                        "spec_id: SPEC-example",
+                        "source_artifacts: .forge-method/artifacts/discovery-intent.md",
+                        "companions: glossary.md",
+                        "absorbed_sources: discovery-intent.md",
+                        "decision_log: .decision-log.md",
+                        "why: Operators need one source of truth before architecture and stories.",
+                        "capabilities: CAP-1 intent: user can import a source brief; success: spec-check validates the resulting kernel",
+                        "constraints: Must preserve source claims and avoid implementation details in the kernel.",
+                        "non_goals: Does not choose UI framework or implementation architecture.",
+                        "success_signal: A future agent can create stories from CAP-1 without reading chat history.",
+                        "assumptions: Source brief is authoritative until a later addendum replaces it.",
+                        "open_questions: none blocking",
+                        "preservation_map: source claim absorbed into CAP-1; glossary moved to companion.",
+                        "validation_verdict: coherent and preservation-complete",
+                        "next_workflow: product-requirements",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            passed = run_cmd("artifact", "spec-check", "--root", str(root), "--path", str(spec_artifact)).stdout
+            self.assertIn("Spec kernel check passed.", passed)
+
+            broken = artifacts_dir / "spec-kernel-broken.md"
+            broken.write_text(spec_artifact.read_text(encoding="utf-8").replace("non_goals: Does not choose UI framework or implementation architecture.", "non_goals: none"), encoding="utf-8")
+            result = run_cmd("artifact", "spec-check", "--root", str(root), "--path", str(broken), check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("non_goals must be explicit", result.stdout)
+
     def test_artifact_test_check_validates_test_automation_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -1842,6 +1884,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "module-distribution-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "module-validation-report.md",
             ROOT / "skills" / "forge-method" / "templates" / "document-utility-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "spec-kernel-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "product-requirements-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "working-backwards-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "ux-design-artifact.md",
@@ -1970,6 +2013,7 @@ class RuntimeTests(unittest.TestCase):
             "edge-case-review",
             "adversarial-review",
             "context-recovery",
+            "write-spec",
             "game-context",
             "gdd",
             "narrative-design",
@@ -1987,6 +2031,7 @@ class RuntimeTests(unittest.TestCase):
         by_id = {item["id"]: item for item in catalog["workflows"]}
         for workflow_id in human_facing_required:
             self.assertIn("facilitation_pack", by_id[workflow_id], workflow_id)
+        self.assertEqual(by_id["write-spec"].get("template"), "spec-kernel-artifact")
         self.assertEqual(by_id["product-requirements"].get("template"), "product-requirements-artifact")
         self.assertEqual(by_id["working-backwards-challenge"].get("template"), "working-backwards-artifact")
         self.assertEqual(by_id["ux-plan"].get("template"), "ux-design-artifact")
@@ -2059,6 +2104,9 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("validate", by_id["ux-plan"].get("modes", []))
         self.assertIn("tradeoff", by_id["architecture"].get("modes", []))
         self.assertIn("readiness-check", by_id["architecture"].get("followed_by", []))
+        self.assertIn("distill", by_id["write-spec"].get("modes", []))
+        self.assertIn("validate", by_id["write-spec"].get("modes", []))
+        self.assertIn("product-requirements", by_id["write-spec"].get("followed_by", []))
         self.assertIn("spec-lite", by_id["quick-dev"].get("modes", []))
         self.assertIn("converge", by_id["brainstorming"].get("modes", []))
         self.assertIn("concept-selection", by_id["brainstorming"].get("followed_by", []))
@@ -2127,6 +2175,12 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("source_fingerprint", document_utility_template)
         self.assertIn("source_last_modified", document_utility_template)
         self.assertIn("original_doc_decision", document_utility_template)
+        spec_kernel_template = (
+            ROOT / "skills" / "forge-method" / "templates" / "spec-kernel-artifact.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("capabilities", spec_kernel_template)
+        self.assertIn("preservation_map", spec_kernel_template)
+        self.assertIn("validation_verdict", spec_kernel_template)
         self.assertIn("investigate", by_id["investigation"].get("modes", []))
         self.assertIn("tone", by_id["editorial-review"].get("modes", []))
         self.assertIn("failure", by_id["edge-case-review"].get("modes", []))

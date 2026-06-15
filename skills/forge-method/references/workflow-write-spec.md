@@ -3,37 +3,44 @@
 trigger:
   - state.phase == 2-specification
   - discovery intent exists
+  - user asks to create, update, validate, or distill a spec kernel
 
 inputs:
   - intent artifact
+  - source artifacts or mixed notes
   - constraints
   - success criteria
   - relevant domain notes
+  - existing spec kernel when updating
 
 steps:
-  1. define the target outcome
-  2. define functional requirements
-  3. define non-functional requirements
-  4. define acceptance criteria
-  5. identify risks and open assumptions
-  6. save spec artifact
-  7. update state next action toward planning
+  1. choose create, update, distill, or validate mode
+  2. separate load-bearing source claims from wrapper prose
+  3. preserve or assign stable capability IDs
+  4. write why, capabilities, constraints, non-goals, and success signal
+  5. move bulky load-bearing detail into companions or adopted source refs
+  6. record assumptions, open questions, preservation map, and decision log
+  7. run `artifact spec-check`
+  8. route the next workflow
 
 outputs:
-  - specification artifact
-  - acceptance criteria
-  - risk list
-  - updated state
+  - spec kernel artifact
+  - companion/source map
+  - validation verdict
+  - next workflow
 
 done_when:
-  - requirements are testable
-  - acceptance criteria can become stories
-  - unresolved assumptions are explicit
+  - each capability has id, intent, and success
+  - constraints bend design decisions
+  - non-goals and success signal are explicit
+  - load-bearing claims are preserved or marked open
+  - `artifact spec-check` passes
 
 blocked_when:
+  - intent is too thin to distill
   - a requirement conflicts with a stated constraint
-  - acceptance criteria cannot be tested or inspected
+  - success signal cannot be tested or demonstrated
+  - load-bearing source ownership is unknowable
 
 handoff:
-  - preserve spec path, assumptions, and planning inputs
-
+  - preserve spec path, companions, sources, capability IDs, decision log, assumptions, open questions, validation verdict, and next workflow

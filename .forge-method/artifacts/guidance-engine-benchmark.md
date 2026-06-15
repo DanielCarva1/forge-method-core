@@ -86,6 +86,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Test Architecture Enterprise Depth outputs must route quality requests to the right engagement mode and workflow, preserve fixture architecture and command contracts, and make gate outcomes distinguish pass, concerns, fail, missing evidence, and explicit waiver.
 - E2E/Test Automation Depth outputs must detect the existing framework, select API/E2E scenarios by risk, prefer semantic locators and visible outcome assertions, require independent tests with no hardcoded waits, and preserve run/fix result, evidence links, failure repair policy, and gate impact before generated tests count as done.
 - Enterprise Artifact Map Depth outputs must make enterprise track decisions produce required/conditional artifact maps, including risk, security, privacy, quality/NFR, CI, traceability, release, conditional DevOps/compliance/observability, evidence status, waiver policy, and readiness/release gate consumers.
+- Spec Kernel Depth outputs must route create/update/validate/distill spec requests to `write-spec`, produce a compact spec kernel with why, stable capabilities, constraints, non-goals, success signal, preservation map, decision log, companions, and `artifact spec-check` proof.
 - Document Review Depth outputs must route prose/structure/tone requests to `editorial-review` and boundary/failure/misuse requests to `edge-case-review`, each with a narrow compact artifact rather than the generic document utility shape.
 - Document Utility Freshness outputs must route explicit index/shard/stale-doc requests to `doc-index` or `doc-shard`, preserve source fingerprint/mtime, original-document handling, precedence rules, and `artifact doc-check` proof.
 
@@ -112,6 +113,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `brainstorming`
 - `build-story`
 - `runtime-builder`
+- `write-spec`
 - `product-requirements`
 - `working-backwards-challenge`
 - `ux-plan`
