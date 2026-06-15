@@ -2,37 +2,39 @@
 
 trigger:
   - reality/evidence gate needs domain rules, ethics, safety, or expert context
-  - product touches animals, health, education, finance, law, children, or regulated work
-  - idea depends on behavior, culture, workflow, or specialist knowledge
+  - product touches regulated, high-trust, cultural, legal, health, finance, education, children, or specialist work
+  - idea depends on workflow norms, domain behavior, or source material rules
 
 inputs:
-  - idea or requirement
-  - affected users, subjects, or stakeholders
-  - domain constraints and known risks
-  - available sources or expert notes
+  - idea, requirement, or domain claim
+  - affected users, subjects, stakeholders, and risk surface
+  - known rules, norms, policies, source material, or expert notes
+  - decision the research must unlock
 
 steps:
-  1. identify domain constraints, norms, harms, and trust requirements
-  2. flag cruelty, manipulation, safety, legal, privacy, and duty-of-care risks
-  3. compare the idea with accepted practices and rejected patterns
-  4. define what expert or primary-source evidence is needed
-  5. write a compact domain scan and next safe action
+  1. frame the claim, decision_to_unlock, and what would make the direction unsafe or invalid
+  2. identify domain constraints, norms, duties, risks_or_harms, and trust requirements
+  3. separate primary source evidence, expert judgment, inference, and assumption
+  4. decide whether qualified or expert_review_needed blocks downstream work
+  5. write research-scan-artifact and run artifact research-check
+  6. route to research-closeout, product-requirements, architecture, or correct-course
 
 outputs:
   - domain scan artifact
-  - risk and norms summary
-  - expert evidence needs
-  - next safe action
+  - constraints and norms summary
+  - risks, harms, and review needs
+  - research stance and next workflow
 
 done_when:
-  - major domain constraints are explicit
-  - harmful or non-compliant directions are blocked or reframed
-  - open evidence needs are named
+  - major constraints, harms, and accepted/rejected patterns are explicit
+  - source quality and unresolved uncertainty are labeled
+  - unsafe, illegal, or incoherent directions are blocked or reframed
+  - artifact research-check passes
 
 blocked_when:
-  - domain risk cannot be assessed from available context
-  - legal, clinical, financial, or safety decision requires qualified review
-  - affected user or subject is unknown
+  - affected user, subject, or domain boundary is unknown
+  - qualified legal, clinical, financial, safety, or expert review is required
+  - source access is missing and cannot be waived safely
 
 handoff:
-  - preserve constraints, harms, accepted practices, required review, and safe next action
+  - preserve artifact path, claim, sources, constraints, risks_or_harms, expert_review_needed, uncertainty, stance, and next workflow

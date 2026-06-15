@@ -1602,6 +1602,53 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("non_goals must be explicit", result.stdout)
 
+    def test_artifact_research_check_validates_scan_contracts(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            artifacts_dir = root / ".forge-method" / "artifacts"
+            market_artifact = artifacts_dir / "market-scan-proof.md"
+            market_artifact.write_text(
+                "\n".join(
+                    [
+                        "# Research Scan Artifact",
+                        "workflow: market-scan",
+                        "mode: market",
+                        "research_question: Would teams switch from spreadsheets for this workflow?",
+                        "decision_to_unlock: decide whether this idea deserves PRD scope",
+                        "claim: Teams have adoption pain worth solving.",
+                        "sources: primary interviews, competitor docs, pricing pages",
+                        "source_gaps: no paid analyst report available",
+                        "evidence_grade: recency current, authority mixed, directness high, bias noted",
+                        "findings: alternatives exist but switching cost is high.",
+                        "contradictions_or_falsifiers: if interviews show no switching pain, shrink scope.",
+                        "uncertainty: pricing willingness remains weak.",
+                        "stance: continue to PRD with adoption risk explicit",
+                        "alternatives: spreadsheets, generic task tools, incumbent SaaS",
+                        "adoption_friction: migration cost and trust barrier",
+                        "demand_signal: repeated manual workaround in interviews",
+                        "validation: artifact research-check --path .forge-method/artifacts/market-scan-proof.md",
+                        "next_workflow: research-closeout",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            passed = run_cmd("artifact", "research-check", "--root", str(root), "--path", str(market_artifact)).stdout
+            self.assertIn("Research scan check passed.", passed)
+
+            broken = artifacts_dir / "market-scan-broken.md"
+            broken.write_text(
+                market_artifact.read_text(encoding="utf-8").replace(
+                    "contradictions_or_falsifiers: if interviews show no switching pain, shrink scope.",
+                    "contradictions_or_falsifiers: none",
+                ),
+                encoding="utf-8",
+            )
+            result = run_cmd("artifact", "research-check", "--root", str(root), "--path", str(broken), check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("contradictions_or_falsifiers must name", result.stdout)
+
     def test_artifact_test_check_validates_test_automation_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -1885,6 +1932,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "module-validation-report.md",
             ROOT / "skills" / "forge-method" / "templates" / "document-utility-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "spec-kernel-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "research-scan-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "product-requirements-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "working-backwards-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "ux-design-artifact.md",
@@ -1925,6 +1973,7 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "facilitation" / "council-decision.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "context-boundary.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "brainstorming.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "evidence-research.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "design-thinking.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "innovation-strategy.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "storytelling.md",
@@ -2014,6 +2063,9 @@ class RuntimeTests(unittest.TestCase):
             "adversarial-review",
             "context-recovery",
             "write-spec",
+            "market-scan",
+            "domain-scan",
+            "technical-feasibility-scan",
             "game-context",
             "gdd",
             "narrative-design",
@@ -2032,6 +2084,9 @@ class RuntimeTests(unittest.TestCase):
         for workflow_id in human_facing_required:
             self.assertIn("facilitation_pack", by_id[workflow_id], workflow_id)
         self.assertEqual(by_id["write-spec"].get("template"), "spec-kernel-artifact")
+        self.assertEqual(by_id["market-scan"].get("template"), "research-scan-artifact")
+        self.assertEqual(by_id["domain-scan"].get("template"), "research-scan-artifact")
+        self.assertEqual(by_id["technical-feasibility-scan"].get("template"), "research-scan-artifact")
         self.assertEqual(by_id["product-requirements"].get("template"), "product-requirements-artifact")
         self.assertEqual(by_id["working-backwards-challenge"].get("template"), "working-backwards-artifact")
         self.assertEqual(by_id["ux-plan"].get("template"), "ux-design-artifact")
@@ -2107,6 +2162,16 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("distill", by_id["write-spec"].get("modes", []))
         self.assertIn("validate", by_id["write-spec"].get("modes", []))
         self.assertIn("product-requirements", by_id["write-spec"].get("followed_by", []))
+        self.assertIn("market", by_id["market-scan"].get("modes", []))
+        self.assertIn("domain", by_id["domain-scan"].get("modes", []))
+        self.assertIn("technical", by_id["technical-feasibility-scan"].get("modes", []))
+        self.assertIn("research-closeout", by_id["market-scan"].get("followed_by", []))
+        research_scan_template = (
+            ROOT / "skills" / "forge-method" / "templates" / "research-scan-artifact.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("decision_to_unlock", research_scan_template)
+        self.assertIn("contradictions_or_falsifiers", research_scan_template)
+        self.assertIn("proof_path", research_scan_template)
         self.assertIn("spec-lite", by_id["quick-dev"].get("modes", []))
         self.assertIn("converge", by_id["brainstorming"].get("modes", []))
         self.assertIn("concept-selection", by_id["brainstorming"].get("followed_by", []))

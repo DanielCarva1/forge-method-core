@@ -12,15 +12,18 @@ source_material:
 follow_up_batches:
   - claim: "What are we trying to prove, disprove, or make safer?"
   - scope: "Is this market, domain, technical, legal, safety, feasibility, or user-pain research?"
+  - decision: "What decision becomes different after this research?"
   - standard: "What quality of evidence is enough for the next workflow?"
   - contradiction: "What would make this idea invalid, smaller, or not worth building?"
+  - source_quality: "How recent, authoritative, direct, and biased are the sources?"
   - output: "Which compact scan or gate should the next agent consume?"
 
 conversation_stages:
   - frame_claim: "Name the assumption and the decision that depends on it."
-  - choose_lens: "Pick reality gate, market scan, domain scan, or technical feasibility scan."
+  - choose_lens: "Pick reality gate, market scan, domain scan, or technical feasibility scan; do not default every research request to domain."
   - gather_evidence: "Collect sources, examples, constraints, and alternatives without drifting into implementation."
   - challenge_claim: "Separate evidence, inference, speculation, and taste."
+  - stance: "Say continue, pivot, prototype, more research, or block; explain why."
   - route_next: "Persist the stance, open questions, and next workflow."
 
 elicitation_options:
@@ -33,21 +36,27 @@ facilitator_moves:
   - "Do not let excitement replace evidence."
   - "Do not treat market scarcity as proof of opportunity."
   - "Name when a source supports only a weaker claim."
+  - "When the human asks for research, first ask what decision the research unlocks."
+  - "When evidence conflicts, keep the contradiction visible instead of smoothing it into a summary."
   - "Turn research into a decision, not a reading list."
 
 quality_bar:
   - "The output distinguishes facts, inferences, guesses, and unresolved risk."
   - "The next workflow can act without rereading every source."
   - "The human understands what changed because of the evidence."
+  - "Market scans name alternatives and adoption friction; domain scans name risks and review needs; technical scans name proof paths."
+  - "artifact research-check passes before downstream planning uses the scan as evidence."
 
 anti_patterns:
   - "Do not browse forever without a decision target."
   - "Do not bury legal, safety, or feasibility blockers under optimism."
   - "Do not write implementation stories from unvalidated claims."
+  - "Do not route competitor/adoption questions to domain-scan or feasibility questions to market-scan."
+  - "Do not cite weak secondary summaries as if they prove primary behavior."
 
 paths:
-  fast_path: "Run the narrowest scan, record stance and next workflow."
-  deep_path: "Run reality gate, domain/market/technical scans, then Grill Gate before spec."
+  fast_path: "Run the narrowest scan, write research-scan-artifact, run artifact research-check, record stance and next workflow."
+  deep_path: "Run reality gate, domain/market/technical scans, close with research-closeout, then Grill Gate before spec."
 
 checkpoint_options:
   - reality-evidence-gate
@@ -59,6 +68,11 @@ checkpoint_options:
 
 artifact_rules:
   Persist claim, source links, evidence grade, contradictions, stance, open questions, and next workflow.
+
+domain_examples:
+  market: "Alternatives, switching cost, adoption friction, demand signal, pricing pressure, trust barrier."
+  domain: "Rules, norms, source material, safety/legal/ethical risks, accepted practices, expert review."
+  technical: "Physical possibility, model/tool/API limits, required data, operational limits, cheapest proof path."
 
 headless:
   Use primary sources when possible, record uncertainty, and stop research when the decision threshold is met or blocked.

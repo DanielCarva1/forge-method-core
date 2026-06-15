@@ -61,6 +61,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Human frustration or rejection of the current route must override stale `next_action` and route to `correct-course` or `6-evolve`.
 - Corrections about the method's own experience, scope, taste, or implementation contradiction must route to `correct-course` first; `runtime-builder`, `plan-sprint`, `build-story`, or `readiness-check` are repair paths after the failed behavior is named.
 - Broad ideas should receive a guided discovery, brainstorm, research, game, creative, quality, or builder workflow before technical implementation plans; option-generation language should route to brainstorming before generic confusion, while taste-heavy broad creative requests still route to creative-session and specific CIS strategy/story/design requests route to their narrow packs.
+- Research requests should route to the narrowest scan: market for alternatives/adoption/demand, domain for rules/risks/review, technical feasibility for capability/data/proof path; each scan must preserve source quality, contradictions, uncertainty, stance, next workflow, and `artifact research-check` proof.
 - Brainstorming should preserve option lanes, selection criteria, taste anchors, anti-goals, discard pile, risk/evidence needs, top candidates, and next workflow in a compact artifact.
 - CIS Facilitation Depth should preserve design-thinking user/opportunity/prototype proof, innovation option/evidence/adoption/reversibility proof, and storytelling audience/pressure/payoff/rejected-path proof in compact artifacts while the human pack stays rich.
 - Agent Compactness Guard should expose a deterministic `workflow compactness` check and wire it into normal workflow validation, runtime smoke, audit, and unit coverage.
@@ -109,7 +110,9 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `game-e2e-scaffold`
 - `problem-solving`
 - `investigation`
+- `market-scan`
 - `domain-scan`
+- `technical-feasibility-scan`
 - `brainstorming`
 - `build-story`
 - `runtime-builder`

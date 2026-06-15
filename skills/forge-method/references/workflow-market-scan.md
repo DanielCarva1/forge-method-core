@@ -2,37 +2,39 @@
 
 trigger:
   - reality/evidence gate needs market or competitor evidence
-  - user asks whether people would pay for or adopt the idea
-  - product claim depends on scarcity, differentiation, or demand
+  - user asks about demand, adoption, willingness to switch, price, or alternatives
+  - product claim depends on scarcity, differentiation, or buying path
 
 inputs:
   - product idea or requirement
-  - target audience
-  - geography, segment, price, or channel constraints
-  - known alternatives and assumptions
+  - target audience, segment, geography, price, or channel constraints
+  - known alternatives, substitutes, and assumptions
+  - decision the research must unlock
 
 steps:
-  1. identify existing alternatives, substitutes, and common workarounds
-  2. separate market scarcity from validated demand
-  3. estimate adoption friction, buying path, and trust barriers
-  4. name the strongest invalidation evidence to seek
-  5. write a compact market scan with sources or explicit source gaps
+  1. frame the claim, decision_to_unlock, and falsifier before browsing or comparing
+  2. map alternatives, substitutes, switching costs, and adoption friction
+  3. separate demand signal, inference, speculation, and taste
+  4. grade sources by recency, authority, directness, and bias
+  5. write research-scan-artifact and run artifact research-check
+  6. route to research-closeout, product-requirements, concept-selection, or correct-course
 
 outputs:
   - market scan artifact
   - alternative map
-  - demand and adoption risks
-  - next evidence step
+  - adoption and demand risk
+  - research stance and next workflow
 
 done_when:
-  - audience and alternatives are explicit
-  - demand claim has evidence or is labeled assumption
-  - next validation step is concrete
+  - audience, alternatives, adoption friction, and demand signal are explicit
+  - weak or missing demand evidence is labeled as uncertainty
+  - contradictions_or_falsifiers and next workflow are concrete
+  - artifact research-check passes
 
 blocked_when:
-  - target audience is undefined
+  - target audience or decision_to_unlock is undefined
   - current sources are required but unavailable
-  - market claim depends on regulated, legal, or private data
+  - market claim depends on regulated, private, or paid data
 
 handoff:
-  - preserve audience, alternatives, demand evidence, assumptions, and next proof
+  - preserve artifact path, claim, sources, evidence grade, alternatives, demand signal, uncertainty, stance, and next workflow

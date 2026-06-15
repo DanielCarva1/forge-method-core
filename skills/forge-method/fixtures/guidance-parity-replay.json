@@ -63,6 +63,32 @@
     "expected_classification": "research-needed",
     "expected_phase": "1-discovery",
     "expected_workflow": "domain-scan",
+    "expected_facilitation_pack": "skill:facilitation/evidence-research.md",
+    "expected_template": "research-scan-artifact",
+    "state_update_required": false
+  },
+  {
+    "id": "market_research_adoption_request",
+    "family": "research",
+    "state": "discovery",
+    "question": "market research: compare competitors alternatives adoption friction demand signal and pricing before deciding product scope",
+    "expected_classification": "research-needed",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "market-scan",
+    "expected_facilitation_pack": "skill:facilitation/evidence-research.md",
+    "expected_template": "research-scan-artifact",
+    "state_update_required": false
+  },
+  {
+    "id": "technical_feasibility_research_request",
+    "family": "research",
+    "state": "discovery",
+    "question": "technical feasibility scan: validate model capability API limits data needs riskiest unknowns and proof path before architecture",
+    "expected_classification": "research-needed",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "technical-feasibility-scan",
+    "expected_facilitation_pack": "skill:facilitation/evidence-research.md",
+    "expected_template": "research-scan-artifact",
     "state_update_required": false
   },
   {

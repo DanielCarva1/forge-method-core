@@ -2432,6 +2432,12 @@ SPEC_KERNEL_WORKFLOWS = {
     "spec-distillation",
 }
 
+RESEARCH_SCAN_WORKFLOWS = {
+    "market-scan",
+    "domain-scan",
+    "technical-feasibility-scan",
+}
+
 TEST_UTILITY_WORKFLOWS = {
     "test-framework",
     "test-automation",
@@ -2584,6 +2590,58 @@ def spec_kernel_findings(root: Path, artifact_path: Path) -> tuple[list[str], li
         warnings.append("preservation_map should say which source claims were absorbed or moved to companions")
     if not fields.get("decision_log", ""):
         warnings.append("spec kernel should preserve a decision_log path or summary")
+    return errors, warnings
+
+
+def research_scan_findings(root: Path, artifact_path: Path) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not artifact_path.exists():
+        return [f"research scan artifact not found: {artifact_path}"], warnings
+    fields = parse_markdown_artifact_fields(artifact_path)
+    workflow = fields.get("workflow", "")
+    if workflow not in RESEARCH_SCAN_WORKFLOWS:
+        errors.append(f"workflow must be one of {', '.join(sorted(RESEARCH_SCAN_WORKFLOWS))}")
+    for key in [
+        "research_question",
+        "decision_to_unlock",
+        "claim",
+        "sources",
+        "evidence_grade",
+        "findings",
+        "contradictions_or_falsifiers",
+        "uncertainty",
+        "stance",
+        "next_workflow",
+        "validation",
+    ]:
+        if not fields.get(key, ""):
+            errors.append(f"research scan requires {key}")
+    weak_values = {"none", "n/a", "na", "tbd", "unknown"}
+    if normalize_text(fields.get("sources", "")) in weak_values and not fields.get("source_gaps", ""):
+        errors.append("sources must cite evidence or name source_gaps")
+    if normalize_text(fields.get("stance", "")) in weak_values:
+        errors.append("stance must recommend continue, pivot, prototype, research, or block")
+    if normalize_text(fields.get("contradictions_or_falsifiers", "")) in weak_values:
+        errors.append("contradictions_or_falsifiers must name what would weaken or kill the claim")
+    evidence_grade = normalize_text(fields.get("evidence_grade", ""))
+    if evidence_grade and not any(word in evidence_grade for word in ["recency", "authority", "directness", "bias"]):
+        warnings.append("evidence_grade should mention recency, authority, directness, or bias")
+    if workflow == "market-scan":
+        for key in ["alternatives", "adoption_friction", "demand_signal"]:
+            if not fields.get(key, ""):
+                errors.append(f"market-scan requires {key}")
+    if workflow == "domain-scan":
+        for key in ["domain_constraints", "risks_or_harms", "expert_review_needed"]:
+            if not fields.get(key, ""):
+                errors.append(f"domain-scan requires {key}")
+    if workflow == "technical-feasibility-scan":
+        for key in ["feasibility_stance", "riskiest_unknowns", "proof_path"]:
+            if not fields.get(key, ""):
+                errors.append(f"technical-feasibility-scan requires {key}")
+    validation = normalize_text(fields.get("validation", ""))
+    if validation and "research-check" not in validation:
+        warnings.append("validation should include artifact research-check")
     return errors, warnings
 
 
@@ -5439,6 +5497,25 @@ def cmd_artifact_spec_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_artifact_research_check(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    artifact_path, rel = project_path(root, args.path)
+    errors, warnings = research_scan_findings(root, artifact_path)
+    if errors:
+        print("Research scan check failed:")
+        for error in errors:
+            print(f"- {error}")
+    if warnings:
+        print("Research scan check warnings:")
+        for warning in warnings:
+            print(f"- {warning}")
+    if errors or (args.strict and warnings):
+        return 1
+    print("Research scan check passed.")
+    print(f"Artifact: {rel}")
+    return 0
+
+
 def cmd_artifact_test_check(args: argparse.Namespace) -> int:
     root, _ = load_state_or_fail(resolve_root(args.root))
     artifact_path, rel = project_path(root, args.path)
@@ -5957,7 +6034,43 @@ def detect_guidance_signals(question: str) -> list[str]:
             "triage",
             "debug why",
         ],
-        "research-needed": ["deep research", "pesquisa profunda", "consultar documentacao", "ler docs", "benchmark"],
+        "research-needed": [
+            "deep research",
+            "pesquisa profunda",
+            "consultar documentacao",
+            "ler docs",
+            "benchmark",
+            "market research",
+            "market scan",
+            "pesquisa de mercado",
+            "competitor",
+            "competidor",
+            "alternativas",
+            "adoption",
+            "adocao",
+            "adoção",
+            "demand",
+            "demanda",
+            "domain research",
+            "domain scan",
+            "pesquisa de dominio",
+            "pesquisa de domínio",
+            "regras do dominio",
+            "regras do domínio",
+            "legal risk",
+            "safety risk",
+            "technical research",
+            "technical feasibility",
+            "feasibility scan",
+            "viabilidade tecnica",
+            "viabilidade técnica",
+            "proof path",
+            "fontes",
+            "sources",
+            "evidence",
+            "evidencia",
+            "evidência",
+        ],
         "document-utility": [
             "index docs",
             "shard document",
@@ -6488,6 +6601,79 @@ def creative_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, s
             ("brainstorming", "use when options need more divergence"),
             ("innovation-strategy", "use when novelty, adoption, and strategic fit are the decision"),
             ("storytelling", "use when narrative arc, audience shift, or voice is the decision"),
+        ),
+    )
+
+
+def routed_research_workflow(question: str) -> str:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    if (
+        "technical feasibility" in normalized
+        or "feasibility scan" in normalized
+        or "technical research" in normalized
+        or "viabilidade tecnica" in normalized
+        or "viabilidade técnica" in normalized
+        or "proof path" in normalized
+        or "technical proof" in normalized
+        or "api limit" in normalized
+        or "model capability" in normalized
+        or "automation capability" in normalized
+        or ({"technical", "feasibility"} <= tokens)
+        or ({"arquitetura", "risco"} <= tokens)
+        or ({"api", "scale"} & tokens)
+    ):
+        return "technical-feasibility-scan"
+    if (
+        "market research" in normalized
+        or "market scan" in normalized
+        or "pesquisa de mercado" in normalized
+        or "competitor" in normalized
+        or "alternatives" in normalized
+        or "alternativas" in normalized
+        or "adoption" in normalized
+        or "adocao" in normalized
+        or "adoção" in normalized
+        or "demand" in normalized
+        or "demanda" in normalized
+        or "pricing" in normalized
+        or "preco" in normalized
+        or "preço" in normalized
+        or ({"market", "competitor", "adoption", "demand", "pricing"} & tokens)
+        or ({"mercado", "concorrentes", "demanda"} & tokens)
+    ):
+        return "market-scan"
+    return "domain-scan"
+
+
+def research_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "market-scan":
+        return (
+            "run market-scan to compare alternatives, adoption friction, demand signal, source quality, contradictions, uncertainty, stance, and research-check proof",
+            "I should test whether people would adopt or switch before treating scarcity as opportunity.",
+            guidance_alternatives(
+                ("domain-scan", "when rules, ethics, legal context, or domain norms decide the risk"),
+                ("technical-feasibility-scan", "when the promise may exceed tools, data, or operational limits"),
+                ("research-closeout", "when the evidence is ready to become a decision handoff"),
+            ),
+        )
+    if workflow_id == "technical-feasibility-scan":
+        return (
+            "run technical-feasibility-scan to decide feasibility stance, riskiest unknowns, required data/tools, cheapest proof path, uncertainty, and research-check proof",
+            "I should prove the risky technical promise before architecture or implementation stories.",
+            guidance_alternatives(
+                ("domain-scan", "when safety, legal, ethics, or expert context can block the proof"),
+                ("market-scan", "when feasibility is plausible but adoption or alternatives are unclear"),
+                ("research-closeout", "when the proof path is accepted and ready to hand off"),
+            ),
+        )
+    return (
+        "run domain-scan to map domain constraints, norms, risks, expert-review needs, evidence grade, contradictions, uncertainty, stance, and research-check proof",
+        "I should understand the domain rules and harms before converting this into product or technical work.",
+        guidance_alternatives(
+            ("market-scan", "when adoption, alternatives, or willingness-to-switch are the main unknowns"),
+            ("technical-feasibility-scan", "when the build promise or AI/automation capability is the main risk"),
+            ("research-closeout", "when the evidence is ready to become a decision handoff"),
         ),
     )
 
@@ -7938,9 +8124,11 @@ def build_guidance_decision(
         elif "research-needed" in signal_set:
             classification = "research-needed"
             recommended_phase = "1-discovery"
-            recommended_workflow = "domain-scan"
-            recommended_action = "create the project with an evidence-first discovery flow, then write a compact scan"
-            human_prompt = "I should gather enough evidence to make the next decision defensible."
+            recommended_workflow = routed_research_workflow(question)
+            action_text, prompt_text, research_alternatives = research_guidance_text(recommended_workflow)
+            recommended_action = f"create the project with an evidence-first discovery flow, then {action_text}"
+            human_prompt = prompt_text
+            alternatives = research_alternatives
             reason = "The first intent depends on docs, evidence, or external benchmark behavior."
         elif "brainstorm" in signal_set:
             classification = "brainstorm"
@@ -8031,14 +8219,9 @@ def build_guidance_decision(
     elif has_question and phase == "5-ready-operate" and "research-needed" in signal_set:
         classification = "research-needed"
         recommended_phase = "6-evolve"
-        recommended_workflow = "domain-scan"
-        recommended_action = "open an evolution cycle, collect grounded evidence, then decide the next runtime change"
-        human_prompt = "This ready project has new evidence needs; I should research before publishing or building."
-        alternatives = guidance_alternatives(
-            ("market-scan", "when alternatives and adoption risk matter"),
-            ("technical-feasibility-scan", "when implementation feasibility is the main uncertainty"),
-            ("evolve-project", "when the evidence question is already answered"),
-        )
+        recommended_workflow = routed_research_workflow(question)
+        action_text, human_prompt, alternatives = research_guidance_text(recommended_workflow)
+        recommended_action = f"open an evolution cycle, then {action_text}"
         state_update_required = True
         reason = "A ready project with a new research request should enter evolve and run the evidence workflow."
         commands.append(
@@ -8047,16 +8230,16 @@ def build_guidance_decision(
                 "transition",
                 "--root",
                 root,
-                "--phase",
-                "6-evolve",
-                "--status",
-                "evolution-research",
-                "--workflow",
-                "domain-scan",
-                "--next-action",
-                recommended_action,
+                    "--phase",
+                    "6-evolve",
+                    "--status",
+                    "evolution-research",
+                    "--workflow",
+                    recommended_workflow,
+                    "--next-action",
+                    recommended_action,
+                )
             )
-        )
     elif has_question and phase == "5-ready-operate" and "brainstorm" in signal_set:
         classification = "brainstorm"
         recommended_phase = "6-evolve"
@@ -8258,13 +8441,8 @@ def build_guidance_decision(
         reason = "The message is documentation utility work rather than general research."
     elif has_question and "research-needed" in signal_set:
         classification = "research-needed"
-        recommended_workflow = "domain-scan"
-        recommended_action = "collect grounded evidence before deciding or building"
-        human_prompt = "I should research enough to make the next decision defensible, then write a compact scan."
-        alternatives = guidance_alternatives(
-            ("market-scan", "when market alternatives matter"),
-            ("technical-feasibility-scan", "when architecture feasibility is the main risk"),
-        )
+        recommended_workflow = routed_research_workflow(question)
+        recommended_action, human_prompt, alternatives = research_guidance_text(recommended_workflow)
         reason = "The message depends on docs, evidence, or external benchmark behavior."
     elif has_question and "product-flow" in signal_set and "game-flow" not in signal_set:
         classification = "product-flow"
@@ -11664,6 +11842,15 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_spec_check.add_argument("--path", required=True)
     artifact_spec_check.add_argument("--strict", action="store_true")
     artifact_spec_check.set_defaults(func=cmd_artifact_spec_check)
+
+    artifact_research_check = artifact_sub.add_parser(
+        "research-check",
+        help="validate research scan claim, evidence, uncertainty, and decision handoff",
+    )
+    artifact_research_check.add_argument("--root", default=".")
+    artifact_research_check.add_argument("--path", required=True)
+    artifact_research_check.add_argument("--strict", action="store_true")
+    artifact_research_check.set_defaults(func=cmd_artifact_research_check)
 
     artifact_test_check = artifact_sub.add_parser(
         "test-check",

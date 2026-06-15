@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T10:30:57+00:00",
+  "generated_at": "2026-06-15T10:54:15+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -1009,12 +1009,27 @@
     },
     {
       "facilitation_pack": "evidence-research",
+      "followed_by": [
+        "research-closeout",
+        "product-requirements",
+        "architecture",
+        "correct-course"
+      ],
       "id": "domain-scan",
+      "modes": [
+        "domain",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "domain constraints"
+        "domain constraints",
+        "risks or harms",
+        "expert review needs",
+        "research stance"
       ],
       "phase": "1-discovery",
-      "required": false
+      "required": false,
+      "template": "research-scan-artifact"
     },
     {
       "facilitation_pack": "document-utility",
@@ -1497,12 +1512,27 @@
     },
     {
       "facilitation_pack": "evidence-research",
+      "followed_by": [
+        "research-closeout",
+        "product-requirements",
+        "concept-selection",
+        "correct-course"
+      ],
       "id": "market-scan",
+      "modes": [
+        "market",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "market evidence"
+        "alternatives",
+        "adoption friction",
+        "demand signal",
+        "research stance"
       ],
       "phase": "1-discovery",
-      "required": false
+      "required": false,
+      "template": "research-scan-artifact"
     },
     {
       "facilitation_pack": "game-lifecycle",
@@ -2255,12 +2285,27 @@
     },
     {
       "facilitation_pack": "evidence-research",
+      "followed_by": [
+        "research-closeout",
+        "architecture",
+        "quick-prototype",
+        "correct-course"
+      ],
       "id": "technical-feasibility-scan",
+      "modes": [
+        "technical",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "technical feasibility evidence"
+        "feasibility stance",
+        "riskiest unknowns",
+        "proof path",
+        "research stance"
       ],
       "phase": "1-discovery",
-      "required": false
+      "required": false,
+      "template": "research-scan-artifact"
     },
     {
       "facilitation_pack": "test-architecture",

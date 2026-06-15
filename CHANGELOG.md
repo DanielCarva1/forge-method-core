@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add Research Guidance Depth with specific market/domain/technical routing, `research-scan-artifact`, source-quality and contradiction fields, `artifact research-check`, and replay coverage
 - add Spec Kernel Depth with `artifact spec-check`, `write-spec` spec-kernel template/modes, stable capability ID and preservation-map contract, companion/decision-log fields, product-planning facilitation depth, and replay coverage for create/update/validate/distill spec requests
 - add Enterprise Artifact Map Depth with `artifact enterprise-check`, required and conditional artifact maps for enterprise track decisions, readiness and release gate consumption, waiver policy fields, enterprise templates, and replay coverage
 - add E2E/Test Automation Depth with `artifact test-check`, framework detection proof, API/E2E scenario fields, semantic locator and visible outcome contracts, no-hardcoded-wait policy, run/fix evidence, game E2E artifact, and replay coverage for generated E2E routing
