@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- add post-command Help Oracle guidance for progress-changing runtime commands: interactive mutations now print the next required workflow, alternatives, and stale-state guard, while path-output commands record the same compact contract in `ledger.ndjson`
+
 ## 1.29.0
 
 Forge Method Core v1.29.0 ships guided workflow depth as one coherent runtime batch:

@@ -73,6 +73,20 @@ def add_decision_source(root: Path, *, title: str = "Approved spec") -> str:
     ).stdout.strip()
 
 
+def ledger_events(root: Path, event: str) -> list[dict[str, object]]:
+    ledger = root / ".forge-method" / "ledger.ndjson"
+    if not ledger.exists():
+        return []
+    events = []
+    for line in ledger.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        item = json.loads(line)
+        if item.get("event") == event:
+            events.append(item)
+    return events
+
+
 def prepare_guidance_fixture(root: Path, state_kind: str) -> None:
     if state_kind == "none":
         return
@@ -818,6 +832,40 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Continue the active workflow", snapshot["help_oracle"]["reason"])
             self.assertIn("Implement Help Oracle invariant", next_text)
             self.assertIn("Next required workflow: runtime-builder", next_text)
+
+    def test_mutating_commands_record_and_emit_post_command_help_oracle(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            init_text = run_cmd("init", "--project", "Example Project", "--root", str(root)).stdout
+
+            self.assertIn("Help Oracle:", init_text)
+            self.assertIn("stale_state_guard", init_text)
+
+            transition_text = run_cmd(
+                "transition",
+                "--root",
+                str(root),
+                "--phase",
+                "1-discovery",
+                "--status",
+                "discovery-ready",
+                "--workflow",
+                "discover-intent",
+            ).stdout
+
+            self.assertIn("Help Oracle:", transition_text)
+            self.assertIn("required_next_workflow: discover-intent", transition_text)
+            self.assertIn("alternatives:", transition_text)
+
+            artifact_path = add_decision_source(root)
+            self.assertEqual(artifact_path, ".forge-method/artifacts/test-decision-source.md")
+
+            events = ledger_events(root, "help_oracle.recorded")
+            self.assertGreaterEqual(len(events), 3)
+            latest = events[-1]["payload"]
+            self.assertEqual(latest["required_next_workflow"], "discover-intent")
+            self.assertIn("stale_state_guard", latest)
+            self.assertTrue(latest["alternatives"])
 
     def test_story_block_routes_without_fake_human_input(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

@@ -3974,6 +3974,71 @@ def build_help_oracle(
     }
 
 
+def compact_help_oracle_event(oracle: dict[str, Any]) -> dict[str, Any]:
+    alternatives = []
+    for item in oracle.get("alternatives", []):
+        alternatives.append(
+            {
+                "workflow": item.get("workflow", ""),
+                "reason": item.get("reason", ""),
+            }
+        )
+    return {
+        "required_next_workflow": oracle.get("required_next_workflow", ""),
+        "recommended_phase": oracle.get("recommended_phase", ""),
+        "human_next_step": oracle.get("human_next_step", ""),
+        "reason": oracle.get("reason", ""),
+        "facilitation_pack": oracle.get("facilitation_pack", ""),
+        "state_update_required": oracle.get("state_update_required", False),
+        "state_updates": oracle.get("state_updates", {}),
+        "stale_state_guard": oracle.get("stale_state_guard", ""),
+        "alternatives": alternatives,
+    }
+
+
+def print_post_command_guidance(event: dict[str, Any]) -> None:
+    print("Help Oracle:")
+    print(f"- required_next_workflow: {event.get('required_next_workflow', '')}")
+    print(f"- recommended_phase: {event.get('recommended_phase', '')}")
+    if event.get("human_next_step"):
+        print(f"- next: {event.get('human_next_step')}")
+    print(f"- reason: {event.get('reason', '')}")
+    if event.get("facilitation_pack"):
+        print(f"- facilitation: {event.get('facilitation_pack')}")
+    alternatives = [item.get("workflow", "") for item in event.get("alternatives", []) if item.get("workflow")]
+    if alternatives:
+        print(f"- alternatives: {', '.join(alternatives)}")
+    print(f"- stale_state_guard: {event.get('stale_state_guard', '')}")
+
+
+def build_post_command_help_oracle(root: Path, state: dict[str, str], *, validate: bool = False) -> dict[str, Any]:
+    stories = list_stories(root)
+    story_counts = {status: 0 for status in STORY_STATUSES}
+    for story in stories:
+        status = story.get("status", "planned")
+        story_counts[status] = story_counts.get(status, 0) + 1
+    resume = build_resume_guidance(
+        root,
+        state,
+        select_next_story(root),
+        audit_project(root) if validate else [],
+        open_required_inputs(root),
+        open_review_findings(root),
+        story_counts,
+    )
+    return build_help_oracle(root, state, resume)
+
+
+def record_post_command_guidance(root: Path, *, emit: bool = False) -> dict[str, Any]:
+    _, state = load_state_or_fail(root)
+    oracle = build_post_command_help_oracle(root, state, validate=emit)
+    event = compact_help_oracle_event(oracle)
+    append_ledger(root, "help_oracle.recorded", event)
+    if emit:
+        print_post_command_guidance(event)
+    return event
+
+
 def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     sprint = read_flat_yaml(method_dir(root) / SPRINT_FILE)
     stories = list_stories(root)
@@ -4957,6 +5022,7 @@ def cmd_project_create(args: argparse.Namespace) -> int:
     print(f"Context pack: {context_pack.relative_to(project_root).as_posix()}")
     if copied_guidance:
         print(f"Project guidance: {', '.join(copied_guidance)}")
+    record_post_command_guidance(project_root, emit=True)
     return 0
 
 
@@ -9482,7 +9548,7 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--force", action="store_true")
     init.add_argument("--allow-runtime-state", action="store_true")
     init.add_argument("--no-project-guidance", action="store_true")
-    init.set_defaults(func=cmd_init)
+    init.set_defaults(func=cmd_init, record_guidance=True, emit_guidance=True)
 
     status = sub.add_parser("status", help="print current runtime state")
     status.add_argument("--root", default=".")
@@ -9534,7 +9600,7 @@ def build_parser() -> argparse.ArgumentParser:
     track_set.add_argument("--track", required=True, choices=sorted(TRACK_IDS))
     track_set.add_argument("--set-module", action="store_true")
     track_set.add_argument("--next-action")
-    track_set.set_defaults(func=cmd_track_set)
+    track_set.set_defaults(func=cmd_track_set, record_guidance=True, emit_guidance=True)
 
     council = sub.add_parser("council", help="run an optional Forge Agent Council")
     council_sub = council.add_subparsers(dest="council_command", required=True)
@@ -9544,7 +9610,7 @@ def build_parser() -> argparse.ArgumentParser:
     council_run.add_argument("--agent", action="append")
     council_run.add_argument("--next-action")
     council_run.add_argument("--eval", action="store_true")
-    council_run.set_defaults(func=cmd_council_run)
+    council_run.set_defaults(func=cmd_council_run, record_guidance=True, emit_guidance=True)
 
     correct_course = sub.add_parser("correct-course", help="write a compact correct-course continuation artifact")
     correct_course.add_argument("--root", default=".")
@@ -9553,7 +9619,7 @@ def build_parser() -> argparse.ArgumentParser:
     correct_course.add_argument("--title")
     correct_course.add_argument("--next-action")
     correct_course.add_argument("--eval", action="store_true")
-    correct_course.set_defaults(func=cmd_correct_course)
+    correct_course.set_defaults(func=cmd_correct_course, record_guidance=True, emit_guidance=True)
 
     transition = sub.add_parser("transition", help="update phase/status/workflow")
     transition.add_argument("--root", default=".")
@@ -9563,7 +9629,7 @@ def build_parser() -> argparse.ArgumentParser:
     transition.add_argument("--next-action")
     transition.add_argument("--human-input-required", choices=["true", "false"])
     transition.add_argument("--force", action="store_true")
-    transition.set_defaults(func=cmd_transition)
+    transition.set_defaults(func=cmd_transition, record_guidance=True, emit_guidance=True)
 
     story = sub.add_parser("story", help="manage stories")
     story_sub = story.add_subparsers(dest="story_command", required=True)
@@ -9575,7 +9641,7 @@ def build_parser() -> argparse.ArgumentParser:
     story_add.add_argument("--acceptance", action="append")
     story_add.add_argument("--status", choices=STORY_STATUSES, default="ready")
     story_add.add_argument("--force", action="store_true")
-    story_add.set_defaults(func=cmd_story_add)
+    story_add.set_defaults(func=cmd_story_add, record_guidance=True, emit_guidance=True)
 
     story_list = story_sub.add_parser("list", help="list stories")
     story_list.add_argument("--root", default=".")
@@ -9591,19 +9657,19 @@ def build_parser() -> argparse.ArgumentParser:
     story_import.add_argument("--root", default=".")
     story_import.add_argument("--file", required=True)
     story_import.add_argument("--force", action="store_true")
-    story_import.set_defaults(func=cmd_story_import)
+    story_import.set_defaults(func=cmd_story_import, record_guidance=True)
 
     story_start = story_sub.add_parser("start", help="start a story")
     story_start.add_argument("--root", default=".")
     story_start.add_argument("--id", required=True)
     story_start.add_argument("--force", action="store_true")
-    story_start.set_defaults(func=cmd_story_start)
+    story_start.set_defaults(func=cmd_story_start, record_guidance=True, emit_guidance=True)
 
     story_review = story_sub.add_parser("review", help="move a story to review")
     story_review.add_argument("--root", default=".")
     story_review.add_argument("--id", required=True)
     story_review.add_argument("--force", action="store_true")
-    story_review.set_defaults(func=cmd_story_review)
+    story_review.set_defaults(func=cmd_story_review, record_guidance=True, emit_guidance=True)
 
     story_done = story_sub.add_parser("done", help="mark a story done")
     story_done.add_argument("--root", default=".")
@@ -9612,14 +9678,14 @@ def build_parser() -> argparse.ArgumentParser:
     story_done.add_argument("--evidence")
     story_done.add_argument("--check", action="append")
     story_done.add_argument("--force", action="store_true")
-    story_done.set_defaults(func=cmd_story_done)
+    story_done.set_defaults(func=cmd_story_done, record_guidance=True, emit_guidance=True)
 
     story_block = story_sub.add_parser("block", help="block a story")
     story_block.add_argument("--root", default=".")
     story_block.add_argument("--id", required=True)
     story_block.add_argument("--reason", required=True)
     story_block.add_argument("--force", action="store_true")
-    story_block.set_defaults(func=cmd_story_block)
+    story_block.set_defaults(func=cmd_story_block, record_guidance=True, emit_guidance=True)
 
     review = sub.add_parser("review", help="manage durable review findings")
     review_sub = review.add_subparsers(dest="review_command", required=True)
@@ -9632,7 +9698,7 @@ def build_parser() -> argparse.ArgumentParser:
     review_add.add_argument("--summary", required=True)
     review_add.add_argument("--source")
     review_add.add_argument("--force", action="store_true")
-    review_add.set_defaults(func=cmd_review_add)
+    review_add.set_defaults(func=cmd_review_add, record_guidance=True, emit_guidance=True)
     review_list = review_sub.add_parser("list", help="list review findings")
     review_list.add_argument("--root", default=".")
     review_list.add_argument("--story")
@@ -9643,12 +9709,12 @@ def build_parser() -> argparse.ArgumentParser:
     review_resolve.add_argument("--id", required=True)
     review_resolve.add_argument("--resolution", required=True)
     review_resolve.add_argument("--evidence")
-    review_resolve.set_defaults(func=cmd_review_resolve)
+    review_resolve.set_defaults(func=cmd_review_resolve, record_guidance=True, emit_guidance=True)
     review_waive = review_sub.add_parser("waive", help="waive a review finding")
     review_waive.add_argument("--root", default=".")
     review_waive.add_argument("--id", required=True)
     review_waive.add_argument("--reason", required=True)
-    review_waive.set_defaults(func=cmd_review_waive)
+    review_waive.set_defaults(func=cmd_review_waive, record_guidance=True, emit_guidance=True)
 
     input_cmd = sub.add_parser("input", help="manage durable human input")
     input_sub = input_cmd.add_subparsers(dest="input_command", required=True)
@@ -9661,7 +9727,7 @@ def build_parser() -> argparse.ArgumentParser:
     input_add.add_argument("--required", action="store_true", default=True)
     input_add.add_argument("--optional", dest="required", action="store_false")
     input_add.add_argument("--force", action="store_true")
-    input_add.set_defaults(func=cmd_input_add)
+    input_add.set_defaults(func=cmd_input_add, record_guidance=True, emit_guidance=True)
     input_list = input_sub.add_parser("list", help="list human input requests")
     input_list.add_argument("--root", default=".")
     input_list.add_argument("--status", choices=HUMAN_INPUT_STATUSES)
@@ -9672,13 +9738,13 @@ def build_parser() -> argparse.ArgumentParser:
     input_answer.add_argument("--answer", required=True)
     input_answer.add_argument("--next-action")
     input_answer.add_argument("--force", action="store_true")
-    input_answer.set_defaults(func=cmd_input_answer)
+    input_answer.set_defaults(func=cmd_input_answer, record_guidance=True, emit_guidance=True)
     input_defer = input_sub.add_parser("defer", help="defer a human input request")
     input_defer.add_argument("--root", default=".")
     input_defer.add_argument("--id", required=True)
     input_defer.add_argument("--reason", required=True)
     input_defer.add_argument("--next-action")
-    input_defer.set_defaults(func=cmd_input_defer)
+    input_defer.set_defaults(func=cmd_input_defer, record_guidance=True, emit_guidance=True)
 
     evidence = sub.add_parser("evidence", help="write evidence")
     evidence_sub = evidence.add_subparsers(dest="evidence_command", required=True)
@@ -9689,7 +9755,7 @@ def build_parser() -> argparse.ArgumentParser:
     evidence_add.add_argument("--summary", required=True)
     evidence_add.add_argument("--story")
     evidence_add.add_argument("--check", action="append")
-    evidence_add.set_defaults(func=cmd_evidence_add)
+    evidence_add.set_defaults(func=cmd_evidence_add, record_guidance=True)
 
     module = sub.add_parser("module", help="inspect runtime modules")
     module_sub = module.add_subparsers(dest="module_command", required=True)
@@ -9715,7 +9781,7 @@ def build_parser() -> argparse.ArgumentParser:
     module_create.add_argument("--phase-span", action="append")
     module_create.add_argument("--workflow", action="append")
     module_create.add_argument("--force", action="store_true")
-    module_create.set_defaults(func=cmd_module_create)
+    module_create.set_defaults(func=cmd_module_create, record_guidance=True)
 
     project = sub.add_parser("project", help="create and list method projects")
     project_sub = project.add_subparsers(dest="project_command", required=True)
@@ -9767,7 +9833,7 @@ def build_parser() -> argparse.ArgumentParser:
     example_create.add_argument("--force", action="store_true")
     example_create.add_argument("--no-project-guidance", action="store_true")
     example_create.add_argument("--max-chars", type=int, default=8000)
-    example_create.set_defaults(func=cmd_example_create)
+    example_create.set_defaults(func=cmd_example_create, record_guidance=True, emit_guidance=True)
 
     workflow = sub.add_parser("workflow", help="inspect and validate workflow references")
     workflow_sub = workflow.add_subparsers(dest="workflow_command", required=True)
@@ -9791,7 +9857,7 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_create.add_argument("--handoff", action="append")
     workflow_create.add_argument("--eval-query")
     workflow_create.add_argument("--force", action="store_true")
-    workflow_create.set_defaults(func=cmd_workflow_create)
+    workflow_create.set_defaults(func=cmd_workflow_create, record_guidance=True)
 
     builder = sub.add_parser("builder", help="scaffold and validate local Forge Method extensions")
     builder_sub = builder.add_subparsers(dest="builder_command", required=True)
@@ -9812,7 +9878,7 @@ def build_parser() -> argparse.ArgumentParser:
     builder_scaffold.add_argument("--expected")
     builder_scaffold.add_argument("--eval-kind", choices=EVAL_KINDS, default="artifact-exists")
     builder_scaffold.add_argument("--force", action="store_true")
-    builder_scaffold.set_defaults(func=cmd_builder_scaffold)
+    builder_scaffold.set_defaults(func=cmd_builder_scaffold, record_guidance=True)
     builder_validate = builder_sub.add_parser("validate", help="validate generated local method extensions")
     builder_validate.add_argument("--root", default=".")
     builder_validate.set_defaults(func=cmd_builder_validate)
@@ -9830,7 +9896,7 @@ def build_parser() -> argparse.ArgumentParser:
     config_index.add_argument("--root", default=".")
     config_index.add_argument("--json", action="store_true")
     config_index.add_argument("--write", action="store_true")
-    config_index.set_defaults(func=cmd_config_index)
+    config_index.set_defaults(func=cmd_config_index, record_guidance=True)
 
     artifact = sub.add_parser("artifact", help="manage artifacts")
     artifact_sub = artifact.add_subparsers(dest="artifact_command", required=True)
@@ -9843,7 +9909,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_add.add_argument("--lifecycle", choices=ARTIFACT_LIFECYCLES, default="durable")
     artifact_add.add_argument("--story")
     artifact_add.add_argument("--eval", action="store_true")
-    artifact_add.set_defaults(func=cmd_artifact_add)
+    artifact_add.set_defaults(func=cmd_artifact_add, record_guidance=True)
 
     artifact_capture = artifact_sub.add_parser("capture", help="capture an artifact result and optionally delete it")
     artifact_capture.add_argument("--root", default=".")
@@ -9852,7 +9918,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_capture.add_argument("--story")
     artifact_capture.add_argument("--evidence")
     artifact_capture.add_argument("--delete", action="store_true")
-    artifact_capture.set_defaults(func=cmd_artifact_capture)
+    artifact_capture.set_defaults(func=cmd_artifact_capture, record_guidance=True)
 
     artifact_verify = artifact_sub.add_parser("verify", help="verify artifact files and summaries")
     artifact_verify.add_argument("--root", default=".")
@@ -9867,7 +9933,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_link.add_argument("--root", default=".")
     artifact_link.add_argument("--path", required=True)
     artifact_link.add_argument("--story", required=True)
-    artifact_link.set_defaults(func=cmd_artifact_link_story)
+    artifact_link.set_defaults(func=cmd_artifact_link_story, record_guidance=True)
 
     eval_cmd = sub.add_parser("eval", help="manage local runtime evals")
     eval_sub = eval_cmd.add_subparsers(dest="eval_command", required=True)
@@ -9878,13 +9944,13 @@ def build_parser() -> argparse.ArgumentParser:
     eval_add.add_argument("--target", required=True)
     eval_add.add_argument("--query", required=True)
     eval_add.add_argument("--expected")
-    eval_add.set_defaults(func=cmd_eval_add)
+    eval_add.set_defaults(func=cmd_eval_add, record_guidance=True)
     eval_list = eval_sub.add_parser("list", help="list evals")
     eval_list.add_argument("--root", default=".")
     eval_list.set_defaults(func=cmd_eval_list)
     eval_run = eval_sub.add_parser("run", help="run evals")
     eval_run.add_argument("--root", default=".")
-    eval_run.set_defaults(func=cmd_eval_run)
+    eval_run.set_defaults(func=cmd_eval_run, record_guidance=True)
 
     checkpoint = sub.add_parser("checkpoint", help="write durable progress memory")
     checkpoint.add_argument("--root", default=".")
@@ -9898,7 +9964,7 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint.add_argument("--next-action")
     checkpoint.add_argument("--max-chars", type=int, default=8000)
     checkpoint.add_argument("--no-context-pack", action="store_true")
-    checkpoint.set_defaults(func=cmd_checkpoint)
+    checkpoint.set_defaults(func=cmd_checkpoint, record_guidance=True)
 
     context = sub.add_parser("context", help="context pack operations")
     context_sub = context.add_subparsers(dest="context_command", required=True)
@@ -9906,13 +9972,13 @@ def build_parser() -> argparse.ArgumentParser:
     context_pack.add_argument("--root", default=".")
     context_pack.add_argument("--out")
     context_pack.add_argument("--max-chars", type=int, default=8000)
-    context_pack.set_defaults(func=cmd_context_pack)
+    context_pack.set_defaults(func=cmd_context_pack, record_guidance=True)
     context_plan = context_sub.add_parser("plan", help="write a machine-readable context load plan")
     context_plan.add_argument("--root", default=".")
     context_plan.add_argument("--out")
     context_plan.add_argument("--max-chars", type=int, default=12000)
     context_plan.add_argument("--json", action="store_true")
-    context_plan.set_defaults(func=cmd_context_plan)
+    context_plan.set_defaults(func=cmd_context_plan, record_guidance=True)
     context_health = context_sub.add_parser("health", help="inspect context budget and handoff risk")
     context_health.add_argument("--root", default=".")
     context_health.add_argument("--max-chars", type=int, default=12000)
@@ -9924,7 +9990,7 @@ def build_parser() -> argparse.ArgumentParser:
     context_recover.add_argument("--max-chars", type=int, default=8000)
     context_recover.add_argument("--checkpoints", type=int, default=5)
     context_recover.add_argument("--compact", action="store_true")
-    context_recover.set_defaults(func=cmd_context_recover)
+    context_recover.set_defaults(func=cmd_context_recover, record_guidance=True)
 
     audit = sub.add_parser("audit", help="validate project state")
     audit.add_argument("--root", default=".")
@@ -9937,14 +10003,14 @@ def build_parser() -> argparse.ArgumentParser:
     gate.add_argument("--summary")
     gate.add_argument("--context-pack", action="store_true")
     gate.add_argument("--max-chars", type=int, default=8000)
-    gate.set_defaults(func=cmd_gate)
+    gate.set_defaults(func=cmd_gate, record_guidance=True)
 
     ready = sub.add_parser("ready", help="mark project ready for use")
     ready.add_argument("--root", default=".")
     ready.add_argument("--summary", required=True)
     ready.add_argument("--check", action="append")
     ready.add_argument("--force", action="store_true")
-    ready.set_defaults(func=cmd_ready)
+    ready.set_defaults(func=cmd_ready, record_guidance=True, emit_guidance=True)
 
     release = sub.add_parser("release", help="plan release version and validation")
     release_sub = release.add_subparsers(dest="release_command", required=True)
@@ -9967,7 +10033,7 @@ def build_parser() -> argparse.ArgumentParser:
     handoff.add_argument("--root", default=".")
     handoff.add_argument("--summary", required=True)
     handoff.add_argument("--next-action")
-    handoff.set_defaults(func=cmd_handoff)
+    handoff.set_defaults(func=cmd_handoff, record_guidance=True)
 
     doctor = sub.add_parser("doctor", help="inspect runtime/project detection and local toolchain readiness")
     doctor.add_argument("--root", default=".")
@@ -9982,7 +10048,13 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    result = args.func(args)
+    record_guidance = getattr(args, "record_guidance", False)
+    if getattr(args, "command", "") == "config" and getattr(args, "config_command", "") == "index" and not getattr(args, "write", False):
+        record_guidance = False
+    if result == 0 and record_guidance:
+        record_post_command_guidance(resolve_root(args.root), emit=getattr(args, "emit_guidance", False))
+    return result
 
 
 if __name__ == "__main__":

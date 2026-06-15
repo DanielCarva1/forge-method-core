@@ -84,6 +84,7 @@ The full parity goal is complete only when every audit row is `translated`, `str
 P0 through P1.7 are closed:
 
 - Help/Next-Step Oracle: implemented and validated.
+- Post-command Help Oracle: implemented after 1.29.0 so progress-changing commands record compact next-workflow guidance in `ledger.ndjson`, and interactive mutations print the next required workflow, alternatives, and stale-state guard.
 - Human facilitation coverage gate: implemented and validated.
 - PRD/UX/Quick Dev depth: implemented with workflows, packs, templates, routes, and fixtures.
 - Story lifecycle proof: implemented with `story-creation`, decision-source guard, and mechanical no-procedural-confirmation tests.
@@ -418,11 +419,11 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 ## Immediate Next Step
 
-Next implementation batch: release/version planning after P1.7 final validation is recorded.
+Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release.
 
 Do not tag or publish from a partial test run. Start from this plan:
 
-1. run the source, runtime, fast, and install validation ladder;
-2. record evidence, checkpoint, state, and ledger for P1.7;
-3. review the Unreleased changelog as one coherent version batch;
-4. decide whether to tag/publish or continue real-use transcript hardening first.
+1. collect or synthesize focused transcripts for the next partial row;
+2. add the smallest guidance/runtime/packs change that makes the transcript route and feel correct;
+3. prove it with parity replay, unit coverage, runtime smoke, and install smoke when packaging is touched;
+4. record evidence, checkpoint, state, and changelog notes without claiming full parity until the completion audit passes.

@@ -74,7 +74,7 @@ The product direction is therefore:
 
 | BMAD capability family | Forge equivalent now | Parity | Gap | Forge translation required |
 | --- | --- | --- | --- | --- |
-| `bmad-help` project-aware guidance | `preflight`, `start`, `resume`, `guide`, Guidance Engine | partial | Guide exists, but "runs after every workflow and always recommends the next required workflow" is not enforced as a universal runtime invariant. | Add end-of-workflow guidance contract: every state-changing command returns/records next required workflow, alternatives, and stale-state guard. |
+| `bmad-help` project-aware guidance | `preflight`, `start`, `resume`, `guide`, Guidance Engine, post-command Help Oracle ledger | translated | Post-command guidance now records the next required workflow, alternatives, and stale-state guard for progress-changing commands; interactive mutations also print it. | Keep real-use transcript hardening focused on places where the agent still ignores the emitted or recorded next workflow. |
 | Workflow status / workflow map | `.forge-method/state.yaml`, `sprint.yaml`, `status`, `snapshot`, `context plan` | strong | Human explanation can still be dry compared to BMAD Help. | Keep compact JSON, improve human summaries and status affordances. |
 | Planning tracks: Quick Flow / Method / Enterprise | Forge modules plus `track-decision` | translated/partial | P1.4 adds a route decision artifact and required workflow map, but deeper track-specific doc trees can still improve. | Expand track-specific required/optional docs as future module depth is translated. |
 | Analysis: brainstorming | `brainstorming` workflow + facilitation pack | strong-ish | Need transcript tests for richer guided divergence, not just route. | Add fixtures for option generation, constraint capture, rejected directions. |
@@ -179,7 +179,7 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 
 | Source token | Forge-native target | Status |
 | --- | --- | --- |
-| `bmad-help` | `preflight`, `start`, `resume`, `guide`, Guidance Engine | partial |
+| `bmad-help` | `preflight`, `start`, `resume`, `guide`, Guidance Engine, post-command Help Oracle | translated |
 | `bmad-brainstorming` | `brainstorming` | strong-ish |
 | `bmad-market-research` | `market-scan` | strong-ish |
 | `bmad-domain-research` | `domain-scan` | strong-ish |
@@ -362,6 +362,6 @@ The full objective is complete only when:
 
 ## Current status
 
-This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.7 are now implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. P2 scope decisions are recorded in `.forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md`. This is not full goal completion: release/version planning and real-use transcript hardening still remain.
+This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.7 are implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. Forge Method 1.29.0 is published, and the post-command Help Oracle hardening adds a runtime-level record/emit contract for progress-changing commands. P2 scope decisions are recorded in `.forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md`. This is not full goal completion: real-use transcript hardening and the remaining partial/strong-ish rows still need proof.
 
-Immediate next step: validate the closure utilities in source and installed skill contexts, then run release planning for a coherent versioned batch.
+Immediate next step: continue real-use transcript hardening against the remaining partial/strong-ish rows, starting with human guidance depth where the runtime routes correctly but the conversation still feels thin.
