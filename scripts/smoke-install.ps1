@@ -14,6 +14,48 @@ function Run {
   }
 }
 
+function Run-Capture {
+  param(
+    [Parameter(Mandatory=$true)]
+    [string]$Exe,
+    [Parameter(ValueFromRemainingArguments=$true)]
+    [string[]]$Args
+  )
+  $output = & $Exe @Args 2>&1 | Out-String
+  if ($LASTEXITCODE -ne 0) {
+    throw "$Exe failed with exit code ${LASTEXITCODE}: $($Args -join ' ')`n$output"
+  }
+  return $output
+}
+
+function Assert-Contains {
+  param(
+    [Parameter(Mandatory=$true)]
+    [string]$Text,
+    [Parameter(Mandatory=$true)]
+    [string]$Expected,
+    [Parameter(Mandatory=$true)]
+    [string]$Label
+  )
+  if (-not $Text.Contains($Expected)) {
+    throw "$Label did not contain expected text: $Expected`n$Text"
+  }
+}
+
+function Assert-NotContains {
+  param(
+    [Parameter(Mandatory=$true)]
+    [string]$Text,
+    [Parameter(Mandatory=$true)]
+    [string]$Unexpected,
+    [Parameter(Mandatory=$true)]
+    [string]$Label
+  )
+  if ($Text.Contains($Unexpected)) {
+    throw "$Label contained unexpected text: $Unexpected`n$Text"
+  }
+}
+
 function Resolve-Python {
   if ($env:PYTHON) {
     return $env:PYTHON
@@ -93,6 +135,10 @@ Run $pythonExe $installedRuntime preflight --root $tmp
 Run $pythonExe $installedRuntime reload --root $tmp
 Run $pythonExe $installedRuntime resume --root $tmp
 Run $pythonExe $installedRuntime start --root $tmp
+$installedGuideText = Run-Capture $pythonExe $installedRuntime guide --root $tmp --question "quero fazer brainstorm de alternativas para este produto"
+Assert-Contains $installedGuideText "Guidance: Let's use ``brainstorming`` as the guided path." "installed guide brainstorm output"
+Assert-Contains $installedGuideText "First question:" "installed guide brainstorm output"
+Assert-NotContains $installedGuideText "Prompt: Let's use ``brainstorming``" "installed guide brainstorm output"
 Run $pythonExe $installedRuntime snapshot --root $tmp
 Run $pythonExe $installedRuntime agent recommend --root $tmp
 Run $pythonExe $installedRuntime workflow create --root $tmp --id install-flow --title "Install Flow" --trigger "installed runtime available" --input "installed runtime" --step "validate installed runtime" --output "install proof" --done "install proof exists" --blocked "runtime missing" --handoff "preserve install result" --eval-query "prove install flow"

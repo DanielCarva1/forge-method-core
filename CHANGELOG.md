@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- require install smoke to assert installed `guide` output exposes `Guidance:` and `First question:` lines for guided starts
 - surface guided first questions as dedicated non-JSON `guide` output lines and render mechanical-build prompts as autonomous `Status:` text
 - add workflow-specific first questions for guided replay coverage and require mechanical-build prompts to use autonomous status/evidence wording
 - require parity replay to validate human-facing facilitated prompts with concrete first questions and compact `Signals:`/`Route:` reason summaries
