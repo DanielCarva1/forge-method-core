@@ -4,41 +4,35 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: v1.29.0-release-prepared
-- workflow: release-readiness
+- status: v1.29.0-published
+- workflow: runtime-builder
 - active_story: <none>
-- next_action: Run clean release check after commit, tag v1.29.0 if clean, then continue real-use transcript hardening for remaining partial parity rows.
+- next_action: Continue real-use transcript hardening for remaining partial parity rows; do not claim full guided-flow parity until the audit rows and live transcripts prove it.
 
 ## Latest Checkpoint
 
-# Forge Method 1.29.0 release prepared
+# Forge Method 1.29.0 published
 
-- created_at: 2026-06-15T03:01:06+00:00
+- created_at: 2026-06-15T03:06:06+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: v1.29.0-release-prepared
-- workflow: release-readiness
+- status: v1.29.0-published
+- workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Prepared Forge Method Core v1.29.0 as a coherent guided workflow depth release batch. Bumped runtime/package/listing/docs metadata, moved Unreleased changelog entries into 1.29.0, added release notes, fixed launch-ops example seeding with a validation-map decision source, and validated the package with full release verification.
+Published Forge Method Core v1.29.0 as the guided workflow depth release batch. The release commit is tagged v1.29.0, origin has the tag, branch codex/script-audit-optimization is pushed, and clone install smoke passed from the published tag.
 
 ## Decisions
 
-- Ship this as an intermediate release batch; do not claim full BMAD/Forge parity completion while audit rows still show partial/deferred surfaces.
-- Build/verify example projects must include a decision-source artifact instead of weakening the implementation-ready story guard.
+- Treat 1.29.0 as an intermediate release batch, not final guided-flow parity completion.
+- Return the runtime state to 6-evolve/runtime-builder for real-use transcript hardening and remaining partial parity rows.
 
 ## Checks
 
-- python -m unittest discover -s tests: 70 tests OK
-- scripts/verify-onboarding-assets.py: passed
-- workflow validate: passed
-- parity replay: 58/58 passed
-- verify-all.ps1: passed
-- artifact verify: passed
-- audit: passed
-- config validate: passed
+- git ls-remote --tags origin v1.29.0: found
+- smoke-plugin-clone-install.ps1 -Ref v1.29.0 -ExpectedVersion 1.29.0: passed
 
 ## Failed Checks
 
@@ -46,27 +40,15 @@ Prepared Forge Method Core v1.29.0 as a coherent guided workflow depth release b
 
 ## Touched Files
 
-- VERSION
-- .codex-plugin/plugin.json
-- skills/forge-method/scripts/forge_method_runtime.py
-- tests/test_runtime.py
-- CHANGELOG.md
-- README.md
-- docs/00-quickstart.md
-- docs/04-distribution.md
-- assets/marketplace/listing.json
-- release-notes/latest.json
-- release-notes/1.29.0.md
+- .forge-method/state.yaml
 
 ## Artifacts
 
-- .forge-method/evidence/20260615-030025-validation-forge-method-1-29-0-release-validation.md
-- release-notes/1.29.0.md
-- CHANGELOG.md
+- .forge-method/evidence/20260615-030535-validation-forge-method-1-29-0-published-clone-smoke.md
 
 ## Next Action
 
-Run clean release check after commit, tag v1.29.0 if clean, then continue real-use transcript hardening for remaining partial parity rows.
+Continue real-use transcript hardening for remaining partial parity rows; do not claim full guided-flow parity until the audit rows and live transcripts prove it.
 
 ## Recovery Signals
 
@@ -76,11 +58,10 @@ Run clean release check after commit, tag v1.29.0 if clean, then continue real-u
 
 ### Touched Files
 
-- .forge-method/artifacts/20260615-p2-scope-decisions-and-polish-plan.md
-- CHANGELOG.md
 - skills/forge-method/scripts/forge_method_runtime.py
 - tests/test_runtime.py
 - docs/adr/0008-guidance-engine.md
+- CHANGELOG.md
 - skills/forge-method/catalog/workflows.json
 - skills/forge-method/fixtures/guidance-parity-replay.json
 - skills/forge-method/references/workflow-*.md
@@ -88,6 +69,7 @@ Run clean release check after commit, tag v1.29.0 if clean, then continue real-u
 - skills/forge-method/modules/*.yaml
 - .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md
 - .forge-method/artifacts/20260613-systematic-parity-plan.md
+- .forge-method/context/capability-index.json
 
 ## Open Human Inputs
 
@@ -104,11 +86,11 @@ Run clean release check after commit, tag v1.29.0 if clean, then continue real-u
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260615-013149-validation-p1-6-test-architecture-enterprise-depth-validati.md
 - .forge-method/evidence/20260615-013605-planning-p2-scope-decisions-recorded.md
 - .forge-method/evidence/20260615-015628-validation-guidance-human-experience-polish-validation.md
 - .forge-method/evidence/20260615-023334-validation-p1-7-parity-closure-utilities-validation.md
 - .forge-method/evidence/20260615-030025-validation-forge-method-1-29-0-release-validation.md
+- .forge-method/evidence/20260615-030535-validation-forge-method-1-29-0-published-clone-smoke.md
 
 ## Recent Artifacts
 

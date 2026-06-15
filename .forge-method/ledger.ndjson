@@ -390,3 +390,7 @@
 {"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "v1.29.0-release-prepared"}, "ts": "2026-06-15T03:00:32+00:00"}
 {"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260615-030106-forge-method-1-29-0-release-prepared.md"}, "ts": "2026-06-15T03:01:06+00:00"}
 {"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-15T03:01:06+00:00"}
+{"event": "evidence.added", "payload": {"kind": "validation", "path": ".forge-method/evidence/20260615-030535-validation-forge-method-1-29-0-published-clone-smoke.md", "story": ""}, "ts": "2026-06-15T03:05:35+00:00"}
+{"event": "state.transitioned", "payload": {"phase": "6-evolve", "status": "v1.29.0-published"}, "ts": "2026-06-15T03:05:42+00:00"}
+{"event": "checkpoint.written", "payload": {"latest": ".forge-method/context/latest-checkpoint.md", "path": ".forge-method/checkpoints/20260615-030606-forge-method-1-29-0-published.md"}, "ts": "2026-06-15T03:06:06+00:00"}
+{"event": "context_pack.written", "payload": {"path": ".forge-method/context/current-pack.md"}, "ts": "2026-06-15T03:06:06+00:00"}
