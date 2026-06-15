@@ -12,19 +12,21 @@ inputs:
   - available test commands
 
 steps:
-  1. identify risk areas
-  2. define automated checks when possible
-  3. define manual inspection checks when automation is unavailable
-  4. attach checks to stories
-  5. define release evidence expectations
+  1. choose quality engagement mode if not already known
+  2. score risks by impact, likelihood, detectability, and late-discovery cost
+  3. map each risk to unit, integration, contract, E2E, NFR, exploratory, review, or manual proof
+  4. define merge, story-done, readiness, and release gates
+  5. record commands, evidence paths, ownership, waivers, and next test workflow
 
 outputs:
   - validation plan
+  - risk proof map
   - story check updates
   - release gate expectations
 
 done_when:
   - every executable story has a validation path
+  - every major risk has proof or waiver
   - release evidence expectations are explicit
   - unavailable automation is documented
 
@@ -33,4 +35,4 @@ blocked_when:
   - required external systems are unavailable
 
 handoff:
-  - preserve check commands, manual checks, and release evidence expectations
+  - preserve engagement mode, risk map, check commands, manual checks, waivers, and release evidence expectations

@@ -4950,7 +4950,25 @@ def detect_guidance_signals(question: str) -> list[str]:
         "confusion": ["nao sei", "não sei", "em duvida", "em dúvida", "what should", "o que fazer", "proximo passo", "próximo passo"],
         "research-needed": ["deep research", "pesquisa profunda", "consultar documentacao", "ler docs", "benchmark"],
         "document-utility": ["index docs", "shard document", "editorial review", "edge case", "spec distillation"],
-        "quality-flow": ["teach me testing"],
+        "quality-flow": [
+            "teach me testing",
+            "quality engagement",
+            "engagement model",
+            "test architecture",
+            "fixture architecture",
+            "quality gate",
+            "gate decision",
+            "missing evidence",
+            "can i deploy",
+            "nfr evidence",
+            "non functional",
+            "test design",
+            "risk assessment",
+            "ci quality",
+            "quality pipeline",
+            "burn in",
+            "selective testing",
+        ],
         "game-flow": [
             "game context",
             "game project context",
@@ -5149,7 +5167,36 @@ def detect_guidance_signals(question: str) -> list[str]:
             "quest",
             "quests",
         },
-        "quality-flow": {"test", "testing", "teste", "qa", "qualidade", "risco", "nfr", "gate", "review"},
+        "quality-flow": {
+            "test",
+            "testing",
+            "teste",
+            "qa",
+            "qualidade",
+            "risco",
+            "risk",
+            "nfr",
+            "gate",
+            "review",
+            "coverage",
+            "cobertura",
+            "traceability",
+            "traceabilidade",
+            "waiver",
+            "evidence",
+            "evidencia",
+            "fixture",
+            "fixtures",
+            "framework",
+            "harness",
+            "ci",
+            "pipeline",
+            "atdd",
+            "automation",
+            "automacao",
+            "automate",
+            "auditoria",
+        },
         "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness"},
         "persona-lens": {"lens", "lente", "persona", "coach", "perspectiva", "visao", "pm", "architect", "arquiteto", "analyst", "analista", "ux", "qa", "writer", "storyteller"},
         "story-flow": {"backlog", "epic", "epics", "sprint", "stories", "story", "historia", "historias"},
@@ -5407,23 +5454,156 @@ def routed_quality_workflow(question: str) -> str:
     normalized = normalize_text(question)
     if {"teach", "ensina", "ensinar", "explica", "explicar", "learn", "aprender"} & tokens or "teach me testing" in normalized:
         return "teach-testing"
-    if {"traceability", "traceabilidade", "matrix", "matriz"} & tokens:
-        return "traceability-gate"
-    if {"nfr", "nonfunctional", "non-functional"} & tokens or "non functional" in normalized:
-        return "nfr-evidence-audit"
-    if {"atdd", "acceptance"} & tokens or "acceptance test" in normalized:
+    if (
+        {"engagement", "modelo", "mode", "modo", "posture", "postura"} & tokens
+        or "quality engagement" in normalized
+        or "engagement model" in normalized
+        or "which quality workflow" in normalized
+        or "do not know if we need" in normalized
+        or "nao sei se precisamos" in normalized
+        or "não sei se precisamos" in normalized
+    ):
+        return "test-engagement-model"
+    if {"review", "revisao"} & tokens or "review the tests" in normalized or "test review" in normalized:
+        return "test-review"
+    if {"atdd", "acceptance"} & tokens or "acceptance test" in normalized or "test design" in normalized:
         return "atdd-plan"
-    if {"ci", "pipeline"} & tokens:
+    if (
+        {"traceability", "traceabilidade", "matrix", "matriz", "coverage", "cobertura", "waiver"} & tokens
+        or "gate decision" in normalized
+        or "quality gate" in normalized
+        or "missing evidence" in normalized
+        or "can i deploy" in normalized
+    ):
+        return "traceability-gate"
+    if {"nfr", "nonfunctional", "non-functional"} & tokens or "non functional" in normalized or "nfr evidence" in normalized:
+        return "nfr-evidence-audit"
+    if {"ci", "pipeline", "burnin", "burn-in"} & tokens or "ci quality" in normalized or "selective testing" in normalized:
         return "ci-quality-pipeline"
     if {"automation", "automacao", "automate", "automatizar"} & tokens:
         return "test-automation"
-    if {"framework", "harness"} & tokens:
+    if {"framework", "harness", "fixture", "fixtures"} & tokens or "fixture architecture" in normalized:
         return "test-framework"
-    if {"review", "revisao", "audit", "auditoria"} & tokens:
+    if {"audit", "auditoria"} & tokens:
         return "test-review"
-    if {"engagement", "modelo"} & tokens:
+    if {"strategy", "estrategia", "design", "risk", "risco"} & tokens or "risk assessment" in normalized:
+        return "test-strategy"
+    if {"quality", "qualidade", "qa"} & tokens:
         return "test-engagement-model"
     return "test-strategy"
+
+
+def quality_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "teach-testing":
+        return (
+            "run teach-testing to explain the smallest useful testing concept with project examples and route to the next quality workflow",
+            "I should teach using your project, then turn the lesson into a concrete quality next step.",
+            guidance_alternatives(
+                ("test-engagement-model", "use when the next quality mode is still unclear"),
+                ("test-strategy", "use when risk and proof need planning"),
+                ("test-framework", "use when the lesson should become a harness decision"),
+            ),
+        )
+    if workflow_id == "test-engagement-model":
+        return (
+            "run test-engagement-model to choose advice, design, implementation, review, audit, or gate before writing quality artifacts",
+            "I should classify the quality job first so we do not produce the wrong kind of testing artifact.",
+            guidance_alternatives(
+                ("test-strategy", "use when the risk/proof plan is already the target"),
+                ("test-framework", "use when infrastructure and fixtures are the blocker"),
+                ("traceability-gate", "use when release evidence is already the question"),
+            ),
+        )
+    if workflow_id == "test-framework":
+        return (
+            "run test-framework to define test layers, fixture architecture, data strategy, commands, and first risk checks",
+            "I should separate reusable helpers, framework wrappers, fixture composition, cleanup, and commands before scaffolding tests.",
+            guidance_alternatives(
+                ("ci-quality-pipeline", "use when CI wiring is the blocker"),
+                ("atdd-plan", "use when story examples should drive the checks"),
+                ("test-automation", "use when the framework exists and coverage should expand"),
+            ),
+        )
+    if workflow_id == "ci-quality-pipeline":
+        return (
+            "run ci-quality-pipeline to map local, fast, full, release, and investigation commands to CI jobs and gate policy",
+            "I should make CI enforce the right checks without hiding missing local parity or release evidence.",
+            guidance_alternatives(
+                ("test-framework", "use when commands or harness are not durable yet"),
+                ("traceability-gate", "use when CI evidence must feed a release decision"),
+                ("release-readiness", "use when the release checklist is the main work"),
+            ),
+        )
+    if workflow_id == "atdd-plan":
+        return (
+            "run atdd-plan to turn acceptance criteria into examples, edge cases, risk coverage, and proof paths",
+            "I should make behavior observable before implementation or automation starts.",
+            guidance_alternatives(
+                ("test-automation", "use when accepted examples should become repeatable checks"),
+                ("story-creation", "use when the story itself is not implementation-ready"),
+                ("test-strategy", "use when broader risk planning is missing"),
+            ),
+        )
+    if workflow_id == "test-automation":
+        return (
+            "run test-automation to choose repeatable checks by risk, fixtures, assertions, commands, evidence, and manual remainders",
+            "I should automate the checks that reduce meaningful risk and leave manual gaps explicit.",
+            guidance_alternatives(
+                ("atdd-plan", "use when examples are not clear yet"),
+                ("test-review", "use when tests exist but confidence is unknown"),
+                ("traceability-gate", "use when automation evidence must support release"),
+            ),
+        )
+    if workflow_id == "test-review":
+        return (
+            "run test-review to compare tests against acceptance, risks, evidence gaps, brittle patterns, and gate recommendation",
+            "I should review quality by risk and evidence, not by whether the test suite merely passes.",
+            guidance_alternatives(
+                ("test-automation", "use when gaps should immediately become checks"),
+                ("nfr-evidence-audit", "use when non-functional claims are the concern"),
+                ("traceability-gate", "use when the review must become a release decision"),
+            ),
+        )
+    if workflow_id == "nfr-evidence-audit":
+        return (
+            "run nfr-evidence-audit to map NFR claims to required evidence, gaps, waivers, release impact, and gate updates",
+            "I should not let performance, security, reliability, accessibility, or compliance claims ship without evidence or waiver.",
+            guidance_alternatives(
+                ("test-strategy", "use when NFR proof still needs planning"),
+                ("test-review", "use when existing tests/evidence need critique"),
+                ("traceability-gate", "use when NFR status feeds release gate"),
+            ),
+        )
+    if workflow_id == "traceability-gate":
+        return (
+            "run traceability-gate to map requirements and risks to checks/evidence, then decide pass, concerns, fail, missing evidence, or waived",
+            "I should distinguish planned coverage from release evidence before making a gate decision.",
+            guidance_alternatives(
+                ("nfr-evidence-audit", "use when NFR claims need evidence status first"),
+                ("test-review", "use when the test suite itself needs critique"),
+                ("release-readiness", "use after the gate decision is ready to consume"),
+            ),
+        )
+    return (
+        "run test-strategy to map risks to proof levels, gates, commands, ownership, evidence paths, and waivers",
+        "I should convert quality concerns into risk-based proof before implementation or release.",
+        guidance_alternatives(
+            ("test-engagement-model", "use when the quality mode is ambiguous"),
+            ("test-framework", "use when harness and fixture architecture are the blocker"),
+            ("traceability-gate", "use when release depends on evidence mapping"),
+        ),
+    )
+
+
+def is_strong_game_quality_intent(question: str) -> bool:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    return bool(
+        {"game", "jogo", "player", "rpg", "gdd", "godot", "unity", "unreal", "phaser"} & tokens
+        or "game qa" in normalized
+        or "game review" in normalized
+        or "playable slice" in normalized
+    )
 
 
 def routed_product_workflow(question: str) -> str:
@@ -6225,6 +6405,11 @@ def build_guidance_decision(
             ("reality-evidence-gate", "filter impossible or risky promises"),
         )
         reason = "The message asks for ideas, options, or exploration."
+    elif has_question and "quality-flow" in signal_set and not is_strong_game_quality_intent(question):
+        classification = "quality-flow"
+        recommended_workflow = routed_quality_workflow(question)
+        recommended_action, human_prompt, alternatives = quality_guidance_text(recommended_workflow)
+        reason = "The message is primarily about quality, risk, review, evidence, fixture architecture, CI, or test architecture."
     elif has_question and "document-utility" in signal_set:
         classification = "document-utility"
         recommended_workflow = routed_document_workflow(question)
@@ -6299,13 +6484,7 @@ def build_guidance_decision(
     elif has_question and "quality-flow" in signal_set:
         classification = "quality-flow"
         recommended_workflow = routed_quality_workflow(question)
-        recommended_action = f"run {recommended_workflow} to produce quality evidence before implementation or release"
-        human_prompt = "I should classify the quality engagement and risks before writing tests."
-        alternatives = guidance_alternatives(
-            ("test-engagement-model", "when the quality mode is ambiguous"),
-            ("test-strategy", "when risks and checks need the broad plan first"),
-            ("traceability-gate", "when release depends on requirement/test/evidence mapping"),
-        )
+        recommended_action, human_prompt, alternatives = quality_guidance_text(recommended_workflow)
         reason = "The message is primarily about quality, risk, review, or test architecture."
     elif has_question and "builder-flow" in signal_set:
         classification = "builder-flow"

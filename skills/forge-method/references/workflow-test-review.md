@@ -13,16 +13,18 @@ inputs:
 steps:
   1. compare tests against acceptance and risk
   2. identify missing checks, weak assertions, and false confidence
-  3. classify findings by severity
-  4. recommend fix, waiver, or gate decision
+  3. identify brittle/flaky patterns and evidence gaps
+  4. classify findings by severity and recommend fix, waiver, or gate decision
 
 outputs:
   - test review findings
+  - quality score
   - gap list
   - gate recommendation
 
 done_when:
   - test gaps are explicit
+  - weak assertions or brittle patterns are named
   - severity and recommended action are recorded
   - gate recommendation is clear
 
@@ -31,4 +33,4 @@ blocked_when:
   - tests or acceptance criteria are unavailable
 
 handoff:
-  - preserve findings, severity, commands reviewed, and gate recommendation
+  - preserve findings, severity, commands reviewed, quality score, repair route, and gate recommendation

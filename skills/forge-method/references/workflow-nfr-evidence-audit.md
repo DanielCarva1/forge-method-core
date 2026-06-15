@@ -11,19 +11,21 @@ inputs:
   - release criteria
 
 steps:
-  1. list required NFR claims and proof type
+  1. list required security, performance, reliability, accessibility, maintainability, and compliance claims
   2. compare available evidence against each claim
-  3. mark pass, gap, waiver, or blocked
-  4. update release/readiness gate expectations
+  3. mark pass, gap, missing evidence, waiver, or blocked
+  4. record waiver owner/rationale/revisit trigger and update release gate expectations
 
 outputs:
-  - NFR evidence audit
+  - NFR evidence matrix
   - gaps and waivers
+  - release impact
   - gate updates
 
 done_when:
   - every NFR claim has evidence status
   - gaps and waivers are explicit
+  - release impact is known
   - release gate can consume the result
 
 blocked_when:
@@ -31,4 +33,4 @@ blocked_when:
   - required evidence cannot be produced or waived
 
 handoff:
-  - preserve audit path, claim statuses, gaps, waivers, and gate updates
+  - preserve audit path, claim statuses, gaps, waivers, release impact, and gate updates

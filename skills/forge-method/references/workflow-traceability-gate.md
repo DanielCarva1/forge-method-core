@@ -11,19 +11,21 @@ inputs:
   - risk register
 
 steps:
-  1. map requirements and risks to checks and evidence
-  2. identify uncovered, weakly covered, and over-tested areas
-  3. decide pass, conditional pass, fail, or waive
-  4. record gate decision and follow-up work
+  1. choose phase 1 coverage mapping or phase 2 release decision
+  2. map requirements and risks to checks and evidence
+  3. identify uncovered, weakly covered, over-tested, and missing-evidence areas
+  4. decide pass, concerns, fail, missing evidence, or waived and record follow-up work
 
 outputs:
   - traceability matrix
   - coverage gaps
+  - coverage status
   - gate decision
 
 done_when:
   - every high-risk requirement has coverage status
-  - gate decision is explicit
+  - gate decision uses pass, concerns, fail, missing evidence, or waived
+  - waivers include owner, rationale, release impact, and revisit trigger
   - follow-up work is recorded
 
 blocked_when:
@@ -31,4 +33,4 @@ blocked_when:
   - coverage cannot be tied to a stable artifact
 
 handoff:
-  - preserve matrix path, gate decision, gaps, waivers, and follow-up stories
+  - preserve phase, matrix path, coverage status, gate decision, gaps, waivers, release impact, and follow-up stories

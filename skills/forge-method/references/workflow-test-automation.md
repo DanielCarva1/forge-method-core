@@ -12,23 +12,25 @@ inputs:
 
 steps:
   1. choose automation targets by risk and maintainability
-  2. define fixtures, data setup, and assertions
-  3. implement or plan command-level checks
-  4. attach evidence to story/gate
+  2. define fixtures, data setup, assertions, and command scope
+  3. implement or plan command-level checks with evidence links
+  4. attach evidence, manual remainders, and gate impact to story/gate
 
 outputs:
   - automation plan or changes
   - test commands
   - evidence links
+  - manual remainders
 
 done_when:
   - automation targets are justified by risk
   - checks have commands or explicit implementation stories
   - evidence path is clear
+  - remaining manual checks or waivers are explicit
 
 blocked_when:
   - target behavior is not observable
   - fixtures or environment cannot be controlled
 
 handoff:
-  - preserve automation targets, commands, evidence links, and remaining manual checks
+  - preserve automation targets, fixtures, commands, evidence links, remaining manual checks, and gate impact

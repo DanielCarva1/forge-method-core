@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T00:57:26+00:00",
+  "generated_at": "2026-06-15T01:23:47+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -551,15 +551,17 @@
       "modes": [
         "create",
         "update",
-        "validate"
+        "validate",
+        "headless"
       ],
       "outputs": [
         "ATDD examples",
-        "acceptance test map"
+        "acceptance test map",
+        "risk coverage map"
       ],
       "phase": "3-plan | 4-build-verify",
       "required": false,
-      "template": "test-architecture-artifact"
+      "template": "atdd-plan-artifact"
     },
     {
       "facilitation_pack": "brainstorming",
@@ -607,15 +609,17 @@
       "modes": [
         "create",
         "update",
-        "validate"
+        "validate",
+        "headless"
       ],
       "outputs": [
         "CI quality pipeline plan",
-        "gate command map"
+        "gate command map",
+        "failure policy"
       ],
       "phase": "3-plan | 5-ready-operate",
       "required": false,
-      "template": "test-architecture-artifact"
+      "template": "ci-quality-pipeline-artifact"
     },
     {
       "facilitation_pack": "lifecycle-closure",
@@ -1361,15 +1365,18 @@
       "id": "nfr-evidence-audit",
       "modes": [
         "audit",
-        "validate"
+        "validate",
+        "waiver",
+        "headless"
       ],
       "outputs": [
-        "NFR evidence audit",
-        "gaps and waivers"
+        "NFR evidence matrix",
+        "gaps and waivers",
+        "release impact"
       ],
       "phase": "5-ready-operate",
       "required": false,
-      "template": "test-architecture-artifact"
+      "template": "nfr-evidence-artifact"
     },
     {
       "facilitation_pack": "enterprise-readiness",
@@ -1822,7 +1829,7 @@
       ],
       "phase": "anytime",
       "required": false,
-      "template": "test-architecture-artifact"
+      "template": "teach-testing-artifact"
     },
     {
       "facilitation_pack": "evidence-research",
@@ -1843,15 +1850,17 @@
       "modes": [
         "create",
         "update",
-        "validate"
+        "validate",
+        "headless"
       ],
       "outputs": [
         "automation plan",
-        "test commands"
+        "test commands",
+        "evidence links"
       ],
       "phase": "4-build-verify",
       "required": false,
-      "template": "test-architecture-artifact"
+      "template": "test-automation-artifact"
     },
     {
       "facilitation_pack": "test-architecture",
@@ -1863,16 +1872,18 @@
       ],
       "id": "test-engagement-model",
       "modes": [
+        "decide",
         "create",
-        "resume"
+        "resume",
+        "headless"
       ],
       "outputs": [
-        "test engagement decision",
+        "quality engagement model",
         "next quality workflow"
       ],
       "phase": "2-specification | 3-plan",
       "required": false,
-      "template": "test-architecture-artifact"
+      "template": "test-engagement-artifact"
     },
     {
       "facilitation_pack": "test-architecture",
@@ -1884,15 +1895,18 @@
       "id": "test-framework",
       "modes": [
         "create",
-        "validate"
+        "fixtures",
+        "validate",
+        "headless"
       ],
       "outputs": [
         "test framework plan",
+        "fixture architecture",
         "command contract"
       ],
       "phase": "3-plan | 4-build-verify",
       "required": false,
-      "template": "test-architecture-artifact"
+      "template": "test-framework-artifact"
     },
     {
       "facilitation_pack": "test-architecture",
@@ -1903,15 +1917,18 @@
       "id": "test-review",
       "modes": [
         "analyze",
-        "validate"
+        "review",
+        "validate",
+        "headless"
       ],
       "outputs": [
         "test review findings",
+        "quality score",
         "gate recommendation"
       ],
       "phase": "4-build-verify | 5-ready-operate",
       "required": false,
-      "template": "test-architecture-artifact"
+      "template": "test-review-artifact"
     },
     {
       "facilitation_pack": "test-strategy",
@@ -1921,11 +1938,19 @@
         "readiness-check"
       ],
       "id": "test-strategy",
+      "modes": [
+        "create",
+        "update",
+        "validate",
+        "headless"
+      ],
       "outputs": [
-        "test strategy"
+        "test strategy",
+        "risk proof map"
       ],
       "phase": "3-plan",
-      "required": true
+      "required": true,
+      "template": "test-strategy-artifact"
     },
     {
       "facilitation_pack": "test-architecture",
@@ -1935,17 +1960,20 @@
       ],
       "id": "traceability-gate",
       "modes": [
-        "create",
+        "phase-1",
+        "phase-2",
         "validate",
-        "gate"
+        "gate",
+        "headless"
       ],
       "outputs": [
         "traceability matrix",
+        "coverage status",
         "gate decision"
       ],
       "phase": "4-build-verify | 5-ready-operate",
       "required": false,
-      "template": "test-architecture-artifact"
+      "template": "traceability-gate-artifact"
     },
     {
       "facilitation_pack": "lifecycle-closure",

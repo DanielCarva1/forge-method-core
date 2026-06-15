@@ -21,7 +21,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Builder flows keep an open floor first, then ask focused questions once the agent has enough context to classify the user's goal.
 - Innovation/problem-solving flows treat uncertainty as a real workflow input, not as a request for the user to choose from a technical menu.
 - Game flows have game-specific entrypoints, correct-course, project context, engine setup/profile, project brief, GDD, sprint status, story cycle, prototype, playtest, performance, and review behavior instead of forcing generic software planning first.
-- Test architecture flows sequence risk, strategy, framework, CI, automation, review, and traceability so quality requests route to the right quality artifact before implementation.
+- Test architecture flows sequence engagement model, risk strategy, fixture architecture, CI command contracts, ATDD, automation, review, NFR evidence, and two-phase traceability so quality requests route to the right artifact before implementation or release.
 - Testing education requests should route to an applied teaching workflow before test strategy when the user is trying to learn or choose a quality approach.
 - Builder utility flows analyze agents/workflows and convert skill material before scaffolding new runtime artifacts.
 - Customization flows select team/local scope, choose supported override keys, validate merged behavior, and expose an effective capability index instead of relying on hidden prose.
@@ -61,6 +61,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Lifecycle Closure outputs must preserve route, source material, findings, decisions, checks, next workflow, and load hints without storing full transcripts.
 - Runtime-builder/systematic parity batch names must outrank loose domain words such as "product", "context", "review", or "retro" when the state is `6-evolve` or runtime-builder.
 - Game Studio Depth outputs must route game-specific requests to game-context, engine-setup, GDD, narrative, mechanics, quick-prototype, playtest, performance, or game QA workflows before generic software planning; artifacts must preserve player fantasy, engine profile, playable-slice proof, decision sources, and validation evidence compactly.
+- Test Architecture Enterprise Depth outputs must route quality requests to the right engagement mode and workflow, preserve fixture architecture and command contracts, and make gate outcomes distinguish pass, concerns, fail, missing evidence, and explicit waiver.
 
 ## Fixture workflow ids
 
@@ -90,6 +91,14 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `game-story-creation`
 - `traceability-gate`
 - `teach-testing`
+- `test-strategy`
+- `test-engagement-model`
+- `test-framework`
+- `ci-quality-pipeline`
+- `atdd-plan`
+- `test-automation`
+- `test-review`
+- `nfr-evidence-audit`
 - `workflow-analyze`
 - `module-ideation`
 - `agent-builder`

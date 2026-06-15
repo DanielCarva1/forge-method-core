@@ -126,14 +126,14 @@ The product direction is therefore:
 | Quick prototype | `quick-prototype` | translated | P1.5 adds playable-slice proof contract, acceptance evidence, commands/manual checks, and route replay. | Add runnable smoke only when a lightweight fixture exists. |
 | Game sprint/story/dev/review | `game-story-creation`, `game-sprint-status`, `build-story`, `game-qa-review` | strong-ish | P1.5 adds first playable slice decision sources, story order, QA review artifact, and route proof; full game dev-story execution remains project-dependent. | Add end-to-end implementation replay when a real game fixture exists. |
 | Game playtest/performance/testing | `playtest-plan`, `performance-plan`, `game-test-*`, `game-e2e-scaffold` | translated | P1.5 adds playtest/performance evidence templates and routes for player signals, frame/runtime budgets, and validation proof. | Add engine-specific measurement examples as projects demand them. |
-| TEA engagement models | `test-engagement-model` | partial | Exists, but likely much thinner than TEA's five-model decision guide. | Expand model decision artifact and fixtures. |
-| Teach testing | `teach-testing` | partial/strong | Route exists; need richer applied teaching examples. | Add fixture and examples. |
-| Test design / ATDD | `atdd-plan`, `test-strategy` | partial | Need stronger risk/design/test layer matrix. | Expand templates. |
-| Fixture architecture | `test-framework` | partial | Missing TEA's three-step fixture architecture guidance. | Add fixture architecture pattern to test framework pack/template. |
-| CI / automation | `ci-quality-pipeline`, `test-automation` | partial | Needs concrete script-generation contracts and platform defaults. | Add command map and CI templates. |
-| NFR assessment/evidence | `nfr-evidence-audit`, enterprise plans | partial | Good workflow id, depth unproven. | Add NFR matrix and gate fixtures. |
-| Traceability and gate | `traceability-gate`, `gate`, `ready` | strong-ish | Needs two-phase traceability + decision semantics and waiver policy. | Expand traceability template and tests. |
-| API/browser utilities | no direct Forge utility layer | missing/partial | Forge relies on Codex/browser/plugins, not TEA utility generation. | Decide scope: route to test-framework with provider-specific utilities where available. |
+| TEA engagement models | `test-engagement-model` | translated | P1.6 adds Quality Engagement Model semantics, narrow template, pack guidance, and replay coverage for advice/design/implementation/review/audit/gate selection. | Add examples only when real project use exposes missing modes. |
+| Teach testing | `teach-testing` | translated | P1.6 adds applied teaching artifact and route proof that education leads to a concrete next quality workflow. | Add richer lessons later if Forge becomes a teaching product. |
+| Test design / ATDD | `atdd-plan`, `test-strategy` | translated | P1.6 adds risk proof map, ATDD examples, edge cases, risk coverage, proof paths, and replay coverage. | Consider separate `test-design` id only if `test-strategy`/`atdd-plan` cannot express future needs. |
+| Fixture architecture | `test-framework` | translated | P1.6 records framework-neutral Fixture Architecture: pure helper, framework wrapper, composition surface, lifecycle cleanup, command evidence. | Add framework-specific examples inside project artifacts only. |
+| CI / automation | `ci-quality-pipeline`, `test-automation` | translated | P1.6 adds local/fast/full/release command contracts, artifacts, failure policy, automation fixtures, evidence links, and manual remainders. | Add provider-specific CI snippets only when a project needs them. |
+| NFR assessment/evidence | `nfr-evidence-audit`, enterprise plans | translated | P1.6 adds NFR evidence matrix, claim status, gaps, waivers, release impact, gate updates, and replay coverage. | Add NFR domain examples over time. |
+| Traceability and gate | `traceability-gate`, `gate`, `ready` | translated | P1.6 adds two-phase traceability and gate outcomes: pass, concerns, fail, missing evidence, waived; waiver requires owner/rationale/revisit/release impact. | Keep release-readiness consumption aligned with this contract. |
+| API/browser utilities | project-specific test utilities under `test-framework` | deferred | Forge relies on Codex/browser/plugins and records provider-specific utility patterns inside project artifacts instead of making generic public utility workflows. | Revisit if repeated projects need reusable browser/API utility workflows. |
 | Enterprise security/privacy/devops/compliance | enterprise module workflows | partial/strong | Good coverage, but not fully tied into track decision and readiness. | Add enterprise track required artifact map. |
 | Package/distribution docs | install scripts, smoke-install, plugin-local scripts | strong-ish | Good Codex packaging; no BMAD-style custom module marketplace generator. | Add module builder if Forge supports external modules. |
 | Hooks and local runtime helpers | launcher, updater, install/smoke scripts | partial | No systematic hook wrapper after experiment archival. | Revisit hooks only as future app/runtime need; avoid Codex overhead. |
@@ -156,7 +156,7 @@ P0 closure status as of the parity replay harness batch:
 4. Story lifecycle proof: implemented through `story-creation`, decision-source guard, and mechanical no-procedural-confirmation tests.
 5. Systematic parity fixture harness: implemented as packaged `parity replay` and installed-smoke validation.
 
-P1 gaps are important for product maturity:
+P1 maturity batches are now translated:
 
 1. Builder module ideation, agent builder, workflow builder, module builder, module validator.
 2. Customization surface for agent/workflow/template overrides.
@@ -249,20 +249,20 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | `performance-test` | `performance-plan` | translated |
 | `test-framework` | `game-test-framework`, `test-framework` | partial |
 | `e2e-scaffold` | `game-e2e-scaffold` | partial |
-| `bmad-tea` | `test-architect` module | partial |
-| `teach-me-testing` | `teach-testing` | partial/strong |
-| `test-design` | `atdd-plan`, `test-strategy`, future test-design | partial |
-| `bmad-tea-testarch-framework` | `test-framework` | partial |
-| `bmad-tea-testarch-ci` | `ci-quality-pipeline` | partial |
-| `bmad-tea-testarch-automate` | `test-automation` | partial |
-| `nfr-assess` | `nfr-evidence-audit` | partial |
-| `trace` | `traceability-gate` | strong-ish |
-| `can-i-deploy` | `release-readiness`, `ready`, `gate` | partial |
-| `fixtures-composition` | `test-framework` future fixture architecture section | partial |
-| `api-request` | future test utility pattern under `test-framework` | missing/partial |
-| `network-recorder` | future browser/API utility pattern under `test-framework` | missing/partial |
-| `network-error-monitor` | future browser/API utility pattern under `test-framework` | missing/partial |
-| `burn-in` | future reliability/performance test mode | missing/partial |
+| `bmad-tea` | `test-architect` module | translated |
+| `teach-me-testing` | `teach-testing` | translated |
+| `test-design` | `test-strategy`, `atdd-plan` | translated |
+| `bmad-tea-testarch-framework` | `test-framework` | translated |
+| `bmad-tea-testarch-ci` | `ci-quality-pipeline` | translated |
+| `bmad-tea-testarch-automate` | `test-automation` | translated |
+| `nfr-assess` | `nfr-evidence-audit` | translated |
+| `trace` | `traceability-gate` | translated |
+| `can-i-deploy` | `traceability-gate`, `release-readiness`, `ready`, `gate` | translated |
+| `fixtures-composition` | `test-framework` Fixture Architecture | translated |
+| `api-request` | provider-specific utility under `test-framework` artifacts | deferred |
+| `network-recorder` | provider-specific utility under `test-framework` artifacts | deferred |
+| `network-error-monitor` | provider-specific utility under `test-framework` artifacts | deferred |
+| `burn-in` | `ci-quality-pipeline` release/investigation command contract | translated |
 
 ## Forge translation backlog
 
@@ -335,7 +335,10 @@ Use these as implementation increments. Each item must ship with workflow metada
 
 ### P1.6 TEA depth
 
-- Expand TEA engagement model, fixture architecture, CI, automation, NFR, traceability, and waiver/gate templates.
+- Status: translated in the Test Architecture Enterprise Depth batch.
+- Expanded TEA engagement model, fixture architecture, CI, automation, NFR, traceability, and waiver/gate templates.
+- Added two-phase traceability gate decision semantics and ADR.
+- Added Guidance Engine route depth and replay coverage for teach, engagement, strategy, framework, CI, ATDD, automation, review, NFR, traceability, and P1.6 internal runtime-builder precedence.
 
 ## Completion criteria for the full parity goal
 
@@ -350,6 +353,6 @@ The full objective is complete only when:
 
 ## Current status
 
-This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.5 are now implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. The execution plan is `.forge-method/artifacts/20260613-systematic-parity-plan.md`. This is not full parity completion: P1.6 TEA depth and explicit deferral/waiver decisions still remain.
+This audit remains the gap map for the full objective. P0.1 through P0.5 and P1.1 through P1.6 are now implemented and have evidence/checkpoints in the Forge state, including packaged `parity replay` validation. This is not full parity completion: explicit P2 deferral/non-goal decisions and post-parity Forge experience polish still remain.
 
-Immediate next step: implement P1.6 Test Architecture Enterprise Depth from the systematic plan unless a new audit shows a higher-severity regression.
+Immediate next step: resolve P2 scope decisions and then apply Forge human/agent experience polish over the translated parity surface.

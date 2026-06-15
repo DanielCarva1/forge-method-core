@@ -11,13 +11,13 @@ inputs:
   - available checks
 
 steps:
-  1. classify the engagement as advisory, design, implementation, review, audit, or gate
-  2. identify constraints, required artifacts, and evidence needs
-  3. choose the next test workflow
-  4. record mode and handoff criteria
+  1. classify the engagement as advice, design, implementation, review, audit, or release gate
+  2. identify lifecycle phase, risk level, source artifacts, constraints, and evidence needs
+  3. choose the next test workflow and required template
+  4. record mode, blocked conditions, and handoff criteria
 
 outputs:
-  - test engagement decision
+  - quality engagement model
   - next quality workflow
   - evidence expectations
 
@@ -31,4 +31,4 @@ blocked_when:
   - no artifact or system is available to evaluate
 
 handoff:
-  - preserve engagement mode, selected workflow, evidence expectations, and open risks
+  - preserve engagement mode, selected workflow, required evidence, blocked conditions, and open risks

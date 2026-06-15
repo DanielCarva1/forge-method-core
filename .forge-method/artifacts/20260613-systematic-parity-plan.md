@@ -81,7 +81,7 @@ The full parity goal is complete only when every audit row is `translated`, `str
 
 ## Current Status
 
-P0 through P1.5 are closed:
+P0 through P1.6 are closed:
 
 - Help/Next-Step Oracle: implemented and validated.
 - Human facilitation coverage gate: implemented and validated.
@@ -93,6 +93,7 @@ P0 through P1.5 are closed:
 - Persona and Elicitation Layer: implemented with Persona Lens overlays, elicitation technique index, persona facilitation pack, Guidance Engine `persona_lens` output, council participant routing, replay coverage, compactness guards, and evidence.
 - Lifecycle Closure: implemented with `track-decision`, `project-context`, `session-prep`, `code-review`, `retrospective`, `research-closeout`, readiness matrix template, lifecycle facilitation, Guidance Engine routes, replay coverage, compact workflow refs, and Capability Index exposure.
 - Game Studio Depth: implemented with `game-context`, `engine-setup`, expanded GDD/narrative/mechanics/prototype/playtest/performance/QA contracts, game-lifecycle facilitation, Guidance Engine routes, replay fixtures, compact workflow refs, templates, and validation coverage.
+- Test Architecture Enterprise Depth: implemented with Quality Engagement Model, Fixture Architecture, narrow TEA templates, expanded quality facilitation, two-phase Traceability Gate semantics, waiver contract, Guidance Engine routes, replay fixtures, compact workflow refs, and validation coverage.
 
 The remaining work is a planned sequence, not ad hoc patching.
 
@@ -280,6 +281,8 @@ Done when:
 
 ### P1.6 Test Architecture Enterprise Depth
 
+Status: translated in the 2026-06-15 Test Architecture Enterprise Depth batch.
+
 Scope:
 
 - engagement model expansion;
@@ -301,17 +304,17 @@ Forge translation:
 
 Deliverables:
 
-- expanded `test-architecture` pack and templates;
-- fixture architecture section in `test-framework`;
-- traceability template with design-time and release-time phases;
-- NFR matrix template;
-- replay fixtures for each quality mode;
-- install/runtime smoke only where packaged behavior changes.
+- expanded `test-architecture` pack and templates: done;
+- fixture architecture section in `test-framework`: done;
+- traceability template with design-time and release-time phases: done;
+- NFR matrix template: done;
+- replay fixtures for each quality mode: done;
+- install/runtime smoke only where packaged behavior changes: pending final batch validation.
 
 Done when:
 
-- quality requests route to the right quality artifact;
-- release gates can distinguish pass, fail, missing evidence, and explicit waiver.
+- quality requests route to the right quality artifact: done;
+- release gates can distinguish pass, concerns, fail, missing evidence, and explicit waiver: done.
 
 ## P2 Decisions
 
@@ -377,12 +380,12 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 ## Immediate Next Step
 
-Next implementation batch: P1.6 Test Architecture Enterprise Depth after P1.5 validation evidence is recorded.
+Next implementation batch: P2 scope decisions and Forge experience polish after P1.6 validation evidence is recorded.
 
-Do not start P1.6 as an ad hoc implementation. Start P1.6 from this plan:
+Do not start the post-parity polish as an ad hoc implementation. Start from this plan:
 
-1. identify Test Architecture Enterprise depth rows from the audit;
-2. define accepted scope for engagement model, fixture architecture, CI, automation, NFR, traceability, waiver, and gate semantics;
-3. add or expand compact workflow refs, facilitation packs, templates, routes, and replay fixtures;
+1. resolve remaining P2 scope decisions as translated, deferred, or non-goal with rationale;
+2. audit the translated parity surface for human-experience richness and agent compactness;
+3. add or refine facilitation packs, compact refs, scripts, and fixtures where the audit finds weak experience;
 4. validate source and installed behavior;
 5. record evidence and checkpoint.

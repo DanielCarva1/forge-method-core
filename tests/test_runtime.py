@@ -1344,6 +1344,13 @@ class RuntimeTests(unittest.TestCase):
             "performance-plan",
             "game-qa-review",
             "game-test-framework",
+            "test-strategy",
+            "test-engagement-model",
+            "test-framework",
+            "ci-quality-pipeline",
+            "atdd-plan",
+            "test-automation",
+            "test-review",
             "traceability-gate",
             "teach-testing",
             "nfr-evidence-audit",
@@ -1378,6 +1385,16 @@ class RuntimeTests(unittest.TestCase):
             ROOT / "skills" / "forge-method" / "templates" / "performance-plan-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "game-qa-review-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "test-architecture-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "teach-testing-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "test-strategy-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "test-engagement-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "test-framework-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "ci-quality-pipeline-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "atdd-plan-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "test-automation-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "test-review-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "nfr-evidence-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "traceability-gate-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "builder-utility-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "builder-factory-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "module-builder-artifact.md",
@@ -1440,7 +1457,15 @@ class RuntimeTests(unittest.TestCase):
             "plan-sprint",
             "readiness-check",
             "gdd",
+            "test-strategy",
+            "teach-testing",
             "test-engagement-model",
+            "test-framework",
+            "ci-quality-pipeline",
+            "atdd-plan",
+            "test-automation",
+            "test-review",
+            "nfr-evidence-audit",
             "traceability-gate",
             "security-plan",
             "module-ideation",
@@ -1486,6 +1511,16 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["retrospective"].get("template"), "retrospective-artifact")
         self.assertEqual(by_id["readiness-check"].get("template"), "readiness-matrix-artifact")
         self.assertEqual(by_id["research-closeout"].get("template"), "research-closeout-artifact")
+        self.assertEqual(by_id["test-strategy"].get("template"), "test-strategy-artifact")
+        self.assertEqual(by_id["teach-testing"].get("template"), "teach-testing-artifact")
+        self.assertEqual(by_id["test-engagement-model"].get("template"), "test-engagement-artifact")
+        self.assertEqual(by_id["test-framework"].get("template"), "test-framework-artifact")
+        self.assertEqual(by_id["ci-quality-pipeline"].get("template"), "ci-quality-pipeline-artifact")
+        self.assertEqual(by_id["atdd-plan"].get("template"), "atdd-plan-artifact")
+        self.assertEqual(by_id["test-automation"].get("template"), "test-automation-artifact")
+        self.assertEqual(by_id["test-review"].get("template"), "test-review-artifact")
+        self.assertEqual(by_id["nfr-evidence-audit"].get("template"), "nfr-evidence-artifact")
+        self.assertEqual(by_id["traceability-gate"].get("template"), "traceability-gate-artifact")
         self.assertEqual(by_id["game-context"].get("template"), "game-context-artifact")
         self.assertEqual(by_id["gdd"].get("template"), "gdd")
         self.assertEqual(by_id["narrative-design"].get("template"), "narrative-bible")
@@ -1513,6 +1548,16 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("create", by_id["retrospective"].get("modes", []))
         self.assertIn("matrix", by_id["readiness-check"].get("modes", []))
         self.assertIn("closeout", by_id["research-closeout"].get("modes", []))
+        self.assertIn("validate", by_id["test-strategy"].get("modes", []))
+        self.assertIn("teach", by_id["teach-testing"].get("modes", []))
+        self.assertIn("decide", by_id["test-engagement-model"].get("modes", []))
+        self.assertIn("fixtures", by_id["test-framework"].get("modes", []))
+        self.assertIn("validate", by_id["ci-quality-pipeline"].get("modes", []))
+        self.assertIn("validate", by_id["atdd-plan"].get("modes", []))
+        self.assertIn("validate", by_id["test-automation"].get("modes", []))
+        self.assertIn("review", by_id["test-review"].get("modes", []))
+        self.assertIn("waiver", by_id["nfr-evidence-audit"].get("modes", []))
+        self.assertIn("phase-2", by_id["traceability-gate"].get("modes", []))
         self.assertIn("document", by_id["game-context"].get("modes", []))
         self.assertIn("create", by_id["gdd"].get("modes", []))
         self.assertIn("create", by_id["narrative-design"].get("modes", []))
@@ -1949,6 +1994,135 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("trigger:", ref_text, ref_name)
             self.assertIn("handoff:", ref_text, ref_name)
             self.assertLess(len(ref_text), 1700, ref_name)
+
+    def test_tea_depth_guidance_and_compact_contracts(self) -> None:
+        tea_cases = [
+            (
+                "quality is weak and I do not know if we need advice design implementation review audit or a release gate",
+                "test-engagement-model",
+                "test-engagement-artifact",
+                "2-specification",
+            ),
+            (
+                "create a test strategy with risk assessment proof mix gates commands ownership and waivers",
+                "test-strategy",
+                "test-strategy-artifact",
+                "3-plan",
+            ),
+            (
+                "setup test framework with fixture architecture pure helpers wrappers composition cleanup and command contract",
+                "test-framework",
+                "test-framework-artifact",
+                "3-plan",
+            ),
+            (
+                "configure CI quality pipeline with local fast full release checks burn in selective testing artifacts and failure policy",
+                "ci-quality-pipeline",
+                "ci-quality-pipeline-artifact",
+                "3-plan",
+            ),
+            (
+                "create ATDD acceptance test examples with given when then edge cases and risk coverage before build",
+                "atdd-plan",
+                "atdd-plan-artifact",
+                "3-plan",
+            ),
+            (
+                "automate high risk QA checks with fixtures data setup assertions commands evidence links and manual remainders",
+                "test-automation",
+                "test-automation-artifact",
+                "4-build-verify",
+            ),
+            (
+                "review the tests against acceptance risk coverage weak assertions flaky patterns and gate recommendation",
+                "test-review",
+                "test-review-artifact",
+                "4-build-verify",
+            ),
+            (
+                "run NFR evidence audit for security performance reliability accessibility compliance gaps waivers and release impact",
+                "nfr-evidence-audit",
+                "nfr-evidence-artifact",
+                "5-ready-operate",
+            ),
+            (
+                "traceability matrix and gate decision for requirements risks checks evidence missing evidence waivers and release impact",
+                "traceability-gate",
+                "traceability-gate-artifact",
+                "4-build-verify",
+            ),
+        ]
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Quality Project", "--root", str(root))
+            run_cmd("transition", "--root", str(root), "--phase", "1-discovery")
+
+            for question, workflow, template, phase in tea_cases:
+                with self.subTest(workflow=workflow):
+                    guide = json.loads(
+                        run_cmd("guide", "--root", str(root), "--question", question, "--json").stdout
+                    )
+
+                    self.assertEqual(guide["intent_classification"], "quality-flow")
+                    self.assertEqual(guide["recommended_workflow"], workflow)
+                    self.assertEqual(guide["recommended_phase"], phase)
+                    self.assertEqual(guide["workflow_metadata"].get("template"), template)
+                    self.assertTrue(guide["state_update_required"])
+                    self.assertIn("transition-workflow", [item["name"] for item in guide["commands"]])
+
+            index_payload = json.loads(run_cmd("config", "index", "--root", str(root), "--json").stdout)
+            workflow_ids = {item["id"] for item in index_payload["workflows"]}
+            self.assertTrue(
+                {
+                    "test-strategy",
+                    "teach-testing",
+                    "test-engagement-model",
+                    "test-framework",
+                    "ci-quality-pipeline",
+                    "atdd-plan",
+                    "test-automation",
+                    "test-review",
+                    "nfr-evidence-audit",
+                    "traceability-gate",
+                }
+                <= workflow_ids
+            )
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            prepare_guidance_fixture(root, "evolve_runtime")
+            p16 = json.loads(
+                run_cmd(
+                    "guide",
+                    "--root",
+                    str(root),
+                    "--question",
+                    "continue P1.6 Test Architecture Enterprise Depth from the systematic parity plan",
+                    "--json",
+                ).stdout
+            )
+
+            self.assertEqual(p16["intent_classification"], "builder-flow")
+            self.assertEqual(p16["recommended_workflow"], "runtime-builder")
+            self.assertEqual(p16["facilitation_pack"], "skill:facilitation/runtime-builder.md")
+            self.assertFalse(p16["state_update_required"])
+
+        for ref_name in [
+            "workflow-test-strategy.md",
+            "workflow-teach-testing.md",
+            "workflow-test-engagement-model.md",
+            "workflow-test-framework.md",
+            "workflow-ci-quality-pipeline.md",
+            "workflow-atdd-plan.md",
+            "workflow-test-automation.md",
+            "workflow-test-review.md",
+            "workflow-nfr-evidence-audit.md",
+            "workflow-traceability-gate.md",
+        ]:
+            ref_text = (ROOT / "skills" / "forge-method" / "references" / ref_name).read_text(encoding="utf-8")
+            self.assertIn("trigger:", ref_text, ref_name)
+            self.assertIn("handoff:", ref_text, ref_name)
+            self.assertLess(len(ref_text), 1900, ref_name)
 
     def test_tracks_guide_council_builder_and_config_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

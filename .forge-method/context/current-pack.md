@@ -4,35 +4,35 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: p1-lifecycle-closure-done
+- status: p1-game-studio-depth-done
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Implement P1.6 Test Architecture Enterprise Depth from the systematic parity plan.
+- next_action: Resolve P2 scope decisions and apply Forge human/agent experience polish over the translated parity surface.
 
 ## Latest Checkpoint
 
-# P1.5 Game Studio Depth closed
+# P1.6 Test Architecture Enterprise Depth closed
 
-- created_at: 2026-06-15T01:03:01+00:00
+- created_at: 2026-06-15T01:32:02+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: p1-lifecycle-closure-done
+- status: p1-game-studio-depth-done
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Translated Game Studio Depth into Forge-native guidance: game-context, engine-setup, expanded GDD/narrative/mechanics/prototype/playtest/performance/QA contracts, game-lifecycle facilitation, routing, fixtures, Capability Index, and validation evidence.
+Translated TEA Depth into Forge-native guidance: Quality Engagement Model, Fixture Architecture, narrow quality templates, two-phase Traceability Gate, waiver semantics, routing, replay fixtures, Capability Index, and validation evidence.
 
 ## Decisions
 
-- Use one engine-setup workflow with compact engine_profile instead of separate engine-specific public entrypoints.
+- Use existing quality workflow ids with richer contracts; add ADR for two-phase Traceability Gate semantics and keep provider-specific API/browser utilities inside project test-framework artifacts unless repeated demand justifies new public workflows.
 
 ## Checks
 
-- targeted Game Studio Depth tests passed
-- parity replay 44/44 passed
-- unittest discover 68/68 passed
+- targeted TEA Depth tests passed
+- parity replay 53/53 passed
+- unittest discover 69/69 passed
 - smoke-runtime, verify-fast, and smoke-install passed
 
 ## Failed Checks
@@ -43,17 +43,18 @@ Translated Game Studio Depth into Forge-native guidance: game-context, engine-se
 
 - skills/forge-method/scripts/forge_method_runtime.py
 - skills/forge-method/catalog/workflows.json
-- skills/forge-method/facilitation/game-lifecycle.md
+- skills/forge-method/facilitation/test-architecture.md
 - skills/forge-method/fixtures/guidance-parity-replay.json
 
 ## Artifacts
 
-- .forge-method/evidence/20260615-010242-validation-p1-5-game-studio-depth-validation.md
-- .forge-method/artifacts/20260615-game-studio-depth-grill.md
+- .forge-method/evidence/20260615-013149-validation-p1-6-test-architecture-enterprise-depth-validati.md
+- .forge-method/artifacts/20260615-tea-depth-grill.md
+- docs/adr/0013-two-phase-traceability-gates.md
 
 ## Next Action
 
-Implement P1.6 Test Architecture Enterprise Depth from the systematic parity plan.
+Resolve P2 scope decisions and apply Forge human/agent experience polish over the translated parity surface.
 
 ## Recovery Signals
 
@@ -63,18 +64,14 @@ Implement P1.6 Test Architecture Enterprise Depth from the systematic parity pla
 
 ### Touched Files
 
+- skills/forge-method/scripts/forge_method_runtime.py; skills/forge-method/personas/overlays.json; skills/forge-method/personas/elicitation-techniques.json; skills/forge-method/facilitation/persona-lenses.md; skills/forge-method/fixtures/guidance-parity-replay.json; tests/test_runtime.py; CONTEXT.md; docs/adr/0010-persona-lens-layer.md
 - skills/forge-method/scripts/forge_method_runtime.py
 - skills/forge-method/catalog/workflows.json
-- skills/forge-method/facilitation/config-customization.md
-- skills/forge-method/references/workflow-config-customization.md
-- skills/forge-method/templates/config-customization-artifact.md
-- tests/test_runtime.py
-- docs/adr/0009-project-configuration-overrides.md
-- skills/forge-method/scripts/forge_method_runtime.py; skills/forge-method/personas/overlays.json; skills/forge-method/personas/elicitation-techniques.json; skills/forge-method/facilitation/persona-lenses.md; skills/forge-method/fixtures/guidance-parity-replay.json; tests/test_runtime.py; CONTEXT.md; docs/adr/0010-persona-lens-layer.md
 - skills/forge-method/facilitation/lifecycle-closure.md
 - skills/forge-method/references/workflow-project-context.md
 - skills/forge-method/fixtures/guidance-parity-replay.json
 - skills/forge-method/facilitation/game-lifecycle.md
+- skills/forge-method/facilitation/test-architecture.md
 
 ## Open Human Inputs
 
@@ -91,16 +88,16 @@ Implement P1.6 Test Architecture Enterprise Depth from the systematic parity pla
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260614-233818-validation-p1-2-customization-and-capability-index-validati.md
 - .forge-method/evidence/20260615-000535-validation-p1-3-persona-lens-and-elicitation-layer-validati.md
 - .forge-method/evidence/20260615-001238-validation-p1-3-final-validation-after-builder-persona-rout.md
 - .forge-method/evidence/20260615-003700-validation-p1-4-lifecycle-closure-validation.md
 - .forge-method/evidence/20260615-010242-validation-p1-5-game-studio-depth-validation.md
+- .forge-method/evidence/20260615-013149-validation-p1-6-test-architecture-enterprise-depth-validati.md
 
 ## Recent Artifacts
 
-- benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine Benchmark - Internal behavior benchmark updated with Game Studio Depth routing, artifacts, and fixture workflow ids.
-- audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD Forge Systematic Parity Audit - Parity audit updated to mark P1.5 Game Studio Depth translated and route next work to TEA depth.
-- plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic Parity Plan - Systematic plan updated with P1.5 closure, validation expectations, and P1.6 next batch.
-- grill [active/durable]: .forge-method/artifacts/20260615-game-studio-depth-grill.md - Game Studio Depth Grill - Pre-implementation grill for Game Studio Depth boundaries, engine-profile decision, and proof requirements.
-- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability Index - Generated capability index exposing Game Studio Depth workflows and templates.
+- audit [active/durable]: .forge-method/artifacts/20260612-bmad-forge-systematic-parity-audit.md - BMAD Forge Systematic Parity Audit - Parity audit updated to mark P1.6 TEA Depth translated and route remaining work to P2 scope decisions and Forge polish.
+- plan [active/durable]: .forge-method/artifacts/20260613-systematic-parity-plan.md - Systematic Parity Plan - Systematic plan updated with P1.6 closure and next post-parity scope/polish batch.
+- grill [active/durable]: .forge-method/artifacts/20260615-tea-depth-grill.md - TEA Depth Grill - Pre-implementation grill for Quality Engagement Model, Fixture Architecture, two-phase Traceability Gate, and waiver semantics.
+- adr [active/durable]: docs/adr/0013-two-phase-traceability-gates.md - Two-Phase Traceability Gates ADR - ADR records design-time traceability mapping and release-time gate decision semantics.
+- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability Index - Generated capability index exposing TEA depth workflows, modes, and templates.

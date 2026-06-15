@@ -13,16 +13,18 @@ inputs:
 steps:
   1. identify the learner's immediate decision or confusion
   2. explain the smallest useful testing concept in project terms
-  3. connect the concept to a concrete workflow, artifact, or check
-  4. preserve examples, caveats, and the recommended next test workflow
+  3. connect the concept to quality engagement mode, risk, evidence, and one concrete workflow
+  4. preserve examples, misconceptions, caveats, and the recommended next test workflow
 
 outputs:
   - testing explanation
   - applied examples
+  - recommended engagement model
   - recommended next test workflow
 
 done_when:
   - the concept is explained in the project's context
+  - the explanation changes the next quality decision
   - the learner has a concrete next workflow or check
   - assumptions and caveats are recorded
 
@@ -31,4 +33,4 @@ blocked_when:
   - the question requires external policy or certification detail not available locally
 
 handoff:
-  - preserve explanation path, examples, caveats, and next test workflow
+  - preserve explanation path, examples, misconceptions, engagement model, caveats, and next test workflow

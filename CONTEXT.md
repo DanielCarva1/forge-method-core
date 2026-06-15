@@ -359,3 +359,27 @@ A generated objective for Codex Goal mode. It turns a Forge Mechanical Work Orde
 ## Commit Policy
 
 A project setting that controls automatic commits during mechanical work. The default is `off`; project configuration may choose `story` or `epic`.
+
+## Test Architecture Enterprise Depth
+
+The guided quality depth family for high-risk, enterprise, brownfield, or release-sensitive projects. It preserves engagement mode, risk model, fixture architecture, CI command contract, NFR evidence, traceability, gate decision, and waiver status without turning every quality request into generic test advice.
+
+## Quality Engagement Model
+
+The selected quality posture for a request: advice, design, implementation, review, audit, or release gate. It decides which test architecture workflow should run next and what evidence future agents must preserve.
+
+## Fixture Architecture
+
+A framework-neutral test utility contract: pure helper, framework wrapper, composition surface, lifecycle cleanup, and command evidence. Specific tools such as Playwright or Cypress are examples inside project artifacts, not separate Forge entrypoints.
+
+## Traceability Gate
+
+A two-phase quality workflow that first maps requirements and risks to planned checks, then makes a release-time decision from actual evidence. It is not a green checklist unless evidence exists.
+
+## Gate Decision
+
+The compact release-quality outcome consumed by readiness and release workflows. Valid meanings are pass, concerns, fail, missing evidence, or waived; waived requires owner, rationale, release impact, and revisit trigger.
+
+## Quality Waiver
+
+A documented decision to proceed despite a known quality gap. It must name the waived risk, missing evidence, accountable owner, rationale, expiry or revisit trigger, and downstream release impact.
