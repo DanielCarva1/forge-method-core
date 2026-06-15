@@ -124,7 +124,7 @@ The product direction is therefore:
 | Game brainstorm/brief/GDD | `game-brief`, `gdd`, `brainstorming` | translated | P1.5 expands GDD template and game lifecycle prompts so broad ideas stay in guided game discovery before architecture/build. | Add richer transcript examples for messy ideation later. |
 | Narrative/mechanics design | `narrative-design`, `mechanics-design` | translated | P1.5 expands templates/contracts for motivation, content units, player verbs, balance assumptions, and production risks. | Add balancing examples when a project reaches tuning depth. |
 | Quick prototype | `quick-prototype` | translated | P1.5 adds playable-slice proof contract, acceptance evidence, commands/manual checks, and route replay. | Add runnable smoke only when a lightweight fixture exists. |
-| Game sprint/story/dev/review | `game-story-creation`, `game-sprint-status`, `build-story`, `game-qa-review` | strong-ish | P1.5 adds first playable slice decision sources, story order, QA review artifact, and route proof; full game dev-story execution remains project-dependent. | Add end-to-end implementation replay when a real game fixture exists. |
+| Game sprint/story/dev/review | `game-story-creation`, `game-sprint-status`, `build-story`, `game-qa-review` | translated | Game Production Depth adds story and sprint-status artifacts, explicit dev-story routing to mechanical build when a game story is ready, game code-review routing to QA review, and replay proof for create/status/dev/review transcripts; full engine execution remains project-dependent. | Add end-to-end implementation replay when a real game fixture exists. |
 | Game playtest/performance/testing | `playtest-plan`, `performance-plan`, `game-test-*`, `game-e2e-scaffold` | translated | P1.5 adds playtest/performance evidence templates and routes for player signals, frame/runtime budgets, and validation proof. | Add engine-specific measurement examples as projects demand them. |
 | TEA engagement models | `test-engagement-model` | translated | P1.6 adds Quality Engagement Model semantics, narrow template, pack guidance, and replay coverage for advice/design/implementation/review/audit/gate selection. | Add examples only when real project use exposes missing modes. |
 | Teach testing | `teach-testing` | translated | P1.6 adds applied teaching artifact and route proof that education leads to a concrete next quality workflow. | Add richer lessons later if Forge becomes a teaching product. |
@@ -242,10 +242,10 @@ This appendix maps named BMAD/CIS/BMGD/TEA commands or workflow tokens to Forge-
 | `/bmgd-create-gdd` | `gdd` | translated |
 | `/bmgd-create-architecture` | `engine-architecture`, `engine-setup` | translated |
 | `/bmgd-sprint-planning` | `plan-sprint`, `game-story-creation` | strong-ish |
-| `/bmgd-sprint-status` | `game-sprint-status`, `resume` | partial |
-| `/bmgd-create-story` | `game-story-creation` | partial |
-| `/bmgd-dev-story` | `build-story` with game artifacts | partial |
-| `/bmgd-code-review` | `game-qa-review`, `code-review` | strong-ish |
+| `/bmgd-sprint-status` | `game-sprint-status`, `resume` | translated |
+| `/bmgd-create-story` | `game-story-creation` | translated |
+| `/bmgd-dev-story` | `build-story` with game artifacts | translated |
+| `/bmgd-code-review` | `game-qa-review`, `code-review` | translated |
 | `/bmgd-quick-prototype` | `quick-prototype` | translated |
 | `playtest-plan` | `playtest-plan` | translated |
 | `performance-test` | `performance-plan` | translated |

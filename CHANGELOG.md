@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- harden Game Production Depth with dedicated `game-story-creation` and `game-sprint-status` artifacts, workflow-specific human microcopy, game dev-story routing to mechanical `build-story`, and replay coverage for game create/status/dev/review/test/e2e transcripts
 - add Council Orchestration Depth with a dedicated `council-decision` pack/template/modes, party-mode routing, richer live debate output, compact dissent/orchestration artifacts, and JSON worker/merge contracts
 - add Document Review Depth with specialized `editorial-review` and `edge-case-review` templates, modes, document-utility facilitation, Guidance Engine precedence over generic quality review, and replay proof
 - add Build Story Autonomy Depth with a structured `build-story` work order template, start/continue/review/evidence modes, full mechanical command map, JSON `loop` and `do_not_prompt` fields, and no-procedural-prompt Codex Goal handoff

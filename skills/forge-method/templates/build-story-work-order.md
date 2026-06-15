@@ -14,6 +14,13 @@
 - source_files:
 - risk_notes:
 
+## Domain Context
+
+- track:
+- playable_slice_or_user_flow:
+- domain_checks:
+- domain_evidence:
+
 ## Mechanical Loop
 
 1. start_or_resume_story:

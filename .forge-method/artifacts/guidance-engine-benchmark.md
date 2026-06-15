@@ -80,7 +80,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Council Orchestration Depth outputs must route party-mode/council/subagent orchestration requests to `council-decision`, show a richer live debate to humans, and persist only compact participant, dissent, worker-output, merge, evidence, and next-action contracts.
 - Lifecycle Closure outputs must preserve route, source material, findings, decisions, checks, next workflow, and load hints without storing full transcripts.
 - Runtime-builder/systematic parity batch names must outrank loose domain words such as "product", "context", "review", or "retro" when the state is `6-evolve` or runtime-builder.
-- Game Studio Depth outputs must route game-specific requests to game-context, engine-setup, GDD, narrative, mechanics, quick-prototype, playtest, performance, or game QA workflows before generic software planning; artifacts must preserve player fantasy, engine profile, playable-slice proof, decision sources, and validation evidence compactly.
+- Game Studio Depth outputs must route game-specific requests to game-context, engine-setup, GDD, narrative, mechanics, game-story-creation, game-sprint-status, build-story, game-test-framework, game-e2e-scaffold, quick-prototype, playtest, performance, or game QA workflows before generic software planning; artifacts must preserve player fantasy, engine profile, playable-slice proof, story order, sprint progress, decision sources, and validation evidence compactly.
 - Test Architecture Enterprise Depth outputs must route quality requests to the right engagement mode and workflow, preserve fixture architecture and command contracts, and make gate outcomes distinguish pass, concerns, fail, missing evidence, and explicit waiver.
 - Document Review Depth outputs must route prose/structure/tone requests to `editorial-review` and boundary/failure/misuse requests to `edge-case-review`, each with a narrow compact artifact rather than the generic document utility shape.
 
@@ -98,6 +98,9 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `playtest-plan`
 - `performance-plan`
 - `game-qa-review`
+- `game-sprint-status`
+- `game-test-framework`
+- `game-e2e-scaffold`
 - `problem-solving`
 - `investigation`
 - `domain-scan`

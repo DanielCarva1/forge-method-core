@@ -1442,6 +1442,40 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
             "guardrail": "Qualidade boa muda decisao de release; nao e checklist decorativo.",
         }
     if classification == "game-flow":
+        game_copy = {
+            "game-story-creation": {
+                "decision_summary": "Isto e producao de jogo: transformar um slice aceito em stories jogaveis, nao em backlog generico.",
+                "next_move": "Fixar valor do jogador, contexto da feature, notas de engine, assets assumidos, criterios e prova antes do build-story.",
+                "human_question": "Qual story prova o slice primeiro: acao principal, feedback, conteudo minimo, UI/HUD, ou infraestrutura de engine?",
+                "guardrail": "Story de jogo sem experiencia observavel vira tarefa tecnica solta.",
+            },
+            "game-sprint-status": {
+                "decision_summary": "Isto e status de producao de jogo: progresso precisa ser lido contra o slice jogavel.",
+                "next_move": "Separar done, ativo, review, bloqueado, deferred, lacunas de evidencia e pressao de escopo.",
+                "human_question": "O proximo risco e jogabilidade, estabilidade, conteudo, performance, evidencia, ou escopo?",
+                "guardrail": "Status bom termina em uma proxima story ou workflow, nao em inventario de tarefas.",
+            },
+            "game-test-framework": {
+                "decision_summary": "Isto e arquitetura de teste para jogo: escolher o que da para provar por engine e o que continua playtest.",
+                "next_move": "Definir camadas, fixtures, comandos, limites manuais e primeiro alvo de automacao.",
+                "human_question": "O sinal mais estavel para testar esta em mecanica, conteudo, UI, save, multiplayer, ou launch smoke?",
+                "guardrail": "Automacao de jogo que nao observa comportamento do jogador da falsa confianca.",
+            },
+            "game-e2e-scaffold": {
+                "decision_summary": "Isto e smoke jogavel: provar do launch ate um resultado observavel.",
+                "next_move": "Definir setup, acao do jogador, assert, teardown, evidencia e gate que consome essa prova.",
+                "human_question": "Qual e o caminho mais curto que demonstra que o slice realmente roda e responde?",
+                "guardrail": "E2E de jogo precisa verificar resultado jogavel, nao so abrir uma janela.",
+            },
+            "game-qa-review": {
+                "decision_summary": "Isto e review de slice jogavel: avaliar experiencia, estabilidade, evidencia e rota de reparo.",
+                "next_move": "Cruzar acceptance, feedback do jogador, performance, regressao e findings antes de liberar ou reparar.",
+                "human_question": "O review deve focar playability, feedback, estabilidade, performance, conteudo, ou prontidao?",
+                "guardrail": "Review de jogo nao e so code review; o slice precisa ser bom de jogar e provavel.",
+            },
+        }
+        if workflow in game_copy:
+            return game_copy[workflow]
         return {
             "decision_summary": "Isto e fluxo de jogo: primeiro fantasia jogavel, loop, slice e motor; depois arquitetura.",
             "next_move": "Escolher a primeira experiencia jogavel e os limites de conteudo/sistema.",
@@ -5594,6 +5628,12 @@ def detect_guidance_signals(question: str) -> list[str]:
         "game-flow": [
             "game context",
             "game project context",
+            "game story",
+            "game stories",
+            "game sprint status",
+            "game test framework",
+            "game e2e",
+            "game smoke",
             "engine setup",
             "engine profile",
             "first playable",
@@ -5676,6 +5716,11 @@ def detect_guidance_signals(question: str) -> list[str]:
             "backlog status",
             "story batch",
             "story plan",
+            "dev story",
+            "develop story",
+            "implement story",
+            "ready-for-dev",
+            "ready for dev",
             "validation plan",
             "implementation-ready",
             "implementation ready",
@@ -6064,6 +6109,12 @@ def routed_game_workflow(question: str) -> str:
         or ({"setup", "template"} & tokens and ({"engine", "godot", "unity", "unreal", "phaser"} & tokens))
     ):
         return "engine-setup"
+    if {"e2e", "smoke"} & tokens or "end to end" in normalized:
+        return "game-e2e-scaffold"
+    if {"framework", "harness"} & tokens and {"test", "teste", "qa"} & tokens:
+        return "game-test-framework"
+    if {"automation", "automacao", "automate", "automatizar"} & tokens:
+        return "game-test-automation"
     if {"narrative", "lore", "world", "characters", "character", "dialogue", "quest", "quests", "storytelling"} & tokens:
         return "narrative-design"
     if {"mechanic", "mechanics", "mecanica", "mecanicas", "economy", "economia", "balance", "balanco", "progression", "progressao"} & tokens:
@@ -6080,12 +6131,6 @@ def routed_game_workflow(question: str) -> str:
         return "game-sprint-status"
     if {"retro", "retrospective", "retrospectiva"} & tokens:
         return "game-retrospective"
-    if {"e2e", "smoke"} & tokens or "end to end" in normalized:
-        return "game-e2e-scaffold"
-    if {"automation", "automacao", "automate", "automatizar"} & tokens:
-        return "game-test-automation"
-    if {"framework", "harness"} & tokens and {"test", "teste", "qa"} & tokens:
-        return "game-test-framework"
     if {"qa", "review", "revisao"} & tokens or "game qa" in normalized or "game review" in normalized:
         return "game-qa-review"
     if {"playtest", "playtesting"} & tokens:
@@ -6095,6 +6140,36 @@ def routed_game_workflow(question: str) -> str:
     if {"story", "stories", "historia", "historias"} & tokens or "create story" in normalized or "criar story" in normalized:
         return "game-story-creation"
     return "game-brief"
+
+
+def is_game_dev_story_intent(question: str) -> bool:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    storyish = (
+        bool({"story", "stories", "historia", "historias"} & tokens)
+        or "dev story" in normalized
+        or "develop story" in normalized
+        or "ready-for-dev" in normalized
+        or "ready for dev" in normalized
+    )
+    gameish = bool(
+        {
+            "game",
+            "jogo",
+            "player",
+            "playable",
+            "slice",
+            "engine",
+            "godot",
+            "unity",
+            "unreal",
+            "phaser",
+        }
+        & tokens
+    ) or "playable slice" in normalized
+    buildish = bool({"implement", "implementar", "implementa", "build", "dev", "develop", "fix", "corrigir"} & tokens)
+    review_or_status = bool({"review", "revisao", "qa", "status"} & tokens) or "sprint status" in normalized
+    return storyish and gameish and buildish and not review_or_status
 
 
 def game_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
@@ -6188,6 +6263,26 @@ def game_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]
                 ("game-story-creation", "use when optimization work becomes stories"),
             ),
         )
+    if workflow_id == "game-story-creation":
+        return (
+            "run game-story-creation to turn the accepted playable slice into implementation-ready game stories with player value, engine notes, asset assumptions, acceptance checks, evidence, and sprint update",
+            "I should convert accepted game decisions into buildable stories without losing the player experience or source context.",
+            guidance_alternatives(
+                ("game-sprint-status", "use when existing game stories need progress, blockers, and next action summarized"),
+                ("build-story", "use only when a game story is already ready for implementation"),
+                ("game-qa-review", "use when a playable slice needs review before more stories"),
+            ),
+        )
+    if workflow_id == "game-sprint-status":
+        return (
+            "run game-sprint-status to summarize playable-slice progress, done/active/review/blocked/deferred work, evidence gaps, scope pressure, risks, and the next story or game workflow",
+            "I should make the game sprint readable as production progress toward a playable slice, not just a generic backlog count.",
+            guidance_alternatives(
+                ("build-story", "use when the next game story is ready to implement"),
+                ("game-qa-review", "use when the slice is in review or evidence is weak"),
+                ("game-story-creation", "use when the next playable slice needs stories"),
+            ),
+        )
     if workflow_id == "game-qa-review":
         return (
             "run game-qa-review to inspect playability, feedback, stability, performance, scope, evidence, findings, and repair route",
@@ -6196,6 +6291,46 @@ def game_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]
                 ("build-story", "use when findings require implementation repair"),
                 ("playtest-plan", "use when QA needs human player evidence"),
                 ("game-retrospective", "use when review closes the increment"),
+            ),
+        )
+    if workflow_id == "game-test-framework":
+        return (
+            "run game-test-framework to define engine-appropriate test layers, deterministic mechanic/content/UI/save checks, playtest evidence boundaries, commands, fixtures, and the first automation target",
+            "I should decide what can be automated for this engine and what must stay as captured playtest or manual evidence.",
+            guidance_alternatives(
+                ("game-test-automation", "use after the framework chooses the first stable automation target"),
+                ("game-e2e-scaffold", "use when a launch-to-result smoke path is the proof target"),
+                ("game-qa-review", "use when the current slice needs review before new test tooling"),
+            ),
+        )
+    if workflow_id == "game-test-automation":
+        return (
+            "run game-test-automation to select high-value game checks, fixtures, engine commands, assertions, evidence capture, and manual leftovers",
+            "I should automate the stable production signals first and preserve manual playtest coverage where automation would lie.",
+            guidance_alternatives(
+                ("game-e2e-scaffold", "use when the next target is launch-to-result verification"),
+                ("game-test-framework", "use when test layers or commands are still unclear"),
+                ("game-qa-review", "use when automated evidence should feed a slice review"),
+            ),
+        )
+    if workflow_id == "game-e2e-scaffold":
+        return (
+            "run game-e2e-scaffold to define the shortest launch-to-result path, setup, player action, assertion, teardown, evidence mode, and release/readiness gate link",
+            "I should make the playable slice prove itself from launch to an observable result before treating it as shippable.",
+            guidance_alternatives(
+                ("game-test-automation", "use when the smoke path should become automated"),
+                ("game-qa-review", "use when the E2E result should gate the slice"),
+                ("release-readiness", "use when all required slice evidence already exists"),
+            ),
+        )
+    if workflow_id == "game-retrospective":
+        return (
+            "run game-retrospective to capture playtest, QA, build, scope, and production lessons, then choose the next slice or repair workflow",
+            "I should close the game increment with evidence and decisions before starting the next slice.",
+            guidance_alternatives(
+                ("game-story-creation", "use when the retrospective creates the next playable-slice stories"),
+                ("playtest-plan", "use when human player evidence was missing"),
+                ("game-sprint-status", "use when the team needs current production status first"),
             ),
         )
     return (
@@ -6359,10 +6494,12 @@ def is_strong_game_quality_intent(question: str) -> bool:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
     return bool(
-        {"game", "jogo", "player", "rpg", "gdd", "godot", "unity", "unreal", "phaser"} & tokens
+        {"game", "jogo", "player", "rpg", "gdd", "engine", "godot", "unity", "unreal", "phaser", "playtest"} & tokens
         or "game qa" in normalized
         or "game review" in normalized
         or "playable slice" in normalized
+        or "first playable" in normalized
+        or "engine profile" in normalized
     )
 
 
@@ -7483,11 +7620,37 @@ def build_guidance_decision(
         recommended_workflow = "context-recovery"
         recommended_action, human_prompt, alternatives = problem_guidance_text(recommended_workflow)
         reason = "The message says the chat, network, or context was interrupted, so recovery must re-anchor on durable state before lifecycle routing."
-    elif has_question and "game-flow" in signal_set and "lifecycle-flow" in signal_set and routed_game_workflow(question) != "game-brief":
+    elif (
+        has_question
+        and next_story
+        and phase == "4-build-verify"
+        and "game-flow" in signal_set
+        and "mechanical-build" in signal_set
+        and is_game_dev_story_intent(question)
+    ):
+        classification = "mechanical-build"
+        recommended_workflow = "build-story"
+        recommended_action = (
+            f"implement and validate game story {next_story.get('id')} with playable-slice acceptance, "
+            "engine notes, player-experience checks, review findings, and evidence"
+        )
+        human_prompt = "The game story is ready; I should build it mechanically while preserving player-facing proof and engine constraints."
+        alternatives = guidance_alternatives(
+            ("game-qa-review", "use after implementation when the playable slice needs review"),
+            ("game-sprint-status", "use when progress or blockers should be summarized"),
+            ("game-story-creation", "use if the story is not actually implementation-ready"),
+        )
+        reason = "A game implementation story is ready in build/verify, so dev-story wording should enter build-story rather than create more planning artifacts."
+    elif (
+        has_question
+        and "game-flow" in signal_set
+        and is_strong_game_quality_intent(question)
+        and routed_game_workflow(question) != "game-brief"
+    ):
         classification = "game-flow"
         recommended_workflow = routed_game_workflow(question)
         recommended_action, human_prompt, alternatives = game_guidance_text(recommended_workflow)
-        reason = "Game-specific lifecycle wording outranks generic lifecycle closure when the game router selects a narrow game workflow."
+        reason = "Game-specific wording outranks generic lifecycle, story, or quality routing when the game router selects a narrow game workflow."
     elif has_question and "lifecycle-flow" in signal_set:
         classification = "lifecycle-flow"
         recommended_workflow = routed_lifecycle_workflow(question)

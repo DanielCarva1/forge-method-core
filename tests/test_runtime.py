@@ -1571,6 +1571,8 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn(workflow_id, workflow_list)
         for template_path in [
             ROOT / "skills" / "forge-method" / "templates" / "game-lifecycle-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "game-story-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "game-sprint-status-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "game-context-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "engine-setup-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "engine-architecture-artifact.md",
@@ -1783,6 +1785,8 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(by_id["quick-prototype"].get("template"), "quick-prototype-artifact")
         self.assertEqual(by_id["playtest-plan"].get("template"), "playtest-plan-artifact")
         self.assertEqual(by_id["performance-plan"].get("template"), "performance-plan-artifact")
+        self.assertEqual(by_id["game-story-creation"].get("template"), "game-story-artifact")
+        self.assertEqual(by_id["game-sprint-status"].get("template"), "game-sprint-status-artifact")
         self.assertEqual(by_id["game-qa-review"].get("template"), "game-qa-review-artifact")
         self.assertIn("validate", by_id["product-requirements"].get("modes", []))
         self.assertIn("prfaq", by_id["working-backwards-challenge"].get("modes", []))
@@ -1842,7 +1846,14 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("prove", by_id["quick-prototype"].get("modes", []))
         self.assertIn("run", by_id["playtest-plan"].get("modes", []))
         self.assertIn("measure", by_id["performance-plan"].get("modes", []))
+        self.assertIn("headless", by_id["game-story-creation"].get("modes", []))
+        self.assertIn("risk", by_id["game-sprint-status"].get("modes", []))
         self.assertIn("review", by_id["game-qa-review"].get("modes", []))
+        build_story_template = (ROOT / "skills" / "forge-method" / "templates" / "build-story-work-order.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("## Domain Context", build_story_template)
+        self.assertIn("domain_checks", build_story_template)
         for pack_id in pack_ids:
             pack_text = (ROOT / "skills" / "forge-method" / "facilitation" / f"{pack_id}.md").read_text(
                 encoding="utf-8"
@@ -2199,6 +2210,30 @@ class RuntimeTests(unittest.TestCase):
                 "3-plan",
             ),
             (
+                "create game stories from the accepted playable slice with player value engine notes asset assumptions acceptance checks evidence and sprint update",
+                "game-story-creation",
+                "game-story-artifact",
+                "3-plan",
+            ),
+            (
+                "game sprint status for the playable slice: done active review blocked deferred evidence gaps scope pressure risks and next story",
+                "game-sprint-status",
+                "game-sprint-status-artifact",
+                "4-build-verify",
+            ),
+            (
+                "game test framework for this Unity project with mechanics content UI saves fixtures commands manual playtest boundaries and first automation target",
+                "game-test-framework",
+                "game-lifecycle-artifact",
+                "3-plan",
+            ),
+            (
+                "game e2e smoke scaffold from launch to playable result with setup action assertion teardown evidence mode and readiness gate",
+                "game-e2e-scaffold",
+                "game-lifecycle-artifact",
+                "4-build-verify",
+            ),
+            (
                 "game QA review this playable slice for playability feedback stability performance evidence and repair route",
                 "game-qa-review",
                 "game-qa-review-artifact",
@@ -2223,6 +2258,10 @@ class RuntimeTests(unittest.TestCase):
                     self.assertEqual(guide["workflow_metadata"].get("template"), template)
                     self.assertTrue(guide["state_update_required"])
                     self.assertIn("transition-workflow", [item["name"] for item in guide["commands"]])
+                    if workflow == "game-story-creation":
+                        self.assertIn("slice aceito", guide["human_experience"]["decision_summary"])
+                    if workflow == "game-sprint-status":
+                        self.assertIn("status de producao de jogo", guide["human_experience"]["decision_summary"])
 
             index_payload = json.loads(run_cmd("config", "index", "--root", str(root), "--json").stdout)
             workflow_ids = {item["id"] for item in index_payload["workflows"]}
@@ -2234,9 +2273,13 @@ class RuntimeTests(unittest.TestCase):
                     "narrative-design",
                     "mechanics-design",
                     "quick-prototype",
+                    "game-story-creation",
+                    "game-sprint-status",
                     "playtest-plan",
                     "performance-plan",
                     "game-qa-review",
+                    "game-test-framework",
+                    "game-e2e-scaffold",
                 }
                 <= workflow_ids
             )
@@ -2268,12 +2311,38 @@ class RuntimeTests(unittest.TestCase):
             "workflow-quick-prototype.md",
             "workflow-playtest-plan.md",
             "workflow-performance-plan.md",
+            "workflow-game-story-creation.md",
+            "workflow-game-sprint-status.md",
             "workflow-game-qa-review.md",
+            "workflow-game-test-framework.md",
+            "workflow-game-e2e-scaffold.md",
         ]:
             ref_text = (ROOT / "skills" / "forge-method" / "references" / ref_name).read_text(encoding="utf-8")
             self.assertIn("trigger:", ref_text, ref_name)
             self.assertIn("handoff:", ref_text, ref_name)
             self.assertLess(len(ref_text), 1700, ref_name)
+
+    def test_game_dev_story_routes_to_mechanical_build_when_ready(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            prepare_guidance_fixture(root, "build_story_ready")
+            guide = json.loads(
+                run_cmd(
+                    "guide",
+                    "--root",
+                    str(root),
+                    "--question",
+                    "dev story for this game: implement the next playable slice with engine notes and player checks",
+                    "--json",
+                ).stdout
+            )
+
+            self.assertEqual(guide["intent_classification"], "mechanical-build")
+            self.assertEqual(guide["recommended_workflow"], "build-story")
+            self.assertEqual(guide["recommended_phase"], "4-build-verify")
+            self.assertEqual(guide["workflow_metadata"].get("template"), "build-story-work-order")
+            self.assertFalse(guide["state_update_required"])
+            self.assertIn("playable-slice acceptance", guide["recommended_action"])
 
     def test_tea_depth_guidance_and_compact_contracts(self) -> None:
         tea_cases = [
