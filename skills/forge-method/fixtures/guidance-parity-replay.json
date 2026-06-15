@@ -454,6 +454,20 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "cis_presentation_master_pitch_request",
+    "family": "cis",
+    "state": "discovery",
+    "question": "CIS agent presentation master: structure a pitch deck with audience shift slide-by-slide argument proof call to action and rejected generic deck paths",
+    "expected_classification": "creative-flow",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "storytelling",
+    "expected_persona_lens": "presentation-craft",
+    "expected_facilitation_pack": "skill:facilitation/storytelling.md",
+    "expected_template": "storytelling-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
     "id": "cis_creative_direction_request",
     "family": "cis",
     "state": "discovery",

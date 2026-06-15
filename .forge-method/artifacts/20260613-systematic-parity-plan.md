@@ -436,7 +436,7 @@ Before marking the full parity objective complete, inspect current evidence for 
 
 Next implementation batch: real-use transcript hardening for the remaining partial/strong-ish audit rows after the 1.29.0 release, Architecture Guidance Depth cleanup, Context Boundary Recovery, Brainstorming Depth, CIS Facilitation Depth, Agent Compactness Guard, Story Decision Source Gate, Sprint Planning Depth, Build Story Autonomy Depth, Document Review Depth, Council Orchestration Depth, and Correct-Course/Problem-Solving Depth.
 
-Current next focus: Game Brief & Sprint Depth now closes the residual game-brief, brainstorm-game, and game sprint planning rows with a living brief pack, `game-sprint-planning`, `artifact game-check`, and replay coverage. Next, decide `/cis-agent-presentation-master` scope and keep deferred API/browser or eval-runner surfaces out unless repeated projects justify them.
+Current next focus: Presentation Craft Fold-In closes `/cis-agent-presentation-master` as pitch/deck narrative through `storytelling` plus `presentation-craft`, while visual deck production stays deferred. Next, begin post-parity Forge polish: audit facilitation packs for thin/generic human guidance and compact workflow refs for misleading or bloated agent instructions.
 
 Do not tag or publish from a partial test run. Start from this plan:
 

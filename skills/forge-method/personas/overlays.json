@@ -143,6 +143,17 @@
       "techniques": ["story-spine", "constraint-remix", "experience-walkthrough"],
       "when": "Narrative, brand story, campaign, content arc, character, or thematic coherence matters.",
       "human_prompt": "Use a storytelling lens: shape the arc, pressure, payoff, and rejected alternate direction before specification."
+    },
+    {
+      "id": "presentation-craft",
+      "title": "Presentation Craft Lens",
+      "aliases": ["presentation master", "presentation craft", "pitch deck", "slide deck", "deck narrative", "caravaggio", "mestre de apresentacao", "pitch"],
+      "primary_agent": "spec-architect",
+      "agent_ids": ["spec-architect", "facilitator", "planner"],
+      "workflows": ["storytelling", "creative-session", "concept-selection"],
+      "techniques": ["story-spine", "experience-walkthrough", "acceptance-slice"],
+      "when": "Pitch, deck, slide narrative, presentation structure, audience shift, or call-to-action needs shaping.",
+      "human_prompt": "Use a presentation lens: structure the audience shift, slide-by-slide argument, proof, and call-to-action before visual deck production."
     }
   ]
 }

@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-15T11:52:00+00:00"
+updated_at: "2026-06-15T12:24:32+00:00"
 id: "artifact-forge-method-artifacts-self-hosting-hardening-backlog-json-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/self-hosting-hardening-backlog.json"
 query: "Four-story implementation batch for self-hosting guardrails, plugin-native skill paths, compact workflow docs, and public plugin install proof."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-15T11:52:00+00:00"
+last_run_at: "2026-06-15T12:24:32+00:00"
 last_error: ""

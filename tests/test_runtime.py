@@ -2275,6 +2275,12 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("prototype", by_id["design-thinking"].get("modes", []))
         self.assertIn("evidence", by_id["innovation-strategy"].get("modes", []))
         self.assertIn("payoff", by_id["storytelling"].get("modes", []))
+        storytelling_template = (
+            ROOT / "skills" / "forge-method" / "templates" / "storytelling-artifact.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("medium", storytelling_template)
+        self.assertIn("presentation_outline", storytelling_template)
+        self.assertIn("call_to_action", storytelling_template)
         self.assertIn("validate", by_id["story-creation"].get("modes", []))
         self.assertIn("rebalance", by_id["plan-sprint"].get("modes", []))
         self.assertIn("status", by_id["sprint-status"].get("modes", []))
@@ -2565,6 +2571,16 @@ class RuntimeTests(unittest.TestCase):
                     "--json",
                 ).stdout
             )
+            presentation_guide = json.loads(
+                run_cmd(
+                    "guide",
+                    "--root",
+                    str(root),
+                    "--question",
+                    "use presentation master to structure a pitch deck narrative with proof and call to action",
+                    "--json",
+                ).stdout
+            )
             index_payload = json.loads(run_cmd("config", "index", "--root", str(root), "--json").stdout)
             council = run_cmd(
                 "council",
@@ -2589,9 +2605,14 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(qa_guide["recommended_workflow"], "traceability-gate")
             self.assertIn("quality-crosscheck", qa_guide["persona_lens"]["techniques"])
 
+            self.assertEqual(presentation_guide["persona_lens"]["id"], "presentation-craft")
+            self.assertEqual(presentation_guide["recommended_workflow"], "storytelling")
+            self.assertEqual(presentation_guide["facilitation_pack"], "skill:facilitation/storytelling.md")
+            self.assertIn("presentation", presentation_guide["human_prompt"].lower())
+
             lens_ids = {item["id"] for item in index_payload["persona_lenses"]}
             technique_ids = {item["id"] for item in index_payload["elicitation_techniques"]}
-            self.assertTrue({"product-manager", "architect", "ux-designer", "qa-strategist", "game-designer", "builder", "tech-writer"} <= lens_ids)
+            self.assertTrue({"product-manager", "architect", "ux-designer", "qa-strategist", "game-designer", "builder", "tech-writer", "presentation-craft"} <= lens_ids)
             self.assertIn("risk-inversion", technique_ids)
             self.assertNotIn("persona", index_payload["agents"][0])
 

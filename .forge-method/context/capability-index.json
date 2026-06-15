@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T11:35:25+00:00",
+  "generated_at": "2026-06-15T12:10:37+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -475,6 +475,29 @@
       ],
       "title": "Storyteller Lens",
       "when": "Narrative, brand story, campaign, content arc, character, or thematic coherence matters.",
+      "workflows": [
+        "storytelling",
+        "creative-session",
+        "concept-selection"
+      ]
+    },
+    {
+      "agent_ids": [
+        "spec-architect",
+        "facilitator",
+        "planner"
+      ],
+      "facilitation_pack": "skill:facilitation/persona-lenses.md",
+      "human_prompt": "Use a presentation lens: structure the audience shift, slide-by-slide argument, proof, and call-to-action before visual deck production.",
+      "id": "presentation-craft",
+      "primary_agent": "spec-architect",
+      "techniques": [
+        "story-spine",
+        "experience-walkthrough",
+        "acceptance-slice"
+      ],
+      "title": "Presentation Craft Lens",
+      "when": "Pitch, deck, slide narrative, presentation structure, audience shift, or call-to-action needs shaping.",
       "workflows": [
         "storytelling",
         "creative-session",

@@ -54,6 +54,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Adversarial review requests should attack assumptions and route repair, waiver, evidence, or rejection rather than hiding critique inside generic edge cases.
 - Checkpoint preview requests should verify durable memory content before writing or handing off context.
 - CIS/creative requests should route to the narrowest useful creative workflow before converging on specification: broad taste/direction requests stay in creative-session, design-thinking coach requests enter design-thinking, innovation strategy requests enter innovation-strategy, and storytelling requests enter storytelling.
+- Presentation-master requests should route pitch/deck narrative to `storytelling` with a compact presentation lens; visual deck production remains deferred unless Forge explicitly grows that scope.
 
 ## Forge parity targets
 
@@ -64,6 +65,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Research requests should route to the narrowest scan: market for alternatives/adoption/demand, domain for rules/risks/review, technical feasibility for capability/data/proof path; each scan must preserve source quality, contradictions, uncertainty, stance, next workflow, and `artifact research-check` proof.
 - Brainstorming should preserve option lanes, selection criteria, taste anchors, anti-goals, discard pile, risk/evidence needs, top candidates, and next workflow in a compact artifact.
 - CIS Facilitation Depth should preserve design-thinking user/opportunity/prototype proof, innovation option/evidence/adoption/reversibility proof, and storytelling audience/pressure/payoff/rejected-path proof in compact artifacts while the human pack stays rich.
+- Presentation Craft Fold-In should preserve medium, slide/story outline, proof rhythm, call-to-action, and rejected generic deck paths through `storytelling`, not a separate deck-production workflow.
 - Agent Compactness Guard should expose a deterministic `workflow compactness` check and wire it into normal workflow validation, runtime smoke, audit, and unit coverage.
 - Confusion and stuckness should enter `problem-solving`, capture current vs desired behavior, bound symptoms, compare candidate causes, and choose one reversible probe instead of asking the human to pick from a technical menu.
 - Mechanical build requests should continue autonomously when decision artifacts and stories are already ready.

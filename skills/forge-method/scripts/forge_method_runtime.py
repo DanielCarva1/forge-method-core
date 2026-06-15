@@ -3309,6 +3309,22 @@ def persona_guidance_text(persona_lens: dict[str, Any], workflow_id: str) -> tup
     return action, prompt, alternatives
 
 
+def is_presentation_craft_intent(question: str) -> bool:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    return bool(
+        "presentation master" in normalized
+        or "pitch deck" in normalized
+        or "slide deck" in normalized
+        or "investor deck" in normalized
+        or "presentation arc" in normalized
+        or "deck narrative" in normalized
+        or "presentation craft" in normalized
+        or "mestre de apresentacao" in normalized
+        or {"pitch", "deck", "slides"} & tokens
+    )
+
+
 def validate_elicitation_techniques() -> list[str]:
     errors: list[str] = []
     payload = elicitation_techniques_payload()
@@ -6474,6 +6490,11 @@ def detect_guidance_signals(question: str) -> list[str]:
             "conceito",
             "inovacao",
             "innovation",
+            "presentation",
+            "presentacao",
+            "pitch",
+            "deck",
+            "slides",
         },
         "game-flow": {
             "game",
@@ -6536,7 +6557,7 @@ def detect_guidance_signals(question: str) -> list[str]:
             "auditoria",
         },
         "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness", "artifact-map", "checkpoint", "council", "party", "subagent", "subagents"},
-        "persona-lens": {"lens", "lente", "persona", "coach", "perspectiva", "visao", "pm", "architect", "arquiteto", "analyst", "analista", "ux", "qa", "writer", "storyteller"},
+        "persona-lens": {"lens", "lente", "persona", "coach", "perspectiva", "visao", "pm", "architect", "arquiteto", "analyst", "analista", "ux", "qa", "writer", "storyteller", "presentation", "presentacao"},
         "story-flow": {"backlog", "epic", "epics", "sprint", "stories", "story", "historia", "historias"},
         "product-flow": {
             "prd",
@@ -6656,8 +6677,9 @@ def routed_creative_workflow(question: str) -> str:
         "storytelling" in normalized
         or "story spine" in normalized
         or "story arc" in normalized
+        or is_presentation_craft_intent(question)
         or "narrativa" in normalized
-        or {"arc", "arco", "payoff", "tensao", "narrative"} & tokens
+        or {"arc", "arco", "payoff", "tensao", "narrative", "pitch", "deck", "slides"} & tokens
     ):
         return "storytelling"
     return "creative-session"
@@ -6686,8 +6708,8 @@ def creative_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, s
         )
     if workflow_id == "storytelling":
         return (
-            "run storytelling to shape audience shift, arc, pressure, payoff, voice, rejected story paths, and next workflow",
-            "I should make the narrative do work before turning it into copy, product spec, or implementation.",
+            "run storytelling to shape audience shift, medium, arc, pressure, payoff, voice, proof, presentation outline when relevant, rejected paths, and next workflow",
+            "I should make the narrative do work before turning it into copy, pitch structure, product spec, or implementation.",
             guidance_alternatives(
                 ("creative-session", "use when taste direction is still broader than the story"),
                 ("concept-selection", "use when multiple arcs need a decision"),
@@ -8211,7 +8233,7 @@ def build_guidance_decision(
         recommended_action = "answer the route question, then create or open the selected project"
         human_prompt = "Tell me the project name and the outcome you want; I will choose the track and first workflow."
         reason = "No Forge project state exists in this workspace."
-        if "game-flow" in signal_set:
+        if "game-flow" in signal_set and not is_presentation_craft_intent(question):
             classification = "game-flow"
             recommended_phase = "1-discovery"
             recommended_workflow = routed_game_workflow(question)
@@ -8473,6 +8495,7 @@ def build_guidance_decision(
     elif (
         has_question
         and "game-flow" in signal_set
+        and not is_presentation_craft_intent(question)
         and is_strong_game_quality_intent(question)
         and routed_game_workflow(question) != "game-brief"
     ):
@@ -8480,7 +8503,7 @@ def build_guidance_decision(
         recommended_workflow = routed_game_workflow(question)
         recommended_action, human_prompt, alternatives = game_guidance_text(recommended_workflow)
         reason = "Game-specific wording outranks generic lifecycle, story, or quality routing when the game router selects a narrow game workflow."
-    elif has_question and "document-utility" in signal_set and is_strong_document_utility_intent(question):
+    elif has_question and "document-utility" in signal_set and is_strong_document_utility_intent(question) and not is_presentation_craft_intent(question):
         classification = "document-utility"
         recommended_workflow = routed_document_workflow(question)
         recommended_action, human_prompt, alternatives = document_guidance_text(recommended_workflow)
@@ -8533,7 +8556,7 @@ def build_guidance_decision(
             ("quick-dev", "when the change is small enough for spec-lite plus implementation"),
         )
         reason = "The message asks to create, update, validate, or distill a compact spec kernel, which should lock the WHAT before downstream work."
-    elif has_question and "document-utility" in signal_set and document_review_outranks_quality(question):
+    elif has_question and "document-utility" in signal_set and document_review_outranks_quality(question) and not is_presentation_craft_intent(question):
         classification = "document-utility"
         recommended_workflow = routed_document_workflow(question)
         recommended_action, human_prompt, alternatives = document_guidance_text(recommended_workflow)
@@ -8565,7 +8588,7 @@ def build_guidance_decision(
         recommended_workflow = routed_quality_workflow(question)
         recommended_action, human_prompt, alternatives = quality_guidance_text(recommended_workflow)
         reason = "The message is primarily about quality, risk, review, evidence, fixture architecture, CI, or test architecture."
-    elif has_question and "document-utility" in signal_set:
+    elif has_question and "document-utility" in signal_set and not is_presentation_craft_intent(question):
         classification = "document-utility"
         recommended_workflow = routed_document_workflow(question)
         recommended_action, human_prompt, alternatives = document_guidance_text(recommended_workflow)
@@ -8634,7 +8657,7 @@ def build_guidance_decision(
             ("sprint-status", "when the human needs progress, blockers, and next story orientation"),
         )
         reason = "The message asks for story lifecycle work, so stories must be generated from accepted decision artifacts before build."
-    elif has_question and "game-flow" in signal_set:
+    elif has_question and "game-flow" in signal_set and not is_presentation_craft_intent(question):
         classification = "game-flow"
         recommended_workflow = routed_game_workflow(question)
         recommended_action, human_prompt, alternatives = game_guidance_text(recommended_workflow)
