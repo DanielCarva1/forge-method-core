@@ -4,35 +4,33 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: runtime-guidance-payload-safety-guard
-- workflow: agent-analyze
+- status: workflow-selected
+- workflow: config-customization
 - active_story: <none>
-- next_action: Continue the broader Forge audit for dead code, stale artifacts, misleading agent docs, and runtime surfaces that still depend on convention instead of deterministic validation.
+- next_action: Continue the broader Forge audit by finding other composed runtime-visible payloads that need final deterministic validation before emission.
 
 ## Latest Checkpoint
 
-# runtime-guidance-payload-safety-guard-final
+# Config capability index guidance safety guard
 
-- created_at: 2026-06-16T02:37:37+00:00
+- created_at: 2026-06-16T03:03:17+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: runtime-guidance-payload-safety-guard
-- workflow: agent-analyze
+- status: workflow-selected
+- workflow: config-customization
 - active_story: <none>
 
 ## Summary
 
-Closed the Runtime Guidance Payload safety guard with clean artifact verification, audit, and gate after registering the runtime-contract and changelog artifacts.
+Closed a config-customization audit gap: config validation, agent profile validation, and config index now apply guidance safety to runtime-visible text before future agents consume conventions, custom capabilities, agent summaries, or generated capability indexes.
 
 ## Decisions
 
-- The next audit should move beyond stale-route safety into broader dead-code, stale artifact, misleading agent doc, and runtime convention checks.
+- Treat composed capability index output as a runtime guidance payload and validate it before print/write.
 
 ## Checks
 
-- python -m unittest discover -s tests passed: 106 tests
-- verify-fast, smoke-runtime, and smoke-install passed
-- artifact verify, audit, and gate --require-evals passed: 20/20 evals
+- unittest 108; smoke-runtime; verify-fast; parity replay 91/91; workflow validate; workflow compactness; artifact verify; audit; gate 20/20; smoke-install
 
 ## Failed Checks
 
@@ -40,18 +38,15 @@ Closed the Runtime Guidance Payload safety guard with clean artifact verificatio
 
 ## Touched Files
 
-- skills/forge-method/scripts/forge_method_runtime.py
-- tests/test_runtime.py
-- CHANGELOG.md
+- skills/forge-method/scripts/forge_method_runtime.py; tests/test_runtime.py; CHANGELOG.md; .forge-method/artifacts/20260616-config-capability-index-guidance-safety.md
 
 ## Artifacts
 
-- .forge-method/artifacts/20260616-runtime-guidance-payload-safety-guard.md
-- .forge-method/evidence/20260616-023724-validation-runtime-guidance-payload-safety-guard-final-gate.md
+- .forge-method/artifacts/20260616-config-capability-index-guidance-safety.md
 
 ## Next Action
 
-Continue the broader Forge audit for dead code, stale artifacts, misleading agent docs, and runtime surfaces that still depend on convention instead of deterministic validation.
+Continue the broader Forge audit by finding other composed runtime-visible payloads that need final deterministic validation before emission.
 
 ## Recovery Signals
 
@@ -64,6 +59,7 @@ Continue the broader Forge audit for dead code, stale artifacts, misleading agen
 - skills/forge-method/scripts/forge_method_runtime.py
 - tests/test_runtime.py
 - CHANGELOG.md
+- skills/forge-method/scripts/forge_method_runtime.py; tests/test_runtime.py; CHANGELOG.md; .forge-method/artifacts/20260616-config-capability-index-guidance-safety.md
 
 ## Open Human Inputs
 
@@ -80,16 +76,16 @@ Continue the broader Forge audit for dead code, stale artifacts, misleading agen
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260616-015842-validation-workflow-guidance-safety-guard-validation.md
 - .forge-method/evidence/20260616-021614-validation-help-oracle-guidance-safety-guard-validation.md
 - .forge-method/evidence/20260616-021756-validation-help-oracle-guidance-safety-guard-final-gate.md
 - .forge-method/evidence/20260616-023621-validation-runtime-guidance-payload-safety-guard-validation.md
 - .forge-method/evidence/20260616-023724-validation-runtime-guidance-payload-safety-guard-final-gate.md
+- .forge-method/evidence/20260616-030227-validation-config-capability-index-guidance-safety-validati.md
 
 ## Recent Artifacts
 
-- changelog [active/durable]: CHANGELOG.md - Workflow guidance safety guard changelog - Unreleased notes record the workflow guidance safety guard for compact agent-facing workflow refs.
-- runtime-contract [active/durable]: .forge-method/artifacts/20260616-help-oracle-guidance-safety-guard.md - Help Oracle guidance safety guard - Runtime Help Oracle and audit output now share the misleading-guidance safety contract with compact workflow refs.
 - changelog [active/durable]: CHANGELOG.md - Help Oracle guidance safety guard changelog - Unreleased notes record the Help Oracle guidance safety guard for runtime resume, snapshot, and audit output.
 - runtime-contract [active/durable]: .forge-method/artifacts/20260616-runtime-guidance-payload-safety-guard.md - Runtime guidance payload safety guard - Guidance Engine parity payloads, preflight JSON, reload JSON, and guide payloads now share the stale-route safety contract.
 - changelog [active/durable]: CHANGELOG.md - Runtime guidance payload safety guard changelog - Unreleased notes record the Runtime Guidance Payload safety guard for Guidance Engine, preflight, reload, and guide JSON output.
+- runtime-audit [active/durable]: .forge-method/artifacts/20260616-config-capability-index-guidance-safety.md - Config capability index guidance safety - Config validation, agent profile validation, and config index now reject misleading runtime-visible guidance text before future agents can consume it.
+- changelog [active/durable]: CHANGELOG.md - Config capability index guidance safety changelog - Unreleased notes record the config, agent profile, and capability index guidance safety guard.

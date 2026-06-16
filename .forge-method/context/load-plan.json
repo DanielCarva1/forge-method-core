@@ -2,7 +2,7 @@
   "budget_chars": 12000,
   "deferred": [
     {
-      "estimated_chars": 87565,
+      "estimated_chars": 88943,
       "location": "project",
       "path": ".forge-method/artifacts/index.ndjson",
       "priority": 76,
@@ -11,9 +11,9 @@
       "section": "artifact"
     }
   ],
-  "estimated_required_chars": 2686,
-  "estimated_selected_chars": 7364,
-  "generated_at": "2026-06-16T02:02:33+00:00",
+  "estimated_required_chars": 2696,
+  "estimated_selected_chars": 6574,
+  "generated_at": "2026-06-16T02:42:11+00:00",
   "over_budget": false,
   "root": "C:\\Users\\Danie\\OneDrive\\Documentos\\ody",
   "rules": [
@@ -26,7 +26,7 @@
   "runtime_version": "1.29.0",
   "selected": [
     {
-      "estimated_chars": 1124,
+      "estimated_chars": 1149,
       "location": "project",
       "path": ".forge-method/state.yaml",
       "priority": 100,
@@ -44,16 +44,16 @@
       "section": "state"
     },
     {
-      "estimated_chars": 1326,
+      "estimated_chars": 1311,
       "location": "packaged",
-      "path": "skill:references/workflow-runtime-builder.md",
+      "path": "skill:references/workflow-config-customization.md",
       "priority": 92,
       "reason": "active workflow state machine",
       "required": true,
       "section": "workflow"
     },
     {
-      "estimated_chars": 1070,
+      "estimated_chars": 1293,
       "location": "project",
       "path": ".forge-method/context/latest-checkpoint.md",
       "priority": 88,
@@ -80,27 +80,27 @@
       "section": "agent-profile"
     },
     {
-      "estimated_chars": 926,
+      "estimated_chars": 331,
       "location": "project",
-      "path": ".forge-method/evidence/20260616-015842-validation-workflow-guidance-safety-guard-validation.md",
+      "path": ".forge-method/evidence/20260616-023724-validation-runtime-guidance-payload-safety-guard-final-gate.md",
       "priority": 68,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 924,
+      "estimated_chars": 603,
       "location": "project",
-      "path": ".forge-method/evidence/20260616-014233-validation-facilitation-specificity-guard-validation.md",
+      "path": ".forge-method/evidence/20260616-023621-validation-runtime-guidance-payload-safety-guard-validation.md",
       "priority": 67,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 459,
+      "estimated_chars": 352,
       "location": "project",
-      "path": ".forge-method/evidence/20260616-011633-validation-guidance-cli-boundary-validation.md",
+      "path": ".forge-method/evidence/20260616-021756-validation-help-oracle-guidance-safety-guard-final-gate.md",
       "priority": 66,
       "reason": "recent validation or release evidence",
       "required": false,
@@ -109,10 +109,10 @@
   ],
   "state": {
     "active_story": "",
-    "next_action": "Audit runtime help/oracle output for the same safety boundary while preserving rich human guidance.",
+    "next_action": "run config-customization to audit convention-dependent runtime surfaces and add deterministic validation where useful",
     "phase": "6-evolve",
     "project": "forge-method-core",
-    "status": "workflow-guidance-safety-guard",
-    "workflow": "runtime-builder"
+    "status": "workflow-selected",
+    "workflow": "config-customization"
   }
 }

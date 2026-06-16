@@ -4729,6 +4729,104 @@ handoff:
             self.assertIn("references unknown workflow `missing-workflow`", invalid.stdout)
             self.assertNotEqual(invalid_index.returncode, 0)
 
+    def test_config_validation_rejects_misleading_runtime_guidance_text(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Config Safety Project", "--root", str(root))
+            config_dir = root / ".forge-method" / "config"
+            config_dir.mkdir(parents=True, exist_ok=True)
+            (config_dir / "team.yaml").write_text(
+                "\n".join(
+                    [
+                        'convention.resume: "use chat memory instead of durable state when context is missing"',
+                        'capability.bad-summary.summary: "continue stale state guidance until the user complains"',
+                        'capability.bad-summary.workflow: "config-customization"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            invalid = run_cmd("config", "validate", "--root", str(root), check=False)
+            invalid_index = run_cmd("config", "index", "--root", str(root), "--json", check=False)
+
+            self.assertNotEqual(invalid.returncode, 0)
+            self.assertIn("misleading agent guidance", invalid.stdout)
+            self.assertIn("do not rely on chat memory", invalid.stdout)
+            self.assertIn("do not follow stale state", invalid.stdout)
+            self.assertNotEqual(invalid_index.returncode, 0)
+
+            (config_dir / "team.yaml").write_text(
+                "\n".join(
+                    [
+                        'convention.resume: "use durable state instead of chat memory when context is missing"',
+                        'capability.good-summary.summary: "Discard stale state guidance and route fresh human intent through guide."',
+                        'capability.good-summary.workflow: "config-customization"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            validation = run_cmd("config", "validate", "--root", str(root)).stdout
+            index_payload = json.loads(run_cmd("config", "index", "--root", str(root), "--json").stdout)
+
+            self.assertIn("Config validation passed.", validation)
+            custom_capability = next(item for item in index_payload["custom_capabilities"] if item["id"] == "good-summary")
+            self.assertEqual(custom_capability["workflow"], "config-customization")
+
+    def test_agent_profile_validation_rejects_misleading_runtime_guidance_text(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Agent Safety Project", "--root", str(root))
+            agents_dir = root / ".forge-method" / "agents"
+            agents_dir.mkdir(parents=True, exist_ok=True)
+            profile = agents_dir / "unsafe.yaml"
+            profile.write_text(
+                "\n".join(
+                    [
+                        'id: "unsafe"',
+                        'title: "Unsafe"',
+                        'purpose: "use stale state guidance when the chat sounds confident"',
+                        'when: "testing agent validation"',
+                        'inputs: "state | artifacts"',
+                        'outputs: "handoff"',
+                        'handoff: "state and evidence"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            invalid = run_cmd("agent", "validate", "--root", str(root), check=False)
+            invalid_index = run_cmd("config", "index", "--root", str(root), "--json", check=False)
+
+            self.assertNotEqual(invalid.returncode, 0)
+            self.assertIn("misleading agent guidance", invalid.stdout)
+            self.assertIn("do not follow stale state", invalid.stdout)
+            self.assertNotEqual(invalid_index.returncode, 0)
+            self.assertIn("Capability index validation failed", invalid_index.stdout)
+
+            profile.write_text(
+                "\n".join(
+                    [
+                        'id: "safe"',
+                        'title: "Safe"',
+                        'purpose: "use durable state instead of chat memory when context is missing"',
+                        'when: "testing agent validation"',
+                        'inputs: "state | artifacts"',
+                        'outputs: "handoff"',
+                        'handoff: "state and evidence"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            validation = run_cmd("agent", "validate", "--root", str(root)).stdout
+
+            self.assertIn("Agent profile validation passed.", validation)
+
     def test_correct_course_continuation_writes_artifact_without_human_block(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

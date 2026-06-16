@@ -107,6 +107,7 @@ AGENT_PROFILE_REQUIRED_FIELDS = [
     "outputs",
     "handoff",
 ]
+AGENT_PROFILE_GUIDANCE_SAFETY_FIELDS = {"purpose", "when", "inputs", "outputs", "handoff"}
 
 WORKFLOW_REQUIRED_SECTIONS = [
     "trigger:",
@@ -495,6 +496,9 @@ CONFIG_WORKFLOW_OVERRIDE_FIELDS = {"phase", "required", "outputs", "followed_by"
 CONFIG_AGENT_OVERRIDE_FIELDS = {"title", "purpose", "when", "inputs", "outputs", "handoff"}
 CONFIG_CAPABILITY_FIELDS = {"title", "summary", "workflow", "kind", "command", "phase", "module"}
 CONFIG_CAPABILITY_KINDS = {"custom", "workflow", "agent", "module", "command", "guide"}
+CONFIG_GUIDANCE_SAFETY_BASE_KEYS = {"human_tone", "project_conventions"}
+CONFIG_GUIDANCE_SAFETY_WORKFLOW_FIELDS = {"outputs", "modes"}
+CONFIG_GUIDANCE_SAFETY_CAPABILITY_FIELDS = {"title", "summary"}
 CONFIG_OVERRIDE_PRECEDENCE = ["packaged defaults", ".forge-method/config/team.yaml", ".forge-method/config/local.yaml"]
 AUTONOMY_MODES = {"auto", "manual"}
 COMMIT_POLICIES = {"off", "story", "epic"}
@@ -970,6 +974,31 @@ def validate_capability_entries(values: dict[str, str], *, source: str) -> list[
     return errors
 
 
+def config_field_is_runtime_guidance(surface: str, field: str) -> bool:
+    if surface == "base":
+        return field in CONFIG_GUIDANCE_SAFETY_BASE_KEYS
+    if surface == "workflow":
+        return field in CONFIG_GUIDANCE_SAFETY_WORKFLOW_FIELDS
+    if surface == "agent":
+        return field in CONFIG_AGENT_OVERRIDE_FIELDS
+    if surface == "convention":
+        return True
+    if surface == "capability":
+        return field in CONFIG_GUIDANCE_SAFETY_CAPABILITY_FIELDS
+    return False
+
+
+def validate_config_guidance_safety(values: dict[str, str], *, source: str) -> list[str]:
+    errors: list[str] = []
+    for key, value in values.items():
+        if key == "updated_at" or not value:
+            continue
+        surface, _item_id, field = config_key_parts(key)
+        if config_field_is_runtime_guidance(surface, field):
+            errors.extend(guidance_safety_errors(f"{source}:{key}", value))
+    return errors
+
+
 def validate_config_values(values: dict[str, str], *, source: str, root: Path | None = None) -> list[str]:
     errors: list[str] = []
     workflow_ids = set(packaged_workflow_catalog_entries())
@@ -1036,6 +1065,7 @@ def validate_config_values(values: dict[str, str], *, source: str, root: Path | 
         if key == "commit_policy" and value and value not in COMMIT_POLICIES:
             errors.append(f"{source}: commit_policy must be one of {', '.join(sorted(COMMIT_POLICIES))}")
     errors.extend(validate_capability_entries(values, source=source))
+    errors.extend(validate_config_guidance_safety(values, source=source))
     return errors
 
 
@@ -3515,6 +3545,10 @@ def validate_agent_profile_file(path: Path) -> list[str]:
         errors.append(f"{path.name}: id must be slug-safe")
     if len(path.read_text(encoding="utf-8").splitlines()) > 80:
         errors.append(f"{path.name}: too long for an agent profile")
+    for field in AGENT_PROFILE_GUIDANCE_SAFETY_FIELDS:
+        value = profile.get(field, "")
+        if value:
+            errors.extend(guidance_safety_errors(f"{path.name}:{field}", value))
     return errors
 
 
@@ -11485,6 +11519,12 @@ def cmd_config_index(args: argparse.Namespace) -> int:
             print(f"- {error}")
         return 1
     payload = capability_index_payload(root)
+    safety_errors = validate_runtime_guidance_payload_safety("capability_index", payload)
+    if safety_errors:
+        print("Capability index validation failed:")
+        for error in safety_errors:
+            print(f"- {error}")
+        return 1
     written_path = ""
     if args.write:
         target = method_dir(root) / "context" / "capability-index.json"
