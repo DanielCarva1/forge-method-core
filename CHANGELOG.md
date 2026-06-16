@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add a Help Oracle guidance safety guard so runtime resume/snapshot/audit output rejects stale-chat or stale-state instructions while preserving durable-state-first recovery guidance
 - add a workflow guidance safety guard so compact workflow refs fail validation if they tell agents to rely on chat memory, follow stale state, ask procedural continue confirmations, or dump catalogs
 - add a facilitation specificity guard: human-facing packs now require `domain_examples`, workflow validation rejects generic packs, and every packaged pack has at least three situational examples
 - trim remaining Guidance Engine test overhead by validating JSON contracts through direct runtime calls while keeping `guide` subprocess coverage for human text, empty-workspace, config/tracks, and mechanical CLI behavior

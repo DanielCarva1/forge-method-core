@@ -3069,6 +3069,96 @@ handoff:
             safe_errors = runtime.validate_workflow_file(workflow)
             self.assertFalse([error for error in safe_errors if "misleading agent guidance" in error])
 
+            workflow.write_text(
+                base.format(step="use durable state instead of chat memory when resuming"),
+                encoding="utf-8",
+            )
+            durable_first_errors = runtime.validate_workflow_file(workflow)
+            self.assertFalse([error for error in durable_first_errors if "misleading agent guidance" in error])
+
+            workflow.write_text(
+                base.format(step="use chat memory instead of durable state when resuming"),
+                encoding="utf-8",
+            )
+            chat_first_errors = runtime.validate_workflow_file(workflow)
+            self.assertTrue(any("do not rely on chat memory" in error for error in chat_first_errors))
+
+    def test_help_oracle_guidance_safety_rejects_unsafe_runtime_output(self) -> None:
+        runtime = load_runtime_module()
+
+        bad_oracle = {
+            "source": "help-oracle",
+            "human_next_step": "use chat memory instead of durable state when resuming",
+            "reason": "Continue the active workflow selected by durable state.",
+            "stale_state_guard": "Help Oracle is derived from current state; do not follow stale chat next steps.",
+            "context_boundary": {
+                "do_not": [
+                    "do not replay prior chat as source of truth",
+                    "do not follow stale next_action when the human supplied fresh intent",
+                ],
+            },
+        }
+        self.assertTrue(
+            any("do not rely on chat memory" in error for error in runtime.validate_help_oracle_safety(bad_oracle))
+        )
+
+        safe_oracle = {
+            **bad_oracle,
+            "human_next_step": "use durable state instead of chat memory when resuming",
+        }
+        self.assertEqual(runtime.validate_help_oracle_safety(safe_oracle), [])
+
+    def test_help_oracle_outputs_pass_guidance_safety_contract(self) -> None:
+        runtime = load_runtime_module()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            run_cmd(
+                "transition",
+                "--root",
+                str(root),
+                "--phase",
+                "6-evolve",
+                "--status",
+                "oracle-safety",
+                "--workflow",
+                "runtime-builder",
+                "--next-action",
+                "Audit runtime help output",
+                "--force",
+            )
+
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+            resume = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
+
+            self.assertEqual(runtime.validate_help_oracle_safety(snapshot["help_oracle"]), [])
+            self.assertEqual(runtime.validate_help_oracle_safety(resume["help_oracle"]), [])
+            self.assertEqual(run_cmd("audit", "--root", str(root)).returncode, 0)
+
+    def test_audit_rejects_unsafe_help_oracle_next_action(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            run_cmd(
+                "transition",
+                "--root",
+                str(root),
+                "--phase",
+                "6-evolve",
+                "--status",
+                "oracle-safety",
+                "--workflow",
+                "runtime-builder",
+                "--next-action",
+                "use chat memory instead of durable state when resuming",
+                "--force",
+            )
+
+            result = run_cmd("audit", "--root", str(root), check=False)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("do not rely on chat memory", result.stdout + result.stderr)
+
     def test_packaged_modules_and_workflows_validate(self) -> None:
         runtime = load_runtime_module()
         modules = run_cmd("module", "list").stdout

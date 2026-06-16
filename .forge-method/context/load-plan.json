@@ -2,7 +2,7 @@
   "budget_chars": 12000,
   "deferred": [
     {
-      "estimated_chars": 86119,
+      "estimated_chars": 87565,
       "location": "project",
       "path": ".forge-method/artifacts/index.ndjson",
       "priority": 76,
@@ -11,9 +11,9 @@
       "section": "artifact"
     }
   ],
-  "estimated_required_chars": 2770,
-  "estimated_selected_chars": 6923,
-  "generated_at": "2026-06-16T01:19:39+00:00",
+  "estimated_required_chars": 2686,
+  "estimated_selected_chars": 7364,
+  "generated_at": "2026-06-16T02:02:33+00:00",
   "over_budget": false,
   "root": "C:\\Users\\Danie\\OneDrive\\Documentos\\ody",
   "rules": [
@@ -26,7 +26,7 @@
   "runtime_version": "1.29.0",
   "selected": [
     {
-      "estimated_chars": 1208,
+      "estimated_chars": 1124,
       "location": "project",
       "path": ".forge-method/state.yaml",
       "priority": 100,
@@ -45,15 +45,15 @@
     },
     {
       "estimated_chars": 1326,
-      "location": "project",
-      "path": "skills/forge-method/references/workflow-runtime-builder.md",
+      "location": "packaged",
+      "path": "skill:references/workflow-runtime-builder.md",
       "priority": 92,
       "reason": "active workflow state machine",
       "required": true,
       "section": "workflow"
     },
     {
-      "estimated_chars": 1181,
+      "estimated_chars": 1070,
       "location": "project",
       "path": ".forge-method/context/latest-checkpoint.md",
       "priority": 88,
@@ -63,8 +63,8 @@
     },
     {
       "estimated_chars": 673,
-      "location": "project",
-      "path": "skills/forge-method/agents/profiles/facilitator.yaml",
+      "location": "packaged",
+      "path": "skill:agents/profiles/facilitator.yaml",
       "priority": 80,
       "reason": "recommended agent profile for current state: facilitator",
       "required": false,
@@ -72,35 +72,35 @@
     },
     {
       "estimated_chars": 626,
-      "location": "project",
-      "path": "skills/forge-method/agents/profiles/planner.yaml",
+      "location": "packaged",
+      "path": "skill:agents/profiles/planner.yaml",
       "priority": 79,
       "reason": "recommended agent profile for current state: planner",
       "required": false,
       "section": "agent-profile"
     },
     {
-      "estimated_chars": 459,
+      "estimated_chars": 926,
       "location": "project",
-      "path": ".forge-method/evidence/20260616-011633-validation-guidance-cli-boundary-validation.md",
+      "path": ".forge-method/evidence/20260616-015842-validation-workflow-guidance-safety-guard-validation.md",
       "priority": 68,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 702,
+      "estimated_chars": 924,
       "location": "project",
-      "path": ".forge-method/evidence/20260616-005844-validation-guidance-loop-routing-and-test-optimization-vali.md",
+      "path": ".forge-method/evidence/20260616-014233-validation-facilitation-specificity-guard-validation.md",
       "priority": 67,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 512,
+      "estimated_chars": 459,
       "location": "project",
-      "path": ".forge-method/evidence/20260616-003551-validation-guidance-replay-test-optimization-validation.md",
+      "path": ".forge-method/evidence/20260616-011633-validation-guidance-cli-boundary-validation.md",
       "priority": 66,
       "reason": "recent validation or release evidence",
       "required": false,
@@ -109,10 +109,10 @@
   ],
   "state": {
     "active_story": "",
-    "next_action": "Continue improving Forge human guidance depth and agent compactness; keep remaining guide subprocess checks as CLI proof unless replacement coverage is equivalent.",
+    "next_action": "Audit runtime help/oracle output for the same safety boundary while preserving rich human guidance.",
     "phase": "6-evolve",
     "project": "forge-method-core",
-    "status": "guidance-cli-boundary-optimized",
+    "status": "workflow-guidance-safety-guard",
     "workflow": "runtime-builder"
   }
 }

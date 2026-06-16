@@ -14,7 +14,7 @@ import sys
 import tempfile
 import unicodedata
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 from urllib.parse import quote
 
 
@@ -148,17 +148,6 @@ WORKFLOW_FORBIDDEN_ROOT_SECTIONS = {
 WORKFLOW_COMPACTNESS_MAX_LINES = 80
 WORKFLOW_COMPACTNESS_MAX_WORDS = 420
 WORKFLOW_COMPACTNESS_MAX_BULLETS = 40
-WORKFLOW_GUIDANCE_SAFE_NEGATIONS = {
-    "do not",
-    "don't",
-    "never",
-    "without",
-    "discard",
-    "remove",
-    "instead of",
-    "over prior",
-    "not chat",
-}
 WORKFLOW_MISLEADING_GUIDANCE_PATTERNS = [
     (
         r"\b(rely|depend|base|infer|continue|resume|trust|use)\b.*\b(chat|conversation)\b.*\b(memory|history|context)\b",
@@ -176,6 +165,36 @@ WORKFLOW_MISLEADING_GUIDANCE_PATTERNS = [
         r"\b(dump\b.*\bcatalog|catalog\b.*\bdump|show\b.*\bfull catalog)\b",
         "do not dump workflow catalogs as guidance",
     ),
+]
+RUNTIME_GUIDANCE_SAFETY_IGNORED_KEYS = {
+    "command",
+    "commands",
+    "first_command",
+}
+GUIDANCE_RISK_TOKENS = [
+    "chat",
+    "conversation",
+    "stale",
+    "procedural",
+    "ok/continue",
+    "ok to continue",
+    "continue?",
+    "catalog",
+]
+GUIDANCE_DIRECT_NEGATIONS = [
+    "do not",
+    "don't",
+    "never",
+    "without",
+]
+GUIDANCE_REPAIR_VERBS = [
+    "discard",
+    "remove",
+]
+GUIDANCE_COMPARISON_MARKERS = [
+    "instead of",
+    "over prior",
+    "not chat",
 ]
 
 FACILITATION_REQUIRED_SECTIONS = [
@@ -4046,17 +4065,61 @@ def validate_workflow_compactness(path: Path, text: str) -> list[str]:
     return errors
 
 
-def validate_workflow_guidance_safety(path: Path, text: str) -> list[str]:
+def _first_guidance_risk_index(normalized: str, match: re.Match[str]) -> int:
+    indexes = [
+        normalized.find(token, match.start(), match.end())
+        for token in GUIDANCE_RISK_TOKENS
+    ]
+    present = [index for index in indexes if index >= 0]
+    return min(present) if present else match.start()
+
+
+def _guidance_match_is_safely_negated(normalized: str, match: re.Match[str]) -> bool:
+    risk_index = _first_guidance_risk_index(normalized, match)
+    before_risk = normalized[:risk_index]
+    if any(marker in before_risk for marker in GUIDANCE_DIRECT_NEGATIONS):
+        return True
+    if any(marker in before_risk for marker in GUIDANCE_REPAIR_VERBS):
+        return True
+    return any(marker in before_risk for marker in GUIDANCE_COMPARISON_MARKERS)
+
+
+def guidance_safety_errors(label: str, text: str) -> list[str]:
     errors: list[str] = []
     for line_number, line in enumerate(text.splitlines(), start=1):
         normalized = line.strip().lower()
         if not normalized:
             continue
-        if any(marker in normalized for marker in WORKFLOW_GUIDANCE_SAFE_NEGATIONS):
-            continue
         for pattern, message in WORKFLOW_MISLEADING_GUIDANCE_PATTERNS:
-            if re.search(pattern, normalized):
-                errors.append(f"{path.name}:{line_number}: misleading agent guidance: {message}")
+            match = re.search(pattern, normalized)
+            if match and not _guidance_match_is_safely_negated(normalized, match):
+                errors.append(f"{label}:{line_number}: misleading agent guidance: {message}")
+    return errors
+
+
+def validate_workflow_guidance_safety(path: Path, text: str) -> list[str]:
+    return guidance_safety_errors(path.name, text)
+
+
+def iter_runtime_guidance_strings(value: Any, path: str = "payload") -> Iterable[tuple[str, str]]:
+    if isinstance(value, str):
+        yield path, value
+        return
+    if isinstance(value, dict):
+        for key, child in value.items():
+            if key in RUNTIME_GUIDANCE_SAFETY_IGNORED_KEYS:
+                continue
+            yield from iter_runtime_guidance_strings(child, f"{path}.{key}")
+        return
+    if isinstance(value, list):
+        for index, child in enumerate(value):
+            yield from iter_runtime_guidance_strings(child, f"{path}[{index}]")
+
+
+def validate_help_oracle_safety(oracle: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    for path, text in iter_runtime_guidance_strings(oracle, "help_oracle"):
+        errors.extend(guidance_safety_errors(path, text))
     return errors
 
 
@@ -4968,6 +5031,10 @@ def audit_project(root: Path) -> list[str]:
         errors.append("state.runtime is not forge-method")
     if state.get("phase") not in PHASES:
         errors.append(f"invalid phase: {state.get('phase')}")
+    try:
+        errors.extend(validate_help_oracle_safety(build_post_command_help_oracle(root, state, validate=False)))
+    except Exception as exc:
+        errors.append(f"help oracle safety validation failed: {exc}")
     required_inputs = open_required_inputs(root)
     if required_inputs and state.get("human_input_required") != "true":
         errors.append("open required human input exists but state.human_input_required is not true")
@@ -5728,7 +5795,7 @@ def build_context_boundary(
         "recovery_triggers": [
             "chat, network, or tool context was interrupted",
             "state, sprint, story, or latest checkpoint contradict each other",
-            "the agent is relying on old chat memory instead of launcher output",
+            "old chat memory appears to be driving behavior; discard it and use launcher output",
             "context health is compact or blocked",
         ],
         "do_not": [
