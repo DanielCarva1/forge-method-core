@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-16T03:42:52+00:00"
+updated_at: "2026-06-16T04:16:52+00:00"
 id: "artifact-forge-method-artifacts-20260616-help-oracle-guidance-safety-guard-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/20260616-help-oracle-guidance-safety-guard.md"
 query: "Runtime Help Oracle and audit output now share the misleading-guidance safety contract with compact workflow refs."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-16T03:42:52+00:00"
+last_run_at: "2026-06-16T04:16:52+00:00"
 last_error: ""

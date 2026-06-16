@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add a durable runtime guidance source guard so artifact index summaries, human input prompts, review findings, and story work fields reject misleading agent guidance before they enter snapshots, context packs, or runtime JSON
 - add a recovery memory guidance guard so checkpoints, latest-checkpoint mirrors, context packs, and recovery briefs reject misleading agent guidance before future sessions consume them
 - add a state guidance write guard so `write_state`, `audit`, and `gate` reject misleading next-action or route-reason guidance before it becomes durable context for future agents
 - add a config and capability-index guidance safety guard so project conventions, custom capability summaries, agent profile text, and generated capability indexes reject misleading runtime guidance before future agents consume it

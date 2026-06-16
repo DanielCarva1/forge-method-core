@@ -109,6 +109,10 @@ AGENT_PROFILE_REQUIRED_FIELDS = [
 ]
 AGENT_PROFILE_GUIDANCE_SAFETY_FIELDS = {"purpose", "when", "inputs", "outputs", "handoff"}
 STATE_GUIDANCE_SAFETY_FIELDS = {"guide_summary", "last_route_reason", "next_action"}
+ARTIFACT_INDEX_GUIDANCE_SAFETY_FIELDS = {"title", "summary"}
+HUMAN_INPUT_GUIDANCE_SAFETY_FIELDS = {"prompt", "reason"}
+REVIEW_FINDING_GUIDANCE_SAFETY_FIELDS = {"title", "summary", "resolution"}
+STORY_GUIDANCE_SAFETY_FIELDS = {"title", "acceptance_criteria", "blocker"}
 CONTEXT_GUIDANCE_SAFETY_FILES = {
     "latest-checkpoint.md",
     "current-pack.md",
@@ -195,15 +199,28 @@ GUIDANCE_DIRECT_NEGATIONS = [
     "don't",
     "never",
     "without",
+    "should not",
+    "must not",
 ]
 GUIDANCE_REPAIR_VERBS = [
     "discard",
     "remove",
+    "reject",
+    "refuse",
+    "block",
+    "prevent",
 ]
 GUIDANCE_COMPARISON_MARKERS = [
     "instead of",
     "over prior",
     "not chat",
+    "unsafe",
+    "misleading",
+    "failure",
+    "fail validation",
+    "fails validation",
+    "failed validation",
+    "validation fails",
 ]
 
 FACILITATION_REQUIRED_SECTIONS = [
@@ -2276,6 +2293,41 @@ def validate_state_guidance_safety(state: dict[str, Any], *, source: str = ".for
     return errors
 
 
+def validate_record_guidance_safety(record: dict[str, Any], fields: set[str], *, source: str) -> list[str]:
+    errors: list[str] = []
+    for field in sorted(fields):
+        raw = record.get(field, "")
+        if isinstance(raw, list):
+            value = join_list([str(item) for item in raw])
+        else:
+            value = str(raw or "")
+        if value:
+            errors.extend(guidance_safety_errors(f"{source}:{field}", value))
+    return errors
+
+
+def require_record_guidance_safety(kind: str, record: dict[str, Any], fields: set[str], *, source: str) -> None:
+    errors = validate_record_guidance_safety(record, fields, source=source)
+    if errors:
+        raise SystemExit(f"{kind} guidance validation failed:\n- " + "\n- ".join(errors))
+
+
+def validate_artifact_index_guidance_safety(entry: dict[str, Any], *, source: str) -> list[str]:
+    return validate_record_guidance_safety(entry, ARTIFACT_INDEX_GUIDANCE_SAFETY_FIELDS, source=source)
+
+
+def validate_human_input_guidance_safety(item: dict[str, Any], *, source: str) -> list[str]:
+    return validate_record_guidance_safety(item, HUMAN_INPUT_GUIDANCE_SAFETY_FIELDS, source=source)
+
+
+def validate_review_finding_guidance_safety(finding: dict[str, Any], *, source: str) -> list[str]:
+    return validate_record_guidance_safety(finding, REVIEW_FINDING_GUIDANCE_SAFETY_FIELDS, source=source)
+
+
+def validate_story_guidance_safety(story: dict[str, Any], *, source: str) -> list[str]:
+    return validate_record_guidance_safety(story, STORY_GUIDANCE_SAFETY_FIELDS, source=source)
+
+
 def write_state(root: Path, state: dict[str, Any]) -> None:
     state.setdefault("schema_version", "1")
     state.setdefault("runtime", RUNTIME_NAME)
@@ -2385,7 +2437,14 @@ def save_story(root: Path, story: dict[str, Any]) -> None:
     story_id = story.get("id")
     if not story_id:
         raise SystemExit("Story must have an id.")
-    write_flat_yaml(story_path(root, str(story_id)), story, header="Forge Method story")
+    path = story_path(root, str(story_id))
+    require_record_guidance_safety(
+        "Story",
+        story,
+        STORY_GUIDANCE_SAFETY_FIELDS,
+        source=path.relative_to(root).as_posix(),
+    )
+    write_flat_yaml(path, story, header="Forge Method story")
 
 
 def list_stories(root: Path) -> list[dict[str, str]]:
@@ -2441,7 +2500,14 @@ def save_human_input(root: Path, item: dict[str, Any]) -> None:
     input_id = item.get("id")
     if not input_id:
         raise SystemExit("Human input must have an id.")
-    write_flat_yaml(human_input_path(root, str(input_id)), item, header="Forge Method human input")
+    path = human_input_path(root, str(input_id))
+    require_record_guidance_safety(
+        "Human input",
+        item,
+        HUMAN_INPUT_GUIDANCE_SAFETY_FIELDS,
+        source=path.relative_to(root).as_posix(),
+    )
+    write_flat_yaml(path, item, header="Forge Method human input")
 
 
 def list_human_inputs(root: Path) -> list[dict[str, str]]:
@@ -2518,6 +2584,13 @@ def append_artifact_index(root: Path, entry: dict[str, Any]) -> None:
     index_path = artifact_index_path(root)
     index_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"ts": utc_now(), **entry}
+    source_label = payload.get("path") or payload.get("title") or "entry"
+    require_record_guidance_safety(
+        "Artifact index",
+        payload,
+        ARTIFACT_INDEX_GUIDANCE_SAFETY_FIELDS,
+        source=f"{index_path.relative_to(root).as_posix()}:{source_label}",
+    )
     with index_path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(payload, ensure_ascii=True, sort_keys=True) + "\n")
 
@@ -2535,6 +2608,27 @@ def artifact_index_entries(root: Path) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             continue
     return entries
+
+
+def validate_durable_runtime_guidance_sources(root: Path) -> list[str]:
+    errors: list[str] = []
+    index_rel = artifact_index_path(root).relative_to(root).as_posix()
+    for index, entry in enumerate(artifact_index_entries(root), start=1):
+        source_label = entry.get("path") or entry.get("title") or f"entry-{index}"
+        errors.extend(validate_artifact_index_guidance_safety(entry, source=f"{index_rel}:{source_label}"))
+    for item in list_human_inputs(root):
+        input_id = item.get("id", "unknown")
+        source = human_input_path(root, input_id).relative_to(root).as_posix()
+        errors.extend(validate_human_input_guidance_safety(item, source=source))
+    for finding in list_review_findings(root):
+        finding_id = finding.get("id", "unknown")
+        source = review_finding_path(root, finding_id).relative_to(root).as_posix()
+        errors.extend(validate_review_finding_guidance_safety(finding, source=source))
+    for story in list_stories(root):
+        story_id = story.get("id", "unknown")
+        source = story_path(root, story_id).relative_to(root).as_posix()
+        errors.extend(validate_story_guidance_safety(story, source=source))
+    return errors
 
 
 def recent_artifacts(root: Path, limit: int = 5) -> list[dict[str, Any]]:
@@ -4318,26 +4412,39 @@ def write_artifact(
     path: str = "",
     lifecycle: str = "durable",
 ) -> str:
+    entry = {
+        "kind": kind,
+        "title": title,
+        "summary": summary.strip(),
+        "lifecycle": lifecycle,
+        "status": "active",
+    }
     if path:
         artifact_path, rel = project_path(root, path)
+        entry["path"] = rel
+        source = f"{artifact_index_path(root).relative_to(root).as_posix()}:{rel}"
+        require_record_guidance_safety(
+            "Artifact index",
+            entry,
+            ARTIFACT_INDEX_GUIDANCE_SAFETY_FIELDS,
+            source=source,
+        )
         artifact_path.parent.mkdir(parents=True, exist_ok=True)
         if not artifact_path.exists():
             artifact_path.write_text(f"# {title}\n\n{summary.strip()}\n", encoding="utf-8")
     else:
         artifact_path = artifact_file(root, kind, title)
-        artifact_path.write_text(f"# {title}\n\n{summary.strip()}\n", encoding="utf-8")
         rel = artifact_path.relative_to(root).as_posix()
-    append_artifact_index(
-        root,
-        {
-            "kind": kind,
-            "title": title,
-            "path": rel,
-            "summary": summary.strip(),
-            "lifecycle": lifecycle,
-            "status": "active",
-        },
-    )
+        entry["path"] = rel
+        source = f"{artifact_index_path(root).relative_to(root).as_posix()}:{rel}"
+        require_record_guidance_safety(
+            "Artifact index",
+            entry,
+            ARTIFACT_INDEX_GUIDANCE_SAFETY_FIELDS,
+            source=source,
+        )
+        artifact_path.write_text(f"# {title}\n\n{summary.strip()}\n", encoding="utf-8")
+    append_artifact_index(root, entry)
     append_ledger(root, "artifact.added", {"kind": kind, "path": rel, "lifecycle": lifecycle})
     return rel
 
@@ -5114,6 +5221,7 @@ def audit_project(root: Path) -> list[str]:
     if state.get("phase") not in PHASES:
         errors.append(f"invalid phase: {state.get('phase')}")
     errors.extend(validate_state_guidance_safety(state))
+    errors.extend(validate_durable_runtime_guidance_sources(root))
     errors.extend(validate_recovery_memory_files(root))
     try:
         errors.extend(validate_help_oracle_safety(build_post_command_help_oracle(root, state, validate=False)))
@@ -5365,7 +5473,14 @@ def save_review_finding(root: Path, finding: dict[str, Any]) -> None:
     finding_id = finding.get("id")
     if not finding_id:
         raise SystemExit("Review finding must have an id.")
-    write_flat_yaml(review_finding_path(root, str(finding_id)), finding, header="Forge Method review finding")
+    path = review_finding_path(root, str(finding_id))
+    require_record_guidance_safety(
+        "Review finding",
+        finding,
+        REVIEW_FINDING_GUIDANCE_SAFETY_FIELDS,
+        source=path.relative_to(root).as_posix(),
+    )
+    write_flat_yaml(path, finding, header="Forge Method review finding")
 
 
 def list_review_findings(

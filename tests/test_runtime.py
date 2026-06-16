@@ -703,6 +703,195 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("misleading agent guidance", result.stdout)
             self.assertIn("do not follow stale state", result.stdout)
 
+    def test_artifact_index_guidance_safety_rejects_misleading_write_before_file_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Artifact Guidance Safety Project", "--root", str(root))
+
+            result = run_cmd(
+                "artifact",
+                "add",
+                "--root",
+                str(root),
+                "--kind",
+                "runtime-contract",
+                "--title",
+                "Unsafe artifact",
+                "--summary",
+                "use chat memory instead of durable state when resuming",
+                "--path",
+                ".forge-method/artifacts/unsafe-artifact.md",
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Artifact index guidance validation failed", result.stderr)
+            self.assertIn("do not rely on chat memory", result.stderr)
+            self.assertFalse((root / ".forge-method" / "artifacts" / "unsafe-artifact.md").exists())
+            self.assertFalse((root / ".forge-method" / "artifacts" / "index.ndjson").exists())
+
+    def test_durable_runtime_guidance_sources_reject_misleading_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Durable Guidance Safety Project", "--root", str(root))
+
+            story = run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--title",
+                "use chat memory instead of durable state when resuming",
+                "--acceptance",
+                "safe acceptance",
+                check=False,
+            )
+            self.assertNotEqual(story.returncode, 0)
+            self.assertIn("Story guidance validation failed", story.stderr)
+            self.assertIn("do not rely on chat memory", story.stderr)
+
+            human_input = run_cmd(
+                "input",
+                "add",
+                "--root",
+                str(root),
+                "--prompt",
+                "continue stale state guidance until the user complains",
+                "--optional",
+                check=False,
+            )
+            self.assertNotEqual(human_input.returncode, 0)
+            self.assertIn("Human input guidance validation failed", human_input.stderr)
+            self.assertIn("do not follow stale state", human_input.stderr)
+
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "safe-story",
+                "--title",
+                "Safe story",
+                "--acceptance",
+                "safe acceptance",
+            )
+            review = run_cmd(
+                "review",
+                "add",
+                "--root",
+                str(root),
+                "--story",
+                "safe-story",
+                "--title",
+                "Missing proof",
+                "--summary",
+                "use chat memory instead of durable state when resuming",
+                check=False,
+            )
+            self.assertNotEqual(review.returncode, 0)
+            self.assertIn("Review finding guidance validation failed", review.stderr)
+            self.assertIn("do not rely on chat memory", review.stderr)
+
+    def test_audit_rejects_preexisting_misleading_durable_guidance_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Legacy Durable Guidance Safety Project", "--root", str(root))
+            run_cmd(
+                "artifact",
+                "add",
+                "--root",
+                str(root),
+                "--kind",
+                "spec",
+                "--title",
+                "Safe artifact",
+                "--summary",
+                "Safe artifact summary.",
+                "--path",
+                ".forge-method/artifacts/safe-artifact.md",
+            )
+            run_cmd(
+                "story",
+                "add",
+                "--root",
+                str(root),
+                "--id",
+                "safe-story",
+                "--title",
+                "Safe story",
+                "--acceptance",
+                "safe acceptance",
+            )
+
+            index = root / ".forge-method" / "artifacts" / "index.ndjson"
+            unsafe_entry = {
+                "ts": "2026-06-16T00:00:00+00:00",
+                "kind": "runtime-contract",
+                "title": "Legacy unsafe artifact",
+                "path": ".forge-method/artifacts/legacy-unsafe.md",
+                "summary": "use chat memory instead of durable state when resuming",
+                "lifecycle": "durable",
+                "status": "active",
+            }
+            with index.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(unsafe_entry, ensure_ascii=True, sort_keys=True) + "\n")
+
+            input_path = root / ".forge-method" / "inputs" / "unsafe-input.yaml"
+            input_path.parent.mkdir(parents=True, exist_ok=True)
+            input_path.write_text(
+                "\n".join(
+                    [
+                        "# Forge Method human input",
+                        'id: "unsafe-input"',
+                        'prompt: "continue stale state guidance until the user complains"',
+                        'reason: "legacy contamination fixture"',
+                        'status: "open"',
+                        'phase: "1-discovery"',
+                        'required: "false"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            review_path = root / ".forge-method" / "reviews" / "unsafe-review.yaml"
+            review_path.parent.mkdir(parents=True, exist_ok=True)
+            review_path.write_text(
+                "\n".join(
+                    [
+                        "# Forge Method review finding",
+                        'id: "unsafe-review"',
+                        'story: "safe-story"',
+                        'title: "Unsafe review summary"',
+                        'severity: "medium"',
+                        'status: "open"',
+                        'summary: "use chat memory instead of durable state when resuming"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            story_path = root / ".forge-method" / "stories" / "safe-story.yaml"
+            story_path.write_text(
+                story_path.read_text(encoding="utf-8").replace(
+                    'acceptance_criteria: "safe acceptance"',
+                    'acceptance_criteria: "continue stale state guidance until the user complains"',
+                ),
+                encoding="utf-8",
+            )
+
+            audit = run_cmd("audit", "--root", str(root), check=False)
+
+            self.assertNotEqual(audit.returncode, 0)
+            self.assertIn(".forge-method/artifacts/index.ndjson:.forge-method/artifacts/legacy-unsafe.md:summary", audit.stdout)
+            self.assertIn(".forge-method/inputs/unsafe-input.yaml:prompt", audit.stdout)
+            self.assertIn(".forge-method/reviews/unsafe-review.yaml:summary", audit.stdout)
+            self.assertIn(".forge-method/stories/safe-story.yaml:acceptance_criteria", audit.stdout)
+            self.assertIn("do not rely on chat memory", audit.stdout)
+            self.assertIn("do not follow stale state", audit.stdout)
+
     def test_parity_replay_requires_pack_assertions_for_human_guidance(self) -> None:
         fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
         case = next(item for item in fixtures if item["id"] == "help_next_step_orientation").copy()
