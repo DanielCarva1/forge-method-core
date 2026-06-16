@@ -2263,6 +2263,7 @@ def build_reload_payload(root: Path, *, scan_depth: int) -> dict[str, Any]:
         "diagnostics": runtime_diagnostics(),
     }
     if state_root:
+        status_brief = build_status_brief(state_root, state)
         reload_resume = {
             "action": "continue_current_workflow",
             "read": [".forge-method/state.yaml", ".forge-method/sprint.yaml"],
@@ -2283,6 +2284,7 @@ def build_reload_payload(root: Path, *, scan_depth: int) -> dict[str, Any]:
                 "phase": state.get("phase", ""),
                 "status": state.get("status", ""),
                 "workflow": state.get("active_workflow", ""),
+                "quality": status_brief["quality"],
                 "human_experience": human_experience_for_route("existing-method-project"),
                 "context_boundary": build_context_boundary(state_root, state, reload_resume, state.get("active_workflow", "")),
                 "decision_required": False,
@@ -2350,6 +2352,7 @@ def print_reload(payload: dict[str, Any]) -> None:
         print(f"Project root: {payload.get('project_root', '')}")
         print(f"Project: {payload.get('project', '')}")
         print(f"State: {payload.get('phase', '')} / {payload.get('status', '')} / {payload.get('workflow', '')}")
+        print_quality_summary(payload.get("quality", {}))
         print("Next: run resume --json, then continue from durable state.")
     else:
         print_human_experience_intro(payload)

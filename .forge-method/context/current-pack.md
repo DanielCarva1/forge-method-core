@@ -4,34 +4,42 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: bootstrap-quality-surface
+- status: reload-quality-surface
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Continue the post-parity Forge audit by checking remaining bootstrap and recovery surfaces where narrow status signals can mislead future agents or humans.
+- next_action: Continue the post-parity Forge audit by checking recovery outputs that still lack compact machine-readable quality, context, or route diagnostics.
 
 ## Latest Checkpoint
 
-# Bootstrap quality surface
+# Reload quality surface
 
-- created_at: 2026-06-16T09:49:24+00:00
+- created_at: 2026-06-16T10:32:04+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: bootstrap-quality-surface
+- status: reload-quality-surface
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed bootstrap quality surface: start, status --brief, and existing-project preflight now expose compact full-quality status so agents do not trust audit-only health.
+Existing-project reload now exposes compact full-quality status in text and JSON, matching bootstrap quality surfaces and preventing stale-chat recovery from hiding workflow/config/builder/agent failures.
 
 ## Decisions
 
-- Keep Audit as a compatibility line, but add Quality as the bootstrap truth for workflow/config/builder/agent health.
+- Treat existing-project reload as a recovery bootstrap surface that must expose full compact quality, not only route/state/next.
+- Keep missing-state reload route-focused until a Forge project is selected.
 
 ## Checks
 
-- 125 tests passed
-- smoke-runtime, smoke-install, verify-fast, parity replay, artifact verify, audit, and gate passed
+- Focused regression: `tests.test_runtime.RuntimeTests.test_snapshot_uses_workflow_validation_surface`
+- `python -m unittest discover -s tests` passed, 125 tests
+- `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1` passed
+- `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1` passed
+- `powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1` passed
+- `python skills\forge-method\scripts\forge_method_runtime.py parity replay --json` passed, 91/91 fixtures
+- `python skills\forge-method\scripts\forge_method_runtime.py artifact verify --root .` passed
+- `python skills\forge-method\scripts\forge_method_runtime.py audit --root .` passed
+- `python skills\forge-method\scripts\forge_method_runtime.py gate --root . --require-evals` passed, 22/22 evals
 
 ## Failed Checks
 
@@ -42,14 +50,16 @@ Closed bootstrap quality surface: start, status --brief, and existing-project pr
 - skills/forge-method/scripts/forge_method_runtime.py
 - tests/test_runtime.py
 - CHANGELOG.md
+- .forge-method/state.yaml
 
 ## Artifacts
 
-- .forge-method/artifacts/20260616-bootstrap-quality-surface.md
+- .forge-method/artifacts/20260616-reload-quality-surface.md
+- .forge-method/evidence/20260616-103204-validation-reload-quality-surface-validation.md
 
 ## Next Action
 
-Continue the post-parity Forge audit by checking remaining bootstrap and recovery surfaces where narrow status signals can mislead future agents or humans.
+Continue the post-parity Forge audit by checking recovery outputs that still lack compact machine-readable quality, context, or route diagnostics.
 
 ## Recovery Signals
 
@@ -61,9 +71,8 @@ Continue the post-parity Forge audit by checking remaining bootstrap and recover
 
 - skills/forge-method/scripts/forge_method_runtime.py
 - tests/test_runtime.py
-- .forge-method/artifacts/20260616-workflow-snapshot-surface-guard.md
-- CHANGELOG.md
 - .forge-method/artifacts/20260616-snapshot-plugin-diagnostic-surface.md
+- CHANGELOG.md
 
 ## Open Human Inputs
 
@@ -88,8 +97,8 @@ Continue the post-parity Forge audit by checking remaining bootstrap and recover
 
 ## Recent Artifacts
 
-- runtime-diagnostic [active/durable]: .forge-method/artifacts/20260616-snapshot-plugin-diagnostic-surface.md - Bootstrap Plugin Diagnostic Surface - Preflight, reload, context health, context plan, resume, and snapshot now expose local plugin installation status, outdated version diagnostics, and repair commands without making plugin state a quality gate blocker.
-- changelog [active/durable]: CHANGELOG.md - Bootstrap Plugin Diagnostic Surface Changelog - Unreleased notes record plugin installation diagnostics across bootstrap and hot-start output.
 - runtime-diagnostic [active/durable]: .forge-method/artifacts/20260616-snapshot-plugin-diagnostic-surface.md - Bootstrap Plugin Diagnostic Surface - Preflight, reload, context health, context plan, resume, and snapshot expose local plugin installation status, outdated version diagnostics, repair commands, and validation evidence without making plugin state a quality gate blocker.
 - runtime-builder [active/durable]: .forge-method/artifacts/20260616-bootstrap-quality-surface.md - Bootstrap quality surface - Bootstrap surfaces now expose compact full-quality status instead of relying on audit-only health.
 - changelog [active/durable]: CHANGELOG.md - Bootstrap quality surface changelog - Unreleased notes record compact quality summary in start, status --brief, and existing-project preflight.
+- runtime-builder [active/durable]: .forge-method/artifacts/20260616-reload-quality-surface.md - Reload quality surface - Existing-project reload now exposes compact full-quality status so stale-chat recovery cannot hide quality failures.
+- changelog [active/durable]: CHANGELOG.md - Reload quality surface changelog - Unreleased notes record compact quality summary in existing-project reload text and JSON.
