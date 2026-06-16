@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-16T03:25:33+00:00"
+updated_at: "2026-06-16T03:42:52+00:00"
 id: "artifact-forge-method-artifacts-20260615-game-artifact-generators-contract-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/20260615-game-artifact-generators-contract.md"
 query: "First-class artifact game-brief and game-sprint-plan generators for game brief and playable-slice sprint planning closeouts with source/install smoke coverage."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-16T03:25:33+00:00"
+last_run_at: "2026-06-16T03:42:52+00:00"
 last_error: ""

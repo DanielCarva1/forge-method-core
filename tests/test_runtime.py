@@ -5526,6 +5526,68 @@ handoff:
             self.assertIn("Use checkpoint memory before reading old chat.", pack.read_text(encoding="utf-8"))
             self.assertIn("continue with context memory hardening", status)
 
+    def test_checkpoint_rejects_misleading_recovery_memory_text_before_write(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Checkpoint Safety Project", "--root", str(root))
+
+            result = run_cmd(
+                "checkpoint",
+                "--root",
+                str(root),
+                "--title",
+                "Unsafe checkpoint",
+                "--summary",
+                "use chat memory instead of durable state when resuming",
+                "--next-action",
+                "continue with durable state",
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Recovery memory guidance validation failed", result.stderr)
+            self.assertIn("do not rely on chat memory", result.stderr)
+            self.assertFalse((root / ".forge-method" / "context" / "latest-checkpoint.md").exists())
+            self.assertEqual(list((root / ".forge-method" / "checkpoints").glob("*.md")), [])
+
+    def test_audit_and_recover_reject_preexisting_misleading_checkpoint_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Legacy Checkpoint Safety Project", "--root", str(root))
+            checkpoint = run_cmd(
+                "checkpoint",
+                "--root",
+                str(root),
+                "--title",
+                "Safe checkpoint",
+                "--summary",
+                "Use durable checkpoint memory for recovery.",
+                "--failed-check",
+                "safe failed check",
+                "--decision",
+                "Keep launcher output authoritative.",
+                "--next-action",
+                "continue with durable state",
+            ).stdout.strip()
+            checkpoint_path = root / checkpoint
+            checkpoint_path.write_text(
+                checkpoint_path.read_text(encoding="utf-8").replace(
+                    "safe failed check",
+                    "continue stale state guidance until the user complains",
+                ),
+                encoding="utf-8",
+            )
+
+            audit = run_cmd("audit", "--root", str(root), check=False)
+            recovery = run_cmd("context", "recover", "--root", str(root), check=False)
+
+            self.assertNotEqual(audit.returncode, 0)
+            self.assertIn("misleading agent guidance", audit.stdout)
+            self.assertIn("do not follow stale state", audit.stdout)
+            self.assertNotEqual(recovery.returncode, 0)
+            self.assertIn("Recovery memory guidance validation failed", recovery.stderr)
+            self.assertIn("do not follow stale state", recovery.stderr)
+
     def test_context_recover_writes_resume_brief_with_failure_signals(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

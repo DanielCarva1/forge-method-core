@@ -109,6 +109,12 @@ AGENT_PROFILE_REQUIRED_FIELDS = [
 ]
 AGENT_PROFILE_GUIDANCE_SAFETY_FIELDS = {"purpose", "when", "inputs", "outputs", "handoff"}
 STATE_GUIDANCE_SAFETY_FIELDS = {"guide_summary", "last_route_reason", "next_action"}
+CONTEXT_GUIDANCE_SAFETY_FILES = {
+    "latest-checkpoint.md",
+    "current-pack.md",
+    "recovery.md",
+    "recovery-compact.md",
+}
 
 WORKFLOW_REQUIRED_SECTIONS = [
     "trigger:",
@@ -4910,6 +4916,29 @@ def append_markdown_list(lines: list[str], title: str, values: list[str]) -> Non
         lines.append("- none")
 
 
+def validate_recovery_memory_text(label: str, text: str) -> list[str]:
+    return guidance_safety_errors(label, text)
+
+
+def validate_recovery_memory_files(root: Path) -> list[str]:
+    errors: list[str] = []
+    checkpoints = sorted((method_dir(root) / "checkpoints").glob("*.md"))
+    context_dir = method_dir(root) / "context"
+    context_files = [context_dir / name for name in sorted(CONTEXT_GUIDANCE_SAFETY_FILES)]
+    for path in [*checkpoints, *context_files]:
+        if not path.exists():
+            continue
+        label = path.relative_to(root).as_posix()
+        errors.extend(validate_recovery_memory_text(label, path.read_text(encoding="utf-8")))
+    return errors
+
+
+def require_recovery_memory_safety(label: str, text: str) -> None:
+    errors = validate_recovery_memory_text(label, text)
+    if errors:
+        raise SystemExit("Recovery memory guidance validation failed:\n- " + "\n- ".join(errors))
+
+
 def write_checkpoint(
     root: Path,
     state: dict[str, str],
@@ -4946,6 +4975,7 @@ def write_checkpoint(
     append_markdown_list(lines, "Artifacts", artifacts)
     lines.extend(["", "## Next Action", "", next_action.strip()])
     text = "\n".join(lines).rstrip() + "\n"
+    require_recovery_memory_safety(path.relative_to(root).as_posix(), text)
     path.write_text(text, encoding="utf-8")
     latest = latest_checkpoint_path(root)
     latest.parent.mkdir(parents=True, exist_ok=True)
@@ -5084,6 +5114,7 @@ def audit_project(root: Path) -> list[str]:
     if state.get("phase") not in PHASES:
         errors.append(f"invalid phase: {state.get('phase')}")
     errors.extend(validate_state_guidance_safety(state))
+    errors.extend(validate_recovery_memory_files(root))
     try:
         errors.extend(validate_help_oracle_safety(build_post_command_help_oracle(root, state, validate=False)))
     except Exception as exc:
@@ -12664,6 +12695,7 @@ def write_context_pack(root: Path, state: dict[str, str], *, out: Path, max_char
     if max_chars and len(text) > max_chars:
         footer = "\n\n[context-pack truncated to max_chars]\n"
         text = text[: max(0, max_chars - len(footer))].rstrip() + footer
+    require_recovery_memory_safety(out.relative_to(root).as_posix(), text)
     out.write_text(text, encoding="utf-8")
     append_ledger(root, "context_pack.written", {"path": out.relative_to(root).as_posix()})
     return out
@@ -12693,6 +12725,7 @@ def write_recovery_brief(
     if max_chars and len(text) > max_chars:
         footer = "\n\n[recovery-brief truncated to max_chars]\n"
         text = text[: max(0, max_chars - len(footer))].rstrip() + footer
+    require_recovery_memory_safety(out.relative_to(root).as_posix(), text)
     out.write_text(text, encoding="utf-8")
     append_ledger(root, "recovery_brief.written", {"path": out.relative_to(root).as_posix()})
     return out
