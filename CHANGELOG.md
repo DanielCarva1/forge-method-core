@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add a facilitation specificity guard: human-facing packs now require `domain_examples`, workflow validation rejects generic packs, and every packaged pack has at least three situational examples
 - trim remaining Guidance Engine test overhead by validating JSON contracts through direct runtime calls while keeping `guide` subprocess coverage for human text, empty-workspace, config/tracks, and mechanical CLI behavior
 - tighten builder routing so test-loop optimization wording no longer false-routes to `skill-convert`, and convert lifecycle/game/TEA guidance contract loops to direct runtime calls while preserving CLI coverage elsewhere
 - optimize Guidance Engine parity fixture tests by using the runtime replay contract directly, preserving 90-case BMAD parity coverage while cutting the slow transcript replay path from minutes to seconds

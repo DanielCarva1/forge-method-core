@@ -61,6 +61,11 @@ checkpoint_options:
   - correct-course
   - config-index
 
+domain_examples:
+  - architect_lens: "The human asks for architecture judgment; select Architect lens and keep tradeoffs compact in the target workflow."
+  - ux_lens: "Taste, interaction, or accessibility is the real job; select UX lens and avoid turning it into generic product planning."
+  - quality_lens: "Testing or release confidence is unclear; select QA lens and route to the narrowest quality workflow with evidence."
+
 artifact_rules:
   Persist lens id, selected technique ids, workflow, participants when council runs, compact decision, and next action.
 

@@ -65,6 +65,11 @@ checkpoint_options:
   - retrospective
   - research-closeout
 
+domain_examples:
+  - session_handoff: "A new agent needs read order, blockers, first command, state mutation rules, and next workflow without replaying chat."
+  - review_closeout: "A diff or artifact needs actionable findings, severity, source lines, repair route, and gate impact before readiness."
+  - retrospective: "An increment shipped but learning is loose; capture keep/change/stop, evidence, follow-up stories, and release note impact."
+
 artifact_rules:
   Persist route, source artifacts, key decisions, blockers, findings/actions, generator command, validation/evidence, load hints, and next workflow.
 

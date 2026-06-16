@@ -2,7 +2,7 @@
   "budget_chars": 12000,
   "deferred": [
     {
-      "estimated_chars": 29788,
+      "estimated_chars": 86119,
       "location": "project",
       "path": ".forge-method/artifacts/index.ndjson",
       "priority": 76,
@@ -11,9 +11,9 @@
       "section": "artifact"
     }
   ],
-  "estimated_required_chars": 2700,
-  "estimated_selected_chars": 7228,
-  "generated_at": "2026-06-15T01:59:36+00:00",
+  "estimated_required_chars": 2770,
+  "estimated_selected_chars": 6923,
+  "generated_at": "2026-06-16T01:19:39+00:00",
   "over_budget": false,
   "root": "C:\\Users\\Danie\\OneDrive\\Documentos\\ody",
   "rules": [
@@ -23,10 +23,10 @@
     "after meaningful progress, write checkpoint or evidence before ending"
   ],
   "runtime": "forge-method",
-  "runtime_version": "1.28.0",
+  "runtime_version": "1.29.0",
   "selected": [
     {
-      "estimated_chars": 1138,
+      "estimated_chars": 1208,
       "location": "project",
       "path": ".forge-method/state.yaml",
       "priority": 100,
@@ -53,7 +53,7 @@
       "section": "workflow"
     },
     {
-      "estimated_chars": 1171,
+      "estimated_chars": 1181,
       "location": "project",
       "path": ".forge-method/context/latest-checkpoint.md",
       "priority": 88,
@@ -80,27 +80,27 @@
       "section": "agent-profile"
     },
     {
-      "estimated_chars": 584,
+      "estimated_chars": 459,
       "location": "project",
-      "path": ".forge-method/evidence/20260615-015628-validation-guidance-human-experience-polish-validation.md",
+      "path": ".forge-method/evidence/20260616-011633-validation-guidance-cli-boundary-validation.md",
       "priority": 68,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 460,
+      "estimated_chars": 702,
       "location": "project",
-      "path": ".forge-method/evidence/20260615-013605-planning-p2-scope-decisions-recorded.md",
+      "path": ".forge-method/evidence/20260616-005844-validation-guidance-loop-routing-and-test-optimization-vali.md",
       "priority": 67,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 1014,
+      "estimated_chars": 512,
       "location": "project",
-      "path": ".forge-method/evidence/20260615-013149-validation-p1-6-test-architecture-enterprise-depth-validati.md",
+      "path": ".forge-method/evidence/20260616-003551-validation-guidance-replay-test-optimization-validation.md",
       "priority": 66,
       "reason": "recent validation or release evidence",
       "required": false,
@@ -109,10 +109,10 @@
   ],
   "state": {
     "active_story": "",
-    "next_action": "Review remaining post-parity polish surface and decide the next release/version batch.",
+    "next_action": "Continue improving Forge human guidance depth and agent compactness; keep remaining guide subprocess checks as CLI proof unless replacement coverage is equivalent.",
     "phase": "6-evolve",
     "project": "forge-method-core",
-    "status": "guidance-human-polish-done",
+    "status": "guidance-cli-boundary-optimized",
     "workflow": "runtime-builder"
   }
 }

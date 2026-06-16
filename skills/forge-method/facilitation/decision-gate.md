@@ -56,6 +56,11 @@ checkpoint_options:
   - readiness-check
   - build-story
 
+domain_examples:
+  - discovery_closeout: "Decide whether intent, audience, non-goals, success signal, and open questions are strong enough to leave discovery."
+  - specification_gate: "Accepted PRD/UX/architecture artifacts conflict; preserve the decision, concern, waiver, or correction before planning."
+  - release_gate: "Evidence is incomplete; choose pass, concerns, fail, missing-evidence, or waived with owner and next workflow."
+
 artifact_rules:
   Persist decision, evidence, concerns, waivers, corrections, final stance, next workflow, and state implications.
 

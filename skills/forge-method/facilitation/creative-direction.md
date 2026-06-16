@@ -57,6 +57,11 @@ checkpoint_options:
   - concept-selection
   - write-spec
 
+domain_examples:
+  - brand_voice: "The human dislikes generic copy; extract taste axes, anti-references, audience pressure, and a sharper selected direction."
+  - product_concept: "A product idea has too many possible moods; compare practical, premium, playful, and strange directions before PRD."
+  - campaign_or_story: "The work needs emotional payoff; preserve audience, tension, tone, rejected routes, and proof that the concept lands."
+
 artifact_rules:
   Persist audience, taste axes, selected concept, rejected options, constraints, proof criteria, and next workflow.
 

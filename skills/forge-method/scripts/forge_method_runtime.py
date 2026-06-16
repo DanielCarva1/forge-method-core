@@ -161,6 +161,7 @@ FACILITATION_REQUIRED_SECTIONS = [
     "anti_patterns:",
     "paths:",
     "checkpoint_options:",
+    "domain_examples:",
     "artifact_rules:",
     "headless:",
 ]
@@ -177,6 +178,7 @@ FACILITATION_FORBIDDEN_ROOT_SECTIONS = {
 FACILITATION_COMPACTNESS_MAX_LINES = 140
 FACILITATION_COMPACTNESS_MAX_WORDS = 1400
 FACILITATION_MIN_BULLETS = 12
+FACILITATION_MIN_DOMAIN_EXAMPLES = 3
 
 PARITY_REPLAY_REQUIRED_FAMILIES = {
     "help",
@@ -3937,6 +3939,12 @@ def validate_facilitation_pack(path: Path) -> list[str]:
             errors.append(f"{path.name}: missing facilitation section `{section}`")
     if text.count("\n  - ") < FACILITATION_MIN_BULLETS:
         errors.append(f"{path.name}: too thin for a human-facing facilitation pack")
+    domain_examples = markdown_section_entry_count(text, "domain_examples")
+    if domain_examples < FACILITATION_MIN_DOMAIN_EXAMPLES:
+        errors.append(
+            f"{path.name}: too generic for human facilitation "
+            f"({domain_examples} domain_examples < {FACILITATION_MIN_DOMAIN_EXAMPLES})"
+        )
     return errors
 
 
@@ -3949,6 +3957,24 @@ def markdown_root_sections(text: str) -> list[str]:
         if stripped.endswith(":") and " " not in stripped[:-1]:
             sections.append(stripped[:-1])
     return sections
+
+
+def markdown_section_entry_count(text: str, section: str) -> int:
+    target = f"{section}:"
+    in_section = False
+    count = 0
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == target:
+            in_section = True
+            continue
+        if in_section and stripped.endswith(":") and line and not line.startswith((" ", "\t", "-", "*", "#")):
+            break
+        if in_section and line.startswith("  - "):
+            count += 1
+        elif in_section and re.match(r"^  [A-Za-z0-9_-]+:\s+", line):
+            count += 1
+    return count
 
 
 def markdown_doc_stats(text: str) -> dict[str, int]:
@@ -11701,7 +11727,12 @@ def compactness_summary(root: Path | None = None) -> dict[str, Any]:
     for path in facilitation_pack_paths(root):
         text = path.read_text(encoding="utf-8")
         stats = markdown_doc_stats(text)
-        row = {"path": str(path), "kind": "facilitation", **stats}
+        row = {
+            "path": str(path),
+            "kind": "facilitation",
+            "domain_examples": markdown_section_entry_count(text, "domain_examples"),
+            **stats,
+        }
         pack_rows.append(row)
         errors.extend(validate_facilitation_pack(path))
     return {
@@ -11716,6 +11747,7 @@ def compactness_summary(root: Path | None = None) -> dict[str, Any]:
             "max_lines": FACILITATION_COMPACTNESS_MAX_LINES,
             "max_words": FACILITATION_COMPACTNESS_MAX_WORDS,
             "min_bullets": FACILITATION_MIN_BULLETS,
+            "min_domain_examples": FACILITATION_MIN_DOMAIN_EXAMPLES,
         },
         "workflow_max": {
             "lines": max((row["lines"] for row in workflow_rows), default=0),

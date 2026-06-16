@@ -56,6 +56,11 @@ checkpoint_options:
   - architecture
   - build-story
 
+domain_examples:
+  - tiny_fix: "A scoped bug or copy fix has clear acceptance and check command; produce spec-lite, patch, evidence, and review route."
+  - small_feature: "A narrow behavior is known but not story-sized; define non-goals, files likely touched, validation, and next workflow."
+  - risky_shortcut: "The request sounds quick but has hidden architecture or product risk; stop at spec-lite and route to PRD, UX, or architecture."
+
 artifact_rules:
   Persist request, scope, non-goals, acceptance evidence, touched files, validation, review, risks, and next workflow.
 

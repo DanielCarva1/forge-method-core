@@ -55,6 +55,11 @@ checkpoint_options:
   - correct-course
   - council
 
+domain_examples:
+  - route_bug: "A transcript routes to the wrong workflow; add replay proof, patch Guidance Engine precedence, and record state impact."
+  - human_guidance_gap: "The method feels dry or premature; enrich guide output or facilitation pack while keeping workflow refs compact."
+  - agent_contract_gap: "Future agents infer behavior from chat; add JSON/state/template/generator proof and validation instead."
+
 artifact_rules:
   Persist behavior contract, state changes, touched workflows, tests/evals, evidence, and next release action.
 

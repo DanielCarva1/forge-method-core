@@ -55,6 +55,11 @@ checkpoint_options:
   - release-readiness
   - council
 
+domain_examples:
+  - pre_build_strategy: "Before implementation, map user-visible risks to unit/integration/E2E/manual proof and story acceptance evidence."
+  - legacy_quality_gap: "Existing tests are noisy or sparse; identify confidence gaps, command reality, owners, and first repair slice."
+  - release_confidence: "A release is close; map evidence, missing checks, waivers, and gate impact before readiness claims."
+
 artifact_rules:
   Persist risk model, test levels, gates, evidence paths, ownership, and unresolved quality risks.
 

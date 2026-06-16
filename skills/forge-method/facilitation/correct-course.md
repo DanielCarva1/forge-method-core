@@ -66,7 +66,7 @@ checkpoint_options:
   - council
   - human-input
 
-domain_impact_examples:
+domain_examples:
   - software: "Scope or architecture changed; inspect spec, architecture, story checks, tests, and release gate before continuing build."
   - game: "Player fantasy, loop, platform, or playable slice changed; inspect brief, GDD, PRD, game stories, playtest evidence, and sprint status."
   - creative: "Taste direction or audience changed; inspect selected concept, rejected options, creative brief, and decision log."

@@ -67,6 +67,11 @@ checkpoint_options:
   - domain-scan
   - council
 
+domain_examples:
+  - stuck_route: "The user does not know whether the issue is scope, architecture, tests, or process; bound symptoms and choose one reversible probe."
+  - broken_runtime: "A method behavior feels wrong; separate route defect, stale state, misleading doc, and missing proof before patching."
+  - product_constraint: "Requirements conflict; map real vs assumed constraints, tradeoffs, and smallest research or correction step."
+
 artifact_rules:
   Persist raw signal, current vs desired behavior, boundaries, hypotheses, constraints, chosen probe, success signal, blocked facts, and next action.
 

@@ -63,6 +63,11 @@ checkpoint_options:
   - workflow-validate
   - correct-course
 
+domain_examples:
+  - team_defaults: "A team wants default model, commit policy, or verification tier changed; write the override, inspect effective config, and validate merged behavior."
+  - local_experiment: "One developer needs a temporary convention or capability entry; keep it local, name the boundary, and avoid shipping it as team policy."
+  - capability_index: "Agents keep missing available workflows; regenerate the capability index so future sessions see the effective route surface."
+
 artifact_rules:
   Persist changed config paths, keys, scope, validation output, index path when generated, and any rejected unsupported behavior.
 

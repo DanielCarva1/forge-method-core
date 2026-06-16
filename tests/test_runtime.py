@@ -2930,7 +2930,95 @@ class RuntimeTests(unittest.TestCase):
             check = run_cmd("artifact", "enterprise-check", "--root", str(root), "--path", ".forge-method/artifacts/enterprise-release-generated.md").stdout
             self.assertIn("Enterprise artifact check passed.", check)
 
+    def test_facilitation_specificity_guard_rejects_generic_packs(self) -> None:
+        runtime = load_runtime_module()
+        base = """# facilitation: sample
+
+purpose:
+  Shape a human-facing workflow.
+
+open_floor:
+  "What are we trying to improve?"
+
+source_material:
+  Ask for transcript, state, artifacts, and proof.
+
+follow_up_batches:
+  - behavior: "What should change?"
+  - proof: "What catches regression?"
+
+conversation_stages:
+  - frame: "Name the situation."
+  - handoff: "Persist the compact result."
+
+elicitation_options:
+  - contrast: "Compare two paths."
+  - probe: "Pick one reversible probe."
+
+facilitator_moves:
+  - "Guide the human."
+  - "Preserve the agent contract."
+
+quality_bar:
+  - "The human gets a useful next move."
+  - "The agent gets a compact handoff."
+
+anti_patterns:
+  - "Do not dump a catalog."
+  - "Do not rely on chat memory."
+
+paths:
+  fast_path: "Patch and prove."
+  deep_path: "Plan, grill, patch, and prove."
+
+checkpoint_options:
+  - continue
+  - correct-course
+
+"""
+        suffix = """
+artifact_rules:
+  Persist behavior, proof, state impact, and next workflow.
+
+headless:
+  Continue only when proof is clear.
+"""
+        with tempfile.TemporaryDirectory() as raw:
+            pack = Path(raw) / "sample.md"
+            pack.write_text(base + suffix, encoding="utf-8")
+            missing_errors = runtime.validate_facilitation_pack(pack)
+            self.assertIn("sample.md: missing facilitation section `domain_examples:`", missing_errors)
+            self.assertTrue(any("too generic" in error for error in missing_errors))
+
+            pack.write_text(
+                base
+                + """domain_examples:
+  route_bug: "A transcript routes wrong; add replay proof."
+  handoff_gap: "Agent state is unclear; add compact JSON proof."
+
+"""
+                + suffix,
+                encoding="utf-8",
+            )
+            thin_errors = runtime.validate_facilitation_pack(pack)
+            self.assertTrue(any("too generic" in error for error in thin_errors))
+
+            pack.write_text(
+                base
+                + """domain_examples:
+  route_bug: "A transcript routes wrong; add replay proof."
+  handoff_gap: "Agent state is unclear; add compact JSON proof."
+  human_gap: "The conversation feels generic; add a pack-specific guided move."
+
+"""
+                + suffix,
+                encoding="utf-8",
+            )
+            specific_errors = runtime.validate_facilitation_pack(pack)
+            self.assertFalse([error for error in specific_errors if "domain_examples" in error or "too generic" in error])
+
     def test_packaged_modules_and_workflows_validate(self) -> None:
+        runtime = load_runtime_module()
         modules = run_cmd("module", "list").stdout
         modules_json = json.loads(run_cmd("module", "list", "--json").stdout)
         module_recommendation = json.loads(
@@ -3124,6 +3212,7 @@ class RuntimeTests(unittest.TestCase):
             "anti_patterns:",
             "paths:",
             "checkpoint_options:",
+            "domain_examples:",
             "artifact_rules:",
             "headless:",
         ]
@@ -3135,6 +3224,17 @@ class RuntimeTests(unittest.TestCase):
             }
         )
         self.assertGreaterEqual(len(pack_ids), 10)
+        self.assertEqual(compactness["facilitation_limits"]["min_domain_examples"], 3)
+        for pack_id in pack_ids:
+            pack_path = ROOT / "skills" / "forge-method" / "facilitation" / f"{pack_id}.md"
+            pack_text = pack_path.read_text(encoding="utf-8")
+            for section in required_facilitation_sections:
+                self.assertIn(section, pack_text, pack_id)
+            self.assertGreaterEqual(
+                runtime.markdown_section_entry_count(pack_text, "domain_examples"),
+                compactness["facilitation_limits"]["min_domain_examples"],
+                pack_id,
+            )
         human_facing_required = {
             "product-requirements",
             "working-backwards-challenge",

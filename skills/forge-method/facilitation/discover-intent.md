@@ -62,6 +62,11 @@ checkpoint_options:
   - problem-solving
   - council
 
+domain_examples:
+  - new_product: "Shape audience, outcome, constraints, non-goals, success signal, and open questions before PRD or stories exist."
+  - broad_game: "Extract player fantasy, first playable proof, content source, AI posture, and parked scope before game brief."
+  - internal_tool: "Clarify operator, repeated pain, current workaround, fixed constraints, and proof of useful workflow before implementation."
+
 artifact_rules:
   Use `artifact discovery-closeout` with source_input, source_answer, audience, outcome, constraints, non_goals, success_signal, open_questions, grill_gate_handoff, decision_log, and next_workflow. Register the artifact and preserve the path for the next workflow.
 
