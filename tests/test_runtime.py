@@ -892,6 +892,70 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("do not rely on chat memory", audit.stdout)
             self.assertIn("do not follow stale state", audit.stdout)
 
+    def test_runtime_audit_rejects_product_docs_that_describe_forge_as_benchmark_fork(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            plugin_dir = root / ".codex-plugin"
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "plugin.json").write_text(json.dumps({"name": "forge-method-core"}), encoding="utf-8")
+            run_cmd(
+                "init",
+                "--project",
+                "Runtime Docs Safety",
+                "--root",
+                str(root),
+                "--allow-runtime-state",
+                "--no-project-guidance",
+            )
+            (root / "README.md").write_text("Forge Method is a BMAD fork with nicer prompts.\n", encoding="utf-8")
+
+            audit = run_cmd("audit", "--root", str(root), check=False)
+
+            self.assertNotEqual(audit.returncode, 0)
+            self.assertIn("product-facing docs must not describe Forge as a clone, fork, or variant", audit.stdout)
+            self.assertIn("README.md:1", audit.stdout)
+
+    def test_runtime_product_docs_guard_allows_git_clone_and_negative_policy_language(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            plugin_dir = root / ".codex-plugin"
+            plugin_dir.mkdir(parents=True)
+            (plugin_dir / "plugin.json").write_text(json.dumps({"name": "forge-method-core"}), encoding="utf-8")
+            run_cmd(
+                "init",
+                "--project",
+                "Runtime Docs Safe",
+                "--root",
+                str(root),
+                "--allow-runtime-state",
+                "--no-project-guidance",
+            )
+            (root / "README.md").write_text(
+                "\n".join(
+                    [
+                        "This guide goes from a fresh clone to a working Forge Method project.",
+                        "git clone https://github.com/example/forge-method-core.git",
+                        "Do not describe Forge Method as a clone, fork, or variant of another framework.",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            audit = run_cmd("audit", "--root", str(root))
+
+            self.assertIn("Audit passed.", audit.stdout)
+
+    def test_product_docs_guard_does_not_apply_to_user_projects(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "User Project", "--root", str(root))
+            (root / "README.md").write_text("This user project is a fork of a framework.\n", encoding="utf-8")
+
+            audit = run_cmd("audit", "--root", str(root))
+
+            self.assertIn("Audit passed.", audit.stdout)
+
     def test_parity_replay_requires_pack_assertions_for_human_guidance(self) -> None:
         fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
         case = next(item for item in fixtures if item["id"] == "help_next_step_orientation").copy()

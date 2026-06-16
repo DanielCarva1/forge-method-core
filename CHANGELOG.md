@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add a product-facing docs independence guard so runtime-repo audit blocks public Markdown from describing Forge as a clone, fork, or variant of another framework while allowing Git clone/install language
 - add a durable runtime guidance source guard so artifact index summaries, human input prompts, review findings, and story work fields reject misleading agent guidance before they enter snapshots, context packs, or runtime JSON
 - add a recovery memory guidance guard so checkpoints, latest-checkpoint mirrors, context packs, and recovery briefs reject misleading agent guidance before future sessions consume them
 - add a state guidance write guard so `write_state`, `audit`, and `gate` reject misleading next-action or route-reason guidance before it becomes durable context for future agents

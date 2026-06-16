@@ -119,6 +119,47 @@ CONTEXT_GUIDANCE_SAFETY_FILES = {
     "recovery.md",
     "recovery-compact.md",
 }
+PRODUCT_FACING_DOC_EXACT_PATHS = {
+    "README.md",
+    "AGENTS.md",
+    "skills/forge-method/SKILL.md",
+    "skills/forge-reload/SKILL.md",
+}
+PRODUCT_FACING_DOC_GLOBS = [
+    "docs/**/*.md",
+    "examples/**/*.md",
+    "templates/**/*.md",
+    "skills/forge-method/assets/project/**/*.md",
+]
+PRODUCT_FRAMEWORK_SOURCE_PATTERN = re.compile(
+    r"\b(forge(?: method| method core)?|runtime|product|produto|method|metodo|m[eé]todo)\b"
+    r".{0,120}\b(clone|fork|variant|variante)\b"
+    r".{0,120}\b(bmad|zico|framework|method|metodo|m[eé]todo|another framework|outro framework)\b",
+    re.IGNORECASE,
+)
+PRODUCT_FRAMEWORK_SOURCE_REVERSE_PATTERN = re.compile(
+    r"\b(clone|fork|variant|variante)\b"
+    r".{0,80}\b(of|de|do|da)\b"
+    r".{0,80}\b(bmad|zico|framework|method|metodo|m[eé]todo|another framework|outro framework)\b"
+    r".{0,120}\b(forge(?: method| method core)?|runtime|product|produto|method|metodo|m[eé]todo)\b",
+    re.IGNORECASE,
+)
+PRODUCT_NAMED_SOURCE_ANY_ORDER_PATTERN = re.compile(
+    r"(?=.*\b(forge(?: method| method core)?|runtime|product|produto)\b)"
+    r"(?=.*\b(clone|fork|variant|variante)\b)"
+    r"(?=.*\b(bmad|zico)\b)",
+    re.IGNORECASE,
+)
+PRODUCT_FRAMEWORK_SAFE_NEGATIONS = [
+    "do not",
+    "don't",
+    "never",
+    "not a",
+    "not an",
+    "nao",
+    "não",
+    "sem",
+]
 
 WORKFLOW_REQUIRED_SECTIONS = [
     "trigger:",
@@ -4275,6 +4316,66 @@ def validate_runtime_guidance_payload_safety(label: str, payload: dict[str, Any]
     return errors
 
 
+def product_doc_match_is_safely_negated(line: str, match: re.Match[str]) -> bool:
+    lower = line.lower()
+    risk_indexes = [
+        lower.find(token)
+        for token in ["clone", "fork", "variant", "variante"]
+        if lower.find(token) >= 0
+    ]
+    risk_index = min(risk_indexes) if risk_indexes else match.start()
+    before = lower[:risk_index]
+    return any(marker in before[-80:] for marker in PRODUCT_FRAMEWORK_SAFE_NEGATIONS)
+
+
+def product_facing_doc_independence_errors(path: Path, text: str, *, root: Path) -> list[str]:
+    errors: list[str] = []
+    label = path.relative_to(root).as_posix()
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        for pattern in [
+            PRODUCT_NAMED_SOURCE_ANY_ORDER_PATTERN,
+            PRODUCT_FRAMEWORK_SOURCE_PATTERN,
+            PRODUCT_FRAMEWORK_SOURCE_REVERSE_PATTERN,
+        ]:
+            match = pattern.search(stripped)
+            if match and not product_doc_match_is_safely_negated(stripped, match):
+                errors.append(
+                    f"{label}:{line_number}: product-facing docs must not describe Forge as a clone, fork, or variant of another framework"
+                )
+                break
+    return errors
+
+
+def product_facing_doc_paths(root: Path) -> list[Path]:
+    paths: dict[str, Path] = {}
+    for rel in PRODUCT_FACING_DOC_EXACT_PATHS:
+        path = root / rel
+        if path.exists() and path.is_file():
+            paths[path.relative_to(root).as_posix()] = path
+    for pattern in PRODUCT_FACING_DOC_GLOBS:
+        for path in root.glob(pattern):
+            if path.is_file():
+                paths[path.relative_to(root).as_posix()] = path
+    return [paths[key] for key in sorted(paths)]
+
+
+def validate_product_facing_docs_independence(root: Path) -> list[str]:
+    if not is_runtime_repo(root):
+        return []
+    errors: list[str] = []
+    for path in product_facing_doc_paths(root):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            errors.append(f"{path.relative_to(root).as_posix()}: cannot read product-facing doc: {exc}")
+            continue
+        errors.extend(product_facing_doc_independence_errors(path, text, root=root))
+    return errors
+
+
 def validate_facilitation_compactness(path: Path, text: str) -> list[str]:
     errors: list[str] = []
     stats = markdown_doc_stats(text)
@@ -5222,6 +5323,7 @@ def audit_project(root: Path) -> list[str]:
         errors.append(f"invalid phase: {state.get('phase')}")
     errors.extend(validate_state_guidance_safety(state))
     errors.extend(validate_durable_runtime_guidance_sources(root))
+    errors.extend(validate_product_facing_docs_independence(root))
     errors.extend(validate_recovery_memory_files(root))
     try:
         errors.extend(validate_help_oracle_safety(build_post_command_help_oracle(root, state, validate=False)))
