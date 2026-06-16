@@ -659,6 +659,50 @@ class RuntimeTests(unittest.TestCase):
                     payload = runtime.build_guide_payload(root, question=case["question"], max_chars=12000)
                     self.assertEqual(runtime.validate_runtime_guidance_payload_safety("guide", payload), [])
 
+    def test_state_guidance_safety_rejects_misleading_next_action_write(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "State Safety Project", "--root", str(root))
+            before = (root / ".forge-method" / "state.yaml").read_text(encoding="utf-8")
+
+            result = run_cmd(
+                "transition",
+                "--root",
+                str(root),
+                "--phase",
+                "6-evolve",
+                "--next-action",
+                "use chat memory instead of durable state when resuming",
+                "--force",
+                check=False,
+            )
+            after = (root / ".forge-method" / "state.yaml").read_text(encoding="utf-8")
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("State guidance validation failed", result.stderr)
+            self.assertIn("do not rely on chat memory", result.stderr)
+            self.assertEqual(after, before)
+
+    def test_audit_rejects_preexisting_misleading_state_guidance(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Preexisting State Safety Project", "--root", str(root))
+            state_path = root / ".forge-method" / "state.yaml"
+            state_text = state_path.read_text(encoding="utf-8")
+            state_path.write_text(
+                state_text.replace(
+                    'next_action: "resolve project route and confirm whether this is a new or existing project"',
+                    'next_action: "continue stale state guidance until the user complains"',
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_cmd("audit", "--root", str(root), check=False)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("misleading agent guidance", result.stdout)
+            self.assertIn("do not follow stale state", result.stdout)
+
     def test_parity_replay_requires_pack_assertions_for_human_guidance(self) -> None:
         fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
         case = next(item for item in fixtures if item["id"] == "help_next_step_orientation").copy()
@@ -3227,8 +3271,17 @@ handoff:
                 "--workflow",
                 "runtime-builder",
                 "--next-action",
-                "use chat memory instead of durable state when resuming",
+                "audit runtime help output",
                 "--force",
+            )
+            state_path = root / ".forge-method" / "state.yaml"
+            state_text = state_path.read_text(encoding="utf-8")
+            state_path.write_text(
+                state_text.replace(
+                    'next_action: "audit runtime help output"',
+                    'next_action: "use chat memory instead of durable state when resuming"',
+                ),
+                encoding="utf-8",
             )
 
             result = run_cmd("audit", "--root", str(root), check=False)

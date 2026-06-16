@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-16T03:04:19+00:00"
+updated_at: "2026-06-16T03:25:33+00:00"
 id: "artifact-forge-method-artifacts-20260615-test-utility-generators-contract-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/20260615-test-utility-generators-contract.md"
 query: "First-class artifact test-framework, test-automation, and game-e2e-scaffold generators for quality and playable smoke handoffs with source/install smoke coverage."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-16T03:04:19+00:00"
+last_run_at: "2026-06-16T03:25:33+00:00"
 last_error: ""

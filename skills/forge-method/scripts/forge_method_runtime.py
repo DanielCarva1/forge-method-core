@@ -108,6 +108,7 @@ AGENT_PROFILE_REQUIRED_FIELDS = [
     "handoff",
 ]
 AGENT_PROFILE_GUIDANCE_SAFETY_FIELDS = {"purpose", "when", "inputs", "outputs", "handoff"}
+STATE_GUIDANCE_SAFETY_FIELDS = {"guide_summary", "last_route_reason", "next_action"}
 
 WORKFLOW_REQUIRED_SECTIONS = [
     "trigger:",
@@ -2260,6 +2261,15 @@ def print_reload(payload: dict[str, Any]) -> None:
         print(f"- {item.get('name')}: {item.get('command')}")
 
 
+def validate_state_guidance_safety(state: dict[str, Any], *, source: str = ".forge-method/state.yaml") -> list[str]:
+    errors: list[str] = []
+    for field in STATE_GUIDANCE_SAFETY_FIELDS:
+        value = str(state.get(field, ""))
+        if value:
+            errors.extend(guidance_safety_errors(f"{source}:{field}", value))
+    return errors
+
+
 def write_state(root: Path, state: dict[str, Any]) -> None:
     state.setdefault("schema_version", "1")
     state.setdefault("runtime", RUNTIME_NAME)
@@ -2268,6 +2278,9 @@ def write_state(root: Path, state: dict[str, Any]) -> None:
     state.setdefault("commit_policy", "off")
     state.setdefault("last_grill_artifact", "")
     state.setdefault("last_correct_course_artifact", "")
+    safety_errors = validate_state_guidance_safety(state)
+    if safety_errors:
+        raise SystemExit("State guidance validation failed:\n- " + "\n- ".join(safety_errors))
     write_flat_yaml(state_path(root), state, header="Forge Method state")
 
 
@@ -5070,6 +5083,7 @@ def audit_project(root: Path) -> list[str]:
         errors.append("state.runtime is not forge-method")
     if state.get("phase") not in PHASES:
         errors.append(f"invalid phase: {state.get('phase')}")
+    errors.extend(validate_state_guidance_safety(state))
     try:
         errors.extend(validate_help_oracle_safety(build_post_command_help_oracle(root, state, validate=False)))
     except Exception as exc:
