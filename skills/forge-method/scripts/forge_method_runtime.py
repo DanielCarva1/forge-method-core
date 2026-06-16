@@ -1560,6 +1560,39 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
             "human_question": "Qual comportamento do metodo precisa existir ou mudar, e qual prova falharia se ele regredir?",
             "guardrail": "A conversa pode ser rica; workflow refs, state, JSON e handoff continuam compactos.",
         }
+    if classification == "document-utility":
+        if workflow == "doc-index":
+            return {
+                "decision_summary": "Isto e mapa de documentacao: decidir fonte da verdade, o que ler primeiro e como detectar doc stale.",
+                "next_move": "Extrair source_of_truth, indexed_docs, navigation_rules, stale notes e freshness proof para `artifact doc-index`.",
+                "human_question": first_guidance_question(classification, workflow),
+                "guardrail": "Indice que nao prova fingerprint/mtime vira mais uma doc possivelmente desatualizada.",
+            }
+        if workflow == "doc-shard":
+            return {
+                "decision_summary": "Isto e shard de documento: dividir contexto sem criar duas fontes da verdade brigando.",
+                "next_move": "Extrair shard_index, generated docs, original_doc_decision, precedence_rule e stale_waiver para `artifact doc-shard`.",
+                "human_question": first_guidance_question(classification, workflow),
+                "guardrail": "Se original e shards ficam vivos, a precedencia precisa ser explicita ou o proximo agente vai ler coisa errada.",
+            }
+        return {
+            "decision_summary": "Isto e utilidade documental: melhorar leitura, confianca, source-of-truth e handoff.",
+            "next_move": "Separar job do doc, fonte da verdade, mudanca ou finding, validacao e proximo workflow.",
+            "human_question": first_guidance_question(classification, workflow),
+            "guardrail": "Doc bonita mas sem ownership, fonte e prova de frescor ainda e armadilha para agente.",
+        }
+    if classification == "lifecycle-flow" and workflow in {"track-decision", "readiness-check", "release-readiness"}:
+        enterprise_moves = {
+            "track-decision": "Mapear selected_track, required/conditional enterprise artifacts, evidence map, readiness gate e waiver policy para `artifact enterprise-track-map`.",
+            "readiness-check": "Mapear enterprise evidence status, NFR evidence, release impact, waivers e weak sources para `artifact enterprise-readiness`.",
+            "release-readiness": "Fechar gate_decision, enterprise evidence, release impact e waivers para `artifact enterprise-release-gate`.",
+        }
+        return {
+            "decision_summary": "Isto e fechamento de lifecycle: rota, artefatos obrigatorios, evidencia e gate precisam ficar consumiveis pelo proximo agente.",
+            "next_move": enterprise_moves[workflow],
+            "human_question": first_guidance_question(classification, workflow),
+            "guardrail": "Enterprise sem mapa de evidencia e waiver vira checklist decorativo e risco escondido.",
+        }
     if classification == "quality-flow":
         if workflow == "test-framework":
             return {
@@ -2620,6 +2653,22 @@ DOCUMENT_UTILITY_WORKFLOWS = {
     "adversarial-review",
     "spec-distillation",
 }
+DOC_INDEX_NEXT_WORKFLOWS = {
+    "adversarial-review",
+    "doc-shard",
+    "edge-case-review",
+    "editorial-review",
+    "project-context",
+    "session-prep",
+    "write-spec",
+}
+DOC_SHARD_NEXT_WORKFLOWS = {
+    "doc-index",
+    "edge-case-review",
+    "editorial-review",
+    "project-context",
+    "session-prep",
+}
 
 SPEC_KERNEL_WORKFLOWS = {
     "write-spec",
@@ -2705,6 +2754,25 @@ ENTERPRISE_CONDITIONAL_ARTIFACTS = [
     "compliance-checklist",
     "observability-plan",
 ]
+ENTERPRISE_TRACK_MAP_NEXT_WORKFLOWS = {
+    "privacy-data-plan",
+    "project-context",
+    "readiness-check",
+    "risk-register",
+    "security-plan",
+    "test-strategy",
+}
+ENTERPRISE_READINESS_NEXT_WORKFLOWS = {
+    "build-story",
+    "release-readiness",
+    "story-creation",
+    "traceability-gate",
+}
+ENTERPRISE_RELEASE_GATE_NEXT_WORKFLOWS = {
+    "observability-plan",
+    "ready-release",
+    "retrospective",
+}
 
 
 def parse_markdown_artifact_fields(path: Path) -> dict[str, str]:
@@ -4492,6 +4560,121 @@ def write_test_utility_artifact(
     )
     if warnings:
         append_ledger(root, "artifact.test_utility.warning", {"path": rel, "warnings": join_list(warnings)})
+    return rel
+
+
+def document_source_metadata(root: Path, source_of_truth: str) -> tuple[str, str]:
+    fingerprints: list[str] = []
+    last_modified: list[str] = []
+    source_refs = split_list(source_of_truth) or ([source_of_truth.strip()] if source_of_truth.strip() else [])
+    for source_ref in source_refs:
+        if is_external_doc_reference(source_ref):
+            continue
+        source_path, rel = project_path(root, source_ref)
+        if not source_path.exists():
+            continue
+        fingerprints.append(file_sha256(source_path))
+        last_modified.append(f"{rel}={source_path.stat().st_mtime}")
+    return join_list(fingerprints), join_list(last_modified)
+
+
+def write_document_utility_artifact(
+    root: Path,
+    *,
+    path: str,
+    title: str,
+    summary: str,
+    kind: str,
+    source_of_truth: str,
+    fields: list[tuple[str, str]],
+    force: bool = False,
+) -> str:
+    artifact_path, rel = project_path(root, path)
+    if artifact_path.exists() and not force:
+        raise SystemExit(f"Document utility artifact already exists: {rel}. Use --force to replace it.")
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    fingerprint, last_modified = document_source_metadata(root, source_of_truth)
+    normalized_fields: list[tuple[str, str]] = []
+    for key, value in fields:
+        if key == "source_fingerprint" and not value:
+            value = fingerprint
+        elif key == "source_last_modified" and not value:
+            value = last_modified
+        elif key == "validation" and not value:
+            value = f"artifact doc-check --path {rel}"
+        normalized_fields.append((key, value))
+    lines = [f"# {title}", ""]
+    lines.extend(f"{key}: {one_line(value)}" for key, value in normalized_fields)
+    artifact_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    errors, warnings = document_utility_findings(root, artifact_path)
+    if errors:
+        artifact_path.unlink(missing_ok=True)
+        raise SystemExit("Document utility generation failed validation:\n" + "\n".join(f"- {error}" for error in errors))
+    rel = write_artifact(
+        root,
+        kind=kind,
+        title=title,
+        summary=summary,
+        path=rel,
+        lifecycle="durable",
+    )
+    if warnings:
+        append_ledger(root, "artifact.document_utility.warning", {"path": rel, "warnings": join_list(warnings)})
+    return rel
+
+
+def enterprise_baseline_artifacts() -> str:
+    return ", ".join(ENTERPRISE_BASELINE_ARTIFACTS)
+
+
+def enterprise_conditional_artifacts() -> str:
+    return (
+        "devops-deployment-plan when deployment matters, "
+        "compliance-checklist when obligations exist, "
+        "observability-plan before operate"
+    )
+
+
+def write_enterprise_artifact(
+    root: Path,
+    *,
+    path: str,
+    title: str,
+    summary: str,
+    kind: str,
+    fields: list[tuple[str, str]],
+    force: bool = False,
+) -> str:
+    artifact_path, rel = project_path(root, path)
+    if artifact_path.exists() and not force:
+        raise SystemExit(f"Enterprise artifact already exists: {rel}. Use --force to replace it.")
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    normalized_fields: list[tuple[str, str]] = []
+    for key, value in fields:
+        if key in {"track_required_artifacts", "enterprise_required_artifacts"} and not value:
+            value = enterprise_baseline_artifacts()
+        elif key == "enterprise_conditional_artifacts" and not value:
+            value = enterprise_conditional_artifacts()
+        elif key == "validation" and not value:
+            value = f"artifact enterprise-check --path {rel}"
+        normalized_fields.append((key, value))
+    lines = [f"# {title}", ""]
+    lines.extend(f"{key}: {one_line(value)}" for key, value in normalized_fields)
+    artifact_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    errors, warnings = enterprise_artifact_findings(root, artifact_path)
+    if errors:
+        artifact_path.unlink(missing_ok=True)
+        raise SystemExit("Enterprise artifact generation failed validation:\n" + "\n".join(f"- {error}" for error in errors))
+    rel = write_artifact(
+        root,
+        kind=kind,
+        title=title,
+        summary=summary,
+        path=rel,
+        lifecycle="durable",
+    )
+    if warnings:
+        append_ledger(root, "artifact.enterprise.warning", {"path": rel, "warnings": join_list(warnings)})
     return rel
 
 
@@ -6557,6 +6740,174 @@ def cmd_artifact_game_e2e_scaffold(args: argparse.Namespace) -> int:
         write_artifact_eval(root, rel, title=args.title, summary=args.summary)
     print(rel)
     print("Test utility check passed.")
+    print(f"Next workflow: {args.next_workflow}")
+    return 0
+
+
+def cmd_artifact_doc_index(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    rel = write_document_utility_artifact(
+        root,
+        path=args.path,
+        title=args.title,
+        summary=args.summary,
+        kind="doc-index",
+        source_of_truth=args.source_of_truth,
+        fields=[
+            ("workflow", "doc-index"),
+            ("audience", args.audience),
+            ("doc_job", args.doc_job),
+            ("target_docs", args.target_docs),
+            ("indexed_docs", args.indexed_docs),
+            ("source_of_truth", args.source_of_truth),
+            ("source_fingerprint", args.source_fingerprint),
+            ("source_last_modified", args.source_last_modified),
+            ("navigation_rules", args.navigation_rules),
+            ("changes_or_findings", args.changes_or_findings),
+            ("stale_or_duplicate_notes", args.stale_or_duplicate_notes),
+            ("stale_check", args.stale_check),
+            ("validation", args.validation),
+            ("next_workflow", args.next_workflow),
+        ],
+        force=args.force,
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title=args.title, summary=args.summary)
+    print(rel)
+    print("Document utility check passed.")
+    print(f"Next workflow: {args.next_workflow}")
+    return 0
+
+
+def cmd_artifact_doc_shard(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    rel = write_document_utility_artifact(
+        root,
+        path=args.path,
+        title=args.title,
+        summary=args.summary,
+        kind="doc-shard",
+        source_of_truth=args.source_of_truth,
+        fields=[
+            ("workflow", "doc-shard"),
+            ("audience", args.audience),
+            ("doc_job", args.doc_job),
+            ("target_docs", args.target_docs),
+            ("source_of_truth", args.source_of_truth),
+            ("source_fingerprint", args.source_fingerprint),
+            ("source_last_modified", args.source_last_modified),
+            ("generated_or_derived_docs", args.generated_or_derived_docs),
+            ("shard_index", args.shard_index),
+            ("original_doc_decision", args.original_doc_decision),
+            ("precedence_rule", args.precedence_rule),
+            ("changes_or_findings", args.changes_or_findings),
+            ("stale_or_duplicate_notes", args.stale_or_duplicate_notes),
+            ("stale_check", args.stale_check),
+            ("stale_waiver", args.stale_waiver),
+            ("validation", args.validation),
+            ("next_workflow", args.next_workflow),
+        ],
+        force=args.force,
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title=args.title, summary=args.summary)
+    print(rel)
+    print("Document utility check passed.")
+    print(f"Next workflow: {args.next_workflow}")
+    return 0
+
+
+def cmd_artifact_enterprise_track_map(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    rel = write_enterprise_artifact(
+        root,
+        path=args.path,
+        title=args.title,
+        summary=args.summary,
+        kind="enterprise-track-map",
+        fields=[
+            ("workflow", "track-decision"),
+            ("selected_track", args.selected_track),
+            ("selected_module", args.selected_module),
+            ("scope", args.scope),
+            ("track_required_artifacts", args.track_required_artifacts),
+            ("enterprise_required_artifacts", args.enterprise_required_artifacts),
+            ("enterprise_conditional_artifacts", args.enterprise_conditional_artifacts),
+            ("artifact_evidence_map", args.artifact_evidence_map),
+            ("readiness_gate", args.readiness_gate),
+            ("waiver_policy", args.waiver_policy),
+            ("validation", args.validation),
+            ("next_workflow", args.next_workflow),
+        ],
+        force=args.force,
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title=args.title, summary=args.summary)
+    print(rel)
+    print("Enterprise artifact check passed.")
+    print(f"Next workflow: {args.next_workflow}")
+    return 0
+
+
+def cmd_artifact_enterprise_readiness(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    rel = write_enterprise_artifact(
+        root,
+        path=args.path,
+        title=args.title,
+        summary=args.summary,
+        kind="enterprise-readiness",
+        fields=[
+            ("workflow", "readiness-check"),
+            ("scope", args.scope),
+            ("selected_track", args.selected_track),
+            ("track_required_artifacts", args.track_required_artifacts),
+            ("enterprise_required_artifacts", args.enterprise_required_artifacts),
+            ("enterprise_conditional_artifacts", args.enterprise_conditional_artifacts),
+            ("enterprise_evidence_status", args.enterprise_evidence_status),
+            ("nfr_evidence", args.nfr_evidence),
+            ("release_gate_impact", args.release_gate_impact),
+            ("waivers", args.waivers),
+            ("missing_or_weak_sources", args.missing_or_weak_sources),
+            ("validation", args.validation),
+            ("next_workflow", args.next_workflow),
+        ],
+        force=args.force,
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title=args.title, summary=args.summary)
+    print(rel)
+    print("Enterprise artifact check passed.")
+    print(f"Next workflow: {args.next_workflow}")
+    return 0
+
+
+def cmd_artifact_enterprise_release_gate(args: argparse.Namespace) -> int:
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    rel = write_enterprise_artifact(
+        root,
+        path=args.path,
+        title=args.title,
+        summary=args.summary,
+        kind="enterprise-release-gate",
+        fields=[
+            ("workflow", "release-readiness"),
+            ("scope", args.scope),
+            ("selected_track", args.selected_track),
+            ("enterprise_required_artifacts", args.enterprise_required_artifacts),
+            ("enterprise_evidence_status", args.enterprise_evidence_status),
+            ("gate_decision", args.gate_decision),
+            ("release_gate_impact", args.release_gate_impact),
+            ("waivers", args.waivers),
+            ("validation", args.validation),
+            ("next_workflow", args.next_workflow),
+        ],
+        force=args.force,
+    )
+    if args.eval:
+        write_artifact_eval(root, rel, title=args.title, summary=args.summary)
+    print(rel)
+    print("Enterprise artifact check passed.")
     print(f"Next workflow: {args.next_workflow}")
     return 0
 
@@ -13667,6 +14018,127 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_game_e2e_scaffold.add_argument("--force", action="store_true")
     artifact_game_e2e_scaffold.add_argument("--eval", action="store_true")
     artifact_game_e2e_scaffold.set_defaults(func=cmd_artifact_game_e2e_scaffold, record_guidance=True)
+
+    artifact_doc_index = artifact_sub.add_parser(
+        "doc-index",
+        help="write and validate a document index source-of-truth artifact",
+    )
+    artifact_doc_index.add_argument("--root", default=".")
+    artifact_doc_index.add_argument("--path", required=True)
+    artifact_doc_index.add_argument("--title", default="Document Index")
+    artifact_doc_index.add_argument("--summary", default="Document index with source-of-truth, navigation, and stale-check proof.")
+    artifact_doc_index.add_argument("--audience", default="future agent")
+    artifact_doc_index.add_argument("--doc-job", default="navigation")
+    artifact_doc_index.add_argument("--target-docs", required=True)
+    artifact_doc_index.add_argument("--indexed-docs", required=True)
+    artifact_doc_index.add_argument("--source-of-truth", required=True)
+    artifact_doc_index.add_argument("--source-fingerprint", default="")
+    artifact_doc_index.add_argument("--source-last-modified", default="")
+    artifact_doc_index.add_argument("--navigation-rules", required=True)
+    artifact_doc_index.add_argument("--changes-or-findings", default="")
+    artifact_doc_index.add_argument("--stale-or-duplicate-notes", default="")
+    artifact_doc_index.add_argument("--stale-check", required=True)
+    artifact_doc_index.add_argument("--validation", default="")
+    artifact_doc_index.add_argument("--next-workflow", choices=sorted(DOC_INDEX_NEXT_WORKFLOWS), default="editorial-review")
+    artifact_doc_index.add_argument("--force", action="store_true")
+    artifact_doc_index.add_argument("--eval", action="store_true")
+    artifact_doc_index.set_defaults(func=cmd_artifact_doc_index, record_guidance=True)
+
+    artifact_doc_shard = artifact_sub.add_parser(
+        "doc-shard",
+        help="write and validate a document shard source-of-truth artifact",
+    )
+    artifact_doc_shard.add_argument("--root", default=".")
+    artifact_doc_shard.add_argument("--path", required=True)
+    artifact_doc_shard.add_argument("--title", default="Document Shard")
+    artifact_doc_shard.add_argument("--summary", default="Document shard handoff with original-document policy and stale-check proof.")
+    artifact_doc_shard.add_argument("--audience", default="future agent")
+    artifact_doc_shard.add_argument("--doc-job", default="split large markdown")
+    artifact_doc_shard.add_argument("--target-docs", required=True)
+    artifact_doc_shard.add_argument("--source-of-truth", required=True)
+    artifact_doc_shard.add_argument("--source-fingerprint", default="")
+    artifact_doc_shard.add_argument("--source-last-modified", default="")
+    artifact_doc_shard.add_argument("--generated-or-derived-docs", required=True)
+    artifact_doc_shard.add_argument("--shard-index", required=True)
+    artifact_doc_shard.add_argument("--original-doc-decision", required=True)
+    artifact_doc_shard.add_argument("--precedence-rule", required=True)
+    artifact_doc_shard.add_argument("--changes-or-findings", default="")
+    artifact_doc_shard.add_argument("--stale-or-duplicate-notes", default="")
+    artifact_doc_shard.add_argument("--stale-check", required=True)
+    artifact_doc_shard.add_argument("--stale-waiver", default="")
+    artifact_doc_shard.add_argument("--validation", default="")
+    artifact_doc_shard.add_argument("--next-workflow", choices=sorted(DOC_SHARD_NEXT_WORKFLOWS), default="doc-index")
+    artifact_doc_shard.add_argument("--force", action="store_true")
+    artifact_doc_shard.add_argument("--eval", action="store_true")
+    artifact_doc_shard.set_defaults(func=cmd_artifact_doc_shard, record_guidance=True)
+
+    artifact_enterprise_track_map = artifact_sub.add_parser(
+        "enterprise-track-map",
+        help="write and validate an enterprise track artifact map",
+    )
+    artifact_enterprise_track_map.add_argument("--root", default=".")
+    artifact_enterprise_track_map.add_argument("--path", required=True)
+    artifact_enterprise_track_map.add_argument("--title", default="Enterprise Track Map")
+    artifact_enterprise_track_map.add_argument("--summary", default="Enterprise track artifact map with required evidence gates and waiver policy.")
+    artifact_enterprise_track_map.add_argument("--selected-track", default="enterprise")
+    artifact_enterprise_track_map.add_argument("--selected-module", default="")
+    artifact_enterprise_track_map.add_argument("--scope", default="enterprise project")
+    artifact_enterprise_track_map.add_argument("--track-required-artifacts", default="")
+    artifact_enterprise_track_map.add_argument("--enterprise-required-artifacts", default="")
+    artifact_enterprise_track_map.add_argument("--enterprise-conditional-artifacts", default="")
+    artifact_enterprise_track_map.add_argument("--artifact-evidence-map", required=True)
+    artifact_enterprise_track_map.add_argument("--readiness-gate", required=True)
+    artifact_enterprise_track_map.add_argument("--waiver-policy", required=True)
+    artifact_enterprise_track_map.add_argument("--validation", default="")
+    artifact_enterprise_track_map.add_argument("--next-workflow", choices=sorted(ENTERPRISE_TRACK_MAP_NEXT_WORKFLOWS), default="readiness-check")
+    artifact_enterprise_track_map.add_argument("--force", action="store_true")
+    artifact_enterprise_track_map.add_argument("--eval", action="store_true")
+    artifact_enterprise_track_map.set_defaults(func=cmd_artifact_enterprise_track_map, record_guidance=True)
+
+    artifact_enterprise_readiness = artifact_sub.add_parser(
+        "enterprise-readiness",
+        help="write and validate an enterprise readiness matrix handoff",
+    )
+    artifact_enterprise_readiness.add_argument("--root", default=".")
+    artifact_enterprise_readiness.add_argument("--path", required=True)
+    artifact_enterprise_readiness.add_argument("--title", default="Enterprise Readiness")
+    artifact_enterprise_readiness.add_argument("--summary", default="Enterprise readiness matrix with evidence status, release impact, waivers, and weak sources.")
+    artifact_enterprise_readiness.add_argument("--scope", required=True)
+    artifact_enterprise_readiness.add_argument("--selected-track", default="enterprise")
+    artifact_enterprise_readiness.add_argument("--track-required-artifacts", default="")
+    artifact_enterprise_readiness.add_argument("--enterprise-required-artifacts", default="")
+    artifact_enterprise_readiness.add_argument("--enterprise-conditional-artifacts", default="")
+    artifact_enterprise_readiness.add_argument("--enterprise-evidence-status", required=True)
+    artifact_enterprise_readiness.add_argument("--nfr-evidence", required=True)
+    artifact_enterprise_readiness.add_argument("--release-gate-impact", required=True)
+    artifact_enterprise_readiness.add_argument("--waivers", required=True)
+    artifact_enterprise_readiness.add_argument("--missing-or-weak-sources", required=True)
+    artifact_enterprise_readiness.add_argument("--validation", default="")
+    artifact_enterprise_readiness.add_argument("--next-workflow", choices=sorted(ENTERPRISE_READINESS_NEXT_WORKFLOWS), default="traceability-gate")
+    artifact_enterprise_readiness.add_argument("--force", action="store_true")
+    artifact_enterprise_readiness.add_argument("--eval", action="store_true")
+    artifact_enterprise_readiness.set_defaults(func=cmd_artifact_enterprise_readiness, record_guidance=True)
+
+    artifact_enterprise_release_gate = artifact_sub.add_parser(
+        "enterprise-release-gate",
+        help="write and validate an enterprise release readiness gate",
+    )
+    artifact_enterprise_release_gate.add_argument("--root", default=".")
+    artifact_enterprise_release_gate.add_argument("--path", required=True)
+    artifact_enterprise_release_gate.add_argument("--title", default="Enterprise Release Gate")
+    artifact_enterprise_release_gate.add_argument("--summary", default="Enterprise release gate with final decision, evidence status, release impact, and waivers.")
+    artifact_enterprise_release_gate.add_argument("--scope", required=True)
+    artifact_enterprise_release_gate.add_argument("--selected-track", default="enterprise")
+    artifact_enterprise_release_gate.add_argument("--enterprise-required-artifacts", default="")
+    artifact_enterprise_release_gate.add_argument("--enterprise-evidence-status", required=True)
+    artifact_enterprise_release_gate.add_argument("--gate-decision", required=True)
+    artifact_enterprise_release_gate.add_argument("--release-gate-impact", required=True)
+    artifact_enterprise_release_gate.add_argument("--waivers", required=True)
+    artifact_enterprise_release_gate.add_argument("--validation", default="")
+    artifact_enterprise_release_gate.add_argument("--next-workflow", choices=sorted(ENTERPRISE_RELEASE_GATE_NEXT_WORKFLOWS), default="ready-release")
+    artifact_enterprise_release_gate.add_argument("--force", action="store_true")
+    artifact_enterprise_release_gate.add_argument("--eval", action="store_true")
+    artifact_enterprise_release_gate.set_defaults(func=cmd_artifact_enterprise_release_gate, record_guidance=True)
 
     artifact_capture = artifact_sub.add_parser("capture", help="capture an artifact result and optionally delete it")
     artifact_capture.add_argument("--root", default=".")

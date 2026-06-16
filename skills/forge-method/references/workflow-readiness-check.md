@@ -18,11 +18,12 @@ steps:
   2. check track-specific artifacts, unresolved inputs, findings, and risks
   3. ensure stories have acceptance criteria and checks
   4. map PRD/spec, UX, architecture, risk, stories, validation, enterprise evidence, open inputs, and review findings
-  5. write readiness matrix artifact and run `artifact enterprise-check` when selected_track is enterprise
-  6. move ready work into build phase only when missing sources are explicit
+  5. run `artifact enterprise-readiness --path <readiness-matrix-artifact>` when selected_track is enterprise
+  6. run `artifact enterprise-check --path <readiness-matrix-artifact>`
+  7. move ready work into build phase only when missing sources are explicit
 
 outputs:
-  - readiness matrix artifact
+  - generated readiness matrix artifact
   - blocked items or build clearance
   - track artifact coverage
   - updated state
@@ -31,6 +32,7 @@ done_when:
   - build can start without hidden planning decisions
   - first story is ready
   - readiness matrix links required sources to checks and evidence
+  - generated enterprise artifact is registered when enterprise is selected
   - enterprise artifact gaps are resolved, blocked, or waived with owner and release impact
 
 blocked_when:

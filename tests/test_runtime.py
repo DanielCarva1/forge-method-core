@@ -1987,6 +1987,93 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotEqual(ambiguous.returncode, 0)
             self.assertIn("keeping the original source requires stale_waiver", ambiguous.stdout)
 
+    def test_artifact_document_generators_create_index_and_shard_with_freshness_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            docs = root / "docs"
+            docs.mkdir()
+            source = docs / "guide.md"
+            source.write_text("# Guide\n\nCurrent source of truth.\n", encoding="utf-8")
+            shard_index = docs / "guide" / "index.md"
+            shard_index.parent.mkdir()
+            shard_index.write_text("# Guide shards\n\n- [Overview](overview.md)\n", encoding="utf-8")
+
+            index_output = run_cmd(
+                "artifact",
+                "doc-index",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/doc-index-generated.md",
+                "--target-docs",
+                "docs",
+                "--indexed-docs",
+                "docs/guide.md",
+                "--source-of-truth",
+                "docs/guide.md",
+                "--navigation-rules",
+                "read docs/guide.md first, then follow linked shards",
+                "--changes-or-findings",
+                "guide.md is the current owner of product navigation",
+                "--stale-or-duplicate-notes",
+                "no duplicate owner found",
+                "--stale-check",
+                "source hash and mtime verified by artifact doc-check",
+                "--next-workflow",
+                "editorial-review",
+                "--eval",
+            ).stdout
+            self.assertIn(".forge-method/artifacts/doc-index-generated.md", index_output)
+            self.assertIn("Document utility check passed.", index_output)
+            index_text = (root / ".forge-method" / "artifacts" / "doc-index-generated.md").read_text(encoding="utf-8")
+            self.assertIn("workflow: doc-index", index_text)
+            self.assertIn(f"source_fingerprint: {sha256(source)}", index_text)
+            self.assertIn("source_last_modified: docs/guide.md=", index_text)
+            self.assertIn("validation: artifact doc-check --path .forge-method/artifacts/doc-index-generated.md", index_text)
+            self.assertTrue((root / ".forge-method" / "evals" / "artifact-forge-method-artifacts-doc-index-generated-md-exists.yaml").exists())
+
+            shard_output = run_cmd(
+                "artifact",
+                "doc-shard",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/doc-shard-generated.md",
+                "--target-docs",
+                "docs/guide.md",
+                "--source-of-truth",
+                "docs/guide.md",
+                "--generated-or-derived-docs",
+                "docs/guide/index.md",
+                "--shard-index",
+                "docs/guide/index.md",
+                "--original-doc-decision",
+                "keep",
+                "--precedence-rule",
+                "whole source document wins until archive decision",
+                "--changes-or-findings",
+                "created shard index for future context loading",
+                "--stale-or-duplicate-notes",
+                "original retained with explicit waiver",
+                "--stale-check",
+                "source hash and shard index verified",
+                "--stale-waiver",
+                "owner keeps whole source for review while shards prove navigation",
+                "--next-workflow",
+                "doc-index",
+                "--eval",
+            ).stdout
+            self.assertIn(".forge-method/artifacts/doc-shard-generated.md", shard_output)
+            self.assertIn("Document utility check passed.", shard_output)
+            shard_text = (root / ".forge-method" / "artifacts" / "doc-shard-generated.md").read_text(encoding="utf-8")
+            self.assertIn("workflow: doc-shard", shard_text)
+            self.assertIn("stale_waiver: owner keeps whole source for review while shards prove navigation", shard_text)
+            self.assertIn("validation: artifact doc-check --path .forge-method/artifacts/doc-shard-generated.md", shard_text)
+            self.assertTrue((root / ".forge-method" / "evals" / "artifact-forge-method-artifacts-doc-shard-generated-md-exists.yaml").exists())
+            check = run_cmd("artifact", "doc-check", "--root", str(root), "--path", ".forge-method/artifacts/doc-shard-generated.md").stdout
+            self.assertIn("Document utility check passed.", check)
+
     def test_artifact_spec_check_validates_kernel_contract(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -2779,6 +2866,101 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotEqual(broken_result.returncode, 0)
             self.assertIn("enterprise required artifacts must include privacy-data-plan", broken_result.stdout)
 
+    def test_artifact_enterprise_generators_create_track_readiness_and_release_gates(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+
+            track_output = run_cmd(
+                "artifact",
+                "enterprise-track-map",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/enterprise-track-generated.md",
+                "--selected-module",
+                "software-builder",
+                "--scope",
+                "enterprise checkout release",
+                "--artifact-evidence-map",
+                "each required artifact names owner, evidence path, gate consumer, and waiver status",
+                "--readiness-gate",
+                "readiness-check then traceability-gate and release-readiness",
+                "--waiver-policy",
+                "waiver owner, rationale, revisit trigger, and release impact required",
+                "--next-workflow",
+                "readiness-check",
+                "--eval",
+            ).stdout
+            self.assertIn(".forge-method/artifacts/enterprise-track-generated.md", track_output)
+            self.assertIn("Enterprise artifact check passed.", track_output)
+            track_text = (root / ".forge-method" / "artifacts" / "enterprise-track-generated.md").read_text(encoding="utf-8")
+            self.assertIn("workflow: track-decision", track_text)
+            self.assertIn("enterprise_required_artifacts: risk-register, security-plan, privacy-data-plan", track_text)
+            self.assertIn("validation: artifact enterprise-check --path .forge-method/artifacts/enterprise-track-generated.md", track_text)
+            self.assertTrue((root / ".forge-method" / "evals" / "artifact-forge-method-artifacts-enterprise-track-generated-md-exists.yaml").exists())
+
+            readiness_output = run_cmd(
+                "artifact",
+                "enterprise-readiness",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/enterprise-readiness-generated.md",
+                "--scope",
+                "enterprise checkout release",
+                "--enterprise-evidence-status",
+                "security privacy risk quality NFR and traceability evidence present",
+                "--nfr-evidence",
+                "nfr-evidence-audit links thresholds to release claims",
+                "--release-gate-impact",
+                "missing P0 evidence blocks release",
+                "--waivers",
+                "compliance-checklist waived by owner until SOC2 scope starts",
+                "--missing-or-weak-sources",
+                "none blocking; observability details continue before operate",
+                "--next-workflow",
+                "traceability-gate",
+                "--eval",
+            ).stdout
+            self.assertIn(".forge-method/artifacts/enterprise-readiness-generated.md", readiness_output)
+            self.assertIn("Enterprise artifact check passed.", readiness_output)
+            readiness_text = (root / ".forge-method" / "artifacts" / "enterprise-readiness-generated.md").read_text(encoding="utf-8")
+            self.assertIn("workflow: readiness-check", readiness_text)
+            self.assertIn("enterprise_required_artifacts: risk-register, security-plan, privacy-data-plan", readiness_text)
+            self.assertTrue((root / ".forge-method" / "evals" / "artifact-forge-method-artifacts-enterprise-readiness-generated-md-exists.yaml").exists())
+
+            release_output = run_cmd(
+                "artifact",
+                "enterprise-release-gate",
+                "--root",
+                str(root),
+                "--path",
+                ".forge-method/artifacts/enterprise-release-generated.md",
+                "--scope",
+                "enterprise checkout release",
+                "--enterprise-evidence-status",
+                "required evidence passed, compliance waiver accepted with owner",
+                "--gate-decision",
+                "hold until traceability evidence is attached",
+                "--release-gate-impact",
+                "release is blocked if traceability evidence remains missing",
+                "--waivers",
+                "compliance-checklist waived by owner with revisit date",
+                "--next-workflow",
+                "ready-release",
+                "--eval",
+            ).stdout
+            self.assertIn(".forge-method/artifacts/enterprise-release-generated.md", release_output)
+            self.assertIn("Enterprise artifact check passed.", release_output)
+            release_text = (root / ".forge-method" / "artifacts" / "enterprise-release-generated.md").read_text(encoding="utf-8")
+            self.assertIn("workflow: release-readiness", release_text)
+            self.assertIn("gate_decision: hold until traceability evidence is attached", release_text)
+            self.assertIn("validation: artifact enterprise-check --path .forge-method/artifacts/enterprise-release-generated.md", release_text)
+            self.assertTrue((root / ".forge-method" / "evals" / "artifact-forge-method-artifacts-enterprise-release-generated-md-exists.yaml").exists())
+            check = run_cmd("artifact", "enterprise-check", "--root", str(root), "--path", ".forge-method/artifacts/enterprise-release-generated.md").stdout
+            self.assertIn("Enterprise artifact check passed.", check)
+
     def test_packaged_modules_and_workflows_validate(self) -> None:
         modules = run_cmd("module", "list").stdout
         modules_json = json.loads(run_cmd("module", "list", "--json").stdout)
@@ -3236,9 +3418,25 @@ class RuntimeTests(unittest.TestCase):
         track_decision_template = (
             ROOT / "skills" / "forge-method" / "templates" / "track-decision-artifact.md"
         ).read_text(encoding="utf-8")
+        lifecycle_pack = (
+            ROOT / "skills" / "forge-method" / "facilitation" / "lifecycle-closure.md"
+        ).read_text(encoding="utf-8")
+        track_decision_workflow = (
+            ROOT / "skills" / "forge-method" / "references" / "workflow-track-decision.md"
+        ).read_text(encoding="utf-8")
+        readiness_workflow = (
+            ROOT / "skills" / "forge-method" / "references" / "workflow-readiness-check.md"
+        ).read_text(encoding="utf-8")
+        release_readiness_workflow = (
+            ROOT / "skills" / "forge-method" / "references" / "workflow-release-readiness.md"
+        ).read_text(encoding="utf-8")
         self.assertIn("enterprise_required_artifacts", track_decision_template)
         self.assertIn("artifact_evidence_map", track_decision_template)
         self.assertIn("waiver_policy", track_decision_template)
+        self.assertIn("artifact enterprise-track-map", lifecycle_pack)
+        self.assertIn("artifact enterprise-track-map", track_decision_workflow)
+        self.assertIn("artifact enterprise-readiness", readiness_workflow)
+        self.assertIn("artifact enterprise-release-gate", release_readiness_workflow)
         readiness_template = (
             ROOT / "skills" / "forge-method" / "templates" / "readiness-matrix-artifact.md"
         ).read_text(encoding="utf-8")
@@ -3271,9 +3469,24 @@ class RuntimeTests(unittest.TestCase):
         document_utility_template = (
             ROOT / "skills" / "forge-method" / "templates" / "document-utility-artifact.md"
         ).read_text(encoding="utf-8")
+        document_utility_pack = (
+            ROOT / "skills" / "forge-method" / "facilitation" / "document-utility.md"
+        ).read_text(encoding="utf-8")
+        doc_index_workflow = (
+            ROOT / "skills" / "forge-method" / "references" / "workflow-doc-index.md"
+        ).read_text(encoding="utf-8")
+        doc_shard_workflow = (
+            ROOT / "skills" / "forge-method" / "references" / "workflow-doc-shard.md"
+        ).read_text(encoding="utf-8")
         self.assertIn("source_fingerprint", document_utility_template)
         self.assertIn("source_last_modified", document_utility_template)
         self.assertIn("original_doc_decision", document_utility_template)
+        self.assertIn("artifact doc-index", document_utility_pack)
+        self.assertIn("artifact doc-shard", document_utility_pack)
+        self.assertIn("artifact doc-index", doc_index_workflow)
+        self.assertIn("artifact doc-check", doc_index_workflow)
+        self.assertIn("artifact doc-shard", doc_shard_workflow)
+        self.assertIn("artifact doc-check", doc_shard_workflow)
         spec_kernel_template = (
             ROOT / "skills" / "forge-method" / "templates" / "spec-kernel-artifact.md"
         ).read_text(encoding="utf-8")

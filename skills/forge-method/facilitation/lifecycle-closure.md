@@ -42,7 +42,7 @@ facilitator_moves:
 quality_bar:
   - "The artifact is compact enough for a future agent to use without chat history."
   - "The next workflow is explicit."
-  - "Track decisions include required workflow and artifact maps; enterprise decisions name evidence gates and waivers."
+  - "Track decisions include required workflow and artifact maps; enterprise decisions use `artifact enterprise-track-map`, `artifact enterprise-readiness`, or `artifact enterprise-release-gate` for evidence gates and waivers."
   - "Source-of-truth artifacts and stale/missing artifacts are named."
   - "Open risks, findings, or human inputs are not hidden."
 
@@ -66,7 +66,7 @@ checkpoint_options:
   - research-closeout
 
 artifact_rules:
-  Persist route, source artifacts, key decisions, blockers, findings/actions, validation/evidence, load hints, and next workflow.
+  Persist route, source artifacts, key decisions, blockers, findings/actions, generator command, validation/evidence, load hints, and next workflow.
 
 headless:
   Create the compact closure artifact from available files and continue the recommended workflow. Ask the human only when source-of-truth, ownership, or risk acceptance is unknowable from durable state.

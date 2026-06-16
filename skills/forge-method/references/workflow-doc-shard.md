@@ -17,11 +17,13 @@ steps:
   3. create or update shard index links and ownership notes
   4. decide whether the original document is deleted, archived, or kept with waiver
   5. record source fingerprint, precedence rule, orphan/staleness notes, and validation command
-  6. run `artifact doc-check --path <document-utility-artifact>`
+  6. run `artifact doc-shard --path <document-utility-artifact>` to write/register the handoff
+  7. run `artifact doc-check --path <document-utility-artifact>`
 
 outputs:
   - sharded docs
   - index updates
+  - generated shard handoff artifact
   - orphan/staleness notes
   - original document decision
   - source fingerprint and stale-check proof
@@ -29,6 +31,7 @@ outputs:
 done_when:
   - shards are independently useful
   - index connects the shard set
+  - generated artifact is registered
   - source-of-truth risk is documented
   - original document handling avoids duplicate-source ambiguity
   - stale-check proof passes or a waiver is explicit

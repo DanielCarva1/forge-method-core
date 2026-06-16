@@ -16,10 +16,11 @@ steps:
   2. read docs before describing them; do not infer purpose from filenames
   3. identify source-of-truth files, generated docs, stale duplicates, and precedence rules
   4. record source fingerprint, source mtime, compact descriptions, and navigation rules
-  5. run `artifact doc-check --path <document-utility-artifact>`
+  5. run `artifact doc-index --path <document-utility-artifact>` to write/register the handoff
+  6. run `artifact doc-check --path <document-utility-artifact>`
 
 outputs:
-  - doc index or map
+  - generated doc index artifact
   - stale/duplicate notes
   - navigation guidance
   - source fingerprint and stale-check proof
@@ -28,6 +29,7 @@ done_when:
   - key docs are findable
   - source-of-truth boundaries are clear
   - index descriptions are content-derived
+  - generated artifact is registered
   - stale-check proof passes or a waiver is explicit
   - future agents know what to read first
 

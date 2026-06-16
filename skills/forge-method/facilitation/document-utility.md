@@ -26,7 +26,7 @@ conversation_stages:
   - edge_case_review: "Turn boundary and failure scenarios into findings, missing checks, waivers, or follow-up stories."
   - transform: "Apply the smallest doc change that improves navigation, comprehension, or machine handoff."
   - verify: "Check links, ownership, duplicated claims, stale language, and expected artifact shape."
-  - freshness_check: "Record source fingerprint, source mtime, precedence rule, and `artifact doc-check` result when indexing or sharding."
+  - freshness_check: "Record source fingerprint, source mtime, precedence rule, generator command, and `artifact doc-check` result when indexing or sharding."
   - handoff: "Persist changed paths, unresolved ownership, and the next workflow."
 
 elicitation_options:
@@ -48,7 +48,7 @@ facilitator_moves:
 quality_bar:
   - "The reader can find the right file and trust which claims are current."
   - "The transformed doc has a clear job and does not duplicate another source of truth."
-  - "Index and shard artifacts prove freshness with source fingerprint, source mtime, and a stale-check command."
+  - "Index and shard artifacts are generated with `artifact doc-index` or `artifact doc-shard` and prove freshness with source fingerprint, source mtime, and a stale-check command."
   - "Future agents get smaller, sharper context rather than more prose to scan."
   - "Editorial findings include reader job, source boundary, severity, and scoped edit recommendation."
   - "Edge-case findings include scenario, failure mode, detectability, missing check, and follow-up route."
@@ -83,7 +83,7 @@ domain_examples:
   - spec-distillation: "Transcript or messy brief is long; extract objective, facts, assumptions, risks, open questions, and next workflow."
 
 artifact_rules:
-  Persist target paths, source-of-truth boundaries, source fingerprint, source mtime, precedence rules, stale/duplicate notes, edits/findings, validation command, and next workflow.
+  Persist target paths, source-of-truth boundaries, source fingerprint, source mtime, precedence rules, stale/duplicate notes, edits/findings, generator command, validation command, and next workflow.
   Use `skill:templates/document-utility-artifact.md` as the default artifact shape unless a narrower project template exists.
 
 headless:
