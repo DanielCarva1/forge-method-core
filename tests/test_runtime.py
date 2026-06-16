@@ -2198,6 +2198,54 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Status: plugin version mismatch", text)
             self.assertIn("Repair: powershell -ExecutionPolicy Bypass -File .\\scripts\\install-plugin-local.ps1", text)
 
+    def test_snapshot_reports_plugin_installation_diagnostics_without_blocking_quality(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw) / "home"
+            project = Path(raw) / "project"
+            home.mkdir()
+            project.mkdir()
+            marketplace_path = home / ".agents" / "plugins" / "marketplace.json"
+            plugin_root = home / "plugins" / "forge-method-core"
+            manifest_path = plugin_root / ".codex-plugin" / "plugin.json"
+            skill_path = plugin_root / "skills" / "forge-method" / "SKILL.md"
+            marketplace_path.parent.mkdir(parents=True)
+            manifest_path.parent.mkdir(parents=True)
+            skill_path.parent.mkdir(parents=True)
+            marketplace_path.write_text(
+                json.dumps(
+                    {
+                        "name": "personal",
+                        "plugins": [
+                            {
+                                "name": "forge-method-core",
+                                "source": {"source": "local", "path": "./plugins/forge-method-core"},
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            manifest_path.write_text(
+                json.dumps({"name": "forge-method-core", "version": "1.22.0", "skills": "./skills/"}),
+                encoding="utf-8",
+            )
+            skill_path.write_text("---\nname: forge-method\n---\n", encoding="utf-8")
+            env = {"HOME": str(home), "USERPROFILE": str(home)}
+            run_cmd("init", "--project", "Snapshot Diagnostics", "--root", str(project), env=env)
+
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(project), env=env).stdout)
+
+            plugin = snapshot["diagnostics"]["plugin_installation"]
+            self.assertFalse(plugin["available"])
+            self.assertEqual(plugin["status"], "plugin version mismatch")
+            self.assertEqual(plugin["expected_version"], "1.29.0")
+            self.assertEqual(plugin["installed_version"], "1.22.0")
+            self.assertIn(
+                "powershell -ExecutionPolicy Bypass -File .\\scripts\\install-plugin-local.ps1",
+                plugin["repair_commands"]["windows"],
+            )
+            self.assertTrue(snapshot["quality"]["audit"]["passed"])
+
     def test_artifact_is_indexed_and_added_to_context_pack(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

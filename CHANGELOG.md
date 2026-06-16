@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- expose plugin installation diagnostics in snapshot output so agents can see stale local Codex plugin versions and repair commands without running `doctor` separately
 - run semantic artifact validators from the shared artifact surface, so workflow-declared spec/research/game/test/doc/discovery/enterprise artifacts cannot pass `artifact verify`, snapshot quality, or the quality gate when their specialized `artifact *-check` would fail
 - expose workflow validation errors in snapshot quality so agents can see workflow/catalog/facilitation failures before relying on compact runtime state
 - validate written capability-index files through config validation, snapshot quality, and the quality gate so compact agent capability contracts cannot become stale or misleading

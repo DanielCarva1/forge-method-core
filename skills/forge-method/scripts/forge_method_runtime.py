@@ -6384,6 +6384,9 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
             "load_plan": load_plan.relative_to(root).as_posix() if load_plan.exists() else "",
             "latest_checkpoint": latest_checkpoint.relative_to(root).as_posix() if latest_checkpoint.exists() else "",
         },
+        "diagnostics": {
+            "plugin_installation": plugin_installation_snapshot_summary(),
+        },
         "recent_artifacts": recent_artifacts(root, limit=5),
     }
 
@@ -13565,6 +13568,20 @@ def collect_plugin_installation() -> dict[str, Any]:
     base["status"] = "ready"
     base["repair_commands"] = {"windows": [], "posix": []}
     return base
+
+
+def plugin_installation_snapshot_summary() -> dict[str, Any]:
+    plugin = collect_plugin_installation()
+    return {
+        "available": plugin.get("available", False),
+        "status": plugin.get("status", ""),
+        "expected_version": plugin.get("expected_version", ""),
+        "installed_version": plugin.get("installed_version") or "",
+        "plugin_path": plugin.get("plugin_path") or "",
+        "skill_exists": plugin.get("skill_exists", False),
+        "codex_deeplink": plugin.get("codex_deeplink") or "",
+        "repair_commands": plugin.get("repair_commands", {"windows": [], "posix": []}),
+    }
 
 
 def run_probe(command: list[str], timeout: float = 3.0) -> dict[str, Any]:
