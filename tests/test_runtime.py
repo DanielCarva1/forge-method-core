@@ -5164,6 +5164,35 @@ handoff:
 
             self.assertIn("Agent profile validation passed.", validation)
 
+    def test_gate_uses_full_agent_validation_surface(self) -> None:
+        runtime = load_runtime_module()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Agent Gate Surface Project", "--root", str(root))
+            original_validate_techniques = runtime.validate_elicitation_techniques
+            runtime.validate_elicitation_techniques = lambda: ["elicitation technique broken"]
+            args = type(
+                "Args",
+                (),
+                {
+                    "root": str(root),
+                    "strict": False,
+                    "require_evals": False,
+                    "summary": None,
+                    "context_pack": False,
+                    "max_chars": 8000,
+                },
+            )()
+            try:
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    result = runtime.cmd_gate(args)
+            finally:
+                runtime.validate_elicitation_techniques = original_validate_techniques
+
+        self.assertEqual(result, 1)
+        self.assertIn("agent: elicitation technique broken", output.getvalue())
+
     def test_correct_course_continuation_writes_artifact_without_human_block(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

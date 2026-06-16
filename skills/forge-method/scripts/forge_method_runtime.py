@@ -3713,6 +3713,13 @@ def agent_profile_validation_errors(root: Path | None = None) -> list[str]:
     return errors
 
 
+def agent_validation_errors(root: Path | None = None) -> list[str]:
+    errors = agent_profile_validation_errors(root)
+    errors.extend(validate_elicitation_techniques())
+    errors.extend(validate_persona_overlays(root))
+    return errors
+
+
 def agent_profile_summary(profile: dict[str, str]) -> dict[str, str]:
     return {
         "id": profile.get("id", ""),
@@ -6230,9 +6237,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     open_findings = [item for item in review_findings if item.get("status") == "open"]
     audit_errors = audit_project(root)
     artifact_errors, artifact_warnings = artifact_findings(root)
-    agent_errors = agent_profile_validation_errors(root)
-    agent_errors.extend(validate_elicitation_techniques())
-    agent_errors.extend(validate_persona_overlays(root))
+    agent_errors = agent_validation_errors(root)
     config_errors = config_validation_errors(root)
     evals = list_evals(root)
     eval_counts: dict[str, int] = {"total": len(evals), "passed": 0, "failed": 0, "pending": 0}
@@ -7872,9 +7877,7 @@ def cmd_agent_recommend(args: argparse.Namespace) -> int:
 
 def cmd_agent_validate(args: argparse.Namespace) -> int:
     root, _ = load_state_or_none(resolve_root(args.root))
-    errors = agent_profile_validation_errors(root)
-    errors.extend(validate_elicitation_techniques())
-    errors.extend(validate_persona_overlays(root))
+    errors = agent_validation_errors(root)
     if errors:
         print("Agent profile validation failed:")
         for error in errors:
@@ -11916,9 +11919,7 @@ def cmd_builder_validate(args: argparse.Namespace) -> int:
     root, _ = load_state_or_fail(resolve_root(args.root))
     errors: list[str] = []
     errors.extend(workflow_validation_errors(root))
-    errors.extend(agent_profile_validation_errors(root))
-    errors.extend(validate_elicitation_techniques())
-    errors.extend(validate_persona_overlays(root))
+    errors.extend(agent_validation_errors(root))
     errors.extend(config_validation_errors(root))
     for skill_path in sorted((method_dir(root) / "skills").glob("*/SKILL.md")):
         text = skill_path.read_text(encoding="utf-8")
@@ -13170,7 +13171,7 @@ def cmd_gate(args: argparse.Namespace) -> int:
     if workflow_errors:
         errors.extend(f"workflow: {error}" for error in workflow_errors)
 
-    agent_errors = agent_profile_validation_errors(root)
+    agent_errors = agent_validation_errors(root)
     if agent_errors:
         errors.extend(f"agent: {error}" for error in agent_errors)
     config_errors = config_validation_errors(root)
