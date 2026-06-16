@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-16T05:58:18+00:00",
+  "generated_at": "2026-06-16T12:26:16+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -506,6 +506,87 @@
     }
   ],
   "project_conventions": [],
+  "route_diagnostics": {
+    "authoritative_entrypoint": [
+      "preflight",
+      "start",
+      "resume --json",
+      "guide --question --json when the human supplied fresh intent"
+    ],
+    "fields": [
+      "intent_classification",
+      "signals",
+      "recommended_phase",
+      "recommended_workflow",
+      "recommended_action",
+      "human_prompt",
+      "alternatives",
+      "state_update_required",
+      "commands",
+      "required_next_workflow",
+      "reason",
+      "context_boundary",
+      "stale_state_guard"
+    ],
+    "purpose": "Keep route choice, reason, context boundary, and executable commands visible after resume, next, guide, and recovery.",
+    "recovery_artifacts": [
+      ".forge-method/context/recovery.md",
+      ".forge-method/context/recovery-compact.md"
+    ],
+    "surfaces": [
+      {
+        "fields": [
+          "intent_classification",
+          "signals",
+          "recommended_phase",
+          "recommended_workflow",
+          "recommended_action",
+          "human_prompt",
+          "alternatives",
+          "state_update_required",
+          "commands"
+        ],
+        "name": "guide --question --json",
+        "use_when": "classify fresh human intent before continuing an older next_action"
+      },
+      {
+        "fields": [
+          "help_oracle",
+          "quality",
+          "commands",
+          "mechanical_work_order"
+        ],
+        "name": "resume --json",
+        "use_when": "resume from durable state and expose Help Oracle diagnostics"
+      },
+      {
+        "fields": [
+          "required_next_workflow",
+          "recommended_phase",
+          "reason",
+          "context_boundary",
+          "stale_state_guard",
+          "quality",
+          "commands",
+          "mechanical_work_order"
+        ],
+        "name": "next --json",
+        "use_when": "continue from resume output without losing Help Oracle route diagnostics"
+      },
+      {
+        "fields": [
+          "required_next_workflow",
+          "recommended_phase",
+          "reason",
+          "context_boundary",
+          "stale_state_guard",
+          "commands"
+        ],
+        "name": "context recover",
+        "use_when": "write persisted recovery memory with route diagnostics for the next agent"
+      }
+    ]
+  },
   "runtime": "forge-method",
   "runtime_version": "1.29.0",
   "sources": [],

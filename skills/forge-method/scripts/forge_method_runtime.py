@@ -11949,6 +11949,86 @@ def cmd_config_validate(args: argparse.Namespace) -> int:
     return 0
 
 
+def route_diagnostics_contract() -> dict[str, Any]:
+    fields = [
+        "intent_classification",
+        "signals",
+        "recommended_phase",
+        "recommended_workflow",
+        "recommended_action",
+        "human_prompt",
+        "alternatives",
+        "state_update_required",
+        "commands",
+        "required_next_workflow",
+        "reason",
+        "context_boundary",
+        "stale_state_guard",
+    ]
+    return {
+        "purpose": "Keep route choice, reason, context boundary, and executable commands visible after resume, next, guide, and recovery.",
+        "authoritative_entrypoint": [
+            "preflight",
+            "start",
+            "resume --json",
+            "guide --question --json when the human supplied fresh intent",
+        ],
+        "fields": fields,
+        "surfaces": [
+            {
+                "name": "guide --question --json",
+                "use_when": "classify fresh human intent before continuing an older next_action",
+                "fields": [
+                    "intent_classification",
+                    "signals",
+                    "recommended_phase",
+                    "recommended_workflow",
+                    "recommended_action",
+                    "human_prompt",
+                    "alternatives",
+                    "state_update_required",
+                    "commands",
+                ],
+            },
+            {
+                "name": "resume --json",
+                "use_when": "resume from durable state and expose Help Oracle diagnostics",
+                "fields": ["help_oracle", "quality", "commands", "mechanical_work_order"],
+            },
+            {
+                "name": "next --json",
+                "use_when": "continue from resume output without losing Help Oracle route diagnostics",
+                "fields": [
+                    "required_next_workflow",
+                    "recommended_phase",
+                    "reason",
+                    "context_boundary",
+                    "stale_state_guard",
+                    "quality",
+                    "commands",
+                    "mechanical_work_order",
+                ],
+            },
+            {
+                "name": "context recover",
+                "use_when": "write persisted recovery memory with route diagnostics for the next agent",
+                "fields": [
+                    "required_next_workflow",
+                    "recommended_phase",
+                    "reason",
+                    "context_boundary",
+                    "stale_state_guard",
+                    "commands",
+                ],
+            },
+        ],
+        "recovery_artifacts": [
+            ".forge-method/context/recovery.md",
+            ".forge-method/context/recovery-compact.md",
+        ],
+    }
+
+
 def capability_index_payload(root: Path) -> dict[str, Any]:
     config, sources = merged_config(root)
     workflows: list[dict[str, Any]] = []
@@ -11987,6 +12067,7 @@ def capability_index_payload(root: Path) -> dict[str, Any]:
         "generated_at": utc_now(),
         "sources": sources,
         "override_precedence": CONFIG_OVERRIDE_PRECEDENCE,
+        "route_diagnostics": route_diagnostics_contract(),
         "workflows": workflows,
         "modules": modules,
         "agents": agents,
@@ -12030,6 +12111,7 @@ def cmd_config_index(args: argparse.Namespace) -> int:
     print(f"Persona lenses: {len(payload['persona_lenses'])}")
     print(f"Elicitation techniques: {len(payload['elicitation_techniques'])}")
     print(f"Custom capabilities: {len(payload['custom_capabilities'])}")
+    print(f"Route diagnostics: {len(payload['route_diagnostics']['surfaces'])} surfaces")
     if written_path:
         print(f"Wrote: {written_path}")
     return 0
@@ -12927,6 +13009,7 @@ def build_recovery_brief_text(root: Path, state: dict[str, str], *, checkpoint_l
     failed_checks = checkpoint_section_items(root, "Failed Checks", checkpoint_limit=checkpoint_limit)
     touched_files = checkpoint_section_items(root, "Touched Files", checkpoint_limit=checkpoint_limit)
     checkpoints = recent_checkpoint_paths(root, limit=checkpoint_limit)
+    help_oracle = build_post_command_help_oracle(root, state, validate=False)
     active_story = state.get("active_story", "")
     read_order = [
         state_path(root).relative_to(root).as_posix(),
@@ -12980,7 +13063,9 @@ def build_recovery_brief_text(root: Path, state: dict[str, str], *, checkpoint_l
             f"python {runtime} gate --root {root_hint} --require-evals",
         ]
     )
-    lines.extend(["```", "", "## Recent Checkpoints", ""])
+    lines.extend(["```", "", "## Route Diagnostics", ""])
+    lines.extend(route_diagnostics_markdown_items(help_oracle, compact=False))
+    lines.extend(["", "## Recent Checkpoints", ""])
     append_markdown_items(lines, [path.relative_to(root).as_posix() for path in checkpoints])
     lines.extend(["", "## Failed Checks", ""])
     append_markdown_items(lines, failed_checks)
@@ -13041,6 +13126,47 @@ def compact_command_summary(command: dict[str, str]) -> str:
     return f"- {command.get('name')}: {text}"
 
 
+def compact_inline_text(value: Any, *, max_chars: int = 180) -> str:
+    text = str(value or "").strip().replace("\n", " ")
+    if len(text) <= max_chars:
+        return text
+    return text[: max(0, max_chars - 3)].rstrip() + "..."
+
+
+def route_diagnostics_markdown_items(oracle: dict[str, Any], *, compact: bool) -> list[str]:
+    if not oracle:
+        return ["- none"]
+    boundary = oracle.get("context_boundary") or {}
+    alternatives = ", ".join(
+        item.get("workflow", "")
+        for item in oracle.get("alternatives", [])
+        if item.get("workflow", "")
+    )
+    reason = compact_inline_text(oracle.get("reason", ""), max_chars=140 if compact else 260)
+    next_step = compact_inline_text(oracle.get("human_next_step", ""), max_chars=140 if compact else 260)
+    stale_guard = oracle.get("stale_state_guard", "")
+    if compact and stale_guard:
+        stale_guard = "do not follow stale chat next steps"
+    items = [
+        f"- required_next_workflow: {oracle.get('required_next_workflow', '')}",
+        f"- recommended_phase: {oracle.get('recommended_phase', '')}",
+        f"- reason: {reason}",
+    ]
+    if not compact and next_step:
+        items.append(f"- human_next_step: {next_step}")
+    if boundary:
+        items.append(f"- context_boundary: {boundary.get('mode', '')} -> {boundary.get('current_workflow', '')}")
+        if boundary.get("first_command") and not compact:
+            items.append(
+                f"- first_command: {compact_inline_text(boundary.get('first_command', ''), max_chars=260)}"
+            )
+    if stale_guard:
+        items.append(f"- stale_state_guard: {stale_guard}")
+    if alternatives and not compact:
+        items.append(f"- alternatives: {alternatives}")
+    return items
+
+
 def build_compact_recovery_brief_text(
     root: Path,
     state: dict[str, str],
@@ -13050,6 +13176,7 @@ def build_compact_recovery_brief_text(
 ) -> str:
     snapshot = build_snapshot(root, state)
     resume = snapshot["resume"]
+    help_oracle = snapshot.get("help_oracle", {})
     context_plan = build_context_load_plan(root, state, max_chars=max(1200, max_chars // 2 if max_chars else 2000))
     selected = context_plan.get("selected", [])
     checkpoints = recent_checkpoint_paths(root, limit=checkpoint_limit)
@@ -13093,6 +13220,10 @@ def build_compact_recovery_brief_text(
                 f"- next_command: {compact_next_command}",
             ],
         ),
+        markdown_section(
+            "Route Diagnostics",
+            route_diagnostics_markdown_items(help_oracle, compact=True),
+        ),
         read_first_section,
         command_section,
     ]
@@ -13128,8 +13259,8 @@ def build_compact_recovery_brief_text(
 
     text = "\n".join(sections).rstrip() + "\n"
     if max_chars and len(text) > max_chars:
-        required_sections = sections[:5]
-        optional_sections = sections[5:]
+        required_sections = sections[:7]
+        optional_sections = sections[7:]
         footer = "\n[compact-recovery omitted lower-priority sections to fit max_chars]\n"
         text = "\n".join(required_sections).rstrip() + "\n"
         for section in optional_sections:

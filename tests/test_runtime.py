@@ -5334,9 +5334,15 @@ handoff:
             product_workflow = next(item for item in index_payload["workflows"] if item["id"] == "product-requirements")
             custom_capability = next(item for item in index_payload["custom_capabilities"] if item["id"] == "config-review")
             facilitator = next(item for item in index_payload["agents"] if item["id"] == "facilitator")
+            route_diagnostics = index_payload["route_diagnostics"]
+            surface_names = [item["name"] for item in route_diagnostics["surfaces"]]
             self.assertEqual(product_workflow["template"], "quick-dev-artifact")
             self.assertEqual(custom_capability["workflow"], "config-customization")
             self.assertEqual(facilitator["title"], "Project Facilitator")
+            self.assertIn("next --json", surface_names)
+            self.assertIn("guide --question --json", surface_names)
+            self.assertIn("context_boundary", route_diagnostics["fields"])
+            self.assertIn("stale_state_guard", route_diagnostics["fields"])
             self.assertTrue((root / written_payload["written_path"]).exists())
 
             (config_dir / "local.yaml").write_text(
@@ -6266,6 +6272,10 @@ handoff:
             self.assertIn("unit test failed: expected route", recovery_text)
             self.assertIn("skills/forge-method/scripts/forge_method_runtime.py", recovery_text)
             self.assertIn("Resume Commands", recovery_text)
+            self.assertIn("Route Diagnostics", recovery_text)
+            self.assertIn("required_next_workflow", recovery_text)
+            self.assertIn("context_boundary", recovery_text)
+            self.assertIn("stale_state_guard", recovery_text)
             self.assertIn("Recovery Signals", pack_text)
             self.assertIn("unit test failed: expected route", pack_text)
 
@@ -6299,7 +6309,10 @@ handoff:
             self.assertIn("# Forge Method Compact Recovery", text)
             self.assertIn("## State", text)
             self.assertIn("## Resume", text)
+            self.assertIn("## Route Diagnostics", text)
             self.assertIn("- action: start_next_story", text)
+            self.assertIn("required_next_workflow", text)
+            self.assertIn("context_boundary", text)
             self.assertIn("## Read First", text)
             self.assertIn("## Commands", text)
             self.assertIn("story start", text)

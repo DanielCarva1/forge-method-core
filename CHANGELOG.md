@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- persist Help Oracle route diagnostics in recovery briefs and the capability index, so fresh agents can see required workflow, reason, context boundary, stale-state guard, and route surfaces without relying on chat history
 - add `next --json` and route diagnostics in text `next`, so agents following the recommended continuation command keep Help Oracle reason, context boundary, commands, quality, and mechanical goal handoff without parsing a full snapshot
 - expose compact quality summary in `resume`, `context plan`, and `context health`, so fresh-chat recovery blocks on project quality failures instead of reporting healthy context while gate-rejected workflow/config/builder/agent failures remain hidden
 - expose compact quality summary in existing-project `reload` text and JSON, so stale-chat recovery surfaces cannot hide workflow/config/builder/agent quality failures that gate would reject
