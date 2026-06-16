@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add a Runtime Guidance Payload safety guard so parity replay rejects stale-route instructions in Guidance Engine payloads and preflight/reload/guide JSON are covered by the same contract
 - add a Help Oracle guidance safety guard so runtime resume/snapshot/audit output rejects stale-chat or stale-state instructions while preserving durable-state-first recovery guidance
 - add a workflow guidance safety guard so compact workflow refs fail validation if they tell agents to rely on chat memory, follow stale state, ask procedural continue confirmations, or dump catalogs
 - add a facilitation specificity guard: human-facing packs now require `domain_examples`, workflow validation rejects generic packs, and every packaged pack has at least three situational examples

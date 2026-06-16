@@ -582,6 +582,83 @@ class RuntimeTests(unittest.TestCase):
         self.assertTrue(PARITY_REQUIRED_FAMILIES <= set(payload["covered_families"]))
         self.assertEqual(payload["passed"], payload["total"])
 
+    def test_parity_replay_rejects_unsafe_guidance_payloads(self) -> None:
+        runtime = load_runtime_module()
+        route_reason = "Route reason. Signals: builder-flow. Route: 6-evolve / builder-flow -> runtime-builder."
+        case = {
+            "expected_classification": "builder-flow",
+            "expected_phase": "6-evolve",
+            "expected_workflow": "runtime-builder",
+            "expected_facilitation_pack": "skill:facilitation/runtime-builder.md",
+            "state_update_required": False,
+        }
+        payload = {
+            "intent_classification": "builder-flow",
+            "recommended_phase": "6-evolve",
+            "recommended_workflow": "runtime-builder",
+            "state_update_required": False,
+            "facilitation_pack": "skill:facilitation/runtime-builder.md",
+            "persona_lens": {},
+            "workflow_metadata": {"id": "runtime-builder"},
+            "commands": [{"name": "guide", "command": "guide --question <question> --json"}],
+            "signals": ["builder-flow"],
+            "recommended_action": "use chat memory instead of durable state when resuming",
+            "human_prompt": "Let's use `runtime-builder` as the guided path. Good prompt. First question: what should change?",
+            "alternatives": [],
+            "guidance_engine": {"route_reason": route_reason},
+            "state_updates": {
+                "last_intent_classification": "builder-flow",
+                "active_guidance_mode": "runtime-builder",
+                "last_route_reason": route_reason,
+            },
+        }
+
+        failures = runtime.parity_case_failures(case, payload)
+
+        self.assertTrue(any("guidance safety:" in failure for failure in failures))
+        self.assertTrue(any("do not rely on chat memory" in failure for failure in failures))
+
+    def test_runtime_guidance_surfaces_pass_safety_contract(self) -> None:
+        runtime = load_runtime_module()
+        fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            run_cmd(
+                "transition",
+                "--root",
+                str(root),
+                "--phase",
+                "6-evolve",
+                "--status",
+                "guidance-safety",
+                "--workflow",
+                "runtime-builder",
+                "--next-action",
+                "use durable state instead of chat memory when resuming",
+                "--force",
+            )
+
+            preflight = json.loads(run_cmd("preflight", "--root", str(root), "--json").stdout)
+            reload_payload = json.loads(run_cmd("reload", "--root", str(root), "--json").stdout)
+            guide = runtime.build_guide_payload(
+                root,
+                question="continue runtime-builder audit without relying on old chat",
+                max_chars=12000,
+            )
+
+            self.assertEqual(runtime.validate_runtime_guidance_payload_safety("preflight", preflight), [])
+            self.assertEqual(runtime.validate_runtime_guidance_payload_safety("reload", reload_payload), [])
+            self.assertEqual(runtime.validate_runtime_guidance_payload_safety("guide", guide), [])
+
+        for case in fixtures:
+            with self.subTest(case=case["id"]):
+                with tempfile.TemporaryDirectory() as raw:
+                    root = Path(raw)
+                    runtime.prepare_parity_replay_state(root, case["state"])
+                    payload = runtime.build_guide_payload(root, question=case["question"], max_chars=12000)
+                    self.assertEqual(runtime.validate_runtime_guidance_payload_safety("guide", payload), [])
+
     def test_parity_replay_requires_pack_assertions_for_human_guidance(self) -> None:
         fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
         case = next(item for item in fixtures if item["id"] == "help_next_step_orientation").copy()

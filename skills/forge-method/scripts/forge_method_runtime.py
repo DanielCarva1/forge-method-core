@@ -170,6 +170,7 @@ RUNTIME_GUIDANCE_SAFETY_IGNORED_KEYS = {
     "command",
     "commands",
     "first_command",
+    "question_context",
 }
 GUIDANCE_RISK_TOKENS = [
     "chat",
@@ -4117,8 +4118,12 @@ def iter_runtime_guidance_strings(value: Any, path: str = "payload") -> Iterable
 
 
 def validate_help_oracle_safety(oracle: dict[str, Any]) -> list[str]:
+    return validate_runtime_guidance_payload_safety("help_oracle", oracle)
+
+
+def validate_runtime_guidance_payload_safety(label: str, payload: dict[str, Any]) -> list[str]:
     errors: list[str] = []
-    for path, text in iter_runtime_guidance_strings(oracle, "help_oracle"):
+    for path, text in iter_runtime_guidance_strings(payload, label):
         errors.extend(guidance_safety_errors(path, text))
     return errors
 
@@ -9190,7 +9195,7 @@ def lifecycle_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, 
     if workflow_id == "context-recovery":
         return (
             "run context-recovery to discard stale chat memory, inspect state/sprint/checkpoint, refresh compact recovery, and route any fresh human intent through Guidance Engine",
-            "I should re-anchor on durable files and launcher output before trusting prior chat context.",
+            "I should re-anchor on durable files and launcher output without trusting prior chat context.",
             guidance_alternatives(
                 ("session-prep", "use when recovery is healthy and the next chat needs a start plan"),
                 ("checkpoint-preview", "use when durable memory needs review before writing a checkpoint"),
@@ -9252,7 +9257,7 @@ def problem_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, st
     if workflow_id == "context-recovery":
         return (
             "run context-recovery to discard stale chat memory, inspect state/sprint/checkpoint, refresh compact recovery, and route any fresh human intent through Guidance Engine",
-            "I should re-anchor on durable files and launcher output before trusting prior chat context.",
+            "I should re-anchor on durable files and launcher output without trusting prior chat context.",
             guidance_alternatives(
                 ("session-prep", "use when recovery is healthy and the next chat needs a start plan"),
                 ("checkpoint-preview", "use when durable memory needs review before writing a checkpoint"),
@@ -9829,7 +9834,7 @@ def humanize_guidance_sentence(prompt: str) -> str:
 
 
 WORKFLOW_FIRST_QUESTIONS = {
-    "context-recovery": "which durable file, launcher output, or chat assumption should we trust first?",
+    "context-recovery": "which durable file or launcher output should anchor recovery, and which prior chat assumption should we discard?",
     "problem-solving": "what symptom, recent change, and desired end state should anchor the diagnosis?",
     "investigation": "what happened, what changed, and what evidence would separate cause from noise?",
     "brainstorming": "what option lanes, taste constraints, and obviously bad ideas should we explore or reject?",
@@ -10900,6 +10905,8 @@ def persona_lens_id_for_payload(payload: dict[str, Any]) -> str:
 
 def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[str]:
     failures: list[str] = []
+    guidance_safety = validate_runtime_guidance_payload_safety("guide_payload", payload)
+    failures.extend(f"guidance safety: {error}" for error in guidance_safety)
 
     def expect_equal(field: str, actual: Any, expected: Any) -> None:
         if expected is not None and actual != expected:
