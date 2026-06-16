@@ -2,7 +2,7 @@
   "budget_chars": 12000,
   "deferred": [
     {
-      "estimated_chars": 102552,
+      "estimated_chars": 103803,
       "location": "project",
       "path": ".forge-method/artifacts/index.ndjson",
       "priority": 76,
@@ -26,9 +26,9 @@
       "status": "ready"
     }
   },
-  "estimated_required_chars": 2735,
-  "estimated_selected_chars": 7296,
-  "generated_at": "2026-06-16T08:29:56+00:00",
+  "estimated_required_chars": 2734,
+  "estimated_selected_chars": 7017,
+  "generated_at": "2026-06-16T09:20:54+00:00",
   "over_budget": false,
   "root": "C:\\Users\\Danie\\OneDrive\\Documentos\\ody",
   "rules": [
@@ -41,7 +41,7 @@
   "runtime_version": "1.29.0",
   "selected": [
     {
-      "estimated_chars": 1173,
+      "estimated_chars": 1172,
       "location": "project",
       "path": ".forge-method/state.yaml",
       "priority": 100,
@@ -68,7 +68,7 @@
       "section": "workflow"
     },
     {
-      "estimated_chars": 1320,
+      "estimated_chars": 1351,
       "location": "project",
       "path": ".forge-method/context/latest-checkpoint.md",
       "priority": 88,
@@ -95,27 +95,27 @@
       "section": "agent-profile"
     },
     {
-      "estimated_chars": 548,
+      "estimated_chars": 546,
       "location": "project",
-      "path": ".forge-method/evidence/20260616-082813-validation-hot-start-plugin-diagnostic-surface-validation.md",
+      "path": ".forge-method/evidence/20260616-092053-validation-bootstrap-plugin-diagnostic-surface-final-valida.md",
       "priority": 68,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 668,
+      "estimated_chars": 539,
       "location": "project",
-      "path": ".forge-method/evidence/20260616-043253-validation-product-facing-docs-independence-guard-validatio.md",
+      "path": ".forge-method/evidence/20260616-090029-validation-bootstrap-plugin-diagnostic-surface-validation.md",
       "priority": 67,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 726,
+      "estimated_chars": 548,
       "location": "project",
-      "path": ".forge-method/evidence/20260616-041434-validation-durable-runtime-guidance-source-guard-validation.md",
+      "path": ".forge-method/evidence/20260616-082813-validation-hot-start-plugin-diagnostic-surface-validation.md",
       "priority": 66,
       "reason": "recent validation or release evidence",
       "required": false,
@@ -124,10 +124,10 @@
   ],
   "state": {
     "active_story": "",
-    "next_action": "Continue the post-parity Forge audit by checking remaining validation surfaces and human/agent experience gaps after exposing plugin diagnostics in hot-start surfaces.",
+    "next_action": "Continue the post-parity Forge audit by checking remaining human guidance and agent runtime recovery gaps after exposing plugin diagnostics across bootstrap surfaces.",
     "phase": "6-evolve",
     "project": "forge-method-core",
-    "status": "hot-start-plugin-diagnostic-surface",
+    "status": "bootstrap-plugin-diagnostic-surface",
     "workflow": "runtime-builder"
   }
 }

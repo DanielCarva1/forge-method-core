@@ -1,14 +1,14 @@
-# Hot Start Plugin Diagnostic Surface
+# Bootstrap Plugin Diagnostic Surface
 
 ## Gap
 
-`doctor --json` could detect outdated or broken local plugin installation state, but the agent hot start surfaces did not all expose that diagnosis.
+`doctor --json` could detect outdated or broken local plugin installation state, but the agent bootstrap and hot start surfaces did not all expose that diagnosis.
 
-That meant future agents relying on `resume --json`, `context plan --json`, or compact resume text could miss an installed plugin mismatch and continue debugging guidance behavior as if runtime state were the only source of truth.
+That meant future agents relying on `preflight --json`, `reload --json`, `context health --json`, `resume --json`, `context plan --json`, or compact text output could miss an installed plugin mismatch and continue debugging guidance behavior as if runtime state were the only source of truth.
 
 ## Change
 
-`snapshot`, `resume --json`, and `context plan --json` now include:
+`snapshot`, `resume --json`, `context plan --json`, `context health --json`, `preflight --json`, and `reload --json` now include:
 
 ```json
 "diagnostics": {
@@ -28,7 +28,7 @@ That meant future agents relying on `resume --json`, `context plan --json`, or c
 }
 ```
 
-Text `resume` also prints a compact `Diagnostics:` block with the plugin status, version comparison, and first repair command when the local plugin is not ready.
+Text `resume`, `context health`, `preflight`, and `reload` also print a compact `Diagnostics:` block with the plugin status, version comparison, and first repair command when the local plugin is not ready.
 
 This is intentionally diagnostic, not a quality gate blocker. A project can still be valid while the local Codex plugin install is outdated; the agent just should not miss the repair path.
 
@@ -39,15 +39,16 @@ Added an isolated marketplace fixture where the local plugin manifest reports ve
 Expected behavior:
 
 - `doctor --json` continues to report `plugin version mismatch`.
-- `snapshot`, `resume --json`, and `context plan --json` report the same plugin status under `diagnostics.plugin_installation`.
-- text `resume` prints the status and repair command.
+- `snapshot`, `resume --json`, `context plan --json`, `context health --json`, `preflight --json`, and `reload --json` report the same plugin status under `diagnostics.plugin_installation`.
+- text `resume`, `context health`, `preflight`, and `reload` print the status and repair command.
 - `snapshot.quality.audit.passed` remains true.
 
-The fixture proves this surface exposes useful environment state that was previously hidden from the agent during hot start.
+The fixture proves this surface exposes useful environment state that was previously hidden from the agent during bootstrap and hot start.
 
 Validation passed:
 
-- `python -m unittest discover -s tests`
+- focused bootstrap diagnostic regression tests
+- `python -m unittest discover -s tests -v`
 - `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1`
 - `powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1`
 - `python skills\forge-method\scripts\forge_method_runtime.py gate --root . --require-evals`

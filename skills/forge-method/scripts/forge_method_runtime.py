@@ -1910,6 +1910,7 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
         status = build_status_brief(state_root, state)
         context_plan = build_context_load_plan(state_root, state, max_chars=max_chars)
         context_health = build_context_health(state_root, state, max_chars=max_chars, plan=context_plan)
+        diagnostics = context_plan.get("diagnostics") or runtime_diagnostics()
         commands = [
             preflight_command("status", "status", "--root", state_root, "--brief"),
             preflight_command("context-plan", "context", "plan", "--root", state_root, "--json", "--max-chars", max_chars),
@@ -1958,6 +1959,7 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
             "status": status,
             "context_load_plan": context_plan,
             "context_health": context_health,
+            "diagnostics": diagnostics,
             "commands": commands,
             "rules": [
                 "treat project_root as the authoritative working directory",
@@ -2095,6 +2097,7 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
         "runtime_repo": runtime_repo,
         "runtime_root": str(runtime_root) if runtime_root else "",
         "project_state": "missing",
+        "diagnostics": runtime_diagnostics(),
         "decision_required": True,
         "question": question,
         "decision": decision,
@@ -2157,6 +2160,7 @@ def print_preflight(payload: dict[str, Any]) -> None:
             print("Decision options:")
             for index, option in enumerate(decision.get("options", []), start=1):
                 print(f"{index}. {option.get('label')} ({option.get('action')})")
+        print_plugin_diagnostics(payload.get("diagnostics", {}))
     else:
         print(f"Runtime repo: {'yes' if payload.get('runtime_repo') else 'no'}")
         if payload.get("runtime_root"):
@@ -2186,6 +2190,7 @@ def print_preflight(payload: dict[str, Any]) -> None:
                 if option.get("requires"):
                     requirement = f" requires: {', '.join(option.get('requires', []))}"
                 print(f"{index}. {option.get('label')} ({option.get('action')}){requirement}")
+        print_plugin_diagnostics(payload.get("diagnostics", {}))
     print("Commands:")
     for item in payload.get("commands", []):
         print(f"- {item.get('name')}: {item.get('command')}")
@@ -2216,6 +2221,7 @@ def build_reload_payload(root: Path, *, scan_depth: int) -> dict[str, Any]:
         "bootstrap_contract": bootstrap_contract,
         "runtime_repo": runtime_repo,
         "runtime_root": str(runtime_root) if runtime_root else "",
+        "diagnostics": runtime_diagnostics(),
     }
     if state_root:
         reload_resume = {
@@ -2320,6 +2326,7 @@ def print_reload(payload: dict[str, Any]) -> None:
                 )
         print(f"Next question: {payload.get('question', '')}")
         print("Next: relay the route opening above; do not replace it with cached initialization copy.")
+    print_plugin_diagnostics(payload.get("diagnostics", {}))
     print("Commands:")
     for item in payload.get("commands", []):
         print(f"- {item.get('name')}: {item.get('command')}")
@@ -6316,9 +6323,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     resume["codex_goal_handoff"] = build_codex_goal_handoff(state, resume["mechanical_work_order"])
     help_oracle = build_help_oracle(root, state, resume)
     resume["help_oracle"] = help_oracle
-    diagnostics = {
-        "plugin_installation": plugin_installation_snapshot_summary(),
-    }
+    diagnostics = runtime_diagnostics()
     resume["diagnostics"] = diagnostics
     context_dir = method_dir(root) / "context"
     current_pack = context_dir / "current-pack.md"
@@ -6477,18 +6482,7 @@ def print_resume_guidance(root: Path, resume: dict[str, Any]) -> None:
         boundary = help_oracle.get("context_boundary") or {}
         if boundary:
             print(f"- context_boundary: {boundary.get('mode', '')} -> {boundary.get('current_workflow', '')}")
-    plugin = (resume.get("diagnostics", {}) or {}).get("plugin_installation", {})
-    if plugin and plugin.get("status") != "ready":
-        print("Diagnostics:")
-        print(f"- plugin_installation: {plugin.get('status', '')}")
-        if plugin.get("installed_version") or plugin.get("expected_version"):
-            print(
-                f"- plugin_version: installed={plugin.get('installed_version', '<none>')} "
-                f"expected={plugin.get('expected_version', '')}"
-            )
-        repair_commands = (plugin.get("repair_commands") or {}).get("windows", [])
-        if repair_commands:
-            print(f"- plugin_repair: {repair_commands[0]}")
+    print_plugin_diagnostics(resume.get("diagnostics", {}))
     work_order = resume.get("mechanical_work_order", {})
     if work_order.get("autonomous"):
         print("Mechanical Work Order:")
@@ -12587,9 +12581,7 @@ def build_context_load_plan(root: Path, state: dict[str, str], *, max_chars: int
             deferred.append(item)
 
     required_chars = sum(int(item.get("estimated_chars", 0)) for item in candidates if item.get("required"))
-    diagnostics = {
-        "plugin_installation": plugin_installation_snapshot_summary(),
-    }
+    diagnostics = runtime_diagnostics()
     return {
         "runtime": RUNTIME_NAME,
         "runtime_version": RUNTIME_VERSION,
@@ -12634,6 +12626,7 @@ def build_context_health(
     required_ratio = (required_chars / budget) if budget else 0.0
     deferred_count = len(plan.get("deferred", []))
     over_budget = bool(plan.get("over_budget"))
+    diagnostics = plan.get("diagnostics") or runtime_diagnostics()
 
     if over_budget:
         level = "blocked"
@@ -12685,6 +12678,7 @@ def build_context_health(
         "deferred_count": deferred_count,
         "over_budget": over_budget,
         "state": plan.get("state", {}),
+        "diagnostics": diagnostics,
         "commands": commands,
         "rules": [
             "treat blocked or compact health as a handoff signal",
@@ -13101,6 +13095,7 @@ def cmd_context_health(args: argparse.Namespace) -> int:
         print(f"Required: {health['estimated_required_chars']} chars ({health['required_ratio']})")
         print(f"Deferred files: {health['deferred_count']}")
         print(f"Recommended action: {health['recommended_action']}")
+        print_plugin_diagnostics(health.get("diagnostics", {}))
         next_command = health["commands"][0]["command"] if health["commands"] else ""
         if next_command:
             print(f"Next command: {next_command}")
@@ -13600,6 +13595,28 @@ def plugin_installation_snapshot_summary() -> dict[str, Any]:
         "codex_deeplink": plugin.get("codex_deeplink") or "",
         "repair_commands": plugin.get("repair_commands", {"windows": [], "posix": []}),
     }
+
+
+def runtime_diagnostics() -> dict[str, Any]:
+    return {
+        "plugin_installation": plugin_installation_snapshot_summary(),
+    }
+
+
+def print_plugin_diagnostics(diagnostics: dict[str, Any]) -> None:
+    plugin = (diagnostics or {}).get("plugin_installation", {})
+    if not plugin or plugin.get("status") == "ready":
+        return
+    print("Diagnostics:")
+    print(f"- plugin_installation: {plugin.get('status', '')}")
+    if plugin.get("installed_version") or plugin.get("expected_version"):
+        print(
+            f"- plugin_version: installed={plugin.get('installed_version', '<none>')} "
+            f"expected={plugin.get('expected_version', '')}"
+        )
+    repair_commands = (plugin.get("repair_commands") or {}).get("windows", [])
+    if repair_commands:
+        print(f"- plugin_repair: {repair_commands[0]}")
 
 
 def run_probe(command: list[str], timeout: float = 3.0) -> dict[str, Any]:

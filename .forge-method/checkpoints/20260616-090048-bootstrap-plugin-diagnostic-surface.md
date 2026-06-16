@@ -1,6 +1,6 @@
-# Bootstrap Plugin Diagnostic Surface Final
+# Bootstrap Plugin Diagnostic Surface
 
-- created_at: 2026-06-16T09:20:53+00:00
+- created_at: 2026-06-16T09:00:48+00:00
 - project: forge-method-core
 - phase: 6-evolve
 - status: bootstrap-plugin-diagnostic-surface
@@ -9,21 +9,21 @@
 
 ## Summary
 
-Closed bootstrap plugin diagnostics and fixed the reload empty-workspace text regression: plugin diagnostics now appear across preflight, reload, context health, context plan, resume, and snapshot while route prompts remain intact.
+Closed the remaining bootstrap diagnostic gap: preflight, reload, context health, context plan, resume, and snapshot now share diagnostics.plugin_installation and text commands print repair guidance when the plugin is not ready.
 
 ## Decisions
 
-- Keep diagnostics compact and diagnostic-only; print repair details only when plugin_installation.status is not ready.
+- Use runtime_diagnostics() as the shared compact contract for plugin installation state across bootstrap and hot-start outputs.
 
 ## Checks
 
-- focused reload/bootstrap diagnostic tests: passed
+- focused bootstrap diagnostic tests: passed
 - python -m unittest discover -s tests -v: 125 passed
 - smoke-runtime.ps1: passed
-- smoke-install.ps1: passed
 - verify-fast.ps1: passed
 - gate --require-evals: 22/22 passed
 - parity replay --json: 91/91 passed
+- smoke-install.ps1: passed
 
 ## Failed Checks
 

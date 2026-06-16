@@ -368,6 +368,7 @@ class RuntimeTests(unittest.TestCase):
             )
             start = run_cmd("start", "--root", str(root)).stdout
             guide = run_cmd("guide", "--root", str(root), "--question", "build a mobile game").stdout
+            reload = run_cmd("reload", "--root", str(root)).stdout
 
             self.assertEqual(payload["route"], "empty-workspace")
             self.assertTrue(payload["decision_required"])
@@ -390,6 +391,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertLess(start.index("Bora começar direito"), start.index("Forge setup: ready"))
             self.assertIn("Reality/Evidence Gate: needs-evidence", guide)
             self.assertIn("Decision options:", text)
+            self.assertIn("Next question: Create a new method project in this workspace?", reload)
             self.assertFalse((root / ".forge-method").exists())
 
     def test_preflight_existing_codebase_returns_brownfield_decision(self) -> None:
@@ -2249,7 +2251,15 @@ class RuntimeTests(unittest.TestCase):
             context_plan = json.loads(
                 run_cmd("context", "plan", "--root", str(project), "--json", env=env).stdout
             )
+            context_health = json.loads(
+                run_cmd("context", "health", "--root", str(project), "--json", env=env).stdout
+            )
+            preflight = json.loads(run_cmd("preflight", "--root", str(project), "--json", env=env).stdout)
+            reload = json.loads(run_cmd("reload", "--root", str(project), "--json", env=env).stdout)
             resume_text = run_cmd("resume", "--root", str(project), env=env).stdout
+            context_health_text = run_cmd("context", "health", "--root", str(project), env=env).stdout
+            preflight_text = run_cmd("preflight", "--root", str(project), env=env).stdout
+            reload_text = run_cmd("reload", "--root", str(project), env=env).stdout
 
             self.assertEqual(
                 resume["diagnostics"]["plugin_installation"]["status"],
@@ -2259,12 +2269,31 @@ class RuntimeTests(unittest.TestCase):
                 context_plan["diagnostics"]["plugin_installation"]["status"],
                 "plugin version mismatch",
             )
+            self.assertEqual(
+                context_health["diagnostics"]["plugin_installation"]["status"],
+                "plugin version mismatch",
+            )
+            self.assertEqual(
+                preflight["diagnostics"]["plugin_installation"]["status"],
+                "plugin version mismatch",
+            )
+            self.assertEqual(
+                preflight["context_health"]["diagnostics"]["plugin_installation"]["status"],
+                "plugin version mismatch",
+            )
+            self.assertEqual(
+                reload["diagnostics"]["plugin_installation"]["status"],
+                "plugin version mismatch",
+            )
             self.assertIn("Diagnostics:", resume_text)
             self.assertIn("plugin_installation: plugin version mismatch", resume_text)
             self.assertIn(
                 "plugin_repair: powershell -ExecutionPolicy Bypass -File .\\scripts\\install-plugin-local.ps1",
                 resume_text,
             )
+            self.assertIn("plugin_installation: plugin version mismatch", context_health_text)
+            self.assertIn("plugin_installation: plugin version mismatch", preflight_text)
+            self.assertIn("plugin_installation: plugin version mismatch", reload_text)
 
     def test_artifact_is_indexed_and_added_to_context_pack(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
