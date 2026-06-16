@@ -2,6 +2,8 @@ import json
 import os
 import hashlib
 import importlib.util
+import contextlib
+import io
 import subprocess
 import sys
 import tempfile
@@ -439,6 +441,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Animal-welfare", cat_payload["reality_evidence_gate"]["summary"])
 
     def test_guidance_engine_routes_transcript_fixtures(self) -> None:
+        runtime = load_runtime_module()
         fixtures = json.loads(GUIDANCE_FIXTURES.read_text(encoding="utf-8"))
         required_keys = {
             "intent_classification",
@@ -463,53 +466,21 @@ class RuntimeTests(unittest.TestCase):
             with self.subTest(case=case["id"]):
                 with tempfile.TemporaryDirectory() as raw:
                     root = Path(raw)
-                    prepare_guidance_fixture(root, case["state"])
-
-                    payload = json.loads(
-                        run_cmd("guide", "--root", str(root), "--question", case["question"], "--json").stdout
-                    )
+                    runtime.prepare_parity_replay_state(root, case["state"])
+                    payload = runtime.build_guide_payload(root, question=case["question"], max_chars=12000)
 
                     self.assertTrue(payload_required_keys <= payload.keys())
                     self.assertTrue(required_keys <= payload["guidance_engine"].keys())
-                    self.assertEqual(payload["intent_classification"], case["expected_classification"])
-                    self.assertEqual(payload["recommended_workflow"], case["expected_workflow"])
-                    self.assertEqual(payload["state_update_required"], case["state_update_required"])
-                    self.assertEqual(payload["workflow_metadata"]["id"], case["expected_workflow"])
-                    if case.get("expected_phase"):
-                        self.assertEqual(payload["recommended_phase"], case["expected_phase"])
-                    if case.get("expected_command"):
-                        command_names = [item["name"] for item in payload["commands"]]
-                        self.assertIn(case["expected_command"], command_names)
-                    if case.get("expected_commands"):
-                        command_names = [item["name"] for item in payload["commands"]]
-                        for expected_command in case["expected_commands"]:
-                            self.assertIn(expected_command, command_names)
-                    if case.get("expected_facilitation_pack"):
-                        self.assertEqual(payload["facilitation_pack"], case["expected_facilitation_pack"])
-                    if case.get("expected_template"):
-                        self.assertEqual(payload["workflow_metadata"].get("template"), case["expected_template"])
-                    if case.get("expected_persona_lens"):
-                        self.assertEqual(payload["persona_lens"].get("id"), case["expected_persona_lens"])
-                    elif case["id"] in {"confused_user", "brainstorm_request", "mixed_bmad_parity_runtime_request"}:
-                        self.assertTrue(payload["facilitation_pack"].startswith("skill:facilitation/"))
-                    if "expected_council_recommended" in case:
-                        self.assertEqual(payload["council_recommended"], case["expected_council_recommended"])
-                    if "expected_codex_goal_handoff_recommended" in case:
-                        self.assertEqual(
-                            payload["codex_goal_handoff"].get("recommended"),
-                            case["expected_codex_goal_handoff_recommended"],
-                        )
-                    if "expected_mechanical_work_order_autonomous" in case:
-                        self.assertEqual(
-                            payload["mechanical_work_order"].get("autonomous"),
-                            case["expected_mechanical_work_order_autonomous"],
-                        )
+                    self.assertEqual([], runtime.parity_case_failures(case, payload))
                     if case["id"] == "method_frustration_ready":
                         self.assertNotIn("publish current batch", payload["recommended_action"])
                         command_names = [item["name"] for item in payload["commands"]]
                         self.assertIn("transition-evolve", command_names)
                         self.assertIn("correct-course", command_names)
-                        text = run_cmd("guide", "--root", str(root), "--question", case["question"]).stdout
+                        output = io.StringIO()
+                        with contextlib.redirect_stdout(output):
+                            runtime.print_guidance_engine_summary(payload)
+                        text = output.getvalue()
                         self.assertIn("Guidance Engine: correct-course -> correct-course / 6-evolve", text)
                         self.assertIn("State update: required", text)
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- optimize Guidance Engine parity fixture tests by using the runtime replay contract directly, preserving 90-case BMAD parity coverage while cutting the slow transcript replay path from minutes to seconds
 - add first-class document and enterprise utility generators with `artifact doc-index`, `artifact doc-shard`, `artifact enterprise-track-map`, `artifact enterprise-readiness`, and `artifact enterprise-release-gate`, plus lifecycle/document handoffs, tests, and source/install smoke coverage
 - add first-class test utility generators with `artifact test-framework`, `artifact test-automation`, and `artifact game-e2e-scaffold`, Test Architecture/game lifecycle handoffs, tests, and source/install smoke coverage
 - add first-class game artifact generators with `artifact game-brief` and `artifact game-sprint-plan`, game facilitation/workflow handoffs, tests, and source/install smoke coverage
