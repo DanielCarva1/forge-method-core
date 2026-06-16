@@ -1,6 +1,6 @@
-# Workflow catalog gate surface guard final validation
+# Workflow catalog gate surface guard
 
-- created_at: 2026-06-16T04:54:27+00:00
+- created_at: 2026-06-16T04:48:01+00:00
 - project: forge-method-core
 - phase: 6-evolve
 - status: workflow-catalog-gate-surface-guard
@@ -9,21 +9,16 @@
 
 ## Summary
 
-Finalized the workflow catalog gate surface guard after source tests, runtime smoke, fast verification, direct audit/artifact/workflow/parity checks, and quality gate all passed.
+Closed a gate validation gap: workflow_validation_errors now includes workflow catalog metadata checks, so gate consumes the same catalog/template route surface as workflow validate.
 
 ## Decisions
 
-- Keep release/version tagging batched; this patch is recorded in Unreleased and durable Forge artifacts.
+- Keep workflow catalog validation in the shared gate path instead of relying on command-specific workflow validate runs.
 
 ## Checks
 
 - python -m unittest tests.test_runtime.RuntimeTests.test_workflow_validation_errors_include_catalog_surface -v: passed
 - python -m unittest discover -s tests: 119 passed
-- powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1: passed
-- powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1: passed
-- audit/artifact verify/workflow validate: passed
-- parity replay: 91/91 passed
-- gate --require-evals: 22/22 passed
 
 ## Failed Checks
 

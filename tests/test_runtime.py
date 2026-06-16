@@ -3391,6 +3391,37 @@ headless:
             specific_errors = runtime.validate_facilitation_pack(pack)
             self.assertFalse([error for error in specific_errors if "domain_examples" in error or "too generic" in error])
 
+    def test_workflow_validation_errors_include_catalog_surface(self) -> None:
+        runtime = load_runtime_module()
+        with tempfile.TemporaryDirectory() as raw:
+            catalog = Path(raw) / "workflows.json"
+            catalog.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "forge-workflow-catalog.v1",
+                        "workflows": [
+                            {
+                                "id": "catalog-gap",
+                                "phase": "1-discovery",
+                                "required": False,
+                                "reference": "discover-intent",
+                                "outputs": ["catalog proof"],
+                                "template": "missing-template",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            original_catalog = runtime.WORKFLOW_CATALOG_PATH
+            runtime.WORKFLOW_CATALOG_PATH = catalog
+            try:
+                errors = runtime.workflow_validation_errors()
+            finally:
+                runtime.WORKFLOW_CATALOG_PATH = original_catalog
+
+        self.assertTrue(any("references missing template: missing-template" in error for error in errors))
+
     def test_workflow_guidance_safety_rejects_stale_agent_instructions(self) -> None:
         runtime = load_runtime_module()
         base = """# workflow: sample

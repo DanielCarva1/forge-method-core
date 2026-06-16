@@ -13130,6 +13130,7 @@ def workflow_validation_errors(root: Path | None = None) -> list[str]:
     errors: list[str] = []
     for path in reference_workflow_paths(root):
         errors.extend(validate_workflow_file(path))
+    errors.extend(validate_workflow_catalog(root))
     errors.extend(validate_facilitation_packs(root))
     return errors
 
