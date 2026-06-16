@@ -2876,7 +2876,11 @@ def artifact_findings(root: Path) -> tuple[list[str], list[str]]:
             modified_at = dt.datetime.fromtimestamp(target.stat().st_mtime, tz=dt.timezone.utc)
             if modified_at > indexed_at + dt.timedelta(seconds=1):
                 warnings.append(f"artifact summary may be stale: {path}")
-        warnings.extend(stale_guidance_warnings(path, target.read_text(encoding="utf-8")))
+        text = target.read_text(encoding="utf-8")
+        warnings.extend(stale_guidance_warnings(path, text))
+        semantic_errors, semantic_warnings = semantic_artifact_findings(root, target, str(state.get("kind", "")))
+        errors.extend(f"{path}: {error}" for error in semantic_errors)
+        warnings.extend(f"{path}: {warning}" for warning in semantic_warnings)
     return errors, warnings
 
 
@@ -3439,6 +3443,45 @@ def enterprise_artifact_findings(root: Path, artifact_path: Path) -> tuple[list[
     if "waiver" in combined and not waiver_text:
         warnings.append("enterprise waivers should preserve owner, rationale, revisit trigger, and release impact")
     return errors, warnings
+
+
+def semantic_artifact_findings(root: Path, artifact_path: Path, artifact_kind: str = "") -> tuple[list[str], list[str]]:
+    if not artifact_path.exists():
+        return [], []
+    fields = parse_markdown_artifact_fields(artifact_path)
+    workflow = fields.get("workflow", "")
+    if not workflow:
+        return [], []
+    kind = slugify(artifact_kind)
+    if kind in DISCOVERY_CLOSEOUT_KINDS:
+        return discovery_closeout_findings(root, artifact_path)
+    if kind in {"doc-index", "doc-shard"}:
+        return document_utility_findings(root, artifact_path)
+    if kind == "spec" and workflow in SPEC_KERNEL_WORKFLOWS:
+        return spec_kernel_findings(root, artifact_path)
+    if kind == "research-scan":
+        return research_scan_findings(root, artifact_path)
+    if kind in {"test-framework", "test-automation", "game-e2e-scaffold"}:
+        return test_utility_findings(root, artifact_path)
+    if kind in {"game-brief", "game-sprint-plan"}:
+        return game_artifact_findings(root, artifact_path)
+    if kind in {"enterprise-track-map", "enterprise-readiness", "enterprise-release-gate"}:
+        return enterprise_artifact_findings(root, artifact_path)
+    if workflow in {"discover-intent", "creative-direction", "module-ideation"}:
+        return discovery_closeout_findings(root, artifact_path)
+    if workflow in {"doc-index", "doc-shard"}:
+        return document_utility_findings(root, artifact_path)
+    if workflow in {"write-spec", "product-requirements"}:
+        return spec_kernel_findings(root, artifact_path)
+    if workflow in RESEARCH_SCAN_WORKFLOWS:
+        return research_scan_findings(root, artifact_path)
+    if workflow in TEST_UTILITY_WORKFLOWS:
+        return test_utility_findings(root, artifact_path)
+    if workflow in GAME_ARTIFACT_WORKFLOWS:
+        return game_artifact_findings(root, artifact_path)
+    if workflow in ENTERPRISE_ARTIFACT_WORKFLOWS:
+        return enterprise_artifact_findings(root, artifact_path)
+    return [], []
 
 
 def module_manifest_paths(root: Path | None = None) -> list[Path]:

@@ -2458,6 +2458,54 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("non_goals must be explicit", result.stdout)
 
+    def test_artifact_verify_snapshot_and_gate_run_semantic_artifact_checks(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Example Project", "--root", str(root))
+            bad_spec = root / ".forge-method" / "artifacts" / "bad-spec.md"
+            bad_spec.write_text(
+                "\n".join(
+                    [
+                        "# Bad Spec",
+                        "workflow: write-spec",
+                        "non_goals: none",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            run_cmd(
+                "artifact",
+                "add",
+                "--root",
+                str(root),
+                "--kind",
+                "spec",
+                "--title",
+                "Bad Spec",
+                "--summary",
+                "Malformed spec artifact should be caught by semantic validation.",
+                "--path",
+                ".forge-method/artifacts/bad-spec.md",
+            )
+
+            verify = run_cmd("artifact", "verify", "--root", str(root), check=False)
+            self.assertNotEqual(verify.returncode, 0)
+            self.assertIn(".forge-method/artifacts/bad-spec.md: spec kernel requires source_artifacts", verify.stdout)
+
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+            artifact_errors = snapshot["quality"]["artifacts"]["errors"]
+            self.assertTrue(
+                any("bad-spec.md: spec kernel requires source_artifacts" in error for error in artifact_errors)
+            )
+
+            gate = run_cmd("gate", "--root", str(root), check=False)
+            self.assertNotEqual(gate.returncode, 0)
+            self.assertIn(
+                "artifact: .forge-method/artifacts/bad-spec.md: spec kernel requires source_artifacts",
+                gate.stdout,
+            )
+
     def test_artifact_spec_kernel_generates_and_validates_kernel(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -3093,6 +3141,8 @@ class RuntimeTests(unittest.TestCase):
             self.assertTrue((root / ".forge-method" / "evals" / "artifact-forge-method-artifacts-game-brief-generated-md-exists.yaml").exists())
             check_brief = run_cmd("artifact", "game-check", "--root", str(root), "--path", ".forge-method/artifacts/game-brief-generated.md").stdout
             self.assertIn("Game artifact check passed.", check_brief)
+            verify_brief = run_cmd("artifact", "verify", "--root", str(root)).stdout
+            self.assertIn("Artifact verification passed.", verify_brief)
 
             sprint = run_cmd(
                 "artifact",
