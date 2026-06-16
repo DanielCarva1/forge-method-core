@@ -3788,6 +3788,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Dissent to preserve", artifact_text)
 
     def test_lifecycle_closure_guidance_and_compact_contracts(self) -> None:
+        runtime = load_runtime_module()
         lifecycle_cases = [
             (
                 "document this project and generate project context for future agents",
@@ -3810,14 +3811,11 @@ class RuntimeTests(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
-            run_cmd("init", "--project", "Lifecycle Project", "--root", str(root))
-            run_cmd("transition", "--root", str(root), "--phase", "1-discovery")
+            runtime.prepare_parity_replay_state(root, "discovery")
 
             for question, workflow, template, phase in lifecycle_cases:
                 with self.subTest(workflow=workflow):
-                    guide = json.loads(
-                        run_cmd("guide", "--root", str(root), "--question", question, "--json").stdout
-                    )
+                    guide = runtime.build_guide_payload(root, question=question, max_chars=12000)
 
                     self.assertEqual(guide["intent_classification"], "lifecycle-flow")
                     self.assertEqual(guide["recommended_workflow"], workflow)
@@ -3870,26 +3868,16 @@ class RuntimeTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
-            prepare_guidance_fixture(root, "evolve_runtime")
-            session = json.loads(
-                run_cmd(
-                    "guide",
-                    "--root",
-                    str(root),
-                    "--question",
-                    "prep next session with read order blockers first command and next workflow",
-                    "--json",
-                ).stdout
+            runtime.prepare_parity_replay_state(root, "evolve_runtime")
+            session = runtime.build_guide_payload(
+                root,
+                question="prep next session with read order blockers first command and next workflow",
+                max_chars=12000,
             )
-            p14 = json.loads(
-                run_cmd(
-                    "guide",
-                    "--root",
-                    str(root),
-                    "--question",
-                    "continue P1.4 Product Context Review Retrospective Closure from the systematic parity plan",
-                    "--json",
-                ).stdout
+            p14 = runtime.build_guide_payload(
+                root,
+                question="continue P1.4 Product Context Review Retrospective Closure from the systematic parity plan",
+                max_chars=12000,
             )
 
             self.assertEqual(session["intent_classification"], "lifecycle-flow")
@@ -3915,6 +3903,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertLess(len(ref_text), 1400, ref_name)
 
     def test_game_studio_depth_guidance_and_compact_contracts(self) -> None:
+        runtime = load_runtime_module()
         game_cases = [
             (
                 "create and validate a living game brief with player fantasy core loop verbs pillars references mvp playable proof parked scope decision log assumptions open questions and next workflow",
@@ -3997,14 +3986,11 @@ class RuntimeTests(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
-            run_cmd("init", "--project", "Game Project", "--root", str(root))
-            run_cmd("transition", "--root", str(root), "--phase", "1-discovery")
+            runtime.prepare_parity_replay_state(root, "discovery")
 
             for question, workflow, template, phase in game_cases:
                 with self.subTest(workflow=workflow):
-                    guide = json.loads(
-                        run_cmd("guide", "--root", str(root), "--question", question, "--json").stdout
-                    )
+                    guide = runtime.build_guide_payload(root, question=question, max_chars=12000)
 
                     self.assertEqual(guide["intent_classification"], "game-flow")
                     self.assertEqual(guide["recommended_workflow"], workflow)
@@ -4046,16 +4032,11 @@ class RuntimeTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
-            prepare_guidance_fixture(root, "evolve_runtime")
-            p15 = json.loads(
-                run_cmd(
-                    "guide",
-                    "--root",
-                    str(root),
-                    "--question",
-                    "continue P1.5 Game Studio Depth from the systematic parity plan",
-                    "--json",
-                ).stdout
+            runtime.prepare_parity_replay_state(root, "evolve_runtime")
+            p15 = runtime.build_guide_payload(
+                root,
+                question="continue P1.5 Game Studio Depth from the systematic parity plan",
+                max_chars=12000,
             )
 
             self.assertEqual(p15["intent_classification"], "builder-flow")
@@ -4085,18 +4066,14 @@ class RuntimeTests(unittest.TestCase):
             self.assertLess(len(ref_text), 1700, ref_name)
 
     def test_game_dev_story_routes_to_mechanical_build_when_ready(self) -> None:
+        runtime = load_runtime_module()
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
-            prepare_guidance_fixture(root, "build_story_ready")
-            guide = json.loads(
-                run_cmd(
-                    "guide",
-                    "--root",
-                    str(root),
-                    "--question",
-                    "dev story for this game: implement the next playable slice with engine notes and player checks",
-                    "--json",
-                ).stdout
+            runtime.prepare_parity_replay_state(root, "build_story_ready")
+            guide = runtime.build_guide_payload(
+                root,
+                question="dev story for this game: implement the next playable slice with engine notes and player checks",
+                max_chars=12000,
             )
 
             self.assertEqual(guide["intent_classification"], "mechanical-build")
@@ -4107,6 +4084,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("playable-slice acceptance", guide["recommended_action"])
 
     def test_tea_depth_guidance_and_compact_contracts(self) -> None:
+        runtime = load_runtime_module()
         tea_cases = [
             (
                 "quality is weak and I do not know if we need advice design implementation review audit or a release gate",
@@ -4165,14 +4143,11 @@ class RuntimeTests(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
-            run_cmd("init", "--project", "Quality Project", "--root", str(root))
-            run_cmd("transition", "--root", str(root), "--phase", "1-discovery")
+            runtime.prepare_parity_replay_state(root, "discovery")
 
             for question, workflow, template, phase in tea_cases:
                 with self.subTest(workflow=workflow):
-                    guide = json.loads(
-                        run_cmd("guide", "--root", str(root), "--question", question, "--json").stdout
-                    )
+                    guide = runtime.build_guide_payload(root, question=question, max_chars=12000)
 
                     self.assertEqual(guide["intent_classification"], "quality-flow")
                     self.assertEqual(guide["recommended_workflow"], workflow)
@@ -4201,16 +4176,11 @@ class RuntimeTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
-            prepare_guidance_fixture(root, "evolve_runtime")
-            p16 = json.loads(
-                run_cmd(
-                    "guide",
-                    "--root",
-                    str(root),
-                    "--question",
-                    "continue P1.6 Test Architecture Enterprise Depth from the systematic parity plan",
-                    "--json",
-                ).stdout
+            runtime.prepare_parity_replay_state(root, "evolve_runtime")
+            p16 = runtime.build_guide_payload(
+                root,
+                question="continue P1.6 Test Architecture Enterprise Depth from the systematic parity plan",
+                max_chars=12000,
             )
 
             self.assertEqual(p16["intent_classification"], "builder-flow")

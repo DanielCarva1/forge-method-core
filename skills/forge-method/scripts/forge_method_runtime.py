@@ -9361,7 +9361,31 @@ def routed_builder_workflow(question: str) -> str:
         or "state machine" in normalized
     ):
         return "runtime-builder"
-    if {"convert", "converter", "conversion"} & tokens or "convert skill" in normalized or "converter skill" in normalized:
+    skill_convert_targets = {
+        "skill",
+        "skills",
+        "workflow",
+        "workflows",
+        "module",
+        "modules",
+        "modulo",
+        "modulos",
+        "agent",
+        "agents",
+        "agente",
+        "agentes",
+        "bmad",
+        "prompt",
+        "prompts",
+    }
+    if (
+        "convert skill" in normalized
+        or "converter skill" in normalized
+        or "skill conversion" in normalized
+        or "convert workflow" in normalized
+        or "convert bmad" in normalized
+        or (({"convert", "converter", "conversion"} & tokens) and (skill_convert_targets & tokens))
+    ):
         return "skill-convert"
     if module_tokens & tokens and (
         {"validate", "validar", "validation", "check", "audit", "auditoria"} & tokens

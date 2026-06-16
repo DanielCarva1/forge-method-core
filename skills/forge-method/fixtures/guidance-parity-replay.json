@@ -336,6 +336,20 @@
     "expected_mechanical_work_order_autonomous": false
   },
   {
+    "id": "runtime_test_loop_optimization_not_skill_convert",
+    "family": "builder",
+    "state": "evolve_runtime",
+    "question": "continue profiling remaining subprocess-heavy guide loops and convert only tests that assert Guidance Engine contracts to direct runtime calls, preserving CLI coverage",
+    "expected_classification": "builder-flow",
+    "expected_phase": "6-evolve",
+    "expected_workflow": "runtime-builder",
+    "expected_facilitation_pack": "skill:facilitation/runtime-builder.md",
+    "state_update_required": false,
+    "expected_council_recommended": false,
+    "expected_codex_goal_handoff_recommended": false,
+    "expected_mechanical_work_order_autonomous": false
+  },
+  {
     "id": "module_ideation_request",
     "family": "builder",
     "state": "evolve_runtime",
