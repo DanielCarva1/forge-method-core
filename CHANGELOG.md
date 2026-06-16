@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- make local builder extension validation part of snapshot quality and the quality gate, so malformed `.forge-method/skills/*/SKILL.md` files cannot pass gate-only validation
 - make the quality gate consume the full agent validation surface by sharing agent profile, elicitation technique, and Persona Lens checks through `agent_validation_errors`
 - make the quality gate consume the full workflow validation surface by including workflow catalog metadata checks in `workflow_validation_errors`, so missing catalog templates or route metadata cannot pass gate-only validation
 - add a product-facing docs independence guard so runtime-repo audit blocks public Markdown from describing Forge as a clone, fork, or variant of another framework while allowing Git clone/install language

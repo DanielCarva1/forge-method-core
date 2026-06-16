@@ -3720,6 +3720,15 @@ def agent_validation_errors(root: Path | None = None) -> list[str]:
     return errors
 
 
+def builder_extension_validation_errors(root: Path) -> list[str]:
+    errors: list[str] = []
+    for skill_path in sorted((method_dir(root) / "skills").glob("*/SKILL.md")):
+        text = skill_path.read_text(encoding="utf-8")
+        if not text.startswith("---"):
+            errors.append(f"{skill_path.relative_to(root).as_posix()}: missing skill frontmatter")
+    return errors
+
+
 def agent_profile_summary(profile: dict[str, str]) -> dict[str, str]:
     return {
         "id": profile.get("id", ""),
@@ -6239,6 +6248,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     artifact_errors, artifact_warnings = artifact_findings(root)
     agent_errors = agent_validation_errors(root)
     config_errors = config_validation_errors(root)
+    builder_errors = builder_extension_validation_errors(root)
     evals = list_evals(root)
     eval_counts: dict[str, int] = {"total": len(evals), "passed": 0, "failed": 0, "pending": 0}
     for item in evals:
@@ -6310,6 +6320,9 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
             },
             "config": {
                 "errors": config_errors,
+            },
+            "builder": {
+                "errors": builder_errors,
             },
             "evals": eval_counts,
         },
@@ -11921,10 +11934,7 @@ def cmd_builder_validate(args: argparse.Namespace) -> int:
     errors.extend(workflow_validation_errors(root))
     errors.extend(agent_validation_errors(root))
     errors.extend(config_validation_errors(root))
-    for skill_path in sorted((method_dir(root) / "skills").glob("*/SKILL.md")):
-        text = skill_path.read_text(encoding="utf-8")
-        if not text.startswith("---"):
-            errors.append(f"{skill_path.relative_to(root).as_posix()}: missing skill frontmatter")
+    errors.extend(builder_extension_validation_errors(root))
     if errors:
         print("Builder validation failed:")
         for error in errors:
@@ -13177,6 +13187,9 @@ def cmd_gate(args: argparse.Namespace) -> int:
     config_errors = config_validation_errors(root)
     if config_errors:
         errors.extend(f"config: {error}" for error in config_errors)
+    builder_errors = builder_extension_validation_errors(root)
+    if builder_errors:
+        errors.extend(f"builder: {error}" for error in builder_errors)
 
     eval_count = len(list_evals(root))
     passed_evals, eval_failures = run_eval_items(root)

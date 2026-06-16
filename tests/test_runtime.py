@@ -4927,6 +4927,30 @@ handoff:
             self.assertIn("Config validation passed.", config_validation)
             self.assertIn("Gate passed.", gate)
 
+    def test_gate_and_snapshot_use_builder_extension_validation_surface(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Builder Gate Surface Project", "--root", str(root))
+            skill_dir = root / ".forge-method" / "skills" / "broken"
+            skill_dir.mkdir(parents=True, exist_ok=True)
+            (skill_dir / "SKILL.md").write_text("# Broken Skill\n\nMissing frontmatter.\n", encoding="utf-8")
+
+            builder_validation = run_cmd("builder", "validate", "--root", str(root), check=False)
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+            gate = run_cmd("gate", "--root", str(root), check=False)
+
+            self.assertNotEqual(builder_validation.returncode, 0)
+            self.assertIn(".forge-method/skills/broken/SKILL.md: missing skill frontmatter", builder_validation.stdout)
+            self.assertIn(
+                ".forge-method/skills/broken/SKILL.md: missing skill frontmatter",
+                snapshot["quality"]["builder"]["errors"],
+            )
+            self.assertNotEqual(gate.returncode, 0)
+            self.assertIn(
+                "builder: .forge-method/skills/broken/SKILL.md: missing skill frontmatter",
+                gate.stdout,
+            )
+
     def test_mechanical_work_order_goal_and_commit_policy_contracts(self) -> None:
         runtime = load_runtime_module()
         with tempfile.TemporaryDirectory() as raw:
