@@ -1,14 +1,14 @@
-# Snapshot Plugin Diagnostic Surface
+# Hot Start Plugin Diagnostic Surface
 
 ## Gap
 
-`doctor --json` could detect stale or broken local plugin installation state, but `snapshot --root .` did not expose that diagnosis.
+`doctor --json` could detect outdated or broken local plugin installation state, but the agent hot start surfaces did not all expose that diagnosis.
 
-That meant future agents relying on the compact snapshot could miss an installed plugin mismatch and continue debugging guidance behavior as if runtime state were the only source of truth.
+That meant future agents relying on `resume --json`, `context plan --json`, or compact resume text could miss an installed plugin mismatch and continue debugging guidance behavior as if runtime state were the only source of truth.
 
 ## Change
 
-`snapshot` now includes:
+`snapshot`, `resume --json`, and `context plan --json` now include:
 
 ```json
 "diagnostics": {
@@ -28,7 +28,9 @@ That meant future agents relying on the compact snapshot could miss an installed
 }
 ```
 
-This is intentionally diagnostic, not a quality gate blocker. A project can still be valid while the local Codex plugin install is stale; the agent just should not miss the repair path.
+Text `resume` also prints a compact `Diagnostics:` block with the plugin status, version comparison, and first repair command when the local plugin is not ready.
+
+This is intentionally diagnostic, not a quality gate blocker. A project can still be valid while the local Codex plugin install is outdated; the agent just should not miss the repair path.
 
 ## Proof
 
@@ -37,10 +39,11 @@ Added an isolated marketplace fixture where the local plugin manifest reports ve
 Expected behavior:
 
 - `doctor --json` continues to report `plugin version mismatch`.
-- `snapshot` reports the same plugin status under `diagnostics.plugin_installation`.
+- `snapshot`, `resume --json`, and `context plan --json` report the same plugin status under `diagnostics.plugin_installation`.
+- text `resume` prints the status and repair command.
 - `snapshot.quality.audit.passed` remains true.
 
-During validation, the real workspace snapshot reported `plugin version mismatch` with installed version `1.22.0`, proving this surface exposes useful environment state that was previously hidden from the agent.
+The fixture proves this surface exposes useful environment state that was previously hidden from the agent during hot start.
 
 Validation passed:
 

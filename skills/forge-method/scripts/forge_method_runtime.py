@@ -6316,6 +6316,10 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     resume["codex_goal_handoff"] = build_codex_goal_handoff(state, resume["mechanical_work_order"])
     help_oracle = build_help_oracle(root, state, resume)
     resume["help_oracle"] = help_oracle
+    diagnostics = {
+        "plugin_installation": plugin_installation_snapshot_summary(),
+    }
+    resume["diagnostics"] = diagnostics
     context_dir = method_dir(root) / "context"
     current_pack = context_dir / "current-pack.md"
     recovery = context_dir / "recovery.md"
@@ -6384,9 +6388,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
             "load_plan": load_plan.relative_to(root).as_posix() if load_plan.exists() else "",
             "latest_checkpoint": latest_checkpoint.relative_to(root).as_posix() if latest_checkpoint.exists() else "",
         },
-        "diagnostics": {
-            "plugin_installation": plugin_installation_snapshot_summary(),
-        },
+        "diagnostics": diagnostics,
         "recent_artifacts": recent_artifacts(root, limit=5),
     }
 
@@ -6475,6 +6477,18 @@ def print_resume_guidance(root: Path, resume: dict[str, Any]) -> None:
         boundary = help_oracle.get("context_boundary") or {}
         if boundary:
             print(f"- context_boundary: {boundary.get('mode', '')} -> {boundary.get('current_workflow', '')}")
+    plugin = (resume.get("diagnostics", {}) or {}).get("plugin_installation", {})
+    if plugin and plugin.get("status") != "ready":
+        print("Diagnostics:")
+        print(f"- plugin_installation: {plugin.get('status', '')}")
+        if plugin.get("installed_version") or plugin.get("expected_version"):
+            print(
+                f"- plugin_version: installed={plugin.get('installed_version', '<none>')} "
+                f"expected={plugin.get('expected_version', '')}"
+            )
+        repair_commands = (plugin.get("repair_commands") or {}).get("windows", [])
+        if repair_commands:
+            print(f"- plugin_repair: {repair_commands[0]}")
     work_order = resume.get("mechanical_work_order", {})
     if work_order.get("autonomous"):
         print("Mechanical Work Order:")
@@ -12573,6 +12587,9 @@ def build_context_load_plan(root: Path, state: dict[str, str], *, max_chars: int
             deferred.append(item)
 
     required_chars = sum(int(item.get("estimated_chars", 0)) for item in candidates if item.get("required"))
+    diagnostics = {
+        "plugin_installation": plugin_installation_snapshot_summary(),
+    }
     return {
         "runtime": RUNTIME_NAME,
         "runtime_version": RUNTIME_VERSION,
@@ -12598,6 +12615,7 @@ def build_context_load_plan(root: Path, state: dict[str, str], *, max_chars: int
         ],
         "selected": selected,
         "deferred": deferred,
+        "diagnostics": diagnostics,
     }
 
 

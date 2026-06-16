@@ -2,7 +2,7 @@
   "budget_chars": 12000,
   "deferred": [
     {
-      "estimated_chars": 88943,
+      "estimated_chars": 102552,
       "location": "project",
       "path": ".forge-method/artifacts/index.ndjson",
       "priority": 76,
@@ -11,9 +11,24 @@
       "section": "artifact"
     }
   ],
-  "estimated_required_chars": 2696,
-  "estimated_selected_chars": 6574,
-  "generated_at": "2026-06-16T02:42:11+00:00",
+  "diagnostics": {
+    "plugin_installation": {
+      "available": true,
+      "codex_deeplink": "codex://plugins/forge-method-core?marketplacePath=C%3A%5CUsers%5CDanie%5C.agents%5Cplugins%5Cmarketplace.json",
+      "expected_version": "1.29.0",
+      "installed_version": "1.29.0",
+      "plugin_path": "C:\\Users\\Danie\\plugins\\forge-method-core",
+      "repair_commands": {
+        "posix": [],
+        "windows": []
+      },
+      "skill_exists": true,
+      "status": "ready"
+    }
+  },
+  "estimated_required_chars": 2735,
+  "estimated_selected_chars": 7296,
+  "generated_at": "2026-06-16T08:29:56+00:00",
   "over_budget": false,
   "root": "C:\\Users\\Danie\\OneDrive\\Documentos\\ody",
   "rules": [
@@ -26,7 +41,7 @@
   "runtime_version": "1.29.0",
   "selected": [
     {
-      "estimated_chars": 1149,
+      "estimated_chars": 1173,
       "location": "project",
       "path": ".forge-method/state.yaml",
       "priority": 100,
@@ -44,16 +59,16 @@
       "section": "state"
     },
     {
-      "estimated_chars": 1311,
-      "location": "packaged",
-      "path": "skill:references/workflow-config-customization.md",
+      "estimated_chars": 1326,
+      "location": "project",
+      "path": "skills/forge-method/references/workflow-runtime-builder.md",
       "priority": 92,
       "reason": "active workflow state machine",
       "required": true,
       "section": "workflow"
     },
     {
-      "estimated_chars": 1293,
+      "estimated_chars": 1320,
       "location": "project",
       "path": ".forge-method/context/latest-checkpoint.md",
       "priority": 88,
@@ -63,8 +78,8 @@
     },
     {
       "estimated_chars": 673,
-      "location": "packaged",
-      "path": "skill:agents/profiles/facilitator.yaml",
+      "location": "project",
+      "path": "skills/forge-method/agents/profiles/facilitator.yaml",
       "priority": 80,
       "reason": "recommended agent profile for current state: facilitator",
       "required": false,
@@ -72,35 +87,35 @@
     },
     {
       "estimated_chars": 626,
-      "location": "packaged",
-      "path": "skill:agents/profiles/planner.yaml",
+      "location": "project",
+      "path": "skills/forge-method/agents/profiles/planner.yaml",
       "priority": 79,
       "reason": "recommended agent profile for current state: planner",
       "required": false,
       "section": "agent-profile"
     },
     {
-      "estimated_chars": 331,
+      "estimated_chars": 548,
       "location": "project",
-      "path": ".forge-method/evidence/20260616-023724-validation-runtime-guidance-payload-safety-guard-final-gate.md",
+      "path": ".forge-method/evidence/20260616-082813-validation-hot-start-plugin-diagnostic-surface-validation.md",
       "priority": 68,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 603,
+      "estimated_chars": 668,
       "location": "project",
-      "path": ".forge-method/evidence/20260616-023621-validation-runtime-guidance-payload-safety-guard-validation.md",
+      "path": ".forge-method/evidence/20260616-043253-validation-product-facing-docs-independence-guard-validatio.md",
       "priority": 67,
       "reason": "recent validation or release evidence",
       "required": false,
       "section": "evidence"
     },
     {
-      "estimated_chars": 352,
+      "estimated_chars": 726,
       "location": "project",
-      "path": ".forge-method/evidence/20260616-021756-validation-help-oracle-guidance-safety-guard-final-gate.md",
+      "path": ".forge-method/evidence/20260616-041434-validation-durable-runtime-guidance-source-guard-validation.md",
       "priority": 66,
       "reason": "recent validation or release evidence",
       "required": false,
@@ -109,10 +124,10 @@
   ],
   "state": {
     "active_story": "",
-    "next_action": "run config-customization to audit convention-dependent runtime surfaces and add deterministic validation where useful",
+    "next_action": "Continue the post-parity Forge audit by checking remaining validation surfaces and human/agent experience gaps after exposing plugin diagnostics in hot-start surfaces.",
     "phase": "6-evolve",
     "project": "forge-method-core",
-    "status": "workflow-selected",
-    "workflow": "config-customization"
+    "status": "hot-start-plugin-diagnostic-surface",
+    "workflow": "runtime-builder"
   }
 }

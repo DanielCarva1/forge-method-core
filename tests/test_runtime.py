@@ -2245,6 +2245,26 @@ class RuntimeTests(unittest.TestCase):
                 plugin["repair_commands"]["windows"],
             )
             self.assertTrue(snapshot["quality"]["audit"]["passed"])
+            resume = json.loads(run_cmd("resume", "--root", str(project), "--json", env=env).stdout)
+            context_plan = json.loads(
+                run_cmd("context", "plan", "--root", str(project), "--json", env=env).stdout
+            )
+            resume_text = run_cmd("resume", "--root", str(project), env=env).stdout
+
+            self.assertEqual(
+                resume["diagnostics"]["plugin_installation"]["status"],
+                "plugin version mismatch",
+            )
+            self.assertEqual(
+                context_plan["diagnostics"]["plugin_installation"]["status"],
+                "plugin version mismatch",
+            )
+            self.assertIn("Diagnostics:", resume_text)
+            self.assertIn("plugin_installation: plugin version mismatch", resume_text)
+            self.assertIn(
+                "plugin_repair: powershell -ExecutionPolicy Bypass -File .\\scripts\\install-plugin-local.ps1",
+                resume_text,
+            )
 
     def test_artifact_is_indexed_and_added_to_context_pack(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
