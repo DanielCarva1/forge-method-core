@@ -423,14 +423,15 @@ class RuntimeTests(unittest.TestCase):
             self.assertFalse((root / ".forge-method").exists())
 
     def test_reality_evidence_gate_blocks_impossible_and_cruel_ideas(self) -> None:
+        runtime = load_runtime_module()
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             dog_question = "Build a product that turns my dog into a delegate that gives speeches."
             cat_question = "Build a tower that sprays water on a cat when it jumps on tables."
 
             dog_text = run_cmd("guide", "--root", str(root), "--question", dog_question).stdout
-            dog_payload = json.loads(run_cmd("guide", "--root", str(root), "--question", dog_question, "--json").stdout)
-            cat_payload = json.loads(run_cmd("guide", "--root", str(root), "--question", cat_question, "--json").stdout)
+            dog_payload = runtime.build_guide_payload(root, question=dog_question, max_chars=12000)
+            cat_payload = runtime.build_guide_payload(root, question=cat_question, max_chars=12000)
 
             self.assertEqual(dog_payload["reality_evidence_gate"]["status"], "blocked")
             self.assertEqual(dog_payload["reality_evidence_gate"]["score"], 0)
@@ -497,14 +498,13 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn(workflow, text)
 
     def test_guidance_human_lede_and_runtime_builder_contract(self) -> None:
+        runtime = load_runtime_module()
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
-            prepare_guidance_fixture(root, "evolve_runtime")
+            runtime.prepare_parity_replay_state(root, "evolve_runtime")
 
             polish_question = "quero melhorar a experiencia humana e compactar os docs agenticos"
-            polish = json.loads(
-                run_cmd("guide", "--root", str(root), "--question", polish_question, "--json").stdout
-            )
+            polish = runtime.build_guide_payload(root, question=polish_question, max_chars=12000)
             polish_text = run_cmd("guide", "--root", str(root), "--question", polish_question).stdout
 
             self.assertEqual(polish["intent_classification"], "builder-flow")
@@ -534,9 +534,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertLess(len(json.dumps(human, sort_keys=True)), 1800)
 
             frustration_question = "estou frustrado, nao sei se o Forge esta guiando de verdade"
-            frustration = json.loads(
-                run_cmd("guide", "--root", str(root), "--question", frustration_question, "--json").stdout
-            )
+            frustration = runtime.build_guide_payload(root, question=frustration_question, max_chars=12000)
             frustration_text = run_cmd("guide", "--root", str(root), "--question", frustration_question).stdout
 
             self.assertEqual(frustration["intent_classification"], "correct-course")
@@ -547,7 +545,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertNotIn("Reality/Evidence Gate", frustration_text)
 
             stuck_question = "estou travado com restricoes conflitantes e nao sei se o problema e escopo, arquitetura ou teste"
-            stuck = json.loads(run_cmd("guide", "--root", str(root), "--question", stuck_question, "--json").stdout)
+            stuck = runtime.build_guide_payload(root, question=stuck_question, max_chars=12000)
             stuck_text = run_cmd("guide", "--root", str(root), "--question", stuck_question).stdout
 
             self.assertEqual(stuck["intent_classification"], "confusion")
@@ -3847,16 +3845,11 @@ class RuntimeTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
-            prepare_guidance_fixture(root, "build_story_ready")
-            review = json.loads(
-                run_cmd(
-                    "guide",
-                    "--root",
-                    str(root),
-                    "--question",
-                    "review this code diff and create actionable findings before readiness",
-                    "--json",
-                ).stdout
+            runtime.prepare_parity_replay_state(root, "build_story_ready")
+            review = runtime.build_guide_payload(
+                root,
+                question="review this code diff and create actionable findings before readiness",
+                max_chars=12000,
             )
 
             self.assertEqual(review["intent_classification"], "lifecycle-flow")
@@ -4279,6 +4272,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Gate passed.", gate)
 
     def test_mechanical_work_order_goal_and_commit_policy_contracts(self) -> None:
+        runtime = load_runtime_module()
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             run_cmd("init", "--project", "Example Project", "--root", str(root))
@@ -4295,7 +4289,7 @@ class RuntimeTests(unittest.TestCase):
             (config_dir / "local.yaml").write_text('commit_policy: "epic"\n', encoding="utf-8")
 
             resume = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
-            guide = json.loads(run_cmd("guide", "--root", str(root), "--json").stdout)
+            guide = runtime.build_guide_payload(root, question="", max_chars=12000)
             guide_text = run_cmd("guide", "--root", str(root)).stdout
             next_text = run_cmd("next", "--root", str(root)).stdout
             config_validation = run_cmd("config", "validate", "--root", str(root)).stdout
@@ -4509,6 +4503,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Evals: 1/1 passed", launch_gate)
 
     def test_project_create_seeds_real_module_project(self) -> None:
+        runtime = load_runtime_module()
         with tempfile.TemporaryDirectory() as raw:
             parent = Path(raw)
             create = run_cmd(
@@ -4551,9 +4546,7 @@ class RuntimeTests(unittest.TestCase):
             ).stdout
             answered_snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
             answered_resume = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
-            answer_guide = json.loads(
-                run_cmd("guide", "--root", str(root), "--question", first_answer, "--json").stdout
-            )
+            answer_guide = runtime.build_guide_payload(root, question=first_answer, max_chars=12000)
             answer_guide_text = run_cmd("guide", "--root", str(root), "--question", first_answer).stdout
 
             self.assertIn("Project created: Night Watch", create)
