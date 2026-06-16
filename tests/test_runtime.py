@@ -5128,6 +5128,13 @@ handoff:
             preflight_json = json.loads(run_cmd("preflight", "--root", str(root), "--json").stdout)
             reload_text = run_cmd("reload", "--root", str(root)).stdout
             reload_json = json.loads(run_cmd("reload", "--root", str(root), "--json").stdout)
+            resume_text = run_cmd("resume", "--root", str(root)).stdout
+            resume_json = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
+            context_plan_json = json.loads(run_cmd("context", "plan", "--root", str(root), "--json").stdout)
+            context_health_text = run_cmd("context", "health", "--root", str(root)).stdout
+            context_health_json = json.loads(
+                run_cmd("context", "health", "--root", str(root), "--json").stdout
+            )
             gate = run_cmd("gate", "--root", str(root), check=False)
 
             self.assertNotEqual(workflow_validation.returncode, 0)
@@ -5154,6 +5161,28 @@ handoff:
                 "workflow-broken.md: missing section `inputs:`",
                 reload_json["quality"]["surfaces"]["workflows"]["errors"],
             )
+            self.assertIn("Quality: failed", resume_text)
+            self.assertIn("workflows: workflow-broken.md: missing section `inputs:`", resume_text)
+            self.assertFalse(resume_json["quality"]["passed"])
+            self.assertIn(
+                "workflow-broken.md: missing section `inputs:`",
+                resume_json["quality"]["surfaces"]["workflows"]["errors"],
+            )
+            self.assertFalse(context_plan_json["quality"]["passed"])
+            self.assertIn(
+                "workflow-broken.md: missing section `inputs:`",
+                context_plan_json["quality"]["surfaces"]["workflows"]["errors"],
+            )
+            self.assertIn("Context health: blocked", context_health_text)
+            self.assertIn("Quality: failed", context_health_text)
+            self.assertIn("workflows: workflow-broken.md: missing section `inputs:`", context_health_text)
+            self.assertEqual(context_health_json["level"], "blocked")
+            self.assertEqual(
+                context_health_json["recommended_action"],
+                "repair project quality before trusting context continuation",
+            )
+            self.assertFalse(context_health_json["quality"]["passed"])
+            self.assertIn("audit", [command["name"] for command in context_health_json["commands"]])
             self.assertNotEqual(gate.returncode, 0)
             self.assertIn("workflow: workflow-broken.md: missing section `inputs:`", gate.stdout)
 
@@ -6255,9 +6284,11 @@ handoff:
             text = run_cmd("context", "health", "--root", str(root), "--max-chars", "100000").stdout
 
             self.assertEqual(health["level"], "ok")
+            self.assertTrue(health["quality"]["passed"])
             self.assertFalse(health["over_budget"])
             self.assertEqual(health["commands"][0]["name"], "context-plan")
             self.assertIn("Context health: ok", text)
+            self.assertIn("Quality: passed", text)
             self.assertFalse((root / ".forge-method" / "context" / "load-plan.json").exists())
 
     def test_context_health_blocks_when_required_context_exceeds_budget(self) -> None:

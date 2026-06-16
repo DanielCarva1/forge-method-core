@@ -1416,6 +1416,26 @@ def print_quality_summary(summary: dict[str, Any], *, include_audit: bool = Fals
             print(f"- {surface}: {error}")
 
 
+def build_compact_quality(root: Path) -> dict[str, Any]:
+    artifact_errors, artifact_warnings = artifact_findings(root)
+    evals = list_evals(root)
+    eval_counts: dict[str, int] = {"total": len(evals), "passed": 0, "failed": 0, "pending": 0}
+    for item in evals:
+        status = item.get("status", "pending")
+        eval_counts[status] = eval_counts.get(status, 0) + 1
+    return compact_quality_summary(
+        {
+            "audit": {"errors": audit_project(root)},
+            "artifacts": {"errors": artifact_errors, "warnings": artifact_warnings},
+            "workflows": {"errors": workflow_validation_errors(root)},
+            "agents": {"errors": agent_validation_errors(root)},
+            "config": {"errors": config_validation_errors(root)},
+            "builder": {"errors": builder_extension_validation_errors(root)},
+            "evals": eval_counts,
+        }
+    )
+
+
 def print_status_brief(root: Path, state: dict[str, str]) -> None:
     brief = build_status_brief(root, state)
     story_counts = brief["stories"]["counts"]
@@ -6349,6 +6369,29 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     for item in evals:
         status = item.get("status", "pending")
         eval_counts[status] = eval_counts.get(status, 0) + 1
+    quality = {
+        "audit": {
+            "passed": not audit_errors,
+            "errors": audit_errors,
+        },
+        "artifacts": {
+            "errors": artifact_errors,
+            "warnings": artifact_warnings,
+        },
+        "workflows": {
+            "errors": workflow_errors,
+        },
+        "agents": {
+            "errors": agent_errors,
+        },
+        "config": {
+            "errors": config_errors,
+        },
+        "builder": {
+            "errors": builder_errors,
+        },
+        "evals": eval_counts,
+    }
     story_counts = {status: 0 for status in STORY_STATUSES}
     for story in stories:
         status = story.get("status", "planned")
@@ -6369,6 +6412,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     resume["help_oracle"] = help_oracle
     diagnostics = runtime_diagnostics()
     resume["diagnostics"] = diagnostics
+    resume["quality"] = compact_quality_summary(quality)
     context_dir = method_dir(root) / "context"
     current_pack = context_dir / "current-pack.md"
     recovery = context_dir / "recovery.md"
@@ -6403,29 +6447,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
             "counts": review_finding_counts(review_findings),
             "open": [review_finding_summary(item) for item in open_findings],
         },
-        "quality": {
-            "audit": {
-                "passed": not audit_errors,
-                "errors": audit_errors,
-            },
-            "artifacts": {
-                "errors": artifact_errors,
-                "warnings": artifact_warnings,
-            },
-            "workflows": {
-                "errors": workflow_errors,
-            },
-            "agents": {
-                "errors": agent_errors,
-            },
-            "config": {
-                "errors": config_errors,
-            },
-            "builder": {
-                "errors": builder_errors,
-            },
-            "evals": eval_counts,
-        },
+        "quality": quality,
         "agents": {
             "available": len(agent_profiles(root)),
             "recommended": recommended_agent_profiles(root, state, next_story, audit_errors),
@@ -6484,6 +6506,7 @@ def print_resume_guidance(root: Path, resume: dict[str, Any]) -> None:
     print(f"Action: {resume.get('action', '')}")
     print(f"Autonomous: {'yes' if resume.get('autonomous') else 'no'}")
     print(f"Summary: {resume.get('summary', '')}")
+    print_quality_summary(resume.get("quality", {}))
     target = resume.get("target", {})
     if target:
         print("Target:")
@@ -12626,6 +12649,7 @@ def build_context_load_plan(root: Path, state: dict[str, str], *, max_chars: int
 
     required_chars = sum(int(item.get("estimated_chars", 0)) for item in candidates if item.get("required"))
     diagnostics = runtime_diagnostics()
+    quality = build_compact_quality(root)
     return {
         "runtime": RUNTIME_NAME,
         "runtime_version": RUNTIME_VERSION,
@@ -12651,6 +12675,7 @@ def build_context_load_plan(root: Path, state: dict[str, str], *, max_chars: int
         ],
         "selected": selected,
         "deferred": deferred,
+        "quality": quality,
         "diagnostics": diagnostics,
     }
 
@@ -12671,8 +12696,13 @@ def build_context_health(
     deferred_count = len(plan.get("deferred", []))
     over_budget = bool(plan.get("over_budget"))
     diagnostics = plan.get("diagnostics") or runtime_diagnostics()
+    quality = plan.get("quality") or build_compact_quality(root)
+    quality_failed = not quality.get("passed", True)
 
-    if over_budget:
+    if quality_failed:
+        level = "blocked"
+        recommended_action = "repair project quality before trusting context continuation"
+    elif over_budget:
         level = "blocked"
         recommended_action = "split work or write compact recovery before loading more context"
     elif budget and (selected_ratio >= 0.90 or deferred_count):
@@ -12688,7 +12718,14 @@ def build_context_health(
     commands = [
         preflight_command("context-plan", "context", "plan", "--root", root, "--json", "--max-chars", max_chars),
     ]
-    if level in {"compact", "blocked"}:
+    if quality_failed:
+        commands.extend(
+            [
+                preflight_command("audit", "audit", "--root", root),
+                preflight_command("status", "status", "--root", root, "--brief"),
+            ]
+        )
+    elif level in {"compact", "blocked"}:
         commands.append(
             preflight_command("compact-recovery", "context", "recover", "--root", root, "--compact", "--max-chars", max_chars)
         )
@@ -12722,6 +12759,7 @@ def build_context_health(
         "deferred_count": deferred_count,
         "over_budget": over_budget,
         "state": plan.get("state", {}),
+        "quality": quality,
         "diagnostics": diagnostics,
         "commands": commands,
         "rules": [
@@ -13139,6 +13177,7 @@ def cmd_context_health(args: argparse.Namespace) -> int:
         print(f"Required: {health['estimated_required_chars']} chars ({health['required_ratio']})")
         print(f"Deferred files: {health['deferred_count']}")
         print(f"Recommended action: {health['recommended_action']}")
+        print_quality_summary(health.get("quality", {}))
         print_plugin_diagnostics(health.get("diagnostics", {}))
         next_command = health["commands"][0]["command"] if health["commands"] else ""
         if next_command:

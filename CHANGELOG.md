@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- expose compact quality summary in `resume`, `context plan`, and `context health`, so fresh-chat recovery blocks on project quality failures instead of reporting healthy context while gate-rejected workflow/config/builder/agent failures remain hidden
 - expose compact quality summary in existing-project `reload` text and JSON, so stale-chat recovery surfaces cannot hide workflow/config/builder/agent quality failures that gate would reject
 - expose compact quality summary in `start`, `status --brief`, and existing-project `preflight`, so bootstrap cannot say only `Audit: passed` while workflow/config/builder/agent quality would fail gate
 - expose plugin installation diagnostics in snapshot, resume, context plan, context health, preflight, and reload output so agents can see outdated local Codex plugin versions and repair commands during bootstrap without running `doctor` separately
