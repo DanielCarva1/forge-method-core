@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- expose compact quality summary in `start`, `status --brief`, and existing-project `preflight`, so bootstrap cannot say only `Audit: passed` while workflow/config/builder/agent quality would fail gate
 - expose plugin installation diagnostics in snapshot, resume, context plan, context health, preflight, and reload output so agents can see outdated local Codex plugin versions and repair commands during bootstrap without running `doctor` separately
 - run semantic artifact validators from the shared artifact surface, so workflow-declared spec/research/game/test/doc/discovery/enterprise artifacts cannot pass `artifact verify`, snapshot quality, or the quality gate when their specialized `artifact *-check` would fail
 - expose workflow validation errors in snapshot quality so agents can see workflow/catalog/facilitation failures before relying on compact runtime state

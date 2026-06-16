@@ -5122,6 +5122,10 @@ handoff:
 
             workflow_validation = run_cmd("workflow", "validate", "--root", str(root), check=False)
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+            start = run_cmd("start", "--root", str(root)).stdout
+            status = run_cmd("status", "--root", str(root), "--brief").stdout
+            preflight = run_cmd("preflight", "--root", str(root)).stdout
+            preflight_json = json.loads(run_cmd("preflight", "--root", str(root), "--json").stdout)
             gate = run_cmd("gate", "--root", str(root), check=False)
 
             self.assertNotEqual(workflow_validation.returncode, 0)
@@ -5129,6 +5133,17 @@ handoff:
             self.assertIn(
                 "workflow-broken.md: missing section `inputs:`",
                 snapshot["quality"]["workflows"]["errors"],
+            )
+            self.assertIn("Quality: failed", start)
+            self.assertIn("workflows: workflow-broken.md: missing section `inputs:`", start)
+            self.assertIn("Quality: failed", status)
+            self.assertIn("workflows: workflow-broken.md: missing section `inputs:`", status)
+            self.assertIn("Quality: failed", preflight)
+            self.assertIn("workflows: workflow-broken.md: missing section `inputs:`", preflight)
+            self.assertFalse(preflight_json["status"]["quality"]["passed"])
+            self.assertIn(
+                "workflow-broken.md: missing section `inputs:`",
+                preflight_json["status"]["quality"]["surfaces"]["workflows"]["errors"],
             )
             self.assertNotEqual(gate.returncode, 0)
             self.assertIn("workflow: workflow-broken.md: missing section `inputs:`", gate.stdout)

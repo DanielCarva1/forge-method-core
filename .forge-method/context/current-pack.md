@@ -4,33 +4,34 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: workflow-snapshot-surface-guard
+- status: bootstrap-quality-surface
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Continue the post-parity Forge audit by checking remaining validation surfaces that are still command-only or hidden from snapshots, gate, audit, or install smoke coverage.
+- next_action: Continue the post-parity Forge audit by checking remaining bootstrap and recovery surfaces where narrow status signals can mislead future agents or humans.
 
 ## Latest Checkpoint
 
-# Workflow snapshot surface guard
+# Bootstrap quality surface
 
-- created_at: 2026-06-16T06:06:33+00:00
+- created_at: 2026-06-16T09:49:24+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: workflow-snapshot-surface-guard
+- status: bootstrap-quality-surface
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed the workflow snapshot visibility gap: snapshot quality now exposes workflow validation errors that workflow validate and gate already consume.
+Closed bootstrap quality surface: start, status --brief, and existing-project preflight now expose compact full-quality status so agents do not trust audit-only health.
 
 ## Decisions
 
-- Use workflow_validation_errors as the shared workflow validation surface for snapshot quality as well as gate and workflow validate.
+- Keep Audit as a compatibility line, but add Quality as the bootstrap truth for workflow/config/builder/agent health.
 
 ## Checks
 
-- focused workflow snapshot regression: passed
+- 125 tests passed
+- smoke-runtime, smoke-install, verify-fast, parity replay, artifact verify, audit, and gate passed
 
 ## Failed Checks
 
@@ -40,16 +41,15 @@ Closed the workflow snapshot visibility gap: snapshot quality now exposes workfl
 
 - skills/forge-method/scripts/forge_method_runtime.py
 - tests/test_runtime.py
-- .forge-method/artifacts/20260616-workflow-snapshot-surface-guard.md
 - CHANGELOG.md
 
 ## Artifacts
 
-- .forge-method/artifacts/20260616-workflow-snapshot-surface-guard.md
+- .forge-method/artifacts/20260616-bootstrap-quality-surface.md
 
 ## Next Action
 
-Continue the post-parity Forge audit by checking remaining validation surfaces that are still command-only or hidden from snapshots, gate, audit, or install smoke coverage.
+Continue the post-parity Forge audit by checking remaining bootstrap and recovery surfaces where narrow status signals can mislead future agents or humans.
 
 ## Recovery Signals
 
@@ -61,13 +61,9 @@ Continue the post-parity Forge audit by checking remaining validation surfaces t
 
 - skills/forge-method/scripts/forge_method_runtime.py
 - tests/test_runtime.py
-- .forge-method/artifacts/20260616-workflow-catalog-gate-surface-guard.md
-- CHANGELOG.md
-- .forge-method/artifacts/20260616-agent-validation-gate-surface-guard.md
-- .forge-method/artifacts/20260616-builder-extension-gate-surface-guard.md
-- .forge-method/context/capability-index.json
-- .forge-method/artifacts/20260616-capability-index-gate-surface-guard.md
 - .forge-method/artifacts/20260616-workflow-snapshot-surface-guard.md
+- CHANGELOG.md
+- .forge-method/artifacts/20260616-snapshot-plugin-diagnostic-surface.md
 
 ## Open Human Inputs
 
@@ -84,16 +80,16 @@ Continue the post-parity Forge audit by checking remaining validation surfaces t
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260616-030227-validation-config-capability-index-guidance-safety-validati.md
-- .forge-method/evidence/20260616-032451-validation-state-guidance-write-guard-validation.md
-- .forge-method/evidence/20260616-034215-validation-recovery-memory-guidance-guard-validation.md
-- .forge-method/evidence/20260616-041434-validation-durable-runtime-guidance-source-guard-validation.md
 - .forge-method/evidence/20260616-043253-validation-product-facing-docs-independence-guard-validatio.md
+- .forge-method/evidence/20260616-082813-validation-hot-start-plugin-diagnostic-surface-validation.md
+- .forge-method/evidence/20260616-090029-validation-bootstrap-plugin-diagnostic-surface-validation.md
+- .forge-method/evidence/20260616-092053-validation-bootstrap-plugin-diagnostic-surface-final-valida.md
+- .forge-method/evidence/20260616-094923-validation-bootstrap-quality-surface-validation.md
 
 ## Recent Artifacts
 
-- changelog [active/durable]: CHANGELOG.md - Capability index gate surface guard changelog - Unreleased notes record that written capability indexes now feed config validation, snapshot quality, and gate.
-- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability index refreshed for gate surface guard - Regenerated compact capability index after adding written capability-index validation through config validate, snapshot quality, and gate.
-- runtime-contract [active/durable]: .forge-method/artifacts/20260616-capability-index-gate-surface-guard.md - Capability index gate surface guard - Config validate, snapshot quality, builder validation, and quality gate now consume the written capability-index validation surface for stale or misleading compact agent contracts and final validation evidence.
-- runtime-contract [active/durable]: .forge-method/artifacts/20260616-workflow-snapshot-surface-guard.md - Workflow snapshot surface guard - Snapshot quality now exposes workflow validation errors so agents can see workflow, catalog, facilitation, and template failures before relying on compact runtime state.
-- changelog [active/durable]: CHANGELOG.md - Workflow snapshot surface guard changelog - Unreleased notes record that workflow validation errors now appear in snapshot quality.
+- runtime-diagnostic [active/durable]: .forge-method/artifacts/20260616-snapshot-plugin-diagnostic-surface.md - Bootstrap Plugin Diagnostic Surface - Preflight, reload, context health, context plan, resume, and snapshot now expose local plugin installation status, outdated version diagnostics, and repair commands without making plugin state a quality gate blocker.
+- changelog [active/durable]: CHANGELOG.md - Bootstrap Plugin Diagnostic Surface Changelog - Unreleased notes record plugin installation diagnostics across bootstrap and hot-start output.
+- runtime-diagnostic [active/durable]: .forge-method/artifacts/20260616-snapshot-plugin-diagnostic-surface.md - Bootstrap Plugin Diagnostic Surface - Preflight, reload, context health, context plan, resume, and snapshot expose local plugin installation status, outdated version diagnostics, repair commands, and validation evidence without making plugin state a quality gate blocker.
+- runtime-builder [active/durable]: .forge-method/artifacts/20260616-bootstrap-quality-surface.md - Bootstrap quality surface - Bootstrap surfaces now expose compact full-quality status instead of relying on audit-only health.
+- changelog [active/durable]: CHANGELOG.md - Bootstrap quality surface changelog - Unreleased notes record compact quality summary in start, status --brief, and existing-project preflight.

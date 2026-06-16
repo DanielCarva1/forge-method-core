@@ -1343,6 +1343,7 @@ def build_status_brief(root: Path, state: dict[str, str]) -> dict[str, Any]:
     required_inputs = snapshot["human_inputs"]["required_open"]
     open_findings = snapshot["review_findings"]["open"]
     audit_errors = snapshot["quality"]["audit"]["errors"]
+    quality = compact_quality_summary(snapshot["quality"])
     return {
         "runtime": snapshot["runtime"],
         "runtime_version": snapshot["runtime_version"],
@@ -1369,6 +1370,7 @@ def build_status_brief(root: Path, state: dict[str, str]) -> dict[str, Any]:
             "error_count": len(audit_errors),
             "errors": audit_errors[:5],
         },
+        "quality": quality,
         "resume": snapshot["resume"],
         "recommended_agents": [
             item.get("id", "")
@@ -1377,6 +1379,41 @@ def build_status_brief(root: Path, state: dict[str, str]) -> dict[str, Any]:
         ],
         "context": snapshot["context"],
     }
+
+
+def compact_quality_summary(quality: dict[str, Any]) -> dict[str, Any]:
+    surfaces: dict[str, dict[str, Any]] = {}
+    for surface in ["audit", "artifacts", "workflows", "agents", "config", "builder"]:
+        errors = list((quality.get(surface) or {}).get("errors", []))
+        surfaces[surface] = {
+            "passed": not errors,
+            "error_count": len(errors),
+            "errors": errors[:5],
+        }
+    warnings = list((quality.get("artifacts") or {}).get("warnings", []))
+    error_count = sum(surface["error_count"] for surface in surfaces.values())
+    return {
+        "passed": error_count == 0,
+        "error_count": error_count,
+        "warning_count": len(warnings),
+        "surfaces": surfaces,
+        "evals": quality.get("evals", {}),
+    }
+
+
+def print_quality_summary(summary: dict[str, Any], *, include_audit: bool = False) -> None:
+    if not summary:
+        return
+    warning_count = int(summary.get("warning_count", 0) or 0)
+    warning_suffix = f" ({warning_count} warning{'s' if warning_count != 1 else ''})" if warning_count else ""
+    print(f"Quality: {'passed' if summary.get('passed') else 'failed'}{warning_suffix}")
+    surfaces = summary.get("surfaces", {})
+    for surface in ["audit", "artifacts", "workflows", "agents", "config", "builder"]:
+        if surface == "audit" and not include_audit:
+            continue
+        details = surfaces.get(surface, {})
+        for error in details.get("errors", [])[:3]:
+            print(f"- {surface}: {error}")
 
 
 def print_status_brief(root: Path, state: dict[str, str]) -> None:
@@ -1422,6 +1459,7 @@ def print_status_brief(root: Path, state: dict[str, str]) -> None:
     print(f"Audit: {'passed' if audit['passed'] else 'failed'}")
     for error in audit["errors"][:3]:
         print(f"- {error}")
+    print_quality_summary(brief["quality"])
     agents = brief["recommended_agents"]
     print(f"Recommended agents: {', '.join(agents) if agents else '<none>'}")
     context = brief["context"]
@@ -2145,6 +2183,7 @@ def print_preflight(payload: dict[str, Any]) -> None:
         print(f"Audit: {'passed' if audit['passed'] else 'failed'}")
         for error in audit["errors"][:3]:
             print(f"- {error}")
+        print_quality_summary(status.get("quality", {}))
         plan = payload["context_load_plan"]
         print(
             "Context budget: "
@@ -5467,15 +5506,17 @@ def cmd_start(args: argparse.Namespace) -> int:
     state_root, state = load_state_or_none(root)
 
     if state_root:
+        status = build_status_brief(state_root, state)
         print("Forge Method Start")
         print(f"Workspace: {root}")
         print("Route: existing-method-project")
         print(f"Project root: {state_root}")
         print_state_summary(state)
-        errors = audit_project(state_root)
+        errors = status["audit"]["errors"]
         print(f"Audit: {'passed' if not errors else 'failed'}")
         for error in errors:
             print(f"- {error}")
+        print_quality_summary(status["quality"])
         return 0
 
     runtime_root = find_runtime_repo_root(root)
