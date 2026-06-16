@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- add `next --json` and route diagnostics in text `next`, so agents following the recommended continuation command keep Help Oracle reason, context boundary, commands, quality, and mechanical goal handoff without parsing a full snapshot
 - expose compact quality summary in `resume`, `context plan`, and `context health`, so fresh-chat recovery blocks on project quality failures instead of reporting healthy context while gate-rejected workflow/config/builder/agent failures remain hidden
 - expose compact quality summary in existing-project `reload` text and JSON, so stale-chat recovery surfaces cannot hide workflow/config/builder/agent quality failures that gate would reject
 - expose compact quality summary in `start`, `status --brief`, and existing-project `preflight`, so bootstrap cannot say only `Audit: passed` while workflow/config/builder/agent quality would fail gate

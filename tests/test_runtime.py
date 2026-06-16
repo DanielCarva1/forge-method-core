@@ -1557,6 +1557,7 @@ class RuntimeTests(unittest.TestCase):
 
             blocked = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
             next_text = run_cmd("next", "--root", str(root)).stdout
+            next_json = json.loads(run_cmd("next", "--root", str(root), "--json").stdout)
             resume = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
             resume_text = run_cmd("resume", "--root", str(root)).stdout
 
@@ -1574,6 +1575,12 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Help Oracle:", resume_text)
             self.assertIn("answer human input target-user", next_text)
             self.assertIn("Next required workflow: discover-intent", next_text)
+            self.assertEqual(next_json["action"], "answer_required_input")
+            self.assertFalse(next_json["autonomous"])
+            self.assertEqual(next_json["required_next_workflow"], "discover-intent")
+            self.assertIn("Required human input", next_json["reason"])
+            self.assertEqual(next_json["context_boundary"]["mode"], "resume-first")
+            self.assertIn("input-list", [command["name"] for command in next_json["commands"]])
             self.assertIn("Audit passed.", run_cmd("audit", "--root", str(root)).stdout)
 
             run_cmd(
@@ -1619,6 +1626,7 @@ class RuntimeTests(unittest.TestCase):
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
             resume = json.loads(run_cmd("resume", "--root", str(root), "--json").stdout)
             next_text = run_cmd("next", "--root", str(root)).stdout
+            next_json = json.loads(run_cmd("next", "--root", str(root), "--json").stdout)
 
             self.assertEqual(snapshot["resume"]["action"], "operate_or_evolve")
             self.assertEqual(snapshot["help_oracle"]["required_next_workflow"], "guidance-engine")
@@ -1628,6 +1636,10 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Ready projects must route", snapshot["help_oracle"]["reason"])
             self.assertIn("Next required workflow: guidance-engine", next_text)
             self.assertNotIn("publish current batch", next_text)
+            self.assertEqual(next_json["required_next_workflow"], "guidance-engine")
+            self.assertIn("Ready projects must route", next_json["reason"])
+            self.assertEqual(next_json["context_boundary"]["mode"], "resume-first")
+            self.assertNotIn("publish current batch", next_json["human_next_step"])
 
     def test_help_oracle_respects_active_evolve_workflow_even_when_ready(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -1650,12 +1662,16 @@ class RuntimeTests(unittest.TestCase):
 
             snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
             next_text = run_cmd("next", "--root", str(root)).stdout
+            next_json = json.loads(run_cmd("next", "--root", str(root), "--json").stdout)
 
             self.assertEqual(snapshot["resume"]["action"], "continue_current_workflow")
             self.assertEqual(snapshot["help_oracle"]["required_next_workflow"], "runtime-builder")
             self.assertIn("Continue the active workflow", snapshot["help_oracle"]["reason"])
             self.assertIn("Implement Help Oracle invariant", next_text)
             self.assertIn("Next required workflow: runtime-builder", next_text)
+            self.assertEqual(next_json["required_next_workflow"], "runtime-builder")
+            self.assertIn("Continue the active workflow", next_json["reason"])
+            self.assertEqual(next_json["context_boundary"]["current_workflow"], "runtime-builder")
 
     def test_mutating_commands_record_and_emit_post_command_help_oracle(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -5135,6 +5151,8 @@ handoff:
             context_health_json = json.loads(
                 run_cmd("context", "health", "--root", str(root), "--json").stdout
             )
+            next_text = run_cmd("next", "--root", str(root)).stdout
+            next_json = json.loads(run_cmd("next", "--root", str(root), "--json").stdout)
             gate = run_cmd("gate", "--root", str(root), check=False)
 
             self.assertNotEqual(workflow_validation.returncode, 0)
@@ -5183,6 +5201,14 @@ handoff:
             )
             self.assertFalse(context_health_json["quality"]["passed"])
             self.assertIn("audit", [command["name"] for command in context_health_json["commands"]])
+            self.assertIn("Quality: failed", next_text)
+            self.assertFalse(next_json["quality"]["passed"])
+            self.assertIn("Continue the active workflow", next_json["reason"])
+            self.assertEqual(next_json["context_boundary"]["mode"], "resume-first")
+            self.assertIn(
+                "workflow-broken.md: missing section `inputs:`",
+                next_json["quality"]["surfaces"]["workflows"]["errors"],
+            )
             self.assertNotEqual(gate.returncode, 0)
             self.assertIn("workflow: workflow-broken.md: missing section `inputs:`", gate.stdout)
 
@@ -5207,6 +5233,7 @@ handoff:
             guide = runtime.build_guide_payload(root, question="", max_chars=12000)
             guide_text = run_cmd("guide", "--root", str(root)).stdout
             next_text = run_cmd("next", "--root", str(root)).stdout
+            next_json = json.loads(run_cmd("next", "--root", str(root), "--json").stdout)
             config_validation = run_cmd("config", "validate", "--root", str(root)).stdout
 
             work_order = resume["mechanical_work_order"]
@@ -5240,6 +5267,11 @@ handoff:
             self.assertNotIn("ok?", next_text.lower())
             self.assertNotIn("continue?", next_text.lower())
             self.assertNotIn("quer continuar", next_text.lower())
+            self.assertEqual(next_json["action"], "start_next_story")
+            self.assertEqual(next_json["required_next_workflow"], "build-story")
+            self.assertTrue(next_json["codex_goal_handoff"]["recommended"])
+            self.assertTrue(next_json["mechanical_work_order"]["autonomous"])
+            self.assertIn("story-start", [command["name"] for command in next_json["commands"]])
             self.assertIn("Config validation passed.", config_validation)
 
     def test_project_config_override_model_and_capability_index_contracts(self) -> None:

@@ -4,34 +4,34 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: context-recovery-quality-surface
+- status: next-help-oracle-surface
 - workflow: runtime-builder
 - active_story: <none>
-- next_action: Continue the post-parity Forge audit by checking route diagnostics and Help Oracle surfaces where future agents may still get stale or incomplete next-step reasons.
+- next_action: Continue the post-parity Forge audit by checking whether guide and Help Oracle route diagnostics are consistently mirrored in persisted recovery artifacts and capability indexes.
 
 ## Latest Checkpoint
 
-# Context recovery quality surface
+# Next Help Oracle surface
 
-- created_at: 2026-06-16T11:00:05+00:00
+- created_at: 2026-06-16T11:28:55+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: context-recovery-quality-surface
+- status: next-help-oracle-surface
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Resume, context plan, and context health now expose compact quality; context health blocks on project quality failures and points agents to audit/status instead of reporting healthy recovery context.
+next now has a compact JSON surface and text route diagnostics, preserving Help Oracle reason, context boundary, quality, commands, state update hints, and mechanical goal handoff after resume.
 
 ## Decisions
 
-- Fresh-chat recovery payloads must carry the same compact quality truth as bootstrap/reload surfaces.
-- Context health uses level blocked for failed project quality and reserves context compaction commands for budget pressure.
+- next remains the terse human continuation command, but next --json is now the compact agent follow-up to resume --json.
+- Text next prints reason and context boundary so stale-state overrides are explainable without full snapshot parsing.
 
 ## Checks
 
-- Focused regression: workflow-broken fixture covers resume/context plan/context health quality.
+- Focused regressions cover human input, ready stale next_action, active evolve workflow, broken workflow quality, and mechanical goal handoff.
 - python -m unittest discover -s tests passed, 125 tests.
 - smoke-runtime, smoke-install, verify-fast, parity replay 91/91, artifact verify, audit, and gate 22/22 passed.
 
@@ -48,11 +48,11 @@ Resume, context plan, and context health now expose compact quality; context hea
 
 ## Artifacts
 
-- .forge-method/artifacts/20260616-context-recovery-quality-surface.md
+- .forge-method/artifacts/20260616-next-help-oracle-surface.md
 
 ## Next Action
 
-Continue the post-parity Forge audit by checking route diagnostics and Help Oracle surfaces where future agents may still get stale or incomplete next-step reasons.
+Continue the post-parity Forge audit by checking whether guide and Help Oracle route diagnostics are consistently mirrored in persisted recovery artifacts and capability indexes.
 
 ## Recovery Signals
 
@@ -91,8 +91,8 @@ Continue the post-parity Forge audit by checking route diagnostics and Help Orac
 
 ## Recent Artifacts
 
-- changelog [active/durable]: CHANGELOG.md - Bootstrap quality surface changelog - Unreleased notes record compact quality summary in start, status --brief, and existing-project preflight.
-- runtime-builder [active/durable]: .forge-method/artifacts/20260616-reload-quality-surface.md - Reload quality surface - Existing-project reload now exposes compact full-quality status so stale-chat recovery cannot hide quality failures.
 - changelog [active/durable]: CHANGELOG.md - Reload quality surface changelog - Unreleased notes record compact quality summary in existing-project reload text and JSON.
 - changelog [active/durable]: CHANGELOG.md - Context recovery quality surface changelog - Unreleased notes record compact quality summary in resume, context plan, and context health.
 - runtime-builder [active/durable]: .forge-method/artifacts/20260616-context-recovery-quality-surface.md - Context recovery quality surface - Resume, context plan, and context health now expose compact quality so fresh-chat recovery cannot hide gate-rejected project failures.
+- runtime-builder [active/durable]: .forge-method/artifacts/20260616-next-help-oracle-surface.md - Next Help Oracle surface - next --json now preserves compact Help Oracle route diagnostics, quality, commands, context boundary, and mechanical goal handoff.
+- changelog [active/durable]: CHANGELOG.md - Next Help Oracle surface changelog - Unreleased notes record next --json and route diagnostics in text next.

@@ -6472,23 +6472,67 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
     return 0
 
 
+def build_next_payload(root: Path, snapshot: dict[str, Any]) -> dict[str, Any]:
+    resume = snapshot.get("resume", {})
+    help_oracle = snapshot.get("help_oracle", {})
+    return {
+        "runtime": snapshot.get("runtime", RUNTIME_NAME),
+        "runtime_version": snapshot.get("runtime_version", RUNTIME_VERSION),
+        "root": snapshot.get("root", str(root)),
+        "action": resume.get("action", ""),
+        "autonomous": bool(resume.get("autonomous")),
+        "human_next_step": help_oracle.get("human_next_step") or resume.get("summary", ""),
+        "required_next_workflow": help_oracle.get("required_next_workflow", ""),
+        "recommended_phase": help_oracle.get("recommended_phase", ""),
+        "reason": help_oracle.get("reason", ""),
+        "quality": resume.get("quality", {}),
+        "commands": help_oracle.get("commands") or resume.get("commands", []),
+        "context_boundary": help_oracle.get("context_boundary", {}),
+        "state_update_required": help_oracle.get("state_update_required", False),
+        "state_updates": help_oracle.get("state_updates", {}),
+        "stale_state_guard": help_oracle.get("stale_state_guard", ""),
+        "alternatives": help_oracle.get("alternatives", []),
+        "mechanical_work_order": resume.get("mechanical_work_order", {}),
+        "codex_goal_handoff": resume.get("codex_goal_handoff", {}),
+    }
+
+
+def print_next_payload(payload: dict[str, Any]) -> None:
+    if payload.get("human_next_step"):
+        print(payload["human_next_step"])
+    if payload.get("required_next_workflow"):
+        print(f"Next required workflow: {payload.get('required_next_workflow')}")
+    if payload.get("reason"):
+        print(f"Reason: {payload.get('reason')}")
+    quality = payload.get("quality") or {}
+    if quality and not quality.get("passed", True):
+        print_quality_summary(quality)
+    boundary = payload.get("context_boundary") or {}
+    if boundary:
+        print(f"Context boundary: {boundary.get('mode', '')} -> {boundary.get('current_workflow', '')}")
+    if payload.get("state_update_required"):
+        updates = payload.get("state_updates") or {}
+        print("State update required: " + ", ".join(f"{key}={value}" for key, value in updates.items()))
+    work_order = payload.get("mechanical_work_order", {})
+    if work_order.get("autonomous") and work_order.get("goal_recommended"):
+        print("Goal recommended: use /goal with the generated Forge mechanical goal handoff.")
+
+
 def cmd_next(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     snapshot = build_snapshot(root, state)
-    help_oracle = snapshot.get("help_oracle", {})
-    if help_oracle.get("human_next_step"):
-        print(help_oracle["human_next_step"])
-        if help_oracle.get("required_next_workflow"):
-            print(f"Next required workflow: {help_oracle.get('required_next_workflow')}")
-        work_order = snapshot["resume"].get("mechanical_work_order", {})
-        if work_order.get("autonomous") and work_order.get("goal_recommended"):
-            print("Goal recommended: use /goal with the generated Forge mechanical goal handoff.")
+    payload = build_next_payload(root, snapshot)
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=True, sort_keys=True, indent=2))
         return 0
-    work_order = snapshot["resume"].get("mechanical_work_order", {})
+    if payload.get("human_next_step"):
+        print_next_payload(payload)
+        return 0
+    work_order = payload.get("mechanical_work_order", {})
     if work_order.get("autonomous") and work_order.get("next_mechanical_step"):
-        print(work_order["next_mechanical_step"])
-        if work_order.get("goal_recommended"):
-            print("Goal recommended: use /goal with the generated Forge mechanical goal handoff.")
+        fallback_payload = dict(payload)
+        fallback_payload["human_next_step"] = work_order["next_mechanical_step"]
+        print_next_payload(fallback_payload)
         return 0
     phase = state.get("phase", "0-route")
     if phase == "4-build-verify":
@@ -14126,6 +14170,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     next_cmd = sub.add_parser("next", help="print next recommended action")
     next_cmd.add_argument("--root", default=".")
+    next_cmd.add_argument("--json", action="store_true")
     next_cmd.set_defaults(func=cmd_next)
 
     resume = sub.add_parser("resume", help="print structured resume guidance for the current project state")
