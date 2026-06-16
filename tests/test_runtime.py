@@ -4951,6 +4951,41 @@ handoff:
                 gate.stdout,
             )
 
+    def test_snapshot_uses_workflow_validation_surface(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Workflow Snapshot Surface Project", "--root", str(root))
+            workflow_dir = root / ".forge-method" / "workflows"
+            workflow_dir.mkdir(parents=True, exist_ok=True)
+            (workflow_dir / "workflow-broken.md").write_text(
+                "\n".join(
+                    [
+                        "# workflow: broken",
+                        "",
+                        "trigger:",
+                        "  - broken request",
+                        "",
+                        "steps:",
+                        "  1. only partial",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            workflow_validation = run_cmd("workflow", "validate", "--root", str(root), check=False)
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+            gate = run_cmd("gate", "--root", str(root), check=False)
+
+            self.assertNotEqual(workflow_validation.returncode, 0)
+            self.assertIn("workflow-broken.md: missing section `inputs:`", workflow_validation.stdout)
+            self.assertIn(
+                "workflow-broken.md: missing section `inputs:`",
+                snapshot["quality"]["workflows"]["errors"],
+            )
+            self.assertNotEqual(gate.returncode, 0)
+            self.assertIn("workflow: workflow-broken.md: missing section `inputs:`", gate.stdout)
+
     def test_mechanical_work_order_goal_and_commit_policy_contracts(self) -> None:
         runtime = load_runtime_module()
         with tempfile.TemporaryDirectory() as raw:

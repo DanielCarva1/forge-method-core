@@ -4,40 +4,33 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: capability-index-gate-surface-guard
+- status: workflow-snapshot-surface-guard
 - workflow: runtime-builder
 - active_story: <none>
 - next_action: Continue the post-parity Forge audit by checking remaining validation surfaces that are still command-only or hidden from snapshots, gate, audit, or install smoke coverage.
 
 ## Latest Checkpoint
 
-# Capability index gate surface guard
+# Workflow snapshot surface guard
 
-- created_at: 2026-06-16T06:00:00+00:00
+- created_at: 2026-06-16T06:06:33+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: capability-index-gate-surface-guard
+- status: workflow-snapshot-surface-guard
 - workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed the written capability-index validation surface gap: stale or misleading compact agent capability contracts now fail config validate, snapshot quality, builder validate, and gate while config index --write remains the repair path.
+Closed the workflow snapshot visibility gap: snapshot quality now exposes workflow validation errors that workflow validate and gate already consume.
 
 ## Decisions
 
-- Use capability_index_validation_errors for the written compact agent capability contract, regenerate the repo capability index, and keep config index --write based on override validation so stale files can be repaired.
+- Use workflow_validation_errors as the shared workflow validation surface for snapshot quality as well as gate and workflow validate.
 
 ## Checks
 
-- focused capability-index regression: passed
-- related config/builder regression tests: passed
-- python -m unittest discover -s tests: 122 passed
-- smoke-runtime.ps1: passed
-- verify-fast.ps1: passed
-- audit/artifact verify/workflow validate/agent validate/config validate/builder validate: passed
-- parity replay: 91/91 passed
-- gate --require-evals: 22/22 passed
+- focused workflow snapshot regression: passed
 
 ## Failed Checks
 
@@ -47,14 +40,12 @@ Closed the written capability-index validation surface gap: stale or misleading 
 
 - skills/forge-method/scripts/forge_method_runtime.py
 - tests/test_runtime.py
-- .forge-method/context/capability-index.json
-- .forge-method/artifacts/20260616-capability-index-gate-surface-guard.md
+- .forge-method/artifacts/20260616-workflow-snapshot-surface-guard.md
 - CHANGELOG.md
 
 ## Artifacts
 
-- .forge-method/artifacts/20260616-capability-index-gate-surface-guard.md
-- .forge-method/context/capability-index.json
+- .forge-method/artifacts/20260616-workflow-snapshot-surface-guard.md
 
 ## Next Action
 
@@ -74,8 +65,9 @@ Continue the post-parity Forge audit by checking remaining validation surfaces t
 - CHANGELOG.md
 - .forge-method/artifacts/20260616-agent-validation-gate-surface-guard.md
 - .forge-method/artifacts/20260616-builder-extension-gate-surface-guard.md
-- .forge-method/artifacts/20260616-capability-index-gate-surface-guard.md
 - .forge-method/context/capability-index.json
+- .forge-method/artifacts/20260616-capability-index-gate-surface-guard.md
+- .forge-method/artifacts/20260616-workflow-snapshot-surface-guard.md
 
 ## Open Human Inputs
 
@@ -100,8 +92,8 @@ Continue the post-parity Forge audit by checking remaining validation surfaces t
 
 ## Recent Artifacts
 
-- runtime-contract [active/durable]: .forge-method/artifacts/20260616-builder-extension-gate-surface-guard.md - Builder extension gate surface guard - Builder validate, snapshots, and quality gate now consume the same local builder extension validation surface for project-local skill frontmatter and final validation evidence.
-- runtime-contract [active/durable]: .forge-method/artifacts/20260616-capability-index-gate-surface-guard.md - Capability index gate surface guard - Config validate, snapshot quality, and quality gate now consume the written capability-index validation surface for stale or misleading compact agent contracts.
 - changelog [active/durable]: CHANGELOG.md - Capability index gate surface guard changelog - Unreleased notes record that written capability indexes now feed config validation, snapshot quality, and gate.
 - capability-index [active/durable]: .forge-method/context/capability-index.json - Capability index refreshed for gate surface guard - Regenerated compact capability index after adding written capability-index validation through config validate, snapshot quality, and gate.
 - runtime-contract [active/durable]: .forge-method/artifacts/20260616-capability-index-gate-surface-guard.md - Capability index gate surface guard - Config validate, snapshot quality, builder validation, and quality gate now consume the written capability-index validation surface for stale or misleading compact agent contracts and final validation evidence.
+- runtime-contract [active/durable]: .forge-method/artifacts/20260616-workflow-snapshot-surface-guard.md - Workflow snapshot surface guard - Snapshot quality now exposes workflow validation errors so agents can see workflow, catalog, facilitation, and template failures before relying on compact runtime state.
+- changelog [active/durable]: CHANGELOG.md - Workflow snapshot surface guard changelog - Unreleased notes record that workflow validation errors now appear in snapshot quality.

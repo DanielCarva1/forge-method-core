@@ -6246,6 +6246,7 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
     open_findings = [item for item in review_findings if item.get("status") == "open"]
     audit_errors = audit_project(root)
     artifact_errors, artifact_warnings = artifact_findings(root)
+    workflow_errors = workflow_validation_errors(root)
     agent_errors = agent_validation_errors(root)
     config_errors = config_validation_errors(root)
     builder_errors = builder_extension_validation_errors(root)
@@ -6314,6 +6315,9 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
             "artifacts": {
                 "errors": artifact_errors,
                 "warnings": artifact_warnings,
+            },
+            "workflows": {
+                "errors": workflow_errors,
             },
             "agents": {
                 "errors": agent_errors,
