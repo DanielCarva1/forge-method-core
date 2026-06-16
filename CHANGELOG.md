@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- validate written capability-index files through config validation, snapshot quality, and the quality gate so compact agent capability contracts cannot become stale or misleading
 - make local builder extension validation part of snapshot quality and the quality gate, so malformed `.forge-method/skills/*/SKILL.md` files cannot pass gate-only validation
 - make the quality gate consume the full agent validation surface by sharing agent profile, elicitation technique, and Persona Lens checks through `agent_validation_errors`
 - make the quality gate consume the full workflow validation surface by including workflow catalog metadata checks in `workflow_validation_errors`, so missing catalog templates or route metadata cannot pass gate-only validation

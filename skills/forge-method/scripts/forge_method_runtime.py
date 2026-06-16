@@ -11718,13 +11718,53 @@ def cmd_config_inspect(args: argparse.Namespace) -> int:
     return 0
 
 
-def config_validation_errors(root: Path) -> list[str]:
+def config_override_validation_errors(root: Path) -> list[str]:
     errors: list[str] = []
     for path in config_paths(root):
         if not path.exists():
             continue
         values = read_flat_yaml(path)
         errors.extend(validate_config_values(values, source=path.relative_to(root).as_posix(), root=root))
+    return errors
+
+
+def normalized_capability_index_payload(payload: Any) -> Any:
+    if isinstance(payload, dict):
+        return {
+            key: normalized_capability_index_payload(value)
+            for key, value in payload.items()
+            if key not in {"generated_at", "written_path"}
+        }
+    if isinstance(payload, list):
+        return [normalized_capability_index_payload(item) for item in payload]
+    return payload
+
+
+def capability_index_validation_errors(root: Path, *, compare_current: bool = True) -> list[str]:
+    errors: list[str] = []
+    path = method_dir(root) / "context" / "capability-index.json"
+    if not path.exists():
+        return errors
+    rel = path.relative_to(root).as_posix()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return [f"{rel}: invalid JSON: {exc.msg}"]
+    if not isinstance(payload, dict):
+        return [f"{rel}: capability index must be a JSON object"]
+    for error in validate_runtime_guidance_payload_safety("capability_index", payload):
+        errors.append(f"{rel}: {error}")
+    if compare_current:
+        current = normalized_capability_index_payload(capability_index_payload(root))
+        written = normalized_capability_index_payload(payload)
+        if written != current:
+            errors.append(f"{rel}: capability index is stale; regenerate with config index --write")
+    return errors
+
+
+def config_validation_errors(root: Path) -> list[str]:
+    errors = config_override_validation_errors(root)
+    errors.extend(capability_index_validation_errors(root, compare_current=not errors))
     return errors
 
 
@@ -11790,7 +11830,7 @@ def capability_index_payload(root: Path) -> dict[str, Any]:
 
 def cmd_config_index(args: argparse.Namespace) -> int:
     root, _ = load_state_or_fail(resolve_root(args.root))
-    errors = config_validation_errors(root)
+    errors = config_override_validation_errors(root)
     if errors:
         print("Config validation failed:")
         for error in errors:

@@ -4,37 +4,40 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: product-facing-docs-independence-guard
-- workflow: agent-analyze
+- status: capability-index-gate-surface-guard
+- workflow: runtime-builder
 - active_story: <none>
-- next_action: Continue the post-parity Forge audit by checking dead code and remaining runtime surfaces that lack deterministic validation.
+- next_action: Continue the post-parity Forge audit by checking remaining validation surfaces that are still command-only or hidden from snapshots, gate, audit, or install smoke coverage.
 
 ## Latest Checkpoint
 
-# Product-facing docs independence guard
+# Capability index gate surface guard
 
-- created_at: 2026-06-16T04:32:56+00:00
+- created_at: 2026-06-16T06:00:00+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: product-facing-docs-independence-guard
-- workflow: agent-analyze
+- status: capability-index-gate-surface-guard
+- workflow: runtime-builder
 - active_story: <none>
 
 ## Summary
 
-Closed the product-facing docs independence guard. Runtime-repo audit now blocks public Markdown from describing Forge as a clone, fork, or variant of another framework while allowing Git clone/install language.
+Closed the written capability-index validation surface gap: stale or misleading compact agent capability contracts now fail config validate, snapshot quality, builder validate, and gate while config index --write remains the repair path.
 
 ## Decisions
 
-- Public Forge docs now have deterministic independence validation instead of relying on reviewer memory.
+- Use capability_index_validation_errors for the written compact agent capability contract, regenerate the repo capability index, and keep config index --write based on override validation so stale files can be repaired.
 
 ## Checks
 
-- python -m unittest discover -s tests: 118 passed
+- focused capability-index regression: passed
+- related config/builder regression tests: passed
+- python -m unittest discover -s tests: 122 passed
 - smoke-runtime.ps1: passed
 - verify-fast.ps1: passed
-- smoke-install.ps1: passed
-- audit/artifact verify/workflow validate/parity replay/gate: passed
+- audit/artifact verify/workflow validate/agent validate/config validate/builder validate: passed
+- parity replay: 91/91 passed
+- gate --require-evals: 22/22 passed
 
 ## Failed Checks
 
@@ -44,16 +47,18 @@ Closed the product-facing docs independence guard. Runtime-repo audit now blocks
 
 - skills/forge-method/scripts/forge_method_runtime.py
 - tests/test_runtime.py
-- .forge-method/artifacts/20260616-product-facing-docs-independence-guard.md
+- .forge-method/context/capability-index.json
+- .forge-method/artifacts/20260616-capability-index-gate-surface-guard.md
 - CHANGELOG.md
 
 ## Artifacts
 
-- none
+- .forge-method/artifacts/20260616-capability-index-gate-surface-guard.md
+- .forge-method/context/capability-index.json
 
 ## Next Action
 
-Continue the post-parity Forge audit by checking dead code and remaining runtime surfaces that lack deterministic validation.
+Continue the post-parity Forge audit by checking remaining validation surfaces that are still command-only or hidden from snapshots, gate, audit, or install smoke coverage.
 
 ## Recovery Signals
 
@@ -63,14 +68,14 @@ Continue the post-parity Forge audit by checking dead code and remaining runtime
 
 ### Touched Files
 
-- skills/forge-method/scripts/forge_method_runtime.py; tests/test_runtime.py; CHANGELOG.md; .forge-method/artifacts/20260616-config-capability-index-guidance-safety.md
-- skills/forge-method/scripts/forge_method_runtime.py; tests/test_runtime.py; CHANGELOG.md; .forge-method/artifacts/20260616-state-guidance-write-guard.md
-- skills/forge-method/scripts/forge_method_runtime.py; tests/test_runtime.py; CHANGELOG.md; .forge-method/artifacts/20260616-recovery-memory-guidance-guard.md
 - skills/forge-method/scripts/forge_method_runtime.py
 - tests/test_runtime.py
-- .forge-method/artifacts/20260616-durable-runtime-guidance-source-guard.md
+- .forge-method/artifacts/20260616-workflow-catalog-gate-surface-guard.md
 - CHANGELOG.md
-- .forge-method/artifacts/20260616-product-facing-docs-independence-guard.md
+- .forge-method/artifacts/20260616-agent-validation-gate-surface-guard.md
+- .forge-method/artifacts/20260616-builder-extension-gate-surface-guard.md
+- .forge-method/artifacts/20260616-capability-index-gate-surface-guard.md
+- .forge-method/context/capability-index.json
 
 ## Open Human Inputs
 
@@ -95,8 +100,8 @@ Continue the post-parity Forge audit by checking dead code and remaining runtime
 
 ## Recent Artifacts
 
-- runtime-contract [active/durable]: .forge-method/artifacts/20260616-durable-runtime-guidance-source-guard.md - Durable runtime guidance source guard - Artifact summaries, human input prompts, review findings, and story work fields now share the guidance safety contract before they enter snapshots, context packs, or runtime JSON.
-- changelog [active/durable]: CHANGELOG.md - Durable runtime guidance source guard changelog - Unreleased notes record the durable runtime guidance source guard for artifact summaries, human input prompts, review findings, and story work fields.
-- runtime-contract [active/durable]: .forge-method/artifacts/20260616-durable-runtime-guidance-source-guard.md - Durable runtime guidance source guard - Artifact summaries, human input prompts, review findings, and story work fields now share the guidance safety contract before they enter snapshots, context packs, or runtime JSON.
-- runtime-contract [active/durable]: .forge-method/artifacts/20260616-product-facing-docs-independence-guard.md - Product-facing docs independence guard - Runtime-repo audit now blocks public Markdown from framing Forge as dependent on another framework while preserving normal Git install wording.
-- changelog [active/durable]: CHANGELOG.md - Product-facing docs independence guard changelog - Unreleased notes record the product-facing docs independence guard for runtime-repo public Markdown.
+- runtime-contract [active/durable]: .forge-method/artifacts/20260616-builder-extension-gate-surface-guard.md - Builder extension gate surface guard - Builder validate, snapshots, and quality gate now consume the same local builder extension validation surface for project-local skill frontmatter and final validation evidence.
+- runtime-contract [active/durable]: .forge-method/artifacts/20260616-capability-index-gate-surface-guard.md - Capability index gate surface guard - Config validate, snapshot quality, and quality gate now consume the written capability-index validation surface for stale or misleading compact agent contracts.
+- changelog [active/durable]: CHANGELOG.md - Capability index gate surface guard changelog - Unreleased notes record that written capability indexes now feed config validation, snapshot quality, and gate.
+- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability index refreshed for gate surface guard - Regenerated compact capability index after adding written capability-index validation through config validate, snapshot quality, and gate.
+- runtime-contract [active/durable]: .forge-method/artifacts/20260616-capability-index-gate-surface-guard.md - Capability index gate surface guard - Config validate, snapshot quality, builder validation, and quality gate now consume the written capability-index validation surface for stale or misleading compact agent contracts and final validation evidence.

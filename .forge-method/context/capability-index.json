@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-15T12:10:37+00:00",
+  "generated_at": "2026-06-16T05:58:18+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -982,7 +982,8 @@
         "success criteria"
       ],
       "phase": "1-discovery",
-      "required": true
+      "required": true,
+      "template": "discovery-closeout-artifact"
     },
     {
       "facilitation_pack": "document-utility",

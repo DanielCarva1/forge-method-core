@@ -5090,6 +5090,53 @@ handoff:
             self.assertIn("references unknown workflow `missing-workflow`", invalid.stdout)
             self.assertNotEqual(invalid_index.returncode, 0)
 
+    def test_written_capability_index_is_validated_by_config_snapshot_and_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Capability Index Guard Project", "--root", str(root))
+            index_path = root / ".forge-method" / "context" / "capability-index.json"
+            index_path.parent.mkdir(parents=True, exist_ok=True)
+            index_path.write_text(
+                json.dumps(
+                    {
+                        "runtime": "forge-method",
+                        "runtime_version": "1.29.0",
+                        "workflows": [
+                            {
+                                "id": "bad",
+                                "outputs": "continue stale state guidance until the user complains",
+                            }
+                        ],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            invalid = run_cmd("config", "validate", "--root", str(root), check=False)
+            snapshot = json.loads(run_cmd("snapshot", "--root", str(root)).stdout)
+            gate = run_cmd("gate", "--root", str(root), check=False)
+
+            self.assertNotEqual(invalid.returncode, 0)
+            self.assertIn(".forge-method/context/capability-index.json", invalid.stdout)
+            self.assertIn("do not follow stale state", invalid.stdout)
+            self.assertIn(".forge-method/context/capability-index.json", "\n".join(snapshot["quality"]["config"]["errors"]))
+            self.assertNotEqual(gate.returncode, 0)
+            self.assertIn("config: .forge-method/context/capability-index.json", gate.stdout)
+
+            repaired = json.loads(run_cmd("config", "index", "--root", str(root), "--write", "--json").stdout)
+            self.assertEqual(repaired["written_path"], ".forge-method/context/capability-index.json")
+            validation = run_cmd("config", "validate", "--root", str(root)).stdout
+            self.assertIn("Config validation passed.", validation)
+
+            payload = json.loads(index_path.read_text(encoding="utf-8"))
+            payload["workflows"] = []
+            index_path.write_text(json.dumps(payload, ensure_ascii=True, sort_keys=True) + "\n", encoding="utf-8")
+            stale = run_cmd("config", "validate", "--root", str(root), check=False)
+
+            self.assertNotEqual(stale.returncode, 0)
+            self.assertIn("capability index is stale; regenerate with config index --write", stale.stdout)
+
     def test_config_validation_rejects_misleading_runtime_guidance_text(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
