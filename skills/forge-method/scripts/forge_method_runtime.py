@@ -148,6 +148,35 @@ WORKFLOW_FORBIDDEN_ROOT_SECTIONS = {
 WORKFLOW_COMPACTNESS_MAX_LINES = 80
 WORKFLOW_COMPACTNESS_MAX_WORDS = 420
 WORKFLOW_COMPACTNESS_MAX_BULLETS = 40
+WORKFLOW_GUIDANCE_SAFE_NEGATIONS = {
+    "do not",
+    "don't",
+    "never",
+    "without",
+    "discard",
+    "remove",
+    "instead of",
+    "over prior",
+    "not chat",
+}
+WORKFLOW_MISLEADING_GUIDANCE_PATTERNS = [
+    (
+        r"\b(rely|depend|base|infer|continue|resume|trust|use)\b.*\b(chat|conversation)\b.*\b(memory|history|context)\b",
+        "do not rely on chat memory; use durable state/artifacts",
+    ),
+    (
+        r"\b(follow|trust|continue|resume|use)\b.*\bstale\b.*\b(state|guidance|next_action|action|workflow|chat|instruction|context)\b",
+        "do not follow stale state or stale guidance",
+    ),
+    (
+        r"\bask\b.*\b(procedural|ok/continue|ok to continue|continue\?)\b",
+        "do not ask for procedural continue confirmations",
+    ),
+    (
+        r"\b(dump\b.*\bcatalog|catalog\b.*\bdump|show\b.*\bfull catalog)\b",
+        "do not dump workflow catalogs as guidance",
+    ),
+]
 
 FACILITATION_REQUIRED_SECTIONS = [
     "purpose:",
@@ -4013,6 +4042,21 @@ def validate_workflow_compactness(path: Path, text: str) -> list[str]:
     unexpected = sorted(roots - WORKFLOW_ALLOWED_ROOT_SECTIONS)
     if unexpected:
         errors.append(f"{path.name}: workflow contains unexpected root sections: {', '.join(unexpected)}")
+    errors.extend(validate_workflow_guidance_safety(path, text))
+    return errors
+
+
+def validate_workflow_guidance_safety(path: Path, text: str) -> list[str]:
+    errors: list[str] = []
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        normalized = line.strip().lower()
+        if not normalized:
+            continue
+        if any(marker in normalized for marker in WORKFLOW_GUIDANCE_SAFE_NEGATIONS):
+            continue
+        for pattern, message in WORKFLOW_MISLEADING_GUIDANCE_PATTERNS:
+            if re.search(pattern, normalized):
+                errors.append(f"{path.name}:{line_number}: misleading agent guidance: {message}")
     return errors
 
 

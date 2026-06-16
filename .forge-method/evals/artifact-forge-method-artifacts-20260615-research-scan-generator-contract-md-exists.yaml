@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-16T01:43:07+00:00"
+updated_at: "2026-06-16T01:59:12+00:00"
 id: "artifact-forge-method-artifacts-20260615-research-scan-generator-contract-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/20260615-research-scan-generator-contract.md"
 query: "First-class artifact research-scan generator for market, domain, and technical evidence closeouts with source/install smoke coverage."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-16T01:43:07+00:00"
+last_run_at: "2026-06-16T01:59:12+00:00"
 last_error: ""

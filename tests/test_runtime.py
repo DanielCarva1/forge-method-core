@@ -3017,6 +3017,58 @@ headless:
             specific_errors = runtime.validate_facilitation_pack(pack)
             self.assertFalse([error for error in specific_errors if "domain_examples" in error or "too generic" in error])
 
+    def test_workflow_guidance_safety_rejects_stale_agent_instructions(self) -> None:
+        runtime = load_runtime_module()
+        base = """# workflow: sample
+
+trigger:
+  - user asks for a sample workflow
+
+inputs:
+  - state
+  - artifact
+
+steps:
+  1. {step}
+
+outputs:
+  - compact artifact
+
+done_when:
+  - artifact validates
+
+blocked_when:
+  - evidence is missing
+
+handoff:
+  - preserve artifact path and next workflow
+"""
+        with tempfile.TemporaryDirectory() as raw:
+            workflow = Path(raw) / "workflow-sample.md"
+
+            workflow.write_text(base.format(step="rely on chat memory before reading durable state"), encoding="utf-8")
+            chat_errors = runtime.validate_workflow_file(workflow)
+            self.assertTrue(any("do not rely on chat memory" in error for error in chat_errors))
+
+            workflow.write_text(base.format(step="follow stale state guidance until the user complains"), encoding="utf-8")
+            stale_errors = runtime.validate_workflow_file(workflow)
+            self.assertTrue(any("do not follow stale state" in error for error in stale_errors))
+
+            workflow.write_text(base.format(step="ask for procedural ok/continue between mechanical steps"), encoding="utf-8")
+            procedural_errors = runtime.validate_workflow_file(workflow)
+            self.assertTrue(any("procedural continue confirmations" in error for error in procedural_errors))
+
+            workflow.write_text(base.format(step="dump the catalog before choosing a next workflow"), encoding="utf-8")
+            catalog_errors = runtime.validate_workflow_file(workflow)
+            self.assertTrue(any("do not dump workflow catalogs" in error for error in catalog_errors))
+
+            workflow.write_text(
+                base.format(step="never ask for procedural ok/continue between mechanical steps"),
+                encoding="utf-8",
+            )
+            safe_errors = runtime.validate_workflow_file(workflow)
+            self.assertFalse([error for error in safe_errors if "misleading agent guidance" in error])
+
     def test_packaged_modules_and_workflows_validate(self) -> None:
         runtime = load_runtime_module()
         modules = run_cmd("module", "list").stdout
