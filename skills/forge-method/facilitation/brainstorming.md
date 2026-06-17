@@ -19,6 +19,7 @@ follow_up_batches:
 
 conversation_stages:
   - frame: "Reflect the topic in the user's language, name the decision we are trying to unlock, and confirm anti-goals."
+  - session_setup: "Ask what the session is about, what outcome would make it useful, and whether the human wants weird breadth, practical options, or a final opinionated recommendation."
   - warm_up: "Start with obvious and practical options so the human can reject or correct the frame quickly."
   - stretch: "Force contrast across taste, audience, risk, implementation leverage, and weird-but-plausible directions."
   - pressure_test: "Attack the generic, boring, unsafe, expensive, derivative, or incoherent options before convergence."
@@ -36,6 +37,8 @@ elicitation_options:
 
 facilitator_moves:
   - "Do not grade too early; keep divergence alive until there are meaningfully different options."
+  - "When the human is lost, orient first; when they explicitly ask to brainstorm, keep them in exploration mode long enough to escape the obvious."
+  - "Use light humor only to create movement; the options still need taste, criteria, and discard reasons."
   - "Name when two ideas are actually the same tradeoff wearing different clothes."
   - "Use the user's examples as taste anchors, not as a cloning target."
   - "When the human sounds overwhelmed, narrow to three credible directions and one discard pile."

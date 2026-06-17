@@ -1,15 +1,14 @@
 {
-  "version": "1.29.0",
-  "date": "2026-06-15",
-  "title": "Guided workflow depth",
-  "summary": "Forge Method now ships a broad guided-workflow depth batch: richer human routing, compact agent contracts, parity replay coverage, closure utilities, game and quality depth, builder factory workflows, persona lenses, and validated install behavior.",
+  "version": "1.30.0",
+  "date": "2026-06-17",
+  "title": "Guided human experience",
+  "summary": "Forge Method now ships a guided human experience increment with stronger first-run facilitation, intent routing, pace/style contracts, and installed-plugin stress coverage.",
   "highlights": [
-    "Guidance Engine and Help Oracle now route more human intent through explicit workflow decisions instead of stale state.",
-    "Builder Factory, Project Configuration, Capability Index, Persona Lens, Lifecycle Closure, Game Studio Depth, and Test Architecture Depth are packaged as a coherent runtime increment.",
-    "Guided closure utilities add investigation, working-backwards challenge, sprint status, checkpoint preview, and adversarial review workflows.",
-    "Parity replay now covers 58 route fixtures and runs during install smoke so packaged behavior matches source behavior.",
-    "Human-facing guidance is richer while workflow references, JSON state, templates, evidence, and handoffs stay compact for future agents.",
-    "Release evidence covers unit tests, workflow validation, runtime smoke, fast verification, install smoke, artifact verification, audit, and config validation."
+    "Broad first-run ideas now start with brain dump, remaining context, anti-goals, and fast-path versus coaching-path choice before artifacts narrow the product.",
+    "Guidance Engine now exposes observable pace contracts for coaching, fast-path, diagnostic, divergent, evidence-first, repair, and mechanical modes.",
+    "No-state routing now sends confused users to problem-solving, explicit brainstorms to divergent facilitation, research requests to evidence-first scans, and frustrated guidance feedback to correct-course.",
+    "Guidance stress coverage now exercises broad game ideas, rushed/simple requests, lost users, brainstorm, research, drift, and frustrated/cold guidance against source and installed-plugin behavior.",
+    "Focused verification loops are documented for short development checks while full unit, runtime smoke, install smoke, and installed guidance stress remain the broader runtime proof."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.29.0.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.30.0.md"
 }

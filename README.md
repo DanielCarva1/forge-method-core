@@ -13,7 +13,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.29.0`.
+Current runtime version: `1.30.0`.
 
 ## Current Shape
 
@@ -246,6 +246,18 @@ powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1
 bash scripts/verify-fast.sh
 ```
 
+For focused development loops, run only the relevant unit test and the lightweight validators:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1 -Test tests.test_runtime.RuntimeTests.test_guidance_human_lede_and_runtime_builder_contract
+```
+
+```bash
+bash scripts/verify-fast.sh --test tests.test_runtime.RuntimeTests.test_guidance_human_lede_and_runtime_builder_contract
+```
+
+Use `-SkipUnit` or `--skip-unit` when only onboarding assets, workflow metadata, and agent profiles changed.
+
 On Windows, the shell scripts require a registered WSL distribution. If WSL exists but no distro is installed, use the PowerShell scripts.
 
 The PowerShell scripts use `$env:PYTHON`, then `python`/`python3`/`py`.
@@ -281,11 +293,11 @@ The full verifier includes a fixture matrix smoke. It creates example and normal
 After a tag is pushed, run a clone/install distribution smoke from the published ref:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.29.0 -ExpectedVersion 1.29.0
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.30.0 -ExpectedVersion 1.30.0
 ```
 
 ```bash
-REF=v1.29.0 EXPECTED_VERSION=1.29.0 bash scripts/smoke-plugin-clone-install.sh
+REF=v1.30.0 EXPECTED_VERSION=1.30.0 bash scripts/smoke-plugin-clone-install.sh
 ```
 
 ## Product Direction

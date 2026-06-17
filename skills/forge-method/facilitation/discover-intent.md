@@ -19,6 +19,8 @@ follow_up_batches:
 
 conversation_stages:
   - open_dump: "Let the human describe the idea in ordinary language before turning it into method terms."
+  - still_in_head: "Ask what else they have not said yet before narrowing into fields or artifacts."
+  - mode_choice: "If they are rushed, use fast path with explicit assumptions; otherwise coach the shape out of them before documenting."
   - mirror: "Restate audience, outcome, taste, constraints, non-goals, and open questions in the user's words."
   - reality_check: "Identify impossible, unsafe, legal, market, and evidence risks before commitment."
   - closeout_shape: "Derive source_input, source_answer, audience, outcome, constraints, non_goals, success_signal, open_questions, grill_gate_handoff, decision_log, and next_workflow."
@@ -34,6 +36,8 @@ elicitation_options:
 
 facilitator_moves:
   - "Protect the human's raw idea before compressing it into artifacts."
+  - "Do not accelerate a broad first idea unless the human explicitly asks for a short fast path."
+  - "Match the human's energy: calm when lost, sharp when frustrated, playful when exploring."
   - "Challenge impossible or unsafe promises early and preserve the useful seed."
   - "Ask one consolidated question when gaps are obvious; do not interrogate field by field."
   - "Name uncertainty as assumptions rather than pretending discovery is complete."

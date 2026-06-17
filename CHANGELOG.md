@@ -25,7 +25,7 @@
 - add a facilitation specificity guard: human-facing packs now require `domain_examples`, workflow validation rejects generic packs, and every packaged pack has at least three situational examples
 - trim remaining Guidance Engine test overhead by validating JSON contracts through direct runtime calls while keeping `guide` subprocess coverage for human text, empty-workspace, config/tracks, and mechanical CLI behavior
 - tighten builder routing so test-loop optimization wording no longer false-routes to `skill-convert`, and convert lifecycle/game/TEA guidance contract loops to direct runtime calls while preserving CLI coverage elsewhere
-- optimize Guidance Engine parity fixture tests by using the runtime replay contract directly, preserving 90-case BMAD parity coverage while cutting the slow transcript replay path from minutes to seconds
+- optimize Guidance Engine parity fixture tests by using the runtime replay contract directly, preserving broad guidance-route coverage while cutting the slow transcript replay path from minutes to seconds
 - add first-class document and enterprise utility generators with `artifact doc-index`, `artifact doc-shard`, `artifact enterprise-track-map`, `artifact enterprise-readiness`, and `artifact enterprise-release-gate`, plus lifecycle/document handoffs, tests, and source/install smoke coverage
 - add first-class test utility generators with `artifact test-framework`, `artifact test-automation`, and `artifact game-e2e-scaffold`, Test Architecture/game lifecycle handoffs, tests, and source/install smoke coverage
 - add first-class game artifact generators with `artifact game-brief` and `artifact game-sprint-plan`, game facilitation/workflow handoffs, tests, and source/install smoke coverage
@@ -68,6 +68,16 @@
 - add Context Boundary Recovery for fresh chats, network drops, reloads, and stale context: `reload`, `resume`, Help Oracle JSON, and post-command ledger now expose compact context boundaries, with a context-recovery facilitation pack/template and replay proof
 - add Architecture Guidance Depth with architecture artifact template, create/update/validate/tradeoff metadata, deeper PRD/UX/security/interface/test-hook/story-impact facilitation, and Guidance Engine precedence for product architecture over generic quality routing
 - add post-command Help Oracle guidance for progress-changing runtime commands: interactive mutations now print the next required workflow, alternatives, and stale-state guard, while path-output commands record the same compact contract in `ledger.ndjson`
+
+## 1.30.0
+
+Forge Method Core v1.30.0 ships the guided human experience increment:
+
+- improve first-run human guidance so broad ideas start with a full brain dump, "what else is still in your head?", anti-goals, and fast-path versus coaching-path choice before artifacts narrow the product
+- add observable Guidance Engine style contracts for human pace, including coaching, fast-path, diagnostic, divergent, evidence-first, repair, and mechanical modes
+- tighten no-state routing so confused users go to problem-solving, explicit brainstorms stay divergent, research requests enter evidence-first scans, and frustrated guidance feedback triggers correct-course instead of stale project creation
+- expand guidance stress coverage for broad game ideas, rushed/simple requests, lost users, brainstorm, research, drift, and frustrated/cold guidance, with source and installed-plugin validation
+- document focused verification loops for short development checks while keeping full unit, runtime smoke, install smoke, and installed guidance stress for broader runtime changes
 
 ## 1.29.0
 

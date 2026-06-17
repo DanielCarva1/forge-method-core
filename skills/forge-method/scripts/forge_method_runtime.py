@@ -20,7 +20,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.29.0"
+RUNTIME_VERSION = "1.30.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 WORKFLOW_CATALOG_PATH = SKILL_DIR / "catalog" / "workflows.json"
@@ -426,8 +426,8 @@ HUMAN_EXPERIENCE_POLICY: dict[str, Any] = {
 }
 
 DISCOVERY_CLOSEOUT_FIRST_QUESTION = (
-    "who is it for, what should change for them, what is fixed or out, "
-    "what is still open, and what proof should close discovery?"
+    "give me the whole picture first: who is it for, what should change for them, "
+    "what is fixed or out, what is still open, and what proof should close discovery?"
 )
 
 REALITY_SCAN_WORKFLOWS = [
@@ -1736,7 +1736,7 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
         return {
             "decision_summary": "Isto ainda e divergente: vale abrir opcoes antes de especificar ou construir.",
             "next_move": "Gerar alternativas, manter criterios de escolha visiveis, e preservar direcoes rejeitadas.",
-            "human_question": "Quer amplitute criativa, comparacao pragmatica, ou uma recomendacao opinativa no fim?",
+            "human_question": "Qual e o espaco de ideias, o objetivo da sessao, os limites, e que tipo de opcao faria voce pensar melhor?",
             "guardrail": "Brainstorm termina em decisao, nao em uma pilha solta de ideias.",
         }
     if classification == "research-needed":
@@ -1823,7 +1823,7 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
             "game-brief": {
                 "decision_summary": "Isto e brief de jogo: preservar a fantasia do jogador e cortar escopo sem matar a graca.",
                 "next_move": "Capturar loop, verbos, pilares, referencias, prova jogavel, escopo estacionado, decisoes e perguntas abertas para `artifact game-brief`.",
-                "human_question": "Qual e a menor cena jogavel que ainda faz a pessoa reconhecer esse jogo?",
+                "human_question": "Antes de perguntas pequenas: despeja a ideia inteira; o que o jogador deve sentir, o que ja existe na sua cabeca, o que nao pode virar, e voce prefere caminho rapido ou coaching?",
                 "guardrail": "Genero, engine e feature list nao sao brief; sem loop e prova jogavel o agente vai inventar direcao.",
             },
             "game-story-creation": {
@@ -1887,6 +1887,63 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def guidance_style_contract(question: str, classification: str, workflow: str, signals: list[str]) -> dict[str, str]:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    fast_requested = bool(
+        {"pressa", "urgente", "rapido", "rapida", "quick", "fast", "hoje", "simples", "curto", "curta"} & tokens
+        or "sem discovery longo" in normalized
+        or "terminar logo" in normalized
+    )
+    if classification == "mechanical-build":
+        return {
+            "pace": "mechanical",
+            "energy": "decisive",
+            "move": "execute without procedural theater",
+        }
+    if fast_requested or workflow == "quick-dev":
+        return {
+            "pace": "fast-path",
+            "energy": "efficient",
+            "move": "batch gaps, mark assumptions, and keep proof explicit",
+        }
+    if classification == "correct-course" or "frustration" in signals:
+        return {
+            "pace": "repair",
+            "energy": "match frustration calmly",
+            "move": "name the mismatch, preserve what still works, and prove the correction",
+        }
+    if classification == "confusion":
+        return {
+            "pace": "diagnostic",
+            "energy": "orienting",
+            "move": "frame the problem before asking for workflow choices",
+        }
+    if classification == "brainstorm":
+        return {
+            "pace": "divergent",
+            "energy": "playful but sharp",
+            "move": "stretch options before converging",
+        }
+    if classification == "research-needed":
+        return {
+            "pace": "evidence-first",
+            "energy": "skeptical",
+            "move": "tie research to a decision, not a reading list",
+        }
+    if workflow in {"discover-intent", "game-brief", "creative-session", "product-requirements", "ux-plan"}:
+        return {
+            "pace": "coaching",
+            "energy": "curious and provocative",
+            "move": "invite a full brain dump before narrowing",
+        }
+    return {
+        "pace": "guided",
+        "energy": "direct",
+        "move": "choose the smallest workflow that preserves human intent and agent state",
+    }
+
+
 def human_experience_for_guidance(base: dict[str, Any], guidance: dict[str, Any]) -> dict[str, Any]:
     signals = [str(item) for item in guidance.get("signals", []) if item]
     copy = guidance_human_copy(guidance)
@@ -1898,6 +1955,12 @@ def human_experience_for_guidance(base: dict[str, Any], guidance: dict[str, Any]
         "compact_contract": (
             "guidance_engine returns intent, workflow, phase, commands, state_updates, and pack path; "
             "rich facilitation is loaded only when needed"
+        ),
+        "style_contract": guidance_style_contract(
+            str(base.get("question_context", "")),
+            str(guidance.get("intent_classification", "")),
+            str(guidance.get("recommended_workflow", "")),
+            signals,
         ),
     }
 
@@ -3730,8 +3793,9 @@ def initial_workflow_for_module(module_id: str) -> str:
 def initial_facilitation_prompt(module_id: str, objective: str) -> str:
     prompts = {
         "game-studio": (
-            "Antes de stories, arquitetura ou seguranca: qual fantasia do jogador, tema/tom visual, "
-            "referencias boas e ruins, primeiro modo jogavel, publico, postura da IA e o que isso nao deve virar?"
+            "Antes de stories, arquitetura ou seguranca: despeja a ideia inteira. O que o jogador deve sentir, "
+            "como a mesa/sessao acontece, quais referencias boas e ruins importam, o que nao pode virar, "
+            "e voce prefere caminho rapido com [ASSUMPTION] tags ou coaching passo a passo?"
         ),
         "creative-studio": (
             "Antes de especificar: qual sensacao, audiencia, referencias boas e ruins, criterios de gosto, "
@@ -3750,9 +3814,9 @@ def initial_facilitation_prompt(module_id: str, objective: str) -> str:
         return prompts[module_id]
     if objective:
         return (
-            "Antes de criar stories ou desenvolver: quem usa, qual dor/desejo isso resolve, "
+            "Antes de criar stories ou desenvolver: me da o quadro inteiro. Quem usa, qual dor/desejo isso resolve, "
             "qual experiencia faria a pessoa gostar, qual taste/UX importa, quais restricoes existem, "
-            "e como saberemos que funcionou?"
+            "o que nao pode virar, e como saberemos que funcionou?"
         )
     return "Me da o quadro inteiro: para quem e isso, por que importa, que experiencia deve ter, e como saberemos que funcionou?"
 
@@ -8133,10 +8197,36 @@ def detect_guidance_signals(question: str) -> list[str]:
             "nao e pra",
             "nao deveria",
             "sem perguntar",
+            "nao pergunta",
+            "nao perguntou",
             "nao guiou",
             "nao conduziu",
             "nao conduz",
+            "nao facilita",
+            "nao facilitou",
+            "nao faz alinhamento",
+            "nao faz brain dump",
+            "nao puxa brain dump",
+            "nao e isso",
+            "nao foi isso",
+            "nao era isso",
+            "not that",
+            "not what i meant",
+            "experiencia humana ruim",
+            "experiencia humana pobre",
+            "human experience bad",
+            "human guidance bad",
+            "agente frio",
+            "ta frio",
+            "esta frio",
+            "cria artifact cedo",
+            "criou artifact cedo",
+            "cria artefato cedo",
+            "criou artefato cedo",
+            "artifact cedo demais",
+            "artefato cedo demais",
             "cedo demais",
+            "mentiu",
             "contradiz",
             "contradicao",
             "contradiction",
@@ -8169,6 +8259,15 @@ def detect_guidance_signals(question: str) -> list[str]:
             "stale context",
             "forge reload",
             "forge-reload",
+            "modelo perdido",
+            "agente perdido",
+            "se perdeu",
+            "saiu da rota",
+            "saiu do rumo",
+            "guidance drift",
+            "route drift",
+            "drifted",
+            "agent got lost",
             "próximo passo",
             "investigate",
             "investigar",
@@ -8182,14 +8281,22 @@ def detect_guidance_signals(question: str) -> list[str]:
         "research-needed": [
             "deep research",
             "pesquisa profunda",
+            "pesquisar",
+            "preciso pesquisar",
             "consultar documentacao",
             "ler docs",
             "benchmark",
+            "benchmarks",
             "market research",
             "market scan",
             "pesquisa de mercado",
+            "foundry",
+            "foundry vtt",
+            "fantasy grounds",
             "competitor",
             "competidor",
+            "concorrente",
+            "concorrentes",
             "alternativas",
             "adoption",
             "adocao",
@@ -8293,6 +8400,11 @@ def detect_guidance_signals(question: str) -> list[str]:
             "game qa",
             "game review",
             "game design document",
+            "virtual tabletop",
+            "tabletop simulator",
+            "table top simulator",
+            "vtt",
+            "vtts",
         ],
         "lifecycle-flow": [
             "track decision",
@@ -8524,8 +8636,8 @@ def detect_guidance_signals(question: str) -> list[str]:
         },
         "frustration": {"frustrado", "frustrante", "cansado", "vergonha", "burro", "merda", "pessimo", "horrivel", "inaceitavel"},
         "confusion": {"duvida", "confuso", "perdido", "incerto", "ajuda", "orientar", "guiar", "travado", "travada", "destravar", "bloqueado", "bloqueada", "stuck", "blocked", "investigate", "investigar", "diagnose", "diagnosticar", "triage"},
-        "brainstorm": {"brainstorm", "ideia", "ideias", "ideation", "explorar", "opcoes", "alternativas"},
-        "research-needed": {"pesquisa", "research", "mercado", "documentacao", "docs", "evidencia", "fontes", "benchmark"},
+        "brainstorm": {"brainstorm", "ideias", "ideation", "explorar", "opcoes", "alternativas"},
+        "research-needed": {"pesquisa", "pesquisar", "research", "mercado", "documentacao", "docs", "evidencia", "fontes", "benchmark", "benchmarks", "concorrentes"},
         "creative-flow": {
             "creative",
             "criativo",
@@ -8552,6 +8664,9 @@ def detect_guidance_signals(question: str) -> list[str]:
             "mechanic",
             "mechanics",
             "rpg",
+            "vtt",
+            "vtts",
+            "tabletop",
             "mesa",
             "dice",
             "engine",
@@ -8802,6 +8917,9 @@ def routed_research_workflow(question: str) -> str:
         "market research" in normalized
         or "market scan" in normalized
         or "pesquisa de mercado" in normalized
+        or "foundry" in normalized
+        or "fantasy grounds" in normalized
+        or "vtt" in normalized
         or "competitor" in normalized
         or "alternatives" in normalized
         or "alternativas" in normalized
@@ -8813,8 +8931,8 @@ def routed_research_workflow(question: str) -> str:
         or "pricing" in normalized
         or "preco" in normalized
         or "preço" in normalized
-        or ({"market", "competitor", "adoption", "demand", "pricing"} & tokens)
-        or ({"mercado", "concorrentes", "demanda"} & tokens)
+        or ({"market", "competitor", "adoption", "demand", "pricing", "benchmark", "benchmarks"} & tokens)
+        or ({"mercado", "concorrente", "concorrentes", "demanda"} & tokens)
     ):
         return "market-scan"
     return "domain-scan"
@@ -8953,7 +9071,7 @@ def game_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]
     if workflow_id == "game-brief":
         return (
             "run game-brief to create, update, or validate a living game brief with player fantasy, core loop, verbs, pillars, references, MVP playable proof, parked scope, decision log, assumptions, open questions, and game-check proof",
-            "I should let the human dump the whole game first, then turn it into a brief they recognize before GDD, architecture, sprint planning, or build.",
+            "I should invite the full game brain dump, ask what else is still in their head, offer fast path versus coaching path, then turn it into a brief they recognize before GDD, architecture, sprint planning, or build.",
             guidance_alternatives(
                 ("brainstorming", "use when the game still needs divergent option lanes before committing to a brief"),
                 ("research-closeout", "use when reference/domain/market research must close before the brief is accepted"),
@@ -10318,7 +10436,7 @@ WORKFLOW_FIRST_QUESTIONS = {
     "context-recovery": "which durable file or launcher output should anchor recovery, and which prior chat assumption should we discard?",
     "problem-solving": "what symptom, recent change, and desired end state should anchor the diagnosis?",
     "investigation": "what happened, what changed, and what evidence would separate cause from noise?",
-    "brainstorming": "what option lanes, taste constraints, and obviously bad ideas should we explore or reject?",
+    "brainstorming": "what are we brainstorming about, what outcome would make the session useful, and which limits or anti-goals should shape the option space?",
     "discover-intent": DISCOVERY_CLOSEOUT_FIRST_QUESTION,
     "domain-scan": "which domain rule, harm, or expert assumption could block this idea?",
     "market-scan": "which alternative, adoption friction, or switching signal would change the product bet?",
@@ -10348,7 +10466,7 @@ WORKFLOW_FIRST_QUESTIONS = {
     "innovation-strategy": "which bet, adoption friction, reversibility, and evidence grade should decide novelty?",
     "storytelling": "what audience shift, tension, payoff, and rejected arc should the story preserve?",
     "creative-session": "what taste direction, anti-reference, and selection criterion should guide the creative pass?",
-    "game-brief": "what player fantasy, core loop, first playable proof, and parked scope should anchor the brief?",
+    "game-brief": "before small questions, dump the whole game: what should players feel, what already exists in your head, what must this not become, and do you want fast path with [ASSUMPTION] tags or step-by-step coaching?",
     "game-context": "what player fantasy, engine profile, source artifact, and next game workflow must future agents preserve?",
     "engine-setup": "which engine profile, first-run command, folder shape, and setup risk must become durable?",
     "gdd": "which pillar, core loop, system, and playable-slice decision should deepen beyond the brief?",
@@ -10504,7 +10622,49 @@ def build_guidance_decision(
         recommended_action = "answer the route question, then create or open the selected project"
         human_prompt = "Tell me the project name and the outcome you want; I will choose the track and first workflow."
         reason = "No Forge project state exists in this workspace."
-        if "game-flow" in signal_set and not is_presentation_craft_intent(question):
+        if {"correct-course", "frustration"} & signal_set:
+            classification = "correct-course"
+            recommended_phase = "6-evolve"
+            recommended_workflow = "correct-course"
+            recommended_action = (
+                "step back, name the failed guidance behavior, preserve the transcript signal, "
+                "then choose restart, repair, or a narrower guided route"
+            )
+            human_prompt = "I should stop the stale route, name the mismatch, and recover trust before creating artifacts."
+            alternatives = guidance_alternatives(
+                ("problem-solving", "use when the failure symptom is still ambiguous"),
+                ("context-recovery", "use when the agent may be following old chat or outdated launcher output"),
+                ("runtime-builder", "use only after the behavior defect is understood"),
+            )
+            reason = "The first message is a correction or frustration signal, so guidance recovery outranks project creation."
+        elif "confusion" in signal_set:
+            classification = "confusion"
+            recommended_phase = "1-discovery"
+            recommended_workflow = routed_problem_workflow(question)
+            recommended_action, human_prompt, alternatives = problem_guidance_text(recommended_workflow)
+            reason = "The first message says the human is lost or blocked, so orientation and problem framing come before track selection."
+        elif "research-needed" in signal_set:
+            classification = "research-needed"
+            recommended_phase = "1-discovery"
+            recommended_workflow = routed_research_workflow(question)
+            action_text, prompt_text, research_alternatives = research_guidance_text(recommended_workflow)
+            recommended_action = f"create the project with an evidence-first discovery flow, then {action_text}"
+            human_prompt = prompt_text
+            alternatives = research_alternatives
+            reason = "The first intent depends on docs, evidence, external benchmarks, or current alternatives."
+        elif "brainstorm" in signal_set:
+            classification = "brainstorm"
+            recommended_phase = "1-discovery"
+            recommended_workflow = "brainstorming"
+            recommended_action = "create the project, then generate and compare options before specification"
+            human_prompt = "I should keep this divergent until the topic, goals, option lanes, criteria, and rejects are clear."
+            alternatives = guidance_alternatives(
+                ("game-brief", "use after the game direction is coherent enough to become a living brief"),
+                ("research-closeout", "use when a promising option depends on external truth"),
+                ("concept-selection", "use when enough options exist and the next move is choosing"),
+            )
+            reason = "The first intent explicitly asks for ideas, options, or exploration."
+        elif "game-flow" in signal_set and not is_presentation_craft_intent(question):
             classification = "game-flow"
             recommended_phase = "1-discovery"
             recommended_workflow = routed_game_workflow(question)
@@ -10545,22 +10705,6 @@ def build_guidance_decision(
             recommended_action = f"create the project, then run {recommended_workflow} to make the source material usable"
             human_prompt = "I should clarify the document job and source-of-truth boundary before editing docs."
             reason = "The first intent is documentation utility work."
-        elif "research-needed" in signal_set:
-            classification = "research-needed"
-            recommended_phase = "1-discovery"
-            recommended_workflow = routed_research_workflow(question)
-            action_text, prompt_text, research_alternatives = research_guidance_text(recommended_workflow)
-            recommended_action = f"create the project with an evidence-first discovery flow, then {action_text}"
-            human_prompt = prompt_text
-            alternatives = research_alternatives
-            reason = "The first intent depends on docs, evidence, or external benchmark behavior."
-        elif "brainstorm" in signal_set:
-            classification = "brainstorm"
-            recommended_phase = "1-discovery"
-            recommended_workflow = "brainstorming"
-            recommended_action = "create the project, then generate and compare options before specification"
-            human_prompt = "I should keep this divergent until the direction is chosen."
-            reason = "The first intent asks for ideas, options, or exploration."
         elif "product-flow" in signal_set:
             classification = "product-flow"
             recommended_phase = "2-specification"
@@ -11054,48 +11198,14 @@ def council_recommended_for_guidance(question: str, guidance: dict[str, Any]) ->
     return any(phrase in normalized for phrase in explicit_council_phrases)
 
 
-def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[str, Any]:
-    state_root, state = load_state_or_none(root)
-    if not state_root:
-        preflight = build_preflight(root, scan_depth=2, max_chars=max_chars, objective=question)
-        tracks = recommended_tracks(question, limit=3)
-        guidance = build_guidance_decision(
-            root,
-            None,
-            question=question,
-            current_next_action="answer the preflight route question, then create or open the selected project",
-            next_story=None,
-        )
-        return {
-            "runtime": RUNTIME_NAME,
-            "runtime_version": RUNTIME_VERSION,
-            "workspace": str(root),
-            "state_found": False,
-            "route": preflight.get("route", ""),
-            "human_experience": human_experience_for_guidance(preflight.get("human_experience", {}), guidance),
-            "reality_evidence_gate": preflight.get("reality_evidence_gate", {}),
-            "question": preflight.get("question", ""),
-            "recommended_tracks": tracks,
-            "next_action": guidance["recommended_action"],
-            "guidance_engine": guidance,
-            "intent_classification": guidance["intent_classification"],
-            "signals": guidance["signals"],
-            "recommended_phase": guidance["recommended_phase"],
-            "recommended_workflow": guidance["recommended_workflow"],
-            "workflow_metadata": guidance["workflow_metadata"],
-            "facilitation_pack": guidance["facilitation_pack"],
-            "persona_lens": guidance.get("persona_lens", {}),
-            "recommended_action": guidance["recommended_action"],
-            "human_prompt": guidance["human_prompt"],
-            "alternatives": guidance["alternatives"],
-            "state_update_required": guidance["state_update_required"],
-            "state_updates": guidance["state_updates"],
-            "commands": preflight.get("commands", []) + guidance["commands"],
-            "mechanical_work_order": {},
-            "codex_goal_handoff": {},
-            "council_recommended": council_recommended_for_guidance(question, guidance),
-        }
-    snapshot = build_snapshot(state_root, state)
+def build_stateful_guide_payload(
+    root: Path,
+    state_root: Path,
+    state: dict[str, str],
+    snapshot: dict[str, Any],
+    *,
+    question: str,
+) -> dict[str, Any]:
     track = track_by_id(state.get("track", "")) or default_track_for_module(state.get("module", "software-builder"))
     next_story = snapshot["stories"].get("next") or {}
     current_next_action = snapshot["route"].get("next_action", "") or state.get("next_action", "")
@@ -11146,6 +11256,51 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
         "codex_goal_handoff": snapshot["resume"].get("codex_goal_handoff", {}),
         "council_recommended": council_recommended_for_guidance(question, guidance),
     }
+
+
+def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[str, Any]:
+    state_root, state = load_state_or_none(root)
+    if not state_root:
+        preflight = build_preflight(root, scan_depth=2, max_chars=max_chars, objective=question)
+        tracks = recommended_tracks(question, limit=3)
+        guidance = build_guidance_decision(
+            root,
+            None,
+            question=question,
+            current_next_action="answer the preflight route question, then create or open the selected project",
+            next_story=None,
+        )
+        return {
+            "runtime": RUNTIME_NAME,
+            "runtime_version": RUNTIME_VERSION,
+            "workspace": str(root),
+            "state_found": False,
+            "route": preflight.get("route", ""),
+            "human_experience": human_experience_for_guidance(preflight.get("human_experience", {}), guidance),
+            "reality_evidence_gate": preflight.get("reality_evidence_gate", {}),
+            "question": preflight.get("question", ""),
+            "recommended_tracks": tracks,
+            "next_action": guidance["recommended_action"],
+            "guidance_engine": guidance,
+            "intent_classification": guidance["intent_classification"],
+            "signals": guidance["signals"],
+            "recommended_phase": guidance["recommended_phase"],
+            "recommended_workflow": guidance["recommended_workflow"],
+            "workflow_metadata": guidance["workflow_metadata"],
+            "facilitation_pack": guidance["facilitation_pack"],
+            "persona_lens": guidance.get("persona_lens", {}),
+            "recommended_action": guidance["recommended_action"],
+            "human_prompt": guidance["human_prompt"],
+            "alternatives": guidance["alternatives"],
+            "state_update_required": guidance["state_update_required"],
+            "state_updates": guidance["state_updates"],
+            "commands": preflight.get("commands", []) + guidance["commands"],
+            "mechanical_work_order": {},
+            "codex_goal_handoff": {},
+            "council_recommended": council_recommended_for_guidance(question, guidance),
+        }
+    snapshot = build_snapshot(state_root, state)
+    return build_stateful_guide_payload(root, state_root, state, snapshot, question=question)
 
 
 def print_guidance_human_prompt(guidance: dict[str, Any]) -> None:
@@ -11528,11 +11683,43 @@ def run_parity_replay(*, fixture_path: Path, max_chars: int) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
 
-    for case in cases:
-        with tempfile.TemporaryDirectory(prefix="forge-parity-replay-") as raw:
-            replay_root = Path(raw)
-            prepare_parity_replay_state(replay_root, str(case.get("state", "")))
-            payload = build_guide_payload(replay_root, question=str(case.get("question", "")), max_chars=max_chars)
+    with tempfile.TemporaryDirectory(prefix="forge-parity-replay-") as raw:
+        replay_base = Path(raw)
+        replay_roots: dict[str, Path] = {}
+        replay_contexts: dict[str, tuple[Path, dict[str, str], dict[str, Any]]] = {}
+
+        def replay_root_for_state(state_kind: str) -> Path:
+            if state_kind not in replay_roots:
+                replay_root = replay_base / slugify(state_kind or "none")
+                replay_root.mkdir(parents=True, exist_ok=True)
+                prepare_parity_replay_state(replay_root, state_kind)
+                replay_roots[state_kind] = replay_root
+            return replay_roots[state_kind]
+
+        def replay_context_for_state(state_kind: str) -> tuple[Path, dict[str, str], dict[str, Any]] | None:
+            if state_kind == "none":
+                return None
+            if state_kind not in replay_contexts:
+                replay_root = replay_root_for_state(state_kind)
+                state_root, state = load_state_or_fail(replay_root)
+                replay_contexts[state_kind] = (state_root, state, build_snapshot(state_root, state))
+            return replay_contexts[state_kind]
+
+        for case in cases:
+            state_kind = str(case.get("state", ""))
+            replay_root = replay_root_for_state(state_kind)
+            context = replay_context_for_state(state_kind)
+            if context is None:
+                payload = build_guide_payload(replay_root, question=str(case.get("question", "")), max_chars=max_chars)
+            else:
+                state_root, state, snapshot = context
+                payload = build_stateful_guide_payload(
+                    replay_root,
+                    state_root,
+                    state,
+                    snapshot,
+                    question=str(case.get("question", "")),
+                )
             case_failures = parity_case_failures(case, payload)
             result = {
                 "id": case.get("id"),

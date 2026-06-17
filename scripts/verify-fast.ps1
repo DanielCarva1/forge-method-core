@@ -1,3 +1,8 @@
+param(
+  [string[]]$Test = @(),
+  [switch]$SkipUnit
+)
+
 $ErrorActionPreference = "Stop"
 
 function Run {
@@ -32,7 +37,15 @@ function Resolve-Python {
 
 $pythonExe = Resolve-Python
 
-Run $pythonExe -m unittest discover -s tests
+if (-not $SkipUnit) {
+  if ($Test.Count -gt 0) {
+    foreach ($case in $Test) {
+      Run $pythonExe -m unittest $case
+    }
+  } else {
+    Run $pythonExe -m unittest discover -s tests
+  }
+}
 Run $pythonExe scripts\verify-onboarding-assets.py
 Run $pythonExe skills\forge-method\scripts\forge_method_runtime.py workflow validate
 Run $pythonExe skills\forge-method\scripts\forge_method_runtime.py agent validate
