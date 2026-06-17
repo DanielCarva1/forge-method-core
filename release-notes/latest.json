@@ -1,14 +1,13 @@
 {
-  "version": "1.31.0",
+  "version": "1.31.1",
   "date": "2026-06-17",
-  "title": "Parity closure and runtime utilities",
-  "summary": "Forge Method now ships parity closure utility surfaces as opt-in Forge contracts, with dedicated routing, facilitation packs, compact templates, scripts, and replay coverage.",
+  "title": "Public install route hotfix",
+  "summary": "Forge Method now hides core-runtime project state for public installed packages and routes normal users to a separate project workspace.",
   "highlights": [
-    "Dedicated routes now cover isolated eval runner, hook/event plan, and reusable API/browser utility requests.",
-    "Runtime utility guidance stays opt-in and disabled by default, avoiding hidden startup overhead.",
-    "Compact artifact templates capture trust boundaries, side effects, commands, cleanup, evidence, and waiver decisions.",
-    "Replay coverage now protects these utility routes as part of the broader guidance fixture suite.",
-    "Release/version skepticism now routes to release-readiness so publication claims are checked against version metadata and install evidence."
+    "Installed public Forge packages no longer expose committed Forge core state as a normal project.",
+    "Normal users are guided to open or create a separate project workspace when they start inside the installed package.",
+    "Core-runtime work now requires explicit maintainer intent through FORGE_METHOD_CORE_DEV=1 or local .forge-method/core-dev.local, plus --allow-runtime-state.",
+    "Plugin manifest detection tolerates UTF-8 BOM so Windows-authored manifests still activate package protections."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.31.0.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.31.1.md"
 }

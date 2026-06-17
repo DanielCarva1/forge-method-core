@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.31.1
+
+Forge Method Core v1.31.1 ships a public-install hotfix:
+
+- hide committed Forge core project state when Forge is running from an installed public package, so normal users are routed to choose a project workspace instead of being offered core-runtime continuation
+- require maintainer intent for core runtime state through `FORGE_METHOD_CORE_DEV=1` or local `.forge-method/core-dev.local`, plus `--allow-runtime-state`
+- tolerate UTF-8 BOM in `.codex-plugin/plugin.json` so Windows-authored plugin manifests still activate runtime-package protections
+
 ## 1.31.0
 
 Forge Method Core v1.31.0 ships the parity closure and runtime utility increment:

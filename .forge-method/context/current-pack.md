@@ -7,13 +7,13 @@
 - status: published
 - workflow: operate-support
 - active_story: <none>
-- next_action: v1.31.0 is public on main and tag; next work is tester feedback or a new evolve cycle.
+- next_action: Commit v1.31.1 hotfix, create GitHub tag/release, and validate clone/install by v1.31.1 and main.
 
 ## Latest Checkpoint
 
-# v1.31.0 merged to main
+# v1.31.1 public install hotfix validated
 
-- created_at: 2026-06-17T19:53:34+00:00
+- created_at: 2026-06-17T20:50:38+00:00
 - project: forge-method-core
 - phase: 5-ready-operate
 - status: published
@@ -22,16 +22,17 @@
 
 ## Summary
 
-Forge Method Core v1.31.0 is now available from both the version tag/GitHub Release and the default main branch; main clone/install validates as 1.31.0.
+Implemented and validated public install routing guard: installed Forge packages no longer expose core project state to normal users; core state requires maintainer marker/env plus explicit allow-runtime-state.
 
 ## Decisions
 
-- Definition of ready now includes default public repo path, not only branch or tag availability.
+- Ship as patch release 1.31.1 because this affects public install/start behavior.
 
 ## Checks
 
-- main pushed to GitHub
-- clone/install from main passed
+- unit full suite passed
+- runtime/package smokes passed
+- installed package simulation no longer leaks continue_current_project
 
 ## Failed Checks
 
@@ -47,7 +48,7 @@ Forge Method Core v1.31.0 is now available from both the version tag/GitHub Rele
 
 ## Next Action
 
-v1.31.0 is public on main and tag; next work is tester feedback or a new evolve cycle.
+Commit v1.31.1 hotfix, create GitHub tag/release, and validate clone/install by v1.31.1 and main.
 
 ## Recovery Signals
 
@@ -58,10 +59,8 @@ v1.31.0 is public on main and tag; next work is tester feedback or a new evolve 
 ### Touched Files
 
 - skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/fixtures/guidance-parity-replay.json
-- CHANGELOG.md
-- .forge-method/artifacts/20260617-current-systematic-parity-completion-audit.md
 - skills/forge-method/catalog/workflows.json
+- skills/forge-method/fixtures/guidance-parity-replay.json
 - skills/forge-method/references/workflow-isolated-eval-runner.md
 - skills/forge-method/references/workflow-hook-event-plan.md
 - skills/forge-method/references/workflow-api-browser-utility.md
@@ -69,6 +68,7 @@ v1.31.0 is public on main and tag; next work is tester feedback or a new evolve 
 - scripts/forge-eval-runner.ps1
 - scripts/forge-hook-dispatch.ps1
 - scripts/forge-eval-runner.sh
+- scripts/forge-hook-dispatch.sh
 
 ## Open Human Inputs
 
@@ -85,11 +85,11 @@ v1.31.0 is public on main and tag; next work is tester feedback or a new evolve 
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260617-181658-validation-current-systematic-parity-audit-and-release-guid.md
 - .forge-method/evidence/20260617-192015-validation-validation-v1-31-0-p2-parity-utility-surfaces.md
 - .forge-method/evidence/20260617-192503-validation-validation-v1-31-0-release-readiness-after-push.md
 - .forge-method/evidence/20260617-194235-validation-validation-v1-31-0-github-release-published.md
 - .forge-method/evidence/20260617-195333-validation-validation-v1-31-0-main-published-install.md
+- .forge-method/evidence/20260617-205038-validation-validation-v1-31-1-public-install-core-state-gua.md
 
 ## Recent Artifacts
 

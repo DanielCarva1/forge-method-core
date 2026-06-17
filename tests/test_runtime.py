@@ -292,6 +292,9 @@ class RuntimeTests(unittest.TestCase):
             manifest_dir = root / ".codex-plugin"
             manifest_dir.mkdir()
             (manifest_dir / "plugin.json").write_text(json.dumps({"name": "forge-method-core"}), encoding="utf-8")
+            maintainer_dir = root / ".forge-method"
+            maintainer_dir.mkdir()
+            (maintainer_dir / "core-dev.local").write_text("", encoding="utf-8")
             nested = root / "docs"
             nested.mkdir()
             example = root / "examples" / "sample"
@@ -319,7 +322,7 @@ class RuntimeTests(unittest.TestCase):
             self.assertEqual(nested_payload["runtime_root"], str(root.resolve()))
             self.assertIn("Known projects: not scanned inside runtime repo", start)
             self.assertIn(f"Runtime repo: {root.resolve()}", status)
-            self.assertFalse((root / ".forge-method").exists())
+            self.assertFalse((root / ".forge-method" / "state.yaml").exists())
 
             blocked = run_cmd(
                 "project",
@@ -358,6 +361,70 @@ class RuntimeTests(unittest.TestCase):
             )
             self.assertIn("Project type: brownfield", allowed.stdout)
             self.assertTrue((root / ".forge-method" / "state.yaml").exists())
+
+    def test_installed_runtime_package_hides_core_state_for_public_users(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            manifest_dir = root / ".codex-plugin"
+            state_dir = root / ".forge-method"
+            manifest_dir.mkdir()
+            state_dir.mkdir()
+            (manifest_dir / "plugin.json").write_text(
+                json.dumps({"name": "forge-method-core", "version": CURRENT_VERSION}),
+                encoding="utf-8-sig",
+            )
+            (state_dir / "state.yaml").write_text(
+                "\n".join(
+                    [
+                        'runtime: "forge-method"',
+                        f'runtime_version: "{CURRENT_VERSION}"',
+                        'project: "forge-method-core"',
+                        'phase: "5-ready-operate"',
+                        'status: "published"',
+                        'active_workflow: "operate-support"',
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            text = run_cmd("preflight", "--root", str(root)).stdout
+            payload = json.loads(run_cmd("preflight", "--root", str(root), "--json").stdout)
+            start = run_cmd("start", "--root", str(root)).stdout
+            status = run_cmd("status", "--root", str(root)).stdout
+
+            self.assertIn("Route: installed-runtime-package", text)
+            self.assertIn("installed Forge package", text)
+            self.assertNotIn("Continue current project", text)
+            self.assertEqual(payload["route"], "installed-runtime-package")
+            self.assertFalse(payload["runtime_repo"])
+            self.assertTrue(payload["installed_runtime_package"])
+            self.assertEqual(payload["project_state"], "missing")
+            self.assertEqual(payload["known_projects"], [])
+            self.assertEqual(payload["decision"]["options"][0]["action"], "choose_external_workspace")
+            self.assertNotIn("continue_current_project", json.dumps(payload))
+            self.assertIn("Known projects: not scanned inside installed Forge package", start)
+            self.assertIn("Installed Forge package:", status)
+
+            blocked = run_cmd(
+                "project",
+                "create",
+                "--root",
+                str(root),
+                "--path",
+                str(root),
+                "--name",
+                "Accidental Core Edit",
+                "--module",
+                "runtime-builder",
+                "--objective",
+                "edit Forge core by accident",
+                "--brownfield",
+                "--allow-runtime-state",
+                check=False,
+            )
+            self.assertNotEqual(blocked.returncode, 0)
+            self.assertIn("Maintainers must set FORGE_METHOD_CORE_DEV=1", blocked.stderr)
 
     def test_preflight_empty_workspace_returns_create_decision(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -928,6 +995,9 @@ class RuntimeTests(unittest.TestCase):
             plugin_dir = root / ".codex-plugin"
             plugin_dir.mkdir(parents=True)
             (plugin_dir / "plugin.json").write_text(json.dumps({"name": "forge-method-core"}), encoding="utf-8")
+            maintainer_dir = root / ".forge-method"
+            maintainer_dir.mkdir()
+            (maintainer_dir / "core-dev.local").write_text("", encoding="utf-8")
             run_cmd(
                 "init",
                 "--project",
@@ -951,6 +1021,9 @@ class RuntimeTests(unittest.TestCase):
             plugin_dir = root / ".codex-plugin"
             plugin_dir.mkdir(parents=True)
             (plugin_dir / "plugin.json").write_text(json.dumps({"name": "forge-method-core"}), encoding="utf-8")
+            maintainer_dir = root / ".forge-method"
+            maintainer_dir.mkdir()
+            (maintainer_dir / "core-dev.local").write_text("", encoding="utf-8")
             run_cmd(
                 "init",
                 "--project",
@@ -3835,14 +3908,17 @@ handoff:
         compactness_text = run_cmd("workflow", "compactness").stdout
         compactness = json.loads(run_cmd("workflow", "compactness", "--json").stdout)
         workflow_list = run_cmd("workflow", "list").stdout
-        guide = json.loads(
-            run_cmd(
-                "guide",
-                "--question",
-                "implementar workflow metadata e facilitation packs do Forge",
-                "--json",
-            ).stdout
-        )
+        with tempfile.TemporaryDirectory() as raw:
+            guide = json.loads(
+                run_cmd(
+                    "guide",
+                    "--root",
+                    raw,
+                    "--question",
+                    "implementar workflow metadata e facilitation packs do Forge",
+                    "--json",
+                ).stdout
+            )
         version = run_cmd("version").stdout
 
         self.assertIn("core-runtime", modules)

@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -20,7 +21,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.31.0"
+RUNTIME_VERSION = "1.31.1"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 WORKFLOW_CATALOG_PATH = SKILL_DIR / "catalog" / "workflows.json"
@@ -36,6 +37,8 @@ STATE_FILE = "state.yaml"
 PROJECTS_FILE = "projects.yaml"
 SPRINT_FILE = "sprint.yaml"
 LEDGER_FILE = "ledger.ndjson"
+CORE_DEV_ENV = "FORGE_METHOD_CORE_DEV"
+CORE_DEV_MARKER = "core-dev.local"
 
 PHASES = [
     "0-route",
@@ -823,10 +826,21 @@ def is_runtime_repo(root: Path) -> bool:
     if not manifest.exists():
         return False
     try:
-        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        payload = json.loads(manifest.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError):
         return False
     return payload.get("name") == RUNTIME_REPO_NAME
+
+
+def core_dev_enabled(root: Path) -> bool:
+    value = os.environ.get(CORE_DEV_ENV, "").strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    return (method_dir(root) / CORE_DEV_MARKER).exists()
+
+
+def is_public_runtime_package(root: Path) -> bool:
+    return is_runtime_repo(root) and not core_dev_enabled(root)
 
 
 def find_runtime_repo_root(start: Path) -> Path | None:
@@ -835,6 +849,10 @@ def find_runtime_repo_root(start: Path) -> Path | None:
         if is_runtime_repo(candidate):
             return candidate
     return None
+
+
+def route_requires_external_workspace(route: str) -> bool:
+    return route in {"runtime-repo", "installed-runtime-package"}
 
 
 def ensure_dirs(root: Path) -> Path:
@@ -1238,14 +1256,19 @@ def load_state_or_none(root: Path) -> tuple[Path | None, dict[str, str]]:
     state_root = find_state_root(root)
     if state_root is None:
         return None, {}
+    if is_public_runtime_package(state_root):
+        return None, {}
     return state_root, apply_state_defaults(read_flat_yaml(state_path(state_root)))
 
 
 def load_state_or_fail(root: Path) -> tuple[Path, dict[str, str]]:
     state_root, state = load_state_or_none(root)
     if state_root is None:
-        if find_runtime_repo_root(root):
+        runtime_root = find_runtime_repo_root(root)
+        if runtime_root and core_dev_enabled(runtime_root):
             raise SystemExit("Runtime repo detected. No project state found here.")
+        if runtime_root:
+            raise SystemExit("Installed Forge package detected. Open a project workspace outside the installed package.")
         raise SystemExit("No .forge-method/state.yaml found. Run init first.")
     return state_root, state
 
@@ -1262,6 +1285,8 @@ def discover_project_roots(root: Path, *, max_depth: int = 2) -> list[Path]:
             continue
         seen.add(current)
         if state_path(current).exists():
+            if is_public_runtime_package(current):
+                continue
             found.append(current)
             continue
         if depth >= max_depth:
@@ -1558,7 +1583,7 @@ def project_route_decision(
                     command=preflight_command("status", "status", "--root", project_root, "--brief"),
                 )
             )
-    create_root: str | Path = "<parent-folder-outside-runtime-repo>" if runtime_repo else root
+    create_root: str | Path = "<parent-folder-outside-runtime-repo>" if route_requires_external_workspace(route) else root
     options.append(
         decision_option(
             "create-new-project",
@@ -1592,6 +1617,17 @@ def project_route_decision(
                 requires=["workspace path"],
             ),
         )
+    if route == "installed-runtime-package":
+        options.insert(
+            0,
+            decision_option(
+                "choose-project-workspace",
+                "Choose a project workspace outside the installed Forge package",
+                "choose_external_workspace",
+                description="The installed Forge package is not a user project; open or create work in a separate folder.",
+                requires=["workspace path"],
+            ),
+        )
     return {
         "required": True,
         "type": "project-route",
@@ -1605,6 +1641,7 @@ def human_experience_for_route(route: str, *, question: str = "") -> dict[str, A
     route_copy = {
         "existing-method-project": "Achei o estado Forge deste projeto. Vou retomar pelos arquivos, sem fingir que lembro tudo pelo chat.",
         "runtime-repo": "Esta pasta é o motor do Forge Method. Para criar algo com ele, escolha uma pasta de projeto fora do runtime.",
+        "installed-runtime-package": "Você está dentro do pacote instalado do Forge Method. Para criar algo com ele, escolha uma pasta de projeto fora desse pacote.",
         "workspace-with-projects": "Achei projetos Forge aqui. Me diga qual vamos abrir, ou se vamos começar uma coisa nova.",
         "existing-codebase": "Achei código aqui, mas ainda não achei estado Forge. Isso parece brownfield: primeiro entendo o que já existe, depois mexo.",
         "empty-workspace": "Ainda não achei um projeto Forge nesta pasta. Bora começar direito: me diz o que você quer criar hoje.",
@@ -1612,6 +1649,7 @@ def human_experience_for_route(route: str, *, question: str = "") -> dict[str, A
     prompt = {
         "existing-method-project": "Vou carregar o próximo passo seguro e seguir pelo estado durável.",
         "runtime-repo": "Qual pasta fora do runtime vamos usar para o projeto real?",
+        "installed-runtime-package": "Qual pasta de projeto vamos usar fora do pacote instalado?",
         "workspace-with-projects": "Qual deles é o da vez?",
         "existing-codebase": "Quer que eu inicialize o Forge aqui e comece por discovery brownfield?",
         "empty-workspace": "Me manda um nome e um objetivo em linguagem normal. Eu transformo isso em estado, trilha e próximos passos.",
@@ -2017,6 +2055,7 @@ def print_missing_state_start_intro(route: str) -> None:
 def setup_label_for_route(route: str) -> str:
     return {
         "runtime-repo": "choose a project workspace outside the runtime",
+        "installed-runtime-package": "choose a project workspace outside the installed Forge package",
         "workspace-with-projects": "choose an existing project or start a new one",
         "existing-codebase": "ready for brownfield discovery",
         "empty-workspace": "ready to create the first Forge project here",
@@ -2026,7 +2065,8 @@ def setup_label_for_route(route: str) -> str:
 def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: str = "") -> dict[str, Any]:
     state_root, state = load_state_or_none(root)
     runtime_root = find_runtime_repo_root(root)
-    runtime_repo = runtime_root is not None
+    runtime_repo = runtime_root is not None and core_dev_enabled(runtime_root)
+    installed_runtime_package = runtime_root is not None and not runtime_repo
     if state_root:
         status = build_status_brief(state_root, state)
         context_plan = build_context_load_plan(state_root, state, max_chars=max_chars)
@@ -2056,6 +2096,7 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
             "human_experience": human_experience_for_route("existing-method-project", question=objective),
             "reality_evidence_gate": reality_evidence_assessment(objective),
             "runtime_repo": runtime_repo,
+            "installed_runtime_package": installed_runtime_package,
             "runtime_root": str(runtime_root) if runtime_root else "",
             "project_root": str(state_root),
             "project_path": display_path(state_root, base=root),
@@ -2090,13 +2131,16 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
             ],
         }
 
-    projects = [] if runtime_repo else [
+    projects = [] if runtime_root else [
         project_route_summary(project, base=root)
         for project in discover_project_roots(root, max_depth=scan_depth)
     ]
     if runtime_repo:
         route = "runtime-repo"
         question = "Which project folder should be opened or created outside the runtime repo?"
+    elif installed_runtime_package:
+        route = "installed-runtime-package"
+        question = "Which project workspace should be opened or created outside the installed Forge package?"
     elif projects:
         route = "workspace-with-projects"
         question = "Which existing project should be opened, or should a new project be created?"
@@ -2108,8 +2152,8 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
         question = "Create a new method project in this workspace?"
 
     module_choices = project_creation_module_choices(None, objective, limit=8)
-    create_root: str | Path = "<parent-folder-outside-runtime-repo>" if runtime_repo else root
-    list_root: str | Path = create_root if runtime_repo else root
+    create_root: str | Path = "<parent-folder-outside-runtime-repo>" if route_requires_external_workspace(route) else root
+    list_root: str | Path = create_root if route_requires_external_workspace(route) else root
     commands = [
         preflight_command("project-list", "project", "list", "--root", list_root, "--scan-depth", scan_depth),
         preflight_command(
@@ -2216,6 +2260,7 @@ def build_preflight(root: Path, *, scan_depth: int, max_chars: int, objective: s
         "human_experience": human_experience_for_route(route, question=objective),
         "reality_evidence_gate": reality_evidence_assessment(objective),
         "runtime_repo": runtime_repo,
+        "installed_runtime_package": installed_runtime_package,
         "runtime_root": str(runtime_root) if runtime_root else "",
         "project_state": "missing",
         "diagnostics": runtime_diagnostics(),
@@ -2321,7 +2366,8 @@ def print_preflight(payload: dict[str, Any]) -> None:
 def build_reload_payload(root: Path, *, scan_depth: int) -> dict[str, Any]:
     state_root, state = load_state_or_none(root)
     runtime_root = find_runtime_repo_root(root)
-    runtime_repo = runtime_root is not None
+    runtime_repo = runtime_root is not None and core_dev_enabled(runtime_root)
+    installed_runtime_package = runtime_root is not None and not runtime_repo
     commands = [
         preflight_command("preflight", "preflight", "--root", root),
         preflight_command("start", "start", "--root", root),
@@ -2342,6 +2388,7 @@ def build_reload_payload(root: Path, *, scan_depth: int) -> dict[str, Any]:
         "skill_dir": str(SKILL_DIR),
         "bootstrap_contract": bootstrap_contract,
         "runtime_repo": runtime_repo,
+        "installed_runtime_package": installed_runtime_package,
         "runtime_root": str(runtime_root) if runtime_root else "",
         "diagnostics": runtime_diagnostics(),
     }
@@ -2377,13 +2424,16 @@ def build_reload_payload(root: Path, *, scan_depth: int) -> dict[str, Any]:
         )
         return base
 
-    projects = [] if runtime_repo else [
+    projects = [] if runtime_root else [
         project_route_summary(project, base=root)
         for project in discover_project_roots(root, max_depth=scan_depth)
     ]
     if runtime_repo:
         route = "runtime-repo"
         question = "Which project folder should be opened or created outside the runtime repo?"
+    elif installed_runtime_package:
+        route = "installed-runtime-package"
+        question = "Which project workspace should be opened or created outside the installed Forge package?"
     elif projects:
         route = "workspace-with-projects"
         question = "Which existing project should be opened, or should a new project be created?"
@@ -2525,8 +2575,11 @@ def initialize_project_state(
     allow_runtime_state: bool = False,
     no_project_guidance: bool = False,
 ) -> tuple[dict[str, str], Path, list[str]]:
-    if is_runtime_repo(root) and not allow_runtime_state:
-        raise SystemExit("Refusing to initialize project state in the runtime repo. Use --allow-runtime-state if intentional.")
+    if is_runtime_repo(root) and not (allow_runtime_state and core_dev_enabled(root)):
+        raise SystemExit(
+            "Refusing to initialize project state in the Forge runtime package. "
+            f"Maintainers must set {CORE_DEV_ENV}=1 or create {STATE_DIR}/{CORE_DEV_MARKER}, then use --allow-runtime-state."
+        )
     fm = ensure_dirs(root)
     path = state_path(root)
     if path.exists() and not force:
@@ -5607,9 +5660,11 @@ def cmd_start(args: argparse.Namespace) -> int:
         return 0
 
     runtime_root = find_runtime_repo_root(root)
-    runtime_repo = runtime_root is not None
+    runtime_repo = runtime_root is not None and core_dev_enabled(runtime_root)
+    installed_runtime_package = runtime_root is not None and not runtime_repo
     if runtime_root:
-        print_missing_state_start_intro("runtime-repo")
+        route = "runtime-repo" if runtime_repo else "installed-runtime-package"
+        print_missing_state_start_intro(route)
         print("Forge Method Start")
         print(f"Workspace: {root}")
         print(f"Runtime repo: {'yes' if runtime_repo else 'no'}")
@@ -5622,6 +5677,15 @@ def cmd_start(args: argparse.Namespace) -> int:
         for item in project_creation_module_choices(None, "", limit=8):
             print(f"- {item.get('id')}: {item.get('purpose')}")
         print("Next: do not initialize project state in the runtime repo unless explicitly intentional.")
+        return 0
+    if installed_runtime_package:
+        print(f"Forge setup: {setup_label_for_route('installed-runtime-package')}")
+        print("Known projects: not scanned inside installed Forge package")
+        print("Next question: Which project workspace should be opened or created outside the installed Forge package?")
+        print("Module choices:")
+        for item in project_creation_module_choices(None, "", limit=8):
+            print(f"- {item.get('id')}: {item.get('purpose')}")
+        print("Next: open a normal project folder, then run Forge Method there.")
         return 0
 
     projects = discover_project_roots(root, max_depth=args.scan_depth)
@@ -5719,10 +5783,15 @@ def cmd_status(args: argparse.Namespace) -> int:
     state_root, state = load_state_or_none(root)
     if state_root is None:
         runtime_root = find_runtime_repo_root(root)
-        if runtime_root:
+        if runtime_root and core_dev_enabled(runtime_root):
             print(f"Runtime repo: {runtime_root}")
             print("Forge setup: choose a project workspace outside the runtime")
             print("Next: open a project folder or initialize a child project outside the runtime root")
+            return 0
+        if runtime_root:
+            print(f"Installed Forge package: {runtime_root}")
+            print("Forge setup: choose a project workspace outside the installed package")
+            print("Next: open a normal project folder, then run Forge Method there")
             return 0
         print(f"Workspace: {root}")
         print("Forge setup: ready to create the first Forge project here")
