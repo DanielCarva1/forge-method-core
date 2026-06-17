@@ -1,6 +1,8 @@
 # Forge Method Core
 
-Forge Method is a Codex-native creation runtime: a state-machine system for turning intent into artifacts, implementation, validation, release, and future evolution.
+Forge Method keeps Codex on rails: messy ideas go in, durable state, guided workflows, and receipts come out.
+
+It is a Codex-native creation runtime: a state-machine system for turning intent into artifacts, implementation, validation, release, and future evolution.
 
 It is built around Codex primitives:
 
@@ -43,18 +45,42 @@ install.sh                         Fallback user-skill installer for macOS/Linux
 
 Forge Method Core is packaged as a Codex plugin and this repo is also a Codex marketplace source.
 
-1. Install Codex.
-2. Copy and run this command in a terminal, or ask Codex to run it:
+### Tester Install
+
+Use this for the current `1.30.0` tester build:
+
+```powershell
+codex plugin marketplace add DanielCarva1/forge-method-core --ref codex/script-audit-optimization
+```
+
+Then:
+
+1. Open Codex Plugins or `/plugins`.
+2. Choose the `Forge Method` marketplace.
+3. Install or enable `Forge Method Core`.
+4. Start a new Codex thread.
+5. Invoke Forge Method:
+
+```txt
+$forge-method
+Start Forge Method in this workspace.
+```
+
+If a chat seems stuck on old instructions, start a new thread or run:
+
+```txt
+$forge-reload
+```
+
+### Stable Ref
+
+After `1.30.0` is merged or tagged, use the stable marketplace ref:
 
 ```powershell
 codex plugin marketplace add DanielCarva1/forge-method-core --ref main
 ```
 
-3. Open Codex Plugins or `/plugins`.
-4. Choose the `Forge Method` marketplace.
-5. Install or enable `Forge Method Core` with the Codex plugin switch.
-6. Start a new thread.
-7. Invoke Forge Method and ask it to start:
+Then open Codex Plugins or `/plugins`, choose the `Forge Method` marketplace, install or enable `Forge Method Core`, and start a new thread:
 
 ```txt
 $forge-method

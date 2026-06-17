@@ -3,10 +3,10 @@
   "name": "forge-method-core",
   "version": "1.30.0",
   "display_name": "Forge Method Core",
-  "tagline": "Run state-machine creation workflows inside Codex.",
+  "tagline": "Keep Codex on rails while messy ideas become durable work.",
   "category": "Productivity",
   "developer": "DanielCarva1",
-  "summary": "Forge Method Core is a Codex-native workflow runtime for long-horizon product, software, creative, game, and builder work.",
+  "summary": "Forge Method Core is a Codex-native workflow runtime for long-horizon product, software, creative, game, and builder work: it bullies weak assumptions, preserves state, and writes receipts.",
   "description": [
     "Keeps project state in files instead of chat memory.",
     "Routes startup through preflight decisions before broad context loading.",
