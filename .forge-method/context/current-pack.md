@@ -3,36 +3,35 @@
 ## State
 
 - project: forge-method-core
-- phase: 6-evolve
-- status: parity-p2-ready
-- workflow: release-readiness
+- phase: 5-ready-operate
+- status: published
+- workflow: operate-support
 - active_story: <none>
-- next_action: v1.31.0 is published; next work is tester feedback or a new evolve cycle.
+- next_action: v1.31.0 is public on main and tag; next work is tester feedback or a new evolve cycle.
 
 ## Latest Checkpoint
 
-# v1.31.0 published
+# v1.31.0 merged to main
 
-- created_at: 2026-06-17T19:42:35+00:00
+- created_at: 2026-06-17T19:53:34+00:00
 - project: forge-method-core
-- phase: 6-evolve
-- status: parity-p2-ready
-- workflow: release-readiness
+- phase: 5-ready-operate
+- status: published
+- workflow: operate-support
 - active_story: <none>
 
 ## Summary
 
-Forge Method Core v1.31.0 is now publicly versioned on GitHub with tag and release, and the tagged package installs successfully by ref.
+Forge Method Core v1.31.0 is now available from both the version tag/GitHub Release and the default main branch; main clone/install validates as 1.31.0.
 
 ## Decisions
 
-- Release definition is public versioned availability, not just a pushed branch; v1.31.0 meets that definition now.
+- Definition of ready now includes default public repo path, not only branch or tag availability.
 
 ## Checks
 
-- tag v1.31.0 points to cc2f99118063d7e3b6661c758ef602858c6b6a43
-- GitHub Release URL exists
-- clone/install smoke from v1.31.0 passed
+- main pushed to GitHub
+- clone/install from main passed
 
 ## Failed Checks
 
@@ -48,7 +47,7 @@ Forge Method Core v1.31.0 is now publicly versioned on GitHub with tag and relea
 
 ## Next Action
 
-v1.31.0 is published; next work is tester feedback or a new evolve cycle.
+v1.31.0 is public on main and tag; next work is tester feedback or a new evolve cycle.
 
 ## Recovery Signals
 
@@ -81,16 +80,16 @@ v1.31.0 is published; next work is tester feedback or a new evolve cycle.
 
 ## Recommended Agent Profiles
 
-- facilitator (Facilitator): Clarify intent, constraints, trade-offs, and human decisions without expanding implementation scope.
-- planner (Planner): Turn specs, risks, and constraints into executable stories, sequencing, and validation strategy.
+- operator (Operator): Maintain a ready project through usage notes, support status, feedback, and future backlog.
+- quality-reviewer (Quality Reviewer): Review implementation, artifacts, workflows, and evidence before work is marked done or ready.
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260617-175907-validation-validate-published-version-1-30-0.md
 - .forge-method/evidence/20260617-181658-validation-current-systematic-parity-audit-and-release-guid.md
 - .forge-method/evidence/20260617-192015-validation-validation-v1-31-0-p2-parity-utility-surfaces.md
 - .forge-method/evidence/20260617-192503-validation-validation-v1-31-0-release-readiness-after-push.md
 - .forge-method/evidence/20260617-194235-validation-validation-v1-31-0-github-release-published.md
+- .forge-method/evidence/20260617-195333-validation-validation-v1-31-0-main-published-install.md
 
 ## Recent Artifacts
 
