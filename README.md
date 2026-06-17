@@ -47,12 +47,12 @@ install.sh                         Fallback user-skill installer for macOS/Linux
 
 Forge Method Core is packaged as a Codex plugin and this repo is also a Codex marketplace source.
 
-### Tester Install
+### Recommended Install
 
-Use this for the current `1.31.0` tester build:
+Use this for the current public build. This tracks the stable `main` branch:
 
 ```powershell
-codex plugin marketplace add DanielCarva1/forge-method-core --ref codex/script-audit-optimization
+codex plugin marketplace add DanielCarva1/forge-method-core --ref main
 ```
 
 Then:
@@ -74,12 +74,12 @@ If a chat seems stuck on old instructions, start a new thread or run:
 $forge-reload
 ```
 
-### Stable Ref
+### Pinned Version
 
-After `1.31.0` is merged or tagged, use the stable marketplace ref:
+Use this when you want to stay on exactly `1.31.0` instead of following `main`:
 
 ```powershell
-codex plugin marketplace add DanielCarva1/forge-method-core --ref main
+codex plugin marketplace add DanielCarva1/forge-method-core --ref v1.31.0
 ```
 
 Then open Codex Plugins or `/plugins`, choose the `Forge Method` marketplace, install or enable `Forge Method Core`, and start a new thread:
@@ -99,6 +99,8 @@ codex
 The marketplace entry lives at `.agents/plugins/marketplace.json` and points at this repo root as the plugin source, so people can install from GitHub without manually copying files.
 
 After the self-updating package is installed, `$forge-method` checks for safe updates before normal startup when the plugin came from the Git marketplace. If a newer package is available, the launcher updates the marketplace copy, prints a short patch-notes summary, and continues `preflight`, `start`, or `reload` in the same chat. Update messages go to stderr so JSON output stays machine-readable. Set `FORGE_METHOD_UPDATE_POLICY=notify|off` to change this behavior, or `FORGE_METHOD_SKIP_UPDATE=1` for CI and local smoke tests.
+
+For existing installs, run the same `codex plugin marketplace add ... --ref main` command to point the marketplace at the current public ref, then open `/plugins` and update or enable the plugin. Installs pinned to an older tag stay on that tag until you switch the ref.
 
 ## Local Development Install
 
