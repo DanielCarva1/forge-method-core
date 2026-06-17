@@ -4,34 +4,35 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: parity-p2-validated
+- status: parity-p2-ready
 - workflow: release-readiness
 - active_story: <none>
-- next_action: Branch codex/script-audit-optimization contains v1.31.0 and is pushed; next release step is explicit tag/GitHub Release publication or tester install feedback.
+- next_action: v1.31.0 is published; next work is tester feedback or a new evolve cycle.
 
 ## Latest Checkpoint
 
-# v1.31.0 pushed and locally installed
+# v1.31.0 published
 
-- created_at: 2026-06-17T19:25:03+00:00
+- created_at: 2026-06-17T19:42:35+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: parity-p2-validated
+- status: parity-p2-ready
 - workflow: release-readiness
 - active_story: <none>
 
 ## Summary
 
-v1.31.0 parity closure/runtime utility batch is committed, pushed, release-check ready, and locally installed for Codex.
+Forge Method Core v1.31.0 is now publicly versioned on GitHub with tag and release, and the tagged package installs successfully by ref.
 
 ## Decisions
 
-- Do not claim a GitHub tag or GitHub Release until the explicit tag/publish step runs; branch distribution and local plugin install are ready.
+- Release definition is public versioned availability, not just a pushed branch; v1.31.0 meets that definition now.
 
 ## Checks
 
-- release check: Ready yes
-- local plugin installed version refreshed to 1.31.0
+- tag v1.31.0 points to cc2f99118063d7e3b6661c758ef602858c6b6a43
+- GitHub Release URL exists
+- clone/install smoke from v1.31.0 passed
 
 ## Failed Checks
 
@@ -47,7 +48,7 @@ v1.31.0 parity closure/runtime utility batch is committed, pushed, release-check
 
 ## Next Action
 
-Branch codex/script-audit-optimization contains v1.31.0 and is pushed; next release step is explicit tag/GitHub Release publication or tester install feedback.
+v1.31.0 is published; next work is tester feedback or a new evolve cycle.
 
 ## Recovery Signals
 
@@ -85,11 +86,11 @@ Branch codex/script-audit-optimization contains v1.31.0 and is pushed; next rele
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260617-045628-validation-versioned-guided-human-experience-release.md
 - .forge-method/evidence/20260617-175907-validation-validate-published-version-1-30-0.md
 - .forge-method/evidence/20260617-181658-validation-current-systematic-parity-audit-and-release-guid.md
 - .forge-method/evidence/20260617-192015-validation-validation-v1-31-0-p2-parity-utility-surfaces.md
 - .forge-method/evidence/20260617-192503-validation-validation-v1-31-0-release-readiness-after-push.md
+- .forge-method/evidence/20260617-194235-validation-validation-v1-31-0-github-release-published.md
 
 ## Recent Artifacts
 
