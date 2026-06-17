@@ -1,8 +1,10 @@
 # Forge Method Core
 
-Forge Method keeps Codex on rails: messy ideas go in, durable state, guided workflows, and receipts come out.
+Forge Method extends human capacity and keeps Codex on rails: messy ideas go in, durable state, guided workflows, sharper thinking, and receipts come out.
 
 It is a Codex-native creation runtime: a state-machine system for turning intent into artifacts, implementation, validation, release, and future evolution.
+
+It is not just agent automation. Forge is built to make humans think better: guided flows, better questions, taste pressure, and the occasional useful slap on the wrist before a bad idea becomes an expensive artifact.
 
 It is built around Codex primitives:
 
