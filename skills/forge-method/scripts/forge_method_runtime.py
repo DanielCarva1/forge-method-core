@@ -8443,6 +8443,15 @@ def detect_guidance_signals(question: str) -> list[str]:
             "readiness matrix",
             "implementation readiness",
             "ready to build",
+            "release readiness",
+            "release validation",
+            "published version",
+            "github release",
+            "github repo",
+            "version mismatch",
+            "versao publicada",
+            "versao no github",
+            "tag de versao",
             "enterprise artifact map",
             "required artifact map",
             "track artifact map",
@@ -8718,7 +8727,7 @@ def detect_guidance_signals(question: str) -> list[str]:
             "automate",
             "auditoria",
         },
-        "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness", "artifact-map", "checkpoint", "council", "party", "subagent", "subagents"},
+        "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness", "artifact-map", "checkpoint", "council", "party", "subagent", "subagents", "github", "version", "versao", "tag"},
         "persona-lens": {"lens", "lente", "persona", "coach", "perspectiva", "visao", "pm", "architect", "arquiteto", "analyst", "analista", "ux", "qa", "writer", "storyteller", "presentation", "presentacao"},
         "story-flow": {"backlog", "epic", "epics", "sprint", "stories", "story", "historia", "historias"},
         "product-flow": {
@@ -9686,6 +9695,21 @@ def routed_lifecycle_workflow(question: str) -> str:
     ):
         return "track-decision"
     if (
+        "release readiness" in normalized
+        or "release validation" in normalized
+        or "github release" in normalized
+        or "github repo" in normalized
+        or "version mismatch" in normalized
+        or "published version" in normalized
+        or "versao publicada" in normalized
+        or "versao no github" in normalized
+        or (
+            {"release", "version", "versao", "tag", "github", "repo", "published", "publicado", "publicada"} & tokens
+            and {"validate", "validar", "check", "conferir", "confere", "confirmed", "confirmar"} & tokens
+        )
+    ):
+        return "release-readiness"
+    if (
         "project context" in normalized
         or "generate project context" in normalized
         or "document project" in normalized
@@ -9839,6 +9863,16 @@ def lifecycle_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, 
                 ("product-requirements", "use when research changes requirements or scope"),
                 ("architecture", "use when research changes technical direction"),
                 ("readiness-check", "use when research confirms build can start"),
+            ),
+        )
+    if workflow_id == "release-readiness":
+        return (
+            "run release-readiness to verify version files, tags, release evidence, install/package checks, and dirty-worktree blockers before claiming publication is ready",
+            "I should prove the published/ref version from current evidence instead of answering from memory.",
+            guidance_alternatives(
+                ("module-distribution", "use when install/share/package mechanics are the blocker"),
+                ("session-prep", "use when the main need is a handoff for another machine"),
+                ("retrospective", "use when the release is already verified and should feed the next evolution"),
             ),
         )
     return (

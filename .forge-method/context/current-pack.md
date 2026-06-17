@@ -4,38 +4,37 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: versioned-release-ready
-- workflow: ready-release
+- status: parity-audit-in-progress
+- workflow: agent-analyze
 - active_story: <none>
-- next_action: Push branch, merge, tag v1.30.0, then run clone/install smoke from the published ref.
+- next_action: Decide and/or implement P2 parity surfaces, then rerun focused replay plus relevant install/runtime validation before any release claim.
 
 ## Latest Checkpoint
 
-# 1.30.0 guided human experience versioned
+# Current systematic parity audit checkpoint
 
-- created_at: 2026-06-17T04:56:52+00:00
+- created_at: 2026-06-17T18:18:35+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: versioned-release-ready
-- workflow: ready-release
+- status: parity-audit-in-progress
+- workflow: agent-analyze
 - active_story: <none>
 
 ## Summary
 
-Bumped Forge Method Core to 1.30.0 for the guided human experience increment, added release notes/latest metadata/marketplace listing updates, reran full source tests and install/runtime smokes, and updated state to ready-release.
+Current systematic parity audit advanced with external source snapshot, Forge inventory, registered audit artifact, release/version skepticism routing patch, replay fixture, and state runtime_version corrected to 1.30.0.
 
 ## Decisions
 
-- Treat this as a minor batch release because release check in batch mode selected the next minor version for the new guided human experience increment.
+- Do not mark full parity objective complete while P2 surfaces remain deferred: isolated eval runner, hook/event wrapper surface, generic API/browser utility layer.
 
 ## Checks
 
-- python -m unittest discover -s tests: passed 126 tests
-- verify-fast -SkipUnit: passed
-- audit: passed
-- install-plugin-local: passed
-- smoke-runtime: passed
-- smoke-install: passed
+- python -m unittest discover -s tests: 126 tests passed
+- powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1: passed
+- powershell -ExecutionPolicy Bypass -File .\scripts\verify-fast.ps1 -SkipUnit: passed
+- python skills/forge-method/scripts/forge_method_runtime.py parity replay --json: 97/97 passed
+- audit and gate: passed
 
 ## Failed Checks
 
@@ -43,16 +42,19 @@ Bumped Forge Method Core to 1.30.0 for the guided human experience increment, ad
 
 ## Touched Files
 
-- none
+- skills/forge-method/scripts/forge_method_runtime.py
+- skills/forge-method/fixtures/guidance-parity-replay.json
+- CHANGELOG.md
+- .forge-method/artifacts/20260617-current-systematic-parity-completion-audit.md
 
 ## Artifacts
 
-- release-notes/1.30.0.md
-- .forge-method/evidence/20260617-045628-validation-versioned-guided-human-experience-release.md
+- .forge-method/artifacts/20260617-current-systematic-parity-completion-audit.md
+- .forge-method/evidence/20260617-181658-validation-current-systematic-parity-audit-and-release-guid.md
 
 ## Next Action
 
-Push branch, merge, tag v1.30.0, then run clone/install smoke from the published ref.
+Decide and/or implement P2 parity surfaces, then rerun focused replay plus relevant install/runtime validation before any release claim.
 
 ## Recovery Signals
 
@@ -62,17 +64,18 @@ Push branch, merge, tag v1.30.0, then run clone/install smoke from the published
 
 ### Touched Files
 
-- .forge-method/artifacts/20260616-post-parity-functionality-experience-audit.md
 - skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/fixtures/guidance-parity-replay.json
 - tests/test_runtime.py
 - scripts/verify-fast.ps1
 - scripts/verify-fast.sh
 - README.md
 - docs/00-quickstart.md
 - skills/forge-method/facilitation/*.md
+- skills/forge-method/fixtures/guidance-parity-replay.json
 - scripts/smoke-runtime.ps1
 - scripts/smoke-install.ps1
+- CHANGELOG.md
+- .forge-method/artifacts/20260617-current-systematic-parity-completion-audit.md
 
 ## Open Human Inputs
 
@@ -89,15 +92,14 @@ Push branch, merge, tag v1.30.0, then run clone/install smoke from the published
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260616-205937-validation-guidance-correct-course-precedence-and-focused-v.md
-- .forge-method/evidence/20260616-224427-validation-full-verification-runtime-optimization.md
 - .forge-method/evidence/20260617-004811-validation-installed-forge-guidance-and-verification-sync.md
 - .forge-method/evidence/20260617-014953-validation-guided-experience-stress-audit.md
 - .forge-method/evidence/20260617-045628-validation-versioned-guided-human-experience-release.md
+- .forge-method/evidence/20260617-175907-validation-validate-published-version-1-30-0.md
+- .forge-method/evidence/20260617-181658-validation-current-systematic-parity-audit-and-release-guid.md
 
 ## Recent Artifacts
 
-- runtime-builder [active/durable]: .forge-method/artifacts/20260616-route-diagnostics-recovery-index.md - Route Diagnostics Recovery Index - Recovery briefs and capability index now preserve Help Oracle route diagnostics for future agents after reload or context recovery.
 - changelog [active/durable]: CHANGELOG.md - Route Diagnostics Recovery Index Changelog - Unreleased notes record persisted route diagnostics in recovery briefs and capability index.
 - capability-index [active/durable]: .forge-method/context/capability-index.json - Capability index refreshed for Route Diagnostics Recovery Index - Regenerated compact capability index with route_diagnostics surfaces for guide, resume, next, and context recovery.
 - runtime-builder [queued/durable]: .forge-method/artifacts/20260616-post-parity-functionality-experience-audit.md - Post-Parity Functionality And Experience Audit - Post-parity audit contract covering transitions, helpers, automation scripts, area detection, human guidance, and agent runtime behavior.
@@ -108,3 +110,4 @@ Impact: Human experience trust is damaged when broad early ideas are compressed 
 Policy: choose the conservative interpretation that preserves the approved spec.
 
 Continuation: Benchmark BMAD Help and guided flows, stress test Forge installed plugin across happy path, rushed user, confused user, misleading correction, stale/drift state, and frustrated energy; patch only concrete gaps and prove with focused and full validation..
+- internal-parity-audit [active/durable]: .forge-method/artifacts/20260617-current-systematic-parity-completion-audit.md - Current systematic parity completion audit - Current external-to-Forge parity audit for Forge Method 1.30.0. Records translated/proved families, deferred P2 surfaces, and the release/version validation routing patch.

@@ -1241,6 +1241,19 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "release_version_validation_complaint",
+    "family": "lifecycle",
+    "state": "evolve_runtime",
+    "question": "parece que ta na versao 1.28 no github no meu repo ainda, voce nao ia validar?",
+    "expected_classification": "lifecycle-flow",
+    "expected_phase": "5-ready-operate",
+    "expected_workflow": "release-readiness",
+    "expected_facilitation_pack": "skill:facilitation/enterprise-readiness.md",
+    "expected_template": "release-readiness-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
     "id": "p1_4_runtime_batch_stays_runtime_builder",
     "family": "builder",
     "state": "evolve_runtime",

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- route version/GitHub/tag publication skepticism to `release-readiness`, with replay coverage for a user claiming the repo still shows an older version
+- add the current systematic parity completion audit artifact, separating translated/proved guidance families from P2 deferred surfaces and non-goals
 - persist Help Oracle route diagnostics in recovery briefs and the capability index, so fresh agents can see required workflow, reason, context boundary, stale-state guard, and route surfaces without relying on chat history
 - add `next --json` and route diagnostics in text `next`, so agents following the recommended continuation command keep Help Oracle reason, context boundary, commands, quality, and mechanical goal handoff without parsing a full snapshot
 - expose compact quality summary in `resume`, `context plan`, and `context health`, so fresh-chat recovery blocks on project quality failures instead of reporting healthy context while gate-rejected workflow/config/builder/agent failures remain hidden
