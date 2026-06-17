@@ -1,13 +1,13 @@
 {
-  "version": "1.31.1",
+  "version": "1.31.2",
   "date": "2026-06-17",
-  "title": "Public install route hotfix",
-  "summary": "Forge Method now hides core-runtime project state for public installed packages and routes normal users to a separate project workspace.",
+  "title": "Guided research drift hotfix",
+  "summary": "Forge Method now keeps strategic app, stack, and codebase-standard conversations in guided research instead of collapsing them into generic runtime-builder automation.",
   "highlights": [
-    "Installed public Forge packages no longer expose committed Forge core state as a normal project.",
-    "Normal users are guided to open or create a separate project workspace when they start inside the installed package.",
-    "Core-runtime work now requires explicit maintainer intent through FORGE_METHOD_CORE_DEV=1 or local .forge-method/core-dev.local, plus --allow-runtime-state.",
-    "Plugin manifest detection tolerates UTF-8 BOM so Windows-authored manifests still activate package protections."
+    "Stack/language/interface decisions with signals like long research, study, iteration, native UI options, editor references, agent self-modification references, or Rust codebase standards now route to technical-feasibility research.",
+    "Ready projects preserve the 6-evolve route when a research or exploration request opens an evolution cycle.",
+    "Performance wording like 'mais rapido e performativo' no longer gets mistaken for a rushed fast-path request.",
+    "The parity replay matrix now includes a standalone-app transcript regression fixture."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.31.1.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.31.2.md"
 }

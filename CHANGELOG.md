@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.31.2
+
+Forge Method Core v1.31.2 ships a guided research drift hotfix:
+
+- keep strategic Forge standalone app, stack, interface-language, and Rust codebase-standard conversations in `research-needed` / `technical-feasibility-scan` instead of collapsing them into generic runtime-builder automation
+- preserve `6-evolve` as the recommended phase when a ready project opens a research evolution cycle
+- stop treating performance wording such as "mais rapido e performativo" as a rushed fast-path request
+- add transcript regression coverage for long research, study, iteration, Dioxus/Tauri/Zed/pi.dev, and Rust codebase-reference guidance
+
 ## 1.31.1
 
 Forge Method Core v1.31.1 ships a public-install hotfix:

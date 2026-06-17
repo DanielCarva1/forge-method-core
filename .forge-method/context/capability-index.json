@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-17T20:34:18+00:00",
+  "generated_at": "2026-06-17T23:19:56+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -588,7 +588,7 @@
     ]
   },
   "runtime": "forge-method",
-  "runtime_version": "1.31.1",
+  "runtime_version": "1.31.2",
   "sources": [],
   "workflows": [
     {

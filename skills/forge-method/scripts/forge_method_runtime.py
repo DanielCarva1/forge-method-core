@@ -21,7 +21,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.31.1"
+RUNTIME_VERSION = "1.31.2"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 WORKFLOW_CATALOG_PATH = SKILL_DIR / "catalog" / "workflows.json"
@@ -1928,11 +1928,20 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
 def guidance_style_contract(question: str, classification: str, workflow: str, signals: list[str]) -> dict[str, str]:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
+    performance_or_study_context = bool(
+        "mais rapido" in normalized
+        or "mais rápido" in normalized
+        or "performativo" in normalized
+        or "performance" in normalized
+        or "muito estudo" in normalized
+        or "longa conversa" in normalized
+        or "ainda quero iterar" in normalized
+    )
     fast_requested = bool(
         {"pressa", "urgente", "rapido", "rapida", "quick", "fast", "hoje", "simples", "curto", "curta"} & tokens
         or "sem discovery longo" in normalized
         or "terminar logo" in normalized
-    )
+    ) and not (classification == "research-needed" and performance_or_study_context)
     if classification == "mechanical-build":
         return {
             "pace": "mechanical",
@@ -8349,13 +8358,41 @@ def detect_guidance_signals(question: str) -> list[str]:
         ],
         "research-needed": [
             "deep research",
+            "grande pesquisa",
+            "longa pesquisa",
             "pesquisa profunda",
             "pesquisar",
             "preciso pesquisar",
+            "muito estudo",
+            "longa conversa",
             "consultar documentacao",
             "ler docs",
             "benchmark",
             "benchmarks",
+            "qual stack",
+            "melhor stack",
+            "qual framework",
+            "melhor framework",
+            "qual linguagem",
+            "melhor linguagem",
+            "language choice",
+            "stack choice",
+            "framework choice",
+            "pi.dev",
+            "opencode",
+            "zed",
+            "dioxus",
+            "tauri",
+            "empresa reconhecida",
+            "codebase impecavel",
+            "codebase impecável",
+            "espelhar nos padroes",
+            "espelhar nos padrões",
+            "padroes que usam",
+            "padrões que usam",
+            "ainda quero iterar",
+            "quero iterar",
+            "vamos iterar",
             "market research",
             "market scan",
             "pesquisa de mercado",
@@ -8728,7 +8765,7 @@ def detect_guidance_signals(question: str) -> list[str]:
         "frustration": {"frustrado", "frustrante", "cansado", "vergonha", "burro", "merda", "pessimo", "horrivel", "inaceitavel"},
         "confusion": {"duvida", "confuso", "perdido", "incerto", "ajuda", "orientar", "guiar", "travado", "travada", "destravar", "bloqueado", "bloqueada", "stuck", "blocked", "investigate", "investigar", "diagnose", "diagnosticar", "triage"},
         "brainstorm": {"brainstorm", "ideias", "ideation", "explorar", "opcoes", "alternativas"},
-        "research-needed": {"pesquisa", "pesquisar", "research", "mercado", "documentacao", "docs", "evidencia", "fontes", "benchmark", "benchmarks", "concorrentes"},
+        "research-needed": {"pesquisa", "pesquisar", "research", "mercado", "documentacao", "docs", "evidencia", "fontes", "benchmark", "benchmarks", "concorrentes", "estudo", "estudar", "iterar", "referencia"},
         "creative-flow": {
             "creative",
             "criativo",
@@ -9003,10 +9040,36 @@ def routed_research_workflow(question: str) -> str:
         or "viabilidade técnica" in normalized
         or "proof path" in normalized
         or "technical proof" in normalized
+        or "qual stack" in normalized
+        or "melhor stack" in normalized
+        or "qual framework" in normalized
+        or "melhor framework" in normalized
+        or "qual linguagem" in normalized
+        or "melhor linguagem" in normalized
+        or "language choice" in normalized
+        or "stack choice" in normalized
+        or "framework choice" in normalized
+        or "mais rapido" in normalized
+        or "mais rÃ¡pido" in normalized
+        or "performativo" in normalized
+        or "dioxus" in normalized
+        or "tauri" in normalized
+        or "zed" in normalized
+        or "pi.dev" in normalized
+        or "opencode" in normalized
+        or "codebase impecavel" in normalized
+        or "codebase impecÃ¡vel" in normalized
+        or "empresa reconhecida" in normalized
+        or "padroes que usam" in normalized
+        or "padrÃµes que usam" in normalized
+        or "espelhar nos padroes" in normalized
+        or "espelhar nos padrÃµes" in normalized
         or "api limit" in normalized
         or "model capability" in normalized
         or "automation capability" in normalized
         or ({"technical", "feasibility"} <= tokens)
+        or ({"stack", "language", "framework"} & tokens)
+        or ({"linguagem", "interface", "codebase"} & tokens and {"rust", "dioxus", "tauri", "zed"} & tokens)
         or ({"arquitetura", "risco"} <= tokens)
         or ({"api", "scale"} & tokens)
     ):
@@ -11305,7 +11368,13 @@ def build_guidance_decision(
     workflow_metadata = workflow_catalog_entry(recommended_workflow, root)
     facilitation_pack = facilitation_pack_for_workflow(recommended_workflow, root)
     if workflow_metadata:
-        recommended_phase = recommended_phase_for_workflow(workflow_metadata, recommended_phase)
+        preserves_ready_evolution = (
+            phase == "5-ready-operate"
+            and recommended_phase == "6-evolve"
+            and any(command.get("name") == "transition-evolve" for command in commands)
+        )
+        if not preserves_ready_evolution:
+            recommended_phase = recommended_phase_for_workflow(workflow_metadata, recommended_phase)
     if should_transition_to_guided_workflow(
         state=state,
         has_question=has_question,

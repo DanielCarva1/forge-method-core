@@ -1343,6 +1343,41 @@ class RuntimeTests(unittest.TestCase):
                 self.assertIn(case["prompt"], payload["human_prompt"], case["question"])
                 self.assertNotIn("I should ", payload["human_prompt"], case["question"])
 
+    def test_standalone_stack_conversation_stays_in_research_guidance(self) -> None:
+        runtime = load_runtime_module()
+        cases = [
+            (
+                "entao, eu quero fazer um fork, manter o forge-method-core plugin do codex, e criar um clone dele pra testar com o APP em volta dele, "
+                "podemos chamar de forge-standalone-app assim nao tem o perigo de confundir e to pensando em qual linguagem faria ele mais rapido e performativo, "
+                "como referencia tenho gostado muito do pi.dev, codex/zed, rust, lua, odin e elixir tbm me interessam, entao tudo vai depender de uma grande pesquisa, "
+                "muito estudo e uma longa conversa"
+            ),
+            (
+                "sim, a pergunta aqui fica, qual seria a melhor linguagem pra interface, parece que ja decidimos algumas coisas, "
+                "rust no coracao, pi.dev como inspiracao, humanos guiados, ainda quero iterar mais"
+            ),
+            (
+                "gostaria de encontrar alguma empresa reconhecida por codebase impecavel em rust, "
+                "e nos espelharmos nos padroes que usam na codebase"
+            ),
+        ]
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            runtime.prepare_parity_replay_state(root, "ready")
+            for question in cases:
+                payload = runtime.build_guide_payload(root, question=question, max_chars=12000)
+                style = payload["human_experience"]["style_contract"]
+
+                self.assertEqual(payload["intent_classification"], "research-needed", question)
+                self.assertEqual(payload["recommended_phase"], "6-evolve", question)
+                self.assertEqual(payload["recommended_workflow"], "technical-feasibility-scan", question)
+                self.assertEqual(style["pace"], "evidence-first", question)
+                self.assertIn("research-needed", payload["signals"], question)
+                self.assertIn("technical promise", payload["human_prompt"], question)
+                self.assertTrue(payload["state_update_required"], question)
+                self.assertIn("transition-evolve", [item["name"] for item in payload["commands"]])
+                self.assertNotIn("fast-path", json.dumps(style), question)
+
     def test_parity_replay_requires_mechanical_build_status_prompt(self) -> None:
         runtime = load_runtime_module()
         route_reason = "A build-ready story exists. Signals: mechanical-build. Route: 4-build-verify / mechanical-build -> build-story."

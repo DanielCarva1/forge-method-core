@@ -96,6 +96,20 @@
     "state_update_required": false
   },
   {
+    "id": "standalone_stack_research_ready",
+    "family": "research",
+    "state": "ready",
+    "question": "quero criar o forge-standalone-app e decidir a melhor linguagem para interface, comparar Dioxus Tauri Zed pi.dev e encontrar referencia de codebase impecavel em Rust; isso precisa de grande pesquisa, muito estudo, longa conversa e ainda quero iterar antes de decidir",
+    "expected_classification": "research-needed",
+    "expected_phase": "6-evolve",
+    "expected_workflow": "technical-feasibility-scan",
+    "expected_facilitation_pack": "skill:facilitation/evidence-research.md",
+    "expected_template": "research-scan-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-evolve",
+    "forbidden_action_terms": ["publish current batch", "runtime-builder"]
+  },
+  {
     "id": "investigation_request",
     "family": "investigation",
     "state": "discovery",

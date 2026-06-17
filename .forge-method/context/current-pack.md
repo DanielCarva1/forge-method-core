@@ -3,36 +3,36 @@
 ## State
 
 - project: forge-method-core
-- phase: 6-evolve
-- status: hotfix-validated
-- workflow: release-readiness
+- phase: 5-ready-operate
+- status: published
+- workflow: operate-support
 - active_story: <none>
-- next_action: v1.31.1 is public; next work is tester feedback or a new evolve cycle.
+- next_action: Commit v1.31.2 hotfix, publish main/tag/release, validate clone install, and update local plugin.
 
 ## Latest Checkpoint
 
-# v1.31.1 public install hotfix published
+# v1.31.2 guided research drift hotfix validated
 
-- created_at: 2026-06-17T20:56:19+00:00
+- created_at: 2026-06-17T23:22:56+00:00
 - project: forge-method-core
-- phase: 6-evolve
-- status: hotfix-validated
-- workflow: release-readiness
+- phase: 5-ready-operate
+- status: published
+- workflow: operate-support
 - active_story: <none>
 
 ## Summary
 
-Published Forge Method 1.31.1 to main, tag, and GitHub Release. Validated public clone/install by tag and main, then updated the local Codex plugin to 1.31.1.
+Patched Guidance Engine routing so strategic standalone app stack/interface and Rust codebase-standard conversations stay in research/technical-feasibility guidance, preserve ready-project evolution phase, and do not treat performance wording as fast-path pressure.
 
 ## Decisions
 
-- Treat public install leakage of core state as a release-blocking distribution bug; maintainer core-edit mode now requires local marker/env.
+- Ship as patch 1.31.2 because this changes public guided human experience and needs beta users to receive it via auto-update.
 
 ## Checks
 
-- GitHub Release v1.31.1 created
-- Clone/install smoke passed for v1.31.1 and main
-- Local plugin preflight no longer reports version mismatch
+- Full unit suite passed: 128 tests
+- Parity replay passed: 101/101
+- verify-fast, smoke-runtime, and smoke-install passed
 
 ## Failed Checks
 
@@ -48,7 +48,7 @@ Published Forge Method 1.31.1 to main, tag, and GitHub Release. Validated public
 
 ## Next Action
 
-v1.31.1 is public; next work is tester feedback or a new evolve cycle.
+Commit v1.31.2 hotfix, publish main/tag/release, validate clone install, and update local plugin.
 
 ## Recovery Signals
 
@@ -70,16 +70,16 @@ v1.31.1 is public; next work is tester feedback or a new evolve cycle.
 
 ## Recommended Agent Profiles
 
-- facilitator (Facilitator): Clarify intent, constraints, trade-offs, and human decisions without expanding implementation scope.
-- planner (Planner): Turn specs, risks, and constraints into executable stories, sequencing, and validation strategy.
+- operator (Operator): Maintain a ready project through usage notes, support status, feedback, and future backlog.
+- quality-reviewer (Quality Reviewer): Review implementation, artifacts, workflows, and evidence before work is marked done or ready.
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260617-192503-validation-validation-v1-31-0-release-readiness-after-push.md
 - .forge-method/evidence/20260617-194235-validation-validation-v1-31-0-github-release-published.md
 - .forge-method/evidence/20260617-195333-validation-validation-v1-31-0-main-published-install.md
 - .forge-method/evidence/20260617-205038-validation-validation-v1-31-1-public-install-core-state-gua.md
 - .forge-method/evidence/20260617-205618-publication-v1-31-1-public-install-hotfix-published.md
+- .forge-method/evidence/20260617-232255-validation-v1-31-2-guided-research-drift-hotfix-validated.md
 
 ## Recent Artifacts
 
