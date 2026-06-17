@@ -1,7 +1,7 @@
 {
   "schema_version": "forge-marketplace-listing.v1",
   "name": "forge-method-core",
-  "version": "1.30.0",
+  "version": "1.31.0",
   "display_name": "Forge Method Core",
   "tagline": "Extend human capacity while Codex turns messy ideas into durable work.",
   "category": "Productivity",
@@ -16,6 +16,7 @@
     "Provides a tiny emergency reload skill when a chat is stuck on stale instructions.",
     "Starts empty and brownfield work with human guidance before technical state details.",
     "Uses guided brain dump, pace selection, and correction routing before narrowing broad human ideas into artifacts.",
+    "Provides opt-in runtime utility contracts for isolated evals, hook/event dispatch, and reusable API/browser helpers without hidden startup overhead.",
     "Challenges new ideas through Reality/Evidence Gate before market or implementation claims.",
     "Creates durable project scaffolds with stories, artifacts, evals, checkpoints, evidence, and recovery context.",
     "Supports packaged modules for software, creative, game, runtime-builder, test, launch, and core-runtime work.",
@@ -32,7 +33,8 @@
     "Guidance Engine",
     "Self Update",
     "Emergency Reload",
-    "Module Fixtures"
+    "Module Fixtures",
+    "Runtime Utilities"
   ],
   "first_run_prompts": [
     "$forge-method",
@@ -72,7 +74,7 @@
     "python -m unittest discover -s tests",
     "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1",
     "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-all.ps1",
-    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref v1.30.0 -ExpectedVersion 1.30.0"
+    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref v1.31.0 -ExpectedVersion 1.31.0"
   ],
   "publication_status": "metadata-ready; public directory submission is external"
 }

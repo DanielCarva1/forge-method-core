@@ -4,7 +4,7 @@
 - created_at: 2026-06-17
 - scope: external guided-method benchmark to Forge Method Core 1.30.0
 - public_boundary: internal benchmark artifact only; do not copy benchmark language into public Forge docs, patch notes, README, or release notes
-- current_verdict: high parity for guided human flows and stronger Forge-native agent runtime substrate; full objective completion is still not proven while P2/deferred utility surfaces remain outside the plugin
+- current_verdict: high parity for guided human flows and stronger Forge-native agent runtime substrate; P2 utility surfaces are now translated as opt-in Forge-native contracts, with active execution still intentionally disabled by default
 
 ## Source snapshot
 
@@ -41,10 +41,10 @@ Current external docs were fetched into `%TEMP%/forge-systematic-parity-current`
 | Guided brainstorm/research/correct-course | Dedicated routes and packs for `brainstorming`, `market-scan`, `domain-scan`, `technical-feasibility-scan`, `problem-solving`, `investigation`, `correct-course`, context recovery. | translated/proved by replay | Keep adding failing real transcripts, not generic prose. |
 | Product/spec/UX/architecture/story cycle | `discover-intent`, `product-requirements`, `write-spec`, `ux-plan`, `architecture`, `readiness-check`, `plan-sprint`, `story-creation`, `build-story`, `code-review`, review findings and evidence. | translated/proved by replay and workflow validation | Broad end-to-end story-cycle smoke remains heavier than replay. |
 | Creative and game guided flows | Creative direction, design-thinking, innovation, storytelling/presentation narrative, game brief, GDD, engine setup, game sprint, playtest, game QA, game E2E, game test automation. | translated/proved by replay | Engine-specific examples should remain project-driven unless repeated gaps appear. |
-| Test architecture / enterprise quality | Test strategy, risk, fixtures, test design, ATDD, automation, NFR, traceability, CI quality, enterprise artifact maps, readiness, release gate. | translated/proved by replay and artifact commands | Generic API/browser utility commands remain deferred as public surface. |
+| Test architecture / enterprise quality | Test strategy, risk, fixtures, test design, ATDD, automation, NFR, traceability, CI quality, enterprise artifact maps, readiness, release gate, API/browser utility contract. | translated/proved by replay and artifact commands | Utility execution remains project/provider-specific and opt-in. |
 | Builder/factory/customization | Runtime-builder, agent/workflow/module builder, module validate/distribution, config customization, capability index, persona overlays, elicitation techniques. | translated/proved by replay/config validation | Isolated Docker eval runner remains deferred. |
 | Scripts/install/package validation | `verify-fast`, `verify-all`, `smoke-runtime`, `smoke-install`, local install, clone-install smoke; published 1.30.0 was validated from `main` and `v1.30.0`. | translated/proved for current plugin | Full release check currently fails only because the worktree is dirty during this audit. |
-| Hooks/local runtime helpers | Launcher/updater/install/smoke helpers exist; previous hook-wrapper experiment is archived as future standalone-app reference. | deferred, not translated as plugin hook surface | If the objective requires hook wrappers inside the Codex plugin now, this is incomplete by design. |
+| Hooks/local runtime helpers | Launcher/updater/install/smoke helpers exist; `hook-event-plan` plus opt-in dispatch scripts translate hook/event behavior without hidden startup work. | translated as opt-in surface | Always-on hooks remain intentionally out of the Codex plugin. |
 | Persistent personal memory | Forge provides project-local state, artifacts, checkpoints, context packs, ledger. | non-goal for current runtime | A personal workspace memory product would need a privacy/product decision first. |
 | Visual deck/presentation production | Forge routes narrative/pitch/deck structure through storytelling and presentation lens. | folded/deferred | Actual deck production is outside current Codex-native runtime scope. |
 
@@ -64,14 +64,14 @@ Current external docs were fetched into `%TEMP%/forge-systematic-parity-current`
 | Config/capability/persona | config customization, capability index, persona overlays | let teams adjust behavior without making the method mushy | validated override model and generated index | translated |
 | Docs/index/shard | doc-index, doc-shard, project-context, session-prep | make docs usable without context dumping | source fingerprint, mtime, precedence, context pack | translated |
 | Install/distribution | local install, marketplace/package docs, clone install smoke | make tester install obvious and verifiable | smoke scripts and published version checks | translated |
-| Isolated eval runner | local evals, parity replay, unit tests, smokes | no extra human burden today | no Docker/untrusted runner in plugin | deferred |
-| Hook/event wrappers | launcher/updater plus archived hook experiment | avoid adding Codex overhead without a concrete lifecycle need | no stable hook API in plugin | deferred |
-| Generic API/browser utilities | project-specific test framework/automation artifacts | do not duplicate Codex/browser providers prematurely | reusable generic utility layer absent | deferred |
+| Isolated eval runner | `isolated-eval-runner`, `runtime-utility` pack, template, opt-in runner scripts | choose local/container/remote/waiver mode explicitly | no always-on runner; Docker execution requires opt-in flag | translated as opt-in |
+| Hook/event wrappers | `hook-event-plan`, `runtime-utility` pack, template, opt-in dispatch scripts | make event, payload, side effects, dry-run, timeout, rollback visible | no hidden startup hook; dispatch requires explicit command | translated as opt-in |
+| Generic API/browser utilities | `api-browser-utility`, `runtime-utility` pack, template, replay proof | shape reusable provider helpers with auth, fixtures, assertions, cleanup | implementation remains project/provider-specific | translated as opt-in |
 
 ## Findings
 
 1. Release/version skepticism was under-routed before this audit. A user complaint like "the repo still shows 1.28; were you not going to validate?" previously stayed too close to the active workflow. Patch: version/GitHub/tag validation wording now routes to `release-readiness`; replay case `release_version_validation_complaint` proves it.
-2. The current plugin has strong parity for guided flow families, but a literal "everything they have" reading remains incomplete because isolated eval runner, generic API/browser utility layer, and hook wrappers are intentionally deferred.
+2. The current plugin has strong parity for guided flow families. The prior P2 gaps are translated as opt-in contracts and scripts, not always-on services, preserving the Forge/Codex overhead boundary.
 3. Existing parity artifacts are useful but were not completion proof. This audit upgrades the current evidence snapshot and separates translated/proved, deferred, and non-goal surfaces.
 4. The next real proof is not more generic docs. It is failing transcripts from users and focused fixtures that catch guidance energy, pacing, and route regressions.
 
@@ -85,10 +85,7 @@ Current external docs were fetched into `%TEMP%/forge-systematic-parity-current`
 
 ## Required next work
 
-1. Decide whether P2 deferred surfaces are required for the current Codex plugin or explicitly reserved for Forge standalone:
-   - isolated Docker/reproducible eval runner;
-   - hook/event wrapper surface;
-   - generic API/browser utility command layer.
-2. If any P2 item is required now, implement it Forge-native: rich pack, compact workflow, template/artifact, runtime command if needed, replay fixture, validation, evidence.
+1. Validate the opt-in P2 scripts on Windows and POSIX where available.
+2. Decide later whether any opt-in contract deserves a first-class runtime artifact command; do not add one without repeated real project need.
 3. Keep collecting real human transcripts and add fixtures when Forge feels cold, premature, or too mechanical.
-4. Do not mark the full objective complete until every external capability is either translated/proved or has a product-approved non-goal/deferred decision with revisit trigger.
+4. Do not add always-on hooks, background runners, or generic provider helpers to normal Forge startup without a concrete product decision.

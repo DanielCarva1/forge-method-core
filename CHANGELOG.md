@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 1.31.0
+
+Forge Method Core v1.31.0 ships the parity closure and runtime utility increment:
+
+- translate the remaining P2 parity utility surfaces as opt-in Forge contracts: isolated eval runner, hook/event plan, and API/browser utility workflow with packs, templates, scripts, and replay coverage
 - route version/GitHub/tag publication skepticism to `release-readiness`, with replay coverage for a user claiming the repo still shows an older version
 - add the current systematic parity completion audit artifact, separating translated/proved guidance families from P2 deferred surfaces and non-goals
 - persist Help Oracle route diagnostics in recovery briefs and the capability index, so fresh agents can see required workflow, reason, context boundary, stale-state guard, and route surfaces without relying on chat history

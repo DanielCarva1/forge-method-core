@@ -17,7 +17,7 @@ It is built around Codex primitives:
 
 This repository is the core runtime and distribution package.
 
-Current runtime version: `1.30.0`.
+Current runtime version: `1.31.0`.
 
 ## Current Shape
 
@@ -49,7 +49,7 @@ Forge Method Core is packaged as a Codex plugin and this repo is also a Codex ma
 
 ### Tester Install
 
-Use this for the current `1.30.0` tester build:
+Use this for the current `1.31.0` tester build:
 
 ```powershell
 codex plugin marketplace add DanielCarva1/forge-method-core --ref codex/script-audit-optimization
@@ -76,7 +76,7 @@ $forge-reload
 
 ### Stable Ref
 
-After `1.30.0` is merged or tagged, use the stable marketplace ref:
+After `1.31.0` is merged or tagged, use the stable marketplace ref:
 
 ```powershell
 codex plugin marketplace add DanielCarva1/forge-method-core --ref main
@@ -321,11 +321,11 @@ The full verifier includes a fixture matrix smoke. It creates example and normal
 After a tag is pushed, run a clone/install distribution smoke from the published ref:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.30.0 -ExpectedVersion 1.30.0
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.31.0 -ExpectedVersion 1.31.0
 ```
 
 ```bash
-REF=v1.30.0 EXPECTED_VERSION=1.30.0 bash scripts/smoke-plugin-clone-install.sh
+REF=v1.31.0 EXPECTED_VERSION=1.31.0 bash scripts/smoke-plugin-clone-install.sh
 ```
 
 ## Product Direction

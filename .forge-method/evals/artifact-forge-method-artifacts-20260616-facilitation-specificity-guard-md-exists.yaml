@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-16T04:34:06+00:00"
+updated_at: "2026-06-17T19:22:41+00:00"
 id: "artifact-forge-method-artifacts-20260616-facilitation-specificity-guard-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/20260616-facilitation-specificity-guard.md"
 query: "Human-facing facilitation packs now require domain_examples with at least three situational entries, preventing structurally valid but generic guidance from passing workflow validation."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-16T04:34:06+00:00"
+last_run_at: "2026-06-17T19:22:41+00:00"
 last_error: ""

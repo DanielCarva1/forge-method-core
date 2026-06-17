@@ -20,7 +20,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.30.0"
+RUNTIME_VERSION = "1.31.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 WORKFLOW_CATALOG_PATH = SKILL_DIR / "catalog" / "workflows.json"
@@ -8599,6 +8599,19 @@ def detect_guidance_signals(question: str) -> list[str]:
             "systematic parity plan",
             "parity plan",
             "parity replay",
+            "isolated eval runner",
+            "docker eval runner",
+            "reproducible eval runner",
+            "untrusted eval",
+            "hook wrapper",
+            "hook wrappers",
+            "event hook",
+            "event hooks",
+            "lifecycle hook",
+            "lifecycle hooks",
+            "hook dispatcher",
+            "runtime hook",
+            "runtime hooks",
             "replay contract",
             "replay contracts",
             "contrato de replay",
@@ -8725,6 +8738,8 @@ def detect_guidance_signals(question: str) -> list[str]:
             "automation",
             "automacao",
             "automate",
+            "utility",
+            "utilities",
             "auditoria",
         },
         "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness", "artifact-map", "checkpoint", "council", "party", "subagent", "subagents", "github", "version", "versao", "tag"},
@@ -8810,6 +8825,11 @@ def detect_guidance_signals(question: str) -> list[str]:
             "parity",
             "paridade",
             "replay",
+            "eval",
+            "runner",
+            "hook",
+            "hooks",
+            "dispatcher",
             "contract",
             "contracts",
             "assertion",
@@ -9271,6 +9291,18 @@ def game_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]
 def routed_quality_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
+    if (
+        "api browser utility" in normalized
+        or "api/browser utility" in normalized
+        or "browser utility" in normalized
+        or "api utility" in normalized
+        or "utility layer" in normalized
+        or (
+            {"api", "browser", "connector"} & tokens
+            and {"utility", "utilities", "helper", "helpers", "reusable"} & tokens
+        )
+    ):
+        return "api-browser-utility"
     if {"teach", "ensina", "ensinar", "explica", "explicar", "learn", "aprender"} & tokens or "teach me testing" in normalized:
         return "teach-testing"
     if (
@@ -9377,9 +9409,20 @@ def quality_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, st
             "run test-automation to detect the existing framework, choose API/E2E scenarios by risk, use semantic locators, assert visible outcomes, run/fix tests, and preserve evidence",
             "I should automate checks against the real harness, avoid brittle waits/selectors, and leave failures or manual gaps explicit.",
             guidance_alternatives(
+                ("api-browser-utility", "use when repeated API/browser setup should become a reusable utility contract"),
                 ("atdd-plan", "use when examples are not clear yet"),
                 ("test-review", "use when tests exist but confidence is unknown"),
                 ("traceability-gate", "use when automation evidence must support release"),
+            ),
+        )
+    if workflow_id == "api-browser-utility":
+        return (
+            "run api-browser-utility to define reusable API/browser helpers, auth boundaries, fixtures, commands, assertions, cleanup, and evidence policy",
+            "I should make repeated API/browser work explicit and reusable without hiding credentials, waits, side effects, or provider assumptions.",
+            guidance_alternatives(
+                ("test-framework", "use when the harness and fixture architecture are still unclear"),
+                ("test-automation", "use when the utility contract should become concrete checks"),
+                ("traceability-gate", "use when utility evidence must feed release decisions"),
             ),
         )
     if workflow_id == "test-review":
@@ -10091,6 +10134,31 @@ def routed_builder_workflow(question: str) -> str:
         "convention",
         "convencao",
     }
+    if (
+        "isolated eval runner" in normalized
+        or "docker eval runner" in normalized
+        or "reproducible eval runner" in normalized
+        or "untrusted eval" in normalized
+        or (
+            {"eval", "evals", "runner", "sandbox", "docker", "container"} & tokens
+            and {"isolated", "reproducible", "untrusted", "runner", "sandbox", "container"} & tokens
+        )
+    ):
+        return "isolated-eval-runner"
+    if (
+        "hook wrapper" in normalized
+        or "hook wrappers" in normalized
+        or "event hook" in normalized
+        or "event hooks" in normalized
+        or "lifecycle hook" in normalized
+        or "hook dispatcher" in normalized
+        or "runtime hook" in normalized
+        or (
+            {"hook", "hooks", "dispatcher", "event", "events"} & tokens
+            and {"runtime", "lifecycle", "automation", "automacao", "script", "scripts"} & tokens
+        )
+    ):
+        return "hook-event-plan"
     if module_tokens & tokens and (
         {"distribute", "distribution", "publish", "publicar", "marketplace", "upgrade", "legacy"} & tokens
         or "distribution contract" in normalized
@@ -10203,6 +10271,26 @@ def routed_builder_workflow(question: str) -> str:
 
 
 def builder_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "isolated-eval-runner":
+        return (
+            "run isolated-eval-runner to choose local/container/remote/waiver mode, define commands, trust boundary, timeout, cleanup, and evidence",
+            "I should make reproducible or untrusted eval execution explicit instead of pretending the normal shell is always enough.",
+            guidance_alternatives(
+                ("eval-design", "use when the eval assertion itself is not designed yet"),
+                ("workflow-validate", "use when the runner contract is written and catalog/workflow proof is needed"),
+                ("release-readiness", "use when runner evidence should feed a release claim"),
+            ),
+        )
+    if workflow_id == "hook-event-plan":
+        return (
+            "run hook-event-plan to define an opt-in event, payload, side-effect boundary, dispatcher command, timeout, rollback, and validation proof",
+            "I should keep hooks explicit and disabled by default so Forge does not add hidden Codex overhead.",
+            guidance_alternatives(
+                ("workflow-builder", "use when the event should become a new workflow boundary"),
+                ("module-distribution", "use when hooks affect install or package behavior"),
+                ("workflow-validate", "use when hook docs/scripts are already changed"),
+            ),
+        )
     if workflow_id == "config-customization":
         return (
             "run config-customization to choose team/local scope, map supported override keys, validate config, and generate the capability index when useful",
@@ -10492,6 +10580,8 @@ WORKFLOW_FIRST_QUESTIONS = {
     "module-distribution": "what install, upgrade, config, and registry proof makes this module usable outside this checkout?",
     "module-validate": "which route, pack, template, or install invariant would prove this extension is coherent?",
     "runtime-builder": "what human behavior should improve, what compact agent contract should exist, and which test would catch regression?",
+    "isolated-eval-runner": "which eval needs isolation, what trust boundary applies, and what evidence proves repeatability?",
+    "hook-event-plan": "which event should exist, what must it never do silently, and what dry-run proves the contract?",
     "workflow-analyze": "which workflow trigger, overlap, missing handoff, or stale doc should the analysis prove?",
     "agent-analyze": "which agent profile, instruction boundary, or handoff contract needs analysis before patching?",
     "skill-convert": "what source skill behavior must survive conversion, and what Codex-native contract should replace it?",
@@ -10516,6 +10606,7 @@ WORKFLOW_FIRST_QUESTIONS = {
     "test-engagement-model": "what risk tier, collaboration mode, and evidence expectation should QA own?",
     "test-strategy": "which user risk, test layer, and release-blocking evidence should define coverage?",
     "test-framework": "which fixture boundary, semantic locator, and maintainability risk should the framework prove?",
+    "api-browser-utility": "which repeated API/browser action deserves a helper, what auth boundary applies, and what visible assertion proves it?",
     "ci-quality-pipeline": "which check, failure signal, runtime budget, and ownership rule should CI enforce?",
     "atdd-plan": "which acceptance behavior, example, and automation layer should define done?",
     "test-automation": "which scenario deserves automation, what visible outcome proves it, and what flake risk must be avoided?",

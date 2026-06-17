@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-17T05:00:46+00:00",
+  "generated_at": "2026-06-17T19:16:41+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -588,7 +588,7 @@
     ]
   },
   "runtime": "forge-method",
-  "runtime_version": "1.30.0",
+  "runtime_version": "1.31.0",
   "sources": [],
   "workflows": [
     {
@@ -656,6 +656,32 @@
       "phase": "1-discovery | 6-evolve",
       "required": false,
       "template": "builder-factory-artifact"
+    },
+    {
+      "facilitation_pack": "runtime-utility",
+      "followed_by": [
+        "test-automation",
+        "test-review",
+        "traceability-gate"
+      ],
+      "id": "api-browser-utility",
+      "modes": [
+        "api",
+        "browser",
+        "connector",
+        "fixture",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "API/browser utility contract",
+        "command and fixture map",
+        "auth boundary",
+        "evidence policy"
+      ],
+      "phase": "4-build-verify | 5-ready-operate | 6-evolve",
+      "required": false,
+      "template": "api-browser-utility-artifact"
     },
     {
       "facilitation_pack": "architecture-planning",
@@ -1233,6 +1259,7 @@
     },
     {
       "followed_by": [
+        "isolated-eval-runner",
         "workflow-validate"
       ],
       "id": "eval-design",
@@ -1598,6 +1625,32 @@
       "required": false
     },
     {
+      "facilitation_pack": "runtime-utility",
+      "followed_by": [
+        "workflow-validate",
+        "module-distribution",
+        "release-readiness"
+      ],
+      "id": "hook-event-plan",
+      "modes": [
+        "advisory",
+        "validation",
+        "mutation",
+        "release",
+        "recovery",
+        "dry-run",
+        "headless"
+      ],
+      "outputs": [
+        "hook/event contract",
+        "opt-in dispatcher command",
+        "side-effect boundary"
+      ],
+      "phase": "3-plan | 4-build-verify | 6-evolve",
+      "required": false,
+      "template": "hook-event-plan-artifact"
+    },
+    {
       "facilitation_pack": "innovation-strategy",
       "followed_by": [
         "market-scan",
@@ -1649,6 +1702,31 @@
       "phase": "1-discovery | 4-build-verify | 6-evolve",
       "required": false,
       "template": "investigation-artifact"
+    },
+    {
+      "facilitation_pack": "runtime-utility",
+      "followed_by": [
+        "eval-design",
+        "workflow-validate",
+        "release-readiness"
+      ],
+      "id": "isolated-eval-runner",
+      "modes": [
+        "local",
+        "container",
+        "remote-sandbox",
+        "waiver",
+        "dry-run",
+        "headless"
+      ],
+      "outputs": [
+        "isolated eval runner contract",
+        "command/evidence map",
+        "isolation decision or waiver"
+      ],
+      "phase": "3-plan | 4-build-verify | 6-evolve",
+      "required": false,
+      "template": "isolated-eval-runner-artifact"
     },
     {
       "facilitation_pack": "evidence-research",
@@ -2450,6 +2528,7 @@
     {
       "facilitation_pack": "test-architecture",
       "followed_by": [
+        "api-browser-utility",
         "test-review",
         "traceability-gate"
       ],

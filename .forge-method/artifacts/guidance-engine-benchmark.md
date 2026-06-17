@@ -88,6 +88,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Game Studio Depth outputs must route game-specific requests to game-context, engine-setup, GDD, narrative, mechanics, game-story-creation, game-sprint-planning, game-sprint-status, build-story, game-test-framework, game-e2e-scaffold, quick-prototype, playtest, performance, or game QA workflows before generic software planning; artifacts must preserve player fantasy, engine profile, playable-slice proof, story order, sprint progress, decision sources, and validation evidence compactly.
 - Test Architecture Enterprise Depth outputs must route quality requests to the right engagement mode and workflow, preserve fixture architecture and command contracts, and make gate outcomes distinguish pass, concerns, fail, missing evidence, and explicit waiver.
 - E2E/Test Automation Depth outputs must detect the existing framework, select API/E2E scenarios by risk, prefer semantic locators and visible outcome assertions, require independent tests with no hardcoded waits, and preserve run/fix result, evidence links, failure repair policy, and gate impact before generated tests count as done.
+- P2 Runtime Utility outputs must route isolated eval runner, hook/event, and API/browser utility requests to explicit opt-in contracts with trust boundary, side-effect policy, commands, dry-run or evidence, and no hidden startup overhead.
 - Enterprise Artifact Map Depth outputs must make enterprise track decisions produce required/conditional artifact maps, including risk, security, privacy, quality/NFR, CI, traceability, release, conditional DevOps/compliance/observability, evidence status, waiver policy, and readiness/release gate consumers.
 - Spec Kernel Depth outputs must route create/update/validate/distill spec requests to `write-spec`, produce a compact spec kernel with why, stable capabilities, constraints, non-goals, success signal, preservation map, decision log, companions, and `artifact spec-check` proof.
 - Document Review Depth outputs must route prose/structure/tone requests to `editorial-review` and boundary/failure/misuse requests to `edge-case-review`, each with a narrow compact artifact rather than the generic document utility shape.
@@ -139,9 +140,12 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `ci-quality-pipeline`
 - `atdd-plan`
 - `test-automation`
+- `api-browser-utility`
 - `test-review`
 - `nfr-evidence-audit`
 - `workflow-analyze`
+- `isolated-eval-runner`
+- `hook-event-plan`
 - `module-ideation`
 - `agent-builder`
 - `workflow-builder`

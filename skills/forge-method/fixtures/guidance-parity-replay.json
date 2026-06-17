@@ -1254,6 +1254,45 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "p2_isolated_eval_runner_request",
+    "family": "builder",
+    "state": "evolve_runtime",
+    "question": "precisamos de isolated eval runner com docker/sandbox para evals reproduziveis e codigo nao confiavel",
+    "expected_classification": "builder-flow",
+    "expected_phase": "6-evolve",
+    "expected_workflow": "isolated-eval-runner",
+    "expected_facilitation_pack": "skill:facilitation/runtime-utility.md",
+    "expected_template": "isolated-eval-runner-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "p2_hook_event_plan_request",
+    "family": "builder",
+    "state": "evolve_runtime",
+    "question": "precisamos traduzir hook wrappers e lifecycle hooks do forge sem overhead no codex",
+    "expected_classification": "builder-flow",
+    "expected_phase": "6-evolve",
+    "expected_workflow": "hook-event-plan",
+    "expected_facilitation_pack": "skill:facilitation/runtime-utility.md",
+    "expected_template": "hook-event-plan-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "p2_api_browser_utility_request",
+    "family": "tea",
+    "state": "evolve_runtime",
+    "question": "precisamos de uma API/browser utility layer reutilizavel para testes e2e e provider fixtures",
+    "expected_classification": "quality-flow",
+    "expected_phase": "6-evolve",
+    "expected_workflow": "api-browser-utility",
+    "expected_facilitation_pack": "skill:facilitation/runtime-utility.md",
+    "expected_template": "api-browser-utility-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
     "id": "p1_4_runtime_batch_stays_runtime_builder",
     "family": "builder",
     "state": "evolve_runtime",

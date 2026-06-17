@@ -1,14 +1,14 @@
 {
-  "version": "1.30.0",
+  "version": "1.31.0",
   "date": "2026-06-17",
-  "title": "Guided human experience",
-  "summary": "Forge Method now ships a guided human experience increment with stronger first-run facilitation, intent routing, pace/style contracts, and installed-plugin stress coverage.",
+  "title": "Parity closure and runtime utilities",
+  "summary": "Forge Method now ships parity closure utility surfaces as opt-in Forge contracts, with dedicated routing, facilitation packs, compact templates, scripts, and replay coverage.",
   "highlights": [
-    "Broad first-run ideas now start with brain dump, remaining context, anti-goals, and fast-path versus coaching-path choice before artifacts narrow the product.",
-    "Guidance Engine now exposes observable pace contracts for coaching, fast-path, diagnostic, divergent, evidence-first, repair, and mechanical modes.",
-    "No-state routing now sends confused users to problem-solving, explicit brainstorms to divergent facilitation, research requests to evidence-first scans, and frustrated guidance feedback to correct-course.",
-    "Guidance stress coverage now exercises broad game ideas, rushed/simple requests, lost users, brainstorm, research, drift, and frustrated/cold guidance against source and installed-plugin behavior.",
-    "Focused verification loops are documented for short development checks while full unit, runtime smoke, install smoke, and installed guidance stress remain the broader runtime proof."
+    "Dedicated routes now cover isolated eval runner, hook/event plan, and reusable API/browser utility requests.",
+    "Runtime utility guidance stays opt-in and disabled by default, avoiding hidden startup overhead.",
+    "Compact artifact templates capture trust boundaries, side effects, commands, cleanup, evidence, and waiver decisions.",
+    "Replay coverage now protects these utility routes as part of the broader guidance fixture suite.",
+    "Release/version skepticism now routes to release-readiness so publication claims are checked against version metadata and install evidence."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.30.0.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.31.0.md"
 }
