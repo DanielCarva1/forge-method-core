@@ -3,36 +3,36 @@
 ## State
 
 - project: forge-method-core
-- phase: 5-ready-operate
-- status: published
-- workflow: operate-support
+- phase: 6-evolve
+- status: hotfix-validated
+- workflow: release-readiness
 - active_story: <none>
-- next_action: Commit v1.31.1 hotfix, create GitHub tag/release, and validate clone/install by v1.31.1 and main.
+- next_action: v1.31.1 is public; next work is tester feedback or a new evolve cycle.
 
 ## Latest Checkpoint
 
-# v1.31.1 public install hotfix validated
+# v1.31.1 public install hotfix published
 
-- created_at: 2026-06-17T20:50:38+00:00
+- created_at: 2026-06-17T20:56:19+00:00
 - project: forge-method-core
-- phase: 5-ready-operate
-- status: published
-- workflow: operate-support
+- phase: 6-evolve
+- status: hotfix-validated
+- workflow: release-readiness
 - active_story: <none>
 
 ## Summary
 
-Implemented and validated public install routing guard: installed Forge packages no longer expose core project state to normal users; core state requires maintainer marker/env plus explicit allow-runtime-state.
+Published Forge Method 1.31.1 to main, tag, and GitHub Release. Validated public clone/install by tag and main, then updated the local Codex plugin to 1.31.1.
 
 ## Decisions
 
-- Ship as patch release 1.31.1 because this affects public install/start behavior.
+- Treat public install leakage of core state as a release-blocking distribution bug; maintainer core-edit mode now requires local marker/env.
 
 ## Checks
 
-- unit full suite passed
-- runtime/package smokes passed
-- installed package simulation no longer leaks continue_current_project
+- GitHub Release v1.31.1 created
+- Clone/install smoke passed for v1.31.1 and main
+- Local plugin preflight no longer reports version mismatch
 
 ## Failed Checks
 
@@ -48,7 +48,7 @@ Implemented and validated public install routing guard: installed Forge packages
 
 ## Next Action
 
-Commit v1.31.1 hotfix, create GitHub tag/release, and validate clone/install by v1.31.1 and main.
+v1.31.1 is public; next work is tester feedback or a new evolve cycle.
 
 ## Recovery Signals
 
@@ -58,17 +58,7 @@ Commit v1.31.1 hotfix, create GitHub tag/release, and validate clone/install by 
 
 ### Touched Files
 
-- skills/forge-method/scripts/forge_method_runtime.py
-- skills/forge-method/catalog/workflows.json
-- skills/forge-method/fixtures/guidance-parity-replay.json
-- skills/forge-method/references/workflow-isolated-eval-runner.md
-- skills/forge-method/references/workflow-hook-event-plan.md
-- skills/forge-method/references/workflow-api-browser-utility.md
-- skills/forge-method/facilitation/runtime-utility.md
-- scripts/forge-eval-runner.ps1
-- scripts/forge-hook-dispatch.ps1
-- scripts/forge-eval-runner.sh
-- scripts/forge-hook-dispatch.sh
+- none
 
 ## Open Human Inputs
 
@@ -80,16 +70,16 @@ Commit v1.31.1 hotfix, create GitHub tag/release, and validate clone/install by 
 
 ## Recommended Agent Profiles
 
-- operator (Operator): Maintain a ready project through usage notes, support status, feedback, and future backlog.
-- quality-reviewer (Quality Reviewer): Review implementation, artifacts, workflows, and evidence before work is marked done or ready.
+- facilitator (Facilitator): Clarify intent, constraints, trade-offs, and human decisions without expanding implementation scope.
+- planner (Planner): Turn specs, risks, and constraints into executable stories, sequencing, and validation strategy.
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260617-192015-validation-validation-v1-31-0-p2-parity-utility-surfaces.md
 - .forge-method/evidence/20260617-192503-validation-validation-v1-31-0-release-readiness-after-push.md
 - .forge-method/evidence/20260617-194235-validation-validation-v1-31-0-github-release-published.md
 - .forge-method/evidence/20260617-195333-validation-validation-v1-31-0-main-published-install.md
 - .forge-method/evidence/20260617-205038-validation-validation-v1-31-1-public-install-core-state-gua.md
+- .forge-method/evidence/20260617-205618-publication-v1-31-1-public-install-hotfix-published.md
 
 ## Recent Artifacts
 
