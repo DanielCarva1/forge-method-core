@@ -2,5 +2,5 @@
 updated_at: "2026-06-10T05:07:53+00:00"
 project: "hello-method"
 project_id: "hello-method"
-root: "C:\\Users\\Danie\\OneDrive\\Documentos\\ody\\examples\\hello-method"
+root: "<forge-method-core-root>\\examples\\hello-method"
 runtime_repo: "false"

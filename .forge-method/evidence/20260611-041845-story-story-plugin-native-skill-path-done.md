@@ -7,4 +7,4 @@
 
 ## Summary
 
-SKILL.md now tells agents to run helpers relative to the active skill/plugin directory first, with the legacy C:\Users\Danie\.agents path only as fallback. smoke-install passed and local skill was updated.
+SKILL.md now tells agents to run helpers relative to the active skill/plugin directory first, with the legacy <user-home>/.agents path only as fallback. smoke-install passed and local skill was updated.

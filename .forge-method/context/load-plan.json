@@ -14,10 +14,10 @@
   "diagnostics": {
     "plugin_installation": {
       "available": true,
-      "codex_deeplink": "codex://plugins/forge-method-core?marketplacePath=C%3A%5CUsers%5CDanie%5C.agents%5Cplugins%5Cmarketplace.json",
+      "codex_deeplink": "codex://plugins/forge-method-core?marketplacePath=%3Cuser-home%3E%2F.agents%2Fplugins%2Fmarketplace.json",
       "expected_version": "1.29.0",
       "installed_version": "1.29.0",
-      "plugin_path": "C:\\Users\\Danie\\plugins\\forge-method-core",
+      "plugin_path": "<user-home>\\plugins\\forge-method-core",
       "repair_commands": {
         "posix": [],
         "windows": []
@@ -30,7 +30,7 @@
   "estimated_selected_chars": 7017,
   "generated_at": "2026-06-16T09:25:24+00:00",
   "over_budget": false,
-  "root": "C:\\Users\\Danie\\OneDrive\\Documentos\\ody",
+  "root": "<forge-method-core-root>",
   "rules": [
     "load selected items in order",
     "prefer selected files over conversation memory",

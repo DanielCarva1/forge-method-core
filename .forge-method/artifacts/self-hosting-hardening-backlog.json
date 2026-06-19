@@ -29,7 +29,7 @@
       "phase": "4-build-verify",
       "acceptance_criteria": [
         "SKILL.md instructs agents to prefer the current skill directory when running from a plugin checkout",
-        "installed skill and plugin checkout instructions do not require literal paths from Daniel's machine",
+        "installed skill and plugin checkout instructions do not require literal paths from a maintainer's machine",
         "launcher examples remain valid for local installs"
       ],
       "checks": [
