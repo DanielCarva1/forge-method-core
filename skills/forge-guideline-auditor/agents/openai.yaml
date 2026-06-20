@@ -1,0 +1,6 @@
+interface:
+  display_name: "Forge Guideline Auditor"
+  short_description: "Audit gaps into agent-safe guidelines"
+  default_prompt: "Use $forge-guideline-auditor to audit a Forge gap and create a guideline-backed work order."
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,10 @@
+# Forge Method eval
+updated_at: "2026-06-20T19:35:31+00:00"
+id: "artifact-forge-method-artifacts-20260620-181432-correct-course-human-guidance-coverage-for-platform-ops-and-vis-md-exists"
+kind: "artifact-exists"
+target: ".forge-method/artifacts/20260620-181432-correct-course-human-guidance-coverage-for-platform-ops-and-vis.md"
+query: "User feedback showed Forge still under-guided infra, CI/CD, database, deploy, observability, and early visible prototype alignment during initial product shaping.  Impact: Without first-class routes, agents could skip operational architecture and let user-facing products reach build without enough visual proof for humans to correct course..  Policy: choose the conservative interpretation that preserves the approved spec.  Continuation: Use platform-ops-plan and visual-alignment-prototype as guided workflows before build when the human intent or project surface requires them.."
+expected: "exists"
+status: "passed"
+last_run_at: "2026-06-20T19:35:31+00:00"
+last_error: ""

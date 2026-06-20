@@ -4,7 +4,7 @@ Forge Method Core is a Codex-native runtime for turning messy intent into durabl
 
 It is not just agent automation. Forge is built to make the human think better before Codex builds faster. It bullies weak assumptions, surfaces alternative paths, and pushes users out of autopilot before big decisions or immature ideas harden into expensive plans.
 
-Current runtime version: `1.31.2`
+Current runtime version: `1.32.0`
 
 ## What It Does
 
@@ -47,10 +47,18 @@ $forge-method
 Start Forge Method in this workspace.
 ```
 
-To pin the current release instead of tracking `main`:
+If a chat seems stuck on old instructions, start a new thread or run:
+
+```txt
+$forge-reload
+```
+
+### Pinned Version
+
+Use this when you want to stay on exactly `1.32.0` instead of following `main`:
 
 ```powershell
-codex plugin marketplace add DanielCarva1/forge-method-core --ref v1.31.2
+codex plugin marketplace add DanielCarva1/forge-method-core --ref v1.32.0
 ```
 
 ## Start A Project
@@ -187,11 +195,11 @@ bash scripts/verify-all.sh
 After publishing a tag, verify that the published package can be cloned and installed:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.31.2 -ExpectedVersion 1.31.2
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.32.0 -ExpectedVersion 1.32.0
 ```
 
 ```bash
-REF=v1.31.2 EXPECTED_VERSION=1.31.2 bash scripts/smoke-plugin-clone-install.sh
+REF=v1.32.0 EXPECTED_VERSION=1.32.0 bash scripts/smoke-plugin-clone-install.sh
 ```
 
 ## Docs

@@ -12,6 +12,7 @@ capabilities:
 constraints:
 non_goals:
 success_signal:
+early_visual_proof:
 assumptions:
 open_questions:
 preservation_map:

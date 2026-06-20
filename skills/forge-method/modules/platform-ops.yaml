@@ -1,0 +1,6 @@
+# Forge Method module
+id: "platform-ops"
+title: "Platform Ops"
+purpose: "Guide infrastructure, environments, CI/CD, database/data operations, deployment, secrets, observability, rollback, and operate readiness."
+phase_span: "1-discovery | 2-specification | 3-plan | 4-build-verify | 5-ready-operate | 6-evolve"
+workflows: "guidance-engine | discover-intent | project-context | session-prep | research-closeout | technical-feasibility-scan | architecture | platform-ops-plan | devops-deployment-plan | ci-quality-pipeline | test-framework | security-plan | privacy-data-plan | observability-plan | nfr-evidence-audit | traceability-gate | risk-register | readiness-check | release-readiness | retrospective | correct-course | grill-gate"

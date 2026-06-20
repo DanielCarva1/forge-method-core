@@ -1,7 +1,7 @@
 {
   "schema_version": "forge-marketplace-listing.v1",
   "name": "forge-method-core",
-  "version": "1.31.2",
+  "version": "1.32.0",
   "display_name": "Forge Method Core",
   "tagline": "Extend human capacity while Codex turns messy ideas into durable work.",
   "category": "Productivity",
@@ -71,10 +71,10 @@
     "GitHub is used only when users clone, push, or publish through their own repository workflow."
   ],
   "validation": [
-    "python -m unittest discover -s tests",
+    "python scripts/test-runner.py --workers 4 --timeout 120 --report .forge-method/test-runs/manual.json",
     "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1",
     "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-all.ps1",
-    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref v1.31.2 -ExpectedVersion 1.31.2"
+    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref v1.32.0 -ExpectedVersion 1.32.0"
   ],
   "publication_status": "metadata-ready; public directory submission is external"
 }

@@ -1,3 +1,12 @@
+param(
+  [switch]$Debug,
+  [switch]$NoReport,
+  [string]$ReportPath = "",
+  [string]$JunitPath = "",
+  [int]$Workers = 0,
+  [int]$TimeoutSeconds = 120
+)
+
 $ErrorActionPreference = "Stop"
 
 function Run {
@@ -32,7 +41,30 @@ function Resolve-Python {
 
 $pythonExe = Resolve-Python
 
-Run $pythonExe -m unittest discover -s tests
+if (-not $NoReport -and -not $ReportPath) {
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $ReportPath = Join-Path ".forge-method\test-runs" "verify-all-$stamp.json"
+}
+
+if ($Workers -le 0) {
+  if ($Debug) {
+    $Workers = 1
+  } else {
+    $Workers = [Math]::Min(4, [Math]::Max(1, [Environment]::ProcessorCount))
+  }
+}
+
+$runnerArgs = @("scripts\test-runner.py", "--workers", "$Workers", "--timeout", "$TimeoutSeconds")
+if ($Debug) {
+  $runnerArgs += "--debug"
+}
+if ($ReportPath) {
+  $runnerArgs += @("--report", $ReportPath)
+}
+if ($JunitPath) {
+  $runnerArgs += @("--junit", $JunitPath)
+}
+Run $pythonExe @runnerArgs
 Run $pythonExe scripts\verify-onboarding-assets.py
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1
 if ($LASTEXITCODE -ne 0) {

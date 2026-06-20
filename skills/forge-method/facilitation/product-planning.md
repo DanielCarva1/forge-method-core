@@ -16,7 +16,7 @@ follow_up_batches:
   - user: "Who is this for, what hurts, and what changes when it works?"
   - value: "What is the smallest valuable outcome, not just the smallest build?"
   - boundaries: "What is in MVP, parked, rejected, or legally/ethically constrained?"
-  - acceptance: "What observable behavior proves each requirement?"
+  - acceptance: "What observable behavior or visible prototype proves each requirement, and what 1-3 early visual examples should the human compare before accepting it?"
   - change_mode: "Are we creating, updating, validating, or distilling a spec?"
   - addendum: "What changed since the last decision, and what previous claim does it replace?"
   - findings: "Which requirement is untestable, unsupported, contradictory, or too broad?"
@@ -31,6 +31,7 @@ conversation_stages:
   - preservation_sweep: "Check every load-bearing claim is in the kernel, a companion, an adopted source, or open questions."
   - conflict_scan: "Find contradictions with evidence, UX, architecture, security, or scope."
   - validate_findings: "Name blocking findings, non-blocking warnings, and routeable gaps."
+  - visual_loop: "When the product is user-facing, show 1-3 screens, flows, references, or examples and turn the human reaction into requirements or correction."
   - handoff: "Persist spec/requirements plus decision log and next workflow."
 
 elicitation_options:
@@ -50,13 +51,15 @@ facilitator_moves:
   - "Do not let feature lists hide the user pain."
   - "Do not invent requirements when discovery is missing."
   - "Keep non-goals and rejected scope as first-class output."
-  - "Route to UX, architecture, or research when the spec depends on unresolved judgment."
+  - "Route to visual-alignment-prototype, UX, architecture, platform ops, or research when the spec depends on unresolved judgment."
+  - "A visual correction from the human changes requirements; do not bury it as polish."
   - "When updating, preserve the previous decision and explain the replacement."
   - "When validating, produce findings instead of silently rewriting the spec."
 
 quality_bar:
   - "Spec kernels have why, stable capability IDs, intent, success, constraints, non-goals, success signal, preservation map, and validation verdict."
   - "Requirements are tied to user value and acceptance evidence."
+  - "Accepted visual examples are captured as product decisions when the product is user-facing."
   - "A future agent can create architecture/stories without asking what matters."
   - "Contradictions and assumptions are visible."
   - "Create/update/validate modes leave a durable decision log or addendum."
@@ -79,12 +82,13 @@ checkpoint_options:
   - write-spec
   - product-requirements
   - ux-plan
+  - visual-alignment-prototype
   - architecture
   - grill-gate
   - create-epics
 
 artifact_rules:
-  Use `artifact spec-kernel` for write-spec closeout with source_artifacts, why, capabilities, constraints, non_goals, success_signal, assumptions, open_questions, preservation_map, validation_verdict, and next_workflow. Persist richer PRD requirements, conflicts, and acceptance evidence only when the chosen workflow is product-requirements.
+  Use `artifact spec-kernel` for write-spec closeout with source_artifacts, why, capabilities, constraints, non_goals, success_signal, early_visual_proof, assumptions, open_questions, preservation_map, validation_verdict, and next_workflow. Persist richer PRD requirements, conflicts, visual proof, and acceptance evidence only when the chosen workflow is product-requirements.
 
 domain_examples:
   - spec_kernel: "Distill mixed notes into a lean WHAT contract with capabilities, constraints, non-goals, success signal, companions, assumptions, and open questions."

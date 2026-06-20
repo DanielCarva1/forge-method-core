@@ -35,7 +35,7 @@ Meaning:
 
 Before a v1 release is called stable:
 
-1. `python -m unittest discover -s tests`
+1. `python scripts/test-runner.py --workers 4 --timeout 120 --report .forge-method/test-runs/manual.json`
 2. `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1`
 3. `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1`
 4. `powershell -ExecutionPolicy Bypass -File .\scripts\verify-all.ps1`

@@ -21,7 +21,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.31.2"
+RUNTIME_VERSION = "1.32.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 WORKFLOW_CATALOG_PATH = SKILL_DIR / "catalog" / "workflows.json"
@@ -306,6 +306,7 @@ PARITY_REPLAY_REQUIRED_FAMILIES = {
     "spec",
     "prd",
     "ux",
+    "visual",
     "architecture",
     "quick-dev",
     "story-cycle",
@@ -315,6 +316,7 @@ PARITY_REPLAY_REQUIRED_FAMILIES = {
     "persona",
     "lifecycle",
     "enterprise",
+    "platform",
     "cis",
     "game",
     "tea",
@@ -373,6 +375,7 @@ HUMAN_FACING_REQUIRED_WORKFLOWS = {
     "product-requirements",
     "architecture",
     "ux-plan",
+    "visual-alignment-prototype",
     "story-creation",
     "create-epics",
     "plan-sprint",
@@ -407,6 +410,7 @@ HUMAN_FACING_REQUIRED_WORKFLOWS = {
     "test-engagement-model",
     "test-framework",
     "ci-quality-pipeline",
+    "platform-ops-plan",
     "atdd-plan",
     "test-automation",
     "test-review",
@@ -428,9 +432,60 @@ HUMAN_EXPERIENCE_POLICY: dict[str, Any] = {
     "contract_split": "rich human guidance belongs in guide output and facilitation packs; compact state machines stay in refs/state/JSON",
 }
 
+EARLY_VISUAL_PROOF_WORKFLOWS = {
+    "discover-intent",
+    "brainstorming",
+    "design-thinking",
+    "creative-session",
+    "concept-selection",
+    "write-spec",
+    "product-requirements",
+    "working-backwards-challenge",
+    "ux-plan",
+    "visual-alignment-prototype",
+    "game-brief",
+    "gdd",
+    "game-ux-design",
+    "game-prd",
+    "game-sprint-planning",
+}
+
+EARLY_VISUAL_PROOF_CLASSIFICATIONS = {
+    "brainstorm",
+    "creative-flow",
+    "game-flow",
+    "product-flow",
+    "visual-flow",
+}
+
+EARLY_VISUAL_SURFACE_TOKENS = {
+    "app",
+    "application",
+    "dashboard",
+    "interface",
+    "interfaces",
+    "layout",
+    "screen",
+    "screens",
+    "site",
+    "software",
+    "tela",
+    "telas",
+    "tool",
+    "ui",
+    "ux",
+    "web",
+    "website",
+    "game",
+    "jogo",
+    "vtt",
+    "rpg",
+    "tabletop",
+}
+
 DISCOVERY_CLOSEOUT_FIRST_QUESTION = (
     "give me the whole picture first: who is it for, what should change for them, "
-    "what is fixed or out, what is still open, and what proof should close discovery?"
+    "what is fixed or out, what is still open, and what visible or operational proof should close discovery?"
 )
 
 REALITY_SCAN_WORKFLOWS = [
@@ -458,6 +513,15 @@ TRACKS: list[dict[str, str]] = [
         "module": "software-builder",
         "purpose": "Create product requirements, architecture, epics, implementation stories, checks, and ready evidence.",
         "when": "normal app, tool, product, API, site, integration, or software workflow",
+    },
+    {
+        "id": "platform-ops",
+        "title": "Platform Ops",
+        "complexity": "medium",
+        "project_kind": "platform-operations",
+        "module": "platform-ops",
+        "purpose": "Plan infrastructure, environments, CI/CD, database/data operations, deployment, secrets, observability, and rollback.",
+        "when": "backend, database, hosting, cloud, deployment, CI/CD, environments, secrets, observability, reliability, or platform work",
     },
     {
         "id": "enterprise",
@@ -518,6 +582,7 @@ TRACKS: list[dict[str, str]] = [
 TRACK_IDS = {track["id"] for track in TRACKS}
 TRACK_BY_MODULE = {
     "software-builder": "standard-product",
+    "platform-ops": "platform-ops",
     "creative-studio": "creative-studio",
     "game-studio": "game-studio",
     "runtime-builder": "runtime-builder",
@@ -593,6 +658,7 @@ DISCOVERY_CLOSEOUT_WORKFLOWS = {
 DISCOVERY_CLOSEOUT_NEXT_WORKFLOWS = {
     "product-requirements",
     "quick-dev",
+    "visual-alignment-prototype",
     "write-spec",
 }
 SPEC_KERNEL_MODES = {
@@ -606,6 +672,7 @@ SPEC_KERNEL_NEXT_WORKFLOWS = {
     "plan-sprint",
     "product-requirements",
     "quick-dev",
+    "visual-alignment-prototype",
     "ux-plan",
 }
 RESEARCH_SCAN_MODES = {
@@ -628,6 +695,7 @@ RESEARCH_SCAN_NEXT_WORKFLOWS = {
     "product-requirements",
     "quick-prototype",
     "research-closeout",
+    "visual-alignment-prototype",
     "write-spec",
 }
 GAME_BRIEF_MODES = {
@@ -646,6 +714,7 @@ GAME_BRIEF_NEXT_WORKFLOWS = {
     "market-scan",
     "quick-prototype",
     "technical-feasibility-scan",
+    "visual-alignment-prototype",
 }
 GAME_SPRINT_PLAN_MODES = {
     "headless",
@@ -908,6 +977,35 @@ def score_track_for_objective(track: dict[str, str], objective: str) -> tuple[in
     keywords = {
         "quick-flow": {"quick", "small", "fix", "patch", "prototype", "tiny"},
         "standard-product": {"app", "api", "software", "web", "product", "tool"},
+        "platform-ops": {
+            "infra",
+            "infrastructure",
+            "platform",
+            "backend",
+            "database",
+            "db",
+            "postgres",
+            "sql",
+            "migration",
+            "migrations",
+            "ci",
+            "cd",
+            "cicd",
+            "pipeline",
+            "deploy",
+            "deployment",
+            "hosting",
+            "cloud",
+            "docker",
+            "kubernetes",
+            "environment",
+            "environments",
+            "env",
+            "secrets",
+            "observability",
+            "monitoring",
+            "rollback",
+        },
         "enterprise": {"security", "privacy", "compliance", "enterprise", "risk", "production"},
         "creative-studio": {"creative", "brand", "story", "content", "campaign", "concept"},
         "game-studio": {
@@ -1916,9 +2014,13 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
             "human_question": "",
             "guardrail": "Pare so por acesso, risco destrutivo, servico externo, ou mudanca real de escopo.",
         }
+    default_next_move = str(guidance.get("recommended_action", "seguir a rota recomendada"))
+    early_visual_proof = guidance.get("early_visual_proof") or {}
+    if early_visual_proof.get("required"):
+        default_next_move = f"Executar {workflow}; mostrar prova visual inicial antes de requirements/stories/build."
     return {
         "decision_summary": f"Rota escolhida: {workflow} em {phase or 'fase atual'}.",
-        "next_move": str(guidance.get("recommended_action", "seguir a rota recomendada")),
+        "next_move": default_next_move,
         "human_question": split_guidance_first_question(str(guidance.get("human_prompt", "")))[1]
         or str(guidance.get("human_prompt", "")),
         "guardrail": "O estado duravel manda, mas a fala humana substantiva pode corrigir a rota.",
@@ -1994,6 +2096,10 @@ def guidance_style_contract(question: str, classification: str, workflow: str, s
 def human_experience_for_guidance(base: dict[str, Any], guidance: dict[str, Any]) -> dict[str, Any]:
     signals = [str(item) for item in guidance.get("signals", []) if item]
     copy = guidance_human_copy(guidance)
+    early_visual_proof = guidance.get("early_visual_proof") or {}
+    visual_contract = ""
+    if early_visual_proof.get("required"):
+        visual_contract = f"required:{early_visual_proof.get('workflow')} before requirements/stories/build"
     return {
         **base,
         **copy,
@@ -2009,6 +2115,7 @@ def human_experience_for_guidance(base: dict[str, Any], guidance: dict[str, Any]
             str(guidance.get("recommended_workflow", "")),
             signals,
         ),
+        "visual_feedback_contract": visual_contract,
     }
 
 
@@ -3238,6 +3345,8 @@ def discovery_closeout_findings(root: Path, artifact_path: Path) -> tuple[list[s
         "constraints",
         "non_goals",
         "success_signal",
+        "visible_or_operational_proof",
+        "early_visual_feedback_loop",
         "open_questions",
         "grill_gate_handoff",
         "next_workflow",
@@ -3251,6 +3360,9 @@ def discovery_closeout_findings(root: Path, artifact_path: Path) -> tuple[list[s
     for key in ["audience", "outcome", "constraints", "non_goals", "success_signal"]:
         if normalize_text(fields.get(key, "")) in weak_values:
             errors.append(f"{key} must be specific enough for a future agent")
+    for key in ["visible_or_operational_proof", "early_visual_feedback_loop"]:
+        if normalize_text(fields.get(key, "")) in weak_values:
+            errors.append(f"{key} must name an inspectable proof or say why it is not applicable")
     if normalize_text(fields.get("non_goals", "")) in {"none", "n/a", "na", "tbd"}:
         errors.append("non_goals must prevent downstream agents from filling scope by guesswork")
     success_signal = normalize_text(fields.get("success_signal", ""))
@@ -3525,6 +3637,7 @@ def game_artifact_findings(root: Path, artifact_path: Path) -> tuple[list[str], 
             "platform_or_engine",
             "pillars",
             "references",
+            "first_visual_preview",
             "mvp_playable_proof",
             "dream_game",
             "parked_scope",
@@ -4833,6 +4946,8 @@ def write_discovery_closeout_artifact(
     constraints: str,
     non_goals: str,
     success_signal: str,
+    visible_or_operational_proof: str,
+    early_visual_feedback_loop: str,
     open_questions: str,
     grill_gate_handoff: str,
     decision_log: str,
@@ -4852,6 +4967,8 @@ def write_discovery_closeout_artifact(
         ("constraints", constraints),
         ("non_goals", non_goals),
         ("success_signal", success_signal),
+        ("visible_or_operational_proof", visible_or_operational_proof),
+        ("early_visual_feedback_loop", early_visual_feedback_loop),
         ("open_questions", open_questions),
         ("grill_gate_handoff", grill_gate_handoff),
         ("decision_log", decision_log),
@@ -4895,6 +5012,7 @@ def write_spec_kernel_artifact(
     constraints: str,
     non_goals: str,
     success_signal: str,
+    early_visual_proof: str,
     assumptions: str,
     open_questions: str,
     preservation_map: str,
@@ -4919,6 +5037,7 @@ def write_spec_kernel_artifact(
         ("constraints", constraints),
         ("non_goals", non_goals),
         ("success_signal", success_signal),
+        ("early_visual_proof", early_visual_proof),
         ("assumptions", assumptions),
         ("open_questions", open_questions),
         ("preservation_map", preservation_map),
@@ -4963,6 +5082,7 @@ def write_research_scan_artifact(
     contradictions_or_falsifiers: str,
     uncertainty: str,
     stance: str,
+    visual_reference_examples: str,
     alternatives: str,
     adoption_friction: str,
     demand_signal: str,
@@ -4995,6 +5115,7 @@ def write_research_scan_artifact(
         ("contradictions_or_falsifiers", contradictions_or_falsifiers),
         ("uncertainty", uncertainty),
         ("stance", stance),
+        ("visual_reference_examples", visual_reference_examples),
         ("alternatives", alternatives),
         ("adoption_friction", adoption_friction),
         ("demand_signal", demand_signal),
@@ -5042,6 +5163,7 @@ def write_game_brief_artifact(
     platform_or_engine: str,
     pillars: str,
     references: str,
+    first_visual_preview: str,
     mvp_playable_proof: str,
     dream_game: str,
     vertical_slice: str,
@@ -5073,6 +5195,7 @@ def write_game_brief_artifact(
         ("platform_or_engine", platform_or_engine),
         ("pillars", pillars),
         ("references", references),
+        ("first_visual_preview", first_visual_preview),
         ("mvp_playable_proof", mvp_playable_proof),
         ("dream_game", dream_game),
         ("vertical_slice", vertical_slice),
@@ -7224,6 +7347,8 @@ def cmd_artifact_discovery_closeout(args: argparse.Namespace) -> int:
         constraints=args.constraints,
         non_goals=args.non_goals,
         success_signal=args.success_signal,
+        visible_or_operational_proof=args.visible_or_operational_proof,
+        early_visual_feedback_loop=args.early_visual_feedback_loop,
         open_questions=args.open_questions,
         grill_gate_handoff=args.grill_gate_handoff,
         decision_log=args.decision_log,
@@ -7257,6 +7382,7 @@ def cmd_artifact_spec_kernel(args: argparse.Namespace) -> int:
         constraints=args.constraints,
         non_goals=args.non_goals,
         success_signal=args.success_signal,
+        early_visual_proof=args.early_visual_proof,
         assumptions=args.assumptions,
         open_questions=args.open_questions,
         preservation_map=args.preservation_map,
@@ -7291,6 +7417,7 @@ def cmd_artifact_research_scan(args: argparse.Namespace) -> int:
         contradictions_or_falsifiers=args.contradictions_or_falsifiers,
         uncertainty=args.uncertainty,
         stance=args.stance,
+        visual_reference_examples=args.visual_reference_examples,
         alternatives=args.alternatives,
         adoption_friction=args.adoption_friction,
         demand_signal=args.demand_signal,
@@ -7328,6 +7455,7 @@ def cmd_artifact_game_brief(args: argparse.Namespace) -> int:
         platform_or_engine=args.platform_or_engine,
         pillars=args.pillars,
         references=args.references,
+        first_visual_preview=args.first_visual_preview,
         mvp_playable_proof=args.mvp_playable_proof,
         dream_game=args.dream_game,
         vertical_slice=args.vertical_slice,
@@ -8487,6 +8615,60 @@ def detect_guidance_signals(question: str) -> list[str]:
             "burn in",
             "selective testing",
         ],
+        "platform-flow": [
+            "infra",
+            "infrastructure",
+            "infraestrutura",
+            "platform ops",
+            "platform engineering",
+            "backend ops",
+            "ci/cd",
+            "cicd",
+            "continuous integration",
+            "continuous delivery",
+            "github actions",
+            "deployment plan",
+            "deploy plan",
+            "deploy pipeline",
+            "hosting",
+            "cloud infra",
+            "database plan",
+            "banco de dados",
+            "data migration",
+            "schema migration",
+            "environment variables",
+            "variaveis de ambiente",
+            "variáveis de ambiente",
+            "secrets management",
+            "gestao de secrets",
+            "gestão de secrets",
+            "rollback plan",
+            "observability plan",
+            "monitoring plan",
+            "logs metrics alerts",
+        ],
+        "visual-flow": [
+            "visual prototype",
+            "visual alignment",
+            "prototype preview",
+            "feedback visual",
+            "prototipo visual",
+            "protótipo visual",
+            "wireframe",
+            "mockup",
+            "screenshot",
+            "screen preview",
+            "preview visual",
+            "tela inicial",
+            "primeira tela",
+            "layout",
+            "style tile",
+            "interaction prototype",
+            "clickable prototype",
+            "ver a cara",
+            "enxergar o produto",
+            "corrigir curso visual",
+        ],
         "game-flow": [
             "game context",
             "game project context",
@@ -8640,6 +8822,10 @@ def detect_guidance_signals(question: str) -> list[str]:
             "quick flow",
             "spec lite",
             "spec-lite",
+            "web app",
+            "app web",
+            "mobile app",
+            "dashboard",
         ],
         "builder-flow": [
             "builder factory",
@@ -8693,6 +8879,20 @@ def detect_guidance_signals(question: str) -> list[str]:
             "docs compactos",
             "compactar docs",
             "state machine",
+            "guideline audit",
+            "guideline auditor",
+            "create guideline",
+            "write guideline",
+            "validate guideline",
+            "guideline-backed work order",
+            "work order",
+            "work-order",
+            "acceptance evidence",
+            "evidencia de aceite",
+            "agent native",
+            "agent-native",
+            "permanent implementation",
+            "implementacao permanente",
             "config customization",
             "customize forge",
             "customizar forge",
@@ -8747,7 +8947,6 @@ def detect_guidance_signals(question: str) -> list[str]:
         "correct-course": {
             "errado",
             "falhou",
-            "falha",
             "corrigir",
             "faltando",
             "pular",
@@ -8848,6 +9047,64 @@ def detect_guidance_signals(question: str) -> list[str]:
             "utilities",
             "auditoria",
         },
+        "platform-flow": {
+            "infra",
+            "infraestrutura",
+            "infrastructure",
+            "platform",
+            "backend",
+            "database",
+            "banco",
+            "dados",
+            "db",
+            "postgres",
+            "postgresql",
+            "mysql",
+            "sqlite",
+            "schema",
+            "migration",
+            "migrations",
+            "cicd",
+            "deploy",
+            "deployment",
+            "deployar",
+            "hosting",
+            "cloud",
+            "docker",
+            "kubernetes",
+            "k8s",
+            "environment",
+            "environments",
+            "env",
+            "secrets",
+            "secret",
+            "observability",
+            "monitoring",
+            "logs",
+            "metrics",
+            "alerts",
+            "rollback",
+        },
+        "visual-flow": {
+            "visual",
+            "prototype",
+            "prototipo",
+            "protótipo",
+            "wireframe",
+            "mockup",
+            "screenshot",
+            "preview",
+            "layout",
+            "tela",
+            "telas",
+            "interface",
+            "ui",
+            "ux",
+            "imagem",
+            "imagens",
+            "figma",
+            "storyboard",
+        },
         "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness", "artifact-map", "checkpoint", "council", "party", "subagent", "subagents", "github", "version", "versao", "tag"},
         "persona-lens": {"lens", "lente", "persona", "coach", "perspectiva", "visao", "pm", "architect", "arquiteto", "analyst", "analista", "ux", "qa", "writer", "storyteller", "presentation", "presentacao"},
         "story-flow": {"backlog", "epic", "epics", "sprint", "stories", "story", "historia", "historias"},
@@ -8859,6 +9116,12 @@ def detect_guidance_signals(question: str) -> list[str]:
             "requisitos",
             "produto",
             "product",
+            "app",
+            "dashboard",
+            "site",
+            "software",
+            "tool",
+            "web",
             "architecture",
             "arquitetura",
             "ux",
@@ -8938,6 +9201,8 @@ def detect_guidance_signals(question: str) -> list[str]:
             "dispatcher",
             "contract",
             "contracts",
+            "guideline",
+            "guidelines",
             "assertion",
             "assertions",
             "p1",
@@ -9231,10 +9496,11 @@ def is_game_dev_story_intent(question: str) -> bool:
 def game_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
     if workflow_id == "game-brief":
         return (
-            "run game-brief to create, update, or validate a living game brief with player fantasy, core loop, verbs, pillars, references, MVP playable proof, parked scope, decision log, assumptions, open questions, and game-check proof",
-            "I should invite the full game brain dump, ask what else is still in their head, offer fast path versus coaching path, then turn it into a brief they recognize before GDD, architecture, sprint planning, or build.",
+            "run game-brief to create, update, or validate a living game brief with player fantasy, core loop, verbs, pillars, references, first visual preview options, MVP playable proof, parked scope, decision log, assumptions, open questions, and game-check proof",
+            "I should invite the full game brain dump, ask what else is still in their head, offer fast path versus coaching path, show quick visual previews of the table/screen/play moment, then turn it into a brief they recognize before GDD, architecture, sprint planning, or build.",
             guidance_alternatives(
                 ("brainstorming", "use when the game still needs divergent option lanes before committing to a brief"),
+                ("visual-alignment-prototype", "use when the player-facing table, HUD, map, sheet, or first screen needs visible correction"),
                 ("research-closeout", "use when reference/domain/market research must close before the brief is accepted"),
                 ("game-sprint-planning", "use when the brief is accepted and the next job is ordering a playable slice"),
             ),
@@ -9700,12 +9966,268 @@ def is_spec_kernel_intent(question: str) -> bool:
     )
 
 
+def is_visual_alignment_intent(question: str) -> bool:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    visual_phrases = (
+        "visual alignment",
+        "feedback visual",
+        "visual feedback",
+        "prototype preview",
+        "visual prototype",
+        "prototipo visual",
+        "protótipo visual",
+        "preview visual",
+        "screen preview",
+        "corrigir curso visual",
+        "ver a cara",
+        "enxergar o produto",
+        "first screen",
+        "primeira tela",
+    )
+    if any(phrase in normalized for phrase in visual_phrases):
+        return True
+    if {"wireframe", "mockup", "screenshot", "storyboard"} & tokens:
+        return True
+    if {"prototype", "prototipo", "protótipo", "preview"} & tokens and {
+        "visual",
+        "ui",
+        "ux",
+        "interface",
+        "screen",
+        "screens",
+        "tela",
+        "telas",
+        "layout",
+    } & tokens:
+        return True
+    return False
+
+
+def early_visual_proof_policy(
+    *,
+    question: str,
+    classification: str,
+    workflow_id: str,
+    phase: str,
+    signals: list[str],
+) -> dict[str, Any]:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    signal_set = set(signals)
+    early_phase = not phase or phase in {"0-route", "1-discovery", "2-specification", "3-plan", "6-evolve"}
+    user_facing_surface = bool(EARLY_VISUAL_SURFACE_TOKENS & tokens) or any(
+        phrase in normalized
+        for phrase in [
+            "user-facing",
+            "human experience",
+            "experiencia humana",
+            "experiencia de usuario",
+            "product shape",
+            "player experience",
+            "first session",
+            "primeira experiencia",
+            "primeira experiencia",
+        ]
+    )
+    required = bool(
+        early_phase
+        and (
+            workflow_id in EARLY_VISUAL_PROOF_WORKFLOWS
+            or classification in EARLY_VISUAL_PROOF_CLASSIFICATIONS
+            or "visual-flow" in signal_set
+            or user_facing_surface
+        )
+        and classification
+        not in {
+            "mechanical-build",
+            "builder-flow",
+            "platform-flow",
+            "quality-flow",
+            "document-utility",
+            "operate-support",
+            "lifecycle-flow",
+        }
+    )
+    if workflow_id == "visual-alignment-prototype":
+        status = "active-workflow"
+    elif required:
+        status = "companion-required"
+    else:
+        status = "not-required"
+    return {
+        "required": required,
+        "status": status,
+        "workflow": "visual-alignment-prototype" if required else "",
+        "cadence": (
+            "during discovery, specification, and planning, show 1-3 inspectable visual options or examples "
+            "before requirements, stories, or build harden the direction; use fewer when the path is narrow"
+        ),
+        "artifact_forms": [
+            "rough screen",
+            "wireframe",
+            "style tile",
+            "reference/anti-reference board",
+            "mockup or screenshot",
+            "clickable sketch",
+            "runnable thin slice",
+        ],
+        "human_gate": "the human must accept, reject, or correct the visible direction before it becomes requirements or story input",
+        "requirements_effect": (
+            "accepted visual choices become PRD/UX/story constraints; visible mismatches route to UX, product requirements, "
+            "correct-course, or another prototype pass"
+        ),
+        "reason": (
+            "early user-facing work needs visible feedback, not only text artifacts"
+            if required
+            else "this route is not an early user-facing visual decision"
+        ),
+    }
+
+
+def append_early_visual_proof_guidance(text: str, policy: dict[str, Any], *, field: str) -> str:
+    value = " ".join(str(text or "").split())
+    if not policy.get("required") or "visual proof" in normalize_text(value):
+        return value
+    if field == "action":
+        suffix = (
+            "include an early visual proof loop that shows 1-3 screens, designs, references, or examples for human "
+            "correction before requirements, stories, or build"
+        )
+    else:
+        suffix = (
+            "I also need to show a quick visible proof of the direction and turn your reaction into requirements "
+            "or a course correction."
+        )
+    if not value:
+        return suffix
+    separator = "; " if field == "action" else ". "
+    return f"{value.rstrip('.')}{separator}{suffix}"
+
+
+def ensure_visual_alignment_alternative(alternatives: list[dict[str, str]], policy: dict[str, Any]) -> list[dict[str, str]]:
+    if not policy.get("required"):
+        return alternatives
+    if any(item.get("workflow") == "visual-alignment-prototype" for item in alternatives):
+        return alternatives
+    return [
+        {
+            "workflow": "visual-alignment-prototype",
+            "reason": "make the current direction visible so the human can accept or correct it before requirements or stories",
+        },
+        *alternatives,
+    ]
+
+
+def routed_platform_workflow(question: str) -> str:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    has_ci = (
+        {"ci", "cd", "cicd", "pipeline"} & tokens
+        or "ci/cd" in normalized
+        or "github actions" in normalized
+        or "continuous integration" in normalized
+        or "continuous delivery" in normalized
+    )
+    has_observability = (
+        {"observability", "monitoring", "logs", "metrics", "alerts"} & tokens
+        or "observability plan" in normalized
+        or "monitoring plan" in normalized
+    )
+    has_deploy = (
+        {"deploy", "deployment", "deployar", "hosting", "cloud", "docker", "kubernetes", "k8s", "rollback"} & tokens
+        or "deployment plan" in normalized
+        or "deploy plan" in normalized
+        or "deploy pipeline" in normalized
+        or "rollback plan" in normalized
+    )
+    has_database = (
+        {"database", "db", "postgres", "postgresql", "mysql", "sqlite", "schema", "migration", "migrations"} & tokens
+        or "banco de dados" in normalized
+        or "data migration" in normalized
+        or "schema migration" in normalized
+    )
+    has_platform_surface = (
+        {"infra", "infraestrutura", "infrastructure", "platform", "backend", "environment", "environments", "env", "secrets", "secret"} & tokens
+        or "variaveis de ambiente" in normalized
+        or "variáveis de ambiente" in normalized
+        or "secrets management" in normalized
+    )
+    if sum(bool(item) for item in [has_ci, has_observability, has_deploy, has_database, has_platform_surface]) >= 2:
+        return "platform-ops-plan"
+    if has_ci:
+        return "ci-quality-pipeline"
+    if has_observability:
+        return "observability-plan"
+    if has_deploy:
+        return "devops-deployment-plan"
+    return "platform-ops-plan"
+
+
+def platform_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "ci-quality-pipeline":
+        return (
+            "run ci-quality-pipeline to map local, fast, full, release, and investigation commands to CI jobs and gate policy",
+            "I should make CI/CD visible as a product constraint instead of leaving it to accidental implementation.",
+            guidance_alternatives(
+                ("platform-ops-plan", "use when CI depends on environments, database, secrets, deployment, or rollback shape"),
+                ("test-framework", "use when commands or harness are not durable yet"),
+                ("traceability-gate", "use when CI evidence must feed release readiness"),
+            ),
+        )
+    if workflow_id == "devops-deployment-plan":
+        return (
+            "run devops-deployment-plan to define environments, deploy path, secrets, rollback, operational checks, and release handoff",
+            "I should make deployment and rollback explicit before build choices quietly hard-code an ops model.",
+            guidance_alternatives(
+                ("platform-ops-plan", "use when database, CI/CD, hosting, and observability still need one combined platform map"),
+                ("ci-quality-pipeline", "use when the deploy path depends on automated gates"),
+                ("observability-plan", "use when support signals and alerting are the riskiest unknown"),
+            ),
+        )
+    if workflow_id == "observability-plan":
+        return (
+            "run observability-plan to define logs, metrics, alerts, support signals, incident triggers, owners, and operate actions",
+            "I should make the product observable before claiming it is ready to operate.",
+            guidance_alternatives(
+                ("platform-ops-plan", "use when observability depends on deployment, database, or environment choices"),
+                ("devops-deployment-plan", "use when alerts depend on release and rollback mechanics"),
+                ("release-readiness", "use when evidence is ready for the final gate"),
+            ),
+        )
+    return (
+        "run platform-ops-plan to map infrastructure, environments, CI/CD, database/data operations, secrets, deployment, observability, rollback, ownership, and the next specialized workflow",
+        "I should surface platform work early so database, deploy, CI/CD, and operate assumptions do not appear only after implementation is already shaped.",
+        guidance_alternatives(
+            ("devops-deployment-plan", "use when deployment and rollback are the narrow blocker"),
+            ("ci-quality-pipeline", "use when automated gates and command budgets are the narrow blocker"),
+            ("observability-plan", "use when support signals and operations are the narrow blocker"),
+            ("privacy-data-plan", "use when data retention, access, or classification is the main risk"),
+        ),
+    )
+
+
+def visual_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    return (
+        "run visual-alignment-prototype to produce a visible artifact, compare it against intent, capture correction choices, and decide whether to revise UX/requirements or proceed",
+        "I should let the human see and correct the product shape before stories and implementation lock in the wrong experience.",
+        guidance_alternatives(
+            ("ux-plan", "use when journeys, states, controls, accessibility, or taste still need design depth"),
+            ("product-requirements", "use when the prototype changes the product promise or acceptance criteria"),
+            ("quick-prototype", "use when the visual alignment is accepted and the next risk needs a runnable proof"),
+            ("correct-course", "use when the visible artifact contradicts accepted intent"),
+        ),
+    )
+
+
 def routed_product_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
     padded = f" {normalized} "
     if is_spec_kernel_intent(question):
         return "write-spec"
+    if is_visual_alignment_intent(question):
+        return "visual-alignment-prototype"
     if (
         {"prfaq"} & tokens
         or "working backwards" in normalized
@@ -10234,9 +10756,53 @@ def is_strong_builder_intent(question: str) -> bool:
     return bool((tokens & action_tokens) and (tokens & (runtime_tokens | factory_tokens)))
 
 
+def is_guideline_audit_intent(question: str) -> bool:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    if {"guideline", "guidelines", "workorder", "workorders"} & tokens:
+        return True
+    if (
+        "guideline audit" in normalized
+        or "guideline auditor" in normalized
+        or "work order" in normalized
+        or "work-order" in normalized
+        or "acceptance evidence" in normalized
+        or "evidencia de aceite" in normalized
+        or "agent-native" in normalized
+        or "agent native" in normalized
+        or "permanent implementation" in normalized
+        or "implementacao permanente" in normalized
+    ):
+        return True
+    guarded_tokens = {
+        "crate",
+        "crates",
+        "permission",
+        "permissions",
+        "permissao",
+        "permissoes",
+        "release",
+        "versioning",
+    }
+    agent_context_tokens = {
+        "agent",
+        "agents",
+        "agente",
+        "agentes",
+        "forge",
+        "standalone",
+        "docs",
+        "documentation",
+        "documentacao",
+    }
+    return bool(tokens & guarded_tokens and tokens & agent_context_tokens)
+
+
 def routed_builder_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
+    if is_guideline_audit_intent(question):
+        return "guideline-audit"
     analysis_tokens = {"analyze", "analise", "analisar", "analysis", "review", "revisao", "quality", "audit", "auditoria"}
     build_tokens = {
         "build",
@@ -10403,6 +10969,16 @@ def routed_builder_workflow(question: str) -> str:
 
 
 def builder_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "guideline-audit":
+        return (
+            "run guideline-audit to identify the governing guideline, missing rule, acceptance evidence, work-order candidate, and implementation block",
+            "I should make the rule and proof explicit before agents create durable architecture, code, permissions, releases, or agent docs.",
+            guidance_alternatives(
+                ("workflow-builder", "use when the audit says a new Forge workflow is the correct artifact"),
+                ("build-story", "use only after the guideline and work order allow implementation"),
+                ("readiness-check", "use when the work-order batch needs readiness proof before build"),
+            ),
+        )
     if workflow_id == "isolated-eval-runner":
         return (
             "run isolated-eval-runner to choose local/container/remote/waiver mode, define commands, trust boundary, timeout, cleanup, and evidence",
@@ -10673,7 +11249,19 @@ def should_transition_to_guided_workflow(
         return False
     if recommended_workflow == state.get("active_workflow", ""):
         return False
-    return classification in {"game-flow", "quality-flow", "builder-flow", "document-utility", "product-flow", "story-flow", "creative-flow", "lifecycle-flow", "persona-lens"}
+    return classification in {
+        "game-flow",
+        "quality-flow",
+        "platform-flow",
+        "visual-flow",
+        "builder-flow",
+        "document-utility",
+        "product-flow",
+        "story-flow",
+        "creative-flow",
+        "lifecycle-flow",
+        "persona-lens",
+    }
 
 
 def humanize_guidance_sentence(prompt: str) -> str:
@@ -10690,15 +11278,16 @@ WORKFLOW_FIRST_QUESTIONS = {
     "context-recovery": "which durable file or launcher output should anchor recovery, and which prior chat assumption should we discard?",
     "problem-solving": "what symptom, recent change, and desired end state should anchor the diagnosis?",
     "investigation": "what happened, what changed, and what evidence would separate cause from noise?",
-    "brainstorming": "what are we brainstorming about, what outcome would make the session useful, and which limits or anti-goals should shape the option space?",
+    "brainstorming": "what are we brainstorming about, what outcome would make the session useful, which limits or anti-goals shape the options, and what visual examples should we compare?",
     "discover-intent": DISCOVERY_CLOSEOUT_FIRST_QUESTION,
     "domain-scan": "which domain rule, harm, or expert assumption could block this idea?",
     "market-scan": "which alternative, adoption friction, or switching signal would change the product bet?",
     "technical-feasibility-scan": "which technical promise is riskiest, and what is the cheapest proof path?",
-    "product-requirements": "what user promise, acceptance signal, and non-goal should become durable requirements?",
-    "write-spec": "what stable capability, constraint, non-goal, and success signal must the spec kernel preserve?",
+    "product-requirements": "what user promise, acceptance signal, non-goal, and visible proof should become durable requirements?",
+    "write-spec": "what stable capability, constraint, non-goal, success signal, and visual checkpoint must the spec kernel preserve?",
     "working-backwards-challenge": "what customer claim, FAQ objection, and evidence gap should pressure-test the promise?",
     "ux-plan": "what moment should feel excellent, what generic interaction should we reject, and how do we prove the feeling?",
+    "visual-alignment-prototype": "what should the human see first, what would prove this is the right product shape, and what visible mismatch should trigger correction?",
     "architecture": "which accepted PRD or UX decision, interface, risk, and validation hook should drive architecture?",
     "quick-dev": "what tiny scope, proof command, and explicit non-goal keep this fast path honest?",
     "story-creation": "which accepted decision source should become the first implementation-ready story?",
@@ -10712,6 +11301,7 @@ WORKFLOW_FIRST_QUESTIONS = {
     "module-distribution": "what install, upgrade, config, and registry proof makes this module usable outside this checkout?",
     "module-validate": "which route, pack, template, or install invariant would prove this extension is coherent?",
     "runtime-builder": "what human behavior should improve, what compact agent contract should exist, and which test would catch regression?",
+    "guideline-audit": "which guideline governs this work, what evidence would prove it, and what remains blocked?",
     "isolated-eval-runner": "which eval needs isolation, what trust boundary applies, and what evidence proves repeatability?",
     "hook-event-plan": "which event should exist, what must it never do silently, and what dry-run proves the contract?",
     "workflow-analyze": "which workflow trigger, overlap, missing handoff, or stale doc should the analysis prove?",
@@ -10722,7 +11312,7 @@ WORKFLOW_FIRST_QUESTIONS = {
     "innovation-strategy": "which bet, adoption friction, reversibility, and evidence grade should decide novelty?",
     "storytelling": "what audience shift, tension, payoff, and rejected arc should the story preserve?",
     "creative-session": "what taste direction, anti-reference, and selection criterion should guide the creative pass?",
-    "game-brief": "before small questions, dump the whole game: what should players feel, what already exists in your head, what must this not become, and do you want fast path with [ASSUMPTION] tags or step-by-step coaching?",
+    "game-brief": "before small questions, dump the whole game: what should players feel, what already exists in your head, what must this not become, and what first visual preview would prove the direction?",
     "game-context": "what player fantasy, engine profile, source artifact, and next game workflow must future agents preserve?",
     "engine-setup": "which engine profile, first-run command, folder shape, and setup risk must become durable?",
     "gdd": "which pillar, core loop, system, and playable-slice decision should deepen beyond the brief?",
@@ -10740,6 +11330,7 @@ WORKFLOW_FIRST_QUESTIONS = {
     "test-framework": "which fixture boundary, semantic locator, and maintainability risk should the framework prove?",
     "api-browser-utility": "which repeated API/browser action deserves a helper, what auth boundary applies, and what visible assertion proves it?",
     "ci-quality-pipeline": "which check, failure signal, runtime budget, and ownership rule should CI enforce?",
+    "platform-ops-plan": "which platform assumption could hurt later: database, CI/CD, deployment, environments, secrets, observability, or rollback?",
     "atdd-plan": "which acceptance behavior, example, and automation layer should define done?",
     "test-automation": "which scenario deserves automation, what visible outcome proves it, and what flake risk must be avoided?",
     "test-review": "which finding, missing proof, or regression risk should block story completion?",
@@ -10781,6 +11372,10 @@ def first_guidance_question(classification: str, workflow_id: str) -> str:
         return "what feeling, audience shift, and rejected direction should shape this pass?"
     if classification == "quality-flow":
         return "what failure would be expensive to miss, and what proof should block release if it fails?"
+    if classification == "platform-flow":
+        return "which infrastructure, CI/CD, database, deployment, environment, secret, or observability assumption should not stay implicit?"
+    if classification == "visual-flow":
+        return "what should the human see first, and what visible mismatch would make us correct course before build?"
     if classification == "document-utility":
         return "what source is authoritative, what job should the document do, and what must not be changed?"
     if classification == "story-flow":
@@ -11094,6 +11689,29 @@ def build_guidance_decision(
                 recommended_action,
             )
         )
+    elif has_question and phase == "5-ready-operate" and is_guideline_audit_intent(question):
+        classification = "builder-flow"
+        recommended_phase = "6-evolve"
+        recommended_workflow = "guideline-audit"
+        recommended_action, human_prompt, alternatives = builder_guidance_text(recommended_workflow)
+        state_update_required = True
+        reason = "A ready project with guideline, work-order, or permanent implementation pressure should enter evolve through guideline audit before implementation."
+        commands.append(
+            preflight_command(
+                "transition-evolve",
+                "transition",
+                "--root",
+                root,
+                "--phase",
+                "6-evolve",
+                "--status",
+                "guideline-audit",
+                "--workflow",
+                recommended_workflow,
+                "--next-action",
+                recommended_action,
+            )
+        )
     elif (
         has_question
         and phase == "5-ready-operate"
@@ -11180,6 +11798,13 @@ def build_guidance_decision(
         recommended_workflow = routed_document_workflow(question)
         recommended_action, human_prompt, alternatives = document_guidance_text(recommended_workflow)
         reason = "The message asks for explicit documentation utility work, so document routing outranks generic project-context or handoff wording."
+    elif has_question and "platform-flow" in signal_set and not (
+        "lifecycle-flow" in signal_set and routed_lifecycle_workflow(question) == "track-decision"
+    ):
+        classification = "platform-flow"
+        recommended_workflow = routed_platform_workflow(question)
+        recommended_action, human_prompt, alternatives = platform_guidance_text(recommended_workflow)
+        reason = "The message is primarily about infrastructure, CI/CD, database/data operations, deployment, environments, secrets, or observability."
     elif has_question and "lifecycle-flow" in signal_set:
         classification = "lifecycle-flow"
         recommended_workflow = routed_lifecycle_workflow(question)
@@ -11201,6 +11826,11 @@ def build_guidance_decision(
         recommended_workflow = routed_creative_workflow(question)
         recommended_action, human_prompt, alternatives = creative_guidance_text(recommended_workflow)
         reason = "The message is taste-heavy or creative, so the creative router chooses the narrowest useful facilitation workflow."
+    elif has_question and "visual-flow" in signal_set and is_visual_alignment_intent(question) and "game-flow" not in signal_set:
+        classification = "visual-flow"
+        recommended_workflow = "visual-alignment-prototype"
+        recommended_action, human_prompt, alternatives = visual_guidance_text(recommended_workflow)
+        reason = "The message asks for visual feedback, prototype preview, mockup, or visible alignment before implementation."
     elif has_question and "brainstorm" in signal_set:
         classification = "brainstorm"
         recommended_workflow = "brainstorming"
@@ -11255,11 +11885,18 @@ def build_guidance_decision(
             ("sprint-status", "when the human needs progress, blockers, and next story orientation"),
         )
         reason = "The message explicitly asks for sprint planning, so story lifecycle planning outranks generic validation or quality wording."
-    elif has_question and "quality-flow" in signal_set and not is_strong_game_quality_intent(question):
+    elif has_question and "quality-flow" in signal_set and "platform-flow" not in signal_set and not is_strong_game_quality_intent(question):
         classification = "quality-flow"
         recommended_workflow = routed_quality_workflow(question)
         recommended_action, human_prompt, alternatives = quality_guidance_text(recommended_workflow)
         reason = "The message is primarily about quality, risk, review, evidence, fixture architecture, CI, or test architecture."
+    elif has_question and "platform-flow" in signal_set and not (
+        "lifecycle-flow" in signal_set and routed_lifecycle_workflow(question) == "track-decision"
+    ):
+        classification = "platform-flow"
+        recommended_workflow = routed_platform_workflow(question)
+        recommended_action, human_prompt, alternatives = platform_guidance_text(recommended_workflow)
+        reason = "The message is primarily about infrastructure, CI/CD, database/data operations, deployment, environments, secrets, or observability."
     elif has_question and "document-utility" in signal_set and not is_presentation_craft_intent(question):
         classification = "document-utility"
         recommended_workflow = routed_document_workflow(question)
@@ -11282,6 +11919,8 @@ def build_guidance_decision(
         elif recommended_workflow == "ux-plan":
             recommended_action = "run ux-plan to calibrate taste, journeys, interaction model, accessibility, rejection log, and proof"
             human_prompt = "I should make the human experience concrete before implementation stories."
+        elif recommended_workflow == "visual-alignment-prototype":
+            recommended_action, human_prompt, alternatives = visual_guidance_text(recommended_workflow)
         elif recommended_workflow == "architecture":
             recommended_action = "run architecture to connect accepted product decisions to technical constraints, interfaces, risks, and story boundaries"
             human_prompt = "I should turn accepted requirements into implementation architecture before story creation."
@@ -11295,6 +11934,7 @@ def build_guidance_decision(
             ("write-spec", "when mixed notes, a brief, or a brain dump need a compact source-of-truth contract"),
             ("product-requirements", "when product promise, scope, or acceptance criteria need a PRD"),
             ("working-backwards-challenge", "when the customer promise needs PRFAQ-style stress testing"),
+            ("visual-alignment-prototype", "when the human needs to see and correct product shape before build"),
             ("ux-plan", "when taste, journey, interface, states, or accessibility are the main uncertainty"),
             ("architecture", "when accepted PRD/UX decisions need technical tradeoffs, interfaces, and story impact"),
         )
@@ -11334,6 +11974,11 @@ def build_guidance_decision(
         recommended_workflow = routed_game_workflow(question)
         recommended_action, human_prompt, alternatives = game_guidance_text(recommended_workflow)
         reason = "The message is game-shaped and includes enough detail to choose a game-specific workflow."
+    elif has_question and is_guideline_audit_intent(question):
+        classification = "builder-flow"
+        recommended_workflow = "guideline-audit"
+        recommended_action, human_prompt, alternatives = builder_guidance_text(recommended_workflow)
+        reason = "The message asks for guideline, work-order, acceptance-evidence, or guarded implementation work, so guideline audit must run before build."
     elif has_question and "quality-flow" in signal_set:
         classification = "quality-flow"
         recommended_workflow = routed_quality_workflow(question)
@@ -11401,6 +12046,18 @@ def build_guidance_decision(
             )
         )
         reason = f"{reason} The selected catalog workflow is narrow and executable, so the runtime should enter it before continuing."
+    early_visual_proof = early_visual_proof_policy(
+        question=question,
+        classification=classification,
+        workflow_id=recommended_workflow,
+        phase=recommended_phase,
+        signals=signals,
+    )
+    if early_visual_proof.get("required"):
+        recommended_action = append_early_visual_proof_guidance(recommended_action, early_visual_proof, field="action")
+        human_prompt = append_early_visual_proof_guidance(human_prompt, early_visual_proof, field="prompt")
+        alternatives = ensure_visual_alignment_alternative(alternatives, early_visual_proof)
+        reason = f"{reason} Early visual proof is required before the direction becomes requirements, stories, or build."
     human_prompt = rich_human_prompt_for_guidance(
         prompt=human_prompt,
         classification=classification,
@@ -11429,6 +12086,7 @@ def build_guidance_decision(
         "human_prompt": human_prompt,
         "alternatives": alternatives,
         "persona_lens": persona_lens,
+        "early_visual_proof": early_visual_proof,
         "state_update_required": state_update_required,
         "state_updates": {
             "last_intent_classification": classification,
@@ -11508,6 +12166,7 @@ def build_stateful_guide_payload(
         "workflow_metadata": guidance["workflow_metadata"],
         "facilitation_pack": guidance["facilitation_pack"],
         "persona_lens": guidance.get("persona_lens", {}),
+        "early_visual_proof": guidance.get("early_visual_proof", {}),
         "recommended_action": guidance["recommended_action"],
         "human_prompt": guidance["human_prompt"],
         "alternatives": guidance["alternatives"],
@@ -11552,6 +12211,7 @@ def build_guide_payload(root: Path, *, question: str, max_chars: int) -> dict[st
             "workflow_metadata": guidance["workflow_metadata"],
             "facilitation_pack": guidance["facilitation_pack"],
             "persona_lens": guidance.get("persona_lens", {}),
+            "early_visual_proof": guidance.get("early_visual_proof", {}),
             "recommended_action": guidance["recommended_action"],
             "human_prompt": guidance["human_prompt"],
             "alternatives": guidance["alternatives"],
@@ -11597,6 +12257,9 @@ def print_guidance_engine_summary(payload: dict[str, Any]) -> None:
         print(f"Workflow metadata: {required}; outputs: {outputs}")
     if guidance.get("facilitation_pack"):
         print(f"Facilitation: {guidance.get('facilitation_pack')}")
+    early_visual_proof = guidance.get("early_visual_proof") or {}
+    if early_visual_proof.get("required"):
+        print(f"Early visual proof: {early_visual_proof.get('status')} -> {early_visual_proof.get('workflow')}")
     persona_lens = guidance.get("persona_lens") or {}
     if persona_lens:
         agents = join_list([str(item) for item in persona_lens.get("agent_ids", [])])
@@ -11772,7 +12435,7 @@ def prepare_parity_replay_state(root: Path, state_kind: str) -> None:
                 "status": "ready",
                 "phase": "4-build-verify",
                 "acceptance_criteria": "target works",
-                "checks": "python -m unittest discover -s tests",
+                "checks": "python scripts/test-runner.py --workers 4 --timeout 120 --report .forge-method/test-runs/manual.json",
                 "decision_sources": decision_source,
                 "artifacts": decision_source,
                 "evidence": "",
@@ -11816,6 +12479,17 @@ def parity_case_failures(case: dict[str, Any], payload: dict[str, Any]) -> list[
     expect_equal("recommended_phase", payload.get("recommended_phase"), case.get("expected_phase"))
     expect_equal("state_update_required", payload.get("state_update_required"), case.get("state_update_required"))
     expect_equal("facilitation_pack", payload.get("facilitation_pack"), case.get("expected_facilitation_pack"))
+    early_visual_proof = payload.get("early_visual_proof") or {}
+    expect_equal(
+        "early_visual_proof.required",
+        bool(early_visual_proof.get("required")),
+        case.get("expected_early_visual_required"),
+    )
+    expect_equal(
+        "early_visual_proof.workflow",
+        early_visual_proof.get("workflow"),
+        case.get("expected_early_visual_workflow"),
+    )
     if (
         payload.get("facilitation_pack")
         and case.get("expected_classification") != "mechanical-build"
@@ -15123,6 +15797,8 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_discovery_closeout.add_argument("--constraints", required=True)
     artifact_discovery_closeout.add_argument("--non-goals", required=True)
     artifact_discovery_closeout.add_argument("--success-signal", required=True)
+    artifact_discovery_closeout.add_argument("--visible-or-operational-proof", default="early visible proof or operational proof selected during discovery")
+    artifact_discovery_closeout.add_argument("--early-visual-feedback-loop", default="show the narrowest useful visual proof before requirements or stories when user-facing")
     artifact_discovery_closeout.add_argument("--open-questions", default="none blocking")
     artifact_discovery_closeout.add_argument(
         "--grill-gate-handoff",
@@ -15154,6 +15830,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_spec_kernel.add_argument("--constraints", required=True)
     artifact_spec_kernel.add_argument("--non-goals", required=True)
     artifact_spec_kernel.add_argument("--success-signal", required=True)
+    artifact_spec_kernel.add_argument("--early-visual-proof", default="not applicable or carried by visual-alignment-prototype before stories")
     artifact_spec_kernel.add_argument("--assumptions", default="none blocking")
     artifact_spec_kernel.add_argument("--open-questions", default="none blocking")
     artifact_spec_kernel.add_argument("--preservation-map", required=True)
@@ -15183,6 +15860,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_research_scan.add_argument("--contradictions-or-falsifiers", required=True)
     artifact_research_scan.add_argument("--uncertainty", required=True)
     artifact_research_scan.add_argument("--stance", required=True)
+    artifact_research_scan.add_argument("--visual-reference-examples", default="")
     artifact_research_scan.add_argument("--alternatives", default="")
     artifact_research_scan.add_argument("--adoption-friction", default="")
     artifact_research_scan.add_argument("--demand-signal", default="")
@@ -15215,6 +15893,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_game_brief.add_argument("--platform-or-engine", required=True)
     artifact_game_brief.add_argument("--pillars", required=True)
     artifact_game_brief.add_argument("--references", required=True)
+    artifact_game_brief.add_argument("--first-visual-preview", default="first table, screen, scene, HUD, map, or sheet preview to align before GDD or stories")
     artifact_game_brief.add_argument("--mvp-playable-proof", required=True)
     artifact_game_brief.add_argument("--dream-game", required=True)
     artifact_game_brief.add_argument("--vertical-slice", default="")

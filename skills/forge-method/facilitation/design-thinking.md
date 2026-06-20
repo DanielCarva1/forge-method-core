@@ -14,13 +14,14 @@ follow_up_batches:
   - define: "Which problem is worth solving now?"
   - ideate: "Which alternatives could change the experience?"
   - prototype: "What can be tested cheaply?"
+  - visible_feedback: "What sketch, screen, storyboard, or example lets the human react before the solution shape is accepted?"
   - test: "What feedback would invalidate the direction?"
 
 conversation_stages:
   - empathy: "Start with the human situation, not the feature request."
   - define: "Turn the messy need into a crisp problem statement and how-might-we question."
   - diverge: "Generate multiple solution shapes before judging implementation."
-  - prototype: "Pick the smallest artifact or interaction that can test the riskiest assumption."
+  - prototype: "Pick the smallest artifact or interaction that can test the riskiest assumption, and show it before freezing the direction."
   - learn: "Define what feedback would confirm, change, or kill the direction."
 
 elicitation_options:
@@ -38,6 +39,7 @@ facilitator_moves:
 quality_bar:
   - "The artifact names a user, context, need, insight, and testable solution direction."
   - "The next experiment is small enough to run before a full build."
+  - "A user-facing solution has a visible feedback artifact before PRD, stories, or implementation."
   - "The chosen design is traceable to human evidence, not just preference."
 
 anti_patterns:
@@ -57,7 +59,7 @@ checkpoint_options:
   - council
 
 artifact_rules:
-  Persist user frame, journey, opportunity, prototype hypothesis, and test criteria.
+  Persist user frame, journey, opportunity, prototype hypothesis, visible feedback artifact, and test criteria.
 
 domain_examples:
   - product_discovery: "Reframe a feature request into user, context, need, insight, and testable opportunity."

@@ -4,35 +4,37 @@
 
 - project: forge-method-core
 - phase: 6-evolve
-- status: hotfix-validated
-- workflow: release-readiness
+- status: validated
+- workflow: guideline-audit
 - active_story: <none>
-- next_action: v1.31.2 is public; next work is tester feedback or a new evolve cycle.
+- next_action: decide whether to optimize the slowest runtime tests or run release readiness
 
 ## Latest Checkpoint
 
-# v1.31.2 guided research drift hotfix published
+# Smart test suite observability
 
-- created_at: 2026-06-17T23:26:18+00:00
+- created_at: 2026-06-18T04:35:51+00:00
 - project: forge-method-core
 - phase: 6-evolve
-- status: hotfix-validated
-- workflow: release-readiness
+- status: validated
+- workflow: guideline-audit
 - active_story: <none>
 
 ## Summary
 
-Published Forge Method 1.31.2 to main, tag, and GitHub Release. Validated public clone/install by tag and main, then updated the local Codex plugin to 1.31.2.
+Added debug mode, JSON/JUnit reports, retained logs, match filtering, and report-driven failure/slowest reruns to the responsive test suite.
 
 ## Decisions
 
-- Guided research drift fix is publicly shipped so beta users following main can receive it on next Forge startup.
+- Keep full test coverage, but make the suite observable through per-test reports and debug reruns instead of opaque unittest discovery.
 
 ## Checks
 
-- GitHub Release v1.31.2 created
-- Clone/install smoke passed for v1.31.2 and main
-- Local plugin preflight no longer reports version mismatch
+- py_compile passed
+- runner self-tests passed
+- verify-fast debug path passed
+- bash wrapper syntax passed
+- full responsive suite passed 133/133 in 199.4s
 
 ## Failed Checks
 
@@ -40,25 +42,44 @@ Published Forge Method 1.31.2 to main, tag, and GitHub Release. Validated public
 
 ## Touched Files
 
-- none
+- scripts/test-runner.py
+- scripts/verify-fast.ps1
+- scripts/verify-fast.sh
+- scripts/verify-all.ps1
+- scripts/verify-all.sh
+- tests/test_test_runner.py
+- AGENTS.md
+- docs/07-v1-readiness-audit.md
+- assets/marketplace/listing.json
 
 ## Artifacts
 
-- none
+- .forge-method/evidence/20260618-013448-smart-test-suite-observability.md
 
 ## Next Action
 
-v1.31.2 is public; next work is tester feedback or a new evolve cycle.
+decide whether to optimize the slowest runtime tests or run release readiness
 
 ## Recovery Signals
 
 ### Failed Checks
 
-- none
+- Legacy direct `python -m unittest discover -s tests` timed out during this work. Replaced in verification scripts with `scripts/test-runner.py`, which preserves coverage while adding progress, per-test timeouts, and slow-test reporting.
 
 ### Touched Files
 
-- none
+- CHANGELOG.md
+- scripts/test-runner.py
+- scripts/verify-all.ps1
+- scripts/verify-all.sh
+- scripts/verify-fast.ps1
+- scripts/verify-fast.sh
+- skills/forge-guideline-auditor/**
+- skills/forge-method/catalog/workflows.json
+- skills/forge-method/facilitation/guideline-audit.md
+- skills/forge-method/modules/runtime-builder.yaml
+- skills/forge-method/references/workflow-guideline-audit.md
+- skills/forge-method/scripts/forge_method_runtime.py
 
 ## Open Human Inputs
 
@@ -75,16 +96,16 @@ v1.31.2 is public; next work is tester feedback or a new evolve cycle.
 
 ## Recent Evidence
 
-- .forge-method/evidence/20260617-195333-validation-validation-v1-31-0-main-published-install.md
-- .forge-method/evidence/20260617-205038-validation-validation-v1-31-1-public-install-core-state-gua.md
 - .forge-method/evidence/20260617-205618-publication-v1-31-1-public-install-hotfix-published.md
 - .forge-method/evidence/20260617-232255-validation-v1-31-2-guided-research-drift-hotfix-validated.md
 - .forge-method/evidence/20260617-232617-publication-v1-31-2-guided-research-drift-hotfix-published.md
+- .forge-method/evidence/20260617-235258-documentation-guideline-auditor-integrated.md
+- .forge-method/evidence/20260618-013448-smart-test-suite-observability.md
 
 ## Recent Artifacts
 
-- internal-parity-audit [active/durable]: .forge-method/artifacts/20260617-current-systematic-parity-completion-audit.md - Current systematic parity completion audit - Current external-to-Forge parity audit for Forge Method 1.30.0. Records translated/proved families, deferred P2 surfaces, and the release/version validation routing patch.
-- internal-benchmark [active/durable]: .forge-method/artifacts/guidance-engine-benchmark.md - Guidance Engine benchmark - Internal benchmark now includes P2 runtime utility workflow targets: isolated eval runner, hook/event plan, and API/browser utility, with replay fixture coverage.
-- capability-index [active/durable]: .forge-method/context/capability-index.json - Capability Index - Regenerated compact capability index for Forge Method 1.31.0 with runtime utility workflows, route diagnostics, packs, templates, and validation metadata.
-- changelog [active/durable]: CHANGELOG.md - Forge Method 1.31.0 changelog - Changelog moved parity closure and runtime utility work into Forge Method Core v1.31.0 with opt-in utility surfaces and release/version validation routing.
 - internal-parity-audit [active/durable]: .forge-method/artifacts/20260617-current-systematic-parity-completion-audit.md - Current systematic parity completion audit - Current systematic parity audit now records remaining P2 utility surfaces as translated into opt-in Forge contracts, with validation and release metadata for 1.31.0.
+- skill [active/durable]: skills/forge-guideline-auditor/SKILL.md - Forge Guideline Auditor - Reusable Forge Guideline Auditor skill for turning gaps into guidelines, work-order candidates, and acceptance evidence before durable implementation.
+- workflow [active/durable]: skills/forge-method/references/workflow-guideline-audit.md - Guideline Audit workflow - Compact guideline-audit workflow for routing guideline, work-order, acceptance-evidence, and guarded implementation requests before build.
+- changelog [active/durable]: CHANGELOG.md - Forge Guideline Auditor changelog - Unreleased notes record Forge Guideline Auditor, guideline-audit routing, work-order fields, and regression coverage.
+- evidence [active/durable]: .forge-method/evidence/20260618-013448-smart-test-suite-observability.md - Smart test suite observability - Debug/report/JUnit runner observability added and validated with full responsive unit run.

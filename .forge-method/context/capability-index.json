@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-17T23:19:56+00:00",
+  "generated_at": "2026-06-20T18:46:01+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -138,35 +138,42 @@
       "phase_span": "2-specification | 3-plan | 4-build-verify | 5-ready-operate | 6-evolve",
       "purpose": "Plan security, privacy, compliance, DevOps, observability, risk, and release readiness for production-grade work.",
       "title": "Enterprise",
-      "workflows": "guidance-engine | discover-intent | project-context | session-prep | research-closeout | reality-evidence-gate | domain-scan | technical-feasibility-scan | security-plan | privacy-data-plan | devops-deployment-plan | ci-quality-pipeline | compliance-checklist | observability-plan | nfr-evidence-audit | traceability-gate | risk-register | readiness-check | code-review | retrospective | release-readiness | grill-gate"
+      "workflows": "guidance-engine | discover-intent | project-context | session-prep | research-closeout | reality-evidence-gate | domain-scan | technical-feasibility-scan | platform-ops-plan | security-plan | privacy-data-plan | devops-deployment-plan | ci-quality-pipeline | compliance-checklist | observability-plan | nfr-evidence-audit | traceability-gate | risk-register | readiness-check | code-review | retrospective | release-readiness | grill-gate"
     },
     {
       "id": "game-studio",
       "phase_span": "1-discovery | 2-specification | 3-plan | 4-build-verify",
       "purpose": "Preserve game-specific concept, mechanic, prototype, design, engine, and vertical-slice decisions.",
       "title": "Game Studio",
-      "workflows": "guidance-engine | discover-intent | game-project | game-brief | game-context | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | gdd | narrative-design | mechanics-design | game-ux-design | game-prd | engine-setup | engine-architecture | game-story-creation | game-sprint-planning | game-sprint-status | game-retrospective | game-test-framework | game-test-automation | game-e2e-scaffold | quick-prototype | playtest-plan | performance-plan | game-qa-review | build-story | grill-gate"
+      "workflows": "guidance-engine | discover-intent | game-project | game-brief | game-context | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | visual-alignment-prototype | gdd | narrative-design | mechanics-design | game-ux-design | game-prd | engine-setup | engine-architecture | game-story-creation | game-sprint-planning | game-sprint-status | game-retrospective | game-test-framework | game-test-automation | game-e2e-scaffold | quick-prototype | playtest-plan | performance-plan | game-qa-review | build-story | grill-gate"
     },
     {
       "id": "launch-ops",
       "phase_span": "4-build-verify | 5-ready-operate | 6-evolve",
       "purpose": "Move a project into ready/operate, preserve release evidence, and route future evolution.",
       "title": "Launch Ops",
-      "workflows": "guidance-engine | discover-intent | project-context | session-prep | checkpoint-preview | sprint-status | code-review | retrospective | ready-release | release-readiness | observability-plan | devops-deployment-plan | evolve-project | context-recovery"
+      "workflows": "guidance-engine | discover-intent | project-context | session-prep | checkpoint-preview | sprint-status | code-review | retrospective | ready-release | release-readiness | platform-ops-plan | observability-plan | devops-deployment-plan | ci-quality-pipeline | evolve-project | context-recovery"
+    },
+    {
+      "id": "platform-ops",
+      "phase_span": "1-discovery | 2-specification | 3-plan | 4-build-verify | 5-ready-operate | 6-evolve",
+      "purpose": "Guide infrastructure, environments, CI/CD, database/data operations, deployment, secrets, observability, rollback, and operate readiness.",
+      "title": "Platform Ops",
+      "workflows": "guidance-engine | discover-intent | project-context | session-prep | research-closeout | technical-feasibility-scan | architecture | platform-ops-plan | devops-deployment-plan | ci-quality-pipeline | test-framework | security-plan | privacy-data-plan | observability-plan | nfr-evidence-audit | traceability-gate | risk-register | readiness-check | release-readiness | retrospective | correct-course | grill-gate"
     },
     {
       "id": "runtime-builder",
       "phase_span": "1-discovery | 2-specification | 3-plan | 4-build-verify | 6-evolve",
       "purpose": "Create new workflows, modules, skills, scripts, and validations for Forge Method projects.",
       "title": "Runtime Builder",
-      "workflows": "guidance-engine | discover-intent | runtime-builder | module-ideation | agent-builder | workflow-builder | module-builder | module-distribution | module-validate | builder-scaffold | agent-analyze | workflow-analyze | skill-convert | config-customization | track-decision | project-context | session-prep | checkpoint-preview | research-closeout | reality-evidence-gate | technical-feasibility-scan | investigation | doc-index | doc-shard | editorial-review | edge-case-review | adversarial-review | spec-distillation | code-review | retrospective | eval-design | workflow-validate | build-story | grill-gate"
+      "workflows": "guidance-engine | discover-intent | runtime-builder | guideline-audit | module-ideation | agent-builder | workflow-builder | module-builder | module-distribution | module-validate | builder-scaffold | agent-analyze | workflow-analyze | skill-convert | config-customization | track-decision | project-context | session-prep | checkpoint-preview | research-closeout | reality-evidence-gate | technical-feasibility-scan | investigation | doc-index | doc-shard | editorial-review | edge-case-review | adversarial-review | spec-distillation | code-review | retrospective | eval-design | workflow-validate | build-story | grill-gate"
     },
     {
       "id": "software-builder",
       "phase_span": "2-specification | 3-plan | 4-build-verify | 5-ready-operate",
       "purpose": "Turn specifications into implementation stories, code changes, checks, review, and evidence.",
       "title": "Software Builder",
-      "workflows": "guidance-engine | discover-intent | track-decision | project-context | session-prep | checkpoint-preview | research-closeout | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | investigation | spec-distillation | product-requirements | working-backwards-challenge | ux-plan | quick-dev | architecture | create-epics | story-creation | sprint-status | doc-index | doc-shard | editorial-review | edge-case-review | adversarial-review | readiness-check | code-review | retrospective | grill-gate | build-story | ready-release | correct-course"
+      "workflows": "guidance-engine | discover-intent | track-decision | project-context | session-prep | checkpoint-preview | research-closeout | reality-evidence-gate | market-scan | domain-scan | technical-feasibility-scan | investigation | spec-distillation | product-requirements | working-backwards-challenge | ux-plan | visual-alignment-prototype | quick-dev | architecture | platform-ops-plan | devops-deployment-plan | ci-quality-pipeline | observability-plan | create-epics | story-creation | sprint-status | doc-index | doc-shard | editorial-review | edge-case-review | adversarial-review | readiness-check | code-review | retrospective | grill-gate | build-story | ready-release | correct-course"
     },
     {
       "id": "test-architect",
@@ -588,7 +595,7 @@
     ]
   },
   "runtime": "forge-method",
-  "runtime_version": "1.31.2",
+  "runtime_version": "1.32.0",
   "sources": [],
   "workflows": [
     {
@@ -686,6 +693,7 @@
     {
       "facilitation_pack": "architecture-planning",
       "followed_by": [
+        "platform-ops-plan",
         "test-strategy",
         "security-plan",
         "create-epics",
@@ -736,6 +744,7 @@
       "facilitation_pack": "brainstorming",
       "followed_by": [
         "concept-selection",
+        "visual-alignment-prototype",
         "reality-evidence-gate",
         "product-requirements",
         "game-brief"
@@ -751,6 +760,7 @@
       "outputs": [
         "option set",
         "selection criteria",
+        "visual option examples",
         "rejected patterns",
         "top candidates",
         "next workflow"
@@ -888,11 +898,13 @@
     {
       "facilitation_pack": "creative-direction",
       "followed_by": [
+        "visual-alignment-prototype",
         "write-spec"
       ],
       "id": "concept-selection",
       "outputs": [
         "selected concept",
+        "visual direction",
         "rejected alternatives"
       ],
       "phase": "1-discovery",
@@ -1031,6 +1043,7 @@
       "facilitation_pack": "design-thinking",
       "followed_by": [
         "brainstorming",
+        "visual-alignment-prototype",
         "ux-plan",
         "problem-solving"
       ],
@@ -1047,6 +1060,7 @@
         "user problem frame",
         "opportunity question",
         "prototype hypothesis",
+        "visible experiment",
         "test criteria"
       ],
       "phase": "1-discovery",
@@ -1080,13 +1094,15 @@
       "facilitation_pack": "discover-intent",
       "followed_by": [
         "reality-evidence-gate",
+        "visual-alignment-prototype",
         "write-spec"
       ],
       "id": "discover-intent",
       "outputs": [
         "intent",
         "constraints",
-        "success criteria"
+        "success criteria",
+        "visible proof need"
       ],
       "phase": "1-discovery",
       "required": true,
@@ -1142,6 +1158,7 @@
       "facilitation_pack": "evidence-research",
       "followed_by": [
         "research-closeout",
+        "visual-alignment-prototype",
         "product-requirements",
         "architecture",
         "correct-course"
@@ -1156,6 +1173,7 @@
         "domain constraints",
         "risks or harms",
         "expert review needs",
+        "domain examples",
         "research stance"
       ],
       "phase": "1-discovery",
@@ -1286,6 +1304,7 @@
     {
       "facilitation_pack": "game-brief",
       "followed_by": [
+        "visual-alignment-prototype",
         "game-context",
         "gdd",
         "game-ux-design",
@@ -1302,6 +1321,7 @@
       ],
       "outputs": [
         "living game brief",
+        "first visual preview",
         "decision log",
         "parked scope",
         "playable proof"
@@ -1360,6 +1380,7 @@
     {
       "facilitation_pack": "game-lifecycle",
       "followed_by": [
+        "visual-alignment-prototype",
         "create-epics",
         "game-story-creation"
       ],
@@ -1371,6 +1392,7 @@
       ],
       "outputs": [
         "game PRD",
+        "visible acceptance examples",
         "acceptance/evidence map"
       ],
       "phase": "2-specification | 3-plan",
@@ -1439,6 +1461,7 @@
     {
       "facilitation_pack": "game-lifecycle",
       "followed_by": [
+        "visual-alignment-prototype",
         "game-story-creation",
         "build-story",
         "game-sprint-status",
@@ -1454,6 +1477,7 @@
       "outputs": [
         "playable slice sprint plan",
         "story order",
+        "visual proof dependency",
         "decision-source map",
         "validation plan"
       ],
@@ -1549,6 +1573,7 @@
     {
       "facilitation_pack": "game-lifecycle",
       "followed_by": [
+        "visual-alignment-prototype",
         "game-prd",
         "game-story-creation"
       ],
@@ -1560,7 +1585,8 @@
       ],
       "outputs": [
         "game UX plan",
-        "interaction map"
+        "interaction map",
+        "visible UX proof"
       ],
       "phase": "2-specification | 3-plan",
       "required": false,
@@ -1569,6 +1595,7 @@
     {
       "facilitation_pack": "game-lifecycle",
       "followed_by": [
+        "visual-alignment-prototype",
         "narrative-design",
         "mechanics-design",
         "game-ux-design",
@@ -1585,6 +1612,7 @@
       ],
       "outputs": [
         "game design document",
+        "visible slice shape",
         "playable slice"
       ],
       "phase": "2-specification",
@@ -1623,6 +1651,31 @@
       ],
       "phase": "anytime",
       "required": false
+    },
+    {
+      "facilitation_pack": "guideline-audit",
+      "followed_by": [
+        "workflow-builder",
+        "build-story",
+        "readiness-check",
+        "correct-course"
+      ],
+      "id": "guideline-audit",
+      "modes": [
+        "audit",
+        "guideline",
+        "work-order",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "guideline audit",
+        "work-order candidate",
+        "acceptance evidence"
+      ],
+      "phase": "2-specification | 3-plan | 4-build-verify | 6-evolve",
+      "required": false,
+      "template": "guideline-audit-artifact"
     },
     {
       "facilitation_pack": "runtime-utility",
@@ -1732,6 +1785,7 @@
       "facilitation_pack": "evidence-research",
       "followed_by": [
         "research-closeout",
+        "visual-alignment-prototype",
         "product-requirements",
         "concept-selection",
         "correct-course"
@@ -1746,6 +1800,7 @@
         "alternatives",
         "adoption friction",
         "demand signal",
+        "visual reference examples",
         "research stance"
       ],
       "phase": "1-discovery",
@@ -1958,6 +2013,7 @@
     {
       "facilitation_pack": "story-lifecycle",
       "followed_by": [
+        "visual-alignment-prototype",
         "story-creation",
         "readiness-check",
         "sprint-status"
@@ -1972,12 +2028,44 @@
       "outputs": [
         "sprint plan artifact",
         "ordered story batch",
+        "visual proof dependency",
         "decision-source map",
         "validation and evidence plan"
       ],
       "phase": "3-plan",
       "required": true,
       "template": "sprint-plan-artifact"
+    },
+    {
+      "facilitation_pack": "platform-ops",
+      "followed_by": [
+        "devops-deployment-plan",
+        "ci-quality-pipeline",
+        "privacy-data-plan",
+        "security-plan",
+        "observability-plan",
+        "architecture",
+        "readiness-check"
+      ],
+      "id": "platform-ops-plan",
+      "modes": [
+        "infra",
+        "database",
+        "cicd",
+        "deployment",
+        "observability",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "platform surface map",
+        "database/data operations plan",
+        "environment and secrets policy",
+        "next ops workflow"
+      ],
+      "phase": "2-specification | 3-plan",
+      "required": false,
+      "template": "platform-ops-plan-artifact"
     },
     {
       "facilitation_pack": "game-lifecycle",
@@ -2053,6 +2141,7 @@
       "facilitation_pack": "product-planning",
       "followed_by": [
         "working-backwards-challenge",
+        "visual-alignment-prototype",
         "architecture",
         "ux-plan",
         "quick-dev"
@@ -2098,6 +2187,7 @@
     {
       "facilitation_pack": "quick-dev",
       "followed_by": [
+        "visual-alignment-prototype",
         "build-story",
         "ready-release",
         "product-requirements",
@@ -2113,6 +2203,7 @@
       ],
       "outputs": [
         "spec-lite",
+        "visible proof when user-facing",
         "implementation evidence",
         "next workflow"
       ],
@@ -2283,6 +2374,7 @@
     {
       "facilitation_pack": "runtime-builder",
       "followed_by": [
+        "guideline-audit",
         "module-ideation",
         "agent-builder",
         "workflow-builder",
@@ -2505,6 +2597,7 @@
       "facilitation_pack": "evidence-research",
       "followed_by": [
         "research-closeout",
+        "visual-alignment-prototype",
         "architecture",
         "quick-prototype",
         "correct-course"
@@ -2519,6 +2612,7 @@
         "feasibility stance",
         "riskiest unknowns",
         "proof path",
+        "prototype/example path",
         "research stance"
       ],
       "phase": "1-discovery",
@@ -2691,6 +2785,7 @@
     {
       "facilitation_pack": "ux-design",
       "followed_by": [
+        "visual-alignment-prototype",
         "story-creation",
         "create-epics",
         "quick-dev"
@@ -2710,6 +2805,35 @@
       "phase": "3-plan",
       "required": false,
       "template": "ux-design-artifact"
+    },
+    {
+      "facilitation_pack": "visual-alignment",
+      "followed_by": [
+        "ux-plan",
+        "product-requirements",
+        "architecture",
+        "quick-prototype",
+        "story-creation",
+        "correct-course"
+      ],
+      "id": "visual-alignment-prototype",
+      "modes": [
+        "sketch",
+        "mockup",
+        "screenshot",
+        "prototype",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "visible prototype artifact",
+        "visual mismatch list",
+        "human correction choices",
+        "next workflow"
+      ],
+      "phase": "1-discovery | 2-specification | 3-plan",
+      "required": false,
+      "template": "visual-alignment-prototype-artifact"
     },
     {
       "facilitation_pack": "builder-utility",
@@ -2765,6 +2889,7 @@
     {
       "facilitation_pack": "product-planning",
       "followed_by": [
+        "visual-alignment-prototype",
         "product-requirements",
         "ux-plan",
         "architecture"
@@ -2779,6 +2904,7 @@
       "outputs": [
         "PRFAQ challenge",
         "customer promise stress test",
+        "visible promise example",
         "decision impact"
       ],
       "phase": "2-specification",
@@ -2788,6 +2914,7 @@
     {
       "facilitation_pack": "product-planning",
       "followed_by": [
+        "visual-alignment-prototype",
         "product-requirements",
         "architecture",
         "plan-sprint",
@@ -2804,6 +2931,7 @@
       "outputs": [
         "spec kernel",
         "companion map",
+        "visual checkpoint",
         "decision log",
         "validation verdict"
       ],

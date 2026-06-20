@@ -1307,6 +1307,47 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "platform_ops_early_infra_route",
+    "family": "platform",
+    "state": "discovery",
+    "question": "antes de criar stories, precisamos mapear infra, banco de dados, CI/CD, deploy, secrets, observability e rollback",
+    "expected_classification": "platform-flow",
+    "expected_phase": "2-specification",
+    "expected_workflow": "platform-ops-plan",
+    "expected_facilitation_pack": "skill:facilitation/platform-ops.md",
+    "expected_template": "platform-ops-plan-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "visual_alignment_before_stories",
+    "family": "visual",
+    "state": "discovery",
+    "question": "quero um mockup visual da primeira tela para enxergar o produto e alinhar expectativa antes de criar stories",
+    "expected_classification": "visual-flow",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "visual-alignment-prototype",
+    "expected_facilitation_pack": "skill:facilitation/visual-alignment.md",
+    "expected_template": "visual-alignment-prototype-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "visual_proof_required_for_broad_game_intent",
+    "family": "visual",
+    "state": "discovery",
+    "question": "quero criar um VTT para jogar RPG online com meus amigos, com IA, mapas, animacoes, temas, musica e boa usabilidade",
+    "expected_classification": "game-flow",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "game-brief",
+    "expected_facilitation_pack": "skill:facilitation/game-brief.md",
+    "expected_template": "game-brief-artifact",
+    "expected_early_visual_required": true,
+    "expected_early_visual_workflow": "visual-alignment-prototype",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
     "id": "p1_4_runtime_batch_stays_runtime_builder",
     "family": "builder",
     "state": "evolve_runtime",

@@ -1,6 +1,13 @@
 param(
   [string[]]$Test = @(),
-  [switch]$SkipUnit
+  [string[]]$Match = @(),
+  [switch]$SkipUnit,
+  [switch]$Debug,
+  [switch]$NoReport,
+  [string]$ReportPath = "",
+  [string]$JunitPath = "",
+  [int]$Workers = 0,
+  [int]$TimeoutSeconds = 90
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,14 +44,59 @@ function Resolve-Python {
 
 $pythonExe = Resolve-Python
 
-if (-not $SkipUnit) {
-  if ($Test.Count -gt 0) {
-    foreach ($case in $Test) {
-      Run $pythonExe -m unittest $case
+function Split-List {
+  param([string[]]$Values)
+  $items = @()
+  foreach ($value in $Values) {
+    foreach ($item in ($value -split ",")) {
+      $trimmed = $item.Trim()
+      if ($trimmed) {
+        $items += $trimmed
+      }
     }
-  } else {
-    Run $pythonExe -m unittest discover -s tests
   }
+  return $items
+}
+
+$normalizedTests = Split-List $Test
+$normalizedMatches = Split-List $Match
+
+if (-not $NoReport -and -not $ReportPath) {
+  $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $ReportPath = Join-Path ".forge-method\test-runs" "verify-fast-$stamp.json"
+}
+
+if ($Workers -le 0) {
+  if ($Debug) {
+    $Workers = 1
+  } else {
+    $Workers = [Math]::Min(4, [Math]::Max(1, [Environment]::ProcessorCount))
+  }
+}
+
+function Runner-Args {
+  $args = @("scripts\test-runner.py", "--workers", "$Workers", "--timeout", "$TimeoutSeconds")
+  if ($Debug) {
+    $args += "--debug"
+  }
+  if ($ReportPath) {
+    $args += @("--report", $ReportPath)
+  }
+  if ($JunitPath) {
+    $args += @("--junit", $JunitPath)
+  }
+  foreach ($case in $normalizedTests) {
+    $args += @("--test", $case)
+  }
+  foreach ($match in $normalizedMatches) {
+    $args += @("--match", $match)
+  }
+  return $args
+}
+
+if (-not $SkipUnit) {
+  $runnerArgs = Runner-Args
+  Run $pythonExe @runnerArgs
 }
 Run $pythonExe scripts\verify-onboarding-assets.py
 Run $pythonExe skills\forge-method\scripts\forge_method_runtime.py workflow validate

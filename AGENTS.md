@@ -6,7 +6,8 @@ Runtime state is file-backed. Behavior that changes project progress must update
 
 Validation expectations:
 
-- Run `python -m unittest discover -s tests` after changing runtime code.
+- Run `python scripts\test-runner.py --workers 4 --timeout 120 --report .forge-method\test-runs\manual.json` after changing runtime code.
+- Add `--debug` to retain per-test logs, print repair hints, and re-run failures from the JSON report.
 - Run `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-runtime.ps1` after changing workflows or state transitions.
 - Run `powershell -ExecutionPolicy Bypass -File .\scripts\smoke-install.ps1` after changing install or skill packaging.
 - Use `scripts/verify-fast.ps1` or `scripts/verify-fast.sh` for normal development validation.

@@ -16,6 +16,7 @@ follow_up_batches:
   - pillars: "Which 2-4 pillars must survive scope cuts?"
   - audience_platform: "Who is this for, and where does it run?"
   - scope_mvp: "What is the smallest playable proof of the core hypothesis?"
+  - visual_preview: "Which table, HUD, map, character sheet, scene, or first screen should the human see before the brief becomes GDD or stories?"
   - references: "Which comparable games matter, and what are we taking or refusing from each?"
   - living_brief: "Are we creating, updating, validating, or handing off the brief?"
 
@@ -24,6 +25,7 @@ conversation_stages:
   - still_in_head: "Ask what else is still in their head before narrowing; late details often contain the real taste signal."
   - mode_choice: "Offer fast path with [ASSUMPTION] tags or coaching path with step-by-step pressure, based on urgency and energy."
   - taste_calibration: "Mirror the intended feeling, audience, and reference games; ask what must be borrowed, inverted, or avoided."
+  - preview_options: "Show one narrow visual proof or 2-3 contrasting table/screen/play examples when the direction is still broad."
   - play_shape: "Extract player fantasy, repeated loop, verbs, risks, rewards, and the moment-to-moment promise."
   - scope_cut: "Separate dream game, vertical slice, and smallest playable proof without shaming ambition."
   - living_contract: "Record decision log, rejected directions, assumptions, open questions, and research needed."
@@ -49,6 +51,7 @@ quality_bar:
   - "The human recognizes the game as their game, not a generic genre template."
   - "The brief can feed GDD, UX, PRD, prototype, and story creation without re-discovery."
   - "The MVP proves the core fantasy instead of a random technical slice."
+  - "The human sees enough of the table/screen/play shape to correct fantasy, usability, and immersion before downstream work."
   - "The artifact names player fantasy, loop, verbs, pillars, references, playable proof, parked scope, decision log, assumptions, open questions, and next workflow."
   - "artifact game-brief registers the living brief before downstream game production uses it."
   - "artifact game-check passes before the brief becomes input to GDD, prototype, or sprint planning."
@@ -68,12 +71,13 @@ checkpoint_options:
   - continue
   - game-sprint-planning
   - quick-prototype
+  - visual-alignment-prototype
   - gdd
   - domain-scan
   - council
 
 artifact_rules:
-  Use artifact game-brief for durable brief output; persist source_material, player_fantasy, core_loop, player_verbs, pillars, references, dream_game, vertical_slice, mvp_playable_proof, parked_scope, rejected alternatives, decision_log, assumptions, open_questions, validation_verdict, and next_workflow.
+  Use artifact game-brief for durable brief output; persist source_material, player_fantasy, core_loop, player_verbs, pillars, references, first_visual_preview, dream_game, vertical_slice, mvp_playable_proof, parked_scope, rejected alternatives, decision_log, assumptions, open_questions, validation_verdict, and next_workflow.
 
 domain_examples:
   - tabletop: "Fantasy, loop, rules surface, player roles, table flow, reference systems, first playable session, and parked sourcebook depth."

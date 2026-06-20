@@ -15,6 +15,7 @@ follow_up_batches:
   - sprint_plan: "Which playable slice goal, story order, decision sources, and validation plan define this sprint?"
   - engine_profile: "Which engine/profile assumptions shape structure, commands, assets, and performance?"
   - playable_slice: "What can the player actually do when this stage is done?"
+  - visual_slice: "What table, HUD, map, sheet, onboarding, scene, or screen should the human inspect before stories lock the slice?"
   - production_scope: "What is MVP, what is parked, and what must be rejected now?"
   - evidence: "Which playtest, automation, E2E, or manual proof shows this is real?"
   - e2e_smoke: "What is the shortest launch-to-result path, and what signal proves the player outcome happened?"
@@ -26,6 +27,7 @@ conversation_stages:
   - engine_context: "Record the engine profile only where it changes structure, commands, assets, tests, or performance."
   - ask_stage_questions: "Ask only the questions that unlock the selected stage, not the whole game again."
   - plan_slice: "For sprint planning, order stories by player value, risk, dependencies, proof value, and deferred scope."
+  - visual_checkpoint: "Before game UX, PRD, GDD, or sprint stories harden, show the narrowest useful visual proof or 2-3 contrasting options."
   - sprint_contract: "For game-sprint-planning, shape fields for artifact game-sprint-plan before story creation."
   - produce_handoff: "Create the lifecycle artifact, story order, status, retrospective, or test plan with source links."
   - transition: "Recommend the next workflow and whether durable state should enter it."
@@ -52,6 +54,7 @@ facilitator_moves:
 quality_bar:
   - "The output is stage-specific and executable by the next agent."
   - "Player experience, production constraints, and validation are all visible."
+  - "Initial game production stages preserve visible slice shape before story creation."
   - "The route advances the game lifecycle instead of looping in ideation."
   - "Sprint planning preserves playable slice goal, decision sources, ordered story batch, validation plan, deferred scope, next story, and sprint update."
   - "artifact game-sprint-plan registers the playable-slice sprint before game-story-creation or build-story consumes it."
@@ -73,6 +76,7 @@ checkpoint_options:
   - game-ux-design
   - game-prd
   - game-context
+  - visual-alignment-prototype
   - engine-setup
   - gdd
   - narrative-design
@@ -111,7 +115,7 @@ domain_examples:
   - game-e2e-scaffold: "Release needs launch-to-result proof; define launch command, setup/action/assertion/teardown, observable success signal, evidence mode, and readiness gate link."
 
 artifact_rules:
-  Persist lifecycle stage, source docs, decisions, parked scope, validation evidence, E2E smoke proof, next story/workflow, and unresolved risks.
+  Persist lifecycle stage, source docs, visible slice proof, decisions, parked scope, validation evidence, E2E smoke proof, next story/workflow, and unresolved risks.
   Use artifact game-sprint-plan for game-sprint-planning handoffs.
   Use artifact game-e2e-scaffold for launch-to-result smoke handoffs.
   Use `skill:templates/game-lifecycle-artifact.md` as the default artifact shape unless a narrower project template exists.

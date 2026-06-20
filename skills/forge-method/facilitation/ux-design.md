@@ -14,7 +14,7 @@ follow_up_batches:
   - emotion: "What should feel calm, powerful, playful, serious, fast, trusted, or avoided?"
   - interface: "Which surfaces, controls, states, and empty/error/loading paths matter?"
   - constraints: "What platform, device, accessibility, localization, or density constraints apply?"
-  - proof: "What prototype, screenshot, usability check, or acceptance evidence proves the UX?"
+  - proof: "What prototype, screenshot, usability check, visible artifact, or acceptance evidence proves the UX, and which 1-3 variants should the human react to?"
   - taste: "Which references, anti-references, and patterns define what good and bad look like?"
   - rejection: "Which common UI choices would make this feel wrong for the domain?"
 
@@ -24,7 +24,8 @@ conversation_stages:
   - map_journeys: "Describe primary workflows, states, and user decisions."
   - specify_interaction: "Define controls, information hierarchy, edge states, and accessibility."
   - rejection_log: "Preserve visual, copy, layout, density, and interaction decisions not to use."
-  - proof_design: "Choose screenshot, prototype, usability, accessibility, or workflow evidence."
+  - proof_design: "Choose screenshot, visual-alignment-prototype, usability, accessibility, or workflow evidence."
+  - visual_options: "Show rough alternatives when taste, layout, density, or workflow is still uncertain; one artifact is enough when the direction is narrow."
   - handoff: "Persist UX plan, assumptions, proof target, and next workflow."
 
 elicitation_options:
@@ -45,7 +46,8 @@ facilitator_moves:
 
 quality_bar:
   - "The UX plan explains workflows, states, controls, density, and proof."
-  - "The human can judge whether the experience has taste."
+  - "The UX plan captures accepted and rejected visible directions, not only written UX claims."
+  - "The human can judge whether the experience has taste from an inspectable artifact when the product is user-facing."
   - "A future implementer can build without inventing interaction intent."
   - "Rejected patterns are explicit enough to stop a future agent from producing generic UI."
   - "Accessibility and first-session proof are part of the plan."
@@ -63,13 +65,14 @@ paths:
 
 checkpoint_options:
   - ux-plan
+  - visual-alignment-prototype
   - product-requirements
   - architecture
   - create-epics
   - build-story
 
 artifact_rules:
-  Persist user journeys, surfaces, controls, states, accessibility, taste decisions, rejected patterns, proof, and next workflow.
+  Persist user journeys, surfaces, controls, states, accessibility, taste decisions, rejected patterns, visible proof, and next workflow.
 
 domain_examples:
   - ux_create: "Create a UX plan from PRD, audience, journeys, controls, states, accessibility, and proof."

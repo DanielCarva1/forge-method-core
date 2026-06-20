@@ -13,6 +13,10 @@
 - non_goals:
 - source_files:
 - risk_notes:
+- governing_guideline:
+- source_gap:
+- guideline_audit:
+- implementation_block:
 
 ## Domain Context
 
@@ -51,6 +55,8 @@
 - fixes:
 - evidence_path:
 - manual_exceptions:
+- human_acceptance_question:
+- rollback:
 
 ## Stop Only When
 

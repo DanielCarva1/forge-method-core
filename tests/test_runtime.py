@@ -25,6 +25,7 @@ PARITY_REQUIRED_FAMILIES = {
     "spec",
     "prd",
     "ux",
+    "visual",
     "architecture",
     "quick-dev",
     "story-cycle",
@@ -34,6 +35,7 @@ PARITY_REQUIRED_FAMILIES = {
     "persona",
     "cis",
     "enterprise",
+    "platform",
     "game",
     "tea",
     "lifecycle",
@@ -1377,6 +1379,40 @@ class RuntimeTests(unittest.TestCase):
                 self.assertTrue(payload["state_update_required"], question)
                 self.assertIn("transition-evolve", [item["name"] for item in payload["commands"]])
                 self.assertNotIn("fast-path", json.dumps(style), question)
+
+    def test_guideline_audit_routes_before_permanent_implementation(self) -> None:
+        runtime = load_runtime_module()
+        question = (
+            "antes de implementacao permanente, crie uma guideline e uma work order "
+            "com acceptance evidence para agentes do forge standalone"
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            runtime.prepare_parity_replay_state(root, "evolve_runtime")
+            payload = runtime.build_guide_payload(root, question=question, max_chars=12000)
+
+            self.assertEqual(payload["intent_classification"], "builder-flow")
+            self.assertEqual(payload["recommended_workflow"], "guideline-audit")
+            self.assertEqual(payload["workflow_metadata"]["template"], "guideline-audit-artifact")
+            self.assertEqual(payload["facilitation_pack"], "skill:facilitation/guideline-audit.md")
+            self.assertIn("builder-flow", payload["signals"])
+
+    def test_ready_project_guideline_audit_enters_evolve_directly(self) -> None:
+        runtime = load_runtime_module()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            runtime.prepare_parity_replay_state(root, "ready")
+            payload = runtime.build_guide_payload(
+                root,
+                question="adicione um guideline audit gate antes de criar Rust crates permanentes",
+                max_chars=12000,
+            )
+
+            self.assertEqual(payload["intent_classification"], "builder-flow")
+            self.assertEqual(payload["recommended_phase"], "6-evolve")
+            self.assertEqual(payload["recommended_workflow"], "guideline-audit")
+            self.assertTrue(payload["state_update_required"])
+            self.assertIn("transition-evolve", [item["name"] for item in payload["commands"]])
 
     def test_parity_replay_requires_mechanical_build_status_prompt(self) -> None:
         runtime = load_runtime_module()
@@ -3324,6 +3360,7 @@ class RuntimeTests(unittest.TestCase):
                         "platform_or_engine: browser-first web app",
                         "pillars: fast table flow, cited rules support, GM control",
                         "references: Foundry, Fantasy Grounds, tabletop maps",
+                        "first_visual_preview: table scene with map, initiative, character sheet, and rules citation side panel",
                         "mvp_playable_proof: one GM hosts a scene and resolves one cited rules interaction",
                         "dream_game: every sourcebook becomes a reviewed rules assistant",
                         "vertical_slice: one system, one map, one combat turn",
@@ -4341,9 +4378,12 @@ handoff:
         ).read_text(encoding="utf-8")
         self.assertIn("artifact game-brief", game_brief_pack)
         self.assertIn("mvp_playable_proof", game_brief_pack)
+        self.assertIn("first_visual_preview", game_brief_pack)
         self.assertIn("artifact game-sprint-plan", game_lifecycle_pack)
+        self.assertIn("visible slice proof", game_lifecycle_pack)
         self.assertIn("playable_slice_goal", game_sprint_workflow)
         self.assertIn("artifact game-brief", game_brief_workflow)
+        self.assertIn("first_visual_preview", game_brief_workflow)
         self.assertIn("artifact game-sprint-plan", game_sprint_workflow)
         self.assertIn("validate", by_id["product-requirements"].get("modes", []))
         self.assertIn("prfaq", by_id["working-backwards-challenge"].get("modes", []))
@@ -4353,6 +4393,11 @@ handoff:
         self.assertIn("distill", by_id["write-spec"].get("modes", []))
         self.assertIn("validate", by_id["write-spec"].get("modes", []))
         self.assertIn("product-requirements", by_id["write-spec"].get("followed_by", []))
+        self.assertIn("visual-alignment-prototype", by_id["discover-intent"].get("followed_by", []))
+        self.assertIn("visual-alignment-prototype", by_id["write-spec"].get("followed_by", []))
+        self.assertIn("visual-alignment-prototype", by_id["brainstorming"].get("followed_by", []))
+        self.assertIn("visual-alignment-prototype", by_id["game-brief"].get("followed_by", []))
+        self.assertIn("visual-alignment-prototype", by_id["plan-sprint"].get("followed_by", []))
         self.assertIn("market", by_id["market-scan"].get("modes", []))
         self.assertIn("domain", by_id["domain-scan"].get("modes", []))
         self.assertIn("technical", by_id["technical-feasibility-scan"].get("modes", []))
@@ -4363,10 +4408,13 @@ handoff:
         self.assertIn("decision_to_unlock", research_scan_template)
         self.assertIn("contradictions_or_falsifiers", research_scan_template)
         self.assertIn("proof_path", research_scan_template)
+        self.assertIn("visual_reference_examples", research_scan_template)
         discovery_closeout_template = (
             ROOT / "skills" / "forge-method" / "templates" / "discovery-closeout-artifact.md"
         ).read_text(encoding="utf-8")
         self.assertIn("source_input", discovery_closeout_template)
+        self.assertIn("visible_or_operational_proof", discovery_closeout_template)
+        self.assertIn("early_visual_feedback_loop", discovery_closeout_template)
         self.assertIn("grill_gate_handoff", discovery_closeout_template)
         self.assertIn("next_workflow", discovery_closeout_template)
         self.assertIn("spec-lite", by_id["quick-dev"].get("modes", []))
@@ -5216,6 +5264,98 @@ handoff:
             self.assertIn("handoff:", ref_text, ref_name)
             self.assertLess(len(ref_text), 1900, ref_name)
 
+    def test_platform_ops_and_visual_alignment_guidance_routes(self) -> None:
+        runtime = load_runtime_module()
+        cases = [
+            (
+                "preciso planejar infra, banco de dados, secrets, deploy, rollback e observability antes do build",
+                "platform-flow",
+                "platform-ops-plan",
+                "platform-ops-plan-artifact",
+                "2-specification",
+                "skill:facilitation/platform-ops.md",
+            ),
+            (
+                "configurar CI/CD com GitHub Actions, comandos fast/full/release e politica de falha",
+                "platform-flow",
+                "ci-quality-pipeline",
+                "ci-quality-pipeline-artifact",
+                "3-plan",
+                "skill:facilitation/test-architecture.md",
+            ),
+            (
+                "quero um mockup visual da primeira tela para alinhar expectativa antes de criar stories",
+                "visual-flow",
+                "visual-alignment-prototype",
+                "visual-alignment-prototype-artifact",
+                "1-discovery",
+                "skill:facilitation/visual-alignment.md",
+            ),
+        ]
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            runtime.prepare_parity_replay_state(root, "discovery")
+
+            for question, classification, workflow, template, phase, pack in cases:
+                with self.subTest(workflow=workflow):
+                    guide = runtime.build_guide_payload(root, question=question, max_chars=12000)
+
+                    self.assertEqual(guide["intent_classification"], classification)
+                    self.assertEqual(guide["recommended_workflow"], workflow)
+                    self.assertEqual(guide["recommended_phase"], phase)
+                    self.assertEqual(guide["facilitation_pack"], pack)
+                    self.assertEqual(guide["workflow_metadata"].get("template"), template)
+                    self.assertTrue(guide["state_update_required"])
+                    self.assertIn("transition-workflow", [item["name"] for item in guide["commands"]])
+
+            broad_game = runtime.build_guide_payload(
+                root,
+                question=(
+                    "quero criar um VTT para jogar RPG online com meus amigos, com IA, mapas, animacoes, temas, "
+                    "musica e boa usabilidade"
+                ),
+                max_chars=12000,
+            )
+            self.assertEqual(broad_game["intent_classification"], "game-flow")
+            self.assertEqual(broad_game["recommended_workflow"], "game-brief")
+            self.assertTrue(broad_game["early_visual_proof"]["required"])
+            self.assertEqual(broad_game["early_visual_proof"]["workflow"], "visual-alignment-prototype")
+            self.assertIn("early visual proof loop", broad_game["recommended_action"])
+            self.assertIn("visual-alignment-prototype", [item["workflow"] for item in broad_game["alternatives"]])
+
+            broad_product = runtime.build_guide_payload(
+                root,
+                question="quero criar um app web bonito para organizar projetos e mostrar dashboards para clientes",
+                max_chars=12000,
+            )
+            self.assertEqual(broad_product["intent_classification"], "product-flow")
+            self.assertTrue(broad_product["early_visual_proof"]["required"])
+            self.assertIn("human must accept", broad_product["early_visual_proof"]["human_gate"])
+
+            tracks = json.loads(
+                run_cmd(
+                    "track",
+                    "recommend",
+                    "--objective",
+                    "web app com banco de dados, CI/CD, deploy, secrets, observability e rollback",
+                    "--json",
+                ).stdout
+            )
+            self.assertEqual(tracks["recommended"][0]["id"], "platform-ops")
+
+            index_payload = json.loads(run_cmd("config", "index", "--root", str(root), "--json").stdout)
+            workflow_ids = {item["id"] for item in index_payload["workflows"]}
+            self.assertTrue({"platform-ops-plan", "visual-alignment-prototype"} <= workflow_ids)
+
+        for ref_name in [
+            "workflow-platform-ops-plan.md",
+            "workflow-visual-alignment-prototype.md",
+        ]:
+            ref_text = (ROOT / "skills" / "forge-method" / "references" / ref_name).read_text(encoding="utf-8")
+            self.assertIn("trigger:", ref_text, ref_name)
+            self.assertIn("handoff:", ref_text, ref_name)
+            self.assertLess(len(ref_text), 1900, ref_name)
+
     def test_tracks_guide_council_builder_and_config_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -5909,12 +6049,12 @@ handoff:
             self.assertIn("First question:", answer_guide["human_prompt"])
             self.assertEqual(
                 answer_guide["human_experience"]["human_question"],
-                "give me the whole picture first: who is it for, what should change for them, what is fixed or out, what is still open, and what proof should close discovery?",
+                "give me the whole picture first: who is it for, what should change for them, what is fixed or out, what is still open, and what visible or operational proof should close discovery?",
             )
             self.assertIn("Guidance Engine: operate-support -> discover-intent / 1-discovery", answer_guide_text)
             self.assertIn("Grill Gate: required", answer_guide_text)
             self.assertIn(
-                "First question: give me the whole picture first: who is it for, what should change for them, what is fixed or out, what is still open, and what proof should close discovery?",
+                "First question: give me the whole picture first: who is it for, what should change for them, what is fixed or out, what is still open, and what visible or operational proof should close discovery?",
                 answer_guide_text,
             )
             self.assertNotIn("Prompt: Let's use", answer_guide_text)
@@ -6024,6 +6164,11 @@ handoff:
             self.assertIn("Discovery closeout check passed.", discovery_check)
             self.assertIn("Transition written.", transition)
             self.assertIn('phase: "2-specification"', state.read_text(encoding="utf-8"))
+            accepted_text = (root / ".forge-method" / "artifacts" / "discovery-intent-accepted.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("visible_or_operational_proof:", accepted_text)
+            self.assertIn("early_visual_feedback_loop:", accepted_text)
 
     def test_project_create_brownfield_starts_with_discovery(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

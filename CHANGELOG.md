@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 1.32.0
+
+Forge Method Core v1.32.0 ships guided early visual proof and platform operations coverage:
+
+- make early visual proof a recurring expectation in initial discovery/spec/game/product/UX routes, so broad ideas produce visible prototype direction before requirements harden
+- add `visual-alignment-prototype` routing, facilitation, template, workflow metadata, artifact fields, and replay coverage for early visual feedback loops
+- add `platform-ops` routing, facilitation, template, module, and workflow support for infrastructure, CI/CD, database, secrets, deploy, observability, and rollback conversations
+- extend discovery, spec, research, and game brief artifacts with visible proof and visual reference fields so user-facing direction can be corrected before build
+- add Forge Guideline Auditor as a reusable Codex/Core skill, plus `guideline-audit` workflow routing, facilitation, template, work-order fields, and regression tests for guideline/work-order/permanent-implementation requests before durable agent work
+- replace monolithic unit-test discovery in `verify-fast`/`verify-all` with a responsive per-test runner that prints progress, applies per-test timeouts, supports focused tests, and reports the slowest tests without reducing smoke or validation coverage
+- add intelligent test-suite observability: JSON/JUnit reports, debug mode with retained per-test logs, substring filtering, report-driven failure/slowest re-runs, and updated validation docs so agents stop falling back to opaque `unittest discover`
+
 ## 1.31.2
 
 Forge Method Core v1.31.2 ships a guided research drift hotfix:

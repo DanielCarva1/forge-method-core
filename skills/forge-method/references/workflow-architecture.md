@@ -18,7 +18,7 @@ steps:
   2. trace product requirements, UX decisions, constraints, and risks into architecture decisions
   3. identify system boundaries, components, data ownership, interfaces, dependencies, and integration contracts
   4. compare plausible options and record rejected options with reasons
-  5. record security, privacy, deployment, observability, performance, and test hooks
+  5. record platform ops, data/database, security, privacy, deployment, observability, performance, and test hooks
   6. map decisions to story boundaries, readiness dependencies, and validation findings
   7. save architecture artifact and next workflow
 
@@ -27,7 +27,7 @@ outputs:
   - decision log
   - rejected options
   - interface and data contracts
-  - security/privacy/ops notes
+  - platform/security/privacy/ops notes
   - story impact map
   - validation hooks and findings
 
@@ -46,4 +46,4 @@ blocked_when:
   - security, privacy, data, or integration risk cannot be bounded
 
 handoff:
-  - preserve architecture path, mode, source trace, decisions, rejected options, risks, interfaces, story impact, validation hooks, and next workflow
+  - preserve architecture path, mode, source trace, decisions, rejected options, risks, platform dependencies, interfaces, story impact, validation hooks, and next workflow

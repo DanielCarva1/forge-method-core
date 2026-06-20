@@ -1,13 +1,13 @@
 {
-  "version": "1.31.2",
-  "date": "2026-06-17",
-  "title": "Guided research drift hotfix",
-  "summary": "Forge Method now keeps strategic app, stack, and codebase-standard conversations in guided research instead of collapsing them into generic runtime-builder automation.",
+  "version": "1.32.0",
+  "date": "2026-06-20",
+  "title": "Guided early visual proof and platform operations",
+  "summary": "Forge Method now treats early visual proof as part of the initial guided cadence for user-facing products and adds a dedicated route for platform operations work.",
   "highlights": [
-    "Stack/language/interface decisions with signals like long research, study, iteration, native UI options, editor references, agent self-modification references, or Rust codebase standards now route to technical-feasibility research.",
-    "Ready projects preserve the 6-evolve route when a research or exploration request opens an evolution cycle.",
-    "Performance wording like 'mais rapido e performativo' no longer gets mistaken for a rushed fast-path request.",
-    "The parity replay matrix now includes a standalone-app transcript regression fixture."
+    "Broad product, game, UX, and creative ideas now carry an early visual proof contract before requirements harden.",
+    "The new visual-alignment-prototype workflow gives agents a concrete way to show screens, design directions, or proof-of-direction examples during early discovery/spec work.",
+    "The new platform-ops workflow covers infrastructure, CI/CD, database, deploy, secrets, observability, and rollback guidance.",
+    "Verification scripts now use a responsive per-test runner with progress, timeouts, debug logs, reports, and slowest-test visibility."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.31.2.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.32.0.md"
 }

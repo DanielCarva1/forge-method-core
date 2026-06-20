@@ -16,6 +16,7 @@ follow_up_batches:
   - standard: "What quality of evidence is enough for the next workflow?"
   - contradiction: "What would make this idea invalid, smaller, or not worth building?"
   - source_quality: "How recent, authoritative, direct, and biased are the sources?"
+  - visual_examples: "Which reference examples, anti-examples, screenshots, patterns, or prototype cues should the human see after research?"
   - output: "Which compact scan or gate should the next agent consume?"
 
 conversation_stages:
@@ -24,6 +25,7 @@ conversation_stages:
   - gather_evidence: "Collect sources, examples, constraints, and alternatives without drifting into implementation."
   - challenge_claim: "Separate evidence, inference, speculation, and taste."
   - scan_shape: "Extract the artifact research-scan fields the next agent can validate."
+  - example_handoff: "When research informs a user-facing direction, route useful examples into visual-alignment-prototype before requirements harden."
   - stance: "Say continue, pivot, prototype, more research, or block; explain why."
   - route_next: "Persist the stance, open questions, and next workflow."
 
@@ -45,6 +47,7 @@ quality_bar:
   - "The output distinguishes facts, inferences, guesses, and unresolved risk."
   - "The next workflow can act without rereading every source."
   - "The human understands what changed because of the evidence."
+  - "For user-facing work, research produces examples or anti-examples the human can inspect, not just a written summary."
   - "Market scans name alternatives and adoption friction; domain scans name risks and review needs; technical scans name proof paths."
   - "artifact research-scan writes research_question, decision_to_unlock, claim, sources/source_gaps, evidence_grade, findings, contradictions_or_falsifiers, uncertainty, stance, workflow-specific fields, validation, and next_workflow."
   - "artifact research-check passes before downstream planning uses the scan as evidence."
@@ -66,10 +69,11 @@ checkpoint_options:
   - domain-scan
   - technical-feasibility-scan
   - product-requirements
+  - visual-alignment-prototype
   - correct-course
 
 artifact_rules:
-  Use artifact research-scan for durable scan output; persist claim, source links, evidence grade, contradictions, stance, workflow-specific proof fields, open questions, validation, and next workflow.
+  Use artifact research-scan for durable scan output; persist claim, source links, evidence grade, contradictions, stance, visual/reference examples when relevant, workflow-specific proof fields, open questions, validation, and next workflow.
 
 domain_examples:
   market: "Alternatives, switching cost, adoption friction, demand signal, pricing pressure, trust barrier."

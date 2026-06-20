@@ -14,7 +14,7 @@ follow_up_batches:
   - outcome: "What should be different for that audience when this works?"
   - constraints: "What is fixed: time, budget, platform, data, integrations, legal, taste, or operating model?"
   - non_goals: "What must this not become, even if that would be easier to build?"
-  - success_signal: "What proof would make the idea worth specifying instead of continuing discovery?"
+  - success_signal: "What proof would make the idea worth specifying instead of continuing discovery, and what early visual examples should the human see before requirements harden?"
   - open_questions: "Which unknowns are acceptable assumptions, and which ones need research, brainstorm, or Grill Gate before spec?"
 
 conversation_stages:
@@ -23,7 +23,7 @@ conversation_stages:
   - mode_choice: "If they are rushed, use fast path with explicit assumptions; otherwise coach the shape out of them before documenting."
   - mirror: "Restate audience, outcome, taste, constraints, non-goals, and open questions in the user's words."
   - reality_check: "Identify impossible, unsafe, legal, market, and evidence risks before commitment."
-  - closeout_shape: "Derive source_input, source_answer, audience, outcome, constraints, non_goals, success_signal, open_questions, grill_gate_handoff, decision_log, and next_workflow."
+  - closeout_shape: "Derive source_input, source_answer, audience, outcome, constraints, non_goals, success_signal, visible_or_operational_proof, early_visual_feedback_loop, open_questions, grill_gate_handoff, decision_log, and next_workflow."
   - route: "Recommend the next workflow and one or two alternatives with clear tradeoffs."
   - commit: "Run `artifact discovery-closeout`, then `artifact discovery-check --path <discovery-closeout-artifact>` before moving to specification."
 
@@ -50,7 +50,8 @@ quality_bar:
   - "`artifact discovery-check` passes before phase 2 starts."
 
 anti_patterns:
-  - "Do not start technical planning before audience, outcome, constraints, non-goals, success signal, and open questions are known."
+  - "Do not start technical planning before audience, outcome, constraints, non-goals, success signal, visible/operational proof, and open questions are known."
+  - "Do not let a user-facing idea leave discovery without naming what visible proof, example, screen, or prototype the human should inspect next."
   - "Do not flatten taste-heavy ideas into generic product language."
   - "Do not treat market scarcity as evidence of viability."
   - "Do not hand-roll discovery closeout markdown when the runtime command exists."
@@ -72,7 +73,7 @@ domain_examples:
   - internal_tool: "Clarify operator, repeated pain, current workaround, fixed constraints, and proof of useful workflow before implementation."
 
 artifact_rules:
-  Use `artifact discovery-closeout` with source_input, source_answer, audience, outcome, constraints, non_goals, success_signal, open_questions, grill_gate_handoff, decision_log, and next_workflow. Register the artifact and preserve the path for the next workflow.
+  Use `artifact discovery-closeout` with source_input, source_answer, audience, outcome, constraints, non_goals, success_signal, visible_or_operational_proof, early_visual_feedback_loop, open_questions, grill_gate_handoff, decision_log, and next_workflow. Register the artifact and preserve the path for the next workflow.
 
 headless:
   Infer only from provided material. Mark missing facts as assumptions and return blocked only when the route or closeout fields cannot be selected.

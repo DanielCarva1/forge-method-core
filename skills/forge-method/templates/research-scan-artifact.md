@@ -12,6 +12,7 @@ findings:
 contradictions_or_falsifiers:
 uncertainty:
 stance:
+visual_reference_examples:
 
 alternatives:
 adoption_friction:

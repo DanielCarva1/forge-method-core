@@ -6,7 +6,7 @@
 - docs_cache: `%TEMP%/forge-bmad-docs`
 - installed_modules: bmb 1.8.1, cis 0.2.1, tea 1.19.0, gds 0.6.0
 
-Internal behavior benchmark for route-aware human guidance, correct-course, research, brainstorm, product/UX/architecture/quick-dev, story lifecycle, closure utilities, CIS/creative, game, builder, customization, lifecycle closure, and quality routing.
+Internal behavior benchmark for route-aware human guidance, correct-course, research, brainstorm, product/UX/visual alignment/architecture/platform ops/quick-dev, story lifecycle, closure utilities, CIS/creative, game, builder, customization, lifecycle closure, and quality routing.
 
 ## Sources
 
@@ -22,6 +22,8 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Innovation/problem-solving flows treat uncertainty as a real workflow input, not as a request for the user to choose from a technical menu.
 - Game flows have game-specific entrypoints, correct-course, project context, engine setup/profile, project brief, GDD, sprint status, story cycle, prototype, playtest, performance, and review behavior instead of forcing generic software planning first.
 - Test architecture flows sequence engagement model, risk strategy, fixture architecture, CI command contracts, ATDD, automation, review, NFR evidence, and two-phase traceability so quality requests route to the right artifact before implementation or release.
+- Platform/ops flows surface infrastructure, CI/CD, database/data operations, environments, secrets, deployment, observability, rollback, owners, waivers, and proof before implementation hides operational assumptions.
+- Visual alignment flows give the human an inspectable prototype, mockup, screen, or screenshot before stories/build can lock in the wrong product shape.
 - Testing education requests should route to an applied teaching workflow before test strategy when the user is trying to learn or choose a quality approach.
 - Builder utility flows analyze agents/workflows and convert skill material before scaffolding new runtime artifacts.
 - Customization flows select team/local scope, choose supported override keys, validate merged behavior, and expose an effective capability index instead of relying on hidden prose.
@@ -43,8 +45,8 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Builder creation requests should route to narrow Builder Factory workflows: module ideation before broad module build, agent builder before agent files, workflow builder before workflow files, module builder before packaging, and module validate for whole-extension checks.
 - PRD requests should route to a create/update/validate product-requirements workflow with decision log, addendum, validation findings, and next workflow.
 - PRFAQ and working-backwards requests should route to a customer-promise challenge before PRD, UX, architecture, or stories harden an untested promise.
-- UX requests should route to UX planning with taste calibration, journeys, interaction model, accessibility, rejection log, and proof target before stories.
-- Architecture requests should route to architecture planning that connects accepted product decisions to technical constraints, interfaces, risks, tradeoffs, validation hooks, and story boundaries; product architecture with PRD/UX trace should outrank generic quality routing even when the human mentions test hooks.
+- UX requests should route to UX planning with taste calibration, journeys, interaction model, accessibility, rejection log, and proof target before stories; explicit visual prototype requests should route to `visual-alignment-prototype`.
+- Architecture requests should route to architecture planning that connects accepted product decisions to technical constraints, platform/data dependencies, interfaces, risks, tradeoffs, validation hooks, and story boundaries; product architecture with PRD/UX trace should outrank generic quality routing even when the human mentions test hooks.
 - Quick Dev / Quick Flow requests should route to a spec-lite workflow that clarifies scope, implements or hands off mechanically, reviews, validates, writes evidence, and names the next workflow.
 - Story lifecycle requests should route to story-creation/readiness flows that require accepted decision sources, acceptance criteria, checks, evidence expectations, and a validation map before build-story.
 - Implementation-ready stories should persist explicit `decision_sources`; story creation must block without approved decision artifacts and require a specific source when multiple artifacts could justify the story.
@@ -89,6 +91,8 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Test Architecture Enterprise Depth outputs must route quality requests to the right engagement mode and workflow, preserve fixture architecture and command contracts, and make gate outcomes distinguish pass, concerns, fail, missing evidence, and explicit waiver.
 - E2E/Test Automation Depth outputs must detect the existing framework, select API/E2E scenarios by risk, prefer semantic locators and visible outcome assertions, require independent tests with no hardcoded waits, and preserve run/fix result, evidence links, failure repair policy, and gate impact before generated tests count as done.
 - P2 Runtime Utility outputs must route isolated eval runner, hook/event, and API/browser utility requests to explicit opt-in contracts with trust boundary, side-effect policy, commands, dry-run or evidence, and no hidden startup overhead.
+- Platform Ops outputs must route infrastructure, CI/CD, database/data, environment, secrets, deployment, observability, rollback, and operate-readiness requests to `platform-ops-plan`, or to narrower CI/deploy/observability workflows when the surface is isolated.
+- Visual Alignment outputs must route early mockup, wireframe, screenshot, preview, and visible-alignment requests to `visual-alignment-prototype` before stories or build, preserving mismatch, accepted/rejected directions, proof, and next workflow.
 - Enterprise Artifact Map Depth outputs must make enterprise track decisions produce required/conditional artifact maps, including risk, security, privacy, quality/NFR, CI, traceability, release, conditional DevOps/compliance/observability, evidence status, waiver policy, and readiness/release gate consumers.
 - Spec Kernel Depth outputs must route create/update/validate/distill spec requests to `write-spec`, produce a compact spec kernel with why, stable capabilities, constraints, non-goals, success signal, preservation map, decision log, companions, and `artifact spec-check` proof.
 - Document Review Depth outputs must route prose/structure/tone requests to `editorial-review` and boundary/failure/misuse requests to `edge-case-review`, each with a narrow compact artifact rather than the generic document utility shape.
@@ -123,7 +127,9 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `product-requirements`
 - `working-backwards-challenge`
 - `ux-plan`
+- `visual-alignment-prototype`
 - `architecture`
+- `platform-ops-plan`
 - `quick-dev`
 - `story-creation`
 - `plan-sprint`

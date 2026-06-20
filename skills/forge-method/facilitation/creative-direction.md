@@ -15,11 +15,13 @@ follow_up_batches:
   - direction: "Are we diverging, selecting, storytelling, or turning a concept into spec?"
   - constraints: "What format, budget, platform, deadline, or brand rule shapes the work?"
   - proof: "How will we know the direction has taste, not just novelty?"
+  - visible_options: "Which 1-3 visual, written, spatial, or example directions should the human compare before selection?"
 
 conversation_stages:
   - open_space: "Let the human brain dump taste, examples, anxieties, and desired feeling."
   - name_axes: "Identify the creative axes that actually matter."
   - generate_options: "Create distinct directions with tradeoffs and anti-patterns."
+  - make_options_visible: "Represent the strongest directions as examples, references, style tiles, sketches, or small samples before selection."
   - select_or_combine: "Choose, combine, reject, or defer directions explicitly."
   - handoff: "Persist selected direction, rejected directions, rationale, and next workflow."
 
@@ -37,6 +39,7 @@ facilitator_moves:
 
 quality_bar:
   - "The selected direction is distinguishable from plausible alternatives."
+  - "The human can compare visible/sensory examples, not only abstract adjectives."
   - "The output captures taste, audience, constraints, and rejected patterns."
   - "A future agent can continue without redoing the whole brainstorm."
 
@@ -63,7 +66,7 @@ domain_examples:
   - campaign_or_story: "The work needs emotional payoff; preserve audience, tension, tone, rejected routes, and proof that the concept lands."
 
 artifact_rules:
-  Persist audience, taste axes, selected concept, rejected options, constraints, proof criteria, and next workflow.
+  Persist audience, taste axes, visible examples, selected concept, rejected options, constraints, proof criteria, and next workflow.
 
 headless:
   If taste input is thin, ask for references or produce clearly labeled options instead of choosing for the human.

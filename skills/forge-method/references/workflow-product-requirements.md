@@ -17,7 +17,7 @@ steps:
   2. define or verify problem, users, goals, non-goals, constraints, and success metrics
   3. write or update functional requirements with acceptance evidence
   4. record decisions, rejected scope, contradictions, risks, and assumptions
-  5. validate requirement testability and route unresolved UX, architecture, research, or quality gaps
+  5. validate requirement testability and route unresolved visual alignment, UX, platform ops, architecture, research, or quality gaps
   6. save product requirements artifact and decision/addendum log
 
 outputs:
@@ -32,7 +32,7 @@ done_when:
   - non-goals and constraints are explicit
   - decisions and rejected scope are preserved
   - validation findings are resolved or routed
-  - next architecture or planning workflow is known
+  - next visual, platform, architecture, or planning workflow is known
 
 blocked_when:
   - target user is unknown

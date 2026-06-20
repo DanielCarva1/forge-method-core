@@ -14,6 +14,7 @@ follow_up_batches:
   - divergence: "Generate varied directions across safe, strange, practical, and high-risk options."
   - lenses: "Use constraints, audience, emotion, business model, technical leverage, and failure modes."
   - taste: "Which options feel generic, too safe, too expensive, too weird, or actually alive?"
+  - visual_options: "Which 1-3 sketches, screens, references, or examples would make the option space concrete enough to judge?"
   - convergence: "Compare against criteria and identify top candidates."
   - handoff: "Which candidate moves to concept-selection, evidence gate, PRD, game brief, or discard?"
 
@@ -22,6 +23,7 @@ conversation_stages:
   - session_setup: "Ask what the session is about, what outcome would make it useful, and whether the human wants weird breadth, practical options, or a final opinionated recommendation."
   - warm_up: "Start with obvious and practical options so the human can reject or correct the frame quickly."
   - stretch: "Force contrast across taste, audience, risk, implementation leverage, and weird-but-plausible directions."
+  - show_examples: "When the idea is user-facing, make options visible as rough screens, references, or concept examples before convergence."
   - pressure_test: "Attack the generic, boring, unsafe, expensive, derivative, or incoherent options before convergence."
   - converge: "Cluster options, name the tradeoff behind each cluster, and pick a short list with selection criteria."
   - commit: "Persist the option set, rejected patterns, assumptions, and the next workflow instead of leaving a loose brainstorm."
@@ -47,6 +49,7 @@ facilitator_moves:
 
 quality_bar:
   - "The human can see options they would not have listed alone."
+  - "For user-facing work, the human sees rough visual options or examples before one direction becomes requirements."
   - "The selected candidates are tied to explicit criteria, not vibes alone."
   - "Rejected options and anti-patterns are explicit enough to stop later agent drift."
   - "Risky or impossible claims route to evidence before specification."
@@ -69,7 +72,7 @@ checkpoint_options:
   - council
 
 artifact_rules:
-  Persist option set, selection criteria, rejected patterns, top candidates, risks, and next workflow.
+  Persist option set, selection criteria, visual examples, rejected patterns, top candidates, risks, and next workflow.
 
 domain_examples:
   - product_ideation: "Explore user promise, first valuable moment, MVP lines, rejected generic solutions, and top product directions."

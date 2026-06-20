@@ -10,6 +10,7 @@ target_player:
 platform_or_engine:
 pillars:
 references:
+first_visual_preview:
 mvp_playable_proof:
 dream_game:
 vertical_slice:
