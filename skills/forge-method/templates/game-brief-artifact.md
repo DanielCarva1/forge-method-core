@@ -9,6 +9,14 @@ player_verbs:
 target_player:
 platform_or_engine:
 pillars:
+mda_trace:
+  target_aesthetics:
+  player_experience_hypothesis:
+  desired_dynamics:
+  supporting_mechanics:
+  feedback_and_ui_signals:
+  proof_or_playtest:
+  unresolved_risks:
 references:
 first_visual_preview:
 mvp_playable_proof:

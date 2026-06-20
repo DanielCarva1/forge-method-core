@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $skillsSource = Join-Path $repoRoot "skills"
 $targetRoot = Join-Path $HOME ".agents\skills"
-$skillNames = @("forge-method", "forge-reload")
+$skillNames = @("forge-method", "forge-reload", "forge-update")
 
 if (-not (Test-Path -LiteralPath $skillsSource)) {
   throw "Skills source not found: $skillsSource"
@@ -37,5 +37,6 @@ foreach ($skillName in $skillNames) {
 
 Write-Host "Use in Codex: `$forge-method"
 Write-Host "Emergency reload: `$forge-reload"
+Write-Host "Manual update: `$forge-update"
 Write-Host "Verify: powershell -ExecutionPolicy Bypass -File `"$targetRoot\forge-method\forge-method.ps1`" --help"
 Write-Host "Start: ask Codex to run Forge Method in your project workspace."

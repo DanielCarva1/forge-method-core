@@ -21,7 +21,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.32.0"
+RUNTIME_VERSION = "1.33.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 WORKFLOW_CATALOG_PATH = SKILL_DIR / "catalog" / "workflows.json"
@@ -3272,6 +3272,16 @@ GAME_ARTIFACT_WORKFLOWS = {
     "game-sprint-planning",
 }
 
+MDA_TRACE_FIELDS = [
+    "target_aesthetics",
+    "player_experience_hypothesis",
+    "desired_dynamics",
+    "supporting_mechanics",
+    "feedback_and_ui_signals",
+    "proof_or_playtest",
+    "unresolved_risks",
+]
+
 ENTERPRISE_ARTIFACT_WORKFLOWS = {
     "track-decision",
     "readiness-check",
@@ -3317,7 +3327,9 @@ ENTERPRISE_RELEASE_GATE_NEXT_WORKFLOWS = {
 
 def parse_markdown_artifact_fields(path: Path) -> dict[str, str]:
     fields: dict[str, str] = {}
+    current_block = ""
     for raw_line in path.read_text(encoding="utf-8").splitlines():
+        indent = len(raw_line) - len(raw_line.lstrip(" "))
         line = raw_line.strip()
         if not line or line.startswith("#") or ":" not in line:
             continue
@@ -3325,7 +3337,12 @@ def parse_markdown_artifact_fields(path: Path) -> dict[str, str]:
             line = line[2:].strip()
         key, value = line.split(":", 1)
         normalized_key = slugify(key).replace("-", "_")
-        fields[normalized_key] = value.strip().strip('"')
+        normalized_value = value.strip().strip('"')
+        if indent > 0 and current_block:
+            fields[f"{current_block}_{normalized_key}"] = normalized_value
+        else:
+            fields[normalized_key] = normalized_value
+            current_block = normalized_key if not normalized_value else ""
     return fields
 
 
@@ -3612,6 +3629,21 @@ def test_utility_findings(root: Path, artifact_path: Path) -> tuple[list[str], l
     return errors, warnings
 
 
+def mda_trace_findings(fields: dict[str, str], workflow: str, weak_values: set[str]) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    has_mda_trace = bool(fields.get("mda_trace")) or any(fields.get(f"mda_trace_{key}", "") for key in MDA_TRACE_FIELDS)
+    if not has_mda_trace:
+        if workflow == "game-brief":
+            warnings.append("legacy game artifact has no mda_trace; add MDA Trace before new game design work")
+        return errors, warnings
+    for key in MDA_TRACE_FIELDS:
+        value = fields.get(f"mda_trace_{key}", "")
+        if not value or normalize_text(value) in weak_values:
+            errors.append(f"mda_trace.{key} is required when mda_trace exists")
+    return errors, warnings
+
+
 def game_artifact_findings(root: Path, artifact_path: Path) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -3629,6 +3661,9 @@ def game_artifact_findings(root: Path, artifact_path: Path) -> tuple[list[str], 
         errors.append("player_fantasy must be concrete enough for future agents")
     if normalize_text(fields.get("playable_slice", "")) in weak_values:
         errors.append("playable_slice must name what the player can actually do")
+    mda_errors, mda_warnings = mda_trace_findings(fields, workflow, weak_values)
+    errors.extend(mda_errors)
+    warnings.extend(mda_warnings)
     if workflow == "game-brief":
         for key in [
             "core_loop",
@@ -5148,6 +5183,39 @@ def write_research_scan_artifact(
     return rel
 
 
+def game_brief_mda_trace(
+    *,
+    target_aesthetics: str,
+    player_experience_hypothesis: str,
+    desired_dynamics: str,
+    supporting_mechanics: str,
+    feedback_and_ui_signals: str,
+    proof_or_playtest: str,
+    unresolved_risks: str,
+    player_fantasy: str,
+    core_loop: str,
+    player_verbs: str,
+    first_visual_preview: str,
+    mvp_playable_proof: str,
+    open_questions: str,
+    research_needed: str,
+) -> list[tuple[str, str]]:
+    risk_source = join_list([item for item in [open_questions, research_needed] if item and normalize_text(item) != "none blocking"])
+    return [
+        ("target_aesthetics", target_aesthetics or player_fantasy),
+        (
+            "player_experience_hypothesis",
+            player_experience_hypothesis
+            or f"The player should feel {player_fantasy} through the repeated loop: {core_loop}.",
+        ),
+        ("desired_dynamics", desired_dynamics or core_loop),
+        ("supporting_mechanics", supporting_mechanics or player_verbs),
+        ("feedback_and_ui_signals", feedback_and_ui_signals or first_visual_preview),
+        ("proof_or_playtest", proof_or_playtest or mvp_playable_proof),
+        ("unresolved_risks", unresolved_risks or risk_source or "none blocking"),
+    ]
+
+
 def write_game_brief_artifact(
     root: Path,
     *,
@@ -5174,6 +5242,13 @@ def write_game_brief_artifact(
     assumptions: str,
     open_questions: str,
     research_needed: str,
+    mda_target_aesthetics: str,
+    mda_player_experience_hypothesis: str,
+    mda_desired_dynamics: str,
+    mda_supporting_mechanics: str,
+    mda_feedback_and_ui_signals: str,
+    mda_proof_or_playtest: str,
+    mda_unresolved_risks: str,
     validation: str,
     validation_verdict: str,
     next_workflow: str,
@@ -5184,6 +5259,22 @@ def write_game_brief_artifact(
         raise SystemExit(f"Game brief artifact already exists: {rel}. Use --force to replace it.")
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     validation_text = validation or f"artifact game-check --path {rel}"
+    mda_trace = game_brief_mda_trace(
+        target_aesthetics=mda_target_aesthetics,
+        player_experience_hypothesis=mda_player_experience_hypothesis,
+        desired_dynamics=mda_desired_dynamics,
+        supporting_mechanics=mda_supporting_mechanics,
+        feedback_and_ui_signals=mda_feedback_and_ui_signals,
+        proof_or_playtest=mda_proof_or_playtest,
+        unresolved_risks=mda_unresolved_risks,
+        player_fantasy=player_fantasy,
+        core_loop=core_loop,
+        player_verbs=player_verbs,
+        first_visual_preview=first_visual_preview,
+        mvp_playable_proof=mvp_playable_proof,
+        open_questions=open_questions,
+        research_needed=research_needed,
+    )
     fields = [
         ("workflow", "game-brief"),
         ("mode", mode),
@@ -5194,6 +5285,7 @@ def write_game_brief_artifact(
         ("target_player", target_player),
         ("platform_or_engine", platform_or_engine),
         ("pillars", pillars),
+        ("mda_trace", ""),
         ("references", references),
         ("first_visual_preview", first_visual_preview),
         ("mvp_playable_proof", mvp_playable_proof),
@@ -5211,7 +5303,12 @@ def write_game_brief_artifact(
         ("next_workflow", next_workflow),
     ]
     lines = [f"# {title}", ""]
-    lines.extend(f"{key}: {one_line(value)}" for key, value in fields)
+    for key, value in fields:
+        if key == "mda_trace":
+            lines.append("mda_trace:")
+            lines.extend(f"  {mda_key}: {one_line(mda_value)}" for mda_key, mda_value in mda_trace)
+        else:
+            lines.append(f"{key}: {one_line(value)}")
     artifact_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     errors, warnings = game_artifact_findings(root, artifact_path)
     if errors:
@@ -7466,6 +7563,13 @@ def cmd_artifact_game_brief(args: argparse.Namespace) -> int:
         assumptions=args.assumptions,
         open_questions=args.open_questions,
         research_needed=args.research_needed,
+        mda_target_aesthetics=args.mda_target_aesthetics,
+        mda_player_experience_hypothesis=args.mda_player_experience_hypothesis,
+        mda_desired_dynamics=args.mda_desired_dynamics,
+        mda_supporting_mechanics=args.mda_supporting_mechanics,
+        mda_feedback_and_ui_signals=args.mda_feedback_and_ui_signals,
+        mda_proof_or_playtest=args.mda_proof_or_playtest,
+        mda_unresolved_risks=args.mda_unresolved_risks,
         validation=args.validation,
         validation_verdict=args.validation_verdict,
         next_workflow=args.next_workflow,
@@ -8670,6 +8774,20 @@ def detect_guidance_signals(question: str) -> list[str]:
             "corrigir curso visual",
         ],
         "game-flow": [
+            "mda lens",
+            "mda trace",
+            "target aesthetics",
+            "player aesthetics",
+            "player experience hypothesis",
+            "desired dynamics",
+            "supporting mechanics",
+            "player feeling",
+            "what should the player feel",
+            "experiencia do jogador",
+            "jogador deve sentir",
+            "jogadores devem sentir",
+            "provar diversao",
+            "provar se e divertido",
             "game context",
             "game project context",
             "game story",
@@ -8990,6 +9108,19 @@ def detect_guidance_signals(question: str) -> list[str]:
             "mecanica",
             "mechanic",
             "mechanics",
+            "dynamic",
+            "dynamics",
+            "aesthetic",
+            "aesthetics",
+            "mda",
+            "estetica",
+            "esteticas",
+            "dinamica",
+            "dinamicas",
+            "diversao",
+            "imersao",
+            "feel",
+            "fun",
             "rpg",
             "vtt",
             "vtts",
@@ -9409,6 +9540,46 @@ def routed_game_workflow(question: str) -> str:
         or ({"context", "contexto", "document"} & tokens and {"game", "jogo"} & tokens)
     ):
         return "game-context"
+    mda_tokens = {"mda", "aesthetic", "aesthetics", "estetica", "esteticas"}
+    dynamic_tokens = {"dynamic", "dynamics", "dinamica", "dinamicas"}
+    feel_tokens = {"feel", "feeling", "fun", "diversao", "imersao"}
+    mechanic_tokens = {
+        "mechanic",
+        "mechanics",
+        "mecanica",
+        "mecanicas",
+        "economy",
+        "economia",
+        "balance",
+        "balanco",
+        "progression",
+        "progressao",
+    }
+    proof_tokens = {"prove", "proof", "provar", "playtest", "playtesting", "testar", "validar"}
+    if {"e2e", "smoke"} & tokens or "end to end" in normalized:
+        return "game-e2e-scaffold"
+    if {"framework", "harness", "fixtures"} & tokens and {"test", "teste", "qa"} & tokens:
+        return "game-test-framework"
+    if {"automation", "automacao", "automate", "automatizar"} & tokens:
+        return "game-test-automation"
+    if {"playtest", "playtesting"} & tokens or (feel_tokens & tokens and proof_tokens & tokens):
+        return "playtest-plan"
+    if (
+        dynamic_tokens & tokens
+        and (mechanic_tokens & tokens or mda_tokens & tokens or "supporting mechanics" in normalized)
+    ):
+        return "mechanics-design"
+    if (
+        mda_tokens & tokens
+        or "player experience hypothesis" in normalized
+        or "target aesthetics" in normalized
+        or "player feeling" in normalized
+        or "what should the player feel" in normalized
+        or "experiencia do jogador" in normalized
+        or "jogador deve sentir" in normalized
+        or "jogadores devem sentir" in normalized
+    ):
+        return "game-brief"
     if (
         "engine setup" in normalized
         or "engine profile" in normalized
@@ -9419,15 +9590,9 @@ def routed_game_workflow(question: str) -> str:
         or ({"setup", "template"} & tokens and ({"engine", "godot", "unity", "unreal", "phaser"} & tokens))
     ):
         return "engine-setup"
-    if {"e2e", "smoke"} & tokens or "end to end" in normalized:
-        return "game-e2e-scaffold"
-    if {"framework", "harness"} & tokens and {"test", "teste", "qa"} & tokens:
-        return "game-test-framework"
-    if {"automation", "automacao", "automate", "automatizar"} & tokens:
-        return "game-test-automation"
     if {"narrative", "lore", "world", "characters", "character", "dialogue", "quest", "quests", "storytelling"} & tokens:
         return "narrative-design"
-    if {"mechanic", "mechanics", "mecanica", "mecanicas", "economy", "economia", "balance", "balanco", "progression", "progressao"} & tokens:
+    if mechanic_tokens & tokens or dynamic_tokens & tokens:
         return "mechanics-design"
     if {"ux", "hud", "controls", "controle", "onboarding", "accessibility", "acessibilidade"} & tokens:
         return "game-ux-design"
@@ -9454,8 +9619,6 @@ def routed_game_workflow(question: str) -> str:
         return "game-retrospective"
     if {"qa", "review", "revisao"} & tokens or "game qa" in normalized or "game review" in normalized:
         return "game-qa-review"
-    if {"playtest", "playtesting"} & tokens:
-        return "playtest-plan"
     if {"performance", "perf", "fps", "frame", "memory", "memoria", "latency", "latencia"} & tokens or "performance budget" in normalized:
         return "performance-plan"
     if {"story", "stories", "historia", "historias"} & tokens or "create story" in normalized or "criar story" in normalized:
@@ -9496,8 +9659,8 @@ def is_game_dev_story_intent(question: str) -> bool:
 def game_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
     if workflow_id == "game-brief":
         return (
-            "run game-brief to create, update, or validate a living game brief with player fantasy, core loop, verbs, pillars, references, first visual preview options, MVP playable proof, parked scope, decision log, assumptions, open questions, and game-check proof",
-            "I should invite the full game brain dump, ask what else is still in their head, offer fast path versus coaching path, show quick visual previews of the table/screen/play moment, then turn it into a brief they recognize before GDD, architecture, sprint planning, or build.",
+            "run game-brief to create, update, or validate a living game brief with player fantasy, core loop, verbs, pillars, MDA Trace, references, first visual preview options, MVP playable proof, parked scope, decision log, assumptions, open questions, and game-check proof",
+            "I should invite the full game brain dump, ask what the player should feel, connect that feeling to dynamics, mechanics, UI/feedback signals, and proof/playtest, show quick visual previews of the table/screen/play moment, then turn it into a brief they recognize before GDD, architecture, sprint planning, or build.",
             guidance_alternatives(
                 ("brainstorming", "use when the game still needs divergent option lanes before committing to a brief"),
                 ("visual-alignment-prototype", "use when the player-facing table, HUD, map, sheet, or first screen needs visible correction"),
@@ -9527,8 +9690,8 @@ def game_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]
         )
     if workflow_id == "gdd":
         return (
-            "run gdd to expand the brief into pillars, loop, systems, content, progression, engine assumptions, playable slice, and proof",
-            "I should deepen the design from the accepted brief before architecture or stories.",
+            "run gdd to expand the accepted brief and MDA Trace into pillars, loop, systems, content, progression, engine assumptions, playable slice, and proof",
+            "I should deepen the design from the accepted brief without losing the target player feeling, desired dynamics, supporting mechanics, feedback signals, or playtest proof.",
             guidance_alternatives(
                 ("mechanics-design", "use when rules, balance, economy, or progression are the main uncertainty"),
                 ("narrative-design", "use when story, world, characters, or quests shape the player goal"),
@@ -9547,8 +9710,8 @@ def game_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]
         )
     if workflow_id == "mechanics-design":
         return (
-            "run mechanics-design to map rules, player decisions, feedback, resources, failure states, balance assumptions, and prototype tests",
-            "I should make mechanics testable before implementation stories.",
+            "run mechanics-design to map target aesthetics to desired dynamics, supporting rules, player decisions, feedback, resources, failure states, balance assumptions, and prototype tests",
+            "I should make mechanics explain the intended player experience, then make that explanation testable before implementation stories.",
             guidance_alternatives(
                 ("quick-prototype", "use when the mechanic needs the smallest playable proof"),
                 ("playtest-plan", "use when the mechanic exists and needs player feedback"),
@@ -9577,8 +9740,8 @@ def game_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]
         )
     if workflow_id == "playtest-plan":
         return (
-            "run playtest-plan to define target players, tasks, observation method, signals, decision map, and evidence capture",
-            "I should convert feel and fun into observable playtest decisions.",
+            "run playtest-plan to define target players, tasks, observation method, MDA Trace signals, decision map, and evidence capture",
+            "I should convert feel and fun into observable playtest decisions tied to the target aesthetics, dynamics, mechanics, and UI feedback.",
             guidance_alternatives(
                 ("game-qa-review", "use when the slice also needs acceptance/stability review"),
                 ("game-retrospective", "use after playtest evidence exists"),
@@ -15904,6 +16067,13 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_game_brief.add_argument("--assumptions", default="none blocking")
     artifact_game_brief.add_argument("--open-questions", default="none blocking")
     artifact_game_brief.add_argument("--research-needed", default="none blocking")
+    artifact_game_brief.add_argument("--mda-target-aesthetics", default="")
+    artifact_game_brief.add_argument("--mda-player-experience-hypothesis", default="")
+    artifact_game_brief.add_argument("--mda-desired-dynamics", default="")
+    artifact_game_brief.add_argument("--mda-supporting-mechanics", default="")
+    artifact_game_brief.add_argument("--mda-feedback-and-ui-signals", default="")
+    artifact_game_brief.add_argument("--mda-proof-or-playtest", default="")
+    artifact_game_brief.add_argument("--mda-unresolved-risks", default="")
     artifact_game_brief.add_argument("--validation", default="")
     artifact_game_brief.add_argument("--validation-verdict", default="coherent living brief")
     artifact_game_brief.add_argument("--next-workflow", choices=sorted(GAME_BRIEF_NEXT_WORKFLOWS), default="game-sprint-planning")

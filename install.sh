@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 skills_source="$repo_root/skills"
 target_root="$HOME/.agents/skills"
-skill_names=("forge-method" "forge-reload")
+skill_names=("forge-method" "forge-reload" "forge-update")
 
 if [[ ! -d "$skills_source" ]]; then
   echo "Skills source not found: $skills_source" >&2
@@ -37,5 +37,6 @@ done
 
 echo 'Use in Codex: $forge-method'
 echo 'Emergency reload: $forge-reload'
+echo 'Manual update: $forge-update'
 echo "Verify: bash $target_root/forge-method/forge-method.sh --help"
 echo "Start: ask Codex to run Forge Method in your project workspace."

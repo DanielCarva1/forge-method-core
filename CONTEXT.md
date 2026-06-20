@@ -32,6 +32,14 @@ The compact, stable `SKILL.md` surface that tells Codex how to invoke the launch
 
 The launcher behavior that checks a Git marketplace install for a newer Forge Method Core package before normal startup, applies the update when policy allows, and continues the same `preflight` or `start` flow without asking the user to initialize Forge twice.
 
+## Manual Update
+
+The explicit user-triggered update path for an installed Forge Method Core package. It is initiated through the `$forge-update` operational maintenance skill, runs the Codex Git marketplace upgrade, reads the local patch notes feed, and reports a short human summary without changing project state.
+
+## Operational Maintenance Skill
+
+A skill used to maintain or repair the installed runtime package rather than advance a Method Project. `$forge-reload` and `$forge-update` are operational maintenance skills; they are allowed exceptions to the single product entrypoint because they restore or update the package and then hand control back to `$forge-method`.
+
 ## Patch Notes Feed
 
 A compact release summary read from `release-notes/latest.json` and printed after a successful self-update. It is human-facing, appears once per installed version, and must not pollute machine-readable stdout.
@@ -123,6 +131,14 @@ A related set of specialized workflows that deepens a broad track without changi
 ## Game Studio Depth
 
 The guided depth family for game projects. It preserves player fantasy, playable slice, engine profile, design artifacts, production stories, playtest learning, and performance proof without collapsing game work into generic software planning.
+
+## MDA Lens
+
+The integrated game-design lens used by Game Studio to connect intended player experience to desired dynamics, supporting mechanics, UI/feedback signals, and proof. It is a facilitation and quality lens inside existing game workflows, not a separate workflow or track.
+
+## MDA Trace
+
+The compact agent-facing artifact field produced by game brief work and preserved by later game workflows. It records `target_aesthetics`, `player_experience_hypothesis`, `desired_dynamics`, `supporting_mechanics`, `feedback_and_ui_signals`, `proof_or_playtest`, and `unresolved_risks` so future agents do not reduce a game to a feature list.
 
 ## Playable Slice
 

@@ -58,6 +58,19 @@ def run_updater(skill_dir: Path, *args: str, env: dict[str, str] | None = None) 
     )
 
 
+def run_manual_updater(skill_dir: Path, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    process_env = os.environ.copy()
+    if env:
+        process_env.update(env)
+    return subprocess.run(
+        [sys.executable, str(UPDATER), "--skill-dir", str(skill_dir), "--manual"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=process_env,
+    )
+
+
 class UpdaterTests(unittest.TestCase):
     def test_semver_and_entrypoint_detection(self) -> None:
         updater = load_updater()
@@ -150,6 +163,98 @@ class UpdaterTests(unittest.TestCase):
             self.assertEqual(second.returncode, 0)
             self.assertEqual(second.stdout, "")
             self.assertEqual(second.stderr, "")
+
+    def test_manual_update_prints_patch_notes(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = make_plugin_root(raw, git_marketplace=True)
+            fake_codex = Path(raw) / "fake_codex.py"
+            fake_codex.write_text(
+                "\n".join(
+                    [
+                        "import json, os",
+                        "from pathlib import Path",
+                        "root = Path(os.environ['FAKE_FORGE_ROOT'])",
+                        "(root / '.codex-plugin' / 'plugin.json').write_text(json.dumps({'name': 'forge-method-core', 'version': '1.33.0'}), encoding='utf-8')",
+                        "(root / 'skills' / 'forge-update').mkdir(parents=True, exist_ok=True)",
+                        "(root / 'skills' / 'forge-update' / 'SKILL.md').write_text('new update skill\\n', encoding='utf-8')",
+                        "notes = root / 'release-notes'",
+                        "notes.mkdir(exist_ok=True)",
+                        "(notes / 'latest.json').write_text(json.dumps({'version': '1.33.0', 'summary': 'Manual updates now have a button.', 'highlights': ['forge-update skill', 'human patch notes'], 'full_notes_url': 'https://example.test/notes'}), encoding='utf-8')",
+                        "meta_path = root / '.codex-marketplace-install.json'",
+                        "meta = json.loads(meta_path.read_text(encoding='utf-8'))",
+                        "meta['revision'] = 'newrev'",
+                        "meta_path.write_text(json.dumps(meta), encoding='utf-8')",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            env = {
+                "FAKE_FORGE_ROOT": str(root),
+                "FORGE_METHOD_CODEX": f"{sys.executable} {fake_codex}",
+                "FORGE_METHOD_UPDATE_STATE": str(Path(raw) / "state" / "update-state.json"),
+            }
+
+            result = run_manual_updater(root / "skills" / "forge-method", env=env)
+
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("Forge Method updated: 1.24.0 -> 1.33.0", result.stderr)
+            self.assertIn("Manual updates now have a button.", result.stderr)
+            self.assertIn("- forge-update skill", result.stderr)
+            self.assertIn("Skill instructions changed", result.stderr)
+
+    def test_manual_update_already_current_is_quiet(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = make_plugin_root(raw, git_marketplace=True, version="1.33.0")
+            fake_codex = Path(raw) / "fake_codex.py"
+            fake_codex.write_text(
+                "\n".join(
+                    [
+                        "import os",
+                        "from pathlib import Path",
+                        "Path(os.environ['FAKE_FORGE_ROOT']).exists()",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            env = {
+                "FAKE_FORGE_ROOT": str(root),
+                "FORGE_METHOD_CODEX": f"{sys.executable} {fake_codex}",
+                "FORGE_METHOD_UPDATE_STATE": str(Path(raw) / "state" / "update-state.json"),
+            }
+
+            result = run_manual_updater(root / "skills" / "forge-method", env=env)
+
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("Forge Method is already up to date: 1.33.0", result.stderr)
+
+    def test_manual_update_non_git_marketplace_explains_install_shape(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = make_plugin_root(raw, git_marketplace=False, version="1.32.0")
+
+            result = run_manual_updater(root / "skills" / "forge-method")
+
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("Forge Method current version: 1.32.0", result.stderr)
+            self.assertIn("Manual update requires the Git marketplace install.", result.stderr)
+            self.assertIn("codex plugin marketplace add DanielCarva1/forge-method-core --ref main", result.stderr)
+
+    def test_manual_update_failure_keeps_install_usable(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = make_plugin_root(raw, git_marketplace=True, version="1.33.0")
+
+            result = run_manual_updater(
+                root / "skills" / "forge-method",
+                env={"FORGE_METHOD_CODEX": str(Path(raw) / "missing-codex"), "FORGE_METHOD_UPDATE_STATE": str(Path(raw) / "state.json")},
+            )
+
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("Forge Method update failed to start; your current install was left usable.", result.stderr)
 
     def test_skip_update_suppresses_all_output(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

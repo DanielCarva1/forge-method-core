@@ -59,6 +59,12 @@ After adding the marketplace, users open Codex Plugins or `/plugins`, choose the
 
 After the self-updating package is installed, normal Git marketplace updates are handled by the Forge launcher before `start`, `preflight`, `guide`, and `resume`. The launcher runs `codex plugin marketplace upgrade forge-method-core`, prints compact patch notes when a newer version is installed, and continues the same startup. Update messages use stderr so JSON stdout remains parseable. A new thread is not part of the normal update flow; it is only a later recommendation when refreshed skill text or manifest changes need to be fully reloaded.
 
+Users can also run `$forge-update` as an Operational Maintenance Skill. It performs the same Git marketplace upgrade explicitly, reads `release-notes/latest.json`, and prints a short human summary. If the install is not a Git marketplace install, it does not guess or patch files in place; it prints:
+
+```powershell
+codex plugin marketplace add DanielCarva1/forge-method-core --ref main
+```
+
 Local personal distribution remains available for development and fallback installs through `scripts/install-plugin-local.ps1` and `scripts/install-plugin-local.sh`. Those scripts copy the plugin source to the user's personal marketplace root.
 
 Workspace sharing and public marketplace listing are separate distribution stages. A validated local plugin can be shared in a workspace through the Codex app; public directory availability requires the external publication/listing process.
@@ -120,12 +126,16 @@ The installer copies:
 
 ```txt
 skills/forge-method
+skills/forge-reload
+skills/forge-update
 ```
 
 to:
 
 ```txt
 %USERPROFILE%\.agents\skills\forge-method
+%USERPROFILE%\.agents\skills\forge-reload
+%USERPROFILE%\.agents\skills\forge-update
 ```
 
 Then the user invokes:
@@ -147,6 +157,7 @@ bash ~/.agents/skills/forge-method/forge-method.sh start --root <workspace>
 Fallback acceptance:
 
 - `SKILL.md` is installed.
+- operational maintenance skills are installed.
 - workflow references are installed.
 - runtime script is installed.
 - runtime launcher is installed.
@@ -265,11 +276,11 @@ Use `release plan` when deciding release shape. Use `release check` only after a
 After a tag or branch is available from a Git-clonable source, run the clone/install distribution smoke:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -RepoUrl https://github.com/DanielCarva1/forge-method-core.git -Ref v1.32.0 -ExpectedVersion 1.32.0
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -RepoUrl https://github.com/DanielCarva1/forge-method-core.git -Ref v1.33.0 -ExpectedVersion 1.33.0
 ```
 
 ```bash
-REPO_URL=https://github.com/DanielCarva1/forge-method-core.git REF=v1.32.0 EXPECTED_VERSION=1.32.0 bash scripts/smoke-plugin-clone-install.sh
+REPO_URL=https://github.com/DanielCarva1/forge-method-core.git REF=v1.33.0 EXPECTED_VERSION=1.33.0 bash scripts/smoke-plugin-clone-install.sh
 ```
 
 This smoke does not use the GitHub API. It clones the requested ref, installs the plugin into an isolated temporary marketplace, verifies manifest and marketplace metadata, runs preflight, creates a project, and runs the quality gate.

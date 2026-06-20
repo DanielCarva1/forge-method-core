@@ -6,23 +6,26 @@ trigger:
 
 inputs:
   - game brief or GDD
+  - MDA Trace
   - target platform
   - player loop
   - input constraints
 
 steps:
   1. identify primary player tasks and friction points
-  2. map screens, controls, HUD, feedback, and onboarding needs
+  2. map screens, controls, HUD, feedback, and onboarding needs to target aesthetics and desired dynamics
   3. define accessibility and platform-specific constraints
   4. record UX risks and prototype checks
 
 outputs:
   - game UX plan
+  - UI/feedback signals for MDA Trace
   - interaction map
   - UX validation checks
 
 done_when:
   - core loop interactions are explicit
+  - UI and feedback signals support the intended player feeling
   - platform/input constraints are recorded
   - UX checks can be attached to stories
 
@@ -31,4 +34,4 @@ blocked_when:
   - target platform or input model is unavailable
 
 handoff:
-  - preserve UX plan path, screen/control assumptions, accessibility constraints, and checks
+  - preserve UX plan path, MDA Trace updates, screen/control assumptions, accessibility constraints, and checks

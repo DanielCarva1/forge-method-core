@@ -1345,6 +1345,31 @@ class RuntimeTests(unittest.TestCase):
                 self.assertIn(case["prompt"], payload["human_prompt"], case["question"])
                 self.assertNotIn("I should ", payload["human_prompt"], case["question"])
 
+    def test_game_mda_lens_routes_to_game_studio_workflows(self) -> None:
+        runtime = load_runtime_module()
+        cases = [
+            (
+                "quero usar MDA Lens para decidir qual experiencia o jogador deve sentir e como provar isso",
+                "game-brief",
+            ),
+            (
+                "as dinamicas e mecanicas do jogador nao fecham com a estetica alvo",
+                "mechanics-design",
+            ),
+            (
+                "como provar se a diversao e a imersao apareceram no playtest",
+                "playtest-plan",
+            ),
+        ]
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            for question, workflow in cases:
+                payload = runtime.build_guide_payload(root, question=question, max_chars=12000)
+
+                self.assertEqual(payload["intent_classification"], "game-flow", question)
+                self.assertEqual(payload["recommended_workflow"], workflow, question)
+                self.assertIn("game-flow", payload["signals"], question)
+
     def test_standalone_stack_conversation_stays_in_research_guidance(self) -> None:
         runtime = load_runtime_module()
         cases = [
@@ -3381,6 +3406,7 @@ class RuntimeTests(unittest.TestCase):
             )
             brief_pass = run_cmd("artifact", "game-check", "--root", str(root), "--path", str(brief_artifact))
             self.assertIn("Game artifact check passed.", brief_pass.stdout)
+            self.assertIn("legacy game artifact has no mda_trace", brief_pass.stdout)
 
             sprint_artifact = artifacts_dir / "game-sprint-plan-proof.md"
             sprint_artifact.write_text(
@@ -3426,6 +3452,30 @@ class RuntimeTests(unittest.TestCase):
             result = run_cmd("artifact", "game-check", "--root", str(root), "--path", str(broken), check=False)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("mvp_playable_proof must name", result.stdout)
+
+            broken_mda = artifacts_dir / "game-brief-broken-mda.md"
+            broken_mda.write_text(
+                brief_artifact.read_text(encoding="utf-8").replace(
+                    "references: Foundry, Fantasy Grounds, tabletop maps",
+                    "\n".join(
+                        [
+                            "mda_trace:",
+                            "  target_aesthetics: tactical tension and GM confidence",
+                            "  player_experience_hypothesis:",
+                            "  desired_dynamics: deliberate turn tradeoffs",
+                            "  supporting_mechanics: initiative, movement, dice, cited rules",
+                            "  feedback_and_ui_signals: map highlights and citation panel",
+                            "  proof_or_playtest: one GM resolves one turn with players",
+                            "  unresolved_risks: licensing and automation limits",
+                            "references: Foundry, Fantasy Grounds, tabletop maps",
+                        ]
+                    ),
+                ),
+                encoding="utf-8",
+            )
+            mda_result = run_cmd("artifact", "game-check", "--root", str(root), "--path", str(broken_mda), check=False)
+            self.assertNotEqual(mda_result.returncode, 0)
+            self.assertIn("mda_trace.player_experience_hypothesis is required", mda_result.stdout)
 
     def test_artifact_game_generators_create_brief_and_sprint_plan(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -3483,10 +3533,15 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("Game artifact check passed.", brief)
             brief_text = (root / ".forge-method" / "artifacts" / "game-brief-generated.md").read_text(encoding="utf-8")
             self.assertIn("workflow: game-brief", brief_text)
+            self.assertIn("mda_trace:", brief_text)
+            self.assertIn("target_aesthetics: Be a tactical GM running a living tabletop battle.", brief_text)
+            self.assertIn("desired_dynamics: prepare scene, adjudicate player decisions, roll outcomes, reveal consequences, earn campaign progress", brief_text)
+            self.assertIn("proof_or_playtest: one GM hosts a scene and resolves one cited rules interaction", brief_text)
             self.assertIn("validation: artifact game-check --path .forge-method/artifacts/game-brief-generated.md", brief_text)
             self.assertTrue((root / ".forge-method" / "evals" / "artifact-forge-method-artifacts-game-brief-generated-md-exists.yaml").exists())
             check_brief = run_cmd("artifact", "game-check", "--root", str(root), "--path", ".forge-method/artifacts/game-brief-generated.md").stdout
             self.assertIn("Game artifact check passed.", check_brief)
+            self.assertNotIn("legacy game artifact has no mda_trace", check_brief)
             verify_brief = run_cmd("artifact", "verify", "--root", str(root)).stdout
             self.assertIn("Artifact verification passed.", verify_brief)
 

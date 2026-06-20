@@ -272,27 +272,101 @@ def auto_update(repo_root: Path, timeout: float) -> None:
     save_state(state)
 
 
+def manual_update(repo_root: Path, timeout: float) -> None:
+    current_version = read_version(repo_root)
+    if not is_git_marketplace(repo_root):
+        eprint(f"Forge Method current version: {current_version or '<unknown>'}")
+        eprint("Manual update requires the Git marketplace install.")
+        eprint("Install or migrate with:")
+        eprint("codex plugin marketplace add DanielCarva1/forge-method-core --ref main")
+        return
+
+    command = codex_command()
+    if not command:
+        eprint("Forge Method update unavailable: Codex CLI not found.")
+        eprint("You can retry from Codex after the CLI is available.")
+        return
+
+    old_version = current_version
+    old_metadata = marketplace_metadata(repo_root)
+    old_revision = str(old_metadata.get("revision") or "")
+    watched = [
+        repo_root / "skills" / "forge-method" / "SKILL.md",
+        repo_root / "skills" / "forge-update" / "SKILL.md",
+        repo_root / ".codex-plugin" / "plugin.json",
+    ]
+    old_hashes = {str(path): file_hash(path) for path in watched}
+
+    try:
+        result = run_with_timeout([*command, "plugin", "marketplace", "upgrade", marketplace_name(repo_root)], timeout)
+    except subprocess.TimeoutExpired:
+        eprint("Forge Method update timed out; your current install was left usable.")
+        return
+    except OSError:
+        eprint("Forge Method update failed to start; your current install was left usable.")
+        return
+    if result.returncode != 0:
+        eprint("Forge Method update failed; your current install was left usable.")
+        detail = (result.stderr or result.stdout or "").strip()
+        if detail:
+            eprint(detail.splitlines()[0])
+        return
+
+    new_version = read_version(repo_root)
+    new_metadata = marketplace_metadata(repo_root)
+    new_revision = str(new_metadata.get("revision") or "")
+    updated = is_newer_version(new_version, old_version) or (bool(new_revision) and new_revision != old_revision)
+    if not updated:
+        eprint(f"Forge Method is already up to date: {new_version or old_version or '<unknown>'}")
+        return
+
+    state = load_state()
+    skill_changed = any(file_hash(path) != old_hashes.get(str(path), "") for path in watched)
+    if is_newer_version(new_version, old_version):
+        print_patch_notes(old_version, new_version, read_release_notes(repo_root, new_version), skill_changed=skill_changed)
+        state["last_announced_version"] = new_version
+    else:
+        eprint(f"Forge Method package refreshed at {new_version or '<unknown>'}.")
+        notes = read_release_notes(repo_root, new_version)
+        summary = str(notes.get("summary") or "").strip()
+        if summary:
+            eprint(summary)
+        if skill_changed:
+            eprint(
+                "Skill instructions changed in this update. This chat can continue; "
+                "open a new thread later only if you want the refreshed skill text fully loaded."
+            )
+    state["last_seen_revision"] = new_revision
+    save_state(state)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Forge Method self-update helper")
     parser.add_argument("--skill-dir", required=True)
+    parser.add_argument("--manual", action="store_true", help="run an explicit user-triggered update")
     parser.add_argument("runtime_args", nargs=argparse.REMAINDER)
     ns = parser.parse_args(argv)
     runtime_args = list(ns.runtime_args)
     if runtime_args and runtime_args[0] == "--":
         runtime_args = runtime_args[1:]
+
+    repo_root = find_repo_root(Path(ns.skill_dir))
+    timeout = update_timeout()
+    if ns.manual:
+        manual_update(repo_root, timeout)
+        return 0
+
     if os.environ.get("FORGE_METHOD_SKIP_UPDATE", "").strip().lower() in SKIP_VALUES:
         return 0
     if not should_run_for_args(runtime_args):
         return 0
 
-    repo_root = find_repo_root(Path(ns.skill_dir))
     policy = effective_policy(repo_root)
     if policy == "off":
         return 0
     if not is_git_marketplace(repo_root):
         maybe_print_legacy_hint(repo_root, read_version(repo_root))
         return 0
-    timeout = update_timeout()
     if policy == "notify":
         notify_available(repo_root, timeout)
         return 0

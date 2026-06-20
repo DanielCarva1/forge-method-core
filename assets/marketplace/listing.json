@@ -1,7 +1,7 @@
 {
   "schema_version": "forge-marketplace-listing.v1",
   "name": "forge-method-core",
-  "version": "1.32.0",
+  "version": "1.33.0",
   "display_name": "Forge Method Core",
   "tagline": "Extend human capacity while Codex turns messy ideas into durable work.",
   "category": "Productivity",
@@ -13,6 +13,7 @@
     "Routes startup through preflight decisions before broad context loading.",
     "Routes substantive human intent through Guidance Engine before following stale state actions.",
     "Checks for safe Git marketplace updates before startup and summarizes new versions.",
+    "Offers a manual update skill for users who want to pull the latest package and see what changed.",
     "Provides a tiny emergency reload skill when a chat is stuck on stale instructions.",
     "Starts empty and brownfield work with human guidance before technical state details.",
     "Uses guided brain dump, pace selection, and correction routing before narrowing broad human ideas into artifacts.",
@@ -32,6 +33,7 @@
     "Reality Evidence Gate",
     "Guidance Engine",
     "Self Update",
+    "Manual Update",
     "Emergency Reload",
     "Module Fixtures",
     "Runtime Utilities"
@@ -39,6 +41,7 @@
   "first_run_prompts": [
     "$forge-method",
     "$forge-reload",
+    "$forge-update",
     "Start Forge Method in this workspace.",
     "Resume this Forge Method project from file state."
   ],
@@ -74,7 +77,7 @@
     "python scripts/test-runner.py --workers 4 --timeout 120 --report .forge-method/test-runs/manual.json",
     "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1",
     "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-all.ps1",
-    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref v1.32.0 -ExpectedVersion 1.32.0"
+    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref v1.33.0 -ExpectedVersion 1.33.0"
   ],
   "publication_status": "metadata-ready; public directory submission is external"
 }

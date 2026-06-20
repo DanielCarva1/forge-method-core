@@ -12,6 +12,8 @@ Forge Method users invoke the product inside an active Codex chat. If every upda
 
 Forge Method uses a compact, stable Hot Start Stub in `SKILL.md` and moves normal product evolution into runtime scripts, workflow references, and release notes. The launcher performs self-update for Git marketplace installs before normal startup, prints compact patch notes when a newer version is installed, and continues the same `preflight` or `start` flow.
 
+Manual update is handled by `$forge-update`, an Operational Maintenance Skill defined by ADR 0014. It uses the same Git marketplace upgrade mechanism and patch notes feed, but it is explicitly user-triggered and must not advance project state.
+
 ## Consequences
 
 - Users normally invoke `$forge-method` once, even when an update is applied.

@@ -37,7 +37,7 @@ bash "$skill/forge-method.sh" resume --root . --json
 bash "$skill/forge-method.sh" guide --root . --question "<latest-user-message>" --json
 ```
 
-The launcher may self-update Git marketplace installs before normal startup. Continue the current start after update; do not ask the user to open another chat as part of the normal flow.
+The launcher may self-update Git marketplace installs before normal startup. Continue the current start after update; do not ask the user to open another chat as part of the normal flow. If the user explicitly asks to update Forge, use `$forge-update`; it is operational maintenance, not a product workflow.
 
 Fallback to `$HOME/.agents/skills/forge-method` only when the active skill directory cannot be resolved.
 
@@ -51,7 +51,7 @@ If Guidance Engine returns `facilitation_pack`, load that `skill:facilitation/*.
 2. Separate runtime development from projects created by the runtime.
 3. Prefer durable files over conversation memory.
 4. Ask for human input only when durable state or the active workflow requires it.
-5. Do not create extra slash commands as product surface.
+5. Do not create extra slash commands as product surface. `$forge-reload` and `$forge-update` are operational maintenance exceptions only.
 6. During mechanical build work, follow `resume --json`, `next`, or `guide --json`; do not ask for procedural confirmations.
 7. Before marking work done, run relevant checks and write evidence/checkpoints.
 

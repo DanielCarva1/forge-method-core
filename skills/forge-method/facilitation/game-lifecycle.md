@@ -12,6 +12,7 @@ source_material:
 follow_up_batches:
   - lifecycle_stage: "Are we shaping, planning, building, validating, or learning from a finished slice?"
   - player_proof: "What player behavior or feeling must this stage protect?"
+  - mda_trace: "Which target aesthetics, desired dynamics, supporting mechanics, feedback/UI signals, and proof/playtest does this stage preserve or change?"
   - sprint_plan: "Which playable slice goal, story order, decision sources, and validation plan define this sprint?"
   - engine_profile: "Which engine/profile assumptions shape structure, commands, assets, and performance?"
   - playable_slice: "What can the player actually do when this stage is done?"
@@ -24,6 +25,7 @@ follow_up_batches:
 conversation_stages:
   - locate_stage: "Name the lifecycle stage and why the broad game brief is no longer enough."
   - load_sources: "Read the existing brief, GDD, mechanics, UX, PRD, architecture, sprint, and evidence relevant to that stage."
+  - mda_checkpoint: "Carry forward or update the MDA Trace so later agents do not reduce the game to features, code, or content volume."
   - engine_context: "Record the engine profile only where it changes structure, commands, assets, tests, or performance."
   - ask_stage_questions: "Ask only the questions that unlock the selected stage, not the whole game again."
   - plan_slice: "For sprint planning, order stories by player value, risk, dependencies, proof value, and deferred scope."
@@ -34,6 +36,7 @@ conversation_stages:
 
 elicitation_options:
   - playable_slice: "Ask what the player can actually do at the end of this stage."
+  - mda_lens: "Map desired player feeling to dynamics, mechanics, UI/feedback signals, and proof before choosing stories."
   - sprint_order: "Rank candidate stories by player value, uncertainty burned down, dependencies, and evidence produced."
   - dependency_walk: "Trace mechanics, UX, content, engine, assets, tests, and story dependencies."
   - risk_cut: "Identify which uncertainty should be proven before more content is created."
@@ -44,6 +47,7 @@ elicitation_options:
 
 facilitator_moves:
   - "Do not re-run discovery when the user asks for a production-stage artifact."
+  - "Challenge game work that names features without naming the player feeling, dynamic, mechanic, feedback signal, and proof."
   - "Tie every story or test back to player behavior or production risk."
   - "Treat game sprint planning as playable-slice planning, not generic backlog grooming."
   - "Keep game-specific context in the handoff so build-story does not become generic software work."
@@ -54,6 +58,7 @@ facilitator_moves:
 quality_bar:
   - "The output is stage-specific and executable by the next agent."
   - "Player experience, production constraints, and validation are all visible."
+  - "MDA Trace is preserved or intentionally updated when GDD, mechanics, UX, PRD, prototype, playtest, or story work changes the experience."
   - "Initial game production stages preserve visible slice shape before story creation."
   - "The route advances the game lifecycle instead of looping in ideation."
   - "Sprint planning preserves playable slice goal, decision sources, ordered story batch, validation plan, deferred scope, next story, and sprint update."
@@ -97,9 +102,9 @@ checkpoint_options:
 domain_examples:
   - game-context: "A future agent needs the real game state; summarize player fantasy, loop, engine profile, playable slice, artifacts, proof, and next workflow."
   - engine-setup: "Engine is selected but setup is not durable; define structure, first-run command, asset pipeline, validation, and performance assumptions."
-  - gdd: "Brief is accepted; expand into pillars, systems, content, progression, UX/feedback, engine assumptions, playable slice, and proof."
+  - gdd: "Brief is accepted; expand MDA Trace into pillars, systems, content, progression, UX/feedback, engine assumptions, playable slice, and proof."
   - narrative-design: "Story or world matters; bind premise, player role, content units, tone, and quest scope to mechanics and slice."
-  - mechanics-design: "Rules or balance are the risk; map player decisions, feedback, resources, failure states, prototype tests, and evidence."
+  - mechanics-design: "Rules or balance are the risk; map target aesthetics to dynamics, mechanics, player decisions, feedback, resources, failure states, prototype tests, and evidence."
   - game-ux-design: "Player cannot understand combat feedback; produce HUD/control/onboarding assumptions and UX checks before story work."
   - game-prd: "GDD has ideas but no implementation boundaries; convert pillars into MVP requirements, parked scope, and acceptance evidence."
   - quick-prototype: "A big idea needs proof; choose the smallest playable player action, asset stubs, proof command/manual check, and next decision."
@@ -107,7 +112,7 @@ domain_examples:
   - game-sprint-planning: "A slice needs sequencing; order story batch by player value, risk, dependencies, decision sources, validation, deferred scope, and next story."
   - game-sprint-status: "Team asks what is actually playable; summarize done/blocked/deferred stories against the slice target."
   - game-retrospective: "Playtest or sprint finished; convert learning into keep/change/stop actions and backlog updates."
-  - playtest-plan: "Prototype exists; define target players, tasks, observation method, pass/fail signals, and decision map."
+  - playtest-plan: "Prototype exists; define target players, tasks, observation method, MDA pass/fail signals, and decision map."
   - performance-plan: "Frame time, memory, load, input latency, or multiplayer risk matters; define budget, scenarios, checks, and optimization story."
   - game-qa-review: "A slice/story needs review; inspect playability, feedback, stability, performance, scope, evidence, and repair route."
   - game-test-framework: "Engine exists but QA is ad hoc; define test layers for mechanics, saves, UI, content, and multiplayer if relevant."
@@ -115,7 +120,7 @@ domain_examples:
   - game-e2e-scaffold: "Release needs launch-to-result proof; define launch command, setup/action/assertion/teardown, observable success signal, evidence mode, and readiness gate link."
 
 artifact_rules:
-  Persist lifecycle stage, source docs, visible slice proof, decisions, parked scope, validation evidence, E2E smoke proof, next story/workflow, and unresolved risks.
+  Persist lifecycle stage, source docs, MDA Trace changes, visible slice proof, decisions, parked scope, validation evidence, E2E smoke proof, next story/workflow, and unresolved risks.
   Use artifact game-sprint-plan for game-sprint-planning handoffs.
   Use artifact game-e2e-scaffold for launch-to-result smoke handoffs.
   Use `skill:templates/game-lifecycle-artifact.md` as the default artifact shape unless a narrower project template exists.

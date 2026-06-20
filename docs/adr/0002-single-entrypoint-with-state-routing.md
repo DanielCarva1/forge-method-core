@@ -10,7 +10,7 @@ Many commands create routing confusion for users and agents. The runtime should 
 
 ## Decision
 
-The public Codex entrypoint is `$forge-method`. The helper script exposes deterministic subcommands for state operations, but users should not need to memorize many workflow commands.
+The public Codex product entrypoint is `$forge-method`. The helper script exposes deterministic subcommands for state operations, but users should not need to memorize many workflow commands. Operational maintenance exceptions are documented in ADR 0014.
 
 Workflow selection is based on:
 
@@ -26,4 +26,3 @@ Workflow selection is based on:
 - The user experience stays simple.
 - Workflow routing must be precise and file-backed.
 - Helper commands remain implementation surface, not product surface.
-

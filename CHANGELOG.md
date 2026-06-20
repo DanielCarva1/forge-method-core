@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 1.33.0
+
+Forge Method Core v1.33.0 ships MDA Game Lens and manual update support:
+
+- add `MDA Lens` and `MDA Trace` to Game Studio guidance so player feeling, dynamics, mechanics, UI/feedback, and proof stay connected
+- make generated game briefs include `mda_trace` by default, with legacy warnings and incomplete-MDA validation failures in `artifact game-check`
+- improve game routing for MDA, player-feel, fun, mechanics/dynamics, and playtest prompts
+- update game facilitation packs, workflow state machines, and templates to preserve MDA decisions through GDD, mechanics, UX, playtest, and lifecycle handoffs
+- add `$forge-update` as an operational maintenance skill for explicit Git marketplace updates with concise patch notes
+- document Manual Update and Operational Maintenance Skills while preserving `$forge-method` as the single product entrypoint
+
 ## 1.32.0
 
 Forge Method Core v1.32.0 ships guided early visual proof and platform operations coverage:

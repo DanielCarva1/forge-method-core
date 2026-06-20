@@ -11,6 +11,7 @@ source_material:
 
 follow_up_batches:
   - core_fantasy: "What should the player feel and pretend to be doing?"
+  - mda_lens: "Which target aesthetics should the player feel, what dynamics should create that feeling, which mechanics support the dynamics, and how will we prove it?"
   - loop: "What does the player repeatedly do, decide, risk, and earn?"
   - verbs: "Which concrete player verbs prove the fantasy in minute-to-minute play?"
   - pillars: "Which 2-4 pillars must survive scope cuts?"
@@ -25,6 +26,7 @@ conversation_stages:
   - still_in_head: "Ask what else is still in their head before narrowing; late details often contain the real taste signal."
   - mode_choice: "Offer fast path with [ASSUMPTION] tags or coaching path with step-by-step pressure, based on urgency and energy."
   - taste_calibration: "Mirror the intended feeling, audience, and reference games; ask what must be borrowed, inverted, or avoided."
+  - mda_trace: "Build the MDA Trace: target aesthetics, player experience hypothesis, desired dynamics, supporting mechanics, feedback/UI signals, proof/playtest, and unresolved risks."
   - preview_options: "Show one narrow visual proof or 2-3 contrasting table/screen/play examples when the direction is still broad."
   - play_shape: "Extract player fantasy, repeated loop, verbs, risks, rewards, and the moment-to-moment promise."
   - scope_cut: "Separate dream game, vertical slice, and smallest playable proof without shaming ambition."
@@ -34,11 +36,13 @@ conversation_stages:
 elicitation_options:
   - reference_compare: "Pick two reference games and ask what to take, refuse, and improve."
   - player_fantasy_ladder: "Ask what the player feels in minute 1, hour 1, and after mastery."
+  - mda_ladder: "Ask: what experience should the player feel; what dynamic produces it; what mechanic sustains it; what feedback tells the player it happened; what prototype or playtest proves it?"
   - scope_knife: "Cut features until the core loop is still playable and recognizable."
   - council: "Use council when genre, audience, tech, or taste tradeoffs are expensive."
 
 facilitator_moves:
   - "Protect the emotional seed of the game while challenging impossible scope."
+  - "Use MDA Lens as a pressure test, not a lecture: feeling -> dynamics -> mechanics -> feedback -> proof."
   - "Do not accelerate unless the human explicitly says this is simple, urgent, or time-boxed."
   - "When energy is high, mirror it with sharper language and useful humor; never turn frustration into apology theater."
   - "Replace genre labels with concrete player verbs and decisions."
@@ -49,10 +53,11 @@ facilitator_moves:
 
 quality_bar:
   - "The human recognizes the game as their game, not a generic genre template."
+  - "The MDA Trace connects target aesthetics to player experience hypothesis, desired dynamics, supporting mechanics, feedback/UI signals, proof/playtest, and unresolved risks."
   - "The brief can feed GDD, UX, PRD, prototype, and story creation without re-discovery."
   - "The MVP proves the core fantasy instead of a random technical slice."
   - "The human sees enough of the table/screen/play shape to correct fantasy, usability, and immersion before downstream work."
-  - "The artifact names player fantasy, loop, verbs, pillars, references, playable proof, parked scope, decision log, assumptions, open questions, and next workflow."
+  - "The artifact names player fantasy, loop, verbs, pillars, MDA Trace, references, playable proof, parked scope, decision log, assumptions, open questions, and next workflow."
   - "artifact game-brief registers the living brief before downstream game production uses it."
   - "artifact game-check passes before the brief becomes input to GDD, prototype, or sprint planning."
 
@@ -77,7 +82,7 @@ checkpoint_options:
   - council
 
 artifact_rules:
-  Use artifact game-brief for durable brief output; persist source_material, player_fantasy, core_loop, player_verbs, pillars, references, first_visual_preview, dream_game, vertical_slice, mvp_playable_proof, parked_scope, rejected alternatives, decision_log, assumptions, open_questions, validation_verdict, and next_workflow.
+  Use artifact game-brief for durable brief output; persist source_material, player_fantasy, core_loop, player_verbs, pillars, mda_trace, references, first_visual_preview, dream_game, vertical_slice, mvp_playable_proof, parked_scope, rejected alternatives, decision_log, assumptions, open_questions, validation_verdict, and next_workflow.
 
 domain_examples:
   - tabletop: "Fantasy, loop, rules surface, player roles, table flow, reference systems, first playable session, and parked sourcebook depth."
