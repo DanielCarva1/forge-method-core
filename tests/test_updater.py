@@ -231,17 +231,124 @@ class UpdaterTests(unittest.TestCase):
             self.assertEqual(result.stdout, "")
             self.assertIn("Forge Method is already up to date: 1.33.0", result.stderr)
 
-    def test_manual_update_non_git_marketplace_explains_install_shape(self) -> None:
+    def test_manual_update_non_git_marketplace_migrates_and_prints_patch_notes(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = make_plugin_root(raw, git_marketplace=False, version="1.32.0")
+            fake_codex = Path(raw) / "fake_codex.py"
+            args_path = Path(raw) / "codex-args.json"
+            fake_codex.write_text(
+                "\n".join(
+                    [
+                        "import json, os, sys",
+                        "from pathlib import Path",
+                        "Path(os.environ['FAKE_CODEX_ARGS']).write_text(json.dumps(sys.argv[1:]), encoding='utf-8')",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            notes = Path(raw) / "latest.json"
+            notes.write_text(
+                json.dumps(
+                    {
+                        "version": "1.34.1",
+                        "summary": "Update now migrates local installs.",
+                        "highlights": ["legacy install migration", "main package refresh"],
+                        "full_notes_url": "https://example.test/notes",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            env = {
+                "FAKE_CODEX_ARGS": str(args_path),
+                "FORGE_METHOD_CODEX": f"{sys.executable} {fake_codex}",
+                "FORGE_METHOD_RELEASE_NOTES_URL": notes.as_uri(),
+                "FORGE_METHOD_UPDATE_STATE": str(Path(raw) / "state" / "update-state.json"),
+            }
 
-            result = run_manual_updater(root / "skills" / "forge-method")
+            result = run_manual_updater(root / "skills" / "forge-method", env=env)
 
             self.assertEqual(result.returncode, 0)
             self.assertEqual(result.stdout, "")
             self.assertIn("Forge Method current version: 1.32.0", result.stderr)
-            self.assertIn("Manual update requires the Git marketplace install.", result.stderr)
-            self.assertIn("codex plugin marketplace add DanielCarva1/forge-method-core --ref main", result.stderr)
+            self.assertIn("migrating it to the updateable main package", result.stderr)
+            self.assertIn("Running: codex plugin marketplace add DanielCarva1/forge-method-core --ref main", result.stderr)
+            self.assertIn("Forge Method updated: 1.32.0 -> 1.34.1", result.stderr)
+            self.assertIn("Update now migrates local installs.", result.stderr)
+            self.assertIn("- legacy install migration", result.stderr)
+            self.assertEqual(
+                json.loads(args_path.read_text(encoding="utf-8")),
+                ["plugin", "marketplace", "add", "DanielCarva1/forge-method-core", "--ref", "main"],
+            )
+
+    def test_manual_update_non_git_marketplace_failed_migration_prints_command(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = make_plugin_root(raw, git_marketplace=False, version="1.32.0")
+            fake_codex = Path(raw) / "fake_codex.py"
+            fake_codex.write_text("import sys\nprint('nope', file=sys.stderr)\nsys.exit(2)\n", encoding="utf-8")
+
+            result = run_manual_updater(
+                root / "skills" / "forge-method",
+                env={
+                    "FORGE_METHOD_CODEX": f"{sys.executable} {fake_codex}",
+                    "FORGE_METHOD_UPDATE_STATE": str(Path(raw) / "state" / "update-state.json"),
+                },
+            )
+
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("Forge Method marketplace migration failed", result.stderr)
+            self.assertIn("Run manually: codex plugin marketplace add DanielCarva1/forge-method-core --ref main", result.stderr)
+
+    def test_manual_update_upgrade_failure_falls_back_to_marketplace_add(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = make_plugin_root(raw, git_marketplace=True, version="1.33.0")
+            fake_codex = Path(raw) / "fake_codex.py"
+            args_path = Path(raw) / "codex-args.ndjson"
+            fake_codex.write_text(
+                "\n".join(
+                    [
+                        "import json, os, sys",
+                        "path = os.environ['FAKE_CODEX_ARGS']",
+                        "with open(path, 'a', encoding='utf-8') as handle: handle.write(json.dumps(sys.argv[1:]) + '\\n')",
+                        "if 'upgrade' in sys.argv:",
+                        "    print('upgrade unavailable', file=sys.stderr)",
+                        "    sys.exit(2)",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            notes = Path(raw) / "latest.json"
+            notes.write_text(
+                json.dumps(
+                    {
+                        "version": "1.34.1",
+                        "summary": "Upgrade fallback refreshes main.",
+                        "highlights": ["fallback add"],
+                        "full_notes_url": "https://example.test/notes",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = run_manual_updater(
+                root / "skills" / "forge-method",
+                env={
+                    "FAKE_CODEX_ARGS": str(args_path),
+                    "FORGE_METHOD_CODEX": f"{sys.executable} {fake_codex}",
+                    "FORGE_METHOD_RELEASE_NOTES_URL": notes.as_uri(),
+                    "FORGE_METHOD_UPDATE_STATE": str(Path(raw) / "state" / "update-state.json"),
+                },
+            )
+
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("upgrade failed; trying the main-package refresh path", result.stderr)
+            self.assertIn("Forge Method updated: 1.33.0 -> 1.34.1", result.stderr)
+            calls = [json.loads(line) for line in args_path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(calls[0], ["plugin", "marketplace", "upgrade", root.name])
+            self.assertEqual(calls[1], ["plugin", "marketplace", "add", "DanielCarva1/forge-method-core", "--ref", "main"])
 
     def test_manual_update_failure_keeps_install_usable(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

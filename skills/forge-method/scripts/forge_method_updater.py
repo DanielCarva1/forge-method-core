@@ -9,11 +9,16 @@ import shlex
 import shutil
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
 
 PLUGIN_NAME = "forge-method-core"
+MARKETPLACE_REPO = "DanielCarva1/forge-method-core"
+MARKETPLACE_REF = "main"
+REMOTE_RELEASE_NOTES_URL = "https://raw.githubusercontent.com/DanielCarva1/forge-method-core/main/release-notes/latest.json"
 USER_ENTRYPOINTS = {"start", "preflight", "guide", "resume", "reload"}
 SKIP_VALUES = {"1", "true", "yes", "on"}
 POLICIES = {"auto", "notify", "off"}
@@ -139,6 +144,14 @@ def codex_command() -> list[str] | None:
     return [path] if path else None
 
 
+def marketplace_add_args() -> list[str]:
+    return ["plugin", "marketplace", "add", MARKETPLACE_REPO, "--ref", MARKETPLACE_REF]
+
+
+def marketplace_add_command_text() -> str:
+    return f"codex plugin marketplace add {MARKETPLACE_REPO} --ref {MARKETPLACE_REF}"
+
+
 def run_with_timeout(command: list[str], timeout: float) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         command,
@@ -172,6 +185,21 @@ def read_release_notes(repo_root: Path, version: str) -> dict[str, Any]:
     }
 
 
+def fetch_remote_release_notes(timeout: float) -> dict[str, Any]:
+    url = os.environ.get("FORGE_METHOD_RELEASE_NOTES_URL", REMOTE_RELEASE_NOTES_URL).strip()
+    if not url:
+        return {}
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            raw = response.read(128 * 1024)
+    except (OSError, urllib.error.URLError, TimeoutError):
+        return {}
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+
+
 def print_patch_notes(old_version: str, new_version: str, notes: dict[str, Any], *, skill_changed: bool) -> None:
     eprint(f"Forge Method updated: {old_version or '<unknown>'} -> {new_version}")
     summary = str(notes.get("summary") or "").strip()
@@ -198,11 +226,63 @@ def maybe_print_legacy_hint(repo_root: Path, current_version: str) -> None:
     if state.get("last_legacy_hint") == key:
         return
     eprint(
-        "Forge Method automatic updates require the Git marketplace install. "
-        "Recommended: codex plugin marketplace add DanielCarva1/forge-method-core --ref main"
+        "Forge Method automatic updates require the Git marketplace install shape. "
+        f"Run $forge-update to migrate, or run: {marketplace_add_command_text()}"
     )
     state["last_legacy_hint"] = key
     save_state(state)
+
+
+def print_refresh_summary(repo_root: Path, old_version: str, notes: dict[str, Any], *, skill_changed: bool) -> None:
+    new_version = str(notes.get("version") or old_version or "").strip()
+    if new_version and is_newer_version(new_version, old_version):
+        print_patch_notes(old_version, new_version, notes, skill_changed=skill_changed)
+    else:
+        eprint(f"Forge Method marketplace install refreshed at {new_version or old_version or '<unknown>'}.")
+        summary = str(notes.get("summary") or "").strip()
+        if summary:
+            eprint(summary)
+        highlights = notes.get("highlights") or []
+        for item in [str(item).strip() for item in highlights if str(item).strip()][:4]:
+            eprint(f"- {item}")
+        url = str(notes.get("full_notes_url") or "").strip()
+        if url:
+            eprint(f"Full notes: {url}")
+        if skill_changed:
+            eprint(
+                "Skill instructions may have changed. This chat can continue; "
+                "open a new thread later only if you want the refreshed skill text fully loaded."
+            )
+    state = load_state()
+    if new_version:
+        state["last_announced_version"] = new_version
+    save_state(state)
+
+
+def fallback_marketplace_add(command: list[str], repo_root: Path, old_version: str, timeout: float, *, reason: str) -> bool:
+    eprint(reason)
+    eprint(f"Running: {marketplace_add_command_text()}")
+    try:
+        result = run_with_timeout([*command, *marketplace_add_args()], timeout)
+    except subprocess.TimeoutExpired:
+        eprint("Forge Method marketplace migration timed out; your current install was left usable.")
+        eprint(f"Run manually: {marketplace_add_command_text()}")
+        return False
+    except OSError:
+        eprint("Forge Method marketplace migration failed to start; your current install was left usable.")
+        eprint(f"Run manually: {marketplace_add_command_text()}")
+        return False
+    if result.returncode != 0:
+        eprint("Forge Method marketplace migration failed; your current install was left usable.")
+        detail = (result.stderr or result.stdout or "").strip()
+        if detail:
+            eprint(detail.splitlines()[0])
+        eprint(f"Run manually: {marketplace_add_command_text()}")
+        return False
+
+    notes = fetch_remote_release_notes(timeout) or read_release_notes(repo_root, old_version)
+    print_refresh_summary(repo_root, old_version, notes, skill_changed=True)
+    return True
 
 
 def notify_available(repo_root: Path, timeout: float) -> None:
@@ -274,17 +354,21 @@ def auto_update(repo_root: Path, timeout: float) -> None:
 
 def manual_update(repo_root: Path, timeout: float) -> None:
     current_version = read_version(repo_root)
-    if not is_git_marketplace(repo_root):
-        eprint(f"Forge Method current version: {current_version or '<unknown>'}")
-        eprint("Manual update requires the Git marketplace install.")
-        eprint("Install or migrate with:")
-        eprint("codex plugin marketplace add DanielCarva1/forge-method-core --ref main")
-        return
-
     command = codex_command()
     if not command:
         eprint("Forge Method update unavailable: Codex CLI not found.")
-        eprint("You can retry from Codex after the CLI is available.")
+        eprint(f"Run manually after the CLI is available: {marketplace_add_command_text()}")
+        return
+
+    if not is_git_marketplace(repo_root):
+        eprint(f"Forge Method current version: {current_version or '<unknown>'}")
+        fallback_marketplace_add(
+            command,
+            repo_root,
+            current_version,
+            timeout,
+            reason="This install is not in Git marketplace shape; migrating it to the updateable main package.",
+        )
         return
 
     old_version = current_version
@@ -306,6 +390,14 @@ def manual_update(repo_root: Path, timeout: float) -> None:
         eprint("Forge Method update failed to start; your current install was left usable.")
         return
     if result.returncode != 0:
+        if fallback_marketplace_add(
+            command,
+            repo_root,
+            old_version,
+            timeout,
+            reason="Forge Method marketplace upgrade failed; trying the main-package refresh path instead.",
+        ):
+            return
         eprint("Forge Method update failed; your current install was left usable.")
         detail = (result.stderr or result.stdout or "").strip()
         if detail:

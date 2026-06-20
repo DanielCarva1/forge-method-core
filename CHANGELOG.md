@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.34.1
+
+Forge Method Core v1.34.1 ships an update-skill hotfix:
+
+- make `$forge-update` migrate legacy/local installs through `codex plugin marketplace add DanielCarva1/forge-method-core --ref main` instead of only explaining that the install shape is unsupported
+- fall back to the main-package refresh path when `codex plugin marketplace upgrade` fails
+- fetch the latest patch notes feed from GitHub during migration so users still see version and feature summaries after updating
+- keep failed migrations non-destructive and print the exact manual command when Codex CLI update commands fail
+
 ## 1.34.0
 
 Forge Method Core v1.34.0 ships guided team collaboration, Product Areas, and repo split planning:

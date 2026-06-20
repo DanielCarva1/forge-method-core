@@ -1,11 +1,11 @@
 ---
 name: forge-update
-description: Operational maintenance command for updating an installed Forge Method Core Git marketplace package and summarizing the new version.
+description: Operational maintenance command for updating or migrating an installed Forge Method Core package and summarizing the new version.
 ---
 
 # Forge Update
 
-Forge Update is an operational maintenance skill, not a product workflow. It updates the installed Forge Method package when the install came from the Codex Git marketplace and then reports the version and short patch notes.
+Forge Update is an operational maintenance skill, not a product workflow. It detects the current Forge Method package shape, updates Git marketplace installs, migrates legacy/local installs to the Git marketplace main package when possible, and reports the version plus short patch notes.
 
 ## Hot Update
 
@@ -52,7 +52,7 @@ If the sibling skill cannot be resolved, fall back to `$HOME/.agents/skills/forg
 1. Treat this as maintenance of the plugin package, not project progress.
 2. Do not mutate `.forge-method/state.yaml`, sprint files, stories, or project artifacts as part of update.
 3. If already updated, say the current version plainly.
-4. If the install is not a Git marketplace install, explain that automatic/manual update requires that install shape and show:
+4. If the install is not a Git marketplace install, let the updater migrate it through Codex marketplace add. If migration fails, show:
 
 ```powershell
 codex plugin marketplace add DanielCarva1/forge-method-core --ref main
