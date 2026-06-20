@@ -6,7 +6,7 @@
 - docs_cache: `%TEMP%/forge-bmad-docs`
 - installed_modules: bmb 1.8.1, cis 0.2.1, tea 1.19.0, gds 0.6.0
 
-Internal behavior benchmark for route-aware human guidance, correct-course, research, brainstorm, product/UX/visual alignment/architecture/platform ops/quick-dev, story lifecycle, closure utilities, CIS/creative, game, builder, customization, lifecycle closure, and quality routing.
+Internal behavior benchmark for route-aware human guidance, correct-course, research, brainstorm, product/UX/visual alignment/architecture/platform ops/team collaboration/quick-dev, story lifecycle, closure utilities, CIS/creative, game, builder, customization, lifecycle closure, and quality routing.
 
 ## Sources
 
@@ -24,6 +24,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - Test architecture flows sequence engagement model, risk strategy, fixture architecture, CI command contracts, ATDD, automation, review, NFR evidence, and two-phase traceability so quality requests route to the right artifact before implementation or release.
 - Platform/ops flows surface infrastructure, CI/CD, database/data operations, environments, secrets, deployment, observability, rollback, owners, waivers, and proof before implementation hides operational assumptions.
 - Visual alignment flows give the human an inspectable prototype, mockup, screen, or screenshot before stories/build can lock in the wrong product shape.
+- Team collaboration flows separate product ownership from runtime modules, establish the Team Operating Model, map Product Areas, define trunk-based and review policy, preserve handoffs, and plan repo splits only when standalone ownership, contracts, validation, release boundary, and integration evidence are real.
 - Testing education requests should route to an applied teaching workflow before test strategy when the user is trying to learn or choose a quality approach.
 - Builder utility flows analyze agents/workflows and convert skill material before scaffolding new runtime artifacts.
 - Customization flows select team/local scope, choose supported override keys, validate merged behavior, and expose an effective capability index instead of relying on hidden prose.
@@ -93,6 +94,7 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - P2 Runtime Utility outputs must route isolated eval runner, hook/event, and API/browser utility requests to explicit opt-in contracts with trust boundary, side-effect policy, commands, dry-run or evidence, and no hidden startup overhead.
 - Platform Ops outputs must route infrastructure, CI/CD, database/data, environment, secrets, deployment, observability, rollback, and operate-readiness requests to `platform-ops-plan`, or to narrower CI/deploy/observability workflows when the surface is isolated.
 - Visual Alignment outputs must route early mockup, wireframe, screenshot, preview, and visible-alignment requests to `visual-alignment-prototype` before stories or build, preserving mismatch, accepted/rejected directions, proof, and next workflow.
+- Team Collaboration outputs must route multi-human, GitHub org, trunk-based, CODEOWNERS, monorepo, multi-repo, Product Area, ownership, handoff, repo split, and standalone repo requests to `team-operating-model`, `product-area-map`, `trunk-based-plan`, `collaboration-handoff`, or `repo-split-plan` before parallel build work.
 - Enterprise Artifact Map Depth outputs must make enterprise track decisions produce required/conditional artifact maps, including risk, security, privacy, quality/NFR, CI, traceability, release, conditional DevOps/compliance/observability, evidence status, waiver policy, and readiness/release gate consumers.
 - Spec Kernel Depth outputs must route create/update/validate/distill spec requests to `write-spec`, produce a compact spec kernel with why, stable capabilities, constraints, non-goals, success signal, preservation map, decision log, companions, and `artifact spec-check` proof.
 - Document Review Depth outputs must route prose/structure/tone requests to `editorial-review` and boundary/failure/misuse requests to `edge-case-review`, each with a narrow compact artifact rather than the generic document utility shape.
@@ -130,6 +132,11 @@ Internal behavior benchmark for route-aware human guidance, correct-course, rese
 - `visual-alignment-prototype`
 - `architecture`
 - `platform-ops-plan`
+- `team-operating-model`
+- `product-area-map`
+- `trunk-based-plan`
+- `collaboration-handoff`
+- `repo-split-plan`
 - `quick-dev`
 - `story-creation`
 - `plan-sprint`

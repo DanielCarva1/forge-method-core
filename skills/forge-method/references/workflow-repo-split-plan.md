@@ -1,0 +1,35 @@
+# workflow: repo-split-plan
+
+trigger:
+  - user wants to split a Product Area into its own repo
+  - a Product Area needs standalone ownership, release, validation, or contract boundary
+  - root integrator must keep only integration evidence after extraction
+
+inputs:
+  - Product Area map
+  - target repo path or URL
+  - owner, public contract, dependencies, checks, and release boundary
+  - root integrator integration expectations
+
+steps:
+  1. verify split readiness: owner, contract, validation, release boundary, and integration cost
+  2. define extraction scope, retained root contract, and downstream/upstream dependencies
+  3. plan standalone `.forge-method/` initialization in the new repo with compact context
+  4. record root integration artifact with repo pointer, expected version/interface, evidence, and owner
+  5. route platform, CI, architecture, or collaboration-handoff follow-up
+
+outputs:
+  - repo split plan artifact
+  - standalone Method Project init contract
+  - root integration handoff
+
+done_when:
+  - split can create a standalone Forge project without copying stale integrator history
+  - root integrator has integration contract, repo pointer, evidence expectation, and owner
+
+blocked_when:
+  - owner, contract, validation command, release boundary, or target repo is missing
+  - split would hide unresolved cross-area coupling
+
+handoff:
+  - preserve source Product Area, target repo, standalone init command, compact context, integration contract, validation evidence, and next workflow

@@ -16,9 +16,9 @@
 
 ## Story Batch
 
-| Order | Story | User Value | Decision Sources | Dependencies | Risk/Learning | Validation | Status |
-|---|---|---|---|---|---|---|---|
-| 1 |  |  |  |  |  |  | ready/planned/blocked/deferred |
+| Order | Story | Product Area | Owner | Branch/PR | User Value | Decision Sources | Dependencies | Risk/Learning | Validation | Status |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 |  |  |  |  |  |  |  |  |  | ready/planned/blocked/deferred |
 
 ## Ready Stories
 
@@ -26,12 +26,18 @@ For each ready story:
 
 - story_id:
 - title:
+- product_area:
+- owner:
+- branch:
+- pr:
 - acceptance:
 - decision_sources:
+- dependencies:
 - validation_commands:
 - manual_checks:
 - evidence_expected:
 - done_when:
+- handoff_required:
 
 ## Deferred Or Blocked
 
@@ -58,5 +64,9 @@ For each ready story:
 - next_story:
 - next_command:
 - files_to_read:
+- product_area:
+- owner:
+- branch_or_pr:
+- handoff_required:
 - state_update:
 - sprint_update:

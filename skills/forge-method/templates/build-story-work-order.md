@@ -4,6 +4,12 @@
 - created_at:
 - story_id:
 - story_title:
+- product_area:
+- owner:
+- branch:
+- pr:
+- dependencies:
+- handoff_required:
 - decision_sources:
 - mode: start/continue/review/evidence/headless
 
@@ -74,6 +80,10 @@
 ## Handoff
 
 - next_story_or_gate:
+- product_area:
+- owner:
+- branch_or_pr:
+- handoff_required:
 - state_update:
 - sprint_update:
 - commit_policy:

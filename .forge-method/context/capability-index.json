@@ -117,7 +117,7 @@
       "when": "Release confidence depends on requirements, risks, tests, and waivers lining up."
     }
   ],
-  "generated_at": "2026-06-20T21:10:22+00:00",
+  "generated_at": "2026-06-20T22:39:32+00:00",
   "modules": [
     {
       "id": "core-runtime",
@@ -595,7 +595,7 @@
     ]
   },
   "runtime": "forge-method",
-  "runtime_version": "1.33.0",
+  "runtime_version": "1.34.0",
   "sources": [],
   "workflows": [
     {
@@ -870,6 +870,33 @@
       "phase": "4-build-verify | 6-evolve",
       "required": false,
       "template": "code-review-artifact"
+    },
+    {
+      "facilitation_pack": "collaboration",
+      "followed_by": [
+        "build-story",
+        "code-review",
+        "sprint-status",
+        "repo-split-plan",
+        "session-prep"
+      ],
+      "id": "collaboration-handoff",
+      "modes": [
+        "handoff",
+        "pr",
+        "parallel",
+        "resume",
+        "headless"
+      ],
+      "outputs": [
+        "branch/PR handoff",
+        "Product Area status",
+        "owner and next actor",
+        "checks/evidence/blockers"
+      ],
+      "phase": "3-plan | 4-build-verify | 5-ready-operate | 6-evolve",
+      "required": false,
+      "template": "collaboration-handoff-artifact"
     },
     {
       "facilitation_pack": "enterprise-readiness",
@@ -2138,6 +2165,33 @@
       "template": "problem-solving-artifact"
     },
     {
+      "facilitation_pack": "collaboration",
+      "followed_by": [
+        "trunk-based-plan",
+        "architecture",
+        "story-creation",
+        "repo-split-plan",
+        "collaboration-handoff"
+      ],
+      "id": "product-area-map",
+      "modes": [
+        "create",
+        "update",
+        "validate",
+        "split-candidates",
+        "headless"
+      ],
+      "outputs": [
+        "Product Area map",
+        "owner and contract map",
+        "split candidate list",
+        "parallel work boundaries"
+      ],
+      "phase": "1-discovery | 2-specification | 3-plan",
+      "required": false,
+      "template": "product-area-map-artifact"
+    },
+    {
       "facilitation_pack": "product-planning",
       "followed_by": [
         "working-backwards-challenge",
@@ -2300,6 +2354,33 @@
       "phase": "5-ready-operate",
       "required": true,
       "template": "release-readiness-artifact"
+    },
+    {
+      "facilitation_pack": "collaboration",
+      "followed_by": [
+        "project-context",
+        "platform-ops-plan",
+        "ci-quality-pipeline",
+        "collaboration-handoff",
+        "release-readiness"
+      ],
+      "id": "repo-split-plan",
+      "modes": [
+        "plan",
+        "standalone",
+        "extract",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "repo split plan",
+        "standalone Method Project init contract",
+        "root integrator contract",
+        "integration evidence"
+      ],
+      "phase": "3-plan | 6-evolve",
+      "required": false,
+      "template": "repo-split-plan-artifact"
     },
     {
       "facilitation_pack": "lifecycle-closure",
@@ -2594,6 +2675,32 @@
       "template": "teach-testing-artifact"
     },
     {
+      "facilitation_pack": "collaboration",
+      "followed_by": [
+        "product-area-map",
+        "trunk-based-plan",
+        "platform-ops-plan",
+        "ci-quality-pipeline",
+        "story-creation"
+      ],
+      "id": "team-operating-model",
+      "modes": [
+        "create",
+        "update",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "team operating model",
+        "owner/review policy",
+        "trunk and agent-use conventions",
+        "next collaboration workflow"
+      ],
+      "phase": "1-discovery | 2-specification | 3-plan",
+      "required": false,
+      "template": "team-operating-model-artifact"
+    },
+    {
       "facilitation_pack": "evidence-research",
       "followed_by": [
         "research-closeout",
@@ -2781,6 +2888,32 @@
       "phase": "0-route | 1-discovery | 6-evolve",
       "required": false,
       "template": "track-decision-artifact"
+    },
+    {
+      "facilitation_pack": "collaboration",
+      "followed_by": [
+        "ci-quality-pipeline",
+        "platform-ops-plan",
+        "story-creation",
+        "collaboration-handoff"
+      ],
+      "id": "trunk-based-plan",
+      "modes": [
+        "create",
+        "update",
+        "github",
+        "validate",
+        "headless"
+      ],
+      "outputs": [
+        "trunk branch policy",
+        "PR/review/check rules",
+        "CODEOWNERS/ruleset stance",
+        "CI/platform follow-up"
+      ],
+      "phase": "3-plan",
+      "required": false,
+      "template": "trunk-based-plan-artifact"
     },
     {
       "facilitation_pack": "ux-design",

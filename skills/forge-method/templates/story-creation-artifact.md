@@ -3,6 +3,12 @@
 source_artifacts:
 track:
 story_batch:
+product_area:
+owner:
+branch:
+pr:
+dependencies:
+handoff_required:
 decision_source_map:
 validation_map:
 story_order:

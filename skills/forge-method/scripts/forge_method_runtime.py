@@ -21,7 +21,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "1.33.0"
+RUNTIME_VERSION = "1.34.0"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 WORKFLOW_CATALOG_PATH = SKILL_DIR / "catalog" / "workflows.json"
@@ -319,6 +319,7 @@ PARITY_REPLAY_REQUIRED_FAMILIES = {
     "platform",
     "cis",
     "game",
+    "collaboration",
     "tea",
 }
 
@@ -376,6 +377,11 @@ HUMAN_FACING_REQUIRED_WORKFLOWS = {
     "architecture",
     "ux-plan",
     "visual-alignment-prototype",
+    "team-operating-model",
+    "product-area-map",
+    "trunk-based-plan",
+    "collaboration-handoff",
+    "repo-split-plan",
     "story-creation",
     "create-epics",
     "plan-sprint",
@@ -1954,6 +1960,13 @@ def guidance_human_copy(guidance: dict[str, Any]) -> dict[str, Any]:
             "human_question": "Voce precisa de orientacao, desenho de teste, automacao, review, auditoria, ou gate?",
             "guardrail": "Qualidade boa muda decisao de release; nao e checklist decorativo.",
         }
+    if classification == "collaboration-flow":
+        return {
+            "decision_summary": "Isto e colaboracao de produto: preparar time, areas, PRs, owners e handoffs antes de paralelizar build.",
+            "next_move": "Registrar Team Operating Model, Product Area map, trunk policy, handoff ou repo split conforme o risco atual.",
+            "human_question": first_guidance_question(classification, workflow),
+            "guardrail": "Product Area nao e Forge Module; split de repo sem owner, contrato e validacao so espalha estado ruim.",
+        }
     if classification == "game-flow":
         game_copy = {
             "game-brief": {
@@ -2079,6 +2092,12 @@ def guidance_style_contract(question: str, classification: str, workflow: str, s
             "pace": "evidence-first",
             "energy": "skeptical",
             "move": "tie research to a decision, not a reading list",
+        }
+    if classification == "collaboration-flow":
+        return {
+            "pace": "team-setup",
+            "energy": "direct and coordination-focused",
+            "move": "make ownership, merge rules, and handoffs explicit before parallel work",
         }
     if workflow in {"discover-intent", "game-brief", "creative-session", "product-requirements", "ux-plan"}:
         return {
@@ -8751,6 +8770,62 @@ def detect_guidance_signals(question: str) -> list[str]:
             "monitoring plan",
             "logs metrics alerts",
         ],
+        "collaboration-flow": [
+            "team operating model",
+            "modelo de operacao do time",
+            "modelo de operação do time",
+            "product area",
+            "product areas",
+            "root integrator project",
+            "root integrator",
+            "standalone method project",
+            "repo split",
+            "split repo",
+            "splitar repo",
+            "splitar repos",
+            "repo proprio",
+            "repo próprio",
+            "repos diferentes",
+            "multi repo",
+            "multi-repo",
+            "monorepo",
+            "trunk based",
+            "trunk-based",
+            "trunk based development",
+            "desenvolvimento trunk based",
+            "github org",
+            "github organization",
+            "organizacao no github",
+            "organização no github",
+            "codeowners",
+            "branch protection",
+            "branch ruleset",
+            "ruleset",
+            "merge queue",
+            "required checks",
+            "short lived branch",
+            "short-lived branch",
+            "pull request curto",
+            "prs curtos",
+            "trabalhar com amigos",
+            "desenvolver com amigos",
+            "forge junto com amigos",
+            "multiplas pessoas",
+            "múltiplas pessoas",
+            "varias pessoas",
+            "várias pessoas",
+            "trabalho paralelo",
+            "parallel work",
+            "parallel agents",
+            "multiple agents",
+            "multiple codex sessions",
+            "collaboration handoff",
+            "handoff de colaboracao",
+            "handoff de colaboração",
+            "owner map",
+            "area owner",
+            "area owners",
+        ],
         "visual-flow": [
             "visual prototype",
             "visual alignment",
@@ -9235,6 +9310,25 @@ def detect_guidance_signals(question: str) -> list[str]:
             "imagens",
             "figma",
             "storyboard",
+        },
+        "collaboration-flow": {
+            "collaboration",
+            "colaboracao",
+            "colaboração",
+            "collaborators",
+            "colaboradores",
+            "monorepo",
+            "multi-repo",
+            "multirepo",
+            "trunk",
+            "codeowners",
+            "ruleset",
+            "rulesets",
+            "owner",
+            "owners",
+            "split",
+            "splitar",
+            "standalone",
         },
         "lifecycle-flow": {"track", "trilha", "context", "contexto", "documentar", "document", "session", "sessao", "handoff", "prep", "retrospective", "retrospectiva", "retro", "closeout", "readiness", "artifact-map", "checkpoint", "council", "party", "subagent", "subagents", "github", "version", "versao", "tag"},
         "persona-lens": {"lens", "lente", "persona", "coach", "perspectiva", "visao", "pm", "architect", "arquiteto", "analyst", "analista", "ux", "qa", "writer", "storyteller", "presentation", "presentacao"},
@@ -10370,6 +10464,195 @@ def platform_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, s
     )
 
 
+def is_collaboration_intent(question: str) -> bool:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    explicit_phrases = [
+        "team operating model",
+        "product area",
+        "product areas",
+        "root integrator",
+        "standalone method project",
+        "repo split",
+        "split repo",
+        "splitar repo",
+        "splitar repos",
+        "repo proprio",
+        "repo próprio",
+        "repos diferentes",
+        "multi repo",
+        "multi-repo",
+        "monorepo",
+        "trunk based",
+        "trunk-based",
+        "github org",
+        "github organization",
+        "organizacao no github",
+        "organização no github",
+        "codeowners",
+        "branch protection",
+        "branch ruleset",
+        "merge queue",
+        "required checks",
+        "trabalhar com amigos",
+        "desenvolver com amigos",
+        "forge junto com amigos",
+        "multiplas pessoas",
+        "múltiplas pessoas",
+        "varias pessoas",
+        "várias pessoas",
+        "parallel agents",
+        "multiple agents",
+        "multiple codex sessions",
+        "collaboration handoff",
+        "handoff de colaboracao",
+        "handoff de colaboração",
+        "product modularization",
+        "modularizacao de produto",
+        "modularização de produto",
+        "estrategia de modularizacao",
+        "estratégia de modularização",
+        "separar por modulos",
+        "separar por módulos",
+    ]
+    if any(phrase in normalized for phrase in explicit_phrases):
+        return True
+    if {"codeowners", "monorepo", "multirepo", "multi-repo", "trunk", "ruleset", "rulesets", "standalone"} & tokens:
+        return True
+    if {"github"} & tokens and {"org", "organization", "organizacao", "organização", "team", "teams", "codeowners", "ruleset", "rulesets"} & tokens:
+        return True
+    if {"split", "splitar"} & tokens and {"repo", "repos", "repository", "repositories"} & tokens:
+        return True
+    if {"multiple", "multiplas", "múltiplas", "varias", "várias"} & tokens and {"people", "pessoas", "agents", "agentes", "codex"} & tokens:
+        return True
+    if {"collaboration", "colaboracao", "colaboração", "collaborators", "colaboradores"} & tokens and {"forge", "github", "repo", "repos", "pr", "branch", "trabalho", "desenvolvimento"} & tokens:
+        return True
+    return False
+
+
+def routed_collaboration_workflow(question: str) -> str:
+    tokens = objective_tokens(question)
+    normalized = normalize_text(question)
+    narrow_trunk_policy = (
+        "codeowners" in normalized
+        or "branch protection" in normalized
+        or "branch ruleset" in normalized
+        or "merge queue" in normalized
+        or "required checks" in normalized
+        or bool({"codeowners", "ruleset", "rulesets"} & tokens)
+    )
+    team_bootstrap = (
+        "team operating model" in normalized
+        or "github org" in normalized
+        or "github organization" in normalized
+        or "organizacao no github" in normalized
+        or "organizaÃ§Ã£o no github" in normalized
+        or "trabalhar com amigos" in normalized
+        or "desenvolver com amigos" in normalized
+        or "forge junto com amigos" in normalized
+        or "multiplas pessoas" in normalized
+        or "mÃºltiplas pessoas" in normalized
+        or "varias pessoas" in normalized
+        or "vÃ¡rias pessoas" in normalized
+        or ({"github"} & tokens and {"org", "organization", "organizacao", "organizaÃ§Ã£o"} & tokens)
+        or ({"multiple", "multiplas", "mÃºltiplas", "varias", "vÃ¡rias"} & tokens and {"people", "pessoas", "agents", "agentes", "codex"} & tokens)
+    )
+    if (
+        "repo split" in normalized
+        or "split repo" in normalized
+        or "splitar repo" in normalized
+        or "splitar repos" in normalized
+        or "repo proprio" in normalized
+        or "repo próprio" in normalized
+        or "standalone method project" in normalized
+        or "standalone" in tokens
+        or ({"split", "splitar"} & tokens and {"repo", "repos", "repository", "repositories"} & tokens)
+    ):
+        return "repo-split-plan"
+    if team_bootstrap and not narrow_trunk_policy:
+        return "team-operating-model"
+    if (
+        "trunk based" in normalized
+        or "trunk-based" in normalized
+        or narrow_trunk_policy
+        or {"trunk", "codeowners", "ruleset", "rulesets"} & tokens
+    ):
+        return "trunk-based-plan"
+    if (
+        "collaboration handoff" in normalized
+        or "handoff de colaboracao" in normalized
+        or "handoff de colaboração" in normalized
+        or ({"handoff", "pr", "branch"} & tokens and {"owner", "owners", "collaboration", "colaboracao", "colaboração"} & tokens)
+    ):
+        return "collaboration-handoff"
+    if (
+        "product area" in normalized
+        or "product areas" in normalized
+        or "product modularization" in normalized
+        or "modularizacao de produto" in normalized
+        or "modularização de produto" in normalized
+        or "estrategia de modularizacao" in normalized
+        or "estratégia de modularização" in normalized
+        or "separar por modulos" in normalized
+        or "separar por módulos" in normalized
+        or ({"modularizacao", "modularização", "modulos", "módulos"} & tokens and {"produto", "product", "repo", "repos", "paths"} & tokens)
+    ):
+        return "product-area-map"
+    return "team-operating-model"
+
+
+def collaboration_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
+    if workflow_id == "product-area-map":
+        return (
+            "run product-area-map to define Product Areas, paths, owners, contracts, dependencies, checks, split criteria, and parallel work boundaries",
+            "I should map product ownership before stories or agents start editing the same surfaces.",
+            guidance_alternatives(
+                ("team-operating-model", "use when repo/team/review conventions are not settled yet"),
+                ("trunk-based-plan", "use when PR, branch, ruleset, or CI policy is the next blocker"),
+                ("repo-split-plan", "use when one Product Area may become a standalone repo"),
+            ),
+        )
+    if workflow_id == "trunk-based-plan":
+        return (
+            "run trunk-based-plan to define trunk branch, short-lived PR policy, CODEOWNERS/rulesets, required checks, conflict handling, merge queue stance, and CI/platform follow-up",
+            "I should make collaboration mechanics explicit before parallel build work creates merge chaos.",
+            guidance_alternatives(
+                ("product-area-map", "use when ownership boundaries are still unclear"),
+                ("ci-quality-pipeline", "use when checks need implementation or CI mapping"),
+                ("platform-ops-plan", "use when GitHub policy depends on broader platform/deploy shape"),
+            ),
+        )
+    if workflow_id == "collaboration-handoff":
+        return (
+            "run collaboration-handoff to capture Product Area, owner, branch/PR, touched surfaces, decisions, checks, evidence, blockers, review status, and first command",
+            "I should leave the next teammate or agent a compact handoff instead of making them replay chat.",
+            guidance_alternatives(
+                ("sprint-status", "use when the team needs project-wide progress and blocker status"),
+                ("code-review", "use when the branch/PR needs actionable findings"),
+                ("session-prep", "use when this is mostly a fresh-chat continuation handoff"),
+            ),
+        )
+    if workflow_id == "repo-split-plan":
+        return (
+            "run repo-split-plan to verify split readiness, define the extracted Product Area contract, initialize a standalone `.forge-method/` plan, and preserve root integration evidence",
+            "I should not split repos until owner, contract, validation, release boundary, and integration proof are real.",
+            guidance_alternatives(
+                ("product-area-map", "use when Product Area boundaries are not stable yet"),
+                ("platform-ops-plan", "use when repo/CI/deploy infrastructure needs planning"),
+                ("collaboration-handoff", "use after split planning to hand off the extraction work"),
+            ),
+        )
+    return (
+        "run team-operating-model to define GitHub org/repo shape, Root Integrator Project, owners, review policy, trunk-based expectations, agent usage, and release cadence",
+        "I should prepare the team operating system before Forge creates parallel stories.",
+        guidance_alternatives(
+            ("product-area-map", "use next to map Product Areas, owners, contracts, and split candidates"),
+            ("trunk-based-plan", "use when branch/PR/check policy is already the main decision"),
+            ("platform-ops-plan", "use when GitHub setup depends on CI/CD, deploy, secrets, or environments"),
+        ),
+    )
+
+
 def visual_guidance_text(workflow_id: str) -> tuple[str, str, list[dict[str, str]]]:
     return (
         "run visual-alignment-prototype to produce a visible artifact, compare it against intent, capture correction choices, and decide whether to revise UX/requirements or proceed",
@@ -11416,6 +11699,7 @@ def should_transition_to_guided_workflow(
         "game-flow",
         "quality-flow",
         "platform-flow",
+        "collaboration-flow",
         "visual-flow",
         "builder-flow",
         "document-utility",
@@ -11513,6 +11797,11 @@ WORKFLOW_FIRST_QUESTIONS = {
     "code-review": "which diff, behavior risk, missing test, or review finding should be recorded first?",
     "retrospective": "what actually changed, what should we repeat or stop, and what evolution follows?",
     "research-closeout": "which evidence, uncertainty, stance, and next workflow should close research?",
+    "team-operating-model": "who is on the team, where does the work live, who can merge, and what agent/PR rules should prevent chaos?",
+    "product-area-map": "which Product Areas exist, who owns each one, what contract connects them, and which shared surfaces create conflict risk?",
+    "trunk-based-plan": "what branch is trunk, how small should PRs be, which checks/reviews block merge, and do we need CODEOWNERS or rulesets now?",
+    "collaboration-handoff": "which Product Area, branch or PR, owner, checks, evidence, blockers, and first command should the next person inherit?",
+    "repo-split-plan": "which Product Area deserves its own repo, who owns it, what contract/checks prove it can stand alone, and what stays in the root integrator?",
 }
 
 
@@ -11537,6 +11826,8 @@ def first_guidance_question(classification: str, workflow_id: str) -> str:
         return "what failure would be expensive to miss, and what proof should block release if it fails?"
     if classification == "platform-flow":
         return "which infrastructure, CI/CD, database, deployment, environment, secret, or observability assumption should not stay implicit?"
+    if classification == "collaboration-flow":
+        return "who owns what, how does work merge, and what compact handoff prevents teammates or agents from stepping on each other?"
     if classification == "visual-flow":
         return "what should the human see first, and what visible mismatch would make us correct course before build?"
     if classification == "document-utility":
@@ -11704,6 +11995,15 @@ def build_guidance_decision(
             recommended_action = f"create the project, then run {recommended_workflow} to make the source material usable"
             human_prompt = "I should clarify the document job and source-of-truth boundary before editing docs."
             reason = "The first intent is explicit documentation utility work."
+        elif "collaboration-flow" in signal_set and is_collaboration_intent(question):
+            classification = "collaboration-flow"
+            recommended_phase = "1-discovery"
+            recommended_workflow = routed_collaboration_workflow(question)
+            action_text, prompt_text, collaboration_alternatives = collaboration_guidance_text(recommended_workflow)
+            recommended_action = f"create the project with a Root Integrator Project stance, then {action_text}"
+            human_prompt = prompt_text
+            alternatives = collaboration_alternatives
+            reason = "The first intent is multi-human or multi-agent product collaboration, so team operating rules and Product Areas should precede parallel build work."
         elif "lifecycle-flow" in signal_set:
             classification = "lifecycle-flow"
             recommended_phase = "1-discovery"
@@ -11924,6 +12224,11 @@ def build_guidance_decision(
         recommended_workflow = "context-recovery"
         recommended_action, human_prompt, alternatives = problem_guidance_text(recommended_workflow)
         reason = "The message says the chat, network, or context was interrupted, so recovery must re-anchor on durable state before lifecycle routing."
+    elif has_question and "collaboration-flow" in signal_set and is_collaboration_intent(question):
+        classification = "collaboration-flow"
+        recommended_workflow = routed_collaboration_workflow(question)
+        recommended_action, human_prompt, alternatives = collaboration_guidance_text(recommended_workflow)
+        reason = "The message is about multi-human or multi-agent collaboration, Product Areas, trunk-based work, or repo split, so collaboration setup must happen before parallel build automation."
     elif (
         has_question
         and next_story

@@ -4,7 +4,7 @@ Forge Method Core is a Codex-native runtime for turning messy intent into durabl
 
 It is not just agent automation. Forge is built to make the human think better before Codex builds faster. It bullies weak assumptions, surfaces alternative paths, and pushes users out of autopilot before big decisions or immature ideas harden into expensive plans.
 
-Current runtime version: `1.33.0`
+Current runtime version: `1.34.0`
 
 ## What It Does
 
@@ -67,10 +67,10 @@ codex plugin marketplace upgrade forge-method-core
 
 ### Pinned Version
 
-Use this when you want to stay on exactly `1.33.0` instead of following `main`:
+Use this when you want to stay on exactly `1.34.0` instead of following `main`:
 
 ```powershell
-codex plugin marketplace add DanielCarva1/forge-method-core --ref v1.33.0
+codex plugin marketplace add DanielCarva1/forge-method-core --ref v1.34.0
 ```
 
 ## Start A Project
@@ -119,6 +119,8 @@ Forge has two modes that matter in practice.
 When the work needs judgment, it acts like a demanding collaborator: it asks what would make the idea fail, what alternatives exist, what proof is missing, and which decision is actually being made.
 
 When the work is already defined, it acts like a runtime: it creates stories, follows state, writes evidence, checks gates, records handoffs, and keeps going until the next real decision or blocker appears.
+
+For teams, Forge starts with the operating model before parallel agents start editing the same surfaces. It maps Product Areas, owners, contracts, branch/PR policy, validation gates, handoffs, and repo split decisions so multi-person work has a Root Integrator Project instead of a pile of disconnected chats.
 
 ## Included Runtime Pieces
 
@@ -208,11 +210,11 @@ bash scripts/verify-all.sh
 After publishing a tag, verify that the published package can be cloned and installed:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.33.0 -ExpectedVersion 1.33.0
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v1.34.0 -ExpectedVersion 1.34.0
 ```
 
 ```bash
-REF=v1.33.0 EXPECTED_VERSION=1.33.0 bash scripts/smoke-plugin-clone-install.sh
+REF=v1.34.0 EXPECTED_VERSION=1.34.0 bash scripts/smoke-plugin-clone-install.sh
 ```
 
 ## Docs

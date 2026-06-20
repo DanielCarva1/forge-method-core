@@ -36,6 +36,7 @@ PARITY_REQUIRED_FAMILIES = {
     "cis",
     "enterprise",
     "platform",
+    "collaboration",
     "game",
     "tea",
     "lifecycle",
@@ -4117,6 +4118,11 @@ handoff:
             "problem-solving",
             "correct-course",
             "adversarial-review",
+            "team-operating-model",
+            "product-area-map",
+            "trunk-based-plan",
+            "collaboration-handoff",
+            "repo-split-plan",
         ]:
             self.assertIn(workflow_id, workflow_list)
         for template_path in [
@@ -4189,6 +4195,11 @@ handoff:
             ROOT / "skills" / "forge-method" / "templates" / "design-thinking-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "innovation-strategy-artifact.md",
             ROOT / "skills" / "forge-method" / "templates" / "storytelling-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "team-operating-model-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "product-area-map-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "trunk-based-plan-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "collaboration-handoff-artifact.md",
+            ROOT / "skills" / "forge-method" / "templates" / "repo-split-plan-artifact.md",
         ]:
             self.assertTrue(template_path.exists())
         for pack_path in [
@@ -4207,6 +4218,7 @@ handoff:
             ROOT / "skills" / "forge-method" / "facilitation" / "design-thinking.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "innovation-strategy.md",
             ROOT / "skills" / "forge-method" / "facilitation" / "storytelling.md",
+            ROOT / "skills" / "forge-method" / "facilitation" / "collaboration.md",
         ]:
             self.assertIn("domain_examples:", pack_path.read_text(encoding="utf-8"))
         catalog = json.loads((ROOT / "skills" / "forge-method" / "catalog" / "workflows.json").read_text(encoding="utf-8"))
@@ -4323,6 +4335,11 @@ handoff:
             "game-test-framework",
             "game-test-automation",
             "game-e2e-scaffold",
+            "team-operating-model",
+            "product-area-map",
+            "trunk-based-plan",
+            "collaboration-handoff",
+            "repo-split-plan",
         }
         by_id = {item["id"]: item for item in catalog["workflows"]}
         for workflow_id in human_facing_required:
@@ -4419,6 +4436,12 @@ handoff:
         self.assertEqual(by_id["game-story-creation"].get("template"), "game-story-artifact")
         self.assertEqual(by_id["game-sprint-status"].get("template"), "game-sprint-status-artifact")
         self.assertEqual(by_id["game-qa-review"].get("template"), "game-qa-review-artifact")
+        self.assertEqual(by_id["team-operating-model"].get("template"), "team-operating-model-artifact")
+        self.assertEqual(by_id["product-area-map"].get("template"), "product-area-map-artifact")
+        self.assertEqual(by_id["trunk-based-plan"].get("template"), "trunk-based-plan-artifact")
+        self.assertEqual(by_id["collaboration-handoff"].get("template"), "collaboration-handoff-artifact")
+        self.assertEqual(by_id["repo-split-plan"].get("template"), "repo-split-plan-artifact")
+        self.assertEqual(by_id["repo-split-plan"].get("facilitation_pack"), "collaboration")
         game_brief_pack = (
             ROOT / "skills" / "forge-method" / "facilitation" / "game-brief.md"
         ).read_text(encoding="utf-8")
@@ -5387,6 +5410,53 @@ handoff:
             self.assertTrue(broad_product["early_visual_proof"]["required"])
             self.assertIn("human must accept", broad_product["early_visual_proof"]["human_gate"])
 
+            collaboration_cases = [
+                (
+                    "estamos desenvolvendo com amigos usando Forge e queremos um GitHub org com trunk based e PRs curtos",
+                    "team-operating-model",
+                    "team-operating-model-artifact",
+                ),
+                (
+                    "precisamos separar o produto por Product Areas com owners contratos paths dependencias e criterios de split",
+                    "product-area-map",
+                    "product-area-map-artifact",
+                ),
+                (
+                    "vamos usar CODEOWNERS rulesets required checks e trunk-based antes de abrir stories paralelas",
+                    "trunk-based-plan",
+                    "trunk-based-plan-artifact",
+                ),
+                (
+                    "quero splitar esse Product Area em repo proprio e transformar em standalone Method Project com .forge-method",
+                    "repo-split-plan",
+                    "repo-split-plan-artifact",
+                ),
+                (
+                    "handoff de colaboracao: branch PR owner Product Area checks evidence blockers e primeiro comando",
+                    "collaboration-handoff",
+                    "collaboration-handoff-artifact",
+                ),
+            ]
+            for question, workflow, template in collaboration_cases:
+                with self.subTest(workflow=workflow):
+                    guide = runtime.build_guide_payload(root, question=question, max_chars=12000)
+                    self.assertEqual(guide["intent_classification"], "collaboration-flow")
+                    self.assertEqual(guide["recommended_workflow"], workflow)
+                    self.assertEqual(guide["facilitation_pack"], "skill:facilitation/collaboration.md")
+                    self.assertEqual(guide["workflow_metadata"].get("template"), template)
+                    self.assertTrue(guide["state_update_required"])
+                    self.assertIn("transition-workflow", [item["name"] for item in guide["commands"]])
+                    self.assertIn("Product Area", guide["human_experience"]["guardrail"])
+
+            github_collab = runtime.build_guide_payload(
+                root,
+                question="GitHub org com CODEOWNERS e CI/CD: definir checks obrigatorios e regras antes do time trabalhar em paralelo",
+                max_chars=12000,
+            )
+            self.assertEqual(github_collab["intent_classification"], "collaboration-flow")
+            self.assertEqual(github_collab["recommended_workflow"], "trunk-based-plan")
+            self.assertIn("ci-quality-pipeline", [item["workflow"] for item in github_collab["alternatives"]])
+
             tracks = json.loads(
                 run_cmd(
                     "track",
@@ -5400,11 +5470,27 @@ handoff:
 
             index_payload = json.loads(run_cmd("config", "index", "--root", str(root), "--json").stdout)
             workflow_ids = {item["id"] for item in index_payload["workflows"]}
-            self.assertTrue({"platform-ops-plan", "visual-alignment-prototype"} <= workflow_ids)
+            self.assertTrue(
+                {
+                    "platform-ops-plan",
+                    "visual-alignment-prototype",
+                    "team-operating-model",
+                    "product-area-map",
+                    "trunk-based-plan",
+                    "collaboration-handoff",
+                    "repo-split-plan",
+                }
+                <= workflow_ids
+            )
 
         for ref_name in [
             "workflow-platform-ops-plan.md",
             "workflow-visual-alignment-prototype.md",
+            "workflow-team-operating-model.md",
+            "workflow-product-area-map.md",
+            "workflow-trunk-based-plan.md",
+            "workflow-collaboration-handoff.md",
+            "workflow-repo-split-plan.md",
         ]:
             ref_text = (ROOT / "skills" / "forge-method" / "references" / ref_name).read_text(encoding="utf-8")
             self.assertIn("trigger:", ref_text, ref_name)

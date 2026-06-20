@@ -1,13 +1,13 @@
 {
-  "version": "1.33.0",
+  "version": "1.34.0",
   "date": "2026-06-20",
-  "title": "MDA Game Lens and manual updates",
-  "summary": "Forge Method now gives Game Studio a built-in MDA Lens and adds an explicit update command for installed packages.",
+  "title": "Team collaboration and Product Areas",
+  "summary": "Forge Method now guides multi-person product work with Product Areas, trunk-based planning, collaboration handoffs, and repo split planning.",
   "highlights": [
-    "Game briefs now generate a compact MDA Trace connecting player feeling, dynamics, mechanics, feedback/UI signals, and proof.",
-    "Game guidance now routes MDA, player-feel, fun, dynamics/mechanics, and playtest questions to the right Game Studio flow.",
-    "Legacy game briefs without MDA warn instead of breaking; incomplete MDA blocks fail validation.",
-    "The new forge-update skill runs manual Git marketplace updates and prints short human patch notes."
+    "New collaboration workflows help teams define GitHub org/repo shape, owners, review policy, agent usage, and release cadence before parallel build work.",
+    "Product Areas are now the product-facing ownership boundary, kept separate from Forge Modules used by the runtime itself.",
+    "Repo split planning now requires owner, contract, validation, release boundary, and integration evidence before creating a standalone Method Project.",
+    "Story, sprint, status, and handoff templates now support optional Product Area, owner, branch, PR, dependency, and handoff fields without adding solo-project overhead."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.33.0.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.34.0.md"
 }

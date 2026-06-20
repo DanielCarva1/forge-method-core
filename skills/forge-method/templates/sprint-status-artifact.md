@@ -4,8 +4,14 @@ project:
 phase:
 status:
 active_story:
+product_area:
+owner:
+branch:
+pr:
 story_counts:
 next_story:
+dependencies:
+handoff_required:
 blocked_items:
 review_findings:
 required_validation:

@@ -112,6 +112,30 @@ A durable artifact that records why one Forge track/module is the right route fo
 
 A durable source-of-truth summary for an existing or evolving project. It captures purpose, architecture shape, conventions, important artifacts, validation commands, and agent handoff boundaries without replacing the generated Context Pack.
 
+## Root Integrator Project
+
+A Method Project that coordinates a product made of multiple Product Areas or repos. It owns the integration map, cross-area contracts, release evidence, and collaboration conventions, but does not swallow standalone area state after a repo split.
+
+## Product Area
+
+A product-owned boundary inside a Method Project, usually mapped to paths, owners, contracts, dependencies, validation commands, and split criteria. Product Area is not a Forge Module; Forge Module remains the packaged runtime/workflow concept.
+
+## Team Operating Model
+
+The durable agreement for a multi-human Forge project: GitHub organization/repo shape, owners, review policy, trunk-based branch rules, CI expectations, agent usage, and release cadence.
+
+## Collaboration Handoff
+
+A compact artifact for handing work between humans or agents. It records product area, owner, branch or pull request, decisions, validation evidence, blockers, and the next accountable actor.
+
+## Repo Split
+
+The planned extraction of a Product Area into its own repository. A repo split requires an owner, public contract, validation boundary, release boundary, integration evidence, and a retained link back to the Root Integrator Project.
+
+## Standalone Method Project
+
+A Method Project whose `.forge-method/` state lives inside its own repo and can be operated without the Root Integrator Project. A Product Area becomes standalone after a repo split when its new repo receives compact context, contracts, validation commands, and integration handoff.
+
 ## Session Prep Artifact
 
 A compact continuation brief for the next working session. It uses current state, checkpoints, open inputs, review findings, and load-plan guidance to name the exact next workflow and files to read.

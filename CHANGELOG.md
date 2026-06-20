@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 1.34.0
+
+Forge Method Core v1.34.0 ships guided team collaboration, Product Areas, and repo split planning:
+
+- add `Product Area`, `Root Integrator Project`, `Team Operating Model`, `Collaboration Handoff`, `Repo Split`, and `Standalone Method Project` as canonical collaboration terms
+- separate Product Areas from Forge Modules, keeping Forge Modules reserved for runtime/workflow packaging and Product Areas for the product being built
+- add guided workflows for `team-operating-model`, `product-area-map`, `trunk-based-plan`, `collaboration-handoff`, and `repo-split-plan`
+- route team, GitHub org, trunk-based, CODEOWNERS, monorepo, multi-repo, ownership, handoff, modularization, and standalone repo requests through collaboration guidance before build work
+- make monorepo-first Root Integrator Projects the default, with repo split only after owner, contract, validation, release boundary, and integration cost are explicit
+- define repo split behavior so an extracted Product Area receives its own standalone `.forge-method/` context while the root integrator keeps compact integration evidence
+- add optional Product Area, owner, branch, PR, dependencies, and handoff fields to story, sprint, status, and build work templates without adding solo-project overhead
+
 ## 1.33.0
 
 Forge Method Core v1.33.0 ships MDA Game Lens and manual update support:

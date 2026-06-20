@@ -1320,6 +1320,45 @@
     "expected_command": "transition-workflow"
   },
   {
+    "id": "collaboration_team_operating_model_route",
+    "family": "collaboration",
+    "state": "discovery",
+    "question": "estamos desenvolvendo com amigos usando Forge e queremos GitHub org, trunk based, PRs curtos, owners e regras de agente",
+    "expected_classification": "collaboration-flow",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "team-operating-model",
+    "expected_facilitation_pack": "skill:facilitation/collaboration.md",
+    "expected_template": "team-operating-model-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "collaboration_product_area_map_route",
+    "family": "collaboration",
+    "state": "discovery",
+    "question": "precisamos separar o produto por Product Areas com paths, owners, contratos, dependencias e criterios de split",
+    "expected_classification": "collaboration-flow",
+    "expected_phase": "1-discovery",
+    "expected_workflow": "product-area-map",
+    "expected_facilitation_pack": "skill:facilitation/collaboration.md",
+    "expected_template": "product-area-map-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
+    "id": "collaboration_repo_split_standalone_route",
+    "family": "collaboration",
+    "state": "discovery",
+    "question": "quero splitar esse Product Area em repo proprio e transformar em standalone Method Project com .forge-method independente",
+    "expected_classification": "collaboration-flow",
+    "expected_phase": "3-plan",
+    "expected_workflow": "repo-split-plan",
+    "expected_facilitation_pack": "skill:facilitation/collaboration.md",
+    "expected_template": "repo-split-plan-artifact",
+    "state_update_required": true,
+    "expected_command": "transition-workflow"
+  },
+  {
     "id": "visual_alignment_before_stories",
     "family": "visual",
     "state": "discovery",
