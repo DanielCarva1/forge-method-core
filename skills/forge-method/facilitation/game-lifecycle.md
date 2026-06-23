@@ -1,10 +1,13 @@
 # facilitation: game-lifecycle
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Guide game-specific production work after the initial brief: game context, engine setup, GDD, narrative, mechanics, UX, PRD, prototype, stories, sprint status, playtest, performance, QA, retrospective, and game testing.
 
 open_floor:
   "What part of the game lifecycle is unclear right now: player fantasy, playable slice, engine setup, GDD, mechanics, narrative, UX, stories, playtest, performance, QA, or sprint learning?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for brief, GDD, references, prototype notes, engine/platform constraints, engine setup notes, story files, playtest notes, performance targets, QA findings, and build evidence.

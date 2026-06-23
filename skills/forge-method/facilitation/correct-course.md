@@ -1,10 +1,13 @@
 # facilitation: correct-course
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Recover when the current route, artifact, plan, taste direction, scope, state, or implementation is wrong.
 
 open_floor:
   "O que exatamente ficou errado, o que isso invalida, e qual parte ainda vale preservar?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for the rejected output, current state, impacted artifacts, user correction, tests/evidence, and constraints.

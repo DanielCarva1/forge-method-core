@@ -1,10 +1,13 @@
 # facilitation: architecture-planning
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Turn requirements, constraints, and quality risks into architecture decisions that future stories can safely execute.
 
 open_floor:
   "Which technical decision, if guessed wrong, would make the product hard to build, unsafe, slow, expensive, or unpleasant to change?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for requirements, UX plan, existing code, platform constraints, data model, integrations, security/privacy notes, scale expectations, test strategy, and prior decisions.

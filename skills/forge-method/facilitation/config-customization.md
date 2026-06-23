@@ -1,10 +1,13 @@
 # facilitation: config-customization
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Help a human or team customize Forge behavior through validated Project Configuration without creating stale docs or hidden chat-only conventions.
 
 open_floor:
   "What should Forge do differently in this project, and should that change apply to the team or only to this local workspace?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for the current route, target workflow or agent, desired convention, existing config, expected human experience, and proof command.

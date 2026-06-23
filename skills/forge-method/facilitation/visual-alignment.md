@@ -1,10 +1,13 @@
 # facilitation: visual-alignment
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Give the human something visible to judge early and repeatedly during initial shaping, then turn corrections into durable product, UX, architecture, or story decisions.
 
 open_floor:
   "Antes de construir de verdade: qual primeira tela, mockup, fluxo ou imagem faria voce dizer 'sim, e isso' ou 'nao, ta indo pro lugar errado'?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for discovery notes, PRD, UX plan, references, anti-references, sketches, screenshots, brand/taste constraints, target device, and first-session story.

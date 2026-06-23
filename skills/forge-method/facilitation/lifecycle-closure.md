@@ -1,10 +1,13 @@
 # facilitation: lifecycle-closure
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Guide project closeout and continuation rituals: track decision, project context, session prep, readiness matrix, code review, retrospective, and research closeout.
 
 open_floor:
   "Which lifecycle closure do we need now: choose the track, document the project, prep the next session, prove readiness, review code, run a retro, or close research?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for state, latest checkpoint, sprint/story files, artifacts, evidence, review findings, load plan, changed files, research notes, and the decision the next agent must preserve.

@@ -1,10 +1,13 @@
 # facilitation: storytelling
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Shape a narrative arc that changes what an audience feels, understands, believes, or does.
 
 open_floor:
   "Who is the audience, what do they believe now, what should change, and what story would be too obvious or fake?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for audience, context, product or world facts, tone references, anti-references, source claims, scenes, characters, proof points, and forbidden tropes.

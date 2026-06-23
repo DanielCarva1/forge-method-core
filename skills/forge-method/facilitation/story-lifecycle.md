@@ -1,10 +1,13 @@
 # facilitation: story-lifecycle
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Move approved decisions into epics, sprint plans, implementation-ready stories, review, ready state, and retrospective learning.
 
 open_floor:
   "What is the next executable slice, and what evidence proves it is ready to build or ready to use?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for spec, PRD, UX plan, architecture, track decision, enterprise artifact map, risk register, sprint state, story files, evidence, review findings, and release criteria.

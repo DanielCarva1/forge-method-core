@@ -1,10 +1,13 @@
 # facilitation: ux-design
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Shape the human experience, interaction model, taste, accessibility, and UX evidence before implementation stories.
 
 open_floor:
   "What should the user understand, feel, and successfully do in the first real session?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for PRD/spec, audience, current screens, references, anti-references, brand constraints, accessibility needs, devices, workflows, and support pain.

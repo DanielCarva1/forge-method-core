@@ -1,10 +1,13 @@
 # facilitation: guideline-audit
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Turn gaps and implementation pressure into reusable guidelines, work-order candidates, and acceptance evidence before agents build durable behavior.
 
 open_floor:
   "Qual trabalho o agente quer fazer, qual guideline governa isso, e que evidencia faria voce aceitar sem ler codigo?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for the gap matrix row, product docs, existing guidelines, AGENTS.md, state files, acceptance criteria, and any previous agent output.

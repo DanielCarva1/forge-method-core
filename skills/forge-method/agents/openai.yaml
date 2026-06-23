@@ -2,3 +2,5 @@ interface:
   display_name: "Forge Method"
   short_description: "State-machine runtime for Codex-native creation workflows."
   default_prompt: "Start Forge Method in this workspace."
+presence:
+  "The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill."

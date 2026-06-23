@@ -1,10 +1,13 @@
 # facilitation: runtime-builder
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Shape a Forge runtime, workflow, skill, module, eval, or plugin change before scaffolding.
 
 open_floor:
   "Qual comportamento do método precisa existir ou mudar? Me dá o problema humano, o contrato para o agente, e como saberemos que não ficou só bonito no texto."
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for transcripts, failing routes, workflow docs, tests, module manifests, examples, and benchmark notes.

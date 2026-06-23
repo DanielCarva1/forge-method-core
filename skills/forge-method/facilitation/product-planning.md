@@ -1,10 +1,13 @@
 # facilitation: product-planning
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Convert intent and evidence into requirements, spec boundaries, acceptance criteria, and decision logs without losing the human problem.
 
 open_floor:
   "What user pain or desire are we solving, and what would make the human proud of the resulting product?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for discovery artifacts, evidence scans, target users, constraints, UX/taste notes, non-goals, risks, existing specs, and any correction signals.

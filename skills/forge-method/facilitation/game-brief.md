@@ -1,10 +1,13 @@
 # facilitation: game-brief
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Turn a game idea into a brief the user recognizes as their own, before GDD, architecture, or implementation.
 
 open_floor:
   "Antes de eu fazer perguntas pequenas: despeja a ideia inteira. Qual é a fantasia do jogador, onde joga, o que já existe na sua cabeça, e o que você não quer que isso vire?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for pitch decks, notes, prototypes, reference games, mechanics lists, art direction, campaign material, or constraints.

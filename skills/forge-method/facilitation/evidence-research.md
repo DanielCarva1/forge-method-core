@@ -1,10 +1,13 @@
 # facilitation: evidence-research
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Turn an idea, claim, market question, domain uncertainty, or feasibility risk into grounded evidence before planning.
 
 open_floor:
   "What claim are we about to believe too quickly, and what evidence would make the next decision defensible?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for the idea, target users, constraints, known alternatives, legal/ethical risks, docs, links, data, prior artifacts, and the decision this research must unlock.

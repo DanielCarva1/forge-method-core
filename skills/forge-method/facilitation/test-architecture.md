@@ -1,10 +1,13 @@
 # facilitation: test-architecture
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Turn broad quality concerns into the right test architecture workflow: engagement model, framework, CI, ATDD, automation, review, NFR audit, or traceability gate.
 
 open_floor:
   "What quality question are we answering: what to test, how to test it, how CI enforces it, whether coverage is enough, or whether release evidence passes?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for requirements, stories, risk register, architecture notes, existing tests, CI config, evidence, release criteria, and known incidents.

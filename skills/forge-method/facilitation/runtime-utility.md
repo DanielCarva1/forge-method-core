@@ -1,10 +1,13 @@
 # facilitation: runtime-utility
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Shape opt-in runtime utilities such as isolated eval runners, hook/event dispatchers, and reusable API/browser helpers without adding always-on Codex overhead.
 
 open_floor:
   "What repeated or risky action needs a utility, what must never run silently, and what evidence proves the utility helped instead of adding ceremony?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for command examples, failing manual steps, trust boundary, side effects, required tools, secrets/auth constraints, timeout needs, cleanup policy, and validation evidence.

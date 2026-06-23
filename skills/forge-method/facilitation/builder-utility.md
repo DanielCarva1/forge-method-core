@@ -1,10 +1,13 @@
 # facilitation: builder-utility
 
+> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+
 purpose:
   Guide runtime-builder utility work that analyzes agents/workflows or converts external skill material into Forge-native artifacts.
 
 open_floor:
   "Are we analyzing an agent, analyzing a workflow, or converting an external skill/prompt into Forge structure? What behavior must future agents get right?"
+  "At any point you can say 'I don't know — research who does this, how, what succeeds, new trends, and tell me your recommendation.' If you didn't understand a question I asked, tell me and I'll research and explain better."
 
 source_material:
   Ask for source skill/prompt, target workflow, module manifest, failure transcript, expected scenarios, validation commands, and copying/licensing boundaries.
