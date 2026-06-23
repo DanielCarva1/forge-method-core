@@ -2686,7 +2686,32 @@ def validate_story_guidance_safety(story: dict[str, Any], *, source: str) -> lis
     return validate_record_guidance_safety(story, STORY_GUIDANCE_SAFETY_FIELDS, source=source)
 
 
-def write_state(root: Path, state: dict[str, Any]) -> None:
+class VersionConflict(Exception):
+    """v2: Raised when optimistic concurrency check fails on state write (G1 fix, Principle 3/18/20).
+
+    This is a TYPED conflict signal — the caller re-reads state, gets the new version, and retries.
+    Contrast with v1.34.1 behavior where two concurrent writes silently lost data.
+    """
+
+
+def write_state(
+    root: Path,
+    state: dict[str, Any],
+    *,
+    expected_version: str | None = None,
+    agent_id: str = "default",
+) -> str:
+    """Write integration state.
+
+    v2 (Principle 3, 18 — G1 fix): when ``expected_version`` is provided, performs
+    optimistic-concurrency check — reads the version currently on disk and raises
+    ``VersionConflict`` if it doesn't match. On success, bumps the version.
+
+    Backward compatible (C2): ``expected_version=None`` (default) preserves v1.34.1
+    behavior — no version check, no bump. Existing single-agent callers unaffected.
+
+    Returns the state version string after the write.
+    """
     state.setdefault("schema_version", "1")
     state.setdefault("runtime", RUNTIME_NAME)
     state.setdefault("runtime_version", RUNTIME_VERSION)
@@ -2694,10 +2719,27 @@ def write_state(root: Path, state: dict[str, Any]) -> None:
     state.setdefault("commit_policy", "off")
     state.setdefault("last_grill_artifact", "")
     state.setdefault("last_correct_course_artifact", "")
+
+    sp = state_path(root)
+    if expected_version is not None:
+        disk_state = read_flat_yaml(sp)
+        disk_version = str(disk_state.get("version", "0"))
+        if disk_version != str(expected_version):
+            raise VersionConflict(
+                f"State version conflict: expected={expected_version} disk={disk_version}. "
+                f"Another agent wrote since you read. Re-read state, get the new version, retry. "
+                f"(v2 G1 fix — conflict DETECTED, not silently lost.)"
+            )
+        new_version = str(int(disk_version) + 1) if disk_version.isdigit() else "1"
+        state["version"] = new_version
+    else:
+        state.setdefault("version", str(state.get("version", "0")))
+
     safety_errors = validate_state_guidance_safety(state)
     if safety_errors:
         raise SystemExit("State guidance validation failed:\n- " + "\n- ".join(safety_errors))
-    write_flat_yaml(state_path(root), state, header="Forge Method state")
+    write_flat_yaml(sp, state, header="Forge Method state")
+    return str(state.get("version", "0"))
 
 
 def initialize_project_state(

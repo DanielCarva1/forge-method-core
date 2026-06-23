@@ -79,18 +79,27 @@ These are in RFC §10. The maintainer has NOT decided them yet. **Run `grill-gat
 - [x] Run `reality-evidence-gate` on the v2.0 product claims (is flock coordination really needed? is STORM evidence sound?). **DONE 2026-06-22** → stance PLAUSIBLE→STRONG conditional; 3 citation fixes applied to RFC v3 (STORM +18.7/+1.4 not +34.6; H1/#9 reframed — research packs exist, gap is the proactive affordance; grill-gate reframed to "not default at every decision-close point"). See `20260622-reality-evidence-gate-forge-v2.md`.
 - [ ] (transplant step is DONE — files are already in place)
 
-### Phase B — empirical validation (validation target is flexible — mutant-run-horde-lab is one example, NOT a binding dependency; the v2 evolution is independent of that game project)
-Use ONLY what Forge already has, to discover empirically what's missing:
-- [ ] Run `team-operating-model` → declare driver (Codex, game-build) + worker (Pi, art-direction).
-- [ ] Run `product-area-map` → `game-build` vs `art-direction` lanes.
+### Phase B — POC of all 20 v2 principles (validation target is flexible — mutant-run-horde-lab is one example, NOT a binding dependency; the v2 evolution is independent of that game project)
+**Maintainer correction (2026-06-23, see `20260623-spec-correction-phase-b-poc-framing.md`):** reframe from "use v1.34.1 as-is, find gaps" to "POC validating all 20 v2 design principles." You cannot validate v2 without implementing it. The POC commits to the entire v2 design (principles 1-20), not just the latest additions (18/19/20) — the decision after POC is whether to commit to the whole design and re-enter Phase 1 for it. Principles 18/19/20 interact with the earlier 17 in ways the papers did not study as a combined system; earlier principles partially present in v1.34.1 (e.g., #2 append-only, #7 runtime-agnostic, #10 verification, #16 grill-default) also need validation under the new substrate.
+- [ ] Build minimal POC across two layers: (a) **code substrate** for state/coordination principles (agent_id, version field + optimistic concurrency, append-only handoffs, claim primitive with TTL, registry, CRDT projection); (b) **behavior/facilitation** for partner-experience principles (research affordance, grill-as-default at every decision-close, match-energy, clarifying-question batching).
+- [ ] Run `team-operating-model` → declare driver + worker flocks.
+- [ ] Run `product-area-map` → lane boundaries.
 - [ ] Run `trunk-based-plan` → branch policy + CODEOWNERS-style merge authority.
-- [ ] Stress-test concurrent agents; observe where it hurts.
-- [ ] Test the **partner experience** (research affordance, grill-close, match-energy) — testable NOW without core changes.
-- [ ] Produce `gap-report.md` → feeds Phase C priorities.
+- [ ] Stress-test concurrent agents THROUGH the POC; observe which principles hold, which break, what the 12+ papers didn't predict.
+- [ ] Test the **partner experience** (research affordance, grill-close, match-energy) — independently testable.
+- [ ] Produce `gap-report.md` with POC verdict (accept / iterate / reject) → on accept, re-enter Phase 1.
 
-### Phase C — implement in forge-method-core (validated, additive, backward-compatible)
-Ordered by impact ÷ effort (from audit top-10). **Each ships as a versioned bump; existing projects ignore new files → v1.34.1 behavior.**
-1. `agent_id` attribution + `--agent-id` flag (HIGH/LOW) — ship first.
+### Phase C — candidate backlog for Phase 1 re-entry (NOT direct next step)
+**Maintainer correction (2026-06-23, see `20260623-spec-correction-phase-b-poc-framing.md`):** going straight from Phase B to Phase C implementation bypassed RFC §6.5 + Principle 12 (Evolve Loop = restart feature in Facilitated mode — full interview, facilitation, POC). v2 is a large enough layer to warrant the full Forge Method flow.
+
+**Correct sequence after a POC-accept verdict:**
+1. Forge Method re-routes **evolve → Phase 1 (discovery)** for v2 (closes defect `evolve-reentry-routing-gap`, logged at commit `391d99b`).
+2. Full **interview → PRD → architecture** cycle, using RFC v3 + POC gap-report as inputs.
+3. Then **build** the architecture-confirmed priorities.
+
+**Candidate backlog below (was Phase C; now input to Phase 1 re-entry), ordered by impact ÷ effort from the audit. Will be re-prioritized during Phase 1. Each candidate ships as a versioned bump; existing projects ignore new files → v1.34.1 behavior.**
+
+1. `agent_id` attribution + `--agent-id` flag (HIGH/LOW) — likely ships first.
 2. `version` field + optimistic concurrency + auto-migrate existing projects (CRITICAL/LOW).
 3. `handoff`/`checkpoint` append-only via `--update-state` flag (CRITICAL/MED).
 4. Encode multi-agent + autonomy anti-patterns in guidance safety (HIGH/LOW).

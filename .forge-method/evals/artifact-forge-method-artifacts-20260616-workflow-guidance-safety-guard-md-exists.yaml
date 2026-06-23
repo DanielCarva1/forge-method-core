@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-23T05:06:00+00:00"
+updated_at: "2026-06-23T13:15:21+00:00"
 id: "artifact-forge-method-artifacts-20260616-workflow-guidance-safety-guard-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/20260616-workflow-guidance-safety-guard.md"
 query: "Compact workflow refs now fail validation if they instruct agents to rely on chat memory, follow stale state, ask procedural continue confirmations, or dump catalogs."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-23T05:06:00+00:00"
+last_run_at: "2026-06-23T13:15:21+00:00"
 last_error: ""

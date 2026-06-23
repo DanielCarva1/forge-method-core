@@ -418,17 +418,37 @@ Leverages the runtime's *existing* guardrail engine — write-time enforcement, 
 - [ ] **Maintainer sign-off on v3.**
 - [ ] Publish RFC to `forge-method-core` repo.
 
-### Phase B — Prototype on mutant-run-horde-lab (no core changes yet)
-Validate the model in the real world using only what Forge already has:
-- [ ] Run `team-operating-model` → artifact declaring Alice's flock (Pi, art-direction, worker) + Codex flock (game-build, driver).
-- [ ] Run `product-area-map` → `art-direction` vs `game-build` lanes with owners/contracts/paths/checks.
-- [ ] Run `trunk-based-plan` → branch policy + CODEOWNERS-style merge authority (the commit-safety layer).
-- [ ] Establish the **single-driver convention** by hand; stress-test concurrent runs.
-- [ ] **Test the partner experience:** does the agent match energy, offer research, grill-close blocks? (This is testable *now*, before any core change.)
-- [ ] Output: `gap-report.md` listing exactly which Layer-1/2 features would have prevented each pain.
+### Phase B — POC: validate ALL 20 v2 design principles through a minimal prototype
 
-### Phase C — Core implementation (validated, additive, ordered by impact ÷ effort)
-1. **R2:** `agent_id` attribution + `--agent-id` flag (HIGH/LOW). **Ship first.**
+**Maintainer correction (2026-06-23, see `20260623-spec-correction-phase-b-poc-framing.md`):** the original "use v1.34.1 as-is, find gaps" framing only re-confirms what `forge-runtime-audit.md` already documented — it does not validate whether the v2 principles actually work. You cannot validate v2 without implementing it. The POC commits to **all 20 principles (1-20)**, not just the latest additions 18/19/20 — those three were the most recent deep-research additions, but the maintainer's decision is whether to commit to the entire v2 design and re-enter Phase 1 for it. Principles 18/19/20 interact with the earlier 17 in ways the papers did not study as a combined system; several earlier principles (#2 append-only, #7 runtime-agnostic, #10 verification, #16 grill-default) are only partially present in v1.34.1 and need validation under multi-agent stress + the new substrate.
+
+Build the **minimum POC** needed to exercise all 20 principles under real multi-agent load. Two complementary layers:
+
+- **Code substrate POC** (state/coordination principles #1-#7, #13, #17-#20): prototypical implementations of `agent_id` attribution, `version` field + optimistic concurrency, append-only handoffs, claim primitive with TTL, fleet registry, CRDT projection. Validates the principles that need code substrate to be exercisable.
+- **Behavior/facilitation POC** (partner-experience principles #8, #9, #11, #14, #15, #16): research-always-on affordance, grill-as-default at every decision-close point, match-energy, clarifying-question batching, teach/explain. Tested via facilitation packs + prompts (no code substrate required).
+
+Then run concurrent agents THROUGH the POC:
+- [ ] Run `team-operating-model` → declare driver + worker flocks on a chosen validation target (flexible — mutant-run-horde-lab is one example, NOT a binding dependency).
+- [ ] Run `product-area-map` → lane boundaries.
+- [ ] Run `trunk-based-plan` → branch policy + CODEOWNERS-style merge authority (the commit-safety layer).
+- [ ] Stress-test concurrent agents THROUGH the POC; observe which principles hold, which break, and what the 12+ papers didn't predict (replicate grite metrics: dup-work rate, conflicting edits, throughput).
+- [ ] Test the **partner experience:** does the agent match energy, offer research proactively, grill-close blocks at every decision-close? (Independently testable from the code substrate.)
+- [ ] Output: `gap-report.md` with a POC verdict — **accept** (proceed to Phase 1 re-entry), **iterate** (rework specific principles, re-POC), or **reject** (design unsound; re-open spec).
+
+### Phase C — Candidate backlog for the Phase 1 re-entry (NOT the direct next step)
+
+**Maintainer correction (2026-06-23, see `20260623-spec-correction-phase-b-poc-framing.md`):** the original framing went straight from Phase B gap-report to Phase C implementation in core. That bypassed this RFC's own §6.5 + Principle 12 (Evolve Loop = restart feature in Facilitated mode — full interview, facilitation, POC). v2 is a large enough layer to warrant the full Forge Method flow, not a direct code-drop.
+
+**Correct sequence after a POC-accept verdict:**
+1. Forge Method re-routes **evolve → Phase 1 (discovery)** for v2 as a new layer (this is what the runtime should do per the design — see defect `evolve-reentry-routing-gap`, logged at commit `391d99b`).
+2. Full **interview → PRD → architecture** cycle, using the v2 RFC + POC gap-report as primary inputs.
+3. Then **build** the architecture-confirmed priorities.
+
+The 13-step list below becomes a **candidate backlog** that feeds the Phase 1 interview/PRD/architecture — it will be re-prioritized, possibly restructured, during Phase 1. It is NOT the direct next step after Phase B.
+
+**Candidate backlog (was Phase C; now input to Phase 1 re-entry), ordered by impact ÷ effort from the audit:**
+
+1. **R2:** `agent_id` attribution + `--agent-id` flag (HIGH/LOW). **Likely ships first.**
 2. **R1:** `version` field + optimistic-concurrency opt-in + **auto-migration of existing projects** (CRITICAL/LOW). Highest leverage.
 3. **R3:** `handoff`/`checkpoint` append-only via `--update-state` flag (CRITICAL/MED).
 4. **R6:** encode multi-agent + autonomy anti-patterns in guidance safety (HIGH/LOW).

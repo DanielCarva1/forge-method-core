@@ -31,18 +31,20 @@ The Forge Method v2.0 design (RFC v3) is spec-locked: the vision (flock coordina
 - Grill-gate reframed: not default at every decision-close point.
 - A1: RFC §6.4 TTL attribution #9 → #10.
 
-## Conditions on the lock (must hold before Phase C)
+## Conditions on the lock (must hold before Phase 1 re-entry)
 
-1. **Phase B is non-negotiable.** Empirical gap-report on a chosen validation target (mutant-run-horde-lab is an example, NOT a binding dependency) MUST run before any Phase C code lands. RFC anti-pattern #2 + reality-evidence-gate agree.
-2. Phase B may refine Q2 (TTL behavior details) and Q6 (which rich fields earn cost). This is the designed A→B→C discipline, not a re-open of the spec.
-3. The 1.34.1 release-readiness hotfix (the active runtime state) is a SEPARATE thread; this v2 spec-lock does not disrupt it.
+1. **Phase B (POC of all 20 principles) is non-negotiable.** A prototypical implementation of the v2 design — both the code-substrate principles (#1-#7, #13, #17-#20) and the behavior/facilitation principles (#8, #9, #11, #14, #15, #16) — MUST be built and stress-tested before any broader v2 implementation lands. RFC anti-pattern #2 + reality-evidence-gate agree. **Reframed 2026-06-23 (maintainer correction, see `20260623-spec-correction-phase-b-poc-framing.md`):** the original "use v1 as-is to find gaps" framing only re-confirms the audit; the real POC validates all 20 v2 principles themselves. Scope is the full design (1-20), not just additions 18/19/20 — the maintainer's decision after POC is whether to commit to the whole design and re-enter Phase 1 for it.
+2. Phase B may refine Q2 (TTL behavior details) and Q6 (which rich fields earn cost). This is the designed A→B→(Phase 1 re-entry) discipline, not a re-open of the spec.
+3. **After POC-accept verdict, the runtime re-routes evolve → Phase 1 (discovery): full interview → PRD → architecture → build.** The original "Phase C direct implementation" framing bypassed RFC §6.5 + Principle 12 (Evolve Loop = restart feature in Facilitated mode — full interview, facilitation, POC). v2 is a large enough layer to warrant the full Forge Method flow. (Closes defect `evolve-reentry-routing-gap`, logged at commit `391d99b`.)
+4. The 1.34.1 release-readiness hotfix (the active runtime state) is a SEPARATE thread; this v2 spec-lock does not disrupt it.
 
 ## Next workflow
 
-Phase B — empirical validation (target flexible):
+Phase B — POC of all 20 v2 principles (target flexible):
+- Build minimal POC across two layers: (a) code substrate for state/coordination principles (agent_id, version field, append-only handoffs, claim primitive, registry, CRDT projection); (b) behavior/facilitation for partner-experience principles (research affordance, grill-as-default, match-energy).
 - `team-operating-model` → declare driver + worker flocks.
 - `product-area-map` → lane boundaries.
 - `trunk-based-plan` → branch policy + CODEOWNERS merge authority.
-- Stress-test concurrent agents; observe where it hurts.
-- Test partner experience (research affordance, grill-close, match-energy) — testable NOW.
-- Output: `gap-report.md` → feeds Phase C priorities.
+- Stress-test concurrent agents THROUGH the POC; observe which principles hold, which break.
+- Test partner experience (research affordance, grill-close, match-energy) — independently testable.
+- Output: `gap-report.md` with POC verdict (accept / iterate / reject) → on accept, re-enter Phase 1.
