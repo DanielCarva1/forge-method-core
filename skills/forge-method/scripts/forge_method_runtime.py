@@ -642,6 +642,25 @@ CONFIG_OVERRIDE_PRECEDENCE = ["packaged defaults", ".forge-method/config/team.ya
 AUTONOMY_MODES = {"auto", "manual"}
 COMMIT_POLICIES = {"off", "story", "epic"}
 GRILL_GATE_PHASES = {"1-discovery", "2-specification", "3-plan"}
+MULTI_AGENT_TRANSCRIPT_WORD_THRESHOLD = 500
+SPEC_ARTIFACT_KINDS = {
+    "discovery",
+    "discovery-closeout",
+    "spec-kernel",
+    "architecture",
+    "engine-architecture",
+    "product-requirements",
+    "document-utility",
+    "research-scan",
+}
+AUTOPILOT_APPROVAL_FIELDS = {"human_input_required", "status"}
+AUTOPILOT_APPROVAL_TRIGGERS = {"true", "waiting-human-input"}
+HUMAN_APPROVAL_GATE_FIELDS = {
+    "human_approval_gate",
+    "last_council_artifact",
+    "last_grill_artifact",
+    "last_correct_course_artifact",
+}
 DISCOVERY_CLOSEOUT_KINDS = {
     "accepted-intent",
     "discovery",
@@ -2687,6 +2706,145 @@ def validate_story_guidance_safety(story: dict[str, Any], *, source: str) -> lis
     return validate_record_guidance_safety(story, STORY_GUIDANCE_SAFETY_FIELDS, source=source)
 
 
+def _agent_claimed_lanes(root: Path, agent_id: str) -> list[str]:
+    """v2-012/v2-013: return lanes actively claimed by ``agent_id`` (non-expired)."""
+    claims_d = _claims_dir(root)
+    if not claims_d.exists():
+        return []
+    claimed: list[str] = []
+    for lock in sorted(claims_d.glob("*.lock")):
+        data = read_flat_yaml(lock)
+        if data.get("agent_id", "") == agent_id and not _is_claim_expired(data):
+            claimed.append(data.get("lane", lock.stem) or lock.stem)
+    return claimed
+
+
+def _lane_paths_map(root: Path) -> dict[str, list[str]]:
+    """v2-012: read ``lane-paths.yaml`` (flat YAML, comma-separated paths) into a dict."""
+    raw = read_flat_yaml(method_dir(root) / "lane-paths.yaml")
+    mapping: dict[str, list[str]] = {}
+    for lane, paths_str in raw.items():
+        paths = [p.strip() for p in str(paths_str).split(",") if p.strip()]
+        if paths:
+            mapping[lane] = paths
+    return mapping
+
+
+def validate_lane_claim(root: Path, file_path: str, agent_id: str = "default") -> list[str]:
+    """v2-012: advisory check — in fleet mode, warn if ``file_path`` falls under a lane
+    the agent hasn't claimed. Reads ``lane-paths.yaml`` for the path-to-lane mapping.
+    Returns a list of warning strings (empty when no mapping or no fleet mode)."""
+    warnings: list[str] = []
+    if not is_fleet_mode(root):
+        return warnings
+    mapping = _lane_paths_map(root)
+    if not mapping:
+        return warnings
+    rel = str(file_path).replace("\\", "/").lstrip("./")
+    claimed = set(_agent_claimed_lanes(root, agent_id))
+    matched_lane = ""
+    for lane, paths in mapping.items():
+        for prefix in paths:
+            norm = prefix.replace("\\", "/").lstrip("./")
+            if not norm:
+                continue
+            if rel == norm or rel.startswith(norm.rstrip("/") + "/"):
+                matched_lane = lane
+                break
+        if matched_lane:
+            break
+    if matched_lane and matched_lane not in claimed:
+        warnings.append(
+            f"multi-agent: '{agent_id}' wrote '{rel}' in lane '{matched_lane}' but holds no active claim for it"
+        )
+    return warnings
+
+
+def _recent_handoff_text(root: Path, *, limit: int = 5) -> str:
+    """v2-013: concatenate the most recent handoff artifact bodies for transcript scanning."""
+    handoffs_d = method_dir(root) / "handoffs"
+    if not handoffs_d.exists():
+        return ""
+    chunks: list[str] = []
+    for path in sorted(handoffs_d.glob("*.md"), reverse=True)[:limit]:
+        try:
+            chunks.append(path.read_text(encoding="utf-8"))
+        except OSError:
+            continue
+    return "\n".join(chunks)
+
+
+def validate_multi_agent_safety(
+    root: Path,
+    state: dict[str, Any],
+    agent_id: str = "default",
+    *,
+    expected_version: str | None = None,
+    handoff_text: str | None = None,
+) -> list[str]:
+    """v2-013: advisory multi-agent anti-pattern checks. Returns WARNINGS (not errors).
+
+    1. write integration state without expected_version in fleet mode
+    2. act outside your claimed lane (delegates to lane-paths mapping; caller may also
+       call :func:`validate_lane_claim` per file write)
+    3. persist worker transcript as integration memory (heuristic: handoff body with
+       more than :data:`MULTI_AGENT_TRANSCRIPT_WORD_THRESHOLD` words of dialogue)
+    """
+    warnings: list[str] = []
+    if not is_fleet_mode(root):
+        return warnings
+    if expected_version is None:
+        warnings.append(
+            "multi-agent: write_state called without expected_version in fleet mode "
+            "(optimistic concurrency bypassed)"
+        )
+    transcript = handoff_text if handoff_text is not None else _recent_handoff_text(root)
+    if transcript:
+        dialogue_words = 0
+        for token in re.split(r"\s+", transcript):
+            if token:
+                dialogue_words += 1
+        if dialogue_words > MULTI_AGENT_TRANSCRIPT_WORD_THRESHOLD:
+            warnings.append(
+                f"multi-agent: handoff/transcript body has ~{dialogue_words} words "
+                f"(>{MULTI_AGENT_TRANSCRIPT_WORD_THRESHOLD}); do not persist worker transcript as integration memory"
+            )
+    return warnings
+
+
+def validate_autonomy_safety(
+    state: dict[str, Any],
+    *,
+    spec_artifact_written: bool = False,
+) -> list[str]:
+    """v2-014: advisory autonomy anti-pattern checks. Returns WARNINGS (not errors).
+
+    1. request human approval for work whose spec is locked (autopilot mode)
+    2. write spec/context artifact without a human-approval gate signal
+    """
+    warnings: list[str] = []
+    mode = str(state.get("autonomy_mode", "auto")).lower()
+    if mode == "autopilot":
+        for field in AUTOPILOT_APPROVAL_FIELDS:
+            if str(state.get(field, "")).lower() in AUTOPILOT_APPROVAL_TRIGGERS:
+                warnings.append(
+                    f"autonomy: autopilot mode requested human approval (state.{field}="
+                    f"{state.get(field)}) for spec-locked work"
+                )
+                break
+    if spec_artifact_written:
+        gate_present = any(
+            str(state.get(field, "")).strip()
+            for field in HUMAN_APPROVAL_GATE_FIELDS
+        )
+        if not gate_present:
+            warnings.append(
+                "autonomy: spec/context artifact written without a human-approval gate signal "
+                "(no human_approval_gate / council / grill / correct-course artifact on record)"
+            )
+    return warnings
+
+
 class VersionConflict(Exception):
     """v2: Raised when optimistic concurrency check fails on state write (G1 fix, Principle 3/18/20).
 
@@ -3035,6 +3193,24 @@ def write_state(
     safety_errors = validate_state_guidance_safety(state)
     if safety_errors:
         raise SystemExit("State guidance validation failed:\n- " + "\n- ".join(safety_errors))
+    multi_agent_warnings = validate_multi_agent_safety(
+        root, state, agent_id=agent_id, expected_version=expected_version
+    )
+    if multi_agent_warnings:
+        append_ledger(
+            root,
+            "guidance.warning.multi_agent",
+            {"warnings": join_list(multi_agent_warnings), "agent_id": agent_id},
+            agent_id=agent_id,
+        )
+    autonomy_warnings = validate_autonomy_safety(state)
+    if autonomy_warnings:
+        append_ledger(
+            root,
+            "guidance.warning.autonomy",
+            {"warnings": join_list(autonomy_warnings), "agent_id": agent_id},
+            agent_id=agent_id,
+        )
     write_flat_yaml(sp, state, header="Forge Method state")
     return str(state.get("version", "0"))
 
@@ -5309,6 +5485,25 @@ def write_artifact(
         artifact_path.write_text(f"# {title}\n\n{summary.strip()}\n", encoding="utf-8")
     append_artifact_index(root, entry)
     append_ledger(root, "artifact.added", {"kind": kind, "path": rel, "lifecycle": lifecycle})
+    lane_warnings = validate_lane_claim(root, rel, agent_id="default")
+    if lane_warnings:
+        append_ledger(
+            root,
+            "guidance.warning.lane_claim",
+            {"warnings": join_list(lane_warnings), "kind": kind, "path": rel},
+        )
+    if kind in SPEC_ARTIFACT_KINDS:
+        try:
+            state = apply_state_defaults(read_flat_yaml(state_path(root)))
+        except OSError:
+            state = {}
+        autonomy_warnings = validate_autonomy_safety(state, spec_artifact_written=True)
+        if autonomy_warnings:
+            append_ledger(
+                root,
+                "guidance.warning.autonomy",
+                {"warnings": join_list(autonomy_warnings), "kind": kind, "path": rel},
+            )
     return rel
 
 
@@ -15665,6 +15860,15 @@ def cmd_gate(args: argparse.Namespace) -> int:
     builder_errors = builder_extension_validation_errors(root)
     if builder_errors:
         errors.extend(f"builder: {error}" for error in builder_errors)
+
+    multi_agent_warnings = validate_multi_agent_safety(root, state, agent_id=_resolve_agent_id(args))
+    warnings.extend(f"multi-agent: {warning}" for warning in multi_agent_warnings)
+    spec_artifact_written = any(
+        str(entry.get("kind", "")).lower() in SPEC_ARTIFACT_KINDS
+        for entry in artifact_index_entries(root)
+    )
+    autonomy_warnings = validate_autonomy_safety(state, spec_artifact_written=spec_artifact_written)
+    warnings.extend(f"autonomy: {warning}" for warning in autonomy_warnings)
 
     eval_count = len(list_evals(root))
     passed_evals, eval_failures = run_eval_items(root)
