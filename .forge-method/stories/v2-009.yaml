@@ -1,0 +1,19 @@
+id: v2-009
+title: Agent attribution in every ledger entry
+epic: Fleet Registry
+lane: runtime-core
+priority: HIGH
+status: planned
+dependencies: v2-008
+acceptance: append_ledger accepts agent_id kwarg and includes it in the payload. All
+  call sites pass agent_id. Existing ledger entries without agent_id still parse (backward
+  compat).
+description: Modify append_ledger to accept agent_id kwarg (default 'default'). Include
+  in payload. Audit all append_ledger call sites (~20+) and thread agent_id through.
+files: scripts/forge_method_runtime.py (append_ledger, all call sites)
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

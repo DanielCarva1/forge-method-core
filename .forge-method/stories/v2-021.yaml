@@ -1,0 +1,20 @@
+id: v2-021
+title: Typed agent-contract artifact + contract-check eval
+epic: Advanced Coordination
+lane: runtime-core
+priority: MED
+status: planned
+dependencies: v2-008
+acceptance: '`forge contract create <name> --lane X --input ... --output ...` creates
+  a typed agent-contract artifact. `forge eval add --kind contract-check --target
+  <contract>` verifies the contract is honored. Evals pass.'
+description: Add agent-contract as a new artifact kind with typed fields (lane, input_contract,
+  output_contract, verification). Add a contract-check eval kind that validates artifacts
+  against their declared contracts.
+files: scripts/forge_method_runtime.py (artifact types, eval kinds)
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

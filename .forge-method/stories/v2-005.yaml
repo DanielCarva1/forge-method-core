@@ -1,0 +1,19 @@
+id: v2-005
+title: requests poll command — driver reads pending requests
+epic: Append-Only Handoffs
+lane: runtime-core
+priority: HIGH
+status: planned
+dependencies: v2-004
+acceptance: '`forge requests poll --root .` reads requests.ndjson, prints pending
+  entries as JSON. Empty if none. Does not mutate state.'
+description: Add cmd_requests_poll that reads .forge-method/requests.ndjson line by
+  line, filters status==pending, prints as JSON array. Add 'requests' subparser with
+  'poll' subcommand.
+files: scripts/forge_method_runtime.py (new cmd_requests_poll, build_parser)
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

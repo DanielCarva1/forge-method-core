@@ -1,0 +1,20 @@
+id: v2-022
+title: Council standup mode (status + cross-dep sync + hard-problem sharing)
+epic: Advanced Coordination
+lane: workflows
+priority: MED
+status: planned
+dependencies: v2-011
+acceptance: '`forge council standup` reads all lane statuses + stories + pending requests,
+  produces a standup summary (what each flock is doing, cross-dependencies, blockers).
+  Output is a council-standup artifact.'
+description: 'Add cmd_council with a ''standup'' mode. Aggregates chronicle data across
+  flocks: lane statuses, story progress, pending requests, cross-lane dependencies.
+  Produces a formatted standup artifact.'
+files: scripts/forge_method_runtime.py (new cmd_council, build_parser)
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

@@ -2694,6 +2694,22 @@ class VersionConflict(Exception):
     """
 
 
+def is_fleet_mode(root: Path) -> bool:
+    """v2 (Principle 17): multi-agent fleet mode is active when agents/registry.yaml exists.
+    Presence of the registry = opt-in to fleet behavior (append-only handoffs, driver-only state)."""
+    return (method_dir(root) / "agents" / "registry.yaml").exists()
+
+
+def append_request(root: Path, action: str, payload: dict[str, Any], *, agent_id: str = "default") -> None:
+    """v2 (Principle 4): workers append state-change requests to requests.ndjson; driver polls and applies.
+    Append-safe (open mode 'a') — concurrent workers never clobber each other's requests."""
+    req_path = method_dir(root) / "requests.ndjson"
+    req_path.parent.mkdir(parents=True, exist_ok=True)
+    entry = {"action": action, "payload": payload, "agent_id": agent_id, "ts": utc_now(), "status": "pending"}
+    with open(req_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
 def write_state(
     root: Path,
     state: dict[str, Any],
@@ -15028,8 +15044,15 @@ def cmd_checkpoint(args: argparse.Namespace) -> int:
         next_action=next_action,
     )
     if next_action:
-        state["next_action"] = next_action
-        write_state(root, state)
+        # v2 (G2 fix): in fleet mode, checkpoint is append-only (no state mutation).
+        update_state = args.update_state
+        if update_state is None:
+            update_state = not is_fleet_mode(root)
+        if update_state:
+            state["next_action"] = next_action
+            write_state(root, state)
+        else:
+            append_request(root, "checkpoint", {"next_action": next_action})
     if not args.no_context_pack:
         write_context_pack(root, state, out=method_dir(root) / "context" / "current-pack.md", max_chars=args.max_chars)
     print(rel)
@@ -15306,9 +15329,20 @@ def cmd_handoff(args: argparse.Namespace) -> int:
         args.next_action or state.get("next_action", ""),
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    state["next_action"] = args.next_action or state.get("next_action", "")
-    write_state(root, state)
-    append_ledger(root, "handoff.written", {"path": path.relative_to(root).as_posix()})
+    # v2 (G2 fix, Principle 2/4): in fleet mode, handoff is append-only — does NOT mutate state.
+    # Workers emit a request; the driver polls requests.ndjson and applies via write_state.
+    update_state = args.update_state
+    if update_state is None:
+        update_state = not is_fleet_mode(root)
+    if update_state:
+        state["next_action"] = args.next_action or state.get("next_action", "")
+        write_state(root, state)
+    else:
+        append_request(root, "handoff", {
+            "next_action": args.next_action or state.get("next_action", ""),
+            "path": path.relative_to(root).as_posix(),
+        })
+    append_ledger(root, "handoff.written", {"path": path.relative_to(root).as_posix(), "state_mutated": str(update_state)})
     print(path)
     return 0
 
@@ -16793,6 +16827,9 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint.add_argument("--next-action")
     checkpoint.add_argument("--max-chars", type=int, default=8000)
     checkpoint.add_argument("--no-context-pack", action="store_true")
+    checkpoint.add_argument("--update-state", dest="update_state", action="store_true", default=None)
+    checkpoint.add_argument("--no-update-state", dest="update_state", action="store_false")
+    checkpoint.add_argument("--agent-id", default="default")
     checkpoint.set_defaults(func=cmd_checkpoint, record_guidance=True)
 
     context = sub.add_parser("context", help="context pack operations")
@@ -16862,6 +16899,9 @@ def build_parser() -> argparse.ArgumentParser:
     handoff.add_argument("--root", default=".")
     handoff.add_argument("--summary", required=True)
     handoff.add_argument("--next-action")
+    handoff.add_argument("--update-state", dest="update_state", action="store_true", default=None)
+    handoff.add_argument("--no-update-state", dest="update_state", action="store_false")
+    handoff.add_argument("--agent-id", default="default")
     handoff.set_defaults(func=cmd_handoff, record_guidance=True)
 
     doctor = sub.add_parser("doctor", help="inspect runtime/project detection and local toolchain readiness")
