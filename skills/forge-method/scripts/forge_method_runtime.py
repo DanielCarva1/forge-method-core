@@ -14162,6 +14162,191 @@ def cmd_council_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _read_pending_requests(root: Path) -> list[dict[str, Any]]:
+    """v2-022: read all pending entries from requests.ndjson (read-only)."""
+    pending: list[dict[str, Any]] = []
+    req_path = method_dir(root) / "requests.ndjson"
+    if not req_path.exists():
+        return pending
+    with open(req_path, "r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if entry.get("status") == "pending":
+                pending.append(entry)
+    return pending
+
+
+def _lane_claim_status(claims: dict[str, dict[str, str]], lane: str) -> dict[str, str]:
+    data = claims.get(lane)
+    if not data:
+        return {"status": "free", "holder": "", "expires": ""}
+    if _is_claim_expired(data):
+        return {"status": "expired", "holder": data.get("agent_id", "?"), "expires": data.get("expires", "?")}
+    return {"status": "claimed", "holder": data.get("agent_id", "?"), "expires": data.get("expires", "?")}
+
+
+def cmd_council_standup(args: argparse.Namespace) -> int:
+    """v2-022: fleet standup.
+
+    Aggregates lane claims, story progress, pending worker requests, and cross-lane
+    story dependencies into a single standup summary. Read-only. Supports ``--json``
+    for machine consumers.
+    """
+    root = resolve_root(args.root)
+
+    claims: dict[str, dict[str, str]] = {}
+    claims_d = _claims_dir(root)
+    if claims_d.exists():
+        for lock in sorted(claims_d.glob("*.lock")):
+            data = read_flat_yaml(lock)
+            lane = data.get("lane", lock.stem) or lock.stem
+            claims[lane] = data
+
+    lanes_defined: list[str] = []
+    registry = method_dir(root) / "agents" / "registry.yaml"
+    if registry.exists():
+        reg = read_flat_yaml(registry)
+        lanes_str = reg.get("lanes", "")
+        if lanes_str:
+            lanes_defined = [piece.strip() for piece in lanes_str.split(",") if piece.strip()]
+
+    stories = list_stories(root)
+
+    all_lanes: list[str] = []
+    seen: set[str] = set()
+    for lane in lanes_defined + list(claims.keys()):
+        if lane not in seen:
+            seen.add(lane)
+            all_lanes.append(lane)
+    for story in stories:
+        lane = story.get("lane", "")
+        if lane and lane not in seen:
+            seen.add(lane)
+            all_lanes.append(lane)
+
+    by_lane: dict[str, list[dict[str, str]]] = {}
+    for story in stories:
+        lane = story.get("lane", "(unassigned)")
+        by_lane.setdefault(lane, []).append(story)
+
+    pending_requests = _read_pending_requests(root)
+
+    story_lane = {story.get("id", ""): story.get("lane", "") for story in stories}
+    story_status = {story.get("id", ""): story.get("status", "planned") for story in stories}
+    cross_deps: list[dict[str, str]] = []
+    for story in stories:
+        sid = story.get("id", "")
+        my_lane = story.get("lane", "")
+        deps_raw = story.get("dependencies", "")
+        if not deps_raw:
+            continue
+        for dep in re.split(r"[,\s]+", deps_raw):
+            dep = dep.strip()
+            if not dep:
+                continue
+            dep_lane = story_lane.get(dep, "")
+            if dep_lane and dep_lane != my_lane:
+                cross_deps.append({
+                    "story": sid,
+                    "lane": my_lane,
+                    "dep": dep,
+                    "dep_lane": dep_lane,
+                    "dep_status": story_status.get(dep, "missing"),
+                })
+
+    lane_blocks: list[dict[str, Any]] = []
+    for lane in all_lanes:
+        items = by_lane.get(lane, [])
+        counts = {status: sum(1 for s in items if s.get("status", "planned") == status) for status in STORY_STATUSES}
+        lane_blocks.append({
+            "lane": lane,
+            "claim": _lane_claim_status(claims, lane),
+            "counts": counts,
+            "in_progress": [s.get("id", "") for s in items if s.get("status", "") == "in_progress"],
+            "review": [s.get("id", "") for s in items if s.get("status", "") == "review"],
+            "blocked": [s.get("id", "") for s in items if s.get("status", "") == "blocked"],
+            "total": len(items),
+        })
+
+    if getattr(args, "json", False):
+        payload = {
+            "lanes": lane_blocks,
+            "cross_lane_deps": cross_deps,
+            "pending_requests": pending_requests,
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+
+    lines: list[str] = []
+    lines.append("Forge Council Standup")
+    lines.append("=" * 60)
+    lines.append("")
+    lines.append("Lanes")
+    lines.append("-" * 60)
+    for block in lane_blocks:
+        lane = block["lane"]
+        claim = block["claim"]
+        if claim["status"] == "claimed":
+            status_str = f"claimed by {claim['holder']} (expires {claim['expires']})"
+        elif claim["status"] == "expired":
+            status_str = f"expired (was {claim['holder'] or '?'})"
+        else:
+            status_str = "free"
+        lines.append(f"- {lane} [{status_str}]")
+        if block["in_progress"]:
+            lines.append(f"    in_progress: {', '.join(block['in_progress'])}")
+        if block["review"]:
+            lines.append(f"    review: {', '.join(block['review'])}")
+        lines.append(f"    done: {block['counts'].get('done', 0)} / {block['total']}")
+        if block["blocked"]:
+            lines.append(f"    blocked: {', '.join(block['blocked'])}")
+        if block["total"] == 0:
+            lines.append("    (no stories)")
+    if not lane_blocks:
+        lines.append("(no lanes defined, no active claims, no lane-tagged stories)")
+    lines.append("")
+    lines.append("Cross-lane dependencies")
+    lines.append("-" * 60)
+    if cross_deps:
+        for cdep in cross_deps:
+            lines.append(
+                f"- {cdep['story']} ({cdep['lane']}) -> {cdep['dep']} ({cdep['dep_lane']}) [{cdep['dep_status']}]"
+            )
+    else:
+        lines.append("(none)")
+    lines.append("")
+    lines.append("Pending requests")
+    lines.append("-" * 60)
+    if pending_requests:
+        for req in pending_requests:
+            lines.append(
+                f"- [{req.get('action', '?')}] from {req.get('agent_id', '?')} ({req.get('ts', '?')})"
+            )
+    else:
+        lines.append("(none)")
+    lines.append("")
+
+    print("\n".join(lines))
+    append_ledger(
+        root,
+        "council.standup",
+        {
+            "lanes": len(all_lanes),
+            "stories": len(stories),
+            "pending_requests": len(pending_requests),
+            "cross_deps": len(cross_deps),
+        },
+        agent_id=_resolve_agent_id(args),
+    )
+    return 0
+
+
 def cmd_correct_course(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     impact = args.impact or "late contradiction discovered during mechanical work"
@@ -15906,6 +16091,82 @@ def _run_integration_checks(root: Path) -> list[str]:
     return errors
 
 
+_TS_AUG_GLOBAL_RE = re.compile(r"declare\s+global\b")
+_TS_AUG_MODULE_QUOTED_RE = re.compile(r"""declare\s+module\s+['"`]([^'"`]+)['"`]""")
+_TS_AUG_MODULE_BARE_RE = re.compile(r"declare\s+module\s+([A-Za-z_$][\w$]*)")
+_TS_AUG_SKIP_DIRS = {"node_modules", ".git", STATE_DIR, "dist", "build", ".next", "out", "coverage"}
+
+
+def _lane_for_path(rel_posix: str, lane_prefixes: list[tuple[str, str]]) -> str:
+    for lane, prefix in lane_prefixes:
+        if rel_posix == prefix or rel_posix.startswith(prefix + "/"):
+            return lane
+    parts = rel_posix.split("/", 1)
+    return parts[0] if len(parts) > 1 else "(root)"
+
+
+def _check_type_augmentation_conflicts(root: Path) -> list[str]:
+    """v2-020 (GAP-2): detect conflicting TypeScript ``declare global`` / ``declare module`` augmentations across lanes.
+
+    Scans .ts/.tsx files under root (skipping node_modules and other build/output dirs).
+    Groups declared global/module names by lane, where lane is resolved via the
+    lane-paths.yaml mapping (lane -> comma-separated path prefixes) with a fallback to
+    the file's top-level directory. Returns one warning string per declared name that
+    appears in files from two or more distinct lanes. Empty list = no conflicts.
+
+    This is advisory: callers surface results as warnings, not errors.
+    """
+    lane_prefixes: list[tuple[str, str]] = []
+    lane_paths = read_flat_yaml(method_dir(root) / "lane-paths.yaml")
+    for lane, paths_str in lane_paths.items():
+        if lane == "updated_at":
+            continue
+        for piece in str(paths_str).split(","):
+            cleaned = piece.strip().strip("/").strip("\\").replace("\\", "/")
+            if cleaned:
+                lane_prefixes.append((lane, cleaned))
+
+    root_resolved = root.resolve()
+    declarations: dict[str, dict[str, list[str]]] = {}
+    candidates = list(root.rglob("*.ts")) + list(root.rglob("*.tsx"))
+    for path in candidates:
+        try:
+            rel = path.resolve().relative_to(root_resolved).as_posix()
+        except ValueError:
+            continue
+        if any(part in _TS_AUG_SKIP_DIRS for part in rel.split("/")):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        names: set[str] = set()
+        if _TS_AUG_GLOBAL_RE.search(text):
+            names.add("(global)")
+        for match in _TS_AUG_MODULE_QUOTED_RE.finditer(text):
+            names.add(match.group(1))
+        for match in _TS_AUG_MODULE_BARE_RE.finditer(text):
+            names.add(match.group(1))
+        if not names:
+            continue
+        lane = _lane_for_path(rel, lane_prefixes)
+        for name in names:
+            declarations.setdefault(name, {}).setdefault(lane, []).append(rel)
+
+    warnings: list[str] = []
+    for name in sorted(declarations):
+        lanes = declarations[name]
+        if len(lanes) > 1:
+            detail = "; ".join(
+                f"{lane_name}: {', '.join(sorted(files))}"
+                for lane_name, files in sorted(lanes.items())
+            )
+            warnings.append(
+                f"type augmentation '{name}' declared in multiple lanes - {detail}"
+            )
+    return warnings
+
+
 def cmd_gate(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     errors: list[str] = []
@@ -15941,6 +16202,9 @@ def cmd_gate(args: argparse.Namespace) -> int:
 
     multi_agent_warnings = validate_multi_agent_safety(root, state, agent_id=_resolve_agent_id(args))
     warnings.extend(f"multi-agent: {warning}" for warning in multi_agent_warnings)
+    if (root / "tsconfig.json").exists():
+        type_conflicts = _check_type_augmentation_conflicts(root)
+        warnings.extend(f"type-augmentation: {conflict}" for conflict in type_conflicts)
     spec_artifact_written = any(
         str(entry.get("kind", "")).lower() in SPEC_ARTIFACT_KINDS
         for entry in artifact_index_entries(root)
@@ -17038,6 +17302,11 @@ def build_parser() -> argparse.ArgumentParser:
     council_run.add_argument("--json", action="store_true")
     council_run.add_argument("--agent-id", default=None)
     council_run.set_defaults(func=cmd_council_run, record_guidance=True, emit_guidance=True)
+    council_standup = council_sub.add_parser("standup", help="fleet standup: status + cross-deps + blockers")
+    council_standup.add_argument("--root", default=".")
+    council_standup.add_argument("--json", action="store_true")
+    council_standup.add_argument("--agent-id", default=None)
+    council_standup.set_defaults(func=cmd_council_standup)
 
     correct_course = sub.add_parser("correct-course", help="write a compact correct-course continuation artifact")
     correct_course.add_argument("--root", default=".")
