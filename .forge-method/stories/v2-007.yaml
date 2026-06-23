@@ -4,6 +4,7 @@ epic: Fleet Registry
 lane: runtime-core
 priority: CRITICAL
 status: done
+evidence: .forge-method/evidence/20260623-083000-v2-007-fleet-registry.md
 dependencies: ''
 acceptance: is_fleet_mode(root) returns True when agents/registry.yaml exists, False
   otherwise. Verified.

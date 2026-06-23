@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-23T13:15:21+00:00"
+updated_at: "2026-06-23T14:41:16+00:00"
 id: "artifact-docs-adr-0004-agent-council-human-experience-md-exists"
 kind: "artifact-exists"
 target: "docs/adr/0004-agent-council-human-experience.md"
 query: "Decision to show rich council debate to humans while persisting compact council decision artifacts for future agents."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-23T13:15:21+00:00"
+last_run_at: "2026-06-23T14:41:16+00:00"
 last_error: ""

@@ -1,6 +1,6 @@
 # facilitation: game-lifecycle
 
-> **Presence:** The agent is an excited expert friend who matches the human's energy. This is creative collaboration, not a form to fill.
+> **Presence:** Excited expert friend. Matches energy. Not a form.
 
 purpose:
   Guide game-specific production work after the initial brief: game context, engine setup, GDD, narrative, mechanics, UX, PRD, prototype, stories, sprint status, playtest, performance, QA, retrospective, and game testing.

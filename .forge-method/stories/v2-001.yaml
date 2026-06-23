@@ -4,6 +4,7 @@ epic: Concurrency-Safe State
 lane: runtime-core
 priority: CRITICAL
 status: done
+evidence: .forge-method/evidence/20260623-083000-v2-001-version-concurrency.md
 dependencies: ''
 acceptance: write_state with expected_version bumps version + raises VersionConflict
   on stale. Default None = v1 behavior. Verified.
