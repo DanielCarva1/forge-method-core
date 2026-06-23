@@ -1,0 +1,12 @@
+# Forge Method human input
+updated_at: "2026-06-23T04:27:17+00:00"
+id: "evolve-reentry-routing-gap"
+prompt: "Guidance engine does not route 'new product demand in phase 6-evolve' to evolve-project workflow. When a user in evolve says 'I want to add feature X', guide --question classifies it as builder-flow/quality-flow and routes to guideline-audit or test-strategy, instead of evolve-project (which per workflow-evolve-project.md step 2+4 should classify the change and transition back to the earliest safe phase, usually 1-discovery). This breaks the evolve-reentry design: evolve + new intent should re-run the flow from phase 1 with the new demand. Fix: guidance-engine classification must recognize 'new feature/demand intent while phase==6-evolve' as an evolve-project trigger, not a builder/quality flow. Dogfooded during v2 evolution work 2026-06-22."
+reason: "Discovered when the opencode agent escaped the rail during v2 work — guide mis-routed new v2 product demand to guideline-audit instead of evolve-project discovery re-entry."
+status: "deferred"
+phase: "6-evolve"
+required: "true"
+answer: ""
+created_at: "2026-06-23T04:26:55+00:00"
+answered_at: ""
+deferred_reason: "Defect in the runtime guidance-engine, not a blocking question for the v2 spec work. Tracked for evolve-phase runtime fix (dogfood). Re-opens when we fix the guidance engine itself."

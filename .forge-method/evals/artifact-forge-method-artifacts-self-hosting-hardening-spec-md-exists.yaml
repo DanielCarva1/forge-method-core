@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-20T23:22:15+00:00"
+updated_at: "2026-06-23T05:06:00+00:00"
 id: "artifact-forge-method-artifacts-self-hosting-hardening-spec-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/self-hosting-hardening-spec.md"
 query: "Testable requirements and acceptance criteria for self-hosting safety, phase-preserving story starts, plugin-native skill behavior, compact workflows, and public install docs."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-20T23:22:15+00:00"
+last_run_at: "2026-06-23T05:06:00+00:00"
 last_error: ""
