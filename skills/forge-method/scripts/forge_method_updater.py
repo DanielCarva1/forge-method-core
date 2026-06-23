@@ -76,15 +76,17 @@ def find_repo_root(skill_dir: Path) -> Path:
 
 def read_version(repo_root: Path) -> str:
     manifest = read_json(repo_root / ".codex-plugin" / "plugin.json")
-    if manifest.get("version"):
-        return str(manifest["version"])
+    manifest_version = str(manifest.get("version") or "").strip()
     version_file = repo_root / "VERSION"
+    file_version = ""
     if version_file.exists():
         try:
-            return version_file.read_text(encoding="utf-8").strip()
+            file_version = version_file.read_text(encoding="utf-8").strip()
         except OSError:
-            return ""
-    return ""
+            file_version = ""
+    if file_version and (not manifest_version or is_newer_version(file_version, manifest_version)):
+        return file_version
+    return manifest_version or file_version
 
 
 def file_hash(path: Path) -> str:
@@ -100,6 +102,54 @@ def marketplace_metadata(repo_root: Path) -> dict[str, Any]:
 
 def marketplace_name(repo_root: Path) -> str:
     return repo_root.name or PLUGIN_NAME
+
+
+def default_marketplace_path() -> Path:
+    override = os.environ.get("FORGE_METHOD_MARKETPLACE_PATH", "").strip()
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".agents" / "plugins" / "marketplace.json"
+
+
+def marketplace_root_for_path(path: Path) -> Path:
+    full_path = path.expanduser().resolve()
+    plugins_dir = full_path.parent
+    agents_dir = plugins_dir.parent
+    if full_path.name == "marketplace.json" and plugins_dir.name == "plugins" and agents_dir.name == ".agents":
+        return agents_dir.parent
+    return full_path.parent
+
+
+def resolve_personal_plugin_root() -> Path | None:
+    marketplace_path = default_marketplace_path()
+    marketplace = read_json(marketplace_path)
+    root = marketplace_root_for_path(marketplace_path)
+    for entry in marketplace.get("plugins") or []:
+        if not isinstance(entry, dict) or entry.get("name") != PLUGIN_NAME:
+            continue
+        source = entry.get("source") or {}
+        path_value = ""
+        if isinstance(source, dict):
+            path_value = str(source.get("path") or "").strip()
+        elif isinstance(source, str):
+            path_value = source.strip()
+        if not path_value:
+            continue
+        candidate = Path(path_value).expanduser()
+        if not candidate.is_absolute():
+            candidate = root / candidate
+        if (candidate / ".codex-plugin" / "plugin.json").exists():
+            return candidate
+    fallback = Path.home() / "plugins" / PLUGIN_NAME
+    if (fallback / ".codex-plugin" / "plugin.json").exists():
+        return fallback
+    return None
+
+
+def best_installed_repo_root(repo_root: Path) -> Path:
+    if (repo_root / ".codex-plugin" / "plugin.json").exists():
+        return repo_root
+    return resolve_personal_plugin_root() or repo_root
 
 
 def is_git_marketplace(repo_root: Path) -> bool:
@@ -280,8 +330,10 @@ def fallback_marketplace_add(command: list[str], repo_root: Path, old_version: s
         eprint(f"Run manually: {marketplace_add_command_text()}")
         return False
 
-    notes = fetch_remote_release_notes(timeout) or read_release_notes(repo_root, old_version)
-    print_refresh_summary(repo_root, old_version, notes, skill_changed=True)
+    installed_root = resolve_personal_plugin_root() or repo_root
+    new_version = read_version(installed_root) or old_version
+    notes = read_release_notes(installed_root, new_version)
+    print_refresh_summary(installed_root, old_version, notes, skill_changed=True)
     return True
 
 
@@ -353,18 +405,19 @@ def auto_update(repo_root: Path, timeout: float) -> None:
 
 
 def manual_update(repo_root: Path, timeout: float) -> None:
-    current_version = read_version(repo_root)
+    update_root = best_installed_repo_root(repo_root)
+    current_version = read_version(update_root) or read_version(repo_root)
     command = codex_command()
     if not command:
         eprint("Forge Method update unavailable: Codex CLI not found.")
         eprint(f"Run manually after the CLI is available: {marketplace_add_command_text()}")
         return
 
-    if not is_git_marketplace(repo_root):
+    if not is_git_marketplace(update_root):
         eprint(f"Forge Method current version: {current_version or '<unknown>'}")
         fallback_marketplace_add(
             command,
-            repo_root,
+            update_root,
             current_version,
             timeout,
             reason="This install is not in Git marketplace shape; migrating it to the updateable main package.",
@@ -372,17 +425,17 @@ def manual_update(repo_root: Path, timeout: float) -> None:
         return
 
     old_version = current_version
-    old_metadata = marketplace_metadata(repo_root)
+    old_metadata = marketplace_metadata(update_root)
     old_revision = str(old_metadata.get("revision") or "")
     watched = [
-        repo_root / "skills" / "forge-method" / "SKILL.md",
-        repo_root / "skills" / "forge-update" / "SKILL.md",
-        repo_root / ".codex-plugin" / "plugin.json",
+        update_root / "skills" / "forge-method" / "SKILL.md",
+        update_root / "skills" / "forge-update" / "SKILL.md",
+        update_root / ".codex-plugin" / "plugin.json",
     ]
     old_hashes = {str(path): file_hash(path) for path in watched}
 
     try:
-        result = run_with_timeout([*command, "plugin", "marketplace", "upgrade", marketplace_name(repo_root)], timeout)
+        result = run_with_timeout([*command, "plugin", "marketplace", "upgrade", marketplace_name(update_root)], timeout)
     except subprocess.TimeoutExpired:
         eprint("Forge Method update timed out; your current install was left usable.")
         return
@@ -392,7 +445,7 @@ def manual_update(repo_root: Path, timeout: float) -> None:
     if result.returncode != 0:
         if fallback_marketplace_add(
             command,
-            repo_root,
+            update_root,
             old_version,
             timeout,
             reason="Forge Method marketplace upgrade failed; trying the main-package refresh path instead.",
@@ -404,8 +457,8 @@ def manual_update(repo_root: Path, timeout: float) -> None:
             eprint(detail.splitlines()[0])
         return
 
-    new_version = read_version(repo_root)
-    new_metadata = marketplace_metadata(repo_root)
+    new_version = read_version(update_root)
+    new_metadata = marketplace_metadata(update_root)
     new_revision = str(new_metadata.get("revision") or "")
     updated = is_newer_version(new_version, old_version) or (bool(new_revision) and new_revision != old_revision)
     if not updated:
@@ -415,11 +468,11 @@ def manual_update(repo_root: Path, timeout: float) -> None:
     state = load_state()
     skill_changed = any(file_hash(path) != old_hashes.get(str(path), "") for path in watched)
     if is_newer_version(new_version, old_version):
-        print_patch_notes(old_version, new_version, read_release_notes(repo_root, new_version), skill_changed=skill_changed)
+        print_patch_notes(old_version, new_version, read_release_notes(update_root, new_version), skill_changed=skill_changed)
         state["last_announced_version"] = new_version
     else:
         eprint(f"Forge Method package refreshed at {new_version or '<unknown>'}.")
-        notes = read_release_notes(repo_root, new_version)
+        notes = read_release_notes(update_root, new_version)
         summary = str(notes.get("summary") or "").strip()
         if summary:
             eprint(summary)

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 2.0.2
+
+Hotfix: `$forge-update` now resolves the installed plugin package from the personal Codex marketplace before printing version summaries, so legacy skill installs do not report stale `1.34.1` patch notes after refreshing to the v2 package. Version detection now prefers the `VERSION` file when it is newer than the plugin manifest, protecting updates from stale manifest metadata.
+
 ## 2.0.1
 
 Hotfix: `agent_id` was not threaded through `append_request` in fleet-mode handoff and checkpoint. Requests showed `"default"` instead of the actual agent identity. Both `cmd_handoff` and `cmd_checkpoint` now pass `agent_id=_resolve_agent_id(args)` to `append_request`, matching the `append_ledger` call that was already correct.

@@ -1,7 +1,7 @@
 {
   "schema_version": "forge-marketplace-listing.v1",
   "name": "forge-method-core",
-  "version": "1.34.1",
+  "version": "2.0.2",
   "display_name": "Forge Method Core",
   "tagline": "Extend human capacity while Codex turns messy ideas into durable work.",
   "category": "Productivity",
@@ -81,7 +81,7 @@
     "python scripts/test-runner.py --workers 4 --timeout 120 --report .forge-method/test-runs/manual.json",
     "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-fast.ps1",
     "powershell -ExecutionPolicy Bypass -File .\\scripts\\verify-all.ps1",
-    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref v1.34.1 -ExpectedVersion 1.34.1"
+    "powershell -ExecutionPolicy Bypass -File .\\scripts\\smoke-plugin-clone-install.ps1 -Ref v2.0.2 -ExpectedVersion 2.0.2"
   ],
   "publication_status": "metadata-ready; public directory submission is external"
 }

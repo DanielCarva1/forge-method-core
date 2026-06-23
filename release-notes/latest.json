@@ -1,14 +1,13 @@
 {
-  "version": "2.0.1",
+  "version": "2.0.2",
   "date": "2026-06-23",
-  "title": "Flock Coordination hotfix",
-  "summary": "Forge v2 adds multi-agent coordination for human and agent fleets, with lane claims, version-checked state writes, request queues, safer handoffs, and a hotfix for agent identity threading.",
+  "title": "Update metadata hotfix",
+  "summary": "Forge v2.0.2 fixes the update path so legacy skill installs report the real v2 package version and show current patch notes after refreshing.",
   "highlights": [
-    "Lane claims with TTL help multiple agents avoid editing the same work area at the same time.",
-    "Fleet-mode handoffs and checkpoints are append-only by default instead of clobbering shared state.",
-    "Requests queue and version-checked transitions let a driver agent apply worker updates deliberately.",
-    "`forge-commit` stages only files in claimed lanes to reduce accidental cross-agent commits.",
-    "Hotfix: fleet-mode `handoff` and `checkpoint` now preserve the real `agent_id` instead of recording `default`."
+    "$forge-update now resolves the installed Forge package from the personal Codex marketplace before printing the update summary.",
+    "Version detection now prefers the `VERSION` file when it is newer than the plugin manifest.",
+    "Legacy skill installs no longer report stale `1.34.1` patch notes after refreshing to the v2 package.",
+    "The v2 multi-agent coordination features from 2.0.0/2.0.1 remain unchanged."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/2.0.1.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/2.0.2.md"
 }
