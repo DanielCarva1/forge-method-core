@@ -15585,6 +15585,48 @@ def cmd_audit(args: argparse.Namespace) -> int:
     return 0
 
 
+def _integration_checks_available(root: Path) -> bool:
+    """v2-018 (GAP-5): whether any integration-level gate check would run."""
+    return (root / "tsconfig.json").exists() or (root / "scripts" / "smoke-runtime.ps1").exists()
+
+
+def _run_integration_checks(root: Path) -> list[str]:
+    """v2-018 (GAP-5): run integration-level checks when project artifacts exist.
+
+    Runs ``npx tsc --noEmit`` if ``tsconfig.json`` is present and the
+    smoke-runtime script if ``scripts/smoke-runtime.ps1`` is present. Returns a
+    list of error strings (empty = pass). Callers should only invoke this after
+    the existing gate checks pass so integration runs are not wasted on already
+    broken projects. Missing artifacts are skipped silently.
+    """
+    errors: list[str] = []
+    tsconfig = root / "tsconfig.json"
+    if tsconfig.exists():
+        result = subprocess.run(
+            ["npx", "tsc", "--noEmit"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip()
+            tail = " | ".join(detail.splitlines()[-5:])[:300]
+            errors.append(f"integration typecheck failed: {tail}")
+    smoke = root / "scripts" / "smoke-runtime.ps1"
+    if smoke.exists():
+        result = subprocess.run(
+            ["powershell", "-ExecutionPolicy", "Bypass", "-File", "scripts/smoke-runtime.ps1"],
+            cwd=str(root),
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip()
+            tail = " | ".join(detail.splitlines()[-5:])[:300]
+            errors.append(f"integration smoke failed: {tail}")
+    return errors
+
+
 def cmd_gate(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     errors: list[str] = []
@@ -15625,6 +15667,14 @@ def cmd_gate(args: argparse.Namespace) -> int:
     if eval_failures:
         errors.extend(f"eval: {failure}" for failure in eval_failures)
 
+    integration_available = _integration_checks_available(root)
+    integration_ran = False
+    if not errors and integration_available:
+        integration_errors = _run_integration_checks(root)
+        integration_ran = True
+        if integration_errors:
+            errors.extend(integration_errors)
+
     strict_failures = warnings if args.strict else []
     passed = not errors and not strict_failures
     append_ledger(
@@ -15635,6 +15685,7 @@ def cmd_gate(args: argparse.Namespace) -> int:
             "errors": len(errors),
             "warnings": len(warnings),
             "evals": eval_count,
+            "integration_ran": str(integration_ran),
         },
     )
 
@@ -15645,6 +15696,8 @@ def cmd_gate(args: argparse.Namespace) -> int:
         print("Workflows: passed")
         print("Agents: passed")
         print(f"Evals: {len(passed_evals)}/{eval_count} passed")
+        if integration_ran:
+            print("Integration: passed")
         if warnings:
             print("Warnings:")
             for warning in warnings:
@@ -15661,7 +15714,7 @@ def cmd_gate(args: argparse.Namespace) -> int:
                     "workflow validate",
                     "agent validate",
                     "eval run",
-                ],
+                ] + (["integration"] if integration_ran else []),
             )
             print(f"Evidence: {evidence}")
         if args.context_pack:
@@ -17332,6 +17385,11 @@ def build_parser() -> argparse.ArgumentParser:
     heartbeat.add_argument("--agent-id", default=None)
     heartbeat.add_argument("--ttl", type=int, default=30)
     heartbeat.set_defaults(func=cmd_heartbeat)
+
+    lanes_cmd = sub.add_parser("lanes", help="v2: show lane claim statuses")
+    lanes_cmd.add_argument("--root", default=".")
+    lanes_cmd.add_argument("--json", action="store_true")
+    lanes_cmd.set_defaults(func=cmd_lanes)
 
     forge_commit = sub.add_parser("forge-commit", help="v2: git commit wrapper that stages only claimed-lane files")
     forge_commit.add_argument("--root", default=".")
