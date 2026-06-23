@@ -3,8 +3,9 @@ title: lanes command — show all lane claim statuses
 epic: Lane Claims
 lane: runtime-core
 priority: MED
-status: planned
+status: done
 dependencies: v2-010
+evidence: .forge-method/evidence/2026-06-23-v2-011-018-lanes-gate.md
 acceptance: '`forge lanes --root .` reads claims/ dir, shows each lane: free/claimed/expired
   + holder + expires. Reads lane definitions from registry.yaml.'
 description: Add cmd_lanes. Reads agents/registry.yaml for lane definitions, reads

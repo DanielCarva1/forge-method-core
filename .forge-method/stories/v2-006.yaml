@@ -3,8 +3,9 @@ title: requests apply command — driver applies a request with version check
 epic: Append-Only Handoffs
 lane: runtime-core
 priority: HIGH
-status: planned
+status: done
 dependencies: v2-005
+evidence: .forge-method/evidence/2026-06-23-v2-005-006-requests.md
 acceptance: '`forge requests apply <id> --expected-version 3` reads the request, applies
   its payload to state via write_state with version check, marks request status=applied
   in requests.ndjson.'

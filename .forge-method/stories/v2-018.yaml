@@ -3,8 +3,9 @@ title: 'GAP-5: Integration gate (tsc --noEmit + smoke test in gate)'
 epic: Integration Quality
 lane: runtime-core
 priority: MED
-status: planned
+status: done
 dependencies: ''
+evidence: .forge-method/evidence/2026-06-23-v2-011-018-lanes-gate.md
 acceptance: '`forge gate` runs `tsc --noEmit` (if tsconfig.json exists) + `npm test`
   or smoke script (if present). Integration errors count as gate failures. Per-lane
   typecheck is not enough.'

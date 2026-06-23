@@ -3,8 +3,9 @@ title: requests poll command — driver reads pending requests
 epic: Append-Only Handoffs
 lane: runtime-core
 priority: HIGH
-status: planned
+status: done
 dependencies: v2-004
+evidence: .forge-method/evidence/2026-06-23-v2-005-006-requests.md
 acceptance: '`forge requests poll --root .` reads requests.ndjson, prints pending
   entries as JSON. Empty if none. Does not mutate state.'
 description: Add cmd_requests_poll that reads .forge-method/requests.ndjson line by
