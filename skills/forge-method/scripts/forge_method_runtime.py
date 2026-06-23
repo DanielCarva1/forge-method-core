@@ -1332,6 +1332,7 @@ def capability_config_entries(config: dict[str, str]) -> list[dict[str, str]]:
 
 
 def apply_state_defaults(state: dict[str, str]) -> dict[str, str]:
+    state.setdefault("version", "0")
     state.setdefault("autonomy_mode", "auto")
     state.setdefault("commit_policy", "off")
     state.setdefault("last_grill_artifact", "")
@@ -2751,7 +2752,7 @@ def cmd_claim(args: argparse.Namespace) -> int:
             return 1
     expires = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=ttl)).strftime("%Y-%m-%dT%H:%M:%SZ")
     write_flat_yaml(lock, {"agent_id": agent_id, "lane": lane, "expires": expires}, header=f"Lane claim: {lane}")
-    append_ledger(root, "lane.claimed", {"lane": lane, "agent_id": agent_id, "expires": expires})
+    append_ledger(root, "lane.claimed", {"lane": lane, "agent_id": agent_id, "expires": expires}, agent_id=agent_id)
     print(f"Claimed lane '{lane}' (agent: {agent_id}, expires: {expires}, TTL: {ttl}min).")
     return 0
 
@@ -2765,7 +2766,7 @@ def cmd_release(args: argparse.Namespace) -> int:
     if lock.exists():
         existing = read_flat_yaml(lock)
         lock.unlink()
-        append_ledger(root, "lane.released", {"lane": lane, "agent_id": agent_id, "had_holder": existing.get("agent_id", "")})
+        append_ledger(root, "lane.released", {"lane": lane, "agent_id": agent_id, "had_holder": existing.get("agent_id", "")}, agent_id=agent_id)
         print(f"Released lane '{lane}'.")
     else:
         print(f"Lane '{lane}' was not claimed.")
@@ -2892,7 +2893,7 @@ def cmd_forge_commit(args: argparse.Namespace) -> int:
     if result.returncode != 0:
         print(f"git commit failed: {result.stderr.strip()}")
         return 1
-    append_ledger(root, "lane.committed", {"agent_id": agent_id, "lanes": ",".join(claimed_lanes), "paths": ",".join(stage_paths)})
+    append_ledger(root, "lane.committed", {"agent_id": agent_id, "lanes": ",".join(claimed_lanes), "paths": ",".join(stage_paths)}, agent_id=agent_id)
     print(f"Committed (lanes: {claimed_lanes}, staged paths: {stage_paths or 'all'}).")
     return 0
 
@@ -2971,7 +2972,7 @@ def cmd_requests_apply(args: argparse.Namespace) -> int:
         for e in entries:
             f.write(json.dumps(e, ensure_ascii=False) + "\n")
 
-    append_ledger(root, "request.applied", {"index": idx, "action": action})
+    append_ledger(root, "request.applied", {"index": idx, "action": action}, agent_id=agent_id)
 
     print(
         json.dumps(
@@ -3110,12 +3111,14 @@ def ledger_path(root: Path) -> Path:
     return method_dir(root) / LEDGER_FILE
 
 
-def append_ledger(root: Path, event: str, payload: dict[str, Any] | None = None) -> None:
+def append_ledger(root: Path, event: str, payload: dict[str, Any] | None = None, *, agent_id: str = "default") -> None:
     ensure_dirs(root)
+    p = dict(payload or {})
+    p["agent_id"] = agent_id
     entry = {
         "ts": utc_now(),
         "event": event,
-        "payload": payload or {},
+        "payload": p,
     }
     with ledger_path(root).open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(entry, ensure_ascii=True, sort_keys=True) + "\n")
@@ -7362,8 +7365,8 @@ def cmd_transition(args: argparse.Namespace) -> int:
         state["next_action"] = args.next_action
     if args.human_input_required is not None:
         state["human_input_required"] = args.human_input_required
-    write_state(root, state)
-    append_ledger(root, "state.transitioned", {"phase": state.get("phase"), "status": state.get("status")})
+    write_state(root, state, expected_version=args.expected_version, agent_id=_resolve_agent_id(args))
+    append_ledger(root, "state.transitioned", {"phase": state.get("phase"), "status": state.get("status")}, agent_id=_resolve_agent_id(args))
     print("Transition written.")
     print(f"Phase: {state.get('phase')}")
     print(f"Status: {state.get('status')}")
@@ -7394,7 +7397,7 @@ def cmd_story_add(args: argparse.Namespace) -> int:
     story = prepare_story_decision_sources(root, story, requested_sources=args.source or [])
     save_story(root, story)
     update_sprint(root)
-    append_ledger(root, "story.added", {"id": story_id, "status": args.status})
+    append_ledger(root, "story.added", {"id": story_id, "status": args.status}, agent_id=_resolve_agent_id(args))
     print(f"Story added: {story_id}")
     return 0
 
@@ -7472,7 +7475,7 @@ def cmd_story_export(args: argparse.Namespace) -> int:
         out, rel = project_path(root, args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(text, encoding="utf-8")
-        append_ledger(root, "story.backlog_exported", {"path": rel, "stories": len(stories)})
+        append_ledger(root, "story.backlog_exported", {"path": rel, "stories": len(stories)}, agent_id=_resolve_agent_id(args))
         print(rel)
         return 0
     print(text.rstrip())
@@ -7500,7 +7503,7 @@ def cmd_story_import(args: argparse.Namespace) -> int:
         save_story(root, story)
         imported += 1
     update_sprint(root)
-    append_ledger(root, "story.backlog_imported", {"path": rel, "stories": imported})
+    append_ledger(root, "story.backlog_imported", {"path": rel, "stories": imported}, agent_id=_resolve_agent_id(args))
     print(f"Stories imported: {imported}")
     return 0
 
@@ -7624,7 +7627,7 @@ def cmd_review_add(args: argparse.Namespace) -> int:
         "resolved_at": "",
     }
     save_review_finding(root, finding)
-    append_ledger(root, "review_finding.added", {"id": finding_id, "story": story_id, "severity": args.severity})
+    append_ledger(root, "review_finding.added", {"id": finding_id, "story": story_id, "severity": args.severity}, agent_id=_resolve_agent_id(args))
     print(f"Review finding added: {finding_id}")
     return 0
 
@@ -7656,7 +7659,7 @@ def cmd_review_resolve(args: argparse.Namespace) -> int:
     finding["evidence"] = evidence
     finding["resolved_at"] = utc_now()
     save_review_finding(root, finding)
-    append_ledger(root, "review_finding.resolved", {"id": finding.get("id"), "story": finding.get("story")})
+    append_ledger(root, "review_finding.resolved", {"id": finding.get("id"), "story": finding.get("story")}, agent_id=_resolve_agent_id(args))
     print(f"Review finding resolved: {finding.get('id')}")
     return 0
 
@@ -7668,7 +7671,7 @@ def cmd_review_waive(args: argparse.Namespace) -> int:
     finding["resolution"] = args.reason
     finding["resolved_at"] = utc_now()
     save_review_finding(root, finding)
-    append_ledger(root, "review_finding.waived", {"id": finding.get("id"), "story": finding.get("story")})
+    append_ledger(root, "review_finding.waived", {"id": finding.get("id"), "story": finding.get("story")}, agent_id=_resolve_agent_id(args))
     print(f"Review finding waived: {finding.get('id')}")
     return 0
 
@@ -7695,7 +7698,7 @@ def cmd_input_add(args: argparse.Namespace) -> int:
     if args.required:
         sync_human_input_state(root, state)
         write_state(root, state)
-    append_ledger(root, "human_input.added", {"id": input_id, "required": args.required})
+    append_ledger(root, "human_input.added", {"id": input_id, "required": args.required}, agent_id=_resolve_agent_id(args))
     print(f"Human input added: {input_id}")
     return 0
 
@@ -7726,7 +7729,7 @@ def cmd_input_answer(args: argparse.Namespace) -> int:
     save_human_input(root, item)
     sync_human_input_state(root, state, next_action=args.next_action or "")
     write_state(root, state)
-    append_ledger(root, "human_input.answered", {"id": item.get("id")})
+    append_ledger(root, "human_input.answered", {"id": item.get("id")}, agent_id=_resolve_agent_id(args))
     print(f"Human input answered: {item.get('id')}")
     return 0
 
@@ -7739,7 +7742,7 @@ def cmd_input_defer(args: argparse.Namespace) -> int:
     save_human_input(root, item)
     sync_human_input_state(root, state, next_action=args.next_action or "")
     write_state(root, state)
-    append_ledger(root, "human_input.deferred", {"id": item.get("id"), "reason": args.reason})
+    append_ledger(root, "human_input.deferred", {"id": item.get("id"), "reason": args.reason}, agent_id=_resolve_agent_id(args))
     print(f"Human input deferred: {item.get('id')}")
     return 0
 
@@ -8508,7 +8511,7 @@ def cmd_module_create(args: argparse.Namespace) -> int:
         "workflows": join_list(args.workflow or []),
     }
     write_flat_yaml(path, values, header="Forge Method module")
-    append_ledger(root, "module.created", {"id": module_id, "path": path.relative_to(root).as_posix()})
+    append_ledger(root, "module.created", {"id": module_id, "path": path.relative_to(root).as_posix()}, agent_id=_resolve_agent_id(args))
     print(path.relative_to(root).as_posix())
     return 0
 
@@ -8732,6 +8735,7 @@ def cmd_project_create(args: argparse.Namespace) -> int:
             "checkpoint": checkpoint,
             "load_plan": load_plan.relative_to(project_root).as_posix(),
         },
+        agent_id=_resolve_agent_id(args),
     )
 
     print(f"Project created: {project}")
@@ -8838,7 +8842,7 @@ def cmd_track_set(args: argparse.Namespace) -> int:
         state["module"] = track["module"]
     state["next_action"] = args.next_action or f"continue on {track['title']} track"
     write_state(root, state)
-    append_ledger(root, "track.set", {"track": track["id"], "module": state.get("module", "")})
+    append_ledger(root, "track.set", {"track": track["id"], "module": state.get("module", "")}, agent_id=_resolve_agent_id(args))
     print(f"Track set: {track['id']}")
     print(f"Next: {state['next_action']}")
     return 0
@@ -13834,6 +13838,7 @@ def cmd_council_run(args: argparse.Namespace) -> int:
             "mode": mode,
             "execution": plan.get("execution", ""),
         },
+        agent_id=_resolve_agent_id(args),
     )
     payload = {
         "runtime": RUNTIME_NAME,
@@ -13914,7 +13919,7 @@ def cmd_correct_course(args: argparse.Namespace) -> int:
     state["active_guidance_mode"] = "correct-course"
     state["next_action"] = next_action
     write_state(root, state)
-    append_ledger(root, "correct_course.continued", {"artifact": rel, "impact": impact})
+    append_ledger(root, "correct_course.continued", {"artifact": rel, "impact": impact}, agent_id=_resolve_agent_id(args))
     print(f"Correct-course artifact: {rel}")
     print(f"Next: {next_action}")
     return 0
@@ -14273,7 +14278,7 @@ def cmd_builder_scaffold(args: argparse.Namespace) -> int:
         rel = write_eval(root, eval_id=item_id, kind=args.eval_kind, target=target, query=query, expected=args.expected or "")
         print(rel)
         return 0
-    append_ledger(root, "builder.scaffolded", {"kind": kind, "id": item_id, "path": path.relative_to(root).as_posix()})
+    append_ledger(root, "builder.scaffolded", {"kind": kind, "id": item_id, "path": path.relative_to(root).as_posix()}, agent_id=_resolve_agent_id(args))
     print(path.relative_to(root).as_posix())
     return 0
 
@@ -14444,6 +14449,7 @@ def cmd_example_create(args: argparse.Namespace) -> int:
             "eval": eval_path_rel,
             "checkpoint": checkpoint,
         },
+        agent_id=_resolve_agent_id(args),
     )
 
     print(f"Example created: {project}")
@@ -14599,7 +14605,7 @@ def cmd_workflow_create(args: argparse.Namespace) -> int:
     if errors:
         path.unlink(missing_ok=True)
         raise SystemExit("Generated workflow is invalid: " + "; ".join(errors))
-    append_ledger(root, "workflow.created", {"id": workflow_id, "path": path.relative_to(root).as_posix()})
+    append_ledger(root, "workflow.created", {"id": workflow_id, "path": path.relative_to(root).as_posix()}, agent_id=_resolve_agent_id(args))
     if args.eval_query:
         write_eval(
             root,
@@ -15459,7 +15465,7 @@ def cmd_checkpoint(args: argparse.Namespace) -> int:
             update_state = not is_fleet_mode(root)
         if update_state:
             state["next_action"] = next_action
-            write_state(root, state)
+            write_state(root, state, expected_version=args.expected_version, agent_id=_resolve_agent_id(args))
         else:
             append_request(root, "checkpoint", {"next_action": next_action})
     if not args.no_context_pack:
@@ -15687,6 +15693,7 @@ def cmd_gate(args: argparse.Namespace) -> int:
             "evals": eval_count,
             "integration_ran": str(integration_ran),
         },
+        agent_id=_resolve_agent_id(args),
     )
 
     if passed:
@@ -15763,7 +15770,7 @@ def cmd_ready(args: argparse.Namespace) -> int:
     state["readiness"] = "ready"
     state["next_action"] = NEXT_BY_PHASE["5-ready-operate"]
     write_state(root, state)
-    append_ledger(root, "project.ready", {"evidence": evidence})
+    append_ledger(root, "project.ready", {"evidence": evidence}, agent_id=_resolve_agent_id(args))
     print("Project marked ready.")
     print(f"Evidence: {evidence}")
     return 0
@@ -15798,13 +15805,13 @@ def cmd_handoff(args: argparse.Namespace) -> int:
         update_state = not is_fleet_mode(root)
     if update_state:
         state["next_action"] = args.next_action or state.get("next_action", "")
-        write_state(root, state)
+        write_state(root, state, expected_version=args.expected_version, agent_id=_resolve_agent_id(args))
     else:
         append_request(root, "handoff", {
             "next_action": args.next_action or state.get("next_action", ""),
             "path": path.relative_to(root).as_posix(),
         })
-    append_ledger(root, "handoff.written", {"path": path.relative_to(root).as_posix(), "state_mutated": str(update_state)})
+    append_ledger(root, "handoff.written", {"path": path.relative_to(root).as_posix(), "state_mutated": str(update_state)}, agent_id=_resolve_agent_id(args))
     print(path)
     return 0
 
@@ -16500,6 +16507,8 @@ def build_parser() -> argparse.ArgumentParser:
     transition.add_argument("--next-action")
     transition.add_argument("--human-input-required", choices=["true", "false"])
     transition.add_argument("--force", action="store_true")
+    transition.add_argument("--expected-version", dest="expected_version", type=str, default=None)
+    transition.add_argument("--agent-id", dest="agent_id", default=None)
     transition.set_defaults(func=cmd_transition, record_guidance=True, emit_guidance=True)
 
     story = sub.add_parser("story", help="manage stories")
@@ -17292,6 +17301,7 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint.add_argument("--update-state", dest="update_state", action="store_true", default=None)
     checkpoint.add_argument("--no-update-state", dest="update_state", action="store_false")
     checkpoint.add_argument("--agent-id", default=None)
+    checkpoint.add_argument("--expected-version", dest="expected_version", type=str, default=None)
     checkpoint.set_defaults(func=cmd_checkpoint, record_guidance=True)
 
     context = sub.add_parser("context", help="context pack operations")
@@ -17364,6 +17374,7 @@ def build_parser() -> argparse.ArgumentParser:
     handoff.add_argument("--update-state", dest="update_state", action="store_true", default=None)
     handoff.add_argument("--no-update-state", dest="update_state", action="store_false")
     handoff.add_argument("--agent-id", default=None)
+    handoff.add_argument("--expected-version", dest="expected_version", type=str, default=None)
     handoff.set_defaults(func=cmd_handoff, record_guidance=True)
 
     claim = sub.add_parser("claim", help="v2: claim a lane for multi-agent coordination")
