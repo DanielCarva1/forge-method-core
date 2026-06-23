@@ -642,6 +642,9 @@ CONFIG_OVERRIDE_PRECEDENCE = ["packaged defaults", ".forge-method/config/team.ya
 AUTONOMY_MODES = {"auto", "manual"}
 COMMIT_POLICIES = {"off", "story", "epic"}
 GRILL_GATE_PHASES = {"1-discovery", "2-specification", "3-plan"}
+# v2-016: commands/workflow signals that close a decision. Grill is RECOMMENDED
+# (not hard-blocked) when any of these appears at a decision-close point.
+GRILL_GATE_DECISION_CLOSE_TRIGGERS = ("handoff", "transition", "spec-lock", "spec_lock", "speclock", "spec-kernel")
 MULTI_AGENT_TRANSCRIPT_WORD_THRESHOLD = 500
 SPEC_ARTIFACT_KINDS = {
     "discovery",
@@ -6994,7 +6997,66 @@ def effective_config_value(root: Path, state: dict[str, str], key: str, default:
 
 
 def grill_gate_required_for_state(state: dict[str, str]) -> bool:
+    """Hard-required baseline: decision phases 1/2/3 only (unchanged)."""
     return state.get("phase", "") in GRILL_GATE_PHASES
+
+
+def grill_has_run(state: dict[str, str]) -> bool:
+    """v2-016: True when any durable human-approval gate artifact (grill, council,
+    correct-course, explicit human_approval_gate) is on record."""
+    return any(str(state.get(field, "")).strip() for field in HUMAN_APPROVAL_GATE_FIELDS)
+
+
+def _decision_close_signal(state: dict[str, str]) -> str:
+    """v2-016: lowercase text searched for decision-close triggers."""
+    return " ".join(
+        str(state.get(key, ""))
+        for key in ("next_action", "active_workflow", "next_workflow", "last_intent_classification", "status")
+    ).lower()
+
+
+def grill_gate_recommended_for_state(state: dict[str, str]) -> bool:
+    """v2-016: grill is RECOMMENDED at every decision-close point.
+
+    Covers handoff, phase transition (advance), and spec-lock across ALL phases,
+    not just 1/2/3. Returns True when either:
+      - the hard-required baseline applies (phase in 1/2/3), or
+      - the state's next action / active workflow signals an imminent decision-close.
+    """
+    if grill_gate_required_for_state(state):
+        return True
+    haystack = _decision_close_signal(state)
+    if not haystack:
+        return False
+    return any(trigger in haystack for trigger in GRILL_GATE_DECISION_CLOSE_TRIGGERS)
+
+
+def grill_gate_warning_for_state(state: dict[str, str]) -> str:
+    """v2-016: advisory warning emitted when a decision-close is imminent but no
+    grill/council/correct-course artifact is on record. Empty string when OK."""
+    if not grill_gate_recommended_for_state(state):
+        return ""
+    if grill_has_run(state):
+        return ""
+    return (
+        "Grill Gate warning: a decision-close point (handoff, phase transition, or "
+        "spec-lock) is approaching but no grill/council/correct-course artifact is "
+        "on record. Run the grill-gate workflow before closing the decision."
+    )
+
+
+def print_grill_gate_advisory(state: dict[str, str]) -> None:
+    """v2-016: emit a non-blocking grill-gate recommendation before decision-close
+    commands (handoff / transition / spec-lock). Recommended, never hard-blocked."""
+    if not grill_gate_recommended_for_state(state):
+        return
+    if grill_has_run(state):
+        print("Grill Gate: a grill/council/correct-course artifact is on record; decision-close may proceed.")
+        return
+    print(
+        "Grill Gate (recommended): no grill/council/correct-course artifact is on record. "
+        "Run the grill-gate workflow before closing this decision (handoff/transition/spec-lock)."
+    )
 
 
 def remaining_mechanical_stories(story_counts: dict[str, int]) -> int:
@@ -7323,6 +7385,8 @@ def build_snapshot(root: Path, state: dict[str, str]) -> dict[str, Any]:
         story_counts,
     )
     resume["grill_gate_required"] = grill_gate_required_for_state(state)
+    resume["grill_gate_recommended"] = grill_gate_recommended_for_state(state)
+    resume["grill_gate_warning"] = grill_gate_warning_for_state(state)
     resume["mechanical_work_order"] = build_mechanical_work_order(root, state, resume, story_counts)
     resume["codex_goal_handoff"] = build_codex_goal_handoff(state, resume["mechanical_work_order"])
     help_oracle = build_help_oracle(root, state, resume)
@@ -7500,6 +7564,11 @@ def print_resume_guidance(root: Path, resume: dict[str, Any]) -> None:
         print("- <not specified>")
     if resume.get("grill_gate_required"):
         print("Grill Gate: required before leaving this decision phase.")
+    if resume.get("grill_gate_recommended") and not resume.get("grill_gate_required"):
+        print("Grill Gate: recommended at this decision-close point.")
+    grill_warning = resume.get("grill_gate_warning", "")
+    if grill_warning:
+        print(grill_warning)
     help_oracle = resume.get("help_oracle", {})
     if help_oracle:
         print("Help Oracle:")
@@ -7549,6 +7618,8 @@ def cmd_transition(args: argparse.Namespace) -> int:
     if args.phase:
         validate_phase_transition(current_phase, args.phase, force=args.force)
         enforce_discovery_closeout_before_specification(root, state, args.phase, force=args.force)
+        # v2-016: grill-gate is recommended (not hard-blocked) before every phase transition.
+        print_grill_gate_advisory(state)
         state["phase"] = args.phase
         if not args.next_action:
             state["next_action"] = NEXT_BY_PHASE.get(args.phase, "inspect state and choose next workflow")
@@ -13308,6 +13379,8 @@ def build_stateful_guide_payload(
         "state_updates": guidance["state_updates"],
         "commands": guidance["commands"],
         "grill_gate_required": snapshot["resume"].get("grill_gate_required", False),
+        "grill_gate_recommended": snapshot["resume"].get("grill_gate_recommended", False),
+        "grill_gate_warning": snapshot["resume"].get("grill_gate_warning", ""),
         "mechanical_work_order": snapshot["resume"].get("mechanical_work_order", {}),
         "codex_goal_handoff": snapshot["resume"].get("codex_goal_handoff", {}),
         "council_recommended": council_recommended_for_guidance(question, guidance),
@@ -13450,6 +13523,11 @@ def cmd_guide(args: argparse.Namespace) -> int:
         print(f"- {agent.get('id')}: {agent.get('purpose')}")
     if payload.get("grill_gate_required"):
         print("Grill Gate: required before leaving this decision phase.")
+    if payload.get("grill_gate_recommended") and not payload.get("grill_gate_required"):
+        print("Grill Gate: recommended at this decision-close point.")
+    grill_warning = payload.get("grill_gate_warning", "")
+    if grill_warning:
+        print(grill_warning)
     assessment = payload.get("reality_evidence_gate") or {}
     if assessment.get("required") and assessment.get("status") != "not-applicable":
         score = assessment.get("score")
@@ -15982,6 +16060,8 @@ def cmd_ready(args: argparse.Namespace) -> int:
 
 def cmd_handoff(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
+    # v2-016: grill-gate is recommended (not hard-blocked) before every handoff.
+    print_grill_gate_advisory(state)
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
     path = method_dir(root) / "handoffs" / f"{stamp}-handoff.md"
     lines = [
@@ -16590,6 +16670,158 @@ def cmd_release_check(args: argparse.Namespace) -> int:
 
 def cmd_version(args: argparse.Namespace) -> int:
     print(RUNTIME_VERSION)
+    return 0
+
+
+def build_agents_md_draft(
+    root: Path,
+    state: dict[str, str],
+    *,
+    runtime_kind: str,
+    agent_id: str | None = None,
+) -> str:
+    """v2-026: assemble the AGENTS.md draft body from Forge state + registry.
+
+    Reads state.yaml (brief, phase, autonomy/commit policy) and agents/registry.yaml
+    (lane map). Output is a DRAFT — never auto-promoted to AGENTS.md.
+    """
+    project = state.get("project", "") or root.name
+    phase = state.get("phase", "")
+    status = state.get("status", "")
+    brief = (state.get("next_action", "") or state.get("last_route_reason", "")).strip()
+
+    lanes_rows: list[tuple[str, str]] = []
+    registry = method_dir(root) / "agents" / "registry.yaml"
+    if registry.exists():
+        reg = read_flat_yaml(registry)
+        lanes_str = reg.get("lanes", "")
+        for lane in [item.strip() for item in lanes_str.split(",") if item.strip()]:
+            owner = reg.get(f"lane.{lane}.owner", "") or reg.get(f"lanes.{lane}.owner", "") or "unassigned"
+            lanes_rows.append((lane, owner))
+
+    runtime_label = {
+        "opencode": "OpenCode",
+        "claude": "Claude Code",
+        "generic": "any agent runtime",
+    }.get(runtime_kind, runtime_kind)
+
+    lines: list[str] = []
+    lines.append(f"# AGENTS.md (DRAFT) — {project}")
+    lines.append("")
+    lines.append("> **DRAFT — not canonical.** Generated by Forge Method from project state.")
+    lines.append("> A human must review and approve this file before it becomes the canonical")
+    lines.append("> AGENTS.md (ETH Zurich C8 / Forge Principle 8 — human approval gate).")
+    lines.append("")
+    lines.append(f"Target runtime: **{runtime_label}**.")
+    lines.append("")
+    lines.append("## Project")
+    lines.append("")
+    lines.append(f"- name: {project}")
+    if phase:
+        lines.append(f"- phase: {phase}")
+    if status:
+        lines.append(f"- status: {status}")
+    if state.get("module", ""):
+        lines.append(f"- module: {state.get('module', '')}")
+    lines.append(f"- autonomy_mode: {state.get('autonomy_mode', 'auto')}")
+    lines.append(f"- commit_policy: {state.get('commit_policy', 'off')}")
+    lines.append("")
+    lines.append("## Brief")
+    lines.append("")
+    lines.append(brief or "_No brief recorded in state.yaml._")
+    lines.append("")
+    lines.append("## Lane map")
+    lines.append("")
+    if lanes_rows:
+        lines.append("| Lane | Owner |")
+        lines.append("| --- | --- |")
+        for lane, owner in lanes_rows:
+            lines.append(f"| {lane} | {owner} |")
+    else:
+        lines.append(
+            "_No `agents/registry.yaml` lanes defined. Run `product-area-map` to define "
+            "Product Areas, owners, and parallel-work boundaries._"
+        )
+    lines.append("")
+    lines.append("## Claim / handoff conventions")
+    lines.append("")
+    lines.append(
+        "- State is file-backed: behavior that changes project progress must update "
+        "`.forge-method/state.yaml`, `sprint.yaml`, story files, evidence, or `ledger.ndjson`."
+    )
+    lines.append(
+        "- Multi-agent (fleet) mode is opt-in via `agents/registry.yaml`. When active, "
+        "handoffs are append-only: workers emit requests to `requests.ndjson`; the driver "
+        "applies them via `write_state`."
+    )
+    lines.append(
+        "- Use `forge claim <lane>` / `forge unclaim <lane>` / `forge heartbeat <lane>` "
+        "to coordinate. First-come, first-served with a TTL."
+    )
+    lines.append(
+        "- Use `forge handoff --summary ...` to write a continuation handoff artifact; "
+        "it does not mutate state in fleet mode."
+    )
+    lines.append(
+        "- Optimistic concurrency: state writes carry `version`; a `VersionConflict` means "
+        "re-read and retry (Principle 3/18/20)."
+    )
+    lines.append("")
+    lines.append("## Decision gates")
+    lines.append("")
+    grill_state = "on record" if grill_has_run(state) else "NOT on record — run grill-gate before closing decisions"
+    lines.append(f"- Grill Gate: {grill_state}.")
+    lines.append(
+        f"- Grill recommended at this decision-close point: "
+        f"{'yes' if grill_gate_recommended_for_state(state) else 'no'}."
+    )
+    lines.append("- Council / correct-course artifacts are durable; cite them in handoffs.")
+    lines.append("")
+    lines.append("## Agent operating notes")
+    lines.append("")
+    lines.append("- Run `forge next` / `forge resume` to load context and the recommended next workflow.")
+    lines.append("- Run `forge story list` to see open stories; claim a lane before editing shared files.")
+    lines.append(
+        "- Workflow docs stay compact state machines: `trigger`, `inputs`, `steps`, "
+        "`outputs`, `done_when`, `blocked_when`, `handoff`."
+    )
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append("_Generated by Forge Method `emit-agents-md`. Edit, then save as `AGENTS.md` once approved._")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def cmd_emit_agents_md(args: argparse.Namespace) -> int:
+    """v2-026: generate an AGENTS.md DRAFT from the project's Forge state.
+
+    Output is written to `agents-md-draft.md` (NOT AGENTS.md) — the human approval
+    gate per ETH Zurich C8 / Forge Principle 8 means this draft is never auto-applied.
+    """
+    root = resolve_root(args.root)
+    runtime_kind = getattr(args, "runtime", "generic") or "generic"
+    state_root, state = load_state_or_none(root)
+    if not state_root:
+        raise SystemExit(
+            "No Forge state found under root; run `forge init` or point --root at a Forge project."
+        )
+    markdown = build_agents_md_draft(
+        state_root,
+        state,
+        runtime_kind=runtime_kind,
+        agent_id=getattr(args, "agent_id", None),
+    )
+    out_path = root / "agents-md-draft.md"
+    out_path.write_text(markdown, encoding="utf-8")
+    append_ledger(
+        state_root,
+        "agents_md.draft_emitted",
+        {"path": out_path.relative_to(root).as_posix(), "runtime": runtime_kind},
+        agent_id=_resolve_agent_id(args),
+    )
+    print(f"Wrote AGENTS.md draft: {out_path}")
+    print("Review the draft; promote to AGENTS.md only after human approval (Principle 8).")
     return 0
 
 
@@ -17673,6 +17905,12 @@ def build_parser() -> argparse.ArgumentParser:
     requests_apply.add_argument("index", type=int, help="0-based index from requests poll")
     requests_apply.add_argument("--agent-id", default=None)
     requests_apply.set_defaults(func=cmd_requests_apply)
+
+    emit_agents = sub.add_parser("emit-agents-md", help="v2: generate AGENTS.md draft for Claude Code/OpenCode")
+    emit_agents.add_argument("--root", default=".")
+    emit_agents.add_argument("--runtime", choices=["opencode", "claude", "generic"], default="generic")
+    emit_agents.add_argument("--agent-id", default=None)
+    emit_agents.set_defaults(func=cmd_emit_agents_md)
 
     return parser
 
