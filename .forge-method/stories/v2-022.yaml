@@ -3,7 +3,7 @@ title: Council standup mode (status + cross-dep sync + hard-problem sharing)
 epic: Advanced Coordination
 lane: workflows
 priority: MED
-status: planned
+status: done
 dependencies: v2-011
 acceptance: '`forge council standup` reads all lane statuses + stories + pending requests,
   produces a standup summary (what each flock is doing, cross-dependencies, blockers).

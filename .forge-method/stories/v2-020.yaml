@@ -3,7 +3,7 @@ title: 'GAP-2: Shared-types coordination (type-conflict detection)'
 epic: Integration Quality
 lane: guidance-safety
 priority: MED
-status: planned
+status: done
 dependencies: v2-018
 acceptance: Gate detects conflicting TypeScript global augmentations (declare global,
   declare module) across lanes and flags them as coordination violations before merge.

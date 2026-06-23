@@ -3,7 +3,7 @@ title: Typed agent-contract artifact + contract-check eval
 epic: Advanced Coordination
 lane: runtime-core
 priority: MED
-status: planned
+status: done
 dependencies: v2-008
 acceptance: '`forge contract create <name> --lane X --input ... --output ...` creates
   a typed agent-contract artifact. `forge eval add --kind contract-check --target

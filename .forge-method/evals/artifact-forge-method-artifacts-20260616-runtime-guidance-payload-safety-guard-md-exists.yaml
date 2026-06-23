@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-23T15:45:43+00:00"
+updated_at: "2026-06-23T16:13:05+00:00"
 id: "artifact-forge-method-artifacts-20260616-runtime-guidance-payload-safety-guard-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/20260616-runtime-guidance-payload-safety-guard.md"
 query: "Guidance Engine parity payloads, preflight JSON, reload JSON, and guide payloads now share the stale-route safety contract."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-23T15:45:43+00:00"
+last_run_at: "2026-06-23T16:13:05+00:00"
 last_error: ""

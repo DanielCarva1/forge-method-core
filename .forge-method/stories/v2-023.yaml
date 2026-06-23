@@ -3,7 +3,7 @@ title: Orchestration spawning (agent-team/parallel/subagent actually spawn)
 epic: Advanced Coordination
 lane: runtime-core
 priority: HIGH
-status: planned
+status: done
 dependencies: v2-010
 acceptance: '`forge spawn --runtime opencode --lane X --task ''...''` emits a spawn
   directive (agent_id, runtime, lane, task) that the harness reads and executes. The
