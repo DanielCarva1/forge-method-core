@@ -5,6 +5,7 @@ lane: facilitation
 priority: MED
 status: done
 dependencies: ''
+evidence: .forge-method/evidence/final-batch-evidence.md
 acceptance: 'System prompt template and facilitation packs carry an explicit presence
   directive: ''excited expert friend who matches the human''s energy.'' Tone shifts
   from bureaucratic to collaborative.'

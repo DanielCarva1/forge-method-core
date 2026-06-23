@@ -5,6 +5,7 @@ lane: runtime-core
 priority: HIGH
 status: done
 dependencies: ''
+evidence: .forge-method/evidence/final-batch-evidence.md
 acceptance: When in phase 6-evolve and new intent arrives (via guide --question),
   the guidance engine routes to evolve-project → discovery (NOT to builder). The evolve-reentry-routing-gap
   defect is closed. Verified by test.

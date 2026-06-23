@@ -5,6 +5,7 @@ lane: runtime-core
 priority: MED
 status: done
 dependencies: v2-008
+evidence: .forge-method/evidence/final-batch-evidence.md
 acceptance: '`forge contract create <name> --lane X --input ... --output ...` creates
   a typed agent-contract artifact. `forge eval add --kind contract-check --target
   <contract>` verifies the contract is honored. Evals pass.'

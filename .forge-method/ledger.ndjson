@@ -1945,3 +1945,5 @@
 {"event": "council.standup", "payload": {"agent_id": "default", "cross_deps": 5, "lanes": 5, "pending_requests": 0, "stories": 46}, "ts": "2026-06-23T16:12:01+00:00"}
 {"event": "eval.run", "payload": {"agent_id": "default", "count": 24, "failures": 0}, "ts": "2026-06-23T16:13:05+00:00"}
 {"event": "gate.run", "payload": {"agent_id": "default", "errors": 4, "evals": 24, "integration_ran": "False", "passed": false, "warnings": 16}, "ts": "2026-06-23T16:13:05+00:00"}
+{"event": "eval.run", "payload": {"agent_id": "default", "count": 24, "failures": 0}, "ts": "2026-06-23T16:14:40+00:00"}
+{"event": "gate.run", "payload": {"agent_id": "default", "errors": 8, "evals": 24, "integration_ran": "False", "passed": false, "warnings": 16}, "ts": "2026-06-23T16:14:40+00:00"}

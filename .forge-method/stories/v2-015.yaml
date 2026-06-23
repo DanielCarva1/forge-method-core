@@ -5,6 +5,7 @@ lane: facilitation
 priority: HIGH
 status: done
 dependencies: ''
+evidence: .forge-method/evidence/final-batch-evidence.md
 acceptance: 'Every facilitation pack''s open_floor section includes the affordance
   phrase: the human can say ''I don''t know — research who does this, how, what succeeds,
   and recommend.'' Grep for the phrase returns >0 matches across all packs.'

@@ -5,6 +5,7 @@ lane: runtime-core
 priority: MED
 status: done
 dependencies: ''
+evidence: .forge-method/evidence/final-batch-evidence.md
 acceptance: A JSON schema file exists for workflow definitions (trigger, inputs, steps,
   outputs, done_when, blocked_when, handoff). `forge workflow validate <id>` checks
   a workflow against the schema. Evals pass.

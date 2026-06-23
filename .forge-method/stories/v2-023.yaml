@@ -5,6 +5,7 @@ lane: runtime-core
 priority: HIGH
 status: done
 dependencies: v2-010
+evidence: .forge-method/evidence/final-batch-evidence.md
 acceptance: '`forge spawn --runtime opencode --lane X --task ''...''` emits a spawn
   directive (agent_id, runtime, lane, task) that the harness reads and executes. The
   spawn is recorded in the registry + ledger. Runtime-agnostic (the harness does the

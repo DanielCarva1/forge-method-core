@@ -5,6 +5,7 @@ lane: workflows
 priority: MED
 status: done
 dependencies: v2-011
+evidence: .forge-method/evidence/final-batch-evidence.md
 acceptance: '`forge council standup` reads all lane statuses + stories + pending requests,
   produces a standup summary (what each flock is doing, cross-dependencies, blockers).
   Output is a council-standup artifact.'
