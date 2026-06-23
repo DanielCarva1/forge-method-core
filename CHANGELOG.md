@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 2.0.1
+
+Hotfix: `agent_id` was not threaded through `append_request` in fleet-mode handoff and checkpoint. Requests showed `"default"` instead of the actual agent identity. Both `cmd_handoff` and `cmd_checkpoint` now pass `agent_id=_resolve_agent_id(args)` to `append_request`, matching the `append_ledger` call that was already correct.
+
 ## 2.0.0 — Flock Coordination
 
 Forge Method Core v2.0.0 ships multi-agent flock coordination — the runtime-agnostic coordination protocol for human+agent fleets:

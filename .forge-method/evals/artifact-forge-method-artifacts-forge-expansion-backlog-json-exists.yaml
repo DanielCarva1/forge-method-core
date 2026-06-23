@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-23T16:36:04+00:00"
+updated_at: "2026-06-23T19:04:42+00:00"
 id: "artifact-forge-method-artifacts-forge-expansion-backlog-json-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/forge-expansion-backlog.json"
 query: "Four-story implementation batch for guide/tracks/council, builder/config/evals, creative/game/enterprise packs, and docs/install proof."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-23T16:36:04+00:00"
+last_run_at: "2026-06-23T19:04:42+00:00"
 last_error: ""
