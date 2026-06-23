@@ -16476,6 +16476,7 @@ def build_parser() -> argparse.ArgumentParser:
     track_set.add_argument("--track", required=True, choices=sorted(TRACK_IDS))
     track_set.add_argument("--set-module", action="store_true")
     track_set.add_argument("--next-action")
+    track_set.add_argument("--agent-id", default=None)
     track_set.set_defaults(func=cmd_track_set, record_guidance=True, emit_guidance=True)
 
     council = sub.add_parser("council", help="run an optional Forge Agent Council")
@@ -16488,6 +16489,7 @@ def build_parser() -> argparse.ArgumentParser:
     council_run.add_argument("--next-action")
     council_run.add_argument("--eval", action="store_true")
     council_run.add_argument("--json", action="store_true")
+    council_run.add_argument("--agent-id", default=None)
     council_run.set_defaults(func=cmd_council_run, record_guidance=True, emit_guidance=True)
 
     correct_course = sub.add_parser("correct-course", help="write a compact correct-course continuation artifact")
@@ -16497,6 +16499,7 @@ def build_parser() -> argparse.ArgumentParser:
     correct_course.add_argument("--title")
     correct_course.add_argument("--next-action")
     correct_course.add_argument("--eval", action="store_true")
+    correct_course.add_argument("--agent-id", default=None)
     correct_course.set_defaults(func=cmd_correct_course, record_guidance=True, emit_guidance=True)
 
     transition = sub.add_parser("transition", help="update phase/status/workflow")
@@ -16522,6 +16525,7 @@ def build_parser() -> argparse.ArgumentParser:
     story_add.add_argument("--source", action="append", help="decision artifact path that justifies the story")
     story_add.add_argument("--status", choices=STORY_STATUSES, default="ready")
     story_add.add_argument("--force", action="store_true")
+    story_add.add_argument("--agent-id", default=None)
     story_add.set_defaults(func=cmd_story_add, record_guidance=True, emit_guidance=True)
 
     story_list = story_sub.add_parser("list", help="list stories")
@@ -16532,24 +16536,28 @@ def build_parser() -> argparse.ArgumentParser:
     story_export.add_argument("--root", default=".")
     story_export.add_argument("--status", choices=STORY_STATUSES)
     story_export.add_argument("--out")
+    story_export.add_argument("--agent-id", default=None)
     story_export.set_defaults(func=cmd_story_export)
 
     story_import = story_sub.add_parser("import", help="import stories from JSON")
     story_import.add_argument("--root", default=".")
     story_import.add_argument("--file", required=True)
     story_import.add_argument("--force", action="store_true")
+    story_import.add_argument("--agent-id", default=None)
     story_import.set_defaults(func=cmd_story_import, record_guidance=True)
 
     story_start = story_sub.add_parser("start", help="start a story")
     story_start.add_argument("--root", default=".")
     story_start.add_argument("--id", required=True)
     story_start.add_argument("--force", action="store_true")
+    story_start.add_argument("--agent-id", default=None)
     story_start.set_defaults(func=cmd_story_start, record_guidance=True, emit_guidance=True)
 
     story_review = story_sub.add_parser("review", help="move a story to review")
     story_review.add_argument("--root", default=".")
     story_review.add_argument("--id", required=True)
     story_review.add_argument("--force", action="store_true")
+    story_review.add_argument("--agent-id", default=None)
     story_review.set_defaults(func=cmd_story_review, record_guidance=True, emit_guidance=True)
 
     story_done = story_sub.add_parser("done", help="mark a story done")
@@ -16559,6 +16567,7 @@ def build_parser() -> argparse.ArgumentParser:
     story_done.add_argument("--evidence")
     story_done.add_argument("--check", action="append")
     story_done.add_argument("--force", action="store_true")
+    story_done.add_argument("--agent-id", default=None)
     story_done.set_defaults(func=cmd_story_done, record_guidance=True, emit_guidance=True)
 
     story_block = story_sub.add_parser("block", help="block a story")
@@ -16566,6 +16575,7 @@ def build_parser() -> argparse.ArgumentParser:
     story_block.add_argument("--id", required=True)
     story_block.add_argument("--reason", required=True)
     story_block.add_argument("--force", action="store_true")
+    story_block.add_argument("--agent-id", default=None)
     story_block.set_defaults(func=cmd_story_block, record_guidance=True, emit_guidance=True)
 
     review = sub.add_parser("review", help="manage durable review findings")
@@ -16579,6 +16589,7 @@ def build_parser() -> argparse.ArgumentParser:
     review_add.add_argument("--summary", required=True)
     review_add.add_argument("--source")
     review_add.add_argument("--force", action="store_true")
+    review_add.add_argument("--agent-id", default=None)
     review_add.set_defaults(func=cmd_review_add, record_guidance=True, emit_guidance=True)
     review_list = review_sub.add_parser("list", help="list review findings")
     review_list.add_argument("--root", default=".")
@@ -16590,11 +16601,13 @@ def build_parser() -> argparse.ArgumentParser:
     review_resolve.add_argument("--id", required=True)
     review_resolve.add_argument("--resolution", required=True)
     review_resolve.add_argument("--evidence")
+    review_resolve.add_argument("--agent-id", default=None)
     review_resolve.set_defaults(func=cmd_review_resolve, record_guidance=True, emit_guidance=True)
     review_waive = review_sub.add_parser("waive", help="waive a review finding")
     review_waive.add_argument("--root", default=".")
     review_waive.add_argument("--id", required=True)
     review_waive.add_argument("--reason", required=True)
+    review_waive.add_argument("--agent-id", default=None)
     review_waive.set_defaults(func=cmd_review_waive, record_guidance=True, emit_guidance=True)
 
     input_cmd = sub.add_parser("input", help="manage durable human input")
@@ -16608,6 +16621,7 @@ def build_parser() -> argparse.ArgumentParser:
     input_add.add_argument("--required", action="store_true", default=True)
     input_add.add_argument("--optional", dest="required", action="store_false")
     input_add.add_argument("--force", action="store_true")
+    input_add.add_argument("--agent-id", default=None)
     input_add.set_defaults(func=cmd_input_add, record_guidance=True, emit_guidance=True)
     input_list = input_sub.add_parser("list", help="list human input requests")
     input_list.add_argument("--root", default=".")
@@ -16619,12 +16633,14 @@ def build_parser() -> argparse.ArgumentParser:
     input_answer.add_argument("--answer", required=True)
     input_answer.add_argument("--next-action")
     input_answer.add_argument("--force", action="store_true")
+    input_answer.add_argument("--agent-id", default=None)
     input_answer.set_defaults(func=cmd_input_answer, record_guidance=True, emit_guidance=True)
     input_defer = input_sub.add_parser("defer", help="defer a human input request")
     input_defer.add_argument("--root", default=".")
     input_defer.add_argument("--id", required=True)
     input_defer.add_argument("--reason", required=True)
     input_defer.add_argument("--next-action")
+    input_defer.add_argument("--agent-id", default=None)
     input_defer.set_defaults(func=cmd_input_defer, record_guidance=True, emit_guidance=True)
 
     evidence = sub.add_parser("evidence", help="write evidence")
@@ -16636,6 +16652,7 @@ def build_parser() -> argparse.ArgumentParser:
     evidence_add.add_argument("--summary", required=True)
     evidence_add.add_argument("--story")
     evidence_add.add_argument("--check", action="append")
+    evidence_add.add_argument("--agent-id", default=None)
     evidence_add.set_defaults(func=cmd_evidence_add, record_guidance=True)
 
     module = sub.add_parser("module", help="inspect runtime modules")
@@ -16662,6 +16679,7 @@ def build_parser() -> argparse.ArgumentParser:
     module_create.add_argument("--phase-span", action="append")
     module_create.add_argument("--workflow", action="append")
     module_create.add_argument("--force", action="store_true")
+    module_create.add_argument("--agent-id", default=None)
     module_create.set_defaults(func=cmd_module_create, record_guidance=True)
 
     project = sub.add_parser("project", help="create and list method projects")
@@ -16682,6 +16700,7 @@ def build_parser() -> argparse.ArgumentParser:
     project_create.add_argument("--force", action="store_true")
     project_create.add_argument("--allow-runtime-state", action="store_true")
     project_create.add_argument("--no-project-guidance", action="store_true")
+    project_create.add_argument("--agent-id", default=None)
     project_create.set_defaults(func=cmd_project_create)
 
     agent = sub.add_parser("agent", help="inspect and recommend agent profiles")
@@ -16714,6 +16733,7 @@ def build_parser() -> argparse.ArgumentParser:
     example_create.add_argument("--force", action="store_true")
     example_create.add_argument("--no-project-guidance", action="store_true")
     example_create.add_argument("--max-chars", type=int, default=8000)
+    example_create.add_argument("--agent-id", default=None)
     example_create.set_defaults(func=cmd_example_create, record_guidance=True, emit_guidance=True)
 
     workflow = sub.add_parser("workflow", help="inspect and validate workflow references")
@@ -16742,6 +16762,7 @@ def build_parser() -> argparse.ArgumentParser:
     workflow_create.add_argument("--handoff", action="append")
     workflow_create.add_argument("--eval-query")
     workflow_create.add_argument("--force", action="store_true")
+    workflow_create.add_argument("--agent-id", default=None)
     workflow_create.set_defaults(func=cmd_workflow_create, record_guidance=True)
 
     builder = sub.add_parser("builder", help="scaffold and validate local Forge Method extensions")
@@ -16763,6 +16784,7 @@ def build_parser() -> argparse.ArgumentParser:
     builder_scaffold.add_argument("--expected")
     builder_scaffold.add_argument("--eval-kind", choices=EVAL_KINDS, default="artifact-exists")
     builder_scaffold.add_argument("--force", action="store_true")
+    builder_scaffold.add_argument("--agent-id", default=None)
     builder_scaffold.set_defaults(func=cmd_builder_scaffold, record_guidance=True)
     builder_validate = builder_sub.add_parser("validate", help="validate generated local method extensions")
     builder_validate.add_argument("--root", default=".")
@@ -16794,6 +16816,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_add.add_argument("--lifecycle", choices=ARTIFACT_LIFECYCLES, default="durable")
     artifact_add.add_argument("--story")
     artifact_add.add_argument("--eval", action="store_true")
+    artifact_add.add_argument("--agent-id", default=None)
     artifact_add.set_defaults(func=cmd_artifact_add, record_guidance=True)
 
     artifact_discovery_closeout = artifact_sub.add_parser(
@@ -16823,6 +16846,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_discovery_closeout.add_argument("--next-workflow", choices=sorted(DISCOVERY_CLOSEOUT_NEXT_WORKFLOWS), default="write-spec")
     artifact_discovery_closeout.add_argument("--force", action="store_true")
     artifact_discovery_closeout.add_argument("--eval", action="store_true")
+    artifact_discovery_closeout.add_argument("--agent-id", default=None)
     artifact_discovery_closeout.set_defaults(func=cmd_artifact_discovery_closeout, record_guidance=True)
 
     artifact_spec_kernel = artifact_sub.add_parser(
@@ -16853,6 +16877,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_spec_kernel.add_argument("--next-workflow", choices=sorted(SPEC_KERNEL_NEXT_WORKFLOWS), default="architecture")
     artifact_spec_kernel.add_argument("--force", action="store_true")
     artifact_spec_kernel.add_argument("--eval", action="store_true")
+    artifact_spec_kernel.add_argument("--agent-id", default=None)
     artifact_spec_kernel.set_defaults(func=cmd_artifact_spec_kernel, record_guidance=True)
 
     artifact_research_scan = artifact_sub.add_parser(
@@ -16889,6 +16914,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_research_scan.add_argument("--next-workflow", choices=sorted(RESEARCH_SCAN_NEXT_WORKFLOWS), default="research-closeout")
     artifact_research_scan.add_argument("--force", action="store_true")
     artifact_research_scan.add_argument("--eval", action="store_true")
+    artifact_research_scan.add_argument("--agent-id", default=None)
     artifact_research_scan.set_defaults(func=cmd_artifact_research_scan, record_guidance=True)
 
     artifact_game_brief = artifact_sub.add_parser(
@@ -16931,6 +16957,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_game_brief.add_argument("--next-workflow", choices=sorted(GAME_BRIEF_NEXT_WORKFLOWS), default="game-sprint-planning")
     artifact_game_brief.add_argument("--force", action="store_true")
     artifact_game_brief.add_argument("--eval", action="store_true")
+    artifact_game_brief.add_argument("--agent-id", default=None)
     artifact_game_brief.set_defaults(func=cmd_artifact_game_brief, record_guidance=True)
 
     artifact_game_sprint_plan = artifact_sub.add_parser(
@@ -16962,6 +16989,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_game_sprint_plan.add_argument("--next-workflow", choices=sorted(GAME_SPRINT_PLAN_NEXT_WORKFLOWS), default="game-story-creation")
     artifact_game_sprint_plan.add_argument("--force", action="store_true")
     artifact_game_sprint_plan.add_argument("--eval", action="store_true")
+    artifact_game_sprint_plan.add_argument("--agent-id", default=None)
     artifact_game_sprint_plan.set_defaults(func=cmd_artifact_game_sprint_plan, record_guidance=True)
 
     artifact_test_framework = artifact_sub.add_parser(
@@ -16996,6 +17024,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_test_framework.add_argument("--next-workflow", choices=sorted(TEST_FRAMEWORK_NEXT_WORKFLOWS), default="test-automation")
     artifact_test_framework.add_argument("--force", action="store_true")
     artifact_test_framework.add_argument("--eval", action="store_true")
+    artifact_test_framework.add_argument("--agent-id", default=None)
     artifact_test_framework.set_defaults(func=cmd_artifact_test_framework, record_guidance=True)
 
     artifact_test_automation = artifact_sub.add_parser(
@@ -17032,6 +17061,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_test_automation.add_argument("--next-workflow", choices=sorted(TEST_AUTOMATION_NEXT_WORKFLOWS), default="test-review")
     artifact_test_automation.add_argument("--force", action="store_true")
     artifact_test_automation.add_argument("--eval", action="store_true")
+    artifact_test_automation.add_argument("--agent-id", default=None)
     artifact_test_automation.set_defaults(func=cmd_artifact_test_automation, record_guidance=True)
 
     artifact_game_e2e_scaffold = artifact_sub.add_parser(
@@ -17059,6 +17089,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_game_e2e_scaffold.add_argument("--next-workflow", choices=sorted(GAME_E2E_SCAFFOLD_NEXT_WORKFLOWS), default="game-qa-review")
     artifact_game_e2e_scaffold.add_argument("--force", action="store_true")
     artifact_game_e2e_scaffold.add_argument("--eval", action="store_true")
+    artifact_game_e2e_scaffold.add_argument("--agent-id", default=None)
     artifact_game_e2e_scaffold.set_defaults(func=cmd_artifact_game_e2e_scaffold, record_guidance=True)
 
     artifact_doc_index = artifact_sub.add_parser(
@@ -17084,6 +17115,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_doc_index.add_argument("--next-workflow", choices=sorted(DOC_INDEX_NEXT_WORKFLOWS), default="editorial-review")
     artifact_doc_index.add_argument("--force", action="store_true")
     artifact_doc_index.add_argument("--eval", action="store_true")
+    artifact_doc_index.add_argument("--agent-id", default=None)
     artifact_doc_index.set_defaults(func=cmd_artifact_doc_index, record_guidance=True)
 
     artifact_doc_shard = artifact_sub.add_parser(
@@ -17112,6 +17144,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_doc_shard.add_argument("--next-workflow", choices=sorted(DOC_SHARD_NEXT_WORKFLOWS), default="doc-index")
     artifact_doc_shard.add_argument("--force", action="store_true")
     artifact_doc_shard.add_argument("--eval", action="store_true")
+    artifact_doc_shard.add_argument("--agent-id", default=None)
     artifact_doc_shard.set_defaults(func=cmd_artifact_doc_shard, record_guidance=True)
 
     artifact_enterprise_track_map = artifact_sub.add_parser(
@@ -17135,6 +17168,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_enterprise_track_map.add_argument("--next-workflow", choices=sorted(ENTERPRISE_TRACK_MAP_NEXT_WORKFLOWS), default="readiness-check")
     artifact_enterprise_track_map.add_argument("--force", action="store_true")
     artifact_enterprise_track_map.add_argument("--eval", action="store_true")
+    artifact_enterprise_track_map.add_argument("--agent-id", default=None)
     artifact_enterprise_track_map.set_defaults(func=cmd_artifact_enterprise_track_map, record_guidance=True)
 
     artifact_enterprise_readiness = artifact_sub.add_parser(
@@ -17159,6 +17193,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_enterprise_readiness.add_argument("--next-workflow", choices=sorted(ENTERPRISE_READINESS_NEXT_WORKFLOWS), default="traceability-gate")
     artifact_enterprise_readiness.add_argument("--force", action="store_true")
     artifact_enterprise_readiness.add_argument("--eval", action="store_true")
+    artifact_enterprise_readiness.add_argument("--agent-id", default=None)
     artifact_enterprise_readiness.set_defaults(func=cmd_artifact_enterprise_readiness, record_guidance=True)
 
     artifact_enterprise_release_gate = artifact_sub.add_parser(
@@ -17180,6 +17215,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_enterprise_release_gate.add_argument("--next-workflow", choices=sorted(ENTERPRISE_RELEASE_GATE_NEXT_WORKFLOWS), default="ready-release")
     artifact_enterprise_release_gate.add_argument("--force", action="store_true")
     artifact_enterprise_release_gate.add_argument("--eval", action="store_true")
+    artifact_enterprise_release_gate.add_argument("--agent-id", default=None)
     artifact_enterprise_release_gate.set_defaults(func=cmd_artifact_enterprise_release_gate, record_guidance=True)
 
     artifact_capture = artifact_sub.add_parser("capture", help="capture an artifact result and optionally delete it")
@@ -17189,6 +17225,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_capture.add_argument("--story")
     artifact_capture.add_argument("--evidence")
     artifact_capture.add_argument("--delete", action="store_true")
+    artifact_capture.add_argument("--agent-id", default=None)
     artifact_capture.set_defaults(func=cmd_artifact_capture, record_guidance=True)
 
     artifact_verify = artifact_sub.add_parser("verify", help="verify artifact files and summaries")
@@ -17267,6 +17304,7 @@ def build_parser() -> argparse.ArgumentParser:
     artifact_link.add_argument("--root", default=".")
     artifact_link.add_argument("--path", required=True)
     artifact_link.add_argument("--story", required=True)
+    artifact_link.add_argument("--agent-id", default=None)
     artifact_link.set_defaults(func=cmd_artifact_link_story, record_guidance=True)
 
     eval_cmd = sub.add_parser("eval", help="manage local runtime evals")
@@ -17278,6 +17316,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_add.add_argument("--target", required=True)
     eval_add.add_argument("--query", required=True)
     eval_add.add_argument("--expected")
+    eval_add.add_argument("--agent-id", default=None)
     eval_add.set_defaults(func=cmd_eval_add, record_guidance=True)
     eval_list = eval_sub.add_parser("list", help="list evals")
     eval_list.add_argument("--root", default=".")
@@ -17310,12 +17349,14 @@ def build_parser() -> argparse.ArgumentParser:
     context_pack.add_argument("--root", default=".")
     context_pack.add_argument("--out")
     context_pack.add_argument("--max-chars", type=int, default=8000)
+    context_pack.add_argument("--agent-id", default=None)
     context_pack.set_defaults(func=cmd_context_pack, record_guidance=True)
     context_plan = context_sub.add_parser("plan", help="write a machine-readable context load plan")
     context_plan.add_argument("--root", default=".")
     context_plan.add_argument("--out")
     context_plan.add_argument("--max-chars", type=int, default=12000)
     context_plan.add_argument("--json", action="store_true")
+    context_plan.add_argument("--agent-id", default=None)
     context_plan.set_defaults(func=cmd_context_plan, record_guidance=True)
     context_health = context_sub.add_parser("health", help="inspect context budget and handoff risk")
     context_health.add_argument("--root", default=".")
@@ -17328,6 +17369,7 @@ def build_parser() -> argparse.ArgumentParser:
     context_recover.add_argument("--max-chars", type=int, default=8000)
     context_recover.add_argument("--checkpoints", type=int, default=5)
     context_recover.add_argument("--compact", action="store_true")
+    context_recover.add_argument("--agent-id", default=None)
     context_recover.set_defaults(func=cmd_context_recover, record_guidance=True)
 
     audit = sub.add_parser("audit", help="validate project state")
@@ -17341,6 +17383,7 @@ def build_parser() -> argparse.ArgumentParser:
     gate.add_argument("--summary")
     gate.add_argument("--context-pack", action="store_true")
     gate.add_argument("--max-chars", type=int, default=8000)
+    gate.add_argument("--agent-id", default=None)
     gate.set_defaults(func=cmd_gate, record_guidance=True)
 
     ready = sub.add_parser("ready", help="mark project ready for use")
@@ -17348,6 +17391,7 @@ def build_parser() -> argparse.ArgumentParser:
     ready.add_argument("--summary", required=True)
     ready.add_argument("--check", action="append")
     ready.add_argument("--force", action="store_true")
+    ready.add_argument("--agent-id", default=None)
     ready.set_defaults(func=cmd_ready, record_guidance=True, emit_guidance=True)
 
     release = sub.add_parser("release", help="plan release version and validation")
