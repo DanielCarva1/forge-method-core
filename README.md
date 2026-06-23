@@ -1,6 +1,19 @@
-# Forge Method
+<p align="center">
+  <img src="assets/forge-banner.svg" alt="Forge Method — Elevate what you can build" width="800">
+</p>
 
-**Elevate what you can build.**
+<p align="center">
+  <strong>Elevate what you can build.</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/DanielCarva1/forge-method-core/releases/tag/v2.0.0"><img src="https://img.shields.io/badge/version-2.0.0-ff6b35" alt="v2.0.0"></a>
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
+  <img src="https://img.shields.io/badge/tests-141%2F141%20pass-brightgreen" alt="141/141 tests pass">
+  <img src="https://img.shields.io/badge/multi--agent-Codex%20%7C%20Claude%20%7C%20OpenCode%20%7C%20Pi-orange" alt="Multi-runtime">
+</p>
+
+---
 
 Forge Method is an open-source framework that makes you a better builder — whether you're shipping your first side project or running a fleet of agents across a team. It guides you through the entire creative process: from fuzzy idea to validated, tested, shipped work. It sharpens your thinking, catches weak assumptions, and refuses to let you ship slop.
 

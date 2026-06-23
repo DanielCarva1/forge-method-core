@@ -1,0 +1,9 @@
+workspace_kind: forge-method-workspace
+project_root: ./forge-method-core/
+project_id: forge-method-core
+purpose: >
+  Agent hint. The Forge Method runtime discovers projects via `project list`
+  scanning; this file lets filesystem-tooling agents (glob/grep/ls) that open
+  the outer workspace root locate the active project without a recursive scan.
+  cd into project_root before running runtime commands or file searches.
+created_at: 2026-06-23T00:00:00+00:00

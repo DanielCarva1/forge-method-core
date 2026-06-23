@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 280" width="280" height="280" role="img" aria-label="Forge Method logo">
+  <defs>
+    <radialGradient id="emberGlow" cx="50%" cy="60%" r="55%">
+      <stop offset="0%" stop-color="#ff8c42" stop-opacity="0.35"/>
+      <stop offset="40%" stop-color="#c0392b" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#1a1a2e" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="steelFace" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#b8c0c4"/>
+      <stop offset="35%" stop-color="#8e9497"/>
+      <stop offset="70%" stop-color="#5c6366"/>
+      <stop offset="100%" stop-color="#3a3f42"/>
+    </linearGradient>
+    <linearGradient id="steelEdge" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#d5dade"/>
+      <stop offset="50%" stop-color="#8e9497"/>
+      <stop offset="100%" stop-color="#4a4f52"/>
+    </linearGradient>
+    <linearGradient id="flameGrad" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#ff4e00"/>
+      <stop offset="35%" stop-color="#ff8c42"/>
+      <stop offset="65%" stop-color="#ffb627"/>
+      <stop offset="100%" stop-color="#ffe6a7" stop-opacity="0.8"/>
+    </linearGradient>
+    <linearGradient id="emberGrad" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#ff3300"/>
+      <stop offset="60%" stop-color="#ff6b35"/>
+      <stop offset="100%" stop-color="#ffcc33" stop-opacity="0.6"/>
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#e8e8e8"/>
+      <stop offset="100%" stop-color="#8e9497"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background circle (forge hearth darkness) -->
+  <circle cx="140" cy="130" r="125" fill="#1a1a2e"/>
+  <circle cx="140" cy="130" r="125" fill="url(#emberGlow)"/>
+  <circle cx="140" cy="130" r="122" fill="none" stroke="#2a2a3e" stroke-width="2"/>
+  <circle cx="140" cy="130" r="118" fill="none" stroke="#3a3a4e" stroke-width="1" opacity="0.5"/>
+
+  <!-- Sparks/embers floating -->
+  <circle cx="95" cy="70" r="1.8" fill="#ff8c42" opacity="0.7"/>
+  <circle cx="180" cy="55" r="1.4" fill="#ffb627" opacity="0.6"/>
+  <circle cx="200" cy="85" r="1.6" fill="#ff6b35" opacity="0.8"/>
+  <circle cx="75" cy="95" r="1.2" fill="#ffcc33" opacity="0.5"/>
+  <circle cx="210" cy="110" r="1.0" fill="#ff8c42" opacity="0.6"/>
+  <circle cx="65" cy="120" r="1.3" fill="#ffb627" opacity="0.5"/>
+  <circle cx="190" cy="135" r="0.9" fill="#ff6b35" opacity="0.7"/>
+
+  <!-- Flame behind the anvil -->
+  <path d="M 140 180 Q 115 150 125 110 Q 130 95 120 75 Q 135 85 135 60 Q 140 80 150 55 Q 148 85 155 95 Q 165 75 160 55 Q 170 85 160 115 Q 170 145 140 180 Z"
+        fill="url(#flameGrad)" opacity="0.85"/>
+  <!-- Inner flame core -->
+  <path d="M 140 175 Q 128 145 135 115 Q 140 95 138 75 Q 145 90 148 70 Q 150 95 155 80 Q 152 110 155 125 Q 160 145 140 175 Z"
+        fill="url(#emberGrad)" opacity="0.7"/>
+
+  <!-- Anvil: top face (the flat striking surface) -->
+  <path d="M 85 145 L 195 145 L 200 138 L 190 135 L 185 142 L 95 142 L 90 135 L 80 138 Z"
+        fill="url(#steelEdge)" stroke="#2a2a2e" stroke-width="0.5"/>
+
+  <!-- Anvil: horn (left pointed end) -->
+  <path d="M 90 142 L 55 148 L 50 152 L 58 153 L 90 145 Z"
+        fill="url(#steelFace)" stroke="#2a2a2e" stroke-width="0.5"/>
+
+  <!-- Anvil: main body (waist) -->
+  <path d="M 95 145 L 185 145 L 178 168 L 102 168 Z"
+        fill="url(#steelFace)" stroke="#2a2a2e" stroke-width="0.5"/>
+
+  <!-- Anvil: base foot -->
+  <path d="M 102 168 L 178 168 L 188 195 L 155 195 L 150 175 L 130 175 L 125 195 L 92 195 Z"
+        fill="url(#steelEdge)" stroke="#2a2a2e" stroke-width="0.5"/>
+
+  <!-- Anvil: highlight on top edge -->
+  <path d="M 90 136 L 190 136" stroke="#d5dade" stroke-width="1.2" opacity="0.6" stroke-linecap="round"/>
+
+  <!-- Hammer above (crossed, forging position) -->
+  <g transform="rotate(-25, 140, 100)">
+    <!-- Hammer handle -->
+    <rect x="137" y="85" width="4" height="40" fill="#6b4226" rx="1"/>
+    <rect x="137" y="85" width="2" height="40" fill="#8b5a36" rx="1" opacity="0.6"/>
+    <!-- Hammer head -->
+    <rect x="128" y="80" width="22" height="12" fill="url(#steelFace)" rx="1.5" stroke="#2a2a2e" stroke-width="0.5"/>
+    <rect x="128" y="80" width="22" height="3" fill="#b8c0c4" rx="1" opacity="0.5"/>
+    <!-- Hammer claw/edge -->
+    <path d="M 150 82 L 156 84 L 156 88 L 150 90 Z" fill="url(#steelEdge)" stroke="#2a2a2e" stroke-width="0.4"/>
+  </g>
+
+  <!-- Heat shimmer lines rising from anvil -->
+  <path d="M 110 135 Q 108 120 112 105" stroke="#ff8c42" stroke-width="1" fill="none" opacity="0.3" stroke-linecap="round"/>
+  <path d="M 170 135 Q 173 118 168 100" stroke="#ff6b35" stroke-width="0.8" fill="none" opacity="0.25" stroke-linecap="round"/>
+  <path d="M 140 130 Q 142 110 138 90" stroke="#ffb627" stroke-width="0.7" fill="none" opacity="0.2" stroke-linecap="round"/>
+
+  <!-- Text: FORGE METHOD -->
+  <text x="140" y="232" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="24" font-weight="bold" fill="url(#textGrad)" letter-spacing="2">FORGE METHOD</text>
+  <!-- Text: tagline -->
+  <text x="140" y="252" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="10" fill="#8e9497" letter-spacing="4">ELEVATE WHAT YOU CAN BUILD</text>
+</svg>
