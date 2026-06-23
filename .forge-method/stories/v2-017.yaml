@@ -3,7 +3,7 @@ title: Partner-grade presence directive in system prompt + pack tone
 epic: Partner Experience
 lane: facilitation
 priority: MED
-status: planned
+status: done
 dependencies: ''
 acceptance: 'System prompt template and facilitation packs carry an explicit presence
   directive: ''excited expert friend who matches the human''s energy.'' Tone shifts

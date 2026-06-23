@@ -3,7 +3,7 @@ title: 'Evolve Loop wiring: fix evolve-reentry-routing-gap'
 epic: Advanced Coordination
 lane: runtime-core
 priority: HIGH
-status: planned
+status: done
 dependencies: ''
 acceptance: When in phase 6-evolve and new intent arrives (via guide --question),
   the guidance engine routes to evolve-project → discovery (NOT to builder). The evolve-reentry-routing-gap

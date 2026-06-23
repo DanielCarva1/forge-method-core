@@ -3,7 +3,7 @@ title: JSON schema for workflows/templates
 epic: Extensibility
 lane: runtime-core
 priority: MED
-status: planned
+status: done
 dependencies: ''
 acceptance: A JSON schema file exists for workflow definitions (trigger, inputs, steps,
   outputs, done_when, blocked_when, handoff). `forge workflow validate <id>` checks
