@@ -1,87 +1,55 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" width="800" height="200" role="img" aria-label="Forge Method banner">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 180" width="800" height="180" role="img" aria-label="Forge Method banner">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#1a1a2e"/>
-      <stop offset="50%" stop-color="#16213e"/>
+      <stop offset="50%" stop-color="#15152a"/>
       <stop offset="100%" stop-color="#1a1a2e"/>
     </linearGradient>
-    <radialGradient id="emberBg" cx="25%" cy="50%" r="40%">
-      <stop offset="0%" stop-color="#ff6b35" stop-opacity="0.12"/>
-      <stop offset="100%" stop-color="#1a1a2e" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="steelG" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#b8c0c4"/>
-      <stop offset="50%" stop-color="#8e9497"/>
-      <stop offset="100%" stop-color="#4a4f52"/>
+    <linearGradient id="steel2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#c4ccd0"/>
+      <stop offset="50%" stop-color="#8b9499"/>
+      <stop offset="100%" stop-color="#4a5054"/>
     </linearGradient>
-    <linearGradient id="flameG" x1="50%" y1="100%" x2="50%" y2="0%">
-      <stop offset="0%" stop-color="#ff4e00"/>
-      <stop offset="50%" stop-color="#ff8c42"/>
-      <stop offset="100%" stop-color="#ffe6a7" stop-opacity="0.6"/>
-    </linearGradient>
-    <linearGradient id="textG" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#f0f0f0"/>
-      <stop offset="100%" stop-color="#9e9e9e"/>
-    </linearGradient>
-    <linearGradient id="accentG" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#ff4e00"/>
-      <stop offset="100%" stop-color="#ffb627"/>
+    <linearGradient id="flame2" x1="50%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#e8400a"/>
+      <stop offset="50%" stop-color="#ff7722"/>
+      <stop offset="100%" stop-color="#ffe88a" stop-opacity="0.9"/>
     </linearGradient>
   </defs>
 
-  <!-- Background -->
-  <rect width="800" height="200" fill="url(#bgGrad)"/>
-  <rect width="800" height="200" fill="url(#emberBg)"/>
+  <rect width="800" height="180" fill="url(#bg)" rx="12"/>
 
-  <!-- Bottom accent line (ember) -->
-  <rect x="0" y="196" width="800" height="4" fill="url(#accentG)" opacity="0.7"/>
+  <!-- Ember accent line -->
+  <rect x="24" y="176" width="752" height="2" fill="#ff6600" opacity="0.4" rx="1"/>
 
-  <!-- Mini anvil + flame emblem (left) -->
-  <g transform="translate(40, 30)">
+  <!-- Mini logo (left) -->
+  <g transform="translate(30, 18)">
+    <circle cx="72" cy="72" r="68" fill="#1a1a2e" stroke="#2a2a3e" stroke-width="1"/>
     <!-- Flame -->
-    <path d="M 45 140 Q 32 110 38 80 Q 42 60 35 40 Q 50 55 48 25 Q 55 50 60 30 Q 58 60 62 75 Q 70 55 65 35 Q 75 60 65 95 Q 72 120 45 140 Z"
-          fill="url(#flameG)" opacity="0.8"/>
-    <!-- Anvil top -->
-    <path d="M 20 110 L 80 110 L 84 104 L 76 101 L 72 107 L 28 107 L 24 101 L 16 104 Z" fill="url(#steelG)"/>
-    <!-- Anvil horn -->
-    <path d="M 24 107 L 5 112 L 2 115 L 8 116 L 24 109 Z" fill="url(#steelG)"/>
-    <!-- Anvil body -->
-    <path d="M 28 110 L 72 110 L 67 130 L 33 130 Z" fill="url(#steelG)"/>
-    <!-- Anvil base -->
-    <path d="M 33 130 L 67 130 L 74 150 L 52 150 L 49 135 L 43 135 L 40 150 L 26 150 Z" fill="url(#steelG)"/>
-    <!-- Top highlight -->
-    <line x1="24" y1="103" x2="76" y2="103" stroke="#d5dade" stroke-width="1" opacity="0.5" stroke-linecap="round"/>
-    <!-- Sparks -->
-    <circle cx="90" cy="50" r="1.2" fill="#ff8c42" opacity="0.6"/>
-    <circle cx="100" cy="70" r="0.9" fill="#ffb627" opacity="0.5"/>
-    <circle cx="-5" cy="60" r="1.0" fill="#ff6b35" opacity="0.5"/>
+    <path d="M 72,22 C 60,38 57,56 65,72 C 68,64 71,59 72,51 C 73,59 76,64 79,72 C 87,56 84,38 72,22 Z" fill="url(#flame2)"/>
+    <!-- Anvil -->
+    <path d="M 22,80 L 38,67 L 106,67 L 110,74 L 98,75 L 91,88 L 104,88 L 116,130 L 28,130 L 40,88 L 53,88 L 47,75 L 38,74 Z" fill="url(#steel2)"/>
+    <path d="M 38,67 L 106,67 L 107,69 L 37,69 Z" fill="#d5dade" opacity="0.6"/>
   </g>
 
-  <!-- Title text -->
-  <text x="170" y="80" font-family="Georgia, 'Times New Roman', serif" font-size="38" font-weight="bold" fill="url(#textG)" letter-spacing="3">FORGE METHOD</text>
+  <!-- Title -->
+  <text x="190" y="68" font-family="Georgia, serif" font-size="32" font-weight="bold" fill="#e8e8e8" letter-spacing="2">FORGE METHOD</text>
 
   <!-- Tagline -->
-  <text x="172" y="108" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#9e9e9e" letter-spacing="1">Elevate what you can build.</text>
+  <text x="192" y="92" font-family="system-ui, sans-serif" font-size="15" fill="#8b9499">Elevate what you can build.</text>
 
   <!-- v2 badge -->
-  <rect x="172" y="125" width="80" height="24" rx="12" fill="#ff4e00" opacity="0.15"/>
-  <rect x="172" y="125" width="80" height="24" rx="12" fill="none" stroke="#ff6b35" stroke-width="1" opacity="0.5"/>
-  <text x="212" y="141" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="bold" fill="#ff8c42">v2.0.0</text>
+  <rect x="192" y="106" width="68" height="22" rx="11" fill="#ff6600" fill-opacity="0.12" stroke="#ff7722" stroke-width="1" stroke-opacity="0.4"/>
+  <text x="226" y="121" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="bold" fill="#ff8833">v2.0.0</text>
 
-  <!-- Right side: feature highlights -->
-  <g transform="translate(440, 50)" font-family="system-ui, -apple-system, sans-serif" font-size="13" fill="#8e9497">
-    <circle cx="0" cy="0" r="2" fill="#ff6b35"/>
-    <text x="12" y="4">Guided workflows — discovery to ship</text>
-    <circle cx="0" cy="28" r="2" fill="#ff8c42"/>
-    <text x="12" y="32">Multi-agent flock coordination</text>
-    <circle cx="0" cy="56" r="2" fill="#ffb627"/>
-    <text x="12" y="60">Anti-slop verification gates</text>
-    <circle cx="0" cy="84" r="2" fill="#ffcc33"/>
-    <text x="12" y="88">Open source. Anti-gatekeeper.</text>
+  <!-- Right: value props -->
+  <g font-family="system-ui, sans-serif" font-size="13" fill="#7a7f84">
+    <text x="470" y="50">Guided workflows — idea to shipped</text>
+    <text x="470" y="74">Multi-agent flock coordination</text>
+    <text x="470" y="98">Anti-slop verification gates</text>
+    <text x="470" y="122">Open source · MIT · Anti-gatekeeper</text>
   </g>
 
-  <!-- Right side: runtime compat -->
-  <g transform="translate(620, 150)" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#5c6366">
-    <text x="0" y="0">Codex · Claude Code · OpenCode · Pi</text>
-  </g>
+  <!-- Right: runtime row -->
+  <text x="470" y="152" font-family="system-ui, sans-serif" font-size="11" fill="#4a5054">Codex · Claude Code · OpenCode · Pi</text>
 </svg>
