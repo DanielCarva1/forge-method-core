@@ -1,13 +1,14 @@
 {
-  "version": "1.34.1",
-  "date": "2026-06-20",
-  "title": "Update skill migration hotfix",
-  "summary": "Forge Update now migrates legacy or local installs to the main Git marketplace package instead of making users fix install shape by hand.",
+  "version": "2.0.1",
+  "date": "2026-06-23",
+  "title": "Flock Coordination hotfix",
+  "summary": "Forge v2 adds multi-agent coordination for human and agent fleets, with lane claims, version-checked state writes, request queues, safer handoffs, and a hotfix for agent identity threading.",
   "highlights": [
-    "$forge-update now runs the main-package refresh path for legacy or local installs instead of only printing instructions.",
-    "If Codex marketplace upgrade fails, Forge Update falls back to marketplace add against main before giving up.",
-    "Update summaries now fetch the latest patch notes feed during migration so users see what changed.",
-    "Failed migrations remain non-destructive and print the exact manual command to run."
+    "Lane claims with TTL help multiple agents avoid editing the same work area at the same time.",
+    "Fleet-mode handoffs and checkpoints are append-only by default instead of clobbering shared state.",
+    "Requests queue and version-checked transitions let a driver agent apply worker updates deliberately.",
+    "`forge-commit` stages only files in claimed lanes to reduce accidental cross-agent commits.",
+    "Hotfix: fleet-mode `handoff` and `checkpoint` now preserve the real `agent_id` instead of recording `default`."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/1.34.1.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/2.0.1.md"
 }
