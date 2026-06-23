@@ -1,0 +1,8 @@
+# Spawn Directive
+agent_id: "agent-catalog-20260623-160954"
+runtime_hint: opencode
+lane: "catalog"
+task: "implement cart routes"
+parent_agent: "default"
+status: pending
+created_at: "2026-06-23T16:09:54+00:00"

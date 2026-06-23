@@ -16825,6 +16825,117 @@ def cmd_emit_agents_md(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_contract_create(args: argparse.Namespace) -> int:
+    """v2-021: write a typed agent-contract artifact to .forge-method/artifacts/."""
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    name = (args.name or "").strip()
+    lane = (args.lane or "").strip()
+    if not name:
+        raise SystemExit("Contract name is required.")
+    if not lane:
+        raise SystemExit("Contract lane is required.")
+    agent_id = (args.agent_id or _resolve_agent_id(args)).strip()
+    inputs = [item for item in (args.input or []) if item.strip()]
+    outputs = [item for item in (args.output or []) if item.strip()]
+    verifications = [item for item in (args.verify or []) if item.strip()]
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
+    artifacts_dir = method_dir(root) / "artifacts"
+    artifacts_dir.mkdir(parents=True, exist_ok=True)
+    artifact_path = artifacts_dir / f"{stamp}-agent-contract-{slugify(name)[:48]}.md"
+    rel = artifact_path.relative_to(root).as_posix()
+    lines = [
+        f"# Agent Contract: {name}",
+        "",
+        "kind: agent-contract",
+        f"name: {quote_yaml(name)}",
+        f"lane: {quote_yaml(lane)}",
+        f"agent_id: {quote_yaml(agent_id)}",
+        "input_contract:",
+    ]
+    if inputs:
+        lines.extend(f"  - {quote_yaml(item)}" for item in inputs)
+    else:
+        lines.append("  []")
+    lines.append("output_contract:")
+    if outputs:
+        lines.extend(f"  - {quote_yaml(item)}" for item in outputs)
+    else:
+        lines.append("  []")
+    lines.append("verification:")
+    if verifications:
+        lines.extend(f"  - {quote_yaml(item)}" for item in verifications)
+    else:
+        lines.append("  []")
+    lines.append("status: proposed")
+    lines.append(f"created_at: {quote_yaml(utc_now())}")
+    artifact_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    rel = write_artifact(
+        root,
+        kind="agent-contract",
+        title=name,
+        summary=f"Agent contract for {name} on lane {lane}.",
+        path=rel,
+        lifecycle="durable",
+    )
+    append_ledger(
+        root,
+        "contract.created",
+        {"name": name, "lane": lane, "agent_id": agent_id, "path": rel},
+        agent_id=agent_id,
+    )
+    print(rel)
+    return 0
+
+
+def cmd_spawn(args: argparse.Namespace) -> int:
+    """v2-023: emit a runtime-agnostic spawn directive to .forge-method/spawns/<id>.yaml.
+
+    The harness (Pi/Codex/OpenCode) reads the directive and performs the actual
+    spawn. Forge does NOT call any runtime API directly (C3 runtime-agnostic).
+    """
+    root, _ = load_state_or_fail(resolve_root(args.root))
+    lane = (args.lane or "").strip()
+    task = (args.task or "").strip()
+    if not lane:
+        raise SystemExit("Spawn lane is required.")
+    if not task:
+        raise SystemExit("Spawn task description is required.")
+    runtime_hint = args.runtime or "opencode"
+    parent_agent = os.environ.get("FORGE_AGENT_ID", "default")
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
+    agent_id = (args.agent_id or "").strip() or f"agent-{slugify(lane)}-{stamp}"
+    spawns_dir = method_dir(root) / "spawns"
+    spawns_dir.mkdir(parents=True, exist_ok=True)
+    spawn_path = spawns_dir / f"{stamp}-{slugify(agent_id)[:32]}.yaml"
+    lines = [
+        "# Spawn Directive",
+        f"agent_id: {quote_yaml(agent_id)}",
+        f"runtime_hint: {runtime_hint}",
+        f"lane: {quote_yaml(lane)}",
+        f"task: {quote_yaml(task)}",
+        f"parent_agent: {quote_yaml(parent_agent)}",
+        "status: pending",
+        f"created_at: {quote_yaml(utc_now())}",
+    ]
+    spawn_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    rel = spawn_path.relative_to(root).as_posix()
+    append_ledger(
+        root,
+        "spawn.emitted",
+        {
+            "agent_id": agent_id,
+            "runtime_hint": runtime_hint,
+            "lane": lane,
+            "task": task,
+            "parent_agent": parent_agent,
+            "path": rel,
+        },
+        agent_id=parent_agent,
+    )
+    print(rel)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Forge Method helper")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -17911,6 +18022,26 @@ def build_parser() -> argparse.ArgumentParser:
     emit_agents.add_argument("--runtime", choices=["opencode", "claude", "generic"], default="generic")
     emit_agents.add_argument("--agent-id", default=None)
     emit_agents.set_defaults(func=cmd_emit_agents_md)
+
+    contract = sub.add_parser("contract", help="v2: typed agent contracts")
+    contract_sub = contract.add_subparsers(dest="contract_command", required=True)
+    contract_create = contract_sub.add_parser("create", help="create an agent contract")
+    contract_create.add_argument("--root", default=".")
+    contract_create.add_argument("--name", required=True)
+    contract_create.add_argument("--lane", required=True)
+    contract_create.add_argument("--agent-id", default=None)
+    contract_create.add_argument("--input", action="append", default=[], help="input contract item")
+    contract_create.add_argument("--output", action="append", default=[], help="output contract item")
+    contract_create.add_argument("--verify", action="append", default=[], help="verification item")
+    contract_create.set_defaults(func=cmd_contract_create)
+
+    spawn = sub.add_parser("spawn", help="v2: emit a spawn directive for a new worker agent")
+    spawn.add_argument("--root", default=".")
+    spawn.add_argument("--lane", required=True, help="lane for the new agent")
+    spawn.add_argument("--task", required=True, help="task description")
+    spawn.add_argument("--runtime", default="opencode", choices=["opencode", "codex", "pi", "claude", "generic"])
+    spawn.add_argument("--agent-id", default=None)
+    spawn.set_defaults(func=cmd_spawn)
 
     return parser
 
