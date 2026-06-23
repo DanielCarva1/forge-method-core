@@ -15925,7 +15925,7 @@ def cmd_checkpoint(args: argparse.Namespace) -> int:
             state["next_action"] = next_action
             write_state(root, state, expected_version=args.expected_version, agent_id=_resolve_agent_id(args))
         else:
-            append_request(root, "checkpoint", {"next_action": next_action})
+            append_request(root, "checkpoint", {"next_action": next_action}, agent_id=_resolve_agent_id(args))
     if not args.no_context_pack:
         write_context_pack(root, state, out=method_dir(root) / "context" / "current-pack.md", max_chars=args.max_chars)
     print(rel)
@@ -16358,7 +16358,7 @@ def cmd_handoff(args: argparse.Namespace) -> int:
         append_request(root, "handoff", {
             "next_action": args.next_action or state.get("next_action", ""),
             "path": path.relative_to(root).as_posix(),
-        })
+        }, agent_id=_resolve_agent_id(args))
     append_ledger(root, "handoff.written", {"path": path.relative_to(root).as_posix(), "state_mutated": str(update_state)}, agent_id=_resolve_agent_id(args))
     print(path)
     return 0
