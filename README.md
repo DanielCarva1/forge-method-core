@@ -1,9 +1,6 @@
 <p align="center">
-  <img src="assets/forge-banner.svg" alt="Forge Method — Elevate what you can build" width="800">
-</p>
-
-<p align="center">
-  <strong>Elevate what you can build.</strong>
+  <strong>FORGE METHOD</strong><br>
+  <em>Elevate what you can build.</em>
 </p>
 
 <p align="center">
