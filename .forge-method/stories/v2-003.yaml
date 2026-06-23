@@ -3,8 +3,9 @@ title: --expected-version + --agent-id CLI flags on advance/handoff/checkpoint c
 epic: Concurrency-Safe State
 lane: runtime-core
 priority: HIGH
-status: planned
+status: done
 dependencies: v2-001
+evidence: .forge-method/evidence/batch3-evidence.md
 acceptance: '`forge advance --expected-version 3 --agent-id dev-a` checks version
   before advancing. Without flags = v1 behavior. Help text documents the flags.'
 description: Thread expected_version and agent_id from CLI args into the write_state

@@ -3,8 +3,9 @@ title: Agent attribution in every ledger entry
 epic: Fleet Registry
 lane: runtime-core
 priority: HIGH
-status: planned
+status: done
 dependencies: v2-008
+evidence: .forge-method/evidence/batch3-evidence.md
 acceptance: append_ledger accepts agent_id kwarg and includes it in the payload. All
   call sites pass agent_id. Existing ledger entries without agent_id still parse (backward
   compat).

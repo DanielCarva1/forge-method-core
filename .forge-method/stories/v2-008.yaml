@@ -3,8 +3,9 @@ title: --agent-id flag + FORGE_AGENT_ID env threaded through all mutating comman
 epic: Fleet Registry
 lane: runtime-core
 priority: HIGH
-status: planned
+status: done
 dependencies: v2-007
+evidence: .forge-method/evidence/batch3-evidence.md
 acceptance: Every command that calls write_state or append_ledger accepts --agent-id
   (default from FORGE_AGENT_ID env or 'default'). The agent_id appears in the ledger
   entry.

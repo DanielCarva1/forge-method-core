@@ -3,8 +3,9 @@ title: 'Auto-migration: add version field to existing projects on first read'
 epic: Concurrency-Safe State
 lane: runtime-core
 priority: HIGH
-status: planned
+status: done
 dependencies: v2-001
+evidence: .forge-method/evidence/batch3-evidence.md
 acceptance: Any project without version field gets version:"0" on next resume/status/read.
   No user action required. Existing tests still pass.
 description: In read_state or load_state, if 'version' key missing, treat as '0' and
