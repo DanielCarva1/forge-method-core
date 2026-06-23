@@ -11302,6 +11302,86 @@ def is_guideline_audit_intent(question: str) -> bool:
     return bool(tokens & guarded_tokens and tokens & agent_context_tokens)
 
 
+def is_evolve_reentry_intent(question: str) -> bool:
+    normalized = normalize_text(question)
+    tokens = objective_tokens(question)
+    reentry_phrases = [
+        "new feature",
+        "new layer",
+        "new module feature",
+        "feature implementation",
+        "implement feature",
+        "implement features",
+        "implement the feature",
+        "implement a feature",
+        "start implementing",
+        "start implementation",
+        "start development",
+        "start the next feature",
+        "begin implementing",
+        "begin implementation",
+        "ship feature",
+        "ship the feature",
+        "ship features",
+        "ship the v2",
+        "ship v2",
+        "build feature",
+        "build features",
+        "build the feature",
+        "build out feature",
+        "build out the feature",
+        "next feature",
+        "next layer",
+        "implement v2",
+        "build v2",
+        "accept the poc",
+        "accept this poc",
+        "poc accepted",
+        "accept the prototype",
+    ]
+    if any(phrase in normalized for phrase in reentry_phrases):
+        return True
+    feature_markers = {
+        "feature",
+        "features",
+        "layer",
+        "layers",
+        "implementation",
+    }
+    has_feature_marker = bool(tokens & feature_markers) or "feature" in normalized or "layer" in normalized
+    action_markers = {
+        "implement",
+        "implements",
+        "implementing",
+        "build",
+        "building",
+        "start",
+        "starts",
+        "starting",
+        "begin",
+        "begins",
+        "beginning",
+        "develop",
+        "developing",
+        "development",
+        "ship",
+        "shipping",
+        "deliver",
+        "delivering",
+    }
+    action_substrings = (
+        "implement",
+        "build",
+        "start",
+        "begin",
+        "develop",
+        "ship",
+        "deliver",
+    )
+    has_action_marker = bool(tokens & action_markers) or any(word in normalized for word in action_substrings)
+    return has_feature_marker and has_action_marker
+
+
 def routed_builder_workflow(question: str) -> str:
     tokens = objective_tokens(question)
     normalized = normalize_text(question)
@@ -12269,6 +12349,50 @@ def build_guidance_decision(
         )
     elif (
         has_question
+        and phase == "6-evolve"
+        and is_evolve_reentry_intent(question)
+    ):
+        classification = "evolve-re-entry"
+        recommended_phase = "1-discovery"
+        recommended_workflow = "evolve-project"
+        recommended_action = (
+            "re-enter discovery for the new feature: capture intent, constraints, "
+            "non-goals, and success criteria before specification, planning, or build"
+        )
+        human_prompt = (
+            "This evolve-phase project has new feature/layer/implementation intent; "
+            "I should restart the feature in Facilitated mode via Phase 1 discovery "
+            "rather than jumping to builder flow."
+        )
+        alternatives = guidance_alternatives(
+            ("discover-intent", "use to re-facilitate the new feature from intent to success criteria"),
+            ("brainstorming", "use when the feature direction still needs option exploration"),
+            ("runtime-builder", "use only when the work is genuinely runtime, workflow, agent, or plugin machinery"),
+        )
+        state_update_required = True
+        reason = (
+            "RFC v3 section 6.5 + Principle 12: the Evolve Loop restarts the feature in Facilitated mode, "
+            "so new feature/layer/implementation intent in phase 6-evolve must re-enter Phase 1 discovery "
+            "instead of jumping to a builder workflow."
+        )
+        commands.append(
+            preflight_command(
+                "transition-evolve-reentry",
+                "transition",
+                "--root",
+                root,
+                "--phase",
+                "1-discovery",
+                "--status",
+                "evolve-reentry",
+                "--workflow",
+                "evolve-project",
+                "--next-action",
+                recommended_action,
+            )
+        )
+    elif (
+        has_question
         and "builder-flow" in signal_set
         and (module_id == "runtime-builder" or phase == "6-evolve")
         and ("lifecycle-flow" not in signal_set or is_strong_builder_intent(question))
@@ -12544,7 +12668,12 @@ def build_guidance_decision(
             and recommended_phase == "6-evolve"
             and any(command.get("name") == "transition-evolve" for command in commands)
         )
-        if not preserves_ready_evolution:
+        preserves_evolve_reentry = (
+            phase == "6-evolve"
+            and recommended_phase == "1-discovery"
+            and any(command.get("name") == "transition-evolve-reentry" for command in commands)
+        )
+        if not preserves_ready_evolution and not preserves_evolve_reentry:
             recommended_phase = recommended_phase_for_workflow(workflow_metadata, recommended_phase)
     if should_transition_to_guided_workflow(
         state=state,
