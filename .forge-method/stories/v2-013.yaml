@@ -4,8 +4,9 @@ title: Multi-agent anti-patterns encoded (write-without-claim, write-without-ver
 epic: Guidance Safety
 lane: guidance-safety
 priority: HIGH
-status: planned
+status: done
 dependencies: v2-010
+evidence: batch4
 acceptance: 'Guidance safety patterns include: ''do not write integration state without
   expected_version in fleet mode'', ''do not write outside your claimed lane'', ''do
   not persist worker transcript as integration memory''. Each is a regex or structural

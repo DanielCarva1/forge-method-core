@@ -3,8 +3,9 @@ title: Autonomy anti-patterns (approve-during-autopilot, spec-write-without-gate
 epic: Guidance Safety
 lane: guidance-safety
 priority: MED
-status: planned
+status: done
 dependencies: v2-013
+evidence: batch4
 acceptance: 'Patterns: ''do not request human approval for work whose spec is locked''
   (autopilot), ''do not write spec/context without human-approval gate'' (ETH Zurich).
   Encoded as guidance safety checks.'

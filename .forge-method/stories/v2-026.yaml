@@ -3,8 +3,9 @@ title: AGENTS.md emitter for Claude Code/OpenCode integration
 epic: Extensibility
 lane: skills
 priority: MED
-status: planned
+status: done
 dependencies: v2-008
+evidence: batch4
 acceptance: '`forge emit agents-md --root . --runtime opencode` generates an AGENTS.md
   draft from the project''s Forge state + facilitation packs. The draft is written
   to agents-md-draft.md (NOT directly to AGENTS.md — human approval gate per ETH Zurich

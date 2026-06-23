@@ -3,8 +3,9 @@ title: 'Claim enforcement in guidance safety (anti-pattern: write in unclaimed l
 epic: Lane Claims
 lane: guidance-safety
 priority: MED
-status: planned
+status: done
 dependencies: v2-010
+evidence: batch4
 acceptance: In fleet mode, if an agent writes a file in a path that maps to a lane
   they haven't claimed, guidance safety flags it as a warning. Not a hard block (advisory),
   but logged.

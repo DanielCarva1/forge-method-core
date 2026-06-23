@@ -3,8 +3,9 @@ title: Grill-as-default at every decision-close point
 epic: Partner Experience
 lane: workflows
 priority: HIGH
-status: planned
+status: done
 dependencies: ''
+evidence: batch4
 acceptance: Grill-gate triggers before every handoff, phase transition, and spec-lock
   — not just in phases 1/2/3. The trigger condition is expanded in the workflow routing
   logic.
