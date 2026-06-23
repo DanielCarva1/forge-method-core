@@ -3,7 +3,8 @@ title: 'GAP-1: forge commit wrapper (stages only files in claimed lanes)'
 epic: Integration Quality
 lane: runtime-core
 priority: MED
-status: planned
+status: done
+evidence: .forge-method/evidence/20260623-151500-v2-019-forge-commit.md
 dependencies: v2-010
 acceptance: '`forge commit -m ''msg''` stages only files whose paths fall under the
   caller''s claimed lanes. Files outside claimed lanes are NOT staged (prevents git

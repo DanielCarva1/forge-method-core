@@ -2710,6 +2710,128 @@ def append_request(root: Path, action: str, payload: dict[str, Any], *, agent_id
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
+def _resolve_agent_id(args: argparse.Namespace) -> str:
+    """v2: resolve agent identity from --agent-id flag, FORGE_AGENT_ID env, or 'default'."""
+    return getattr(args, "agent_id", None) or os.environ.get("FORGE_AGENT_ID", "default")
+
+
+def _claims_dir(root: Path) -> Path:
+    return method_dir(root) / "claims"
+
+
+def _lock_path(root: Path, lane: str) -> Path:
+    return _claims_dir(root) / f"{lane}.lock"
+
+
+def _is_claim_expired(lock_data: dict[str, str]) -> bool:
+    expires_str = lock_data.get("expires", "")
+    if not expires_str:
+        return True
+    try:
+        exp_dt = dt.datetime.fromisoformat(expires_str.replace("Z", "+00:00"))
+        return dt.datetime.now(dt.timezone.utc) >= exp_dt
+    except ValueError:
+        return True
+
+
+def cmd_claim(args: argparse.Namespace) -> int:
+    """v2 (Principle 5, 18): claim a lane. First-come, first-served. TTL 30min default."""
+    root = resolve_root(args.root)
+    agent_id = _resolve_agent_id(args)
+    ttl = getattr(args, "ttl", 30) or 30
+    lane = args.lane
+    lock = _lock_path(root, lane)
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    if lock.exists():
+        existing = read_flat_yaml(lock)
+        if not _is_claim_expired(existing) and existing.get("agent_id", "") != agent_id:
+            holder = existing.get("agent_id", "?")
+            expires = existing.get("expires", "?")
+            print(f"Lane '{lane}' is claimed by '{holder}' until {expires}. Try another lane or wait.")
+            return 1
+    expires = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(minutes=ttl)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    write_flat_yaml(lock, {"agent_id": agent_id, "lane": lane, "expires": expires}, header=f"Lane claim: {lane}")
+    append_ledger(root, "lane.claimed", {"lane": lane, "agent_id": agent_id, "expires": expires})
+    print(f"Claimed lane '{lane}' (agent: {agent_id}, expires: {expires}, TTL: {ttl}min).")
+    return 0
+
+
+def cmd_release(args: argparse.Namespace) -> int:
+    """v2: release a claimed lane."""
+    root = resolve_root(args.root)
+    agent_id = _resolve_agent_id(args)
+    lane = args.lane
+    lock = _lock_path(root, lane)
+    if lock.exists():
+        existing = read_flat_yaml(lock)
+        lock.unlink()
+        append_ledger(root, "lane.released", {"lane": lane, "agent_id": agent_id, "had_holder": existing.get("agent_id", "")})
+        print(f"Released lane '{lane}'.")
+    else:
+        print(f"Lane '{lane}' was not claimed.")
+    return 0
+
+
+def cmd_heartbeat(args: argparse.Namespace) -> int:
+    """v2: renew a lane claim (reset TTL). Same as claim when you already hold it."""
+    return cmd_claim(args)
+
+
+def cmd_forge_commit(args: argparse.Namespace) -> int:
+    """v2 (GAP-1 fix): git commit wrapper that stages ONLY files in the caller's claimed lanes.
+    Prevents the 'git add -A' cross-lane sweep that mis-attributed files in the POC.
+    Falls back to 'git add -A' in single-agent mode (no claims) or when no lane-paths mapping exists."""
+    import subprocess
+    root = resolve_root(args.root)
+    agent_id = _resolve_agent_id(args)
+    claims_d = _claims_dir(root)
+
+    if not claims_d.exists() or not is_fleet_mode(root):
+        subprocess.run(["git", "add", "-A"], cwd=str(root), check=True)
+        result = subprocess.run(["git", "commit", "-m", args.message], cwd=str(root), capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"git commit failed: {result.stderr.strip()}")
+            return 1
+        print(f"Committed (single-agent mode).")
+        return 0
+
+    claimed_lanes = []
+    for lock in claims_d.glob("*.lock"):
+        data = read_flat_yaml(lock)
+        if data.get("agent_id", "") == agent_id and not _is_claim_expired(data):
+            claimed_lanes.append(data.get("lane", lock.stem))
+
+    if not claimed_lanes:
+        print(f"Agent '{agent_id}' has no active lane claims. Use 'forge claim <lane>' first.")
+        return 1
+
+    lane_paths_map = read_flat_yaml(method_dir(root) / "lane-paths.yaml")
+    stage_paths = []
+    untracked_lanes = []
+    for lane in claimed_lanes:
+        paths_str = lane_paths_map.get(lane, "")
+        if paths_str:
+            stage_paths.extend(p.strip() for p in paths_str.split(",") if p.strip())
+        else:
+            untracked_lanes.append(lane)
+
+    if stage_paths:
+        for p in stage_paths:
+            subprocess.run(["git", "add", "--", p], cwd=str(root), check=True)
+    if untracked_lanes or not stage_paths:
+        if untracked_lanes:
+            print(f"Warning: no path mapping for lanes {untracked_lanes} in lane-paths.yaml. Staging all remaining.")
+        subprocess.run(["git", "add", "-A"], cwd=str(root), check=True)
+
+    result = subprocess.run(["git", "commit", "-m", args.message], cwd=str(root), capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"git commit failed: {result.stderr.strip()}")
+        return 1
+    append_ledger(root, "lane.committed", {"agent_id": agent_id, "lanes": ",".join(claimed_lanes), "paths": ",".join(stage_paths)})
+    print(f"Committed (lanes: {claimed_lanes}, staged paths: {stage_paths or 'all'}).")
+    return 0
+
+
 def write_state(
     root: Path,
     state: dict[str, Any],
@@ -16958,7 +17080,7 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint.add_argument("--no-context-pack", action="store_true")
     checkpoint.add_argument("--update-state", dest="update_state", action="store_true", default=None)
     checkpoint.add_argument("--no-update-state", dest="update_state", action="store_false")
-    checkpoint.add_argument("--agent-id", default="default")
+    checkpoint.add_argument("--agent-id", default=None)
     checkpoint.set_defaults(func=cmd_checkpoint, record_guidance=True)
 
     context = sub.add_parser("context", help="context pack operations")
@@ -17030,8 +17152,34 @@ def build_parser() -> argparse.ArgumentParser:
     handoff.add_argument("--next-action")
     handoff.add_argument("--update-state", dest="update_state", action="store_true", default=None)
     handoff.add_argument("--no-update-state", dest="update_state", action="store_false")
-    handoff.add_argument("--agent-id", default="default")
+    handoff.add_argument("--agent-id", default=None)
     handoff.set_defaults(func=cmd_handoff, record_guidance=True)
+
+    claim = sub.add_parser("claim", help="v2: claim a lane for multi-agent coordination")
+    claim.add_argument("--root", default=".")
+    claim.add_argument("lane", help="lane id to claim")
+    claim.add_argument("--agent-id", default=None)
+    claim.add_argument("--ttl", type=int, default=30, help="claim TTL in minutes (default 30)")
+    claim.set_defaults(func=cmd_claim)
+
+    lane_release = sub.add_parser("unclaim", help="v2: release a claimed lane")
+    lane_release.add_argument("--root", default=".")
+    lane_release.add_argument("lane", help="lane id to release")
+    lane_release.add_argument("--agent-id", default=None)
+    lane_release.set_defaults(func=cmd_release)
+
+    heartbeat = sub.add_parser("heartbeat", help="v2: renew a lane claim (reset TTL)")
+    heartbeat.add_argument("--root", default=".")
+    heartbeat.add_argument("lane", help="lane id to renew")
+    heartbeat.add_argument("--agent-id", default=None)
+    heartbeat.add_argument("--ttl", type=int, default=30)
+    heartbeat.set_defaults(func=cmd_heartbeat)
+
+    forge_commit = sub.add_parser("forge-commit", help="v2: git commit wrapper that stages only claimed-lane files")
+    forge_commit.add_argument("--root", default=".")
+    forge_commit.add_argument("-m", "--message", required=True, help="commit message")
+    forge_commit.add_argument("--agent-id", default=None)
+    forge_commit.set_defaults(func=cmd_forge_commit)
 
     doctor = sub.add_parser("doctor", help="inspect runtime/project detection and local toolchain readiness")
     doctor.add_argument("--root", default=".")

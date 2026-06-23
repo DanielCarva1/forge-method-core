@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-23T14:41:16+00:00"
+updated_at: "2026-06-23T15:10:49+00:00"
 id: "artifact-forge-method-artifacts-20260620-193511-correct-course-early-visual-proof-as-initial-stage-cadence-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/20260620-193511-correct-course-early-visual-proof-as-initial-stage-cadence.md"
 query: "User clarified that visual alignment/prototype preview must be part of all early product shaping stages, not only an explicit route when the user asks for mockups.  Impact: Without a recurring early visual proof loop, agents can guide conversation and write requirements while the human still has no visible product direction to accept or correct..  Policy: choose the conservative interpretation that preserves the approved spec.  Continuation: Keep early_visual_proof active for initial product, game, UX, creative, and brainstorm workflows; route accepted visuals into requirements and mismatches into UX/product/correct-course before stories or build.."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-23T14:41:16+00:00"
+last_run_at: "2026-06-23T15:10:49+00:00"
 last_error: ""

@@ -3,7 +3,8 @@ title: claims/<lane>.lock with TTL + claim/release/heartbeat commands
 epic: Lane Claims
 lane: runtime-core
 priority: HIGH
-status: planned
+status: done
+evidence: .forge-method/evidence/20260623-151500-v2-010-lane-claims.md
 dependencies: v2-008
 acceptance: '`forge claim <lane> --agent-id X` writes claims/<lane>.lock with agent_id+ts+expires(30min).
   `forge release <lane>` removes it. Second claim while unexpired = denied. `forge
