@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-23T16:14:40+00:00"
+updated_at: "2026-06-23T16:35:16+00:00"
 id: "artifact-forge-method-artifacts-20260616-product-facing-docs-independence-guard-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/20260616-product-facing-docs-independence-guard.md"
 query: "Runtime-repo audit now blocks public Markdown from framing Forge as dependent on another framework while preserving normal Git install wording."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-23T16:14:40+00:00"
+last_run_at: "2026-06-23T16:35:16+00:00"
 last_error: ""

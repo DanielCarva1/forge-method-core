@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+## 2.0.0 — Flock Coordination
+
+Forge Method Core v2.0.0 ships multi-agent flock coordination — the runtime-agnostic coordination protocol for human+agent fleets:
+
+**Critical blockers fixed (G1/G2/G3):**
+- **G1:** `state.yaml` gains `version` field + optimistic concurrency (`write_state` accepts `expected_version`; `VersionConflict` on stale version — conflict DETECTED, not silently lost). Backward compatible: `expected_version=None` preserves v1.34.1 behavior.
+- **G2:** `handoff`/`checkpoint` are append-only in fleet mode (`agents/registry.yaml` present) — workers emit requests to `requests.ndjson` instead of mutating `state.next_action`. `--update-state` flag overrides for single-agent legacy.
+- **G3:** `agents/registry.yaml` + `is_fleet_mode()` detection + `--agent-id` flag threaded through 36+ mutating commands + `FORGE_AGENT_ID` env support + agent attribution in every ledger entry.
+
+**Coordination primitives (Principle 5, 18, 19):**
+- `claim`/`unclaim`/`heartbeat` commands — lane claims with 30min TTL, collision detection, first-come first-served.
+- `lanes` command — show all lane claim statuses (free/claimed/expired).
+- `forge-commit` wrapper — stages ONLY files in the caller's claimed lanes (GAP-1 fix from POC).
+- `requests poll`/`apply` — driver reads and applies pending worker requests with version check.
+
+**Guidance safety (Principle D2):**
+- Multi-agent anti-patterns encoded: write-without-expected-version, act-outside-claimed-lane, persist-worker-transcript-as-integration-memory.
+- Autonomy anti-patterns encoded: approve-during-autopilot, spec-write-without-gate.
+
+**Partner experience (Principle 14, 15, 16):**
+- Research-always-on affordance in all 34 facilitation packs.
+- Partner-grade presence directive in all packs + agent profiles.
+- Grill-as-default extended to every decision-close point (handoff, transition, spec-lock).
+
+**Integration quality (POC gaps):**
+- Integration gate: `tsc --noEmit` + smoke script in `gate` (GAP-5).
+- Type-augmentation conflict detection: scans for cross-lane `declare global`/`declare module` duplicates (GAP-2).
+- `council standup` — fleet coordination summary (lane status, cross-deps, blockers).
+- `contract create` — typed agent-contract artifacts with input/output/verification contracts.
+- `spawn` — runtime-agnostic spawn directive emitter (writes to `spawns/<id>.yaml`; harness reads and spawns).
+
+**Architecture:**
+- `emit-agents-md` — generates AGENTS.md draft for Claude Code/OpenCode (human-approval gated).
+- JSON Schema (Draft 2020-12) for workflow definitions.
+- Evolve-reentry-routing-gap fixed: guidance engine routes evolve-phase build-intent to discovery (not builder).
+
+**Validation:** 141/141 existing tests pass. 14/14 v2 unit tests pass. smoke-runtime + smoke-install pass. Gate: 24/24 evals + Integration: passed. Backward compatible (C2).
+
+**Proof of concept:** Validated via Stable Investments POC (3 concurrent agents, 25 stories, commit-to-main chaos, zero state clobbers, zero lane collisions, typecheck exit 0).
+
 ## 1.34.1
 
 Forge Method Core v1.34.1 ships an update-skill hotfix:

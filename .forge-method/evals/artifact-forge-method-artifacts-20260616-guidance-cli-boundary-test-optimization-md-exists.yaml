@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-23T16:14:40+00:00"
+updated_at: "2026-06-23T16:35:16+00:00"
 id: "artifact-forge-method-artifacts-20260616-guidance-cli-boundary-test-optimization-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/20260616-guidance-cli-boundary-test-optimization.md"
 query: "Converted JSON-only Guidance Engine assertions to direct runtime calls while preserving guide subprocess coverage for human text, empty-workspace, config/tracks, and mechanical CLI behavior."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-23T16:14:40+00:00"
+last_run_at: "2026-06-23T16:35:16+00:00"
 last_error: ""
