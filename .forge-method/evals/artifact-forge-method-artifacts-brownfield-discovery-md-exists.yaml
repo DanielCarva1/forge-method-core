@@ -1,10 +1,10 @@
 # Forge Method eval
-updated_at: "2026-06-23T16:35:16+00:00"
+updated_at: "2026-06-23T16:36:04+00:00"
 id: "artifact-forge-method-artifacts-brownfield-discovery-md-exists"
 kind: "artifact-exists"
 target: ".forge-method/artifacts/brownfield-discovery.md"
 query: "Inventory, current behavior, in-progress work, constraints, risks, safe change boundaries, success criteria, and next workflow for self-hosting Forge Method Core."
 expected: "exists"
 status: "passed"
-last_run_at: "2026-06-23T16:35:16+00:00"
+last_run_at: "2026-06-23T16:36:04+00:00"
 last_error: ""
