@@ -2777,6 +2777,71 @@ def cmd_heartbeat(args: argparse.Namespace) -> int:
     return cmd_claim(args)
 
 
+def cmd_lanes(args: argparse.Namespace) -> int:
+    """v2-011: show all lane claim statuses.
+
+    Reads claims/*.lock for status (claimed/expired) and agents/registry.yaml
+    for lane definitions (free lanes with no lock). Falls back to claims-only
+    when no registry or no ``lanes:`` key is present.
+    """
+    root = resolve_root(args.root)
+    claims_d = _claims_dir(root)
+
+    claims: dict[str, dict[str, str]] = {}
+    if claims_d.exists():
+        for lock in sorted(claims_d.glob("*.lock")):
+            data = read_flat_yaml(lock)
+            lane = data.get("lane", lock.stem) or lock.stem
+            claims[lane] = data
+
+    lanes_defined: list[str] = []
+    registry = method_dir(root) / "agents" / "registry.yaml"
+    if registry.exists():
+        reg = read_flat_yaml(registry)
+        lanes_str = reg.get("lanes", "")
+        if lanes_str:
+            lanes_defined = [lane.strip() for lane in lanes_str.split(",") if lane.strip()]
+
+    all_lanes: list[str] = []
+    seen: set[str] = set()
+    for lane in lanes_defined + list(claims.keys()):
+        if lane not in seen:
+            seen.add(lane)
+            all_lanes.append(lane)
+
+    rows: list[dict[str, str]] = []
+    for lane in all_lanes:
+        data = claims.get(lane)
+        if data is None:
+            rows.append({"lane": lane, "status": "free", "holder": "-", "expires": "-"})
+            continue
+        if _is_claim_expired(data):
+            rows.append({"lane": lane, "status": "expired", "holder": data.get("agent_id", "?"), "expires": data.get("expires", "?")})
+        else:
+            rows.append({"lane": lane, "status": "claimed", "holder": data.get("agent_id", "?"), "expires": data.get("expires", "?")})
+
+    if getattr(args, "json", False):
+        print(json.dumps({"lanes": rows}, indent=2))
+        return 0
+
+    if not rows:
+        print("No lanes defined and no active claims.")
+        return 0
+
+    headers = ["lane", "status", "holder", "expires"]
+    table = [headers] + [[r[h] for h in headers] for r in rows]
+    widths = [max(len(str(table[i][j])) for i in range(len(table))) for j in range(len(headers))]
+
+    def fmt_row(row: list[str]) -> str:
+        return " | ".join(str(row[j]).ljust(widths[j]) for j in range(len(headers)))
+
+    print(fmt_row(headers))
+    print("-+-".join("-" * widths[j] for j in range(len(headers))))
+    for i in range(1, len(table)):
+        print(fmt_row(table[i]))
+    return 0
+
+
 def cmd_forge_commit(args: argparse.Namespace) -> int:
     """v2 (GAP-1 fix): git commit wrapper that stages ONLY files in the caller's claimed lanes.
     Prevents the 'git add -A' cross-lane sweep that mis-attributed files in the POC.
@@ -2829,6 +2894,99 @@ def cmd_forge_commit(args: argparse.Namespace) -> int:
         return 1
     append_ledger(root, "lane.committed", {"agent_id": agent_id, "lanes": ",".join(claimed_lanes), "paths": ",".join(stage_paths)})
     print(f"Committed (lanes: {claimed_lanes}, staged paths: {stage_paths or 'all'}).")
+    return 0
+
+
+def cmd_requests_poll(args: argparse.Namespace) -> int:
+    """v2 (Principle 4): driver reads pending worker requests from requests.ndjson.
+    Read-only — does not mutate state. Prints pending entries as a JSON array."""
+    root = resolve_root(args.root)
+    req_path = method_dir(root) / "requests.ndjson"
+    pending: list[dict[str, Any]] = []
+    if req_path.exists():
+        with open(req_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if entry.get("status") == "pending":
+                    pending.append(entry)
+    print(json.dumps(pending, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_requests_apply(args: argparse.Namespace) -> int:
+    """v2 (Principle 4, 18): driver applies one pending request to state with version check.
+    Marks the entry status='applied' in requests.ndjson and records a ledger entry."""
+    root = resolve_root(args.root)
+    agent_id = _resolve_agent_id(args)
+    req_path = method_dir(root) / "requests.ndjson"
+    if not req_path.exists():
+        print(f"No requests file at {req_path}.")
+        return 1
+
+    entries: list[dict[str, Any]] = []
+    with open(req_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                entries.append({"_unparseable": line})
+
+    idx = args.index
+    if idx < 0 or idx >= len(entries):
+        print(f"Index {idx} out of range (have {len(entries)} requests).")
+        return 1
+
+    target = entries[idx]
+    action = target.get("action", "")
+    payload = target.get("payload", {}) or {}
+
+    state = read_flat_yaml(state_path(root))
+    current_version = str(state.get("version", "0"))
+
+    if action in ("handoff", "checkpoint"):
+        if isinstance(payload, dict):
+            next_action = payload.get("next_action", "")
+        else:
+            next_action = str(payload)
+        state["next_action"] = next_action
+    elif isinstance(payload, dict):
+        for k, v in payload.items():
+            state[k] = v
+    else:
+        state["next_action"] = str(payload)
+
+    new_version = write_state(root, state, expected_version=current_version, agent_id=agent_id)
+
+    entries[idx]["status"] = "applied"
+    with open(req_path, "w", encoding="utf-8") as f:
+        for e in entries:
+            f.write(json.dumps(e, ensure_ascii=False) + "\n")
+
+    append_ledger(root, "request.applied", {"index": idx, "action": action})
+
+    print(
+        json.dumps(
+            {
+                "index": idx,
+                "action": action,
+                "previous_version": current_version,
+                "new_version": new_version,
+                "status": "applied",
+                "agent_id": agent_id,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
     return 0
 
 
@@ -17187,6 +17345,17 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument("--touches", action="append", choices=["docs", "runtime", "workflow", "state", "install", "package"])
     doctor.add_argument("--json", action="store_true")
     doctor.set_defaults(func=cmd_doctor)
+
+    requests_cmd = sub.add_parser("requests", help="v2: worker request queue (fleet mode)")
+    requests_sub = requests_cmd.add_subparsers(dest="requests_command", required=True)
+    requests_poll = requests_sub.add_parser("poll", help="show pending worker requests")
+    requests_poll.add_argument("--root", default=".")
+    requests_poll.set_defaults(func=cmd_requests_poll)
+    requests_apply = requests_sub.add_parser("apply", help="apply a pending request (driver-only)")
+    requests_apply.add_argument("--root", default=".")
+    requests_apply.add_argument("index", type=int, help="0-based index from requests poll")
+    requests_apply.add_argument("--agent-id", default=None)
+    requests_apply.set_defaults(func=cmd_requests_apply)
 
     return parser
 
