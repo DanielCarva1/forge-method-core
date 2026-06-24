@@ -163,9 +163,9 @@ python .\skills\forge-method\scripts\forge_method_runtime.py parity replay
 After publishing a tag, verify the published package can be cloned and installed as a plugin:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v2.0.3 -ExpectedVersion 2.0.3
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -Ref v2.0.4 -ExpectedVersion 2.0.4
 ```
 
 ```bash
-REF=v2.0.3 EXPECTED_VERSION=2.0.3 bash scripts/smoke-plugin-clone-install.sh
+REF=v2.0.4 EXPECTED_VERSION=2.0.4 bash scripts/smoke-plugin-clone-install.sh
 ```

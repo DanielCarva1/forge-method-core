@@ -1,13 +1,13 @@
 {
-  "version": "2.0.3",
+  "version": "2.0.4",
   "date": "2026-06-23",
-  "title": "Bash verify-fast hotfix",
-  "summary": "Forge v2.0.3 fixes `scripts/verify-fast.sh` for Bash strict mode so empty test and match filters no longer crash under `set -u`.",
+  "title": "Bash option parser hotfix",
+  "summary": "Forge v2.0.4 makes Bash verification scripts handle missing option values cleanly under `set -u` instead of crashing with `unbound variable`.",
   "highlights": [
-    "`verify-fast.sh` now guards empty `tests` and `matches` arrays before expanding them.",
-    "Git Bash and strict Bash users can run `scripts/verify-fast.sh` with no filters.",
-    "Added regression coverage that runs the shell script with empty arrays and nounset behavior.",
-    "No runtime behavior changed outside the verification script hotfix."
+    "`verify-fast.sh` now validates values for `--test`, `--match`, `--report`, `--junit`, `--workers`, and `--timeout`.",
+    "`verify-all.sh` now validates values for `--report`, `--junit`, `--workers`, and `--timeout`.",
+    "Missing option values now return exit code 2 with a clear `Missing value for --flag` message.",
+    "Added Bash regression coverage for missing required option values."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/2.0.3.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/2.0.4.md"
 }

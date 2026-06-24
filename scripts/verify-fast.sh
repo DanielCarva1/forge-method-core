@@ -12,6 +12,16 @@ debug="${FORGE_TEST_DEBUG:-0}"
 report_path="${FORGE_TEST_REPORT:-}"
 junit_path="${FORGE_TEST_JUNIT:-}"
 no_report=0
+
+require_value() {
+  local option="$1"
+  local value="${2:-}"
+  if [[ -z "$value" || "$value" == --* ]]; then
+    echo "Missing value for ${option}" >&2
+    exit 2
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-unit)
@@ -19,6 +29,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --test)
+      require_value "$1" "${2:-}"
       tests+=("$2")
       shift 2
       ;;
@@ -27,6 +38,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --match)
+      require_value "$1" "${2:-}"
       matches+=("$2")
       shift 2
       ;;
@@ -43,6 +55,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --report)
+      require_value "$1" "${2:-}"
       report_path="$2"
       shift 2
       ;;
@@ -51,6 +64,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --junit)
+      require_value "$1" "${2:-}"
       junit_path="$2"
       shift 2
       ;;
@@ -59,6 +73,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --workers)
+      require_value "$1" "${2:-}"
       workers="$2"
       shift 2
       ;;
@@ -67,6 +82,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --timeout)
+      require_value "$1" "${2:-}"
       timeout_seconds="$2"
       shift 2
       ;;

@@ -4,7 +4,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/DanielCarva1/forge-method-core/releases/tag/v2.0.3"><img src="https://img.shields.io/badge/version-2.0.3-ff6b35" alt="v2.0.3"></a>
+  <a href="https://github.com/DanielCarva1/forge-method-core/releases/tag/v2.0.4"><img src="https://img.shields.io/badge/version-2.0.4-ff6b35" alt="v2.0.4"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
   <img src="https://img.shields.io/badge/tests-141%2F141%20pass-brightgreen" alt="141/141 tests pass">
   <img src="https://img.shields.io/badge/multi--agent-Codex%20%7C%20Claude%20%7C%20OpenCode%20%7C%20Pi-orange" alt="Multi-runtime">

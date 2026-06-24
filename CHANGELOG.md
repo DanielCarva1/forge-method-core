@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 2.0.4
+
+Hotfix: Bash verification scripts now validate required option values before reading `$2` under `set -u`. `verify-fast.sh` and `verify-all.sh` now return a clean `Missing value for --flag` error instead of an `unbound variable` crash when flags such as `--test`, `--match`, `--workers`, `--timeout`, `--report`, or `--junit` are passed without a value.
+
 ## 2.0.3
 
 Hotfix: `scripts/verify-fast.sh` now handles empty `--test` and `--match` arrays under Bash `set -u` / nounset. This fixes Git Bash and strict Bash runs where an empty declared array could be treated as unbound before the runner started.
