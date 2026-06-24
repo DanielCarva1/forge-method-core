@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 2.0.5
+
+Hotfix: checkpoint and handoff continuation text no longer becomes official route state by default. `checkpoint --next-action` and `handoff --next-action` now write durable memory with non-authoritative suggestion labels unless `--update-state` is passed. Fleet request application now ignores legacy checkpoint/handoff route mutations that lack `state_update_authorized`, preventing an agent's own checkpoint from becoming the next Forge instruction.
+
 ## 2.0.4
 
 Hotfix: Bash verification scripts now validate required option values before reading `$2` under `set -u`. `verify-fast.sh` and `verify-all.sh` now return a clean `Missing value for --flag` error instead of an `unbound variable` crash when flags such as `--test`, `--match`, `--workers`, `--timeout`, `--report`, or `--junit` are passed without a value.

@@ -21,7 +21,7 @@ from urllib.parse import quote
 
 RUNTIME_NAME = "forge-method"
 RUNTIME_REPO_NAME = "forge-method-core"
-RUNTIME_VERSION = "2.0.4"
+RUNTIME_VERSION = "2.0.5"
 SKILL_DIR = Path(__file__).resolve().parents[1]
 PROJECT_TEMPLATE_DIR = SKILL_DIR / "assets" / "project"
 WORKFLOW_CATALOG_PATH = SKILL_DIR / "catalog" / "workflows.json"
@@ -3117,8 +3117,42 @@ def cmd_requests_apply(args: argparse.Namespace) -> int:
     if action in ("handoff", "checkpoint"):
         if isinstance(payload, dict):
             next_action = payload.get("next_action", "")
+            authorized = payload.get("state_update_authorized") is True or str(
+                payload.get("state_update_authorized", "")
+            ).lower() in {
+                "1",
+                "true",
+                "yes",
+            }
         else:
             next_action = str(payload)
+            authorized = False
+        if not authorized:
+            entries[idx]["status"] = "ignored"
+            entries[idx]["reason"] = "handoff/checkpoint request lacks explicit state_update_authorized"
+            with open(req_path, "w", encoding="utf-8") as f:
+                for e in entries:
+                    f.write(json.dumps(e, ensure_ascii=False) + "\n")
+            append_ledger(
+                root,
+                "request.ignored",
+                {"index": idx, "action": action, "reason": "missing state_update_authorized"},
+                agent_id=agent_id,
+            )
+            print(
+                json.dumps(
+                    {
+                        "status": "ignored",
+                        "index": idx,
+                        "action": action,
+                        "reason": "handoff/checkpoint request lacks explicit state_update_authorized",
+                        "state_version": current_version,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return 0
         state["next_action"] = next_action
     elif isinstance(payload, dict):
         for k, v in payload.items():
@@ -6191,6 +6225,7 @@ def write_checkpoint(
     touched: list[str],
     artifacts: list[str],
     next_action: str,
+    authoritative_next_action: bool = True,
 ) -> str:
     path = checkpoint_file(root, title)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -6203,6 +6238,7 @@ def write_checkpoint(
         f"- status: {state.get('status', '')}",
         f"- workflow: {state.get('active_workflow', '')}",
         f"- active_story: {state.get('active_story', '') or '<none>'}",
+        f"- next_action_authority: {'state' if authoritative_next_action else 'checkpoint-suggestion'}",
         "",
         "## Summary",
         "",
@@ -6213,7 +6249,8 @@ def write_checkpoint(
     append_markdown_list(lines, "Failed Checks", failed_checks)
     append_markdown_list(lines, "Touched Files", touched)
     append_markdown_list(lines, "Artifacts", artifacts)
-    lines.extend(["", "## Next Action", "", next_action.strip()])
+    next_action_heading = "State Next Action" if authoritative_next_action else "Suggested Continuation (Non-Authoritative)"
+    lines.extend(["", f"## {next_action_heading}", "", next_action.strip()])
     text = "\n".join(lines).rstrip() + "\n"
     require_recovery_memory_safety(path.relative_to(root).as_posix(), text)
     path.write_text(text, encoding="utf-8")
@@ -15904,6 +15941,7 @@ def cmd_context_recover(args: argparse.Namespace) -> int:
 def cmd_checkpoint(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     next_action = args.next_action or state.get("next_action", "")
+    update_state = bool(args.update_state)
     rel = write_checkpoint(
         root,
         state,
@@ -15915,17 +15953,26 @@ def cmd_checkpoint(args: argparse.Namespace) -> int:
         touched=args.touched or [],
         artifacts=args.artifact or [],
         next_action=next_action,
+        authoritative_next_action=not bool(args.next_action) or update_state,
     )
-    if next_action:
-        # v2 (G2 fix): in fleet mode, checkpoint is append-only (no state mutation).
-        update_state = args.update_state
-        if update_state is None:
-            update_state = not is_fleet_mode(root)
-        if update_state:
+    if next_action and update_state:
+        if is_fleet_mode(root):
+            append_request(
+                root,
+                "checkpoint",
+                {"next_action": next_action, "state_update_authorized": True},
+                agent_id=_resolve_agent_id(args),
+            )
+        else:
             state["next_action"] = next_action
             write_state(root, state, expected_version=args.expected_version, agent_id=_resolve_agent_id(args))
-        else:
-            append_request(root, "checkpoint", {"next_action": next_action}, agent_id=_resolve_agent_id(args))
+    elif next_action and args.next_action:
+        append_ledger(
+            root,
+            "checkpoint.next_action_suggestion",
+            {"path": rel, "state_mutated": "false"},
+            agent_id=_resolve_agent_id(args),
+        )
     if not args.no_context_pack:
         write_context_pack(root, state, out=method_dir(root) / "context" / "current-pack.md", max_chars=args.max_chars)
     print(rel)
@@ -16326,6 +16373,10 @@ def cmd_handoff(args: argparse.Namespace) -> int:
     root, state = load_state_or_fail(resolve_root(args.root))
     # v2-016: grill-gate is recommended (not hard-blocked) before every handoff.
     print_grill_gate_advisory(state)
+    update_state = bool(args.update_state)
+    handoff_next_action = args.next_action or state.get("next_action", "")
+    next_action_authoritative = not bool(args.next_action) or update_state
+    next_action_heading = "State Next Action" if next_action_authoritative else "Suggested Continuation (Non-Authoritative)"
     stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
     path = method_dir(root) / "handoffs" / f"{stamp}-handoff.md"
     lines = [
@@ -16341,24 +16392,24 @@ def cmd_handoff(args: argparse.Namespace) -> int:
         "",
         args.summary,
         "",
-        "## Next Action",
+        f"- next_action_authority: {'state' if next_action_authoritative else 'handoff-suggestion'}",
         "",
-        args.next_action or state.get("next_action", ""),
+        f"## {next_action_heading}",
+        "",
+        handoff_next_action,
     ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    # v2 (G2 fix, Principle 2/4): in fleet mode, handoff is append-only — does NOT mutate state.
-    # Workers emit a request; the driver polls requests.ndjson and applies via write_state.
-    update_state = args.update_state
-    if update_state is None:
-        update_state = not is_fleet_mode(root)
+    # Handoffs are memory by default. Only explicit --update-state may alter route state.
     if update_state:
-        state["next_action"] = args.next_action or state.get("next_action", "")
-        write_state(root, state, expected_version=args.expected_version, agent_id=_resolve_agent_id(args))
-    else:
-        append_request(root, "handoff", {
-            "next_action": args.next_action or state.get("next_action", ""),
-            "path": path.relative_to(root).as_posix(),
-        }, agent_id=_resolve_agent_id(args))
+        if is_fleet_mode(root):
+            append_request(root, "handoff", {
+                "next_action": handoff_next_action,
+                "path": path.relative_to(root).as_posix(),
+                "state_update_authorized": True,
+            }, agent_id=_resolve_agent_id(args))
+        else:
+            state["next_action"] = handoff_next_action
+            write_state(root, state, expected_version=args.expected_version, agent_id=_resolve_agent_id(args))
     append_ledger(root, "handoff.written", {"path": path.relative_to(root).as_posix(), "state_mutated": str(update_state)}, agent_id=_resolve_agent_id(args))
     print(path)
     return 0
@@ -18153,8 +18204,19 @@ def build_parser() -> argparse.ArgumentParser:
     checkpoint.add_argument("--next-action")
     checkpoint.add_argument("--max-chars", type=int, default=8000)
     checkpoint.add_argument("--no-context-pack", action="store_true")
-    checkpoint.add_argument("--update-state", dest="update_state", action="store_true", default=None)
-    checkpoint.add_argument("--no-update-state", dest="update_state", action="store_false")
+    checkpoint.add_argument(
+        "--update-state",
+        dest="update_state",
+        action="store_true",
+        default=None,
+        help="authorize this checkpoint to change state.next_action",
+    )
+    checkpoint.add_argument(
+        "--no-update-state",
+        dest="update_state",
+        action="store_false",
+        help="write memory only; this is the default",
+    )
     checkpoint.add_argument("--agent-id", default=None)
     checkpoint.add_argument("--expected-version", dest="expected_version", type=str, default=None)
     checkpoint.set_defaults(func=cmd_checkpoint, record_guidance=True)
@@ -18231,8 +18293,19 @@ def build_parser() -> argparse.ArgumentParser:
     handoff.add_argument("--root", default=".")
     handoff.add_argument("--summary", required=True)
     handoff.add_argument("--next-action")
-    handoff.add_argument("--update-state", dest="update_state", action="store_true", default=None)
-    handoff.add_argument("--no-update-state", dest="update_state", action="store_false")
+    handoff.add_argument(
+        "--update-state",
+        dest="update_state",
+        action="store_true",
+        default=None,
+        help="authorize this handoff to change state.next_action",
+    )
+    handoff.add_argument(
+        "--no-update-state",
+        dest="update_state",
+        action="store_false",
+        help="write handoff only; this is the default",
+    )
     handoff.add_argument("--agent-id", default=None)
     handoff.add_argument("--expected-version", dest="expected_version", type=str, default=None)
     handoff.set_defaults(func=cmd_handoff, record_guidance=True)

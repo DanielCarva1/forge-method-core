@@ -1,13 +1,13 @@
 {
-  "version": "2.0.4",
-  "date": "2026-06-23",
-  "title": "Bash option parser hotfix",
-  "summary": "Forge v2.0.4 makes Bash verification scripts handle missing option values cleanly under `set -u` instead of crashing with `unbound variable`.",
+  "version": "2.0.5",
+  "date": "2026-06-24",
+  "title": "Checkpoint route authority hotfix",
+  "summary": "Forge v2.0.5 prevents checkpoint and handoff suggestions from becoming official `next_action` state unless an explicit state update is authorized.",
   "highlights": [
-    "`verify-fast.sh` now validates values for `--test`, `--match`, `--report`, `--junit`, `--workers`, and `--timeout`.",
-    "`verify-all.sh` now validates values for `--report`, `--junit`, `--workers`, and `--timeout`.",
-    "Missing option values now return exit code 2 with a clear `Missing value for --flag` message.",
-    "Added Bash regression coverage for missing required option values."
+    "`checkpoint --next-action` now writes a non-authoritative continuation suggestion by default instead of mutating `state.yaml`.",
+    "`handoff --next-action` now follows the same memory-only default and requires `--update-state` to change the official route.",
+    "Fleet `requests apply` ignores legacy checkpoint/handoff route mutations that do not include `state_update_authorized`.",
+    "Checkpoint and handoff artifacts now label route authority as `state`, `checkpoint-suggestion`, or `handoff-suggestion`."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/2.0.4.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/2.0.5.md"
 }

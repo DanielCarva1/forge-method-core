@@ -4,7 +4,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/DanielCarva1/forge-method-core/releases/tag/v2.0.4"><img src="https://img.shields.io/badge/version-2.0.4-ff6b35" alt="v2.0.4"></a>
+  <a href="https://github.com/DanielCarva1/forge-method-core/releases/tag/v2.0.5"><img src="https://img.shields.io/badge/version-2.0.5-ff6b35" alt="v2.0.5"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
   <img src="https://img.shields.io/badge/tests-141%2F141%20pass-brightgreen" alt="141/141 tests pass">
   <img src="https://img.shields.io/badge/multi--agent-Codex%20%7C%20Claude%20%7C%20OpenCode%20%7C%20Pi-orange" alt="Multi-runtime">
@@ -59,6 +59,7 @@ This is flock coordination: the `.forge-method/` directory becomes the coordinat
 |---|---|---|
 | **Two agents writing state = silent data loss** | `version` field + optimistic concurrency. Conflict DETECTED, not lost. | You can trust your project state when 5 agents are working simultaneously. |
 | **Worker handoffs clobbered the driver's state** | Fleet-mode append-only handoffs. Workers emit requests; driver applies. | Agents coordinate through files, not through hoping they don't step on each other. |
+| **Checkpoint suggestions became fake official routes** | Checkpoints and handoffs are memory by default; only explicit authorized updates mutate `next_action`. | Forge stops obeying an agent's own invented continuation as if it were a method decision. |
 | **No way to know who did what** | `agents/registry.yaml` + `--agent-id` on every command + full ledger attribution. | Full audit trail. You always know which agent touched what. |
 
 ### Lane claims — your agents won't trip over each other

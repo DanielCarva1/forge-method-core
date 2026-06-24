@@ -54,6 +54,7 @@ If Guidance Engine returns `facilitation_pack`, load that `skill:facilitation/*.
 5. Do not create extra slash commands as product surface. `$forge-reload` and `$forge-update` are operational maintenance exceptions only.
 6. During mechanical build work, follow `resume --json`, `next`, or `guide --json`; do not ask for procedural confirmations.
 7. Before marking work done, run relevant checks and write evidence/checkpoints.
+8. A checkpoint or handoff is durable memory, not a route oracle. Do not treat a checkpoint `Suggested Continuation` as Forge's official next step unless `state.yaml`, `guide --json`, or an explicit `--update-state` command authorizes it.
 
 ## Source Of Truth
 

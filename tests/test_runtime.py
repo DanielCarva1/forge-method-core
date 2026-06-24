@@ -6666,9 +6666,159 @@ handoff:
             self.assertTrue(latest.exists())
             self.assertTrue(pack.exists())
             self.assertIn("Use durable checkpoints", latest.read_text(encoding="utf-8"))
+            self.assertIn("checkpoint-suggestion", latest.read_text(encoding="utf-8"))
+            self.assertIn("Suggested Continuation (Non-Authoritative)", latest.read_text(encoding="utf-8"))
             self.assertIn("Latest Checkpoint", pack.read_text(encoding="utf-8"))
             self.assertIn("Use checkpoint memory before reading old chat.", pack.read_text(encoding="utf-8"))
-            self.assertIn("continue with context memory hardening", status)
+            self.assertNotIn("continue with context memory hardening", status)
+
+    def test_checkpoint_next_action_does_not_mutate_state_without_update_state(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Prototype Loop Project", "--root", str(root))
+            before_state = (root / ".forge-method" / "state.yaml").read_text(encoding="utf-8")
+
+            checkpoint = run_cmd(
+                "checkpoint",
+                "--root",
+                str(root),
+                "--title",
+                "Agent suggested prototype extension",
+                "--summary",
+                "The agent suggested another prototype room after the human asked what Forge says.",
+                "--next-action",
+                "Add a new exit beyond the awakened Heartseed.",
+            ).stdout.strip()
+
+            after_state = (root / ".forge-method" / "state.yaml").read_text(encoding="utf-8")
+            latest = root / ".forge-method" / "context" / "latest-checkpoint.md"
+            status = run_cmd("status", "--root", str(root)).stdout
+
+            self.assertEqual(after_state, before_state)
+            self.assertFalse((root / ".forge-method" / "requests.ndjson").exists())
+            self.assertTrue((root / checkpoint).exists())
+            self.assertIn("checkpoint-suggestion", latest.read_text(encoding="utf-8"))
+            self.assertIn("Suggested Continuation (Non-Authoritative)", latest.read_text(encoding="utf-8"))
+            self.assertIn("Add a new exit beyond the awakened Heartseed.", latest.read_text(encoding="utf-8"))
+            self.assertNotIn("Add a new exit beyond the awakened Heartseed.", status)
+
+    def test_checkpoint_update_state_requires_explicit_flag(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Authorized Checkpoint Project", "--root", str(root))
+
+            run_cmd(
+                "checkpoint",
+                "--root",
+                str(root),
+                "--title",
+                "Authorized route update",
+                "--summary",
+                "A workflow gate chose the next route explicitly.",
+                "--next-action",
+                "run the approved production pass",
+                "--update-state",
+            )
+
+            latest = root / ".forge-method" / "context" / "latest-checkpoint.md"
+            status = run_cmd("status", "--root", str(root)).stdout
+
+            self.assertIn("next_action_authority: state", latest.read_text(encoding="utf-8"))
+            self.assertIn("State Next Action", latest.read_text(encoding="utf-8"))
+            self.assertIn("run the approved production pass", status)
+
+    def test_handoff_next_action_does_not_mutate_state_without_update_state(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Handoff Safety Project", "--root", str(root))
+            before_state = (root / ".forge-method" / "state.yaml").read_text(encoding="utf-8")
+
+            handoff = run_cmd(
+                "handoff",
+                "--root",
+                str(root),
+                "--summary",
+                "Preserve the current work without changing the route.",
+                "--next-action",
+                "invent one more prototype branch",
+            ).stdout.strip()
+
+            after_state = (root / ".forge-method" / "state.yaml").read_text(encoding="utf-8")
+            status = run_cmd("status", "--root", str(root)).stdout
+            handoff_text = Path(handoff).read_text(encoding="utf-8")
+
+            self.assertEqual(after_state, before_state)
+            self.assertFalse((root / ".forge-method" / "requests.ndjson").exists())
+            self.assertIn("handoff-suggestion", handoff_text)
+            self.assertIn("Suggested Continuation (Non-Authoritative)", handoff_text)
+            self.assertNotIn("invent one more prototype branch", status)
+
+    def test_requests_apply_ignores_legacy_checkpoint_route_mutation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Legacy Request Safety Project", "--root", str(root))
+            before_state = (root / ".forge-method" / "state.yaml").read_text(encoding="utf-8")
+            req_path = root / ".forge-method" / "requests.ndjson"
+            req_path.write_text(
+                json.dumps(
+                    {
+                        "action": "checkpoint",
+                        "payload": {"next_action": "Add a new exit beyond the awakened Heartseed."},
+                        "agent_id": "worker-1",
+                        "ts": "2026-06-24T00:00:00Z",
+                        "status": "pending",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = run_cmd("requests", "apply", "--root", str(root), "0")
+
+            after_state = (root / ".forge-method" / "state.yaml").read_text(encoding="utf-8")
+            entries = [json.loads(line) for line in req_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+            self.assertEqual(after_state, before_state)
+            self.assertIn('"status": "ignored"', result.stdout)
+            self.assertEqual(entries[0]["status"], "ignored")
+            self.assertIn("lacks explicit state_update_authorized", entries[0]["reason"])
+
+    def test_checkpoint_update_state_in_fleet_emits_authorized_request(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            run_cmd("init", "--project", "Fleet Authorized Checkpoint Project", "--root", str(root))
+            agents_dir = root / ".forge-method" / "agents"
+            agents_dir.mkdir(parents=True, exist_ok=True)
+            (agents_dir / "registry.yaml").write_text("driver: default\n", encoding="utf-8")
+            before_state = (root / ".forge-method" / "state.yaml").read_text(encoding="utf-8")
+
+            run_cmd(
+                "checkpoint",
+                "--root",
+                str(root),
+                "--title",
+                "Authorized fleet route update",
+                "--summary",
+                "A worker proposes a driver-applied route update.",
+                "--next-action",
+                "run the driver-approved integration pass",
+                "--update-state",
+                "--agent-id",
+                "worker-1",
+            )
+
+            req_path = root / ".forge-method" / "requests.ndjson"
+            entries = [json.loads(line) for line in req_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+            mid_state = (root / ".forge-method" / "state.yaml").read_text(encoding="utf-8")
+
+            self.assertEqual(mid_state, before_state)
+            self.assertTrue(entries[0]["payload"]["state_update_authorized"])
+
+            run_cmd("requests", "apply", "--root", str(root), "0", "--agent-id", "driver")
+            status = run_cmd("status", "--root", str(root)).stdout
+
+            self.assertIn("run the driver-approved integration pass", status)
 
     def test_checkpoint_rejects_misleading_recovery_memory_text_before_write(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

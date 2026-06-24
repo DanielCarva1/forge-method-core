@@ -158,7 +158,7 @@ For handoff under a tight budget, the agent should write compact recovery. Compa
 
 ## Checkpoint Rule
 
-After a meaningful work block, the agent should write a checkpoint with the decisions, checks, touched files, artifacts, and next action needed for a future session. A checkpoint is durable memory; it is not a transcript.
+After a meaningful work block, the agent should write a checkpoint with the decisions, checks, touched files, artifacts, and continuation context needed for a future session. A checkpoint is durable memory; it is not a transcript and it is not a route oracle. A checkpoint or handoff may suggest a continuation, but only `state.yaml`, Guidance Engine output, a workflow command, or an explicit `--update-state` call may change the official next action.
 
 ## Artifact Lifecycle Rule
 
