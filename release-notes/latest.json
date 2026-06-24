@@ -1,13 +1,13 @@
 {
-  "version": "2.0.2",
+  "version": "2.0.3",
   "date": "2026-06-23",
-  "title": "Update metadata hotfix",
-  "summary": "Forge v2.0.2 fixes the update path so legacy skill installs report the real v2 package version and show current patch notes after refreshing.",
+  "title": "Bash verify-fast hotfix",
+  "summary": "Forge v2.0.3 fixes `scripts/verify-fast.sh` for Bash strict mode so empty test and match filters no longer crash under `set -u`.",
   "highlights": [
-    "$forge-update now resolves the installed Forge package from the personal Codex marketplace before printing the update summary.",
-    "Version detection now prefers the `VERSION` file when it is newer than the plugin manifest.",
-    "Legacy skill installs no longer report stale `1.34.1` patch notes after refreshing to the v2 package.",
-    "The v2 multi-agent coordination features from 2.0.0/2.0.1 remain unchanged."
+    "`verify-fast.sh` now guards empty `tests` and `matches` arrays before expanding them.",
+    "Git Bash and strict Bash users can run `scripts/verify-fast.sh` with no filters.",
+    "Added regression coverage that runs the shell script with empty arrays and nounset behavior.",
+    "No runtime behavior changed outside the verification script hotfix."
   ],
-  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/2.0.2.md"
+  "full_notes_url": "https://github.com/DanielCarva1/forge-method-core/blob/main/release-notes/2.0.3.md"
 }

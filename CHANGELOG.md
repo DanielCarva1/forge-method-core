@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 2.0.3
+
+Hotfix: `scripts/verify-fast.sh` now handles empty `--test` and `--match` arrays under Bash `set -u` / nounset. This fixes Git Bash and strict Bash runs where an empty declared array could be treated as unbound before the runner started.
+
 ## 2.0.2
 
 Hotfix: `$forge-update` now resolves the installed plugin package from the personal Codex marketplace before printing version summaries, so legacy skill installs do not report stale `1.34.1` patch notes after refreshing to the v2 package. Version detection now prefers the `VERSION` file when it is newer than the plugin manifest, protecting updates from stale manifest metadata.

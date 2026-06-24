@@ -98,12 +98,16 @@ if [[ "$skip_unit" -eq 0 ]]; then
   if [[ "$junit_path" != "" ]]; then
     runner_args+=(--junit "$junit_path")
   fi
-  for test_case in "${tests[@]}"; do
-    runner_args+=(--test "$test_case")
-  done
-  for match in "${matches[@]}"; do
-    runner_args+=(--match "$match")
-  done
+  if (( ${#tests[@]} )); then
+    for test_case in "${tests[@]}"; do
+      runner_args+=(--test "$test_case")
+    done
+  fi
+  if (( ${#matches[@]} )); then
+    for match in "${matches[@]}"; do
+      runner_args+=(--match "$match")
+    done
+  fi
   "$python_bin" "${runner_args[@]}"
 fi
 "$python_bin" scripts/verify-onboarding-assets.py

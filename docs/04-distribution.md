@@ -278,11 +278,11 @@ Use `release plan` when deciding release shape. Use `release check` only after a
 After a tag or branch is available from a Git-clonable source, run the clone/install distribution smoke:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -RepoUrl https://github.com/DanielCarva1/forge-method-core.git -Ref v2.0.2 -ExpectedVersion 2.0.2
+powershell -ExecutionPolicy Bypass -File .\scripts\smoke-plugin-clone-install.ps1 -RepoUrl https://github.com/DanielCarva1/forge-method-core.git -Ref v2.0.3 -ExpectedVersion 2.0.3
 ```
 
 ```bash
-REPO_URL=https://github.com/DanielCarva1/forge-method-core.git REF=v2.0.2 EXPECTED_VERSION=2.0.2 bash scripts/smoke-plugin-clone-install.sh
+REPO_URL=https://github.com/DanielCarva1/forge-method-core.git REF=v2.0.3 EXPECTED_VERSION=2.0.3 bash scripts/smoke-plugin-clone-install.sh
 ```
 
 This smoke does not use the GitHub API. It clones the requested ref, installs the plugin into an isolated temporary marketplace, verifies manifest and marketplace metadata, runs preflight, creates a project, and runs the quality gate.
