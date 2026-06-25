@@ -1,0 +1,25 @@
+schema_version: "0.1"
+policy: "rust_validation_authority"
+status: "active"
+purpose: "Define Rust/Serde validation as the acceptance authority for the new Forge core contracts and runtime redesign."
+rules:
+  - id: "rust_is_acceptance_gate"
+    rule: "New core contracts, schemas, fixtures, and runtime behavior must be validated by Rust tooling before commit."
+  - id: "python_is_not_acceptance"
+    rule: "Python validation may be used only as legacy compatibility, quick diagnostics, or migration aid; it is not acceptance evidence for the Rust core."
+  - id: "serde_shape_first"
+    rule: "Typed YAML/JSON contracts must stay compatible with Rust serde enums, structs, stable ids, explicit nulls, and deterministic validation."
+  - id: "commit_requires_rust_evidence"
+    rule: "A commit that changes Rust-core contracts must report the Rust validator or Rust test command used."
+acceptance_evidence:
+  required:
+    - "cargo_check_or_test_for_rust_code"
+    - "rust_contract_validator_for_yaml_json_contracts"
+  optional:
+    - "legacy_python_smoke_for_old_runtime"
+    - "host_specific_smoke_scripts"
+failure_modes_prevented:
+  - "contracts pass loose YAML parsing but fail serde shape"
+  - "Python compatibility accidentally becomes the new architecture"
+  - "agent treats legacy smoke as product-quality proof"
+  - "runtime is planned for Rust but validated by non-Rust assumptions"

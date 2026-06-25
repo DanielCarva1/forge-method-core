@@ -1,0 +1,422 @@
+﻿schema_version: "0.1"
+audit: v2_design_coverage_for_rust_core
+status: active
+purpose: "Prevent the Rust OperationContract redesign from rediscovering v2 work while still auditing v2 critically before carrying ideas into the Rust core."
+stance: "v2_is_evidence_not_oracle"
+rules:
+  - id: do_not_copy_blindly
+    rule: "Do not copy v2 mechanisms into Rust just because they exist."
+  - id: preserve_proven_successes
+    rule: "Carry forward mechanisms that have clear rationale, acceptance evidence, and fit the Rust typed-first architecture."
+  - id: repair_known_failures
+    rule: "If v2 evidence names a gap or failure mode, the Rust contract must address it explicitly or reject it with rationale."
+  - id: reject_prompt_or_markdown_debt
+    rule: "Any v2 idea expressed as Markdown/prose must become typed contracts, schemas, fixtures, or tests before it enters the Rust core."
+  - id: no_python_shape_lock_in
+    rule: "Do not preserve Python CLI shapes such as advance/handoff/checkpoint if the Rust operation model has a better explicit contract."
+reviewed_sources:
+  - path: "forensic-reference/legacy-forge-state/artifacts/forge-flock-coordination-rfc-v3.md"
+    role: "primary v2 RFC"
+  - path: "forensic-reference/legacy-forge-state/artifacts/prd-forge-v2.md"
+    role: "v2 implementation PRD"
+  - path: "forensic-reference/legacy-forge-state/artifacts/20260623-phase-b-poc-gap-report.md"
+    role: "multi-agent POC gap report"
+  - path: "forensic-reference/legacy-forge-state/artifacts/20260623-phase-b-poc-acceptance.md"
+    role: "POC acceptance and re-entry decision"
+  - path: "forensic-reference/legacy-forge-state/artifacts/20260622-v2-positioning-and-distributed-design.md"
+    role: "A2A/MCP positioning, distributed design, CRDT/completion/read-set upgrades"
+  - path: "forensic-reference/legacy-forge-state/artifacts/20260622-spec-lock-forge-v2.md"
+    role: "locked v2 decision set"
+  - path: "forensic-reference/legacy-forge-state/artifacts/20260622-grill-gate-forge-v2-open-questions.md"
+    role: "maintainer-resolved open questions"
+  - path: "forensic-reference/legacy-forge-state/artifacts/handoff-forge-v2-evolution.md"
+    role: "start-here summary and handoff"
+  - path: "forensic-reference/docs/adr/0015-product-areas-and-team-collaboration.md"
+    role: "Product Area, Root Integrator, repo split decision"
+v2_successes_to_preserve_after_audit:
+  - id: product_area_not_module
+    decision: "Product Area is the product boundary; Forge Module remains runtime/workflow packaging."
+    rust_contract_implication: "Use product_area fields in scopes; do not reuse module terminology."
+  - id: monorepo_root_integrator_first
+    decision: "Default collaboration topology is Root Integrator Project with Product Areas; repo split creates Standalone Method Project."
+    rust_contract_implication: "Contracts need root/integrator and standalone area references."
+  - id: expected_version_required_in_fleet
+    decision: "Mutating state writes use expected_version and agent_id; mismatch is typed VersionConflict."
+    rust_contract_implication: "Every mutating operation payload needs expected_state_version or explicit single-agent exception."
+  - id: agent_identity_required
+    decision: "agent_id comes from flag, FORGE_AGENT_ID, or fallback; ledger entries are attributed."
+    rust_contract_implication: "OperationContract and write operations need agent_identity."
+  - id: fleet_registry
+    decision: "agents/registry.yaml is the flock roster; registry presence and/or FORGE_FLEET opt in to fleet mode."
+    rust_contract_implication: "Contracts need fleet_mode and registry_ref."
+  - id: driver_claim
+    decision: "Integration FSM has exactly one writer: the current driver claim holder."
+    rust_contract_implication: "Writes to integration state require driver claim evidence."
+  - id: worker_requests_append_only
+    decision: "Workers do not mutate integration state; they emit append-only requests/handoffs for the driver."
+    rust_contract_implication: "OperationContract must route non-driver state changes to record_request, not apply_transition."
+  - id: lane_write_boundary
+    decision: "Lane is the write boundary; Product Area and Story lanes have one claimant at a time."
+    rust_contract_implication: "Write operations require coordination_scope with lane/product_area/story/path coverage plus claim/version/completion rules."
+  - id: claim_ttl_heartbeat
+    decision: "Claims have TTL, heartbeat, and handoff-on-expiry semantics."
+    rust_contract_implication: "ClaimContract v0 includes expiry/heartbeat status; expired claim routes to typed handoff request."
+  - id: completion_state
+    decision: "Locks alone are insufficient; protocol tracks done/completion state."
+    rust_contract_implication: "OperationContract must check completion state before recommending claim/build."
+  - id: crdt_projection
+    decision: "Integration FSM is single-driver; coordination state converges from append-only log/CRDT projection."
+    rust_contract_implication: "Store design must distinguish FSM state from coordination projection."
+  - id: commit_safe_by_construction
+    decision: "Commit safety uses claims, branch policy, reviewer gate, verification gates, and lane-aware staging."
+    rust_contract_implication: "Command contracts for commit/stage must be lane-aware, never git add -A by default."
+  - id: shared_types_coordination
+    decision: "Shared/global type surfaces need contract lane or type-conflict detection."
+    rust_contract_implication: "Gate contracts need shared-type/config/global-surface checks."
+  - id: integration_gate
+    decision: "Project-wide integration gate catches cross-lane type/build conflicts."
+    rust_contract_implication: "GateContract v0 distinguishes lane, product_area, integration, and release scopes."
+  - id: progressive_autonomy_evolve_loop
+    decision: "Early work is human-led; locked spec enables autopilot; evolve loops back to facilitated mode."
+    rust_contract_implication: "OperationContract autonomy mode must consume spec-lock/evolve state."
+  - id: grill_at_decision_close
+    decision: "Grill runs by default before handoff, phase transition, or decision-lock."
+    rust_contract_implication: "DecisionCloseContract v0 requires grill evidence before decision-closing mutations."
+  - id: cross_runtime_suggestion_double_gated
+    decision: "Suggest cross-runtime handoff only when task is outside lane/capability and another runtime is registered."
+    rust_contract_implication: "Guide recommendations need host/runtime capability and registry evidence before suggesting handoff."
+  - id: a2a_mcp_boundary
+    decision: "Forge sits above A2A and MCP as repo-local coordination/governance; it does not compete with either."
+    rust_contract_implication: "MCP surface exposes Forge contracts; A2A is optional adapter/messaging layer."
+  - id: notify_dont_blindly_abort
+    decision: "When a write touches an agent read-set, notify and let the agent judge plan invalidation instead of blindly aborting."
+    rust_contract_implication: "ToolEffectContract v0 owns read_set/write_set conflict notification; OperationContract references effect_contract_refs."
+v2_failures_or_cautions_to_fix:
+  - id: python_cli_shape_leak
+    severity: high
+    detail: "Some v2 stories refer to advance/handoff/checkpoint commands. Rust core must translate the intent into explicit operations rather than preserving broad command verbs."
+  - id: markdown_design_surface
+    severity: high
+    detail: "Most v2 rationale lives in Markdown. Rust core must convert accepted content into typed contracts and delete Markdown debt."
+  - id: advisory_lane_enforcement_was_insufficient
+    severity: high
+    detail: "POC found lane claims at Forge level did not stop git add -A cross-lane sweep until lane-aware commit wrapper was added."
+  - id: shared_type_space_was_under-modeled
+    severity: high
+    detail: "POC found global type definitions transcend lane boundaries and need shared-types/config/global-surface coordination."
+  - id: integration_gate_missing_initially
+    severity: medium
+    detail: "Per-lane checks were insufficient; project-wide integration gate is required."
+  - id: ttl_without_handoff_is_unsafe
+    severity: high
+    detail: "Claim expiry must emit handoff, not silently release work."
+  - id: runtime_specific_agent_docs_risk
+    severity: medium
+    detail: "Generated AGENTS/CLAUDE docs are host adapters and must be minimal, human-approved, and non-authoritative."
+  - id: crdt_is_not_for_integration_fsm
+    severity: high
+    detail: "CRDT applies to coordination projection, not phase/status workflow FSM."
+current_operation_contract_gaps:
+  - id: missing_coordination_scope
+    severity: critical
+    detail: "OperationContract v0 needs typed coordination_scope for lane/product_area/story/artifact/evidence/path plus claim/version/completion authority."
+    source_decisions:
+      - lane_write_boundary
+      - product_area_not_module
+      - expected_version_required_in_fleet
+  - id: missing_agent_identity
+    severity: critical
+    detail: "OperationContract v0 source has host/surface but not agent_id/flock/role/driver status."
+    source_decisions:
+      - agent_identity_required
+      - fleet_registry
+      - driver_claim
+  - id: missing_driver_vs_worker_routing
+    severity: critical
+    detail: "OperationContract v0 can recommend apply_transition without proving caller is driver or routing worker to append-only request."
+    source_decisions:
+      - driver_claim
+      - worker_requests_append_only
+  - id: missing_typed_request_message_protocol
+    severity: high
+    status: "resolved_by_request_contract_v0"
+    detail: "Worker/driver/handoff coordination could become opaque notes without typed communication fields."
+    resolution: "Use RequestContract v0 as the durable communication unit with communication, payload, response, dependency, evidence, append-only, and status fields."
+    source_decisions:
+      - worker_requests_append_only
+      - claim_ttl_heartbeat
+  - id: missing_completion_state_check
+    severity: high
+    status: "resolved_by_completion_contract_v0"
+    detail: "OperationContract v0 can recommend claim/build without checking done/completion state."
+    resolution: "Use coordination_scope.completion.must_check_completion plus completion_contract_ref. CompletionContract v0 defines task_id, status enum, proof policy, invalidation, and storage identity for file-backed Rust migration."
+    source_decisions:
+      - completion_state
+  - id: missing_claim_ttl_semantics
+    severity: high
+    status: "resolved_by_claim_contract_v0"
+    detail: "OperationContract v0 has claim_lane/release_lane/heartbeat but no expiry/handoff-on-expiry contract."
+    resolution: "Use claim_contract_ref to load ClaimContract v0 with lease, heartbeat, status, expiry policy, and mandatory handoff-on-expiry."
+    source_decisions:
+      - claim_ttl_heartbeat
+  - id: missing_runtime_health_recovery_contract
+    severity: high
+    status: "resolved_by_health_recovery_contract_v0"
+    detail: "Claim TTL does not classify runtime health, anomaly type, or recovery action for stalled/crashed/degraded agents."
+    resolution: "Use HealthRecoveryContract v0 with runtime status, heartbeat, anomaly, evidence refs, recovery action, request ref, and claim ref."
+    source_decisions:
+      - claim_ttl_heartbeat
+  - id: missing_fine_read_write_conflict_contract
+    severity: high
+    status: "resolved_by_tool_effect_contract_v0"
+    detail: "OperationContract v0 needed fine-grained read/write conflict handling without embedding loose read_set/write_set fields."
+    resolution: "Use effect_contract_refs to load ToolEffectContract v0, which defines read_set, write_set, conflict_detection, notification, and repair policy."
+    source_decisions:
+      - notify_dont_blindly_abort
+  - id: missing_destructive_effect_inverse_policy
+    severity: critical
+    status: "resolved_by_tool_effect_inverse_policy"
+    detail: "ToolEffectContract v0 described inverse refs but did not require destructive writes to declare inverse/compensation metadata or stop before execution."
+    resolution: "Use repair.inverse metadata plus Rust validation: destructive writes require inverse kind/source/ref or a stop path with human_review/driver_review/block and automatic repair disabled."
+    source_decisions:
+      - notify_dont_blindly_abort
+  - id: missing_integration_scope_gate
+    severity: high
+    status: "resolved_by_gate_contract_v0"
+    detail: "OperationContract v0 has gate but no distinction between lane gate and project integration gate."
+    resolution: "Use GateContract v0 plus gate_contract_refs and scoped required_before_mutation entries."
+    source_decisions:
+      - integration_gate
+      - shared_types_coordination
+  - id: missing_grill_close_requirement
+    severity: medium
+    status: "resolved_by_decision_close_contract_v0"
+    detail: "OperationContract v0 does not require grill evidence before decision-closing mutations."
+    resolution: "Use DecisionCloseContract v0 for phase transition, handoff, spec lock, route change, and release readiness close attempts."
+    source_decisions:
+      - grill_at_decision_close
+  - id: missing_runtime_handoff_double_gate
+    severity: medium
+    status: "resolved_by_runtime_handoff_contract_v0"
+    detail: "OperationContract v0 does not model the double-gate for suggesting cross-runtime handoff."
+    resolution: "Use RuntimeHandoffContract v0 with registry evidence, capability evidence, typed payload context, and authority refs before a cross-runtime handoff can be suggested."
+    source_decisions:
+      - cross_runtime_suggestion_double_gated
+  - id: insufficient_coordination_eval_dimensions
+    severity: high
+    status: "resolved_by_coordination_eval_contract_v0"
+    detail: "Fixture shape checks and final task success do not prove multi-agent/team coordination quality."
+    resolution: "Use CoordinationEvalContract v0 with mandatory dimensions for duplicate work, lane collision, stale claim recovery, read/write repair, request lifecycle, integration gate, runtime handoff, destructive effect safety, and human guidance recovery."
+    source_decisions:
+      - lane_write_boundary
+      - worker_requests_append_only
+      - integration_gate
+      - cross_runtime_suggestion_double_gated
+  - id: scattered_operation_side_contract_refs
+    severity: high
+    status: "resolved_by_operation_reference_policy_v0"
+    detail: "Side-contract refs can drift if each validator family owns only part of OperationContract reference resolution."
+    resolution: "Use OperationReferencePolicy v0 plus Rust validation for approved claim, completion, gate, effect, request, decision, and runtime handoff refs."
+    source_decisions:
+      - expected_version_required_in_fleet
+      - worker_requests_append_only
+      - commit_safe_by_construction
+  - id: contract_family_inventory_not_locked
+    severity: high
+    status: "resolved_by_contract_family_inventory_v0"
+    detail: "After side-contracts exist, schema/codegen can miss a family or accidentally treat support YAML as runtime authority."
+    resolution: "Use ContractFamilyInventory v0 plus v0-contract-family-lock.yaml to list runtime contract families, schema refs, instance globs, validator functions, statuses, and evidence refs before Rust schema generation."
+    source_decisions:
+      - commit_safe_by_construction
+      - typed_state_machine_contracts
+  - id: schema_generation_strategy_missing
+    severity: high
+    status: "resolved_by_schema_generation_authority_policy"
+    detail: "The inventory lock establishes what must be represented, but not whether Rust types, YAML schemas, or JSON Schema owns contract semantics."
+    resolution: "Use SchemaGenerationAuthority policy: locked YAML inventory bootstraps Rust/Serde domain types; Rust becomes executable source; JSON Schema and compact agent views are generated outputs."
+    source_decisions:
+      - commit_safe_by_construction
+      - typed_state_machine_contracts
+      - markdown_removal_validated
+  - id: rust_workspace_architecture_missing
+    severity: high
+    status: "resolved_by_rust_workspace_architecture_policy"
+    detail: "Without a crate/workspace boundary, the Rust rewrite can recreate the current giant-runtime problem in a compiled language."
+    resolution: "Use RustWorkspaceArchitecture policy: contracts, validation, store, runtime, CLI, MCP, and host adapters are separate crate boundaries, with implementation starting from contracts/validation/thin CLI."
+    source_decisions:
+      - commit_safe_by_construction
+      - typed_state_machine_contracts
+      - cross_runtime_suggestion_double_gated
+  - id: rust_contract_type_order_missing
+    severity: high
+    status: "resolved_by_rust_contract_type_order_policy"
+    detail: "A locked inventory and workspace architecture do not yet define which Rust/Serde types must be implemented first."
+    resolution: "Use RustContractTypeOrder policy: foundation ids/refs/evidence/diagnostics, inventory, command, operation/reference policy, then side contracts in dependency order."
+    source_decisions:
+      - commit_safe_by_construction
+      - typed_state_machine_contracts
+      - schema_generation_strategy_validated
+  - id: operation_contract_rust_types_missing
+    severity: high
+    status: "resolved_by_operation_contract_rust_type_strictness_policy"
+    detail: "OperationContract was still validated mostly through YAML traversal and string checks, not Rust/Serde domain types."
+    resolution: "Use OperationContractRustTypeStrictness policy plus forge-core-contracts operation modules. All 16 current operation fixtures deserialize with closed authority/control enums and typed refs."
+    source_decisions:
+      - commit_safe_by_construction
+      - typed_state_machine_contracts
+      - funnel_autonomy_validated
+  - id: validator_library_missing
+    severity: high
+    status: "resolved_by_forge_core_validate_initial_crate"
+    detail: "Validation was still coupled to a binary and string/path scans, limiting reuse from CLI, app, MCP, tests, and compact agent views."
+    resolution: "Use ValidatorLibraryMigrationBoundary policy plus forge-core-validate with typed diagnostics and pure validations for evidence, inventory, command, and operation contracts."
+    source_decisions:
+      - commit_safe_by_construction
+      - typed_state_machine_contracts
+      - operation_contract_rust_types_missing
+  - id: basic_side_contract_rust_types_missing
+    severity: high
+    status: "resolved_by_claim_completion_gate_rust_types"
+    detail: "OperationContract referenced claim, completion, and gate contracts, but these side contracts were not yet Rust/Serde typed."
+    resolution: "Use SideContractTypeOrder policy plus forge-core-contracts claim/completion/gate modules and forge-core-validate semantic checks."
+    source_decisions:
+      - claim_ttl_heartbeat
+      - completion_state
+      - integration_gate
+  - id: request_effect_rust_types_missing
+    severity: high
+    status: "resolved_by_request_effect_rust_types"
+    detail: "RequestContract and ToolEffectContract existed as YAML contract families, but were not yet Rust/Serde typed or validated through the reusable validation crate."
+    resolution: "Use RequestEffectTypeBoundary policy plus forge-core-contracts request/tool_effect modules and forge-core-validate semantic checks for append-only requests and destructive effect inverse/review policy."
+    source_decisions:
+      - worker_requests_append_only
+      - notify_dont_blindly_abort
+  - id: decision_close_rust_types_missing
+    severity: high
+    status: "resolved_by_decision_close_rust_types"
+    detail: "DecisionCloseContract existed as YAML contract family, but was not yet Rust/Serde typed or validated through the reusable validation crate."
+    resolution: "Use AdvancedBoundaryTypeOrder policy plus forge-core-contracts decision module and forge-core-validate semantic checks for closed grill-required decisions and blocked decision state."
+    source_decisions:
+      - grill_at_decision_close
+      - progressive_autonomy_evolve_loop
+  - id: runtime_handoff_rust_types_missing
+    severity: high
+    status: "resolved_by_runtime_handoff_rust_types"
+    detail: "RuntimeHandoffContract existed as YAML contract family, but handoff, registry, and capability evidence were not yet Rust/Serde typed or validated through the reusable validation crate."
+    resolution: "Use RuntimeHandoffTypeBoundary policy plus forge-core-contracts runtime module and forge-core-validate semantic checks for registry evidence, capability evidence, compact payload, and no direct external runtime state mutation."
+    source_decisions:
+      - cross_runtime_suggestion_double_gated
+      - a2a_mcp_boundary
+  - id: health_recovery_rust_types_missing
+    severity: high
+    status: "resolved_by_health_recovery_rust_types"
+    detail: "HealthRecoveryContract existed as YAML contract family, but runtime status, anomaly, request/claim refs, and recovery action were not yet Rust/Serde typed or validated through the reusable validation crate."
+    resolution: "Use HealthRecoveryTypeBoundary policy plus forge-core-contracts recovery module and forge-core-validate semantic checks for unhealthy action, review/automation conflict, request/claim refs, and compact handoff context."
+    source_decisions:
+      - claim_ttl_heartbeat
+      - worker_requests_append_only
+  - id: coordination_eval_rust_types_missing
+    severity: high
+    status: "resolved_by_coordination_eval_rust_types"
+    detail: "CoordinationEvalContract existed as YAML contract family, but eval dimensions, fixtures, pass policy, and failure signals were not yet Rust/Serde typed or validated through the reusable validation crate."
+    resolution: "Use CoordinationEvalTypeBoundary policy plus forge-core-contracts coordination_eval module and forge-core-validate semantic checks for all required v0 dimensions, fixture refs, evidence refs, failure signals, threshold policy, and manual review release blocking."
+    source_decisions:
+      - lane_write_boundary
+      - worker_requests_append_only
+      - integration_gate
+      - cross_runtime_suggestion_double_gated
+  - id: generated_schema_and_compact_views_missing
+    severity: high
+    status: "resolved_by_forge_core_schema_crate"
+    detail: "All v0 contract families had Rust types, but JSON Schema and compact agent-facing views were not yet generated from Rust as outputs."
+    resolution: "Use forge-core-schema to generate JSON Schema artifacts and compact agent views from Rust/Serde types; views are derived read models and cannot override Rust validation."
+    source_decisions:
+      - typed_state_machine_contracts
+      - markdown_removal_validated
+  - id: typed_cross_file_reference_validation_missing
+    severity: high
+    status: "resolved_by_reference_index_validation"
+    detail: "All v0 contract families had Rust types, but cross-file authority refs could still drift unless semantic validation resolved referenced kind, not only local shape."
+    resolution: "Use TypedCrossFileReferenceValidationBoundary policy plus forge-core-validate ReferenceIndex and ReferenceKind checks for inventory, operation, side-contract, runtime handoff, recovery, and eval authority refs."
+    source_decisions:
+      - typed_state_machine_contracts
+      - rust_validation_authority
+      - operation_reference_policy
+  - id: filesystem_reference_index_adapter_missing
+    severity: high
+    status: "resolved_by_forge_core_store_reference_index_builder"
+    detail: "ReferenceIndex validation existed, but repo/runtime discovery still lived only in tests and could be duplicated by future CLI, app, daemon, or MCP surfaces."
+    resolution: "Use FilesystemReferenceIndexAdapterBoundary policy plus forge-core-store ReferenceIndexBuilder as the shared repo/runtime index source."
+    source_decisions:
+      - rust_workspace_architecture
+      - typed_cross_file_reference_validation
+  - id: thin_cli_validation_surface_missing
+    severity: high
+    status: "resolved_by_forge_core_cli_validate_command"
+    detail: "Typed validation and store-backed reference indexing existed, but agents still lacked a structured Rust CLI surface that consumed those crates directly."
+    resolution: "Use ThinCliValidationSurfaceBoundary policy plus forge-core-cli validate command with JSON output, store-built ReferenceIndex, and forge-core-validate diagnostics."
+    source_decisions:
+      - rust_workspace_architecture
+      - filesystem_reference_index_adapter
+  - id: legacy_validator_retirement_unproven
+    severity: high
+    status: "resolved_by_parity_audit_keep_legacy_temporarily"
+    detail: "forge-core-cli exists, but local audit found legacy recursive YAML parse, recursive source_id scan, and generic policy/ref checks that are not yet proven covered by the new CLI."
+    resolution: "Use LegacyValidatorParityRetirementBoundary policy; do not retire or wrap forge-contract-validator until generic YAML/evidence-ref validation and parity matrix are implemented."
+    source_decisions:
+      - thin_cli_validation_surface
+      - rust_validation_authority
+  - id: generic_yaml_evidence_ref_validation_missing
+    severity: high
+    status: "resolved_by_store_documents_and_validate_source_id_refs"
+    detail: "forge-contract-validator still owned recursive YAML parse coverage and recursive source_id checks across contracts and operation fixtures."
+    resolution: "Use GenericYamlEvidenceRefValidationBoundary policy; forge-core-store collects parsed YAML documents, forge-core-validate checks recursive source_id refs, and forge-core-cli surfaces both checks."
+    source_decisions:
+      - legacy_validator_parity_retirement
+      - policy_first_control
+  - id: legacy_validator_parity_matrix_missing
+    severity: high
+    status: "resolved_by_initial_overlap_matrix"
+    detail: "The project had a legacy validator and new CLI, but no concrete parity matrix or overlap tests proving pass/fail behavior shared by both."
+    resolution: "Use LegacyValidatorParityMatrixBoundary policy plus forge-contract-validator parity tests for current repo pass and synthetic unknown source_id failure."
+    source_decisions:
+      - legacy_validator_parity_retirement
+      - generic_yaml_evidence_ref_validation
+  - id: generic_known_ref_validation_missing
+    severity: high
+    status: "resolved_by_generic_known_ref_validation"
+    detail: "The legacy validator still owned generic known-ref/file-ref checks for contracts/docs refs, especially inventory/policy paths."
+    resolution: "Use GenericKnownRefValidationBoundary policy; forge-core-store supplies known contracts/docs paths, forge-core-validate checks ref-like YAML keys, and forge-core-cli surfaces yaml_known_repo_refs."
+    source_decisions:
+      - legacy_validator_parity_matrix
+      - typed_cross_file_reference_validation
+  - id: schema_enum_parity_missing
+    severity: medium
+    status: "resolved_by_schema_enum_parity_boundary"
+    detail: "The legacy validator owned schema enum_set checks while the new CLI depended on Rust/Serde enum deserialization without representative negative parity proof."
+    resolution: "Use SchemaEnumParityBoundary policy plus parity tests that mutate operation autonomy.mode and command_contract.kind and require both validators to reject the bad fixtures."
+    source_decisions:
+      - legacy_validator_parity_matrix
+      - rust_contract_type_order
+  - id: legacy_stdout_compatibility_missing
+    severity: medium
+    status: "resolved_by_compatibility_wrapper"
+    detail: "The legacy validator stdout contract could have broken scripts if forge-contract-validator were deleted or changed while forge-core-cli JSON became the new machine surface."
+    resolution: "Use LegacyStdoutCompatibilityBoundary policy: forge-contract-validator is a compatibility wrapper over run_validate and preserves rust_contract_validation_passed stdout fields."
+    source_decisions:
+      - legacy_validator_parity_matrix
+      - thin_cli_validation_surface
+  - id: legacy_validator_retirement_policy_missing
+    severity: medium
+    status: "resolved_by_retirement_policy_boundary"
+    detail: "After turning forge-contract-validator into a compatibility wrapper, future agents could delete it as dead code without a release/deprecation policy."
+    resolution: "Use LegacyValidatorRetirementPolicyBoundary: wrapper is supported and not deprecated; future removal requires explicit deprecation, at least four months, major/breaking release boundary, replacement tests, and repo-wide migration proof."
+    source_decisions:
+      - legacy_validator_parity_matrix
+      - legacy_stdout_compatibility
+next_contract_changes:
+  - "Define Rust runtime execution boundary after validation/compatibility stabilization."
+acceptance:
+  - "No future grill question treats these v2 decisions as unknown unless the source contract is missing or contradictory."
+  - "OperationContract v0 must cite this audit before adding concurrency or multi-agent fields."
+  - "Rust rewrite must audit v2 strategy before preserving, changing, or rejecting it."

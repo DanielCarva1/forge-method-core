@@ -1,0 +1,64 @@
+schema_version: "0.1"
+policy: "legacy_validator_retirement_policy_boundary"
+status: "accepted"
+purpose: "Define when forge-contract-validator may be deprecated or removed after becoming a compatibility wrapper."
+decision:
+  selected_strategy: "supported_wrapper_until_explicit_deprecation_window"
+  current_status: "supported_not_deprecated"
+  removal_allowed_now: false
+  compatibility_binary: "forge-contract-validator"
+  replacement_surface: "forge-core validate --root <path> --json"
+  deprecation_start_allowed_when:
+    - "forge-core-cli JSON schema is documented as stable for agents and CI."
+    - "release-notes/latest.json and human release notes name forge-contract-validator as deprecated and name forge-core validate --json as replacement."
+    - "all repo scripts, install docs, smoke checks, and marketplace assets either use forge-core-cli or explicitly justify compatibility use."
+    - "compatibility tests still pass before the deprecation release."
+  removal_allowed_when:
+    - "deprecation notice has shipped for at least four months."
+    - "removal occurs only at a major or explicitly breaking release boundary."
+    - "release notes include migration command, removed behavior, replacement behavior, and validation evidence."
+    - "no active contract, policy, script, asset, or README install path relies on forge-contract-validator except historical release notes."
+    - "forge-core-cli JSON has replacement tests for every retired compatibility assertion."
+  warning_policy:
+    before_deprecation: "no warning"
+    after_deprecation: "stderr_only_never_stdout"
+    rationale: "stdout remains machine-readable compatibility output until removal."
+rules:
+  - id: "supported_not_deprecated_by_default"
+    rule: "The compatibility wrapper is supported until an explicit deprecation release starts the clock."
+  - id: "no_silent_removal"
+    rule: "Do not delete forge-contract-validator as cleanup, refactor, or minor/patch maintenance."
+  - id: "stdout_must_remain_clean"
+    rule: "Deprecation notices must never change the rust_contract_validation_passed stdout line."
+  - id: "replacement_must_be_proven"
+    rule: "Every removed compatibility behavior needs a forge-core-cli JSON replacement test or explicit retirement rationale."
+implementation_evidence:
+  policy_refs:
+    - "contracts/policies/legacy-stdout-compatibility-boundary.yaml"
+    - "contracts/policies/legacy-validator-parity-matrix-boundary.yaml"
+  validation:
+    - "cargo test -p forge-contract-validator"
+    - "cargo run -p forge-core-cli -- validate --root . --json"
+evidence_basis:
+  direct_patterns:
+    - source_id: "semver_2_0_0"
+      supports: "Deprecation should be documented in a minor release; removal of public behavior is a major/breaking change."
+    - source_id: "salesforce_cli_deprecation_policy"
+      supports: "CLI command/flag deprecation should provide release-note notice, runtime notice, replacement, and a minimum removal window."
+    - source_id: "kubernetes_deprecation_policy"
+      supports: "User/admin-facing CLI elements need explicit deprecation policy before removal."
+    - source_id: "rfc8594_sunset"
+      supports: "Sunset information should communicate when an interface is likely to become unavailable."
+    - source_id: "arduino_cli_versioning"
+      supports: "Removing or changing command-line behavior is a breaking change."
+    - source_id: "bash_in_the_wild_2022"
+      supports: "Shell automation makes stdout compatibility risky to remove casually."
+  inference_boundary: "The sources support explicit deprecation and breaking-change policy. The four-month minimum follows Salesforce CLI field policy as the closest CLI-specific observed practice, not a universal theorem."
+failure_modes_prevented:
+  - "agent deletes compatibility wrapper as dead code"
+  - "minor or patch release silently breaks shell users"
+  - "deprecation warning pollutes stdout and breaks parsers"
+  - "JSON replacement is assumed rather than tested"
+next_boundary:
+  id: "rust_runtime_execution_boundary"
+  question: "After validation and compatibility are stabilized, which Rust runtime execution boundary should be implemented next without recreating the old giant Python runtime?"

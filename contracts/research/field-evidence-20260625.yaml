@@ -1,0 +1,1461 @@
+schema_version: "0.1"
+research: field_evidence_for_forge_rust_core
+created_at: "2026-06-25"
+status: active
+policy:
+  purpose: "Require Forge Core architecture decisions to cite field evidence, current research, or explicit product constraints."
+  evidence_tiers:
+    - id: tier_1_primary_research_or_official
+      description: "Peer-reviewed/preprint papers, official vendor docs, official engineering writeups, protocol specs."
+      decision_weight: "high"
+    - id: tier_2_product_field_report
+      description: "Production case studies, reputable engineering blogs, benchmark sites, tool docs."
+      decision_weight: "medium"
+    - id: tier_3_commentary
+      description: "Opinion pieces, social posts, secondary summaries."
+      decision_weight: "low"
+  rule: "Future grill questions for architecture must include tradeoffs plus at least one relevant evidence reference when available."
+  geographic_coverage:
+    rule: "Research passes must intentionally include non-US/non-Western work, especially Chinese research and production systems, when the domain has active work there."
+    rationale: "Agent systems, coding agents, multi-agent coordination, and model/runtime infrastructure have major contributions from Chinese universities, labs, and companies. Ignoring them creates a biased and weaker architecture review."
+    minimum_behavior:
+      - "Search for Chinese-origin papers, labs, and products alongside US/EU sources."
+      - "Do not infer quality from geography; evaluate by evidence, adoption, reproducibility, and fit."
+      - "Record country/institution only when confirmed by the source."
+      - "If no relevant Chinese/non-Western source is found, say that explicitly instead of silently omitting the search."
+sources:
+  - id: grite_2606_19616
+    tier: tier_1_primary_research_or_official
+    title: "Before the Pull Request: Mining Multi-Agent Coordination"
+    url: "https://arxiv.org/html/2606.19616"
+    observed_claims:
+      - "Coordination actions can live in append-only content-addressed logs."
+      - "CRDT reconciliation plus advisory leases are viable for multi-agent coding coordination."
+      - "Shared coordination state can travel with the code through git."
+    forge_implications:
+      - "Preserve append-only coordination events."
+      - "Use CRDT projection for coordination state, not integration FSM."
+      - "Use leases/claims as write-boundary signals."
+  - id: grite_product
+    tier: tier_2_product_field_report
+    title: "neul-labs/grite"
+    url: "https://github.com/neul-labs/grite"
+    observed_claims:
+      - "Repo-local issue state can be represented as append-only events in git refs."
+      - "Deterministic CRDT conflict resolution avoids central service dependency."
+    forge_implications:
+      - "Keep Forge coordination repo-local and runtime-agnostic."
+      - "Prefer append-only logs and projections over direct shared-file mutation."
+  - id: coagent_2606_15376
+    tier: tier_1_primary_research_or_official
+    title: "CoAgent: Concurrency Control for Multi-Agent Systems"
+    url: "https://arxiv.org/abs/2606.15376"
+    confirmed_origin: "Shanghai Jiao Tong University, China"
+    observed_claims:
+      - "Classical locks and abort/retry waste long-running agent work."
+      - "Agents can judge whether conflicting writes invalidate their plan."
+      - "Notify-and-repair can preserve concurrency while staying close to serial correctness."
+    forge_implications:
+      - "Do not treat every read/write conflict as blind abort."
+      - "Model read_set/write_set in a typed effect contract with notification and repair policy."
+      - "Keep typed undo/repair surfaces on the roadmap for mutating tools."
+      - "Require destructive tool effects to declare inverse/compensation metadata or stop before execution."
+  - id: rac_2605_03409
+    tier: tier_1_primary_research_or_official
+    title: "Robust Agent Compensation (RAC): Teaching AI Agents to Compensate"
+    url: "https://arxiv.org/html/2605.03409v2"
+    observed_claims:
+      - "Log-based recovery with compensation can avoid unintended side effects in agent workflows."
+      - "Compensation pairs can be exposed through agent framework extension points, including MCP."
+      - "Decoupling recovery from agent replanning can improve latency and token economy."
+    forge_implications:
+      - "Model compensation metadata as runtime contract data, not as freeform agent reasoning."
+      - "Use typed inverse refs and validation gates for destructive effects."
+      - "Do not rely on broad replanning loops to undo side effects."
+  - id: runtime_enforcement_2503_18666
+    tier: tier_1_primary_research_or_official
+    title: "Customizable Runtime Enforcement for Safe and Reliable LLM Agents"
+    url: "https://arxiv.org/html/2503.18666v2"
+    observed_claims:
+      - "Runtime rules can prevent unsafe executions across code and embodied-agent settings with low overhead."
+    forge_implications:
+      - "Enforce destructive-effect policy in Rust validation/runtime rather than prompt prose."
+  - id: solver_policy_tool_agents_2603_20449
+    tier: tier_1_primary_research_or_official
+    title: "Solver-Aided Verification of Policy Compliance in Tool-Augmented LLM Agents"
+    url: "https://arxiv.org/html/2603.20449v1"
+    observed_claims:
+      - "Prompt-only policy descriptions do not guarantee policy compliance."
+      - "Tool calls can be checked against formal constraints before execution."
+    forge_implications:
+      - "Treat ToolEffectContract validation as a precondition for mutating tool execution."
+      - "Block destructive effects before execution when required metadata is missing."
+  - id: verifiable_safe_tool_use_2601_08012
+    tier: tier_1_primary_research_or_official
+    title: "Towards Verifiably Safe Tool Use for LLM Agents"
+    url: "https://arxiv.org/html/2601.08012"
+    observed_claims:
+      - "Agent safety should move from ad hoc reliability fixes to proactive guardrails with formal guarantees."
+      - "Structured labels on capabilities, confidentiality, and trust level can support enforceable tool safety."
+    forge_implications:
+      - "Represent destructive capability and inverse availability as structured fields."
+      - "Use labels and contracts to reduce dependence on repeated human confirmation."
+  - id: tool_use_orchestration_survey_2603_22862
+    tier: tier_1_primary_research_or_official
+    title: "The Evolution of Tool Use in LLM Agents: From Single-Tool Call to Multi-Tool Orchestration"
+    url: "https://arxiv.org/html/2603.22862v2"
+    confirmed_origin: "Harbin Institute of Technology / Huawei contributors, China"
+    observed_claims:
+      - "Long-horizon multi-tool agents must manage intermediate state, recovery, safety, cost, and verifiability."
+    forge_implications:
+      - "Tool-effect safety belongs in orchestration/runtime contracts, not individual prompt snippets."
+      - "Recovery policy must be part of the contract surface for long-running agent work."
+  - id: owasp_llm06_excessive_agency
+    tier: tier_1_primary_research_or_official
+    title: "OWASP LLM06:2025 Excessive Agency"
+    url: "https://genai.owasp.org/llmrisk/llm062025-excessive-agency/"
+    observed_claims:
+      - "Damaging actions can result from excessive functionality, permissions, or autonomy."
+      - "High-impact actions need independent verification or approval."
+    forge_implications:
+      - "Destructive effects should be review-gated even when an inverse exists."
+      - "Do not expose broad mutating behavior to the host agent without typed authority."
+  - id: microservices_saga_pattern
+    tier: tier_2_product_field_report
+    title: "Saga pattern"
+    url: "https://microservices.io/patterns/data/saga.html"
+    observed_claims:
+      - "Long-running distributed transactions rely on explicitly designed compensating actions rather than automatic rollback."
+    forge_implications:
+      - "Compensation is a designed operation with audit trail, not a magical rewind."
+      - "Destructive effect policy should require an explicit inverse or stop path."
+  - id: agentscope_2402_14034
+    tier: tier_1_primary_research_or_official
+    title: "AgentScope: A Flexible yet Robust Multi-Agent Platform"
+    url: "https://arxiv.org/abs/2402.14034"
+    confirmed_origin: "Alibaba DAMO Academy / ModelScope ecosystem, China"
+    observed_claims:
+      - "Multi-agent applications face coordination complexity and erratic LLM behavior."
+      - "Message exchange can be the core communication mechanism for robust multi-agent applications."
+      - "Actor-style distribution and fault-tolerance mechanisms help local and distributed deployments."
+    forge_implications:
+      - "Keep coordination mechanics explicit rather than prompt-only."
+      - "Treat distributed and local execution as first-class design cases."
+      - "Investigate actor-like internal boundaries for Rust service/daemon later without forcing them into v0 contracts."
+      - "Model fault tolerance and recovery as runtime contracts rather than prompt advice."
+  - id: agentops_survey_2508_02121
+    tier: tier_1_primary_research_or_official
+    title: "A Survey on AgentOps: Categorization, Challenges, and Future Directions"
+    url: "https://arxiv.org/html/2508.02121v1"
+    observed_claims:
+      - "Agent systems encounter intra-agent and inter-agent anomalies across execution lifecycles."
+      - "AgentOps includes monitoring, anomaly detection, root cause analysis, and resolution."
+      - "Traditional operations techniques are insufficient for LLM-based agent systems."
+    forge_implications:
+      - "Forge needs health/recovery contracts beyond claim TTL."
+      - "Recovery should classify anomaly kind and resolution action explicitly."
+  - id: agentops_observability_2411_05285
+    tier: tier_1_primary_research_or_official
+    title: "AgentOps: Enabling Observability of LLM Agents"
+    url: "https://arxiv.org/abs/2411.05285"
+    observed_claims:
+      - "Agent observability requires tracing runtime artifacts and associated data across the lifecycle."
+      - "Existing tooling often focuses on LLM metrics and prompt management while missing agent-specific artifacts."
+    forge_implications:
+      - "Health recovery should reference goals, claims, requests, gates, and evidence rather than only raw logs."
+      - "Recovery evidence must be compact and typed."
+  - id: multi_agent_distributed_systems_2026
+    tier: tier_2_product_field_report
+    title: "Multi-Agent Systems Have a Distributed Systems Problem"
+    url: "https://christophermeiklejohn.com/ai/agents/distributed/zabriskie/2026/03/30/multi-agent-systems-have-a-distributed-systems-problem.html"
+    observed_claims:
+      - "Multiple coding agents working on one codebase exhibit distributed-systems failures such as lost updates, stale views, and missing recovery paths."
+    forge_implications:
+      - "Model stale state and missing recovery as first-class runtime failures."
+      - "Do not solve multi-agent drift with more prompt text."
+  - id: agent_protocol_taxonomy_2606_19135
+    tier: tier_1_primary_research_or_official
+    title: "A Technical Taxonomy of LLM Agent Communication Protocols"
+    url: "https://arxiv.org/html/2606.19135v1"
+    observed_claims:
+      - "Agent communication protocols can be analyzed by counterparty, payload, interaction state, discovery mechanism, and schema flexibility."
+      - "The protocol landscape is fragmented and may evolve toward layered protocol stacks."
+    forge_implications:
+      - "Do not create overlapping request/message protocols until the boundary is proven."
+      - "RequestContract should explicitly model payload, interaction state, and schema fields."
+  - id: communication_centric_llm_mas_2502_14321
+    tier: tier_1_primary_research_or_official
+    title: "Beyond Self-Talk: A Communication-Centric Survey of LLM-Based Multi-Agent Systems"
+    url: "https://arxiv.org/html/2502.14321v3"
+    confirmed_origin: "Beihang University, China"
+    observed_claims:
+      - "LLM-based multi-agent systems can be understood as communication protocol-constrained systems driven by communication goals and architectures."
+      - "Communication efficiency, security vulnerabilities, benchmarking, and scalability are open challenges."
+    forge_implications:
+      - "Agent coordination requests need sender, receiver, intent, payload, dependencies, lifecycle status, and evidence refs."
+      - "Do not let freeform chat carry coordination authority."
+  - id: chatdev_2307_07924
+    tier: tier_1_primary_research_or_official
+    title: "ChatDev: Communicative Agents for Software Development"
+    url: "https://arxiv.org/abs/2307.07924"
+    confirmed_origin: "OpenBMB/Tsinghua-linked research ecosystem, China; verify exact institutional mapping before final claims"
+    observed_claims:
+      - "Specialized agents can coordinate software phases through structured communication."
+      - "Communication protocol design affects hallucination and debugging behavior."
+      - "Language can unify design, coding, and testing phases, but does not by itself solve shared-state safety."
+    forge_implications:
+      - "Preserve guided communication and role clarity."
+      - "Do not rely on chat communication alone for state authority."
+      - "Use ChatDev as historical evidence for facilitation/roles, not as sufficient coordination substrate."
+  - id: llm_as_code_2606_15874
+    tier: tier_1_primary_research_or_official
+    title: "LLM-as-Code: Agentic Programming for Agent Harness"
+    url: "https://arxiv.org/html/2606.15874v1"
+    confirmed_origin: "author/institution origin not yet verified"
+    observed_claims:
+      - "Assigning deterministic looping, branching, sequencing, and stopping to probabilistic models causes token explosion and unreliable completion."
+      - "Agent harnesses should make control flow executable, inspectable, and stateful."
+    forge_implications:
+      - "Strengthens the Rust core direction: deterministic protocol/runtime first, model as reasoning component."
+      - "Supports replacing prompt-shaped Markdown with typed executable contracts."
+  - id: code_as_agent_harness_2605_18747
+    tier: tier_1_primary_research_or_official
+    title: "Code as Agent Harness"
+    url: "https://arxiv.org/abs/2605.18747"
+    confirmed_origin: "institution mix not yet verified; do not classify geographically until source metadata is audited"
+    observed_claims:
+      - "Code can act as executable, inspectable, and stateful infrastructure for agent reasoning, action, environment modeling, and execution-based verification."
+      - "Agent harness engineering has open challenges around evaluation beyond final task success, verification under incomplete feedback, consistent shared state, multi-agent coordination, and human oversight for safety-critical actions."
+    forge_implications:
+      - "Rust contract validation should be treated as product evidence, not optional hygiene."
+      - "Decision-close and gate behavior should be verifiable harness behavior, not prose instruction."
+  - id: cooperbench_2601_13295
+    tier: tier_1_primary_research_or_official
+    title: "CooperBench: Why Coding Agents Cannot be Your Teammates Yet"
+    url: "https://arxiv.org/html/2601.13295v1"
+    observed_claims:
+      - "Collaborative coding tasks expose coordination failures beyond solo coding ability."
+      - "Benchmarks need tasks with potential conflicts across realistic repositories."
+      - "Cooperation requires conflict resolution, consensus, and social/coordination intelligence."
+    forge_implications:
+      - "Do not evaluate Forge only with solo-agent success."
+      - "Add conformance tests for conflict, duplicate work, ownership, and handoff."
+      - "Treat coordination as first-class, not polish."
+  - id: multiagentbench_2503_01935
+    tier: tier_1_primary_research_or_official
+    title: "MultiAgentBench: Evaluating the Collaboration and Competition of LLM agents"
+    url: "https://arxiv.org/abs/2503.01935"
+    observed_claims:
+      - "Single-agent or narrow-domain benchmarks fail to capture multi-agent coordination and competition."
+      - "Evaluation should measure task completion plus collaboration/competition quality with milestone-based KPIs."
+    forge_implications:
+      - "Forge evals need coordination-quality dimensions, not only final task success."
+      - "Use milestone-like fixture coverage for v0 until broader benchmark runners exist."
+  - id: utboost_2025_acl
+    tier: tier_1_primary_research_or_official
+    title: "UTBoost: Rigorous Evaluation of Coding Agents on SWE-Bench"
+    url: "https://aclanthology.org/2025.acl-long.189.pdf"
+    observed_claims:
+      - "Insufficient tests can incorrectly label generated patches as passed."
+      - "Augmented tests uncovered many erroneous patches and changed benchmark rankings."
+    forge_implications:
+      - "Passing narrow local checks is not enough evidence for broad quality claims."
+      - "Coordination evals should name failure signals and evidence coverage explicitly."
+  - id: agentless_fse_2025
+    tier: tier_1_primary_research_or_official
+    title: "Demystifying LLM-Based Software Engineering Agents"
+    url: "https://lingming.cs.illinois.edu/publications/fse2025.pdf"
+    observed_claims:
+      - "Benchmark tasks can include exact ground-truth patches, missing critical information, or misleading solutions."
+      - "Simpler, constrained baselines can outperform more autonomous agent systems on cost and success."
+    forge_implications:
+      - "Forge evals must separate real capability from misleading input or overpowered autonomy."
+      - "Keep evals cost-aware and compare against constrained baselines where possible."
+  - id: anthropic_parallel_c_compiler
+    tier: tier_2_product_field_report
+    title: "Building a C compiler with a team of parallel Claudes"
+    url: "https://www.anthropic.com/engineering/building-c-compiler"
+    observed_claims:
+      - "Large parallel agent teams can produce nontrivial systems when coordination is engineered."
+      - "Cost, session count, and validation effort are material architecture constraints."
+    forge_implications:
+      - "Support agent teams, but require scoped work, evidence, validation, and cost-aware loops."
+      - "Avoid unbounded autonomy without coordination contracts."
+  - id: claude_worktrees
+    tier: tier_1_primary_research_or_official
+    title: "Run parallel sessions with worktrees"
+    url: "https://code.claude.com/docs/en/worktrees"
+    observed_claims:
+      - "Worktrees isolate file edits for parallel sessions."
+      - "Subagents and agent teams coordinate work above file isolation."
+    forge_implications:
+      - "Distinguish file isolation from coordination authority."
+      - "Keep Product Area/lane claims even when worktrees are used."
+  - id: a2a_protocol
+    tier: tier_1_primary_research_or_official
+    title: "Agent2Agent Protocol"
+    url: "https://github.com/a2aproject/A2A"
+    observed_claims:
+      - "A2A enables interoperability between opaque agentic applications."
+    forge_implications:
+      - "Forge should not compete with A2A."
+      - "Forge owns repo-local coordination/governance; A2A can be an adapter/messaging layer."
+      - "Cross-runtime handoff should require target runtime identity/registry evidence."
+      - "RequestContract should preserve lifecycle, context refs, and response expectations for handoff-style coordination."
+  - id: mcp_tools_spec
+    tier: tier_1_primary_research_or_official
+    title: "Model Context Protocol Tools Specification"
+    url: "https://modelcontextprotocol.io/specification/2025-11-25/server/tools"
+    observed_claims:
+      - "MCP tools are named capabilities with schemas and metadata."
+    forge_implications:
+      - "Expose Forge through MCP as schema-backed tools."
+      - "Do not put method logic inside host-specific prompt prose."
+      - "Do not represent commands as raw shell strings."
+  - id: mcp_tool_annotations_2603
+    tier: tier_1_primary_research_or_official
+    title: "Tool Annotations as Risk Vocabulary: What Hints Can and Can't Do"
+    url: "https://blog.modelcontextprotocol.io/posts/2026-03-16-tool-annotations/"
+    observed_claims:
+      - "Tool annotations provide risk hints such as read-only and destructive behavior, but they remain advisory metadata."
+      - "Clients use annotations to drive confirmations and safety UI, not as complete authorization."
+    forge_implications:
+      - "Capability evidence may cite MCP schemas or annotations, but Forge must still keep its own authority gates."
+      - "Runtime handoff cannot treat tool annotations as sufficient state authority."
+  - id: mcp_security_best_practices_2026
+    tier: tier_1_primary_research_or_official
+    title: "Model Context Protocol Security Best Practices"
+    url: "https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices"
+    observed_claims:
+      - "MCP implementations need explicit security analysis beyond basic tool exposure."
+      - "Confused-deputy, malicious-server, and tool-permission risks are implementation concerns."
+    forge_implications:
+      - "Forge MCP exposure must be deny-by-default and preserve command authority classes."
+      - "MCP transport metadata must not become Forge workflow authority."
+  - id: mcp_authorization_spec_2025_11_25
+    tier: tier_1_primary_research_or_official
+    title: "Model Context Protocol Authorization Specification"
+    url: "https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization"
+    observed_claims:
+      - "MCP authorization operates at the transport level for restricted MCP servers."
+      - "Transport authorization is separate from application-specific action governance."
+    forge_implications:
+      - "Forge must keep transport authorization separate from OperationContract admission."
+      - "MCP authorization does not grant mutation authority inside Forge."
+  - id: slsa_framework_spec
+    tier: tier_1_primary_research_or_official
+    title: "Supply-chain Levels for Software Artifacts"
+    url: "https://slsa.dev/spec/v1.1/"
+    observed_claims:
+      - "Software supply-chain integrity depends on provenance, build, source, and dependency controls."
+      - "Consumers need evidence that artifacts are produced from expected source and build process."
+    forge_implications:
+      - "Forge adapter installs and updates should require provenance and immutable source refs."
+      - "Distribution admission should be explicit and machine-readable."
+  - id: slsa_artifact_verification_spec
+    tier: tier_1_primary_research_or_official
+    title: "SLSA Verifying Artifacts"
+    url: "https://slsa.dev/spec/v1.0/verifying-artifacts"
+    observed_claims:
+      - "Provenance only mitigates authenticity risks when consumers inspect and verify it."
+      - "Artifact verification compares provenance and artifact information against expected values."
+    forge_implications:
+      - "Forge must separate distribution evidence presence from local artifact verification."
+      - "Forge update/install adapters must not mutate an install before verification evidence passes."
+  - id: slsa_provenance_v1
+    tier: tier_1_primary_research_or_official
+    title: "SLSA Provenance v1"
+    url: "https://slsa.dev/spec/v1.1/provenance"
+    observed_claims:
+      - "SLSA provenance describes how artifacts were produced so consumers can verify them against expectations."
+      - "builder.id identifies the trusted build platform and provenance subjects identify output artifacts."
+    forge_implications:
+      - "Forge provenance verification must compare builder, source, and artifact subject against explicit expectations."
+      - "Forge must not treat signed metadata as sufficient unless predicate semantics match the expected release."
+  - id: slsa_verifier_project
+    tier: tier_1_primary_research_or_official
+    title: "SLSA Verifier"
+    url: "https://github.com/slsa-framework/slsa-verifier"
+    observed_claims:
+      - "SLSA verifier checks cryptographic signatures on provenance and expected builder/source/ref values."
+      - "SLSA verifier supports artifact verification for binary blobs."
+    forge_implications:
+      - "Forge should mirror the practical checks: signature, artifact digest, builder identity, source URI, and source ref."
+      - "Forge host adapters should consume a single verifier result instead of implementing verifier policy themselves."
+  - id: in_toto_statement_v1
+    tier: tier_1_primary_research_or_official
+    title: "in-toto Statement v1"
+    url: "https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md"
+    observed_claims:
+      - "The Statement layer binds a predicate type to one or more artifact subjects."
+      - "Subjects are identified by cryptographic digest metadata."
+    forge_implications:
+      - "Forge must require predicateType and subject digest checks when consuming provenance."
+      - "Forge should fail provenance verification if the local artifact digest is not a statement subject."
+  - id: sigstore_client_spec
+    tier: tier_1_primary_research_or_official
+    title: "Sigstore Client Specification"
+    url: "https://github.com/sigstore/architecture-docs/blob/main/client-spec.md"
+    observed_claims:
+      - "Verifier policy defines trusted identity, trusted transparency services, verification materials, and failure behavior."
+      - "Verification should abort when required signature, identity, timestamp, or transparency checks fail."
+    forge_implications:
+      - "Forge Core should own verification policy and expose typed pass/fail evidence to adapters."
+      - "Host adapters should not independently decide which release identities or log roots to trust."
+  - id: rfc6962_merkle_audit_paths
+    tier: tier_1_primary_research_or_official
+    title: "RFC 6962 Certificate Transparency"
+    url: "https://datatracker.ietf.org/doc/html/rfc6962"
+    observed_claims:
+      - "Merkle audit paths let auditors verify that a leaf is included in a committed Merkle tree root."
+      - "Transparency logs support append-only auditability through signed tree roots and inclusion proofs."
+    forge_implications:
+      - "Forge transparency proofs should bind signed provenance to a Merkle inclusion root."
+      - "Forge should keep public log root distribution and checkpoint validation as explicit trust policy."
+  - id: sigstore_docs
+    tier: tier_1_primary_research_or_official
+    title: "Sigstore Documentation"
+    url: "https://docs.sigstore.dev/"
+    observed_claims:
+      - "Software artifacts can be signed and verified with transparency-backed workflows."
+      - "Signing evidence helps consumers verify artifact origin and integrity."
+    forge_implications:
+      - "Forge distribution policy should accept signature evidence as a trust input."
+      - "Unsigned artifacts still need checksum and provenance evidence before admission."
+  - id: tuf_specification
+    tier: tier_1_primary_research_or_official
+    title: "The Update Framework Specification"
+    url: "https://theupdateframework.github.io/specification/latest/"
+    observed_claims:
+      - "Secure update systems need metadata that constrains trusted targets and versions."
+      - "Update clients need rollback and freeze protection considerations."
+      - "Root metadata update workflow uses version sequencing for rollback protection."
+      - "TUF freeze attacks are limited by metadata expiration times."
+    forge_implications:
+      - "Forge updates need rollback metadata and version compatibility evidence."
+      - "Floating refs or missing update metadata should block distribution admission."
+      - "Forge can verify local metadata freshness by checking role type, version floors, and expires against a fixed update start time without claiming full TUF client behavior."
+  - id: sigstore_security_model_tuf_trust_root
+    tier: tier_1_primary_research_or_official
+    title: "Sigstore Security Model - Trust Root"
+    url: "https://docs.sigstore.dev/about/security/"
+    observed_claims:
+      - "The Sigstore Trust Root secures keys used by the Sigstore project."
+      - "The Sigstore Trust Root leverages TUF principles and protects keys and certificates used to verify artifacts."
+    forge_implications:
+      - "Forge should keep Sigstore trusted-root freshness as a first-class verification boundary instead of assuming static trust material."
+      - "Passing Fulcio/Rekor/TSA checks must not imply TUF trusted-root freshness."
+  - id: sigstore_tuf_client_installation_docs
+    tier: tier_1_primary_research_or_official
+    title: "Sigstore Installation - Downloading The Update Framework client"
+    url: "https://docs.sigstore.dev/cosign/system_config/installation/"
+    observed_claims:
+      - "Sigstore setup starts from trusted TUF root material."
+      - "The TUF client downloads the latest unexpired root as part of its workflow."
+    forge_implications:
+      - "Forge's first TUF boundary should reject expired local trusted-root metadata and report that full client download/signature workflow remains outside scope."
+  - id: in_toto_spec
+    tier: tier_1_primary_research_or_official
+    title: "in-toto Attestation Framework"
+    url: "https://in-toto.io/"
+    observed_claims:
+      - "Supply-chain steps and artifacts can be represented as attestations."
+      - "Provenance and layout evidence can help verify that an artifact followed an expected process."
+    forge_implications:
+      - "Forge adapter distribution should require provenance or attestation refs."
+      - "Host adapters should not treat a downloaded binary as trusted without supply-chain evidence."
+  - id: openai_agents_sdk
+    tier: tier_1_primary_research_or_official
+    title: "OpenAI Agents SDK"
+    url: "https://developers.openai.com/api/docs/guides/agents"
+    observed_claims:
+      - "Agent applications should own orchestration, tool execution, approvals, and state."
+    forge_implications:
+      - "Forge Core should own operation contracts, approvals, side-effect policy, and state authority."
+  - id: openai_agents_handoffs
+    tier: tier_1_primary_research_or_official
+    title: "OpenAI Agents SDK Handoffs"
+    url: "https://openai.github.io/openai-agents-python/handoffs/"
+    observed_claims:
+      - "Handoffs allow an agent to delegate tasks to another specialized agent."
+      - "Handoffs are represented as tools to the LLM."
+    forge_implications:
+      - "Runtime handoff can be modeled as a typed operation/request, not prose."
+      - "Specialization is not enough; Forge still requires capability and registry evidence before suggesting cross-runtime handoff."
+  - id: agent_protocol_survey_2504_16736
+    tier: tier_1_primary_research_or_official
+    title: "A Survey of AI Agent Protocols"
+    url: "https://arxiv.org/html/2504.16736v3"
+    observed_claims:
+      - "The lack of standardized protocols makes it harder for agents to collaborate and scale."
+      - "Future protocol directions include layered architectures and collective intelligence infrastructure."
+    forge_implications:
+      - "Keep Forge communication protocol layered and minimal."
+      - "Strengthen RequestContract before introducing a separate MessageContract."
+  - id: langgraph_multi_agent_handoffs
+    tier: tier_1_primary_research_or_official
+    title: "LangChain multi-agent handoffs"
+    url: "https://docs.langchain.com/oss/python/langchain/multi-agent/handoffs"
+    observed_claims:
+      - "Handoff tools navigate between agent nodes."
+      - "Subgraph handoffs require careful context engineering and explicit decisions about which messages pass between agents."
+    forge_implications:
+      - "Runtime handoff payloads must pass compact typed context, not full chat history."
+      - "Handoff should preserve Forge authority refs across runtimes."
+  - id: langgraph_hitl
+    tier: tier_1_primary_research_or_official
+    title: "LangGraph Human-in-the-loop"
+    url: "https://docs.langchain.com/oss/python/langchain/human-in-the-loop"
+    observed_claims:
+      - "Durable graph state allows safe pause/resume around human decisions."
+      - "Human decisions can approve, edit, reject, or respond."
+    forge_implications:
+      - "Model human checkpoints as durable operation contracts."
+      - "Do not block all autonomy; pause only at meaningful decision points."
+  - id: parasuraman_levels_automation
+    tier: tier_1_primary_research_or_official
+    title: "A model for types and levels of human interaction with automation"
+    url: "https://pubmed.ncbi.nlm.nih.gov/11760769/"
+    observed_claims:
+      - "Automation level should vary by function: acquisition, analysis, decision/action selection, and action implementation."
+      - "Automation changes human work and creates coordination demands instead of simply replacing the human."
+    forge_implications:
+      - "Funnel Autonomy should not be one global autonomy level."
+      - "Forge should distinguish reasoning, decision selection, and action implementation in operation contracts."
+      - "High automation is safer after decisions/gates are settled than during ambiguous direction-setting."
+  - id: mixed_initiative_aaai_2025
+    tier: tier_1_primary_research_or_official
+    title: "Adaptive Agents for Mixed-Initiative Human-AI Collaborations"
+    url: "https://ojs.aaai.org/index.php/AAAI/article/view/35220"
+    observed_claims:
+      - "Effective human-agent collaboration requires appropriate reliance and dynamic contribution by humans and agents."
+      - "Mixed-initiative settings need awareness of capabilities, uncertainty, and control handoff."
+    forge_implications:
+      - "The contract should make next actor, human input requirement, execution policy, and stop policy explicit."
+      - "Autonomy should be phase- and confidence-aware rather than fixed."
+  - id: trustworthy_lma_raci
+    tier: tier_1_primary_research_or_official
+    title: "Facilitating Trustworthy Human-Agent Collaboration in LLM-based Multi-Agent System oriented Software Engineering"
+    url: "https://arxiv.org/abs/2505.04251"
+    observed_claims:
+      - "Strategic allocation of tasks between humans and LLM-based multi-agent systems is a major SE challenge."
+      - "RACI-style responsibility assignment can improve accountability and risk mitigation."
+    forge_implications:
+      - "caller_role, next_actor, authority evidence, and required human checkpoints should be explicit accountability fields."
+      - "High-risk transitions should not rely on implicit chat memory."
+  - id: fudan_agent4se_survey
+    tier: tier_1_primary_research_or_official
+    title: "Large Language Model-Based Agents for Software Engineering: A Survey"
+    url: "https://arxiv.org/html/2409.02977v1"
+    confirmed_origin: "Fudan University, China"
+    observed_claims:
+      - "LLM-based agents for SE need to be analyzed from both software-engineering and agent-system perspectives."
+      - "Human interaction and multi-agent synergy are key future directions."
+    forge_implications:
+      - "Forge should test both SE outputs and agent coordination quality."
+      - "Human guidance and mechanical autonomy should be evaluated separately."
+  - id: schema_first_tool_apis_2603_13404
+    tier: tier_1_primary_research_or_official
+    title: "Schema First Tool APIs for LLM Agents"
+    url: "https://arxiv.org/abs/2603.13404"
+    observed_claims:
+      - "Schema-backed tool contracts and structured validation diagnostics are experimentally compared against free-form documentation."
+      - "Strict schemas reduce interface-level misuse, but schema validity alone does not prove task success."
+    forge_implications:
+      - "Schema/codegen should be mandatory at authority boundaries."
+      - "Schema validation must be paired with semantic gates, evals, and runtime policy instead of treated as the whole product."
+  - id: jsonschemabench_2501_10868
+    tier: tier_1_primary_research_or_official
+    title: "Generating Structured Outputs from Language Models: Benchmark and Studies"
+    url: "https://arxiv.org/html/2501.10868v1"
+    observed_claims:
+      - "JSON Schema has broad feature coverage and implementation variance that must be tested carefully."
+      - "The JSON Schema Test Suite is useful for evaluating validator compliance and edge-case behavior."
+    forge_implications:
+      - "Use conservative schema features for agent/runtime contracts."
+      - "Treat generated JSON Schema as interoperability and tooling surface; Rust/Serde remains the executable source of truth."
+  - id: tool_schema_compression_2605_26165
+    tier: tier_1_primary_research_or_official
+    title: "Tool-Schema Compression Enables Agentic RAG Under Constrained Context Budgets"
+    url: "https://arxiv.org/abs/2605.26165"
+    observed_claims:
+      - "Tool schemas consume context budget and can disable agentic workflows under constrained windows."
+      - "Compressed schema views can preserve operational ability when full schemas overflow context."
+    forge_implications:
+      - "Do not dump full schemas into agent context by default."
+      - "Generate compact agent views from typed contracts for guidance, while keeping full Rust/JSON Schema validation available."
+  - id: serde_official
+    tier: tier_1_primary_research_or_official
+    title: "Serde"
+    url: "https://serde.rs/"
+    observed_claims:
+      - "Serde serializes and deserializes Rust data structures efficiently through Rust traits and derives."
+      - "Serde supports many formats through a shared trait model instead of runtime reflection."
+    forge_implications:
+      - "Rust structs with Serde derives should be the executable contract source for YAML/JSON instances."
+      - "Format support should be adapter-level; domain types should not be tied to YAML-only parsing."
+  - id: schemars_official
+    tier: tier_1_primary_research_or_official
+    title: "Schemars"
+    url: "https://docs.rs/schemars"
+    observed_claims:
+      - "Schemars can generate JSON Schema from Rust types using derive macros."
+      - "Generated schemas are designed to match Serde serialization behavior."
+    forge_implications:
+      - "Generate JSON Schema from Rust types after Serde shape is defined."
+      - "Use schema output for IDE/tooling/interoperability, not as the only source of semantics."
+  - id: jsonschema_rust_official
+    tier: tier_1_primary_research_or_official
+    title: "jsonschema Rust crate"
+    url: "https://docs.rs/jsonschema"
+    observed_claims:
+      - "Rust JSON Schema validation supports popular drafts, custom format validation, structured output, and WebAssembly."
+    forge_implications:
+      - "Rust can validate generated JSON Schema artifacts and instance conformance without Python."
+      - "Schema validation can become part of the Rust acceptance gate."
+  - id: rust_json_schema_field_report_2024
+    tier: tier_2_product_field_report
+    title: "Rust and JSON Schema: odd couple or perfect strangers"
+    url: "https://ahl.dtrace.org/2024/01/22/rust-and-json-schema/"
+    observed_claims:
+      - "JSON Schema is strong for validating built values, but less direct for constructing intended Rust types."
+      - "Generating Rust types from broad JSON Schema can expose impedance mismatch and ambiguous constraints."
+    forge_implications:
+      - "Prefer Rust-domain-types-first for Forge core contracts."
+      - "Use JSON Schema as generated validation/interoperability output unless a stable external schema must be consumed."
+  - id: agent_harness_engineering_survey_2026
+    tier: tier_1_primary_research_or_official
+    title: "Agent Harness Engineering: A Survey"
+    url: "https://openreview.net/pdf/f358711a95aaaf61fdeffd4ef3fc60fba9b8da57.pdf"
+    observed_claims:
+      - "Agent execution harnesses are independent system layers whose engineering quality materially affects reliability."
+      - "Harness engineering can be decomposed into execution environment, tool interface, context, lifecycle, observability, validation, and governance concerns."
+    forge_implications:
+      - "Forge Rust should separate contract types, validation, runtime execution, storage, observability, and host/tool adapters."
+      - "A single binary module should not own all harness responsibilities."
+  - id: opendev_terminal_agents_2603_05344
+    tier: tier_1_primary_research_or_official
+    title: "Building AI Coding Agents for the Terminal: Scaffolding, Harness, Context Engineering, and Lessons Learned"
+    url: "https://arxiv.org/abs/2603.05344"
+    observed_claims:
+      - "Terminal-native coding agents need strict safety controls and efficient context management."
+      - "OpenDev uses a compound AI system architecture with separation between planning/execution, lazy tool discovery, context compaction, and persistent project memory."
+    forge_implications:
+      - "Forge should keep CLI/host adapters thin and move planning/runtime contracts into core crates."
+      - "Context and memory/storage concerns deserve explicit module boundaries."
+  - id: policy_first_control_2603_18059
+    tier: tier_1_primary_research_or_official
+    title: "Policy-First Control for Tool-Orchestrated Workflows"
+    url: "https://arxiv.org/pdf/2603.18059"
+    observed_claims:
+      - "Tool-orchestrated workflows can be governed through policy checks at lifecycle boundaries."
+      - "Trace records and policy decision logs should be joinable through stable ids."
+    forge_implications:
+      - "Policy/gate validation should be a core service boundary rather than mixed into CLI output."
+      - "Storage and runtime traces need stable typed ids."
+  - id: cargo_workspaces_official
+    tier: tier_1_primary_research_or_official
+    title: "Cargo Workspaces"
+    url: "https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html"
+    observed_claims:
+      - "Cargo workspaces manage multiple related packages developed together."
+      - "Workspaces are appropriate when a growing library should be split into multiple library crates."
+    forge_implications:
+      - "Forge Rust should use a workspace once contract types, validator, CLI, storage, and runtime become separate library/binary packages."
+      - "A workspace can share lockfile/build output while keeping crate boundaries explicit."
+  - id: rust_api_guidelines_official
+    tier: tier_1_primary_research_or_official
+    title: "Rust API Guidelines"
+    url: "https://rust-lang.github.io/api-guidelines/checklist.html"
+    observed_claims:
+      - "Rust APIs should leverage type safety, meaningful custom types, predictable traits, and stable public dependencies."
+      - "Public API design affects dependability and long-term compatibility."
+    forge_implications:
+      - "Contract crates should expose narrow, typed APIs and avoid leaking unstable implementation dependencies."
+      - "Use newtypes and enums for ids, roles, authority, and state rather than loose strings where runtime semantics matter."
+  - id: semver_2_0_0
+    tier: tier_1_primary_research_or_official
+    title: "Semantic Versioning 2.0.0"
+    url: "https://semver.org/"
+    observed_claims:
+      - "Backward-incompatible changes to public API require a major version boundary."
+      - "Backward-compatible additions are minor-version changes."
+    forge_implications:
+      - "Treat documented CLI stdout as compatibility surface until explicitly deprecated."
+      - "Do not remove forge-contract-validator or change its success line as an internal refactor."
+  - id: cli_guidelines_clig_dev
+    tier: tier_2_product_field_report
+    title: "Command Line Interface Guidelines"
+    url: "https://clig.dev/"
+    observed_claims:
+      - "CLI tools should return zero on success and non-zero on failure."
+      - "Primary output and machine-readable output should go to stdout; diagnostics belong on stderr."
+    forge_implications:
+      - "Keep validator exit codes meaningful."
+      - "Use stdout for success payloads and stderr for diagnostics."
+  - id: rust_cli_machine_readable_output
+    tier: tier_2_product_field_report
+    title: "Rain's Rust CLI recommendations: Machine-readable output"
+    url: "https://rust-cli-recommendations.sunshowers.io/machine-readable-output.html"
+    observed_claims:
+      - "Rust CLI programs should support at least JSON for machine-readable output."
+      - "Self-describing output formats are preferred for automation."
+    forge_implications:
+      - "Keep forge-core-cli JSON as the canonical new automation surface."
+      - "Do not make agents parse the compatibility stdout line."
+  - id: bash_in_the_wild_2022
+    tier: tier_1_primary_research_or_official
+    title: "Bash in the Wild: Language Usage, Code Smells, and Bugs"
+    url: "https://dl.acm.org/doi/10.1145/3517193"
+    observed_claims:
+      - "Large-scale empirical study over more than one million open-source Bash scripts."
+      - "Shell scripts are common automation glue and contain recurring bug-prone patterns."
+    forge_implications:
+      - "Assume existing shell consumers may parse stable-looking stdout."
+      - "Prefer compatibility wrappers and explicit migration over silent CLI output changes."
+  - id: salesforce_cli_deprecation_policy
+    tier: tier_2_product_field_report
+    title: "Salesforce CLI Deprecation Policy"
+    url: "https://developer.salesforce.com/docs/atlas.en-us.sfdx_cli_reference.meta/sfdx_cli_reference/sfdx_dev_cli_deprecation.htm"
+    observed_claims:
+      - "Deprecated commands and flags are announced in release notes."
+      - "Deprecated commands or flags emit warnings for at least four months before removal."
+      - "When possible, a functional alternative is provided."
+    forge_implications:
+      - "CLI removals should have release-note notice, replacement path, and a minimum warning window."
+      - "Deprecation notices must avoid stdout pollution when stdout is machine-consumed."
+  - id: kubernetes_deprecation_policy
+    tier: tier_1_primary_research_or_official
+    title: "Kubernetes Deprecation Policy"
+    url: "https://kubernetes.io/docs/reference/using-api/deprecation-policy/"
+    observed_claims:
+      - "CLI flags and commands are treated as compatibility elements with deprecation policy."
+      - "Removal depends on stability level and release boundaries."
+    forge_implications:
+      - "Treat Forge CLI commands and compatibility binaries as public compatibility surfaces."
+      - "Do not remove user-facing CLI behavior without a documented lifecycle."
+  - id: rfc8594_sunset
+    tier: tier_1_primary_research_or_official
+    title: "RFC 8594: The Sunset HTTP Header Field"
+    url: "https://datatracker.ietf.org/doc/html/rfc8594"
+    observed_claims:
+      - "Sunset communicates that a resource is likely to become unavailable at a specified future time."
+      - "Sunset links can point consumers to information about the upcoming resource sunset."
+    forge_implications:
+      - "If Forge retires an interface, release metadata should state the sunset/removal target and migration information."
+  - id: arduino_cli_versioning
+    tier: tier_1_primary_research_or_official
+    title: "Backward compatibility policy for Arduino CLI"
+    url: "https://docs.arduino.cc/arduino-cli/versioning/"
+    observed_claims:
+      - "Removing or renaming a command, positional argument, or flag is a breaking CLI change."
+      - "Changing command behavior or argument formats can be breaking."
+    forge_implications:
+      - "Removing forge-contract-validator or changing its output should be treated as breaking CLI behavior."
+  - id: natural_language_agent_harnesses_2603_25723
+    tier: tier_1_primary_research_or_official
+    title: "Natural-Language Agent Harnesses"
+    url: "https://arxiv.org/html/2603.25723v1"
+    confirmed_origin: "Tsinghua University Shenzhen / Harbin Institute of Technology Shenzhen, China"
+    observed_claims:
+      - "Harness behavior can be externalized as a portable executable artifact with explicit contracts, durable artifacts, and lightweight adapters."
+      - "Runtime charter and harness logic should be separated so task-family method logic does not become buried in controller code."
+    forge_implications:
+      - "Forge should keep human-facing guidance as agent-consumable harness logic, but execution authority should be typed and runtime-owned."
+      - "Host adapters should stay lightweight and should not own the method's state-machine semantics."
+  - id: runtime_governance_paths_2603_16586
+    tier: tier_1_primary_research_or_official
+    title: "Runtime Governance for AI Agents: Policies on Paths"
+    url: "https://arxiv.org/html/2603.16586v1"
+    observed_claims:
+      - "Prompting and ordinary access control are insufficient for path-level agent governance."
+      - "Compliance policies can be modeled as deterministic functions over execution paths."
+    forge_implications:
+      - "Forge runtime must evaluate operation paths and stop policies, not rely on repeated prompt reminders."
+      - "OperationContract execution should produce auditable path decisions before side effects."
+  - id: runtime_governance_embodied_2604_07833
+    tier: tier_1_primary_research_or_official
+    title: "Harnessing Embodied Agents: Runtime Governance for Policy-Constrained Execution"
+    url: "https://arxiv.org/html/2604.07833v4"
+    confirmed_origin: "China/EU/UK contributor mix; exact institutional mapping should be checked before stronger origin claims"
+    observed_claims:
+      - "Agent cognition and execution oversight should be separated by a dedicated runtime governance layer."
+      - "Governance should handle policy checking, capability admission, monitoring, rollback, and human override."
+    forge_implications:
+      - "Forge Core should own policy checks and execution gating, while the host LLM remains the reasoning and communication layer."
+      - "Runtime operation planning should be implemented before broad mutating execution."
+  - id: agentic_harness_engineering_2604_25850
+    tier: tier_1_primary_research_or_official
+    title: "Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses"
+    url: "https://arxiv.org/html/2604.25850v3"
+    confirmed_origin: "Fudan University / Peking University / Shanghai Qiji Zhifeng Co., Ltd., China"
+    observed_claims:
+      - "Harnesses are central to coding-agent performance and need component, experience, and decision observability."
+      - "Harness evolution needs explicit editable components and evidence tying edits to outcomes."
+    forge_implications:
+      - "Forge must keep every architecture boundary as an explicit component with decision evidence and validation outcome."
+      - "Runtime improvements should be traceable through typed policies, migration audits, and tests."
+  - id: w3c_prov_dm
+    tier: tier_1_primary_research_or_official
+    title: "PROV-DM: The PROV Data Model"
+    url: "https://www.w3.org/TR/prov-dm/"
+    observed_claims:
+      - "Provenance centers on entities produced or used by activities and influenced by agents."
+      - "Entity/activity/agent relationships support assessments of quality, reliability, and trustworthiness."
+    forge_implications:
+      - "Forge artifacts and evidence should remain identifiable entities generated by runtime activities and attributed to actors."
+      - "Storage projection should preserve stable logical refs rather than collapse artifact/evidence semantics into generic file paths."
+  - id: ro_crate_spec_1_1
+    tier: tier_1_primary_research_or_official
+    title: "RO-Crate Metadata Specification 1.1"
+    url: "https://www.researchobject.org/ro-crate/specification/1.1/"
+    observed_claims:
+      - "Research objects package data, outputs, methods, and metadata as linked entities."
+      - "Files can be aggregated with identifiers, provenance, relations, and annotations."
+    forge_implications:
+      - "Repo-local Forge artifacts can start as ordinary files while retaining logical artifact/evidence identity for later metadata."
+      - "A separate artifact database is not required before file-backed projection is exhausted."
+  - id: workflow_run_ro_crate_2024
+    tier: tier_1_primary_research_or_official
+    title: "Recording provenance of workflow runs with RO-Crate"
+    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC11386446/"
+    observed_claims:
+      - "Workflow execution provenance can be captured by packaging run metadata, inputs, outputs, and workflow context."
+      - "Workflow Run RO-Crate specializes RO-Crate for execution records."
+    forge_implications:
+      - "Forge should keep execution outputs and evidence in predictable repo-local locations that can later be packaged or indexed."
+      - "Operation execution artifacts should be traceable without requiring a separate service."
+  - id: openlineage_object_model
+    tier: tier_1_primary_research_or_official
+    title: "OpenLineage Object Model"
+    url: "https://openlineage.io/docs/spec/object-model/"
+    observed_claims:
+      - "Lineage events model jobs, runs, datasets, inputs, outputs, and facets."
+      - "Output datasets can carry statistics and facets that describe generated outputs."
+    forge_implications:
+      - "Forge evidence and artifacts should keep output identity separate from physical storage path."
+      - "Typed metadata/facets can be layered later without blocking file-backed output projection now."
+  - id: harnessfix_trace_guided_2606_06324
+    tier: tier_1_primary_research_or_official
+    title: "From Failed Trajectories to Reliable LLM Agents: Diagnosing and Repairing Agent Harnesses with Trace-Guided Program Repair"
+    url: "https://arxiv.org/html/2606.06324v1"
+    observed_claims:
+      - "Agent harness repair benefits from locating relevant evidence in failed trajectories."
+      - "Trace-guided diagnosis needs evidence scoped to harness layers rather than broad indirect context."
+    forge_implications:
+      - "Forge evidence targets should land in predictable evidence locations so future diagnosis can retrieve scoped traces."
+      - "Artifact/evidence projection should reduce ambiguity for downstream harness repair and evaluation."
+  - id: storm_state_management_2605_20563
+    tier: tier_1_primary_research_or_official
+    title: "Multi-agent Collaboration with State Management"
+    url: "https://arxiv.org/html/2605.20563v1"
+    confirmed_origin: "Shanghai Jiaotong University / Peking University contributors, China"
+    observed_claims:
+      - "Workspace isolation defers conflicts to expensive post-hoc merges."
+      - "Write-time state consistency detects stale reads and conflicting writes before accepting edits."
+      - "Empirical results beat git-worktree multi-agent baselines on Commit0-Lite and PaperBench."
+    forge_implications:
+      - "Forge lanes need typed read/write state, stale-view detection, and runtime mediation instead of only worktree isolation."
+      - "Rust runtime should start by planning and validating operations before executing writes."
+  - id: coordination_architecture_layer_2605_03310
+    tier: tier_1_primary_research_or_official
+    title: "Coordination as an Architectural Layer for LLM-Based Multi-Agent Systems"
+    url: "https://arxiv.org/abs/2605.03310"
+    observed_claims:
+      - "Coordination defects are a primary failure mode in production multi-agent LLM systems."
+      - "Coordination should be treated as a configurable architectural layer separable from agent logic and information access."
+    forge_implications:
+      - "Forge should not hide coordination in prompt style; it belongs in explicit runtime/store/contract boundaries."
+      - "Coordination quality should be tested separately from task success."
+  - id: cordon_semantic_transactions_2606_17573
+    tier: tier_1_primary_research_or_official
+    title: "Cordon: Semantic Transactions for Tool-Using LLM Agents"
+    url: "https://arxiv.org/html/2606.17573v1"
+    observed_claims:
+      - "Tool-using agent runtimes need task-scoped execution boundaries for commit, rollback, recovery, and audit across multi-step workflows."
+      - "Irreversible effects should be staged and validated before commit."
+      - "Runtime containment guarantees apply only to operations mediated by the runtime and observable to the system."
+    forge_implications:
+      - "Forge runtime should separate read-only planning snapshots from later staged execution and commit boundaries."
+      - "Do not let host agents jump from a valid-looking plan to irreversible effects without a mediated runtime boundary."
+  - id: local_llm_agents_vulnerable_runtimes_2606_21071
+    tier: tier_1_primary_research_or_official
+    title: "Local LLM Agents as Vulnerable Runtimes: A Source-Code Audit of the Agent Runtime Layer"
+    url: "https://arxiv.org/html/2606.21071v1"
+    observed_claims:
+      - "Local LLM agents are privileged runtimes that mediate shell, filesystem, browser, and credential access."
+      - "The runtime layer needs security analysis beyond model prompting because tool dispatch, permission gates, and process execution are attack surfaces."
+      - "Source-code audit can identify missing enforcement around shell execution, permissions, and environment exposure."
+    forge_implications:
+      - "Forge command execution must be runtime-owned and typed, not host-agent prose."
+      - "Shell-string execution and broad environment inheritance should be blocked in the first command runner boundary."
+      - "Command results should be structured evidence so future audits can inspect what actually ran."
+  - id: agentleak_privacy_leakage_2602_11510
+    tier: tier_1_primary_research_or_official
+    title: "AgentLeak: A Full-Stack Benchmark for Privacy Leakage in Multi-Agent LLM Systems"
+    url: "https://arxiv.org/html/2602.11510v2"
+    observed_claims:
+      - "Multi-agent privacy leakage appears in internal channels such as inter-agent messages, shared memory, tool inputs, logs, and artifacts."
+      - "Output-only audits miss a large fraction of privacy violations because internal channels can leak while final output looks safe."
+      - "Frameworks often propagate full task context without systematic access control or filtering."
+    forge_implications:
+      - "Forge adapters must not put payload bytes or sensitive tool arguments into chat-facing JSON by default."
+      - "Payload loading should be a typed adapter boundary with minimization, size limits, and path scope checks."
+      - "Execution evidence should record metadata and hashes, not raw payload content."
+  - id: tool_agent_data_leakage_2606_17114
+    tier: tier_1_primary_research_or_official
+    title: "An Evaluation of Data Leakage Risks in Tool-Using LLM Agents in Realistic Scenarios"
+    url: "https://arxiv.org/html/2606.17114v1"
+    confirmed_origin: "Singapore AI Safety Institute / Korea AI Safety Institute joint evaluation"
+    observed_claims:
+      - "Data leakage can occur during benign, non-adversarial agent tasks involving tools and realistic workflows."
+      - "Successful task completion can coincide with unnecessary access or inappropriate disclosure of sensitive information."
+      - "Capability and data-handling safety need separate evaluation criteria."
+    forge_implications:
+      - "Forge should treat payload access and payload disclosure as separate safety checks from task success."
+      - "Payload adapters should validate scope and size before reading bytes for execution."
+      - "Tests should cover payload rejection independently from operation success."
+  - id: parallax_cognitive_executive_separation_2604_12986
+    tier: tier_1_primary_research_or_official
+    title: "Parallax: Why AI Agents That Think Must Never Act"
+    url: "https://arxiv.org/html/2604.12986v1"
+    observed_claims:
+      - "Prompt-only guardrails are insufficient when the same agent both reasons and executes side-effecting actions."
+      - "Separating cognitive planning from executive validation reduces unsafe action execution."
+      - "Independent validation and reversible execution patterns improve safety for agent tool use."
+    forge_implications:
+      - "Forge should keep host LLM reasoning separate from Rust runtime command admission."
+      - "Command runner admission should validate staging, platform, env, timeout, network, and side-effect policy before spawn."
+      - "Mutation and irreversible commit remain separate later boundaries."
+  - id: rust_std_child_process_official
+    tier: tier_1_primary_research_or_official
+    title: "Rust Standard Library: std::process::Child"
+    url: "https://doc.rust-lang.org/std/process/struct.Child.html"
+    observed_claims:
+      - "Child has no Drop implementation that automatically waits for a child process."
+      - "A spawned child can continue running after the Child handle is dropped."
+      - "The parent should explicitly wait or kill/wait to avoid lingering processes and zombies."
+    forge_implications:
+      - "Forge command runner must enforce timeout with explicit kill and wait."
+      - "Captured stdout/stderr must be drained without relying on process drop behavior."
+      - "Command execution tests should cover timeout/admission behavior separately from effect commits."
+  - id: failure_atomic_updates_fast15
+    tier: tier_1_primary_research_or_official
+    title: "Failure-Atomic Updates of Application Data in a Linux File System"
+    url: "https://www.usenix.org/conference/fast15/technical-sessions/presentation/verma"
+    observed_claims:
+      - "Application data integrity across process crashes, kernel panics, and power outages requires explicit failure-atomic update mechanisms."
+      - "Multi-file atomic durability needs file-system or transaction support beyond ordinary per-file writes."
+      - "Journaling/write-ahead mechanisms can distinguish completed transactions from incomplete transactions during recovery."
+    forge_implications:
+      - "Forge must not claim crash-durable multi-file transactions from a simple temp-file application boundary."
+      - "The first file-effect application boundary can provide process-local rollback, while crash recovery requires a later WAL/recovery boundary."
+      - "Multi-file commit semantics need explicit evidence and tests before being treated as release-grade durability."
+  - id: rust_file_sync_all_official
+    tier: tier_1_primary_research_or_official
+    title: "Rust Standard Library: std::fs::File"
+    url: "https://doc.rust-lang.org/std/fs/struct.File.html"
+    observed_claims:
+      - "sync_all attempts to synchronize file data and metadata to the filesystem."
+      - "sync_data may skip some metadata synchronization depending on platform."
+    forge_implications:
+      - "Forge temporary payload writes should call sync_all before rename/replace when applying file effects."
+      - "Syncing one file does not by itself prove directory-entry or multi-file transaction durability."
+  - id: rust_std_file_lock_official
+    tier: tier_1_primary_research_or_official
+    title: "Rust Standard Library: std::fs::File locking"
+    url: "https://doc.rust-lang.org/std/fs/struct.File.html"
+    observed_claims:
+      - "File::lock, File::try_lock, lock_shared, try_lock_shared, and unlock are stable standard-library APIs."
+      - "Locks are released when the file handle is closed or unlock is called."
+      - "The implementation maps to platform locking APIs and may be advisory or mandatory depending on platform."
+    forge_implications:
+      - "Forge can serialize local repo file-effect writers without adding a third-party locking crate."
+      - "Lock semantics must be documented as local/advisory and not treated as distributed coordination."
+      - "Multi-machine or network filesystem correctness remains a daemon/database/distributed coordination boundary."
+  - id: aries_wal_1992
+    tier: tier_1_primary_research_or_official
+    title: "ARIES: A Transaction Recovery Method Supporting Fine-Granularity Locking and Partial Rollbacks Using Write-Ahead Logging"
+    url: "https://dl.acm.org/doi/10.1145/128765.128770"
+    observed_claims:
+      - "Write-ahead logging supports transaction recovery, fine-grained locking, and partial rollbacks."
+      - "Recovery requires durable log records that can drive redo and undo after failure."
+    forge_implications:
+      - "Forge's future crash-safe effect commits should use a WAL/recovery boundary rather than relying only on host-agent repair."
+      - "Rollback metadata must be runtime/store data, not chat narration."
+  - id: sigstore_bundle_format_docs
+    tier: tier_1_primary_research_or_official
+    title: "Sigstore Bundle Format"
+    url: "https://docs.sigstore.dev/about/bundle/"
+    observed_claims:
+      - "A Sigstore bundle contains the verification material and signature content required to verify a signature on an artifact."
+      - "Verification material is distinct from the signed content."
+      - "Bundle content can be either a Message Signature over an artifact hash or a DSSE envelope for attestations."
+      - "Short-lived Fulcio certificates need timestamp or transparency evidence to prove signing occurred within the certificate validity window."
+    forge_implications:
+      - "Forge should not treat a Rekor inclusion proof alone as full Sigstore bundle or Fulcio identity verification."
+      - "Host adapters should receive typed verification results, not raw bundle interpretation duties."
+      - "Forge should model Message Signature and DSSE as separate binding branches instead of one generic bundle pass."
+  - id: dsse_protocol_spec
+    tier: tier_1_primary_research_or_official
+    title: "Dead Simple Signing Envelope Protocol"
+    url: "https://github.com/secure-systems-lab/dsse/blob/master/protocol.md"
+    observed_claims:
+      - "DSSE signs the pre-authentication encoding of payload type and serialized payload body."
+      - "Verifiers must verify the exact serialized body that the application consumes."
+      - "The key id is a hint and not authority."
+    forge_implications:
+      - "Forge DSSE verification must construct PAE over the original payload bytes and payloadType."
+      - "Forge must not reserialize the in-toto statement before checking the DSSE signature."
+      - "Forge should treat key identity as certificate/trust-policy evidence, not as DSSE keyid prose."
+  - id: sigstore_go_artifact_policy
+    tier: tier_1_primary_research_or_official
+    title: "sigstore-go verify package"
+    url: "https://pkg.go.dev/github.com/sigstore/sigstore-go/pkg/verify"
+    observed_claims:
+      - "Artifact policies enforce that a signed entity was created for a given artifact or digest."
+      - "Skipping artifact checks is explicitly marked unsafe."
+      - "Certificate identity policies are separate from artifact digest policies."
+    forge_implications:
+      - "Forge bundle verification must bind the artifact digest to signed content instead of accepting bundle presence."
+      - "Forge should keep artifact policy, certificate identity policy, and transparency policy as typed evidence layers."
+  - id: intoto_statement_subject_spec
+    tier: tier_1_primary_research_or_official
+    title: "in-toto Statement Layer Specification"
+    url: "https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md"
+    observed_claims:
+      - "The statement subject identifies the software artifacts an attestation applies to."
+      - "Every subject must have a digest, and subjects are assumed immutable."
+    forge_implications:
+      - "Future DSSE bundle verification must bind in-toto subject digests to Forge artifact digests."
+      - "The Message Signature boundary should not claim DSSE subject semantics."
+  - id: sigstore_go_bundle_signing_docs
+    tier: tier_1_primary_research_or_official
+    title: "sigstore-go signing documentation"
+    url: "https://github.com/sigstore/sigstore-go/blob/main/docs/signing.md"
+    observed_claims:
+      - "sigstore-go emits JSON bundles that combine raw message signatures or attestations with certificates, transparency log data, timestamps, and other metadata."
+      - "Trusted root material can be supplied separately because trust material rotates."
+    forge_implications:
+      - "Forge bundle subject binding should compose content, certificate, Rekor, timestamp, and trusted-root evidence instead of embedding host-specific assumptions."
+      - "Trusted-root freshness remains a separate boundary from subject binding."
+  - id: sigstore_rekor_docs
+    tier: tier_1_primary_research_or_official
+    title: "Sigstore Rekor Overview"
+    url: "https://docs.sigstore.dev/logging/overview/"
+    observed_claims:
+      - "Rekor is a transparency log for signed software releases."
+      - "Rekor tooling can verify log inclusion, log integrity, and retrieve entries."
+    forge_implications:
+      - "Forge can add a Rust-owned Rekor inclusion verification boundary before host adapters install or update artifacts."
+      - "Rekor proof verification should be evidence in the release chain, not workflow authority."
+  - id: transparency_dev_checkpoint_format
+    tier: tier_1_primary_research_or_official
+    title: "Transparency.dev Checkpoint Format"
+    url: "https://github.com/transparency-dev/formats/blob/main/log/README.md"
+    observed_claims:
+      - "Signed checkpoints can be merged and can contain multiple signatures."
+      - "The checkpoint format is designed for interoperability across transparent log tooling and witnesses."
+    forge_implications:
+      - "Forge should verify signed checkpoints as a separate trust-root step instead of only recomputing Merkle paths."
+      - "Future witness/cosigned checkpoint policy can be added without changing host adapter command semantics."
+  - id: sigstore_go_field_capabilities
+    tier: tier_1_primary_research_or_official
+    title: "Sigstore Go Library"
+    url: "https://github.com/sigstore/sigstore-go"
+    observed_claims:
+      - "The Go implementation supports Sigstore bundle verification, Rekor verification, TSA, structured verification results, and TUF trusted roots."
+      - "Sigstore's mature implementation separates trust roots and structured verification results from application policy."
+    forge_implications:
+      - "Forge should model bundle/Fulcio/Rekor verification as typed backend results with explicit trust-root policy."
+      - "The Rust core should avoid scattering Sigstore-specific internals across host adapters."
+  - id: sigstore_rs_014_rekor_backend
+    tier: tier_2_field_implementation
+    title: "sigstore-rs 0.14.0"
+    url: "https://github.com/sigstore/sigstore-rs"
+    observed_claims:
+      - "The Rust crate is under active development and not considered stable before a 1.0 release."
+      - "Its Rekor model can verify inclusion proofs with signed checkpoints and Rekor public keys."
+      - "The current bundle verifier code still marks Merkle inclusion and Signed Entry Timestamp verification as TODOs."
+    forge_implications:
+      - "Forge can use sigstore-rs as compatibility evidence for Rekor checkpoint semantics without making it the host-adapter contract."
+      - "Forge should keep Fulcio/bundle identity as a separate boundary until the Rust backend policy and coverage are explicit."
+  - id: software_signing_industry_study_2025
+    tier: tier_1_primary_research_or_official
+    title: "Software Signing for Supply Chain Security: An Industry Study"
+    url: "https://www.usenix.org/system/files/usenixsecurity25-kalu.pdf"
+    observed_claims:
+      - "Software signing deployment has operational complexity and inconsistent understanding across organizations."
+      - "Security benefit depends on verification policy, key/trust-root handling, and usable tooling rather than signing presence alone."
+    forge_implications:
+      - "Forge should make verification boundaries explicit and typed so agents cannot claim safety from metadata presence."
+      - "Install/update paths need clear failure reasons and evidence outputs instead of opaque host adapter decisions."
+  - id: sigstore_security_model
+    tier: tier_1_primary_research_or_official
+    title: "Sigstore Security Model"
+    url: "https://docs.sigstore.dev/about/security/"
+    observed_claims:
+      - "Sigstore's trust root secures Fulcio certificate authority trust material."
+      - "Fulcio issues short-lived code-signing certificates after identity validation."
+      - "Verifiers must reason about trust roots and signer identity, not just artifact bytes."
+    forge_implications:
+      - "Forge must keep trusted-root policy separate from host adapter prose."
+      - "Fulcio certificate and identity verification need a later typed boundary after trust-root policy exists."
+  - id: sigstore_timestamps_docs
+    tier: tier_1_primary_research_or_official
+    title: "Sigstore Timestamps"
+    url: "https://docs.sigstore.dev/cosign/verifying/timestamps/"
+    observed_claims:
+      - "Verification checks that timestamp evidence falls within the certificate validity period."
+      - "Timestamp evidence can come from Rekor integrated time or RFC3161 timestamp authority material."
+    forge_implications:
+      - "Forge trust policy must name the allowed timestamp source before bundle/Fulcio verification can claim temporal validity."
+      - "Rekor inclusion alone should not be treated as the only possible timestamp policy."
+  - id: rfc6962_certificate_transparency
+    tier: tier_1_primary_research_or_official
+    title: "RFC 6962: Certificate Transparency"
+    url: "https://datatracker.ietf.org/doc/html/rfc6962"
+    observed_claims:
+      - "A Certificate Transparency log returns a Signed Certificate Timestamp as a promise to incorporate a certificate into an append-only Merkle tree within the maximum merge delay."
+      - "The SCT key id is the SHA-256 hash of the log public key represented as SubjectPublicKeyInfo."
+      - "SCT validation is separate from later auditing that the certificate actually appears in the log."
+    forge_implications:
+      - "Forge should treat SCT signature verification as its own read-only boundary."
+      - "Passing SCT verification must not imply revocation, TUF freshness, or installer authority."
+  - id: sigstore_fulcio_certificate_transparency_docs
+    tier: tier_1_primary_research_or_official
+    title: "Sigstore Fulcio Certificate Issuing Overview"
+    url: "https://docs.sigstore.dev/certificate_authority/certificate-issuing-overview/"
+    observed_claims:
+      - "Fulcio appends issued certificates to a Certificate Transparency log and receives an SCT signed by that CT log."
+      - "The SCT can be verified without contacting the log, while inclusion proof can be requested separately."
+      - "Fulcio's CT log is separate from Rekor, which stores artifact signatures and attestations."
+    forge_implications:
+      - "Forge must not collapse Fulcio CT evidence and Rekor artifact transparency into one pass/fail."
+      - "Offline SCT verification is useful but does not replace inclusion proof, revocation, or freshness checks."
+  - id: rustls_sct_crate_docs
+    tier: tier_1_primary_research_or_official
+    title: "sct Rust crate"
+    url: "https://docs.rs/sct"
+    observed_claims:
+      - "The sct crate verifies Signed Certificate Timestamp encodings for DER X.509 certificates against trusted CT log descriptions."
+      - "The verifier returns the trusted log index on success and explicit errors such as unknown log, invalid signature, malformed SCT, unsupported version, or future timestamp."
+    forge_implications:
+      - "Forge can wrap sct as a small Rust verifier boundary instead of hand-rolling SCT signature parsing."
+      - "Forge should preserve sct failure modes in machine-readable output."
+  - id: rfc3161_timestamp_protocol
+    tier: tier_1_primary_research_or_official
+    title: "RFC 3161: Internet X.509 Public Key Infrastructure Time-Stamp Protocol"
+    url: "https://www.rfc-editor.org/info/rfc3161/"
+    observed_claims:
+      - "A Time Stamping Authority creates time-stamp tokens to indicate that a datum existed at a particular point in time."
+      - "RFC3161 defines request/response token semantics and security-relevant TSA requirements."
+    forge_implications:
+      - "Forge must not claim RFC3161 timestamp authority verification until it validates the timestamp token, message imprint, TSA signature, and trusted TSA certificate path."
+      - "Rekor integrated time and RFC3161 TSA evidence should remain separately reported timestamp sources."
+  - id: rfc5652_cms
+    tier: tier_1_primary_research_or_official
+    title: "RFC 5652: Cryptographic Message Syntax"
+    url: "https://datatracker.ietf.org/doc/html/rfc5652"
+    observed_claims:
+      - "CMS defines the signed-data syntax used by RFC3161 TimeStampToken."
+      - "SignerInfo signed attributes and signature validation are separate from application-level timestamp semantics."
+    forge_implications:
+      - "Forge should not hand-roll CMS verification when a focused Rust verifier can validate signed attributes, signer certificate selection, and signature algorithms."
+      - "Forge's RFC3161 verifier must keep CMS signature verification separate from release install/update authority."
+  - id: sigstore_tsa_rust_crate_docs
+    tier: tier_1_primary_research_or_official
+    title: "sigstore-tsa Rust crate documentation"
+    url: "https://docs.rs/sigstore-tsa/latest/sigstore_tsa/verify/fn.verify_timestamp_response.html"
+    observed_claims:
+      - "The verifier parses RFC3161 timestamp tokens, extracts TSTInfo, verifies message imprint against signature bytes, verifies CMS signature, and validates TSA certificate chain to trusted roots."
+      - "Verification options accept trusted roots, intermediates, and optional TSA certificates."
+    forge_implications:
+      - "Forge can integrate RFC3161 support as an offline Rust verifier without adding a TSA network client to the runtime boundary."
+      - "Forge fixtures should cover valid timestamp, payload mismatch, missing trust roots, and certificate validity-window checks."
+  - id: fulcio_oid_info
+    tier: tier_1_primary_research_or_official
+    title: "Fulcio OID Information"
+    url: "https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md"
+    observed_claims:
+      - "Fulcio certificates encode OIDC and CI/CD workflow identity information using certificate extension semantics."
+      - "Different issuers and workflow systems expose different identity claim shapes."
+    forge_implications:
+      - "Forge should require explicit identity policy before interpreting certificate subject or workflow identity."
+      - "Host adapters must not infer GitHub identity policy from arbitrary certificate text."
+  - id: sigstore_trusted_root_proto
+    tier: tier_1_primary_research_or_official
+    title: "Sigstore Trusted Root Protobuf"
+    url: "https://github.com/sigstore/protobuf-specs/blob/main/protos/sigstore_trustroot.proto"
+    observed_claims:
+      - "Sigstore trusted root material covers certificate authorities, transparency logs, and timestamp authorities."
+      - "Trusted root distribution is a distinct data model from signature bundle content."
+    forge_implications:
+      - "Forge should validate trusted-root policy as its own boundary before certificate or bundle verification."
+      - "Policy must mention Fulcio, Rekor, certificate transparency, and timestamp authority material explicitly."
+  - id: sigstore_go_verify_policy
+    tier: tier_2_product_field_report
+    title: "sigstore-go verify package"
+    url: "https://pkg.go.dev/github.com/sigstore/sigstore-go/pkg/verify"
+    observed_claims:
+      - "The mature Go verifier uses explicit policies for artifact digest and certificate identity."
+      - "Verification separates trust material, subject/artifact checks, and identity policy."
+    forge_implications:
+      - "Forge should expose policy validation and verification results as typed Rust outputs."
+      - "Adapters should not own Sigstore policy interpretation."
+  - id: sigstore_usability_case_study_2025
+    tier: tier_1_primary_research_or_official
+    title: "Why Johnny Adopts Identity-Based Software Signing: A Usability Case Study of Sigstore"
+    url: "https://arxiv.org/html/2503.00271v6"
+    observed_claims:
+      - "Practitioners value Sigstore transparency, but public logs, air-gapped operation, and documentation clarity create adoption risks."
+      - "Users need clearer guidance on how different Sigstore components fit together."
+    forge_implications:
+      - "Forge should report precise evidence and limits instead of bundling all Sigstore concepts into one opaque pass/fail."
+      - "A trust-policy boundary reduces operator confusion before deeper cryptographic verification is added."
+  - id: sigstore_overview_verification_flow
+    tier: tier_1_primary_research_or_official
+    title: "Sigstore Overview"
+    url: "https://docs.sigstore.dev/about/overview/"
+    observed_claims:
+      - "Sigstore verification checks artifact signature, certificate identity, Fulcio trust, and transparency evidence as distinct steps."
+      - "Fulcio certificates bind an ephemeral public key to an OIDC-authenticated identity."
+    forge_implications:
+      - "Forge should keep Fulcio certificate identity verification separate from artifact subject binding and transparency verification."
+      - "Verifier outputs must identify which Sigstore evidence class was checked."
+  - id: fulcio_spec_oidc_certificate_binding
+    tier: tier_1_primary_research_or_official
+    title: "Fulcio Specification"
+    url: "https://github.com/sigstore/architecture-docs/blob/main/fulcio-spec.md"
+    observed_claims:
+      - "Fulcio authenticates OIDC ID tokens through issuer discovery and signature validation before issuing a certificate."
+      - "Fulcio embeds the public key, subject alternative name, OIDC issuer, and CI workflow metadata into certificate fields and extensions."
+      - "Certificate transparency evidence is critical to auditability and should remain a separate verification concern."
+    forge_implications:
+      - "Forge should verify certificate chain and identity selectors before treating a release identity as trusted."
+      - "OIDC issuer and workflow identity must be typed policy selectors, not inferred from arbitrary certificate prose."
+      - "CT proof handling stays out of the Fulcio identity boundary until its own verifier exists."
+  - id: rfc5280_subject_alt_name_and_key_usage
+    tier: tier_1_primary_research_or_official
+    title: "RFC 5280: Internet X.509 Public Key Infrastructure Certificate and CRL Profile"
+    url: "https://datatracker.ietf.org/doc/html/rfc5280"
+    observed_claims:
+      - "Subject alternative name binds identities to certificate subjects and certificate authorities are responsible for verifying those identities."
+      - "Key usage and extended key usage constrain how a certificate subject public key should be used."
+    forge_implications:
+      - "Forge should check SAN identity and code-signing usage when verifying Fulcio release identity."
+      - "Certificate chain validation should not be collapsed into plain text identity comparison."
+  - id: sigstore_identity_representation_issue
+    tier: tier_2_field_implementation
+    title: "Sigstore Client Identity Representation Discussion"
+    url: "https://github.com/sigstore/sig-clients/issues/7"
+    observed_claims:
+      - "Sigstore identity policy is not a single opaque string because issuer and identity fields interact."
+      - "Verifier UX needs explicit identity and issuer selectors."
+    forge_implications:
+      - "Forge should require expected_oidc_issuer and at least one identity selector in policy."
+      - "Host adapters must not silently choose identity matching semantics."
+  - id: sigstore_fido_identity_assurance_2025
+    tier: tier_1_primary_research_or_official
+    title: "Using FIDO-based Authentication to Improve the Security of Software Supply Chains"
+    url: "https://www.jstage.jst.go.jp/article/ipsjjip/33/0/33_708/_article/-char/en"
+    confirmed_origin: "Japan"
+    observed_claims:
+      - "Sigstore identity assurance can be strengthened by integrating stronger authentication signals such as FIDO."
+      - "Identity assurance can improve without replacing Sigstore's existing architecture."
+    forge_implications:
+      - "Forge should keep identity assurance as a policy boundary that can evolve beyond current OIDC selectors."
+      - "This source supports future assurance extensions, not current FIDO enforcement."
+  - id: rtadev_intention_aligned_multi_agent_2025
+    tier: tier_1_primary_research_or_official
+    title: "Intention Aligned Multi-Agent Framework for Software Development"
+    url: "https://aclanthology.org/2025.findings-acl.80.pdf"
+    observed_claims:
+      - "LLM software agents frequently misunderstand goals and each other's intentions, and accumulated errors can cause whole-project failure."
+      - "A shared certified repository plus alignment checks before accepting deliverables reduces errors with limited extra communication."
+    forge_implications:
+      - "Forge should make accepted state and evidence explicit before another agent treats a checkpoint as authority."
+      - "Agent autonomy should be gated by certified contracts, not by chat momentum."
+  - id: mast_multi_agent_failure_taxonomy_2025
+    tier: tier_1_primary_research_or_official
+    title: "Why Do Multi-Agent LLM Systems Fail?"
+    url: "https://arxiv.org/abs/2503.13657"
+    observed_claims:
+      - "Multi-agent LLM systems fail through specification issues, inter-agent misalignment, and weak verification or termination."
+      - "The study analyzes annotated traces across popular frameworks and identifies recurring failure modes."
+    forge_implications:
+      - "Forge should treat coordination failures as first-class test fixtures, not as prompt-quality issues."
+      - "Runtime boundaries should include termination, verification, and authority semantics."
+  - id: structured_context_engineering_file_native_2026
+    tier: tier_1_primary_research_or_official
+    title: "Structured Context Engineering for File-Native Agentic Systems"
+    url: "https://arxiv.org/pdf/2602.05447"
+    observed_claims:
+      - "File-native context effectiveness is model-dependent, and domain-partitioned schemas can scale navigation."
+      - "Format alone is not a universal accuracy guarantee; compact or unfamiliar formats can create a grep/output-density tax."
+    forge_implications:
+      - "Forge should prefer typed, partitioned contracts for critical state but keep generated agent views compact and searchable."
+      - "Replacing Markdown with YAML is not sufficient by itself; validators, partitions, and known refs are required."
+  - id: constraint_state_governance_2026
+    tier: tier_1_primary_research_or_official
+    title: "Safe Multi-Agent Behavior Must Be Maintained, Not Merely Asserted: Constraint Drift in LLM-Based Multi-Agent Systems"
+    url: "https://arxiv.org/html/2605.10481v1"
+    observed_claims:
+      - "Safety-critical constraints can lose operational force across memory, delegation, communication, tool use, audit, and optimization."
+      - "Constraints should be explicit execution state, inherited through scoped delegation, checked before critical actions, and recorded for audit."
+    forge_implications:
+      - "Forge should move authority and safety constraints into typed runtime state instead of relying on repeated prompt text."
+      - "Host adapter commands should declare authority class, mutation class, and inference boundary."
+  - id: agent_harness_survey_2026
+    tier: tier_1_primary_research_or_official
+    title: "Agent Harness for Large Language Model Agents: A Survey"
+    url: "https://www.preprints.org/manuscript/202604.0428"
+    observed_claims:
+      - "Production reliability is strongly shaped by the harness layer around the model."
+      - "The survey frames a harness as execution loop, tool registry, context manager, state store, lifecycle hooks, and evaluation interface."
+      - "It emphasizes the harness as a primary architectural object rather than a trivial prompt wrapper."
+    forge_implications:
+      - "Forge Core should be designed as runtime/protocol/harness infrastructure, not as a pile of host-specific prompts."
+      - "Cross-host compatibility should be implemented through typed commands, state, hooks, and evaluation contracts."
+  - id: swe_agent_2405_15793
+    tier: tier_1_primary_research_or_official
+    title: "SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering"
+    url: "https://arxiv.org/abs/2405.15793"
+    observed_claims:
+      - "Agent-computer interface design materially affects language-model agent performance on software engineering tasks."
+      - "Coding agents benefit from interfaces deliberately shaped around navigation, editing, testing, and repository interaction."
+    forge_implications:
+      - "Forge should expose a deliberate operation surface for host agents instead of relying on freeform prompt instructions."
+      - "Host shells should be treated as clients of Forge Core, not as the source of routing authority."
+  - id: multi_agent_failure_modes_2503_13657
+    tier: tier_1_primary_research_or_official
+    title: "Why Do Multi-Agent LLM Systems Fail?"
+    url: "https://arxiv.org/html/2503.13657v2"
+    observed_claims:
+      - "Multi-agent LLM systems exhibit recurring failure modes that include coordination, system-design, and task-verification problems."
+      - "The paper proposes a taxonomy and evaluation approach for diagnosing multi-agent failures."
+    forge_implications:
+      - "Forge must test coordination failure modes directly instead of assuming agents will cooperate from prose."
+      - "Backlog readiness should include explicit anti-patterns and eval expectations for multi-agent work."
+  - id: agent_workflow_survey_2508_01186
+    tier: tier_1_primary_research_or_official
+    title: "A Survey on Agent Workflow -- Status and Future"
+    url: "https://arxiv.org/abs/2508.01186"
+    observed_claims:
+      - "Agent workflow systems can be classified by functional capabilities and architectural features such as roles, orchestration flows, and specification languages."
+      - "Workflow systems span academic frameworks and industrial implementations, with open challenges around orchestration and specification."
+    forge_implications:
+      - "Forge should make workflow specification and orchestration explicit typed surfaces."
+      - "Backlog epics should separate contracts, runtime orchestration, host adapters, guidance, and evaluation."
+  - id: llm_agent_science_china_2025
+    tier: tier_1_primary_research_or_official
+    title: "The Rise and Potential of Large Language Model Based Agents: A Survey"
+    url: "https://scis.scichina.com/en/2025/121101.pdf"
+    confirmed_origin: "Science China Information Sciences; China-origin survey venue"
+    observed_claims:
+      - "LLM-based agents can be analyzed by agent paradigms, application scenarios, and supporting mechanisms."
+      - "Agent applications require attention to planning, memory, tool use, interaction, and evaluation."
+    forge_implications:
+      - "Forge planning should intentionally include non-Western research and should evaluate planning, memory/state, tool/runtime, interaction, and evaluation as separate layers."
+      - "A Rust-only backlog should not collapse all agent concerns into one runtime script."
+  - id: sigstore_security_model_short_lived_certificates
+    tier: tier_1_primary_research_or_official
+    title: "Sigstore Security Model"
+    url: "https://docs.sigstore.dev/about/security/"
+    observed_claims:
+      - "Fulcio issues short-lived certificates and appends them to CT logs."
+      - "Sigstore relies on trusted signing-time evidence to show an artifact was signed while a certificate was valid."
+      - "Sigstore does not make all trust evidence equivalent; CT, Rekor, timestamping, and monitoring have separate roles."
+    forge_implications:
+      - "Forge can support a short-lived certificate revocation policy boundary without claiming CRL or OCSP status."
+      - "Release/update admission must not treat timestamp, Rekor, or CT evidence as explicit revocation status."
+  - id: fulcio_spec_short_lived_certificate_timestamping
+    tier: tier_1_primary_research_or_official
+    title: "Fulcio Specification"
+    url: "https://github.com/sigstore/architecture-docs/blob/main/fulcio-spec.md"
+    observed_claims:
+      - "Fulcio uses ephemeral keys and short-lived certificates to avoid normal revocation-list requirements."
+      - "Verifying a short-lived certificate requires timestamping evidence that the signature existed while the certificate was valid."
+    forge_implications:
+      - "Forge should require certificate lifetime policy plus trusted signing time for short-lived revocation policy verification."
+      - "Forge should keep explicit CRL/OCSP status as a separate boundary."
+  - id: rfc5280_x509_crl_profile
+    tier: tier_1_primary_research_or_official
+    title: "RFC 5280: Internet X.509 Public Key Infrastructure Certificate and Certificate Revocation List Profile"
+    url: "https://datatracker.ietf.org/doc/html/rfc5280"
+    observed_claims:
+      - "RFC 5280 profiles X.509 certificates and certificate revocation lists as explicit PKI structures."
+      - "CRL processing is a separate revocation mechanism and cannot be inferred from certificate validity alone."
+    forge_implications:
+      - "Forge must not report CRL-based revocation status unless it has actual CRL evidence."
+  - id: rfc6960_ocsp_certificate_status
+    tier: tier_1_primary_research_or_official
+    title: "RFC 6960: X.509 Internet Public Key Infrastructure Online Certificate Status Protocol - OCSP"
+    url: "https://datatracker.ietf.org/doc/html/rfc6960"
+    observed_claims:
+      - "OCSP provides online certificate status responses with status values such as good, revoked, and unknown."
+      - "OCSP is a distinct protocol and not implied by certificate transparency or timestamp evidence."
+    forge_implications:
+      - "Forge must fail explicit_status_required until it has a dedicated OCSP/CRL verifier and freshness policy."
+plan_level_implications:
+  - id: evidence_before_architecture_questions
+    rule: "Before accepting a structural contract field, check v2 audit plus external evidence."
+  - id: coordination_scope_validated
+    rule: "coordination_scope is supported by v2, grite, CooperBench, Claude worktrees, and field reports."
+  - id: record_request_validated
+    rule: "worker-to-driver request routing is supported by v2 single-driver design and append-only log evidence."
+  - id: completion_contract_validated
+    rule: "Completion state needs a typed contract with proof requirements and stable storage identity; locks alone do not prevent duplicate work or done-without-proof."
+  - id: tool_effect_contract_validated
+    rule: "Fine read/write conflict handling belongs in typed ToolEffectContract with notify-and-repair policy, not loose OperationContract prose."
+  - id: destructive_effect_inverse_policy_validated
+    rule: "Destructive ToolEffect writes must declare inverse/compensation metadata or stop for review before execution; this is an inference from CoAgent/RAC, runtime enforcement, tool-use policy, and excessive-agency evidence."
+  - id: claim_contract_validated
+    rule: "Fleet claims need typed TTL, heartbeat, ownership, and handoff-on-expiry; lock files alone are insufficient coordination evidence."
+  - id: gate_contract_validated
+    rule: "Validation scope must be explicit: lane evidence can feed broader gates, but cannot replace integration or release gates."
+  - id: decision_close_contract_validated
+    rule: "Decision-closing mutations need explicit review evidence and reopen policy; chat momentum is not authority. This is an inference from HITL, mixed-initiative, accountability, and runtime-control research, not a direct copied pattern."
+  - id: runtime_handoff_contract_validated
+    rule: "Cross-runtime handoff requires both target runtime registry evidence and capability evidence; interoperability protocols enable handoff but do not replace Forge authority."
+  - id: request_contract_as_message_unit_validated
+    rule: "RequestContract is the v0 durable communication unit; it must carry communication, payload, response, dependency, evidence, and status fields before a separate MessageContract is justified."
+  - id: coordination_eval_contract_validated
+    rule: "Multi-agent/team readiness requires coordination-specific eval dimensions covering duplicate work, lane collision, stale claims, conflict repair, request lifecycle, gates, handoff, destructive effects, and human guidance recovery."
+  - id: health_recovery_contract_validated
+    rule: "Claim TTL is not enough; runtime health and recovery need typed status, anomaly, evidence, and recovery action fields."
+  - id: command_contract_validated
+    rule: "CommandContract separation is supported by MCP schema-backed tools and security/conformance needs."
+  - id: markdown_removal_validated
+    rule: "Typed contracts are preferred for agent correctness; Markdown remains distribution-only."
+  - id: funnel_autonomy_validated
+    rule: "Funnel Autonomy should be encoded as operation policy: next actor, execution policy, stop policy, authority, and human checkpoint rules."
+  - id: schema_generation_strategy_validated
+    rule: "Rust/Serde structs are the executable source for core contract semantics; generated JSON Schema supports tooling/interoperability; compact agent views prevent schema bloat in context."
+  - id: rust_runtime_operation_planning_validated
+    rule: "The first Rust runtime boundary should validate OperationContractDocument and return typed RuntimePlan decisions before any command execution, file mutation, daemon, or host adapter owns authority."
+  - id: runtime_store_state_read_validated
+    rule: "Runtime may consume store-backed read snapshots for reference and state authority checks, but store/adapters own filesystem discovery and later mutation boundaries."
+  - id: runtime_effect_staging_validated
+    rule: "Runtime may stage command/effect refs from ready plans, but execution and irreversible commit require separate command runner and effect transaction boundaries."
+  - id: runtime_command_runner_validated
+    rule: "Runtime may execute only staged read-only CommandContract commands with disabled network, safe flags, platform/env/output guards, timeout, and typed execution result; shell and mutating commands stay blocked."
+  - id: runtime_command_evidence_recording_validated
+    rule: "Runtime command output should become a typed RuntimeCommandEvidenceRecord and be persisted by store as repo-relative append-only JSONL evidence; host-agent prose is not evidence authority."
+  - id: runtime_effect_transaction_readiness_validated
+    rule: "ToolEffectContract writes cannot be applied from write_set alone; runtime must require staged valid effects plus explicit RuntimeEffectPayload for every non-delete write before any file application boundary."
+  - id: runtime_effect_application_validated
+    rule: "Store may apply file-backed ToolEffect writes only with materialized payload hashes, file-backed freshness checks, safe repo-relative paths, temp-file replacement, and process-local rollback; crash durability needs a later WAL boundary."
+  - id: runtime_effect_wal_recovery_validated
+    rule: "File-effect application may record synced JSONL WAL entries with before-images and recover incomplete transactions by restoring before-images; compaction and concurrent-writer serialization remain later boundaries."
+  - id: runtime_effect_wal_compaction_and_locking_validated
+    rule: "Store may use standard-library file locks to serialize local effect writers and compact WAL by retaining incomplete transactions only; distributed locking and network filesystem semantics remain future boundaries."
+  - id: operation_executor_payload_adapter_validated
+    rule: "Adapters may load payload bytes for RuntimeOperationExecution only through explicit payload specs with size limits, repo-root scope by default, hash metadata, and no raw payload content in chat-facing execution JSON."
+  - id: operation_executor_artifact_storage_projection_validated
+    rule: "Store should project logical artifact_id, evidence_id, ledger_stream, and request_stream targets to canonical repo-local file paths while preserving logical refs; separate artifact storage adapters remain future work."
+open_research_gaps:
+  - "Find more real-world Rust/MCP host package examples before finalizing host distribution."
+  - "Find current security guidance for MCP stdio/local process execution before implementing MCP server."
+  - "Validate ToolEffectContract against real file-backed and future DB/daemon projections before implementation."
+  - "Expand Chinese-language and China-origin source search for agent runtime, coding-agent orchestration, and multi-agent coordination before final Rust architecture lock."

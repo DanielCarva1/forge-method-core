@@ -1,0 +1,52 @@
+schema_version: "0.1"
+audit: "operation_executor_index_compaction_boundary_grill"
+status: "closed"
+created_at: "2026-06-25"
+grill_question:
+  id: "operation_executor_index_compaction_boundary"
+  question: "Should the effect metadata index get dedupe/truncation/compaction semantics now, or remain append-only until real duplicate pressure appears?"
+  answered_by: "agent_research_and_local_code_inspection"
+input_refs:
+  - "contracts/policies/operation-executor-metadata-index-boundary.yaml"
+  - "contracts/policies/operation-executor-metadata-rebuild-boundary.yaml"
+  - "contracts/policies/operation-executor-repair-cli-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+decision:
+  selected_option: "defer_compaction_keep_append_only"
+  recommendation_basis:
+    - "The index currently has write/rebuild surfaces but no reader/query semantics."
+    - "Additive lineage/provenance records are safer than premature destructive maintenance."
+    - "Compaction would require backup, lock, stale-reader, and failure-atomic semantics not yet defined."
+    - "Duplicate pressure is hypothetical; deleting audit evidence now would be a product risk."
+tradeoffs:
+  pros:
+    - "Preserves all repair/audit observations."
+    - "Avoids destructive maintenance before a reader contract exists."
+    - "Keeps repair CLI simple and predictable."
+  cons:
+    - "Repeated rebuild can create duplicate rows."
+    - "Index may grow until a future compaction policy exists."
+    - "Consumers must tolerate duplicates once readers are added."
+evidence_basis:
+  - source_id: "openlineage_object_model"
+    supports: "Lineage observations can be additive runtime events."
+  - source_id: "w3c_prov_dm"
+    supports: "Provenance identity/relationships should not be pruned without defined semantics."
+  - source_id: "aries_wal_1992"
+    supports: "Durable log/recovery data should be retained unless rewrite policy is explicit."
+  - source_id: "failure_atomic_updates_fast15"
+    supports: "File rewrite/compaction needs failure-atomic handling."
+  - source_id: "harnessfix_trace_guided_2606_06324"
+    supports: "Trace repair needs scoped evidence retention."
+policy_ref: "contracts/policies/operation-executor-index-compaction-boundary.yaml"
+implementation_refs:
+  - "contracts/policies/operation-executor-index-compaction-boundary.yaml"
+acceptance:
+  - "No code compaction is added."
+  - "Policies explicitly forbid rebuild-effect-index from dedupe/truncate/compact behavior."
+  - "Next boundary is metadata reader/query API."
+closed_decision: "Keep effect metadata index append-only; defer compaction until reader/query semantics and real duplicate pressure are proven."
+next_grill_question:
+  id: "sigstore_fulcio_certificate_identity_boundary"
+  question: "How should Forge verify Fulcio certificate chain, certificate identity extensions, expected OIDC issuer, and workflow identity selectors against the trusted-root policy without treating policy validation as cryptographic proof?"
+  recommended_answer: "Add a Forge-owned Sigstore bundle/Fulcio verifier backend that consumes trusted-root policy and returns typed identity, subject, timestamp, and revocation evidence while preserving adapter-neutral authority."

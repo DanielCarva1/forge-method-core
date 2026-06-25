@@ -1,0 +1,52 @@
+schema_version: "0.1"
+tool_effect_contract:
+  id: "effect.fixture.lane_claim"
+  contract_ref: "contracts/effects/tool-effect-contract-v0.yaml"
+  effect_kind: "state_write"
+  operation_ref: "op_fixture_multi_agent_lane_claim"
+  actor:
+    agent_id: "cursor-worker-1"
+    role: "worker"
+  read_set:
+    - target_kind: "file_path"
+      ref: ".forge-method/lanes/index.yaml"
+      expected_hash: "sha256:fixture-lanes"
+      expected_version: null
+      required_for_plan: true
+    - target_kind: "completion_id"
+      ref: "completion.story.current"
+      expected_hash: "sha256:fixture-completion"
+      expected_version: 19
+      required_for_plan: true
+  write_set:
+    - target_kind: "file_path"
+      ref: "contracts/claims/story-current-active-claim.yaml"
+      access_mode: "create"
+      expected_hash: null
+      expected_version: null
+      destructive: false
+  conflict_detection:
+    check_against: "latest_projection"
+    granularity: "path"
+    conflict_codes:
+      - "write_target_claimed"
+      - "completion_now_done"
+      - "expected_state_version_mismatch"
+    policy: "block"
+  notification:
+    required: false
+    recipients:
+      - "driver"
+    request_contract_ref: null
+  repair:
+    strategy: "refresh_reads"
+    automatic_repair_allowed: false
+    inverse_operation_ref: null
+    stop_if_inverse_missing: false
+    inverse:
+      kind: "none"
+      source: "unavailable"
+      ref: null
+      input_mapping_refs: []
+      validation_gate_refs: []
+      review_required: false

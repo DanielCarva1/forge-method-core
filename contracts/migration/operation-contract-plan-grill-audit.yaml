@@ -1,0 +1,1074 @@
+schema_version: "0.1"
+audit: operation_contract_plan_grill_with_field_evidence
+created_at: "2026-06-25"
+status: active
+inputs:
+  - "contracts/migration/v2-design-coverage-audit.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "docs/13-operation-contract-v0.md"
+  - "docs/fixtures/operation-contract-v0/*.yaml"
+review_rule: "Each contract area is accepted, revise, or reject based on v2 audit, field evidence, and typed-first Rust fit."
+validation_authority:
+  policy_ref: "contracts/policies/rust-validation-authority.yaml"
+  rule: "Rust/Serde validation is the acceptance authority for new core contracts; Python checks are auxiliary only."
+contract_areas:
+  - id: guide_as_orchestrator
+    status: accepted_with_tests_required
+    evidence:
+      - openai_agents_sdk
+      - langgraph_hitl
+      - mcp_tools_spec
+    rationale: "Modern agent systems separate orchestration/state/approval from raw model prompting."
+    required_tests:
+      - "fresh human correction overrides stale next action"
+      - "guide recommends specialized operation without mutating"
+  - id: no_advance_no_generic_write
+    status: accepted
+    evidence:
+      - mcp_tools_spec
+      - openai_agents_sdk
+    rationale: "Named schema-backed operations reduce ambiguity and host-agent drift."
+    required_tests:
+      - "no operation enum contains advance or generic write"
+  - id: command_contract
+    status: accepted
+    evidence:
+      - mcp_tools_spec
+    rationale: "Commands are tool-like side-effect surfaces and need typed executor/args/policy."
+    required_tests:
+      - "operation fixtures contain command_refs only"
+      - "command contracts reject shell string authority"
+  - id: coordination_scope
+    status: accepted
+    evidence:
+      - grite_2606_19616
+      - cooperbench_2601_13295
+      - claude_worktrees
+    rationale: "Safe mutation requires target, version, agent identity, lane/driver claim, and completion state."
+    required_tests:
+      - "mutating operations require coordination_scope"
+      - "fleet mode requires agent_id and registry_ref"
+      - "driver state writes require driver claim evidence"
+  - id: record_request_for_workers
+    status: accepted
+    evidence:
+      - grite_2606_19616
+      - v2_design_coverage_audit
+    rationale: "Workers should emit append-only requests; driver applies integration FSM mutations."
+    required_changes:
+      - "Add record_request to operation enum."
+      - "Add caller_role to coordination_scope.concurrency."
+      - "Add fixture where worker wants transition and is routed to record_request."
+      - "Add minimal RequestContract."
+  - id: completion_state
+    status: accepted
+    evidence:
+      - grite_2606_19616
+      - v2_design_coverage_audit
+    rationale: "Locks alone do not stop duplicate work; a typed CompletionContract must be checked before claim/build."
+    required_changes:
+      - "Define minimal CompletionContract with task_id, status, proof policy, invalidation, and storage identity."
+      - "Use completion_contract_ref instead of untyped legacy completion references."
+      - "Keep file projection as current backend while preserving DB/daemon-compatible stable IDs and enums."
+    required_tests:
+      - "Already-done story routes to read/status instead of claim/build."
+  - id: read_set_write_set_notify
+    status: accepted_via_tool_effect_contract
+    evidence:
+      - coagent_2606_15376
+    rationale: "Read/write conflict tracking belongs in ToolEffectContract, not as loose OperationContract fields; v0 covers fine-grained conflict notification while keeping repair policy typed."
+    required_changes:
+      - "Define ToolEffectContract v0 with read_set, write_set, conflict_detection, notification, and repair policy."
+      - "Reference effects from OperationContract through effect_contract_refs."
+      - "Add fixture where stale read/write conflict records a notification instead of overwriting or blind-aborting."
+  - id: markdown_removal
+    status: accepted
+    evidence:
+      - mcp_tools_spec
+      - openai_agents_sdk
+    rationale: "Agent-facing runtime authority should be schema-backed contracts; Markdown is distribution/render only."
+    required_tests:
+      - "runtime loader rejects Markdown authority outside allowlist"
+  - id: host_surfaces_cli_json_mcp
+    status: accepted_with_security_review
+    evidence:
+      - mcp_tools_spec
+      - a2a_protocol
+      - openai_agents_sdk
+    rationale: "CLI JSON is universal debug/integration surface; MCP is agent-native tool surface; A2A remains optional interop layer."
+    required_changes:
+      - "Run MCP/local-process security review before implementation."
+  - id: claim_ttl_and_handoff_on_expiry
+    status: accepted_minimal_claim_contract
+    evidence:
+      - grite_2606_19616
+      - agentscope_2402_14034
+      - v2_design_coverage_audit
+    rationale: "Fleet claims need typed ownership, TTL, heartbeat, and mandatory handoff-on-expiry so stale agents do not freeze lanes or lose context."
+    required_changes:
+      - "Define ClaimContract v0 with owner, scope, lease, heartbeat, status, expiry policy, and reclaim policy."
+      - "Use claim_contract_ref instead of untyped legacy lock authority."
+      - "Add fixture where expired claim records handoff request instead of silently releasing or reassigning work."
+  - id: execution_policy_stop_policy
+    status: accepted
+    evidence:
+      - llm_as_code_2606_15874
+      - parasuraman_levels_automation
+      - mixed_initiative_aaai_2025
+      - langgraph_hitl
+      - trustworthy_lma_raci
+    rationale: "Loops, retries, branch selection, and stop behavior are deterministic control-flow concerns. They must be runtime policy, not host-agent improvisation."
+    required_changes:
+      - "Add execution_policy to OperationContract."
+      - "Add stop_policy to OperationContract."
+      - "Add fixtures for human-stop, mechanical-autonomy, gate-stop, and worker-request paths."
+  - id: integration_gate_scope
+    status: accepted_minimal_gate_scope
+    evidence:
+      - cooperbench_2601_13295
+      - v2_design_coverage_audit
+    rationale: "Lane-local validation cannot prove product-area, integration, or release safety. Gate scope must be explicit before broader automation."
+    required_changes:
+      - "Define GateContract v0 with lane, product_area, integration, and release scopes."
+      - "Use gate_contract_refs and scoped required_before_mutation entries."
+      - "Add fixture where lane/product-area pass still routes to integration gate before merge/readiness."
+  - id: decision_close_requires_grill
+    status: accepted_minimal_decision_close_contract
+    evidence:
+      - v2_design_coverage_audit
+      - llm_as_code_2606_15874
+      - code_as_agent_harness_2605_18747
+      - langgraph_hitl
+      - mixed_initiative_aaai_2025
+      - trustworthy_lma_raci
+      - agentscope_2402_14034
+      - fudan_agent4se_survey
+    rationale: "Closing direction, phase, handoff, spec-lock, route-change, or release-readiness decisions changes project authority and must not be inferred from chat momentum."
+    evidence_boundary: "The papers support runtime-owned control, human checkpoints, accountability, and multi-agent coordination risks; Forge maps that into grill evidence as its product-specific review artifact."
+    required_changes:
+      - "Define DecisionCloseContract v0 with decision_kind, status, grill evidence, authority evidence, closer, timestamp, and reopen policy."
+      - "Add fixture where phase transition without grill evidence is blocked."
+      - "Extend Rust contract validator to validate decision close enums and refs."
+  - id: runtime_handoff_double_gate
+    status: accepted_minimal_runtime_handoff_contract
+    evidence:
+      - a2a_protocol
+      - mcp_tools_spec
+      - openai_agents_handoffs
+      - langgraph_multi_agent_handoffs
+      - agentscope_2402_14034
+      - fudan_agent4se_survey
+    rationale: "Cross-runtime handoff is an interoperability and coordination boundary; suggesting it requires target runtime identity plus capability evidence and compact context."
+    evidence_boundary: "A2A/MCP/OpenAI/LangGraph support interop, schema-backed capability surfaces, handoff, and context-engineering patterns; Forge maps that into a product-specific double gate before suggestion."
+    required_changes:
+      - "Define RuntimeHandoffContract v0 with runtime identity, task boundary, double gate, typed payload, and authority refs."
+      - "Add blocked and suggestible fixtures so missing capability evidence cannot become a handoff recommendation."
+      - "Extend Rust contract validator to validate runtime handoff enums, refs, payload context, and operation fixture refs."
+  - id: tool_inverse_and_repair_contract
+    status: accepted_minimal_destructive_effect_policy
+    evidence:
+      - coagent_2606_15376
+      - rac_2605_03409
+      - runtime_enforcement_2503_18666
+      - solver_policy_tool_agents_2603_20449
+      - verifiable_safe_tool_use_2601_08012
+      - owasp_llm06_excessive_agency
+      - microservices_saga_pattern
+      - tool_use_orchestration_survey_2603_22862
+    rationale: "Destructive or delete-like effects are high-impact tool actions; they need an explicit inverse/compensation path or must stop before execution."
+    evidence_boundary: "CoAgent and RAC directly support registered inverse/compensation for agent recovery; runtime enforcement, solver-aided policy, safe tool-use work, OWASP, and saga literature support pre-execution governance. Forge maps that into a minimal destructive-effect rule."
+    required_changes:
+      - "Extend ToolEffectContract v0 with inverse kind/source/ref metadata."
+      - "Require all effect fixtures to state inverse metadata, including none/unavailable for non-destructive effects."
+      - "Add destructive fixtures for with-inverse review and missing-inverse block."
+      - "Extend Rust contract validator to reject destructive effects without inverse metadata unless they stop for human/driver review."
+  - id: message_protocol_for_agent_coordination
+    status: accepted_strengthen_request_contract
+    evidence:
+      - agent_protocol_taxonomy_2606_19135
+      - communication_centric_llm_mas_2502_14321
+      - agentscope_2402_14034
+      - a2a_protocol
+      - agent_protocol_survey_2504_16736
+    rationale: "Forge already uses append-only requests as the durable coordination unit; v0 should strengthen RequestContract before introducing a separate MessageContract."
+    evidence_boundary: "The research supports structured communication, lifecycle state, payloads, and protocol layering; Forge's product-specific decision is to use RequestContract as the v0 message unit to avoid duplicated authority surfaces."
+    required_changes:
+      - "Define RequestContract v0 schema with communication, payload, response, dependencies, append-only storage, and status."
+      - "Update all request fixtures to include the canonical communication/payload/response blocks."
+      - "Extend Rust validator to validate request enums, refs, lifecycle fields, and effect notification refs."
+  - id: coordination_eval_dimensions
+    status: accepted_minimal_coordination_eval_contract
+    evidence:
+      - cooperbench_2601_13295
+      - multiagentbench_2503_01935
+      - code_as_agent_harness_2605_18747
+      - utboost_2025_acl
+      - agentless_fse_2025
+    rationale: "Forge cannot claim team/multi-agent readiness from final task success or schema shape alone; coordination quality needs its own minimum eval dimensions."
+    evidence_boundary: "The sources support coordination-specific benchmarks, milestone KPIs, evaluation beyond task success, and stronger test evidence; Forge maps that into a local CoordinationEvalContract before external benchmark runners exist."
+    required_changes:
+      - "Define CoordinationEvalContract v0 with closed dimensions, metric kind, required level, fixtures, failure signal, and evidence refs."
+      - "Add a minimal coordination eval suite covering duplicate work, lane collision, stale claim recovery, read/write repair, request lifecycle, integration gate, runtime handoff, destructive effect safety, and human guidance recovery."
+      - "Extend Rust validator to validate eval dimension enums and fixture/evidence refs."
+  - id: runtime_health_recovery_contract
+    status: accepted_minimal_health_recovery_contract
+    evidence:
+      - agentops_survey_2508_02121
+      - agentops_observability_2411_05285
+      - agentscope_2402_14034
+      - multi_agent_distributed_systems_2026
+    rationale: "Claim TTL says an ownership lease expired; it does not classify runtime health, anomaly kind, or recovery action."
+    evidence_boundary: "AgentOps and AgentScope support monitoring, anomaly detection, observability, and fault tolerance; Forge maps that into a minimal typed health/recovery contract rather than implementing a daemon in this step."
+    required_changes:
+      - "Define HealthRecoveryContract v0 with status, runtime identity, heartbeat, anomaly, evidence refs, and recovery action."
+      - "Add stalled worker and crashed runtime fixtures linked to claims and requests."
+      - "Extend Rust validator to validate health/recovery enums and refs."
+  - id: operation_contract_unification_check
+    status: accepted_reference_policy_before_more_surface_area
+    evidence:
+      - llm_as_code_2606_15874
+      - code_as_agent_harness_2605_18747
+      - mcp_tools_spec
+      - agent_protocol_taxonomy_2606_19135
+    rationale: "Side contracts now cover claims, completion, gates, effects, requests, decisions, runtime handoff, evals, and recovery; OperationContract must not grow scattered authority refs."
+    evidence_boundary: "The sources support inspectable harness dependencies, schema-backed surfaces, and layered protocol boundaries; Forge maps that into an OperationReferencePolicy and uniform Rust ref resolution."
+    required_changes:
+      - "Define OperationReferencePolicy v0 listing approved side-contract reference fields."
+      - "Extend Rust validator to resolve claim, completion, request, gate, effect, decision, and runtime handoff refs from operation fixtures."
+      - "Reserve eval/recovery operation refs without requiring them until OperationContract uses them."
+  - id: contract_family_inventory_lock
+    status: accepted_locked_for_schema_generation
+    evidence:
+      - llm_as_code_2606_15874
+      - code_as_agent_harness_2605_18747
+      - mcp_tools_spec
+      - agent_protocol_taxonomy_2606_19135
+    rationale: "After operation, command, claim, completion, gate, effect, request, decision, runtime handoff, eval, and recovery contracts exist, the v0 surface needs an explicit inventory boundary before Rust schema/type generation."
+    evidence_boundary: "The sources support executable, inspectable, schema-backed harness boundaries; Forge maps that into a product-specific inventory lock, not a claim that no future families can exist."
+    required_changes:
+      - "Define ContractFamilyInventory v0."
+      - "Create v0 contract family lock with schema refs, instance globs, validator functions, statuses, and evidence refs."
+      - "Extend Rust validator to validate inventory enums, schema refs, supporting policies, family ids, validator functions, glob parents, and evidence_refs presence."
+  - id: schema_generation_strategy
+    status: accepted_rust_types_from_locked_inventory
+    evidence:
+      - schema_first_tool_apis_2603_13404
+      - code_as_agent_harness_2605_18747
+      - serde_official
+      - schemars_official
+      - tool_schema_compression_2605_26165
+      - rust_json_schema_field_report_2024
+    rationale: "The v0 inventory is locked, so the next move should be executable Rust/Serde contract types, with JSON Schema and compact agent views generated from Rust rather than maintained as separate authority."
+    evidence_boundary: "The sources support schema-backed contracts, executable harnesses, generated schema tooling, and compact schema views. Forge's product-specific choice is to use locked YAML as bootstrap input and Rust/Serde as the durable source of truth."
+    required_changes:
+      - "Define SchemaGenerationAuthority policy."
+      - "Close schema-generation grill audit with selected option and tradeoffs."
+      - "Add Rust validation for evidence refs used by inventory and evidence_basis blocks."
+  - id: rust_workspace_crate_split
+    status: accepted_layered_workspace_contracts_first
+    evidence:
+      - agent_harness_engineering_survey_2026
+      - code_as_agent_harness_2605_18747
+      - opendev_terminal_agents_2603_05344
+      - policy_first_control_2603_18059
+      - cargo_workspaces_official
+      - rust_api_guidelines_official
+    rationale: "Forge needs a Rust core reusable from borrowed shells and a future standalone app, so runtime/domain semantics must be separated from CLI rendering, storage, MCP, daemon, and host adapter concerns."
+    evidence_boundary: "The sources support layered harness concerns and Rust workspace mechanics. Forge's exact crate names and build order are product-specific."
+    required_changes:
+      - "Define RustWorkspaceArchitecture policy with target crates, responsibilities, dependencies, forbidden dependencies, build order, and tradeoffs."
+      - "Close rust workspace crate split grill audit."
+      - "Keep MCP/daemon deferred until contracts, validation, store, and runtime boundaries compile."
+  - id: first_rust_contract_type_order
+    status: accepted_foundation_then_authority_response_then_side_contracts
+    evidence:
+      - schema_first_tool_apis_2603_13404
+      - code_as_agent_harness_2605_18747
+      - rust_api_guidelines_official
+      - policy_first_control_2603_18059
+    rationale: "The first Rust types must establish ids, evidence refs, inventory, diagnostics, commands, and operation authority before runtime behavior or broad side-contract migration starts."
+    evidence_boundary: "The sources support typed, verifiable harness boundaries and stable ids. Forge's exact family order is inferred from local contract dependencies."
+    required_changes:
+      - "Define RustContractTypeOrder policy with staged implementation order."
+      - "Close first rust contract type order grill audit."
+      - "Advance next work to Cargo workspace/bootstrap."
+  - id: cargo_workspace_bootstrap_plan
+    status: accepted_and_implemented_foundation_types
+    evidence:
+      - cargo_workspaces_official
+      - rust_api_guidelines_official
+      - serde_official
+      - schema_first_tool_apis_2603_13404
+      - code_as_agent_harness_2605_18747
+    rationale: "The workspace decision had enough evidence and implementation policy to move into code. The first crate now compiles with foundation, evidence, inventory, and command types."
+    evidence_boundary: "The sources support Rust workspaces and typed executable contracts. The exact first module set follows Forge's type-order policy and locked inventory."
+    implementation_evidence:
+      commit: "a65e74c"
+      validation:
+        - "cargo test --workspace"
+        - "cargo run --quiet --manifest-path crates/forge-contract-validator/Cargo.toml -- <repo-root>"
+  - id: operation_contract_rust_type_strictness
+    status: accepted_and_implemented_strict_authority_shape
+    evidence:
+      - schema_first_tool_apis_2603_13404
+      - llm_as_code_2606_15874
+      - code_as_agent_harness_2605_18747
+      - rust_api_guidelines_official
+      - mixed_initiative_aaai_2025
+    rationale: "OperationContract is the central host-agent authority response, so authority/control fields must be closed typed enums now. Side families stay explicit typed refs until their own implementation stage."
+    evidence_boundary: "The sources support strict typed authority/control boundaries. The exact transitional split follows Forge's locked inventory and type-order policy."
+    implementation_evidence:
+      crate_refs:
+        - "crates/forge-core-contracts/src/operation.rs"
+        - "crates/forge-core-contracts/src/operation_reference.rs"
+        - "crates/forge-core-contracts/tests/load_current_contracts.rs"
+      validation:
+        - "cargo test --workspace"
+  - id: validator_library_migration_boundary
+    status: accepted_and_implemented_typed_diagnostics_library_first
+    evidence:
+      - schema_first_tool_apis_2603_13404
+      - code_as_agent_harness_2605_18747
+      - policy_first_control_2603_18059
+      - rust_api_guidelines_official
+    rationale: "Now that evidence, inventory, command, and operation contracts compile as Rust types, pure validation rules should move into a reusable library with typed diagnostics before filesystem traversal is migrated."
+    evidence_boundary: "The sources support structured diagnostics and executable validation. Forge's first boundary keeps legacy filesystem checks in the binary while typed rules move to forge-core-validate."
+    implementation_evidence:
+      crate_refs:
+        - "crates/forge-core-validate/src/lib.rs"
+        - "crates/forge-core-validate/tests/current_contracts.rs"
+      validation:
+        - "cargo test --workspace"
+  - id: side_contract_type_order_after_operation
+    status: accepted_and_implemented_basic_runtime_authority_types
+    evidence:
+      - cooperbench_2601_13295
+      - coagent_2606_15376
+      - policy_first_control_2603_18059
+      - code_as_agent_harness_2605_18747
+    rationale: "Claim, completion, and gate contracts define ownership, done-state, and validation scope. They should compile before request/effect side contracts because requests/effects need these authority boundaries."
+    evidence_boundary: "The sources support typed ownership, coordination, validation, and lifecycle governance. Forge's exact order follows OperationContract dependencies."
+    implementation_evidence:
+      crate_refs:
+        - "crates/forge-core-contracts/src/claim.rs"
+        - "crates/forge-core-contracts/src/completion.rs"
+        - "crates/forge-core-contracts/src/gate.rs"
+        - "crates/forge-core-validate/src/lib.rs"
+      validation:
+        - "cargo test --workspace"
+  - id: request_effect_type_boundary
+    status: accepted_and_implemented_coordination_and_effect_types
+    evidence:
+      - communication_centric_llm_mas_2502_14321
+      - agent_protocol_taxonomy_2606_19135
+      - agentscope_2402_14034
+      - coagent_2606_15376
+      - rac_2605_03409
+      - owasp_llm06_excessive_agency
+      - policy_first_control_2603_18059
+    rationale: "RequestContract and ToolEffectContract must stay separate: requests carry durable coordination lifecycle, while effects carry tool read/write/inverse/repair safety. Refs connect them without creating a broad event object."
+    evidence_boundary: "The sources support structured communication, typed tool-effect policy, compensation, and lifecycle control. Forge's exact request/effect split is a product-specific inference selected to avoid overlapping authority surfaces."
+    implementation_evidence:
+      crate_refs:
+        - "crates/forge-core-contracts/src/request.rs"
+        - "crates/forge-core-contracts/src/tool_effect.rs"
+        - "crates/forge-core-validate/src/lib.rs"
+      validation:
+        - "cargo test -p forge-core-contracts --test load_current_contracts deserializes_request_and_effect_instances"
+        - "cargo test -p forge-core-validate"
+  - id: advanced_boundary_type_order
+    status: accepted_and_implemented_decision_close_first
+    evidence:
+      - langgraph_hitl
+      - mixed_initiative_aaai_2025
+      - trustworthy_lma_raci
+      - llm_as_code_2606_15874
+      - code_as_agent_harness_2605_18747
+      - agentscope_2402_14034
+    rationale: "DecisionCloseContract must be typed before handoff, recovery, and evals because it prevents host-agent chat momentum from closing phase, route, handoff, spec, or release decisions."
+    evidence_boundary: "The sources support explicit checkpoints, control handoff, accountability, and harness-owned control flow. Forge's exact order is inferred from local dependency and observed drift failures."
+    implementation_evidence:
+      crate_refs:
+        - "crates/forge-core-contracts/src/decision.rs"
+        - "crates/forge-core-validate/src/lib.rs"
+      validation:
+        - "cargo test -p forge-core-contracts --test load_current_contracts deserializes_decision_close_instances"
+        - "cargo test -p forge-core-validate validates_current_decision_close_instances"
+  - id: runtime_handoff_type_boundary
+    status: accepted_and_implemented_adapter_agnostic_double_gate
+    evidence:
+      - a2a_protocol
+      - mcp_tools_spec
+      - mcp_tool_annotations_2603
+      - openai_agents_handoffs
+      - langgraph_multi_agent_handoffs
+      - agentscope_2402_14034
+      - fudan_agent4se_survey
+      - agent_protocol_survey_2504_16736
+    rationale: "Runtime handoff must stay host-adapter agnostic, require registry and capability evidence before suggestion, and preserve Forge authority through compact refs."
+    evidence_boundary: "The sources support identity, schema-backed capabilities, handoff, context engineering, and protocol layering. Forge's double-gate and authority-ref payload are product-specific governance."
+    implementation_evidence:
+      crate_refs:
+        - "crates/forge-core-contracts/src/runtime.rs"
+        - "crates/forge-core-validate/src/lib.rs"
+      validation:
+        - "cargo test -p forge-core-contracts --test load_current_contracts deserializes_runtime_boundary_instances"
+        - "cargo test -p forge-core-validate validates_current_runtime_boundary_instances"
+  - id: health_recovery_type_boundary
+    status: accepted_and_implemented_recovery_intent_contract
+    evidence:
+      - agentops_survey_2508_02121
+      - agentops_observability_2411_05285
+      - agentscope_2402_14034
+      - multi_agent_distributed_systems_2026
+      - grite_2606_19616
+      - coagent_2606_15376
+    rationale: "HealthRecoveryContract should classify runtime health/anomaly and select reviewed recovery intent without freezing daemon architecture before store/runtime boundaries exist."
+    evidence_boundary: "The sources support observability, anomaly classification, fault tolerance, and recovery. Forge's contract-vs-daemon split is inferred from local crate-boundary maturity."
+    implementation_evidence:
+      crate_refs:
+        - "crates/forge-core-contracts/src/recovery.rs"
+        - "crates/forge-core-validate/src/lib.rs"
+      validation:
+        - "cargo test -p forge-core-contracts --test load_current_contracts deserializes_health_recovery_instances"
+        - "cargo test -p forge-core-validate validates_current_health_recovery_instances"
+  - id: coordination_eval_type_boundary
+    status: accepted_and_implemented_boundary_failure_modes
+    evidence:
+      - cooperbench_2601_13295
+      - multiagentbench_2503_01935
+      - code_as_agent_harness_2605_18747
+      - utboost_2025_acl
+      - agentless_fse_2025
+      - multi_agent_distributed_systems_2026
+    rationale: "Coordination evals must measure required failure modes with fixtures, evidence refs, and failure signals; schema shape and solo task success are insufficient."
+    evidence_boundary: "The papers support coordination-specific and rigorous evals. Forge's local fixture suite is an interim typed acceptance surface before external benchmark runners."
+    implementation_evidence:
+      crate_refs:
+        - "crates/forge-core-contracts/src/coordination_eval.rs"
+        - "crates/forge-core-validate/src/lib.rs"
+      validation:
+        - "cargo test -p forge-core-contracts --test load_current_contracts deserializes_coordination_eval_instances"
+        - "cargo test -p forge-core-validate validates_current_coordination_eval_instances"
+  - id: schema_and_compact_agent_view_generation_boundary
+    status: accepted_and_implemented_rust_generated_outputs
+    evidence:
+      - schema_first_tool_apis_2603_13404
+      - serde_official
+      - schemars_official
+      - jsonschema_rust_official
+      - jsonschemabench_2501_10868
+      - tool_schema_compression_2605_26165
+    rationale: "After all v0 families have Rust types, JSON Schema and compact agent views should be generated from Rust/Serde types as outputs, not maintained as Markdown/YAML authority."
+    evidence_boundary: "The sources support schema-backed surfaces, Rust serialization, generated schemas, and compact views. Forge's first implementation provides Rust library and CLI outputs; semantic cross-file validation remains separate."
+    implementation_evidence:
+      crate_refs:
+        - "crates/forge-core-schema/src/lib.rs"
+        - "crates/forge-core-schema/src/main.rs"
+      validation:
+        - "cargo test -p forge-core-schema"
+        - "cargo run -p forge-core-schema --quiet -- views"
+        - "cargo run -p forge-core-schema --quiet -- schemas"
+  - id: rust_runtime_execution_boundary
+    status: accepted_narrow_operation_planner
+    evidence:
+      - natural_language_agent_harnesses_2603_25723
+      - runtime_governance_paths_2603_16586
+      - runtime_governance_embodied_2604_07833
+      - agentic_harness_engineering_2604_25850
+      - storm_state_management_2605_20563
+      - tool_use_orchestration_survey_2603_22862
+    rationale: "The first runtime boundary should make OperationContract execution authority typed and inspectable without expanding into command execution, file mutation, daemon lifecycle, or host-specific behavior."
+    evidence_boundary: "The sources support explicit harness contracts, runtime governance, observable harness components, and state-mediated multi-agent coordination. Forge's exact RuntimePlan statuses are product-specific and constrained by existing OperationContract fields."
+    required_changes:
+      - "Define RustRuntimeExecutionBoundary policy."
+      - "Close rust runtime execution boundary grill audit."
+      - "Implement forge-core-runtime with plan_operation and fixture-backed Rust tests."
+  - id: runtime_store_state_read_boundary
+    status: accepted_adapter_built_read_snapshot
+    evidence:
+      - storm_state_management_2605_20563
+      - runtime_governance_paths_2603_16586
+      - cordon_semantic_transactions_2606_17573
+      - policy_first_control_2603_18059
+    rationale: "Runtime should consume store/adapters' read-only ReferenceIndex snapshots for authority ref checks before readiness, while filesystem discovery and mutation stay outside runtime policy."
+    evidence_boundary: "The papers support explicit state mediation, path-aware governance, and staged effect boundaries. Forge's exact RuntimeReadSnapshot shape reuses existing ReferenceIndex as a local implementation choice."
+    required_changes:
+      - "Define RuntimeStoreStateReadBoundary policy."
+      - "Close runtime store state read grill audit."
+      - "Implement plan_operation_with_snapshot and fixture-backed Rust tests."
+  - id: runtime_effect_staging_boundary
+    status: accepted_typed_staging_plan_without_commit
+    evidence:
+      - cordon_semantic_transactions_2606_17573
+      - runtime_governance_paths_2603_16586
+      - runtime_enforcement_2503_18666
+      - solver_policy_tool_agents_2603_20449
+      - tool_use_orchestration_survey_2603_22862
+    rationale: "Runtime should create a typed staging plan for command/effect refs after readiness, but must not execute or commit effects until command runner and transaction boundaries are designed."
+    evidence_boundary: "The papers support staging/pre-execution governance and separating irreversible commit from planning. Forge's exact RuntimeEffectStagingPlan is local Rust implementation."
+    required_changes:
+      - "Define RuntimeEffectStagingBoundary policy."
+      - "Close runtime effect staging grill audit."
+      - "Implement stage_operation_effects and fixture-backed Rust tests."
+  - id: runtime_command_runner_boundary
+    status: accepted_staged_read_only_command_runner
+    evidence:
+      - cordon_semantic_transactions_2606_17573
+      - runtime_governance_paths_2603_16586
+      - runtime_enforcement_2503_18666
+      - solver_policy_tool_agents_2603_20449
+      - tool_use_orchestration_survey_2603_22862
+      - local_llm_agents_vulnerable_runtimes_2606_21071
+      - parallax_cognitive_executive_separation_2604_12986
+      - rust_std_child_process_official
+    rationale: "After staging, Forge can execute useful read-only validation commands, but only if runtime admission owns command id matching, policy validation, shell/network/mutation blocking, timeout, environment, output, and typed result semantics."
+    evidence_boundary: "The papers support runtime-owned execution admission and cognitive/executive separation. Forge's first runner is intentionally narrower than sandboxing and does not claim arbitrary binary read-only proof."
+    required_changes:
+      - "Define RuntimeCommandRunnerBoundary policy."
+      - "Close runtime command runner grill audit."
+      - "Implement run_staged_read_only_command with fixture-backed Rust tests."
+  - id: runtime_command_evidence_recording_boundary
+    status: accepted_runtime_typed_record_plus_store_append_jsonl
+    evidence:
+      - grite_2606_19616
+      - cordon_semantic_transactions_2606_17573
+      - storm_state_management_2605_20563
+      - agentic_harness_engineering_2604_25850
+      - local_llm_agents_vulnerable_runtimes_2606_21071
+    rationale: "Command execution output must become append-only evidence generated from runtime results, not host-agent narration; persistence belongs in store while runtime keeps typed execution evidence."
+    evidence_boundary: "The sources support append-only audit records and observable runtime actions. Forge's exact JSONL append primitive is an implementation choice for event evidence, not a new authority contract family."
+    required_changes:
+      - "Define RuntimeCommandEvidenceRecordingBoundary policy."
+      - "Close runtime command evidence recording grill audit."
+      - "Implement RuntimeCommandEvidenceRecord and store append_json_line with Rust tests."
+  - id: runtime_effect_transaction_boundary
+    status: accepted_payload_gated_transaction_readiness
+    evidence:
+      - cordon_semantic_transactions_2606_17573
+      - coagent_2606_15376
+      - rac_2605_03409
+      - runtime_enforcement_2503_18666
+      - storm_state_management_2605_20563
+    rationale: "Current ToolEffectContract instances authorize targets and access modes, but do not carry payload content; transaction readiness must block non-delete writes until explicit RuntimeEffectPayload entries exist."
+    evidence_boundary: "The sources support staging, pre-write validation, and explicit recovery metadata. Forge's payload-gated readiness is a product-specific response to the confirmed local write payload gap."
+    required_changes:
+      - "Define RuntimeEffectTransactionBoundary policy."
+      - "Close runtime effect transaction grill audit."
+      - "Implement prepare_effect_transaction with missing-payload and ready tests."
+  - id: runtime_effect_application_boundary
+    status: accepted_store_owned_file_effect_application
+    evidence:
+      - cordon_semantic_transactions_2606_17573
+      - failure_atomic_updates_fast15
+      - rust_file_sync_all_official
+      - aries_wal_1992
+      - storm_state_management_2605_20563
+      - rac_2605_03409
+    rationale: "After payload readiness, Forge can apply file-backed effects in store with payload hashes, freshness checks, temp replacement, and process-local rollback while explicitly deferring crash-durable multi-file recovery to WAL."
+    evidence_boundary: "The sources support staged side-effect application and warn that crash-durable multi-file atomicity needs stronger recovery mechanisms. Forge's first implementation is process-local rollback, not full ACID."
+    required_changes:
+      - "Define RuntimeEffectApplicationBoundary policy."
+      - "Close runtime effect application grill audit."
+      - "Implement apply_file_effect_transaction with success, stale-read, and rollback tests."
+  - id: runtime_effect_wal_recovery_boundary
+    status: accepted_store_owned_effect_wal_recovery
+    evidence:
+      - aries_wal_1992
+      - failure_atomic_updates_fast15
+      - cordon_semantic_transactions_2606_17573
+      - rac_2605_03409
+      - grite_2606_19616
+    rationale: "Process-local rollback cannot recover interruption after writes; store needs synced WAL records with before-images and startup recovery before Forge can claim recoverable file-effect transactions."
+    evidence_boundary: "The sources support WAL-style recovery and transaction metadata. Forge's JSONL WAL is a repo-local minimum, not full database isolation or compaction."
+    required_changes:
+      - "Define RuntimeEffectWalRecoveryBoundary policy."
+      - "Close runtime effect WAL recovery grill audit."
+      - "Implement apply_file_effect_transaction_with_wal and recover_effect_wal with commit/recovery tests."
+  - id: runtime_effect_wal_compaction_and_locking_boundary
+    status: accepted_standard_file_lock_plus_incomplete_transaction_compaction
+    evidence:
+      - rust_std_file_lock_official
+      - aries_wal_1992
+      - grite_2606_19616
+      - coagent_2606_15376
+      - storm_state_management_2605_20563
+    rationale: "After WAL recovery, cooperating local writers need serialization and WAL growth needs compaction; Rust std file locks cover local borrowed-shell use while daemon/database/distributed locking remains a later boundary."
+    evidence_boundary: "The sources support local file locks, WAL checkpoint/compaction patterns, and write-time mediation. They do not prove network filesystem or distributed lock correctness."
+    required_changes:
+      - "Define RuntimeEffectWalCompactionAndLockingBoundary policy."
+      - "Close runtime effect WAL compaction and locking grill audit."
+      - "Implement EffectStoreLock, locked WAL apply/recovery, and compact_effect_wal with Rust tests."
+  - id: runtime_store_adapter_integration_boundary
+    status: accepted_runtime_owned_operation_executor
+    evidence:
+      - natural_language_agent_harnesses_2603_25723
+      - policy_first_control_2603_18059
+      - parallax_cognitive_executive_separation_2604_12986
+      - cordon_semantic_transactions_2606_17573
+      - storm_state_management_2605_20563
+      - agentic_harness_engineering_2604_25850
+    rationale: "The safe path must be one runtime-owned operation executor that thin adapters call; otherwise every host can recombine plan/stage/command/effect APIs and drift back into chat-led execution."
+    evidence_boundary: "The sources support explicit harness contracts, policy-mediated tool execution, cognitive/executive separation, staged transactions, write-time state mediation, and observable harness evidence. Forge's exact RuntimeOperationExecution type and CLI flags are local implementation choices."
+    required_changes:
+      - "Define RuntimeStoreAdapterIntegrationBoundary policy."
+      - "Close runtime store adapter integration grill audit."
+      - "Implement RuntimeOperationExecution and CLI execute-operation with Rust tests."
+  - id: operation_executor_payload_adapter_boundary
+    status: accepted_file_payload_specs_with_safe_defaults
+    evidence:
+      - agentleak_privacy_leakage_2602_11510
+      - tool_agent_data_leakage_2606_17114
+      - local_llm_agents_vulnerable_runtimes_2606_21071
+      - mcp_tool_annotations_2603
+      - owasp_llm06_excessive_agency
+    rationale: "Operation execution needs payload bytes, but payload bytes are also a leakage channel. The adapter must load them with explicit scope/size/hash policy and keep raw content out of execution JSON."
+    evidence_boundary: "The sources support payload/data-flow minimization and runtime security boundaries. Root-scope and byte-size defaults reduce risk but do not semantically classify secrets."
+    required_changes:
+      - "Define OperationExecutorPayloadAdapterBoundary policy."
+      - "Close operation executor payload adapter grill audit."
+      - "Implement PayloadLoadPolicy and CLI tests for outside-root, size, and JSON redaction."
+  - id: operation_executor_artifact_storage_projection_boundary
+    status: accepted_canonical_repo_local_projection
+    evidence:
+      - w3c_prov_dm
+      - ro_crate_spec_1_1
+      - workflow_run_ro_crate_2024
+      - openlineage_object_model
+      - agentic_harness_engineering_2604_25850
+      - harnessfix_trace_guided_2606_06324
+    rationale: "Artifact/evidence/stream targets need stable logical identity and constrained physical storage. Canonical repo-local projection makes current ToolEffect contracts executable without prematurely adding an artifact database."
+    evidence_boundary: "Provenance/lineage/observability sources support identifiable generated entities and file-backed evidence corpora. They do not prove Forge's final artifact backend must be filesystem-only."
+    required_changes:
+      - "Define OperationExecutorArtifactStorageProjectionBoundary policy."
+      - "Close operation executor artifact storage projection grill audit."
+      - "Implement target-kind-aware store projection and runtime tests without target-kind mutation."
+research_found_gaps:
+  - id: missing_tool_inverse_and_repair_contract
+    severity: critical
+    status: "resolved_by_destructive_effect_policy"
+    evidence:
+      - coagent_2606_15376
+    problem: "OperationContract/CommandContract can authorize tools, but does not require undo/inverse or targeted repair metadata for mutating tools."
+    implication: "Without inverse/repair contracts, Forge falls back to lock/abort/retry and loses the CoAgent advantage for long-running agent work."
+    candidate_fix: "Use ToolEffectContract v0 for read/write sets, conflict notification, and repair policy; require inverse/compensation metadata before destructive tool writes."
+  - id: missing_message_protocol_for_agent_coordination
+    severity: high
+    status: "resolved_by_request_contract_v0"
+    evidence:
+      - agentscope_2402_14034
+      - chatdev_2307_07924
+    problem: "Forge models state, claims, requests, and handoffs, but not enough typed message semantics for agent-to-agent/workflow communication."
+    implication: "Requests and handoffs may become opaque notes instead of structured coordination messages."
+    candidate_fix: "Define MessageContract or RequestContract with sender, receiver/driver, intent, required_response, dependency, deadline, evidence_refs, and status."
+  - id: llm_still_too_close_to_control_flow
+    severity: critical
+    evidence:
+      - llm_as_code_2606_15874
+    problem: "Guide is read-only, but if host agents decide loops, retries, branching, and stop conditions from prose, deterministic control is still delegated to the model."
+    implication: "The Rust core must own loop/branch/stop execution policy, not just recommend it."
+    candidate_fix: "Make OperationContract include explicit execution_policy and stop_policy enums; host agents may explain and act, not invent control flow."
+  - id: missing_fault_tolerance_monitoring_contract
+    severity: medium
+    status: "resolved_by_health_recovery_contract_v0"
+    evidence:
+      - agentscope_2402_14034
+    problem: "Lane heartbeat exists, but v0 contracts do not model monitorability, failure classification, or recovery action selection."
+    implication: "A crashed/stale agent may be detected by TTL, but recovery quality depends on untyped behavior."
+    candidate_fix: "Use ClaimContract v0 for TTL, heartbeat, stale reason, and handoff-on-expiry; add broader RecoveryContract/HealthContract later for crashed runtime monitoring."
+  - id: insufficient_evaluation_beyond_task_success
+    severity: high
+    status: "resolved_by_coordination_eval_contract_v0"
+    evidence:
+      - cooperbench_2601_13295
+      - code_as_agent_harness_2605_18747
+    problem: "Existing fixtures prove shape, but not duplicate work, conflict resolution, coordination cost, human interruption quality, or regression-free harness improvement."
+    implication: "Forge can pass contract fixtures while still being bad for teams."
+    candidate_fix: "Add eval dimensions for duplicate work, lane collision, stale-state recovery, request latency, integration gate catches, and human guidance quality."
+  - id: typed_communication_does_not_replace_governance
+    severity: medium
+    evidence:
+      - chatdev_2307_07924
+      - a2a_protocol
+    problem: "Multi-agent communication frameworks prove role/chat value, but not state authority or commit safety."
+    implication: "Forge should use communication patterns for facilitation while keeping governance in typed state/claims/gates."
+    candidate_fix: "Keep ChatDev-like role communication as behavior contracts, never as authority."
+closed_grill_questions:
+  - id: typed_cross_file_reference_validation_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/typed-cross-file-reference-validation-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/typed-cross-file-reference-validation-boundary.yaml"
+    implementation_refs:
+      - "crates/forge-core-validate/src/lib.rs"
+      - "crates/forge-core-validate/tests/current_contracts.rs"
+  - id: filesystem_reference_index_adapter_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/filesystem-reference-index-adapter-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/filesystem-reference-index-adapter-boundary.yaml"
+    implementation_refs:
+      - "crates/forge-core-store/src/lib.rs"
+      - "crates/forge-core-store/tests/reference_index.rs"
+  - id: thin_cli_validation_surface_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/thin-cli-validation-surface-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/thin-cli-validation-surface-boundary.yaml"
+    implementation_refs:
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: legacy_validator_parity_retirement_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/legacy-validator-parity-retirement-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/legacy-validator-parity-retirement-boundary.yaml"
+    implementation_refs:
+      - "crates/forge-contract-validator/src/main.rs"
+      - "crates/forge-core-cli/src/lib.rs"
+  - id: generic_yaml_evidence_ref_validation_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/generic-yaml-evidence-ref-validation-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/generic-yaml-evidence-ref-validation-boundary.yaml"
+    implementation_refs:
+      - "crates/forge-core-store/src/lib.rs"
+      - "crates/forge-core-validate/src/lib.rs"
+      - "crates/forge-core-cli/src/lib.rs"
+  - id: legacy_validator_parity_matrix_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/legacy-validator-parity-matrix-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/legacy-validator-parity-matrix-boundary.yaml"
+    implementation_refs:
+      - "crates/forge-contract-validator/tests/parity.rs"
+  - id: generic_known_ref_validation_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/generic-known-ref-validation-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/generic-known-ref-validation-boundary.yaml"
+    implementation_refs:
+      - "crates/forge-core-store/src/lib.rs"
+      - "crates/forge-core-validate/src/lib.rs"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-contract-validator/tests/parity.rs"
+  - id: schema_enum_parity_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/schema-enum-parity-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/schema-enum-parity-boundary.yaml"
+    implementation_refs:
+      - "crates/forge-contract-validator/tests/parity.rs"
+  - id: legacy_stdout_compatibility_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/legacy-stdout-compatibility-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/legacy-stdout-compatibility-boundary.yaml"
+    implementation_refs:
+      - "crates/forge-contract-validator/src/main.rs"
+      - "crates/forge-contract-validator/tests/parity.rs"
+  - id: legacy_validator_retirement_policy_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/legacy-validator-retirement-policy-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/legacy-validator-retirement-policy-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/legacy-validator-retirement-policy-boundary.yaml"
+  - id: rust_runtime_execution_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/rust-runtime-execution-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/rust-runtime-execution-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/rust-runtime-execution-boundary.yaml"
+      - "crates/forge-core-runtime/src/lib.rs"
+      - "crates/forge-core-runtime/tests/operation_plan.rs"
+  - id: runtime_store_state_read_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/runtime-store-state-read-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/runtime-store-state-read-boundary.yaml"
+    implementation_refs:
+      - "crates/forge-core-runtime/src/lib.rs"
+      - "crates/forge-core-runtime/tests/operation_plan.rs"
+  - id: runtime_effect_staging_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/runtime-effect-staging-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/runtime-effect-staging-boundary.yaml"
+    implementation_refs:
+      - "crates/forge-core-runtime/src/lib.rs"
+      - "crates/forge-core-runtime/tests/operation_plan.rs"
+  - id: runtime_command_runner_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/runtime-command-runner-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/runtime-command-runner-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/runtime-command-runner-boundary.yaml"
+      - "crates/forge-core-runtime/src/lib.rs"
+      - "crates/forge-core-runtime/tests/operation_plan.rs"
+  - id: runtime_command_evidence_recording_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/runtime-command-evidence-recording-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/runtime-command-evidence-recording-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/runtime-command-evidence-recording-boundary.yaml"
+      - "crates/forge-core-runtime/src/lib.rs"
+      - "crates/forge-core-runtime/tests/operation_plan.rs"
+      - "crates/forge-core-store/src/lib.rs"
+      - "crates/forge-core-store/tests/reference_index.rs"
+  - id: runtime_effect_transaction_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/runtime-effect-transaction-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/runtime-effect-transaction-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/runtime-effect-transaction-boundary.yaml"
+      - "crates/forge-core-runtime/src/lib.rs"
+      - "crates/forge-core-runtime/tests/operation_plan.rs"
+  - id: runtime_effect_application_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/runtime-effect-application-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/runtime-effect-application-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/runtime-effect-application-boundary.yaml"
+      - "crates/forge-core-store/src/lib.rs"
+      - "crates/forge-core-store/tests/reference_index.rs"
+  - id: runtime_effect_wal_recovery_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/runtime-effect-wal-recovery-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/runtime-effect-wal-recovery-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/runtime-effect-wal-recovery-boundary.yaml"
+      - "crates/forge-core-store/src/lib.rs"
+      - "crates/forge-core-store/tests/reference_index.rs"
+  - id: runtime_effect_wal_compaction_and_locking_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/runtime-effect-wal-compaction-and-locking-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/runtime-effect-wal-compaction-and-locking-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/runtime-effect-wal-compaction-and-locking-boundary.yaml"
+      - "crates/forge-core-store/src/lib.rs"
+      - "crates/forge-core-store/tests/reference_index.rs"
+  - id: runtime_store_adapter_integration_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/runtime-store-adapter-integration-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/runtime-store-adapter-integration-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/runtime-store-adapter-integration-boundary.yaml"
+      - "crates/forge-core-runtime/src/lib.rs"
+      - "crates/forge-core-runtime/tests/operation_plan.rs"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+  - id: operation_executor_payload_adapter_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/operation-executor-payload-adapter-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/operation-executor-payload-adapter-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/operation-executor-payload-adapter-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: operation_executor_artifact_storage_projection_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/operation-executor-artifact-storage-projection-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/operation-executor-artifact-storage-projection-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/operation-executor-artifact-storage-projection-boundary.yaml"
+      - "crates/forge-core-store/src/lib.rs"
+      - "crates/forge-core-store/tests/reference_index.rs"
+      - "crates/forge-core-runtime/tests/operation_plan.rs"
+  - id: operation_executor_metadata_index_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/operation-executor-metadata-index-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/operation-executor-metadata-index-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/operation-executor-metadata-index-boundary.yaml"
+      - "crates/forge-core-store/src/lib.rs"
+      - "crates/forge-core-runtime/src/lib.rs"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-store/tests/reference_index.rs"
+      - "crates/forge-core-runtime/tests/operation_plan.rs"
+  - id: operation_executor_metadata_rebuild_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/operation-executor-metadata-rebuild-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/operation-executor-metadata-rebuild-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/operation-executor-metadata-rebuild-boundary.yaml"
+      - "crates/forge-core-store/src/lib.rs"
+      - "crates/forge-core-store/tests/reference_index.rs"
+  - id: operation_executor_repair_cli_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/operation-executor-repair-cli-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/operation-executor-repair-cli-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/operation-executor-repair-cli-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: operation_executor_index_compaction_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/operation-executor-index-compaction-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/operation-executor-index-compaction-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/operation-executor-index-compaction-boundary.yaml"
+  - id: operation_executor_metadata_reader_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/operation-executor-metadata-reader-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/operation-executor-metadata-reader-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/operation-executor-metadata-reader-boundary.yaml"
+      - "crates/forge-core-store/src/lib.rs"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-store/tests/reference_index.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: operation_executor_metadata_consumer_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/operation-executor-metadata-consumer-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/operation-executor-metadata-consumer-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/operation-executor-metadata-consumer-boundary.yaml"
+      - "crates/forge-core-store/src/lib.rs"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-store/tests/reference_index.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: operation_executor_metadata_context_builder_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/operation-executor-metadata-context-builder-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/operation-executor-metadata-context-builder-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/operation-executor-metadata-context-builder-boundary.yaml"
+      - "crates/forge-core-store/src/lib.rs"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-store/tests/reference_index.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: operation_executor_metadata_adapter_integration_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/operation-executor-metadata-adapter-integration-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/operation-executor-metadata-adapter-integration-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/operation-executor-metadata-adapter-integration-boundary.yaml"
+      - "crates/forge-core-store/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-store/tests/reference_index.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: host_adapter_manifest_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/host-adapter-manifest-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/host-adapter-manifest-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/host-adapter-manifest-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: host_adapter_manifest_projection_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/host-adapter-manifest-projection-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/host-adapter-manifest-projection-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/host-adapter-manifest-projection-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: mcp_local_process_security_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/mcp-local-process-security-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/mcp-local-process-security-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/mcp-local-process-security-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: installer_trust_and_distribution_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/installer-trust-and-distribution-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/installer-trust-and-distribution-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/installer-trust-and-distribution-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: release_artifact_verification_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/release-artifact-verification-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/release-artifact-verification-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/release-artifact-verification-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: signature_and_provenance_verification_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/signature-and-provenance-verification-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/signature-and-provenance-verification-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/signature-and-provenance-verification-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: sigstore_rekor_backend_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/sigstore-rekor-backend-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/sigstore-rekor-backend-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/sigstore-rekor-backend-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: sigstore_trusted_root_policy_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/sigstore-trusted-root-policy-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/sigstore-trusted-root-policy-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/sigstore-trusted-root-policy-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: sigstore_fulcio_certificate_identity_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/sigstore-fulcio-certificate-identity-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/sigstore-fulcio-certificate-identity-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/sigstore-fulcio-certificate-identity-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: sigstore_bundle_subject_binding_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/sigstore-bundle-subject-binding-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/sigstore-bundle-subject-binding-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/sigstore-bundle-subject-binding-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: sigstore_dsse_in_toto_subject_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/sigstore-dsse-in-toto-subject-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/sigstore-dsse-in-toto-subject-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/sigstore-dsse-in-toto-subject-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: sigstore_timestamp_authority_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/sigstore-timestamp-authority-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/sigstore-timestamp-authority-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/sigstore-timestamp-authority-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: sigstore_rfc3161_tsa_token_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/sigstore-rfc3161-tsa-token-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/sigstore-rfc3161-tsa-token-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/sigstore-rfc3161-tsa-token-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+  - id: certificate_transparency_sct_boundary
+    status: "closed"
+    decision_ref: "contracts/migration/certificate-transparency-sct-boundary-grill-audit.yaml"
+    policy_ref: "contracts/policies/certificate-transparency-sct-boundary.yaml"
+    implementation_refs:
+      - "contracts/policies/certificate-transparency-sct-boundary.yaml"
+      - "crates/forge-core-cli/src/lib.rs"
+      - "crates/forge-core-cli/src/main.rs"
+      - "crates/forge-core-cli/tests/validate.rs"
+next_grill_question:
+  id: explicit_crl_ocsp_revocation_status_boundary
+  question: "How should Forge verify explicit CRL or OCSP certificate revocation status without treating CT, Rekor, timestamp, or short-lived certificate policy evidence as CRL/OCSP evidence?"
+  recommended_answer: "Keep explicit CRL/OCSP status as a separate read-only host-adapter boundary after choosing status sources, freshness, offline behavior, and failure policy."

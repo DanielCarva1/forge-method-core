@@ -1,0 +1,60 @@
+schema_version: "0.1"
+audit: "certificate_revocation_policy_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/sigstore-timestamp-authority-boundary.yaml"
+  - "contracts/policies/certificate-transparency-sct-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "certificate_revocation_policy_boundary"
+  question: "How should Forge verify revocation behavior without treating CT, Rekor, timestamp, or certificate validity as explicit CRL/OCSP status?"
+  options:
+    - id: "claim_not_revoked_without_evidence"
+      summary: "Report not_revoked whenever certificate validity and timestamp checks pass."
+      advantages:
+        - "Very small implementation."
+      disadvantages:
+        - "Incorrectly converts temporal validity into revocation status."
+        - "Would mislead update/install decisions into believing CRL or OCSP was checked."
+    - id: "crl_ocsp_fetch_now"
+      summary: "Implement live CRL/OCSP fetch and status verification immediately."
+      advantages:
+        - "Closer to explicit revocation semantics for long-lived PKI."
+      disadvantages:
+        - "Combines network trust, cache freshness, responder policy, offline behavior, and install gating in one slice."
+        - "Does not match Sigstore/Fulcio's primary short-lived certificate strategy."
+    - id: "short_lived_certificate_policy_verifier"
+      summary: "Verify declared short-lived certificate policy, certificate lifetime, and trusted signing time now; fail explicit CRL/OCSP mode until a focused boundary exists."
+      advantages:
+        - "Matches Sigstore/Fulcio's short-lived certificate design."
+        - "Avoids overclaiming not_revoked."
+        - "Keeps explicit CRL/OCSP semantics available for a later focused verifier."
+      disadvantages:
+        - "Does not support products that require live CRL/OCSP status yet."
+        - "Depends on a prior trusted-time boundary to supply signing time."
+  selected_option: "short_lived_certificate_policy_verifier"
+  decision: "Forge adds host-adapter-verify-certificate-revocation-policy as a read-only Rust verifier for short_lived_certificate policy, certificate lifetime, and trusted signing time, while failing explicit_status_required until a later CRL/OCSP boundary."
+acceptance_criteria:
+  - "Policy contract exists."
+  - "Runtime exposes read-only host adapter command."
+  - "Runtime passes short-lived certificate policy with trusted signing time inside certificate validity."
+  - "Runtime fails excessive certificate lifetime."
+  - "Runtime fails explicit_status_required instead of pretending CRL/OCSP was checked."
+  - "No Python is introduced."
+  - "No Markdown authority is introduced."
+evidence_basis:
+  direct_patterns:
+    - source_id: "sigstore_security_model_short_lived_certificates"
+      supports: "Sigstore documents short-lived Fulcio certificates and trusted signing time as the expected model."
+    - source_id: "fulcio_spec_short_lived_certificate_timestamping"
+      supports: "Fulcio specification connects short-lived certificate validity with timestamp proof of signing time."
+    - source_id: "rfc5280_x509_crl_profile"
+      supports: "CRLs are a separate certificate revocation mechanism."
+    - source_id: "rfc6960_ocsp_certificate_status"
+      supports: "OCSP is a separate certificate-status protocol with explicit status outcomes."
+  inference_boundary: "The decision closes short-lived certificate revocation policy verification only. It does not close explicit CRL/OCSP status, TUF freshness, live network behavior, or release install authority."
+next_grill_question:
+  id: "explicit_crl_ocsp_revocation_status_boundary"
+  question: "How should Forge verify explicit CRL or OCSP revocation status, freshness, and offline failure policy without blocking the short-lived certificate strategy?"
+  recommended_answer: "Add a separate read-only boundary for explicit CRL/OCSP evidence only if Forge needs long-lived PKI support; keep installer/update admission blocked from claiming stronger revocation assurance until that boundary exists."

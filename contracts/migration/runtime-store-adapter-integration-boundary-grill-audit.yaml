@@ -1,0 +1,90 @@
+schema_version: "0.1"
+audit: "runtime_store_adapter_integration_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+grill_state_machine:
+  state: "S6"
+  closed_question:
+    id: "runtime_store_adapter_integration_boundary"
+    question: "After store supports planning snapshots, command evidence, WAL application, recovery, compaction, and local locking, how should the CLI/runtime adapter expose a single operation execution path without letting host agents bypass it?"
+    selected_answer: "Create a runtime-owned Operation Executor with thin adapters. It composes plan, snapshot, staging, command execution, evidence append, effect transaction readiness, locked WAL application, and typed result reporting."
+inputs:
+  - "contracts/policies/runtime-effect-wal-compaction-and-locking-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "crates/forge-core-runtime/src/lib.rs"
+  - "crates/forge-core-cli/src/lib.rs"
+  - "crates/forge-core-store/src/lib.rs"
+decision:
+  canonical_term: "Runtime Operation Executor"
+  policy_ref: "contracts/policies/runtime-store-adapter-integration-boundary.yaml"
+  selected_strategy: "runtime_owned_operation_executor_with_thin_cli_adapter"
+  scope:
+    includes:
+      - "one runtime operation execution API"
+      - "runtime result with plan/staging/command/effect summaries"
+      - "read-only command execution through existing runner"
+      - "command evidence append through store"
+      - "effect readiness and locked WAL application"
+      - "CLI execute-operation adapter surface"
+    excludes:
+      - "daemon"
+      - "MCP server"
+      - "payload redaction UX"
+      - "distributed locks"
+      - "non-cooperating host enforcement"
+tradeoffs:
+  selected:
+    advantages:
+      - "Makes the correct path easier than host-agent improvisation."
+      - "Keeps CLI/MCP/app adapters thin and portable."
+      - "Preserves runtime/store separation while composing them at the operation boundary."
+      - "Creates Rust-testable proof that failed plan/command/effect states do not mutate files."
+    disadvantages:
+      - "Runtime now depends on store for execution orchestration."
+      - "Adapter input loading still needs later payload policy."
+      - "Bypass remains possible for hosts that ignore the executor."
+  rejected:
+    - id: "prompt_guard_only"
+      reason: "Prompt-only guardrails are exactly the observed failure mode."
+    - id: "cli_only_executor"
+      reason: "Would make MCP/app adapters duplicate authority logic."
+    - id: "store_level_executor"
+      reason: "Would put operation semantics into persistence."
+    - id: "daemon_now"
+      reason: "Useful later, but not required to remove adapter recomposition in the local Rust core."
+scenario_tests:
+  - id: "not_ready_operation"
+    scenario: "Operation plan requires human input."
+    expected_result: "Executor returns AwaitingHuman/Blocked and does not run commands or effects."
+  - id: "missing_required_command"
+    scenario: "Operation references a required command not supplied by adapter."
+    expected_result: "Executor blocks before effects."
+  - id: "command_failure"
+    scenario: "Required command runs but exits non-zero or is blocked."
+    expected_result: "Executor records typed result and blocks effects."
+  - id: "successful_operation"
+    scenario: "Plan is ready, required command succeeds, effect has payloads."
+    expected_result: "Executor appends command evidence and applies effect through locked WAL."
+evidence_basis:
+  direct_patterns:
+    - source_id: "natural_language_agent_harnesses_2603_25723"
+      supports: "Contracts plus durable artifacts plus lightweight adapters."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy mediation belongs at tool lifecycle boundaries."
+    - source_id: "parallax_cognitive_executive_separation_2604_12986"
+      supports: "Execution boundary must be structurally separate from model reasoning."
+    - source_id: "cordon_semantic_transactions_2606_17573"
+      supports: "Tool execution needs staged commit/recovery/audit."
+    - source_id: "storm_state_management_2605_20563"
+      supports: "Write-time mediation is better than post-hoc merge for shared state."
+    - source_id: "agentic_harness_engineering_2604_25850"
+      supports: "Harness behavior should be observable as explicit components and evidence."
+  inference_boundary: "The research supports the execution architecture; exact Rust API names and the first CLI flags are Forge implementation choices."
+implementation_plan:
+  - "Add runtime operation input/result types."
+  - "Add execute_operation using snapshot, staging, read-only commands, evidence append, effect readiness, and locked WAL application."
+  - "Add CLI execute-operation JSON surface."
+  - "Add Rust tests for blocking and success paths."
+next_grill_question:
+  id: "operation_executor_payload_adapter_boundary"
+  question: "After the runtime owns a single operation executor, how should adapters load, validate, and redact effect payload content without putting large or sensitive payload bytes into agent context?"

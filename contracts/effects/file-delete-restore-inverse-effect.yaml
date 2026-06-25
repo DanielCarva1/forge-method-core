@@ -1,0 +1,47 @@
+schema_version: "0.1"
+tool_effect_contract:
+  id: "effect.fixture.file_delete_restore_inverse"
+  contract_ref: "contracts/effects/tool-effect-contract-v0.yaml"
+  effect_kind: "file_edit"
+  operation_ref: "inverse_restore_deleted_file_from_snapshot"
+  actor:
+    agent_id: "forge-core"
+    role: "runtime"
+  read_set:
+    - target_kind: "evidence_id"
+      ref: ".forge-method/snapshots/src-obsolete-rs.before-delete"
+      expected_hash: "sha256:fixture-snapshot"
+      expected_version: null
+      required_for_plan: true
+  write_set:
+    - target_kind: "file_path"
+      ref: "src/obsolete.rs"
+      access_mode: "create"
+      expected_hash: null
+      expected_version: null
+      destructive: false
+  conflict_detection:
+    check_against: "filesystem"
+    granularity: "path"
+    conflict_codes:
+      - "write_target_changed"
+      - "path_outside_scope"
+    policy: "driver_review"
+  notification:
+    required: true
+    recipients:
+      - "driver"
+    request_contract_ref: "contracts/requests/read-write-conflict-notification-request.yaml"
+  repair:
+    strategy: "run_gate"
+    automatic_repair_allowed: false
+    inverse_operation_ref: null
+    stop_if_inverse_missing: false
+    inverse:
+      kind: "none"
+      source: "unavailable"
+      ref: null
+      input_mapping_refs: []
+      validation_gate_refs:
+        - "contracts/gates/story-ready-lane-gate.yaml"
+      review_required: true

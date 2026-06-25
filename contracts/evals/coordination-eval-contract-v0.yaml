@@ -1,0 +1,80 @@
+schema_version: "0.1"
+contract: "coordination_eval_contract"
+status: "draft"
+purpose: "Define the minimal evaluation dimensions required before Forge claims multi-agent or team coordination is working."
+design_rules:
+  - id: "coordination_is_not_task_success"
+    rule: "A green implementation test is not enough; coordination evals must cover duplicate work, conflict, stale ownership, handoff, request lifecycle, and human guidance."
+  - id: "fixtures_are_required"
+    rule: "Each required dimension must point to at least one fixture or future runner case."
+  - id: "cheap_first_not_weak_forever"
+    rule: "v0 uses cheap local fixtures as the minimum; later suites may add external benchmarks, replay transcripts, and stress runners."
+rust_compatibility:
+  serialization: "serde"
+  id_policy: "stable_ascii_ids"
+  enum_policy: "closed_for_v0_with_unknown_rejected"
+enums:
+  dimension:
+    - "duplicate_work_prevention"
+    - "lane_collision_detection"
+    - "stale_claim_recovery"
+    - "read_write_conflict_repair"
+    - "request_lifecycle"
+    - "integration_gate_scope"
+    - "runtime_handoff_safety"
+    - "destructive_effect_safety"
+    - "human_guidance_recovery"
+  metric_kind:
+    - "fixture_pass"
+    - "threshold"
+    - "latency_budget"
+    - "manual_review"
+  required_level:
+    - "must_pass"
+    - "should_pass"
+    - "manual_review_required"
+  status:
+    - "draft"
+    - "required"
+    - "passed"
+    - "failed"
+required_fields:
+  - "id"
+  - "status"
+  - "dimensions"
+  - "pass_policy.required_level"
+field_contract:
+  id: "Stable eval suite id."
+  status: "Closed status enum."
+  dimensions:
+    item:
+      dimension: "Closed dimension enum."
+      metric_kind: "Closed metric_kind enum."
+      required_level: "Closed required_level enum."
+      fixture_refs: "Operation/request/effect fixtures proving coverage."
+      threshold: "Optional numeric threshold for runner-backed evals."
+      failure_signal: "What failure means in product behavior."
+      evidence_refs: "Research or field-evidence refs justifying the dimension."
+  pass_policy:
+    required_level: "Minimum level required for release claim."
+    all_must_pass_dimensions_required: "Boolean."
+    manual_review_blocks_release: "Boolean."
+evidence_basis:
+  direct_patterns:
+    - source_id: "cooperbench_2601_13295"
+      supports: "Collaborative coding agents can perform worse together; failures include vague communication, broken commitments, and wrong expectations."
+    - source_id: "multiagentbench_2503_01935"
+      supports: "Multi-agent evaluation should measure collaboration quality and milestone KPIs, not only task completion."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Agent harnesses need evaluation beyond final task success, including shared state, coordination, and human oversight."
+    - source_id: "utboost_2025_acl"
+      supports: "Weak test/eval suites can falsely label bad agent patches as passed."
+    - source_id: "agentless_fse_2025"
+      supports: "Benchmark inputs can be misleading or incomplete; rigorous evals need filtered/validated tasks and cost-aware baselines."
+  inference_boundary: "The sources support coordination-specific evals and stronger benchmarks; Forge's product-specific v0 is a local contract suite that names required dimensions before external benchmark runners exist."
+failure_modes_prevented:
+  - "Forge claims multi-agent support after only solo task success"
+  - "duplicate work passes because output is eventually green"
+  - "stale claim recovery exists but loses context or blocks a lane"
+  - "runtime handoff appears useful but bypasses evidence gates"
+  - "human correction transcript passes without proving the agent recovered course"

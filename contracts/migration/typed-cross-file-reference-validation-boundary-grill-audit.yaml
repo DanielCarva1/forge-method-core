@@ -1,0 +1,75 @@
+schema_version: "0.1"
+audit: "typed_cross_file_reference_validation_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/validator-library-migration-boundary.yaml"
+  - "contracts/policies/rust-contract-type-order.yaml"
+  - "contracts/migration/schema-and-compact-agent-view-generation-boundary-grill-audit.yaml"
+  - "contracts/migration/v2-design-coverage-audit.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "typed_cross_file_reference_validation_boundary"
+  question: "Now that all v0 contract families have Rust types, how should forge-core-validate resolve cross-file refs without becoming a filesystem-heavy CLI again?"
+  options:
+    - id: "pure_index_then_typed_reference_resolution"
+      summary: "Semantic validators receive a ReferenceIndex and resolve refs by expected ReferenceKind."
+      advantages:
+        - "Keeps validation reusable from CLI, app, daemon, MCP, and tests."
+        - "Preserves Rust-first contract authority without filesystem coupling."
+        - "Separates missing refs from wrong-kind refs."
+        - "Allows future adapters to cache, scan, or serve references without changing core rules."
+      disadvantages:
+        - "Requires adapter crates or callers to build a correct index."
+        - "Does not prove runtime evidence blob existence in this first boundary."
+    - id: "filesystem_traversal_inside_validator"
+      summary: "Have forge-core-validate walk the repo directly for every cross-file check."
+      advantages:
+        - "Simple CLI wiring in the short term."
+      disadvantages:
+        - "Couples reusable rules to one repository layout."
+        - "Repeats the legacy validator shape under a Rust name."
+        - "Harder to reuse from Forge app, daemon, or MCP surfaces."
+    - id: "schema_only_reference_fields"
+      summary: "Rely on generated schema patterns and required fields for refs."
+      advantages:
+        - "No new validator code."
+      disadvantages:
+        - "Cannot prove referenced authority exists."
+        - "Cannot detect wrong-kind references."
+        - "Leaves agents free to trust stale chat or prompt context."
+  selected_option: "pure_index_then_typed_reference_resolution"
+  decision: "Use ReferenceIndex plus ReferenceKind in forge-core-validate. Semantic validators remain pure and emit MissingReference or ReferenceKindMismatch diagnostics. Filesystem/runtime discovery is a later adapter boundary."
+  acceptance_criteria:
+    - "ReferenceIndex and ReferenceKind are public validation types."
+    - "Inventory and operation refs validate against ReferenceIndex."
+    - "Current v0 side-contract families validate authority refs against ReferenceIndex."
+    - "Test coverage builds a pure index from current repo state without putting traversal into core validators."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-validate/src/lib.rs"
+    - "crates/forge-core-validate/tests/current_contracts.rs"
+  policy_refs:
+    - "contracts/policies/typed-cross-file-reference-validation-boundary.yaml"
+  validation:
+    - "cargo test -p forge-core-validate validates_current_cross_file_references_with_pure_index"
+    - "cargo test -p forge-core-validate typed_reference_validation_reports_missing_and_wrong_kind"
+evidence_basis:
+  direct_patterns:
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Validation decisions should be policy-backed infrastructure with structured diagnostics."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness behavior should be executable, inspectable, and verification-oriented."
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Structured diagnostics complement schemas for reliable agent/tool interfaces."
+    - source_id: "agent_protocol_taxonomy_2606_19135"
+      supports: "Protocol designs need explicit boundaries for payload, state, and discovery."
+    - source_id: "jsonschemabench_2501_10868"
+      supports: "Schema conformance alone is not enough to cover all semantic validation behavior."
+  inference_boundary: "The sources support typed diagnostics, explicit policy, and separated protocol/runtime boundaries. The exact ReferenceIndex API is a Forge implementation choice that must remain covered by Rust tests."
+next_grill_question:
+  id: "legacy_validator_parity_retirement_boundary"
+  question: "Which legacy forge-contract-validator checks are not yet covered by forge-core-cli typed validation, and should the old binary wrap the new CLI or stay temporarily separate?"
+  recommended_answer: "audit_legacy_checks_then_wrap_or_retire_only_when_coverage_is_proven"

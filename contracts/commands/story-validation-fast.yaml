@@ -1,0 +1,31 @@
+schema_version: "0.1"
+command_contract:
+  id: "cmd.validate.story_fast"
+  contract_ref: "contracts/commands/command-contract-v0.yaml"
+  kind: "test"
+  executor: "cargo"
+  args:
+    - "test"
+  cwd_policy: "project_root"
+  side_effect_policy: "read_only"
+  platforms:
+    - "windows"
+    - "macos"
+    - "linux"
+  timeout_ms: 120000
+  env_policy:
+    inherit: "minimal"
+    required: []
+    forbidden:
+      - "secrets"
+  network_policy: "disabled"
+  output_policy:
+    capture: "summary"
+    max_bytes: 12000
+  authority_required:
+    - "operation_contract"
+  safety:
+    shell_string_allowed: false
+    writes_files: false
+    publishes: false
+    installs_packages: false

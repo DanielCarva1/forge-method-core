@@ -1,0 +1,62 @@
+schema_version: "0.1"
+audit: "release_artifact_verification_boundary_grill"
+status: "closed"
+boundary:
+  id: "release_artifact_verification_boundary"
+  question: "How should Forge verify checksums, signatures, provenance refs, and compatibility metadata locally before an adapter install or update is allowed to execute?"
+  selected_answer: "Implement a separate Rust read-only verifier that checks local artifact bytes against sha256, validates required distribution metadata refs, reports deferred cryptographic checks explicitly, and blocks install/update mutation on any failure."
+decision_quality:
+  evidence_based: true
+  asks_human_to_read_docs: false
+  primary_sources_consulted:
+    - "https://slsa.dev/spec/v1.0/verifying-artifacts"
+    - "https://docs.sigstore.dev/about/security/"
+    - "https://theupdateframework.github.io/specification/latest/"
+    - "https://www.usenix.org/conference/usenixsecurity19/presentation/torres-arias"
+  confidence: "medium_high"
+  confidence_reason: "Byte-level hash verification and metadata gating are directly supported by secure update and supply-chain verification practice. Confidence is not high because cryptographic signature/provenance verification remains a separate boundary."
+options_considered:
+  - id: "distribution_admission_as_verification"
+    decision: "rejected"
+    reason: "It would allow agents to confuse evidence presence with local artifact integrity."
+  - id: "checksum_only_as_done"
+    decision: "rejected"
+    reason: "It would contradict Sigstore/SLSA/in-toto expectations for identity, provenance, and supply-chain verification."
+  - id: "separate_local_verifier"
+    decision: "selected"
+    reason: "It gives every host adapter the same Rust-owned byte and metadata verification result before mutation."
+research_synthesis:
+  - source_id: "slsa_artifact_verification_spec"
+    claim_used: "Provenance is useful only if consumers inspect and verify it against expectations."
+    forge_application: "Forge records verification as a separate output instead of treating provenance_ref as enough."
+  - source_id: "sigstore_docs"
+    claim_used: "Real verification includes signature, certificate identity, root of trust, and Rekor inclusion."
+    forge_application: "The verifier lists those checks as deferred rather than pretending sha256 proves signer identity."
+  - source_id: "tuf_specification"
+    claim_used: "Secure update systems defend against rollback, freeze, mix-and-match, and arbitrary install attacks."
+    forge_application: "Verification requires rollback/update metadata and opens a later TUF-style target metadata boundary."
+  - source_id: "in_toto_spec"
+    claim_used: "End users should verify the supply chain from inception to deployment."
+    forge_application: "Provenance refs are mandatory, while predicate semantics remain next-boundary work."
+implementation_refs:
+  - "contracts/policies/release-artifact-verification-boundary.yaml"
+  - "crates/forge-core-cli/src/lib.rs"
+  - "crates/forge-core-cli/src/main.rs"
+  - "crates/forge-core-cli/tests/validate.rs"
+acceptance:
+  - id: "library_passes_matching_artifact"
+    evidence: "host_adapter_artifact_verification_passes_for_matching_digest_and_metadata"
+  - id: "library_fails_mismatch_or_missing_metadata"
+    evidence: "host_adapter_artifact_verification_fails_for_mismatch_or_missing_metadata"
+  - id: "cli_passes_matching_artifact"
+    evidence: "host_adapter_verify_artifact_binary_outputs_json_and_exit_status"
+  - id: "cli_blocks_mismatched_digest"
+    evidence: "host_adapter_verify_artifact_binary_blocks_mismatched_digest"
+open_risks:
+  - id: "signature_and_provenance_not_cryptographically_verified_yet"
+    mitigation: "Keep deferred_verification in runtime output and open signature_and_provenance_verification_boundary."
+  - id: "no_tuf_target_metadata_validation_yet"
+    mitigation: "Keep rollback/update metadata required and handle target metadata in a later boundary."
+next_boundary:
+  id: "sigstore_fulcio_certificate_identity_boundary"
+  question: "How should Forge verify Fulcio certificate chain, certificate identity extensions, expected OIDC issuer, and workflow identity selectors against the trusted-root policy without treating policy validation as cryptographic proof?"

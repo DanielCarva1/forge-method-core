@@ -1,0 +1,56 @@
+schema_version: "0.1"
+policy: "legacy_validator_parity_retirement_boundary"
+status: "accepted"
+purpose: "Define when forge-contract-validator can be wrapped by or retired in favor of forge-core-cli without losing validation coverage."
+decision:
+  selected_strategy: "audit_then_wrap_or_retire_only_when_coverage_is_proven"
+  current_state:
+    new_cli: "forge-core validate"
+    legacy_binary: "forge-contract-validator"
+    retirement_status: "not_allowed_yet"
+  covered_by_forge_core_cli:
+    - "Typed deserialization for current v0 contract families."
+    - "Evidence registry source uniqueness and metadata checks through forge-core-validate."
+    - "Inventory evidence and reference checks."
+    - "Command, operation, claim, completion, gate, request, effect, decision, runtime handoff, runtime registry, runtime capability, health recovery, and coordination eval semantic checks."
+    - "Cross-file authority refs through forge-core-store ReferenceIndexBuilder and forge-core-validate."
+    - "Recursive YAML parse coverage for contracts and operation fixtures through forge-core-store document collection."
+    - "Recursive source_id reference checks through forge-core-validate generic YAML validation."
+    - "Structured JSON summary for agents and automation."
+  not_yet_proven_or_missing:
+    - id: "generic_policy_and_migration_ref_checks"
+      detail: "Some policy/migration YAML refs are still checked by generic string traversal rather than typed contract families."
+    - id: "schema_enum_parity_proof"
+      detail: "Serde enums likely cover many legacy enum_set checks, but parity must be proven check-by-check before deletion."
+    - id: "legacy_summary_contract"
+      detail: "Existing scripts may depend on forge-contract-validator stdout summary fields."
+  allowed_next_steps:
+    - "Continue closing remaining matrix items from contracts/policies/legacy-validator-parity-matrix-boundary.yaml."
+    - "After parity is proven, make forge-contract-validator a compatibility wrapper or retire it with release notes."
+  forbidden_until_proven:
+    - "Deleting forge-contract-validator."
+    - "Replacing forge-contract-validator with forge-core-cli without parity matrix coverage."
+    - "Claiming forge-core-cli has full legacy coverage."
+rules:
+  - id: "no_retirement_without_matrix"
+    rule: "Legacy validator retirement requires a coverage matrix that names each legacy check category and its new typed/generic Rust authority."
+  - id: "overlap_must_have_tests"
+    rule: "Any check claimed covered by forge-core-cli must have a Rust test or validation command proving it."
+  - id: "gaps_stay_visible"
+    rule: "Known parity gaps must remain in YAML contracts until implemented or explicitly rejected."
+evidence_basis:
+  direct_patterns:
+    - source_id: "utboost_2025_acl"
+      supports: "Insufficient tests can falsely label generated patches or agents as correct."
+    - source_id: "agentless_fse_2025"
+      supports: "Simpler constrained baselines can expose overclaimed agent/system capability."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness verification should cover behavior beyond final pass status."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy checks need stable, auditable lifecycle records."
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Structured diagnostics are useful only when semantic coverage is explicit."
+  inference_boundary: "The sources support not overclaiming validation coverage and requiring explicit parity evidence. The listed gaps come from local audit of forge-contract-validator versus forge-core-cli."
+next_boundary:
+  id: "generic_known_ref_validation_boundary"
+  question: "How should generic known-ref/file-ref checks for policy and migration YAML move into reusable Rust validation without duplicating typed cross-file reference rules?"

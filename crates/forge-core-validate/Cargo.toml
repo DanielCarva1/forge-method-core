@@ -1,0 +1,13 @@
+[package]
+name = "forge-core-validate"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+forge-core-contracts = { path = "../forge-core-contracts" }
+serde.workspace = true
+serde_yaml.workspace = true
+
+[dev-dependencies]
+serde.workspace = true
+serde_yaml.workspace = true

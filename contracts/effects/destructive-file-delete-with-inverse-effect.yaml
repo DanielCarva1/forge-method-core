@@ -1,0 +1,51 @@
+schema_version: "0.1"
+tool_effect_contract:
+  id: "effect.fixture.destructive_file_delete_with_inverse"
+  contract_ref: "contracts/effects/tool-effect-contract-v0.yaml"
+  effect_kind: "file_edit"
+  operation_ref: "op_fixture_destructive_file_delete_with_inverse"
+  actor:
+    agent_id: "codex-main"
+    role: "driver"
+  read_set:
+    - target_kind: "file_path"
+      ref: "src/obsolete.rs"
+      expected_hash: "sha256:fixture-before-delete"
+      expected_version: null
+      required_for_plan: true
+  write_set:
+    - target_kind: "file_path"
+      ref: "src/obsolete.rs"
+      access_mode: "delete"
+      expected_hash: "sha256:fixture-before-delete"
+      expected_version: null
+      destructive: true
+  conflict_detection:
+    check_against: "filesystem"
+    granularity: "path"
+    conflict_codes:
+      - "read_target_changed"
+      - "write_target_changed"
+      - "missing_inverse_for_destructive_write"
+      - "path_outside_scope"
+    policy: "human_review"
+  notification:
+    required: true
+    recipients:
+      - "human"
+      - "driver"
+    request_contract_ref: "contracts/requests/destructive-effect-review-request.yaml"
+  repair:
+    strategy: "compensate_then_retry"
+    automatic_repair_allowed: false
+    inverse_operation_ref: "contracts/effects/file-delete-restore-inverse-effect.yaml"
+    stop_if_inverse_missing: true
+    inverse:
+      kind: "restore_snapshot"
+      source: "tool_contract"
+      ref: "contracts/effects/file-delete-restore-inverse-effect.yaml"
+      input_mapping_refs:
+        - ".forge-method/snapshots/src-obsolete-rs.before-delete"
+      validation_gate_refs:
+        - "contracts/gates/story-ready-lane-gate.yaml"
+      review_required: true

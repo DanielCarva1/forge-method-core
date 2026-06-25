@@ -1,0 +1,92 @@
+schema_version: "0.1"
+policy: "operation_executor_payload_adapter_boundary"
+status: "accepted"
+purpose: "Define how host adapters load effect payload bytes for RuntimeOperationExecution without exposing large or sensitive content to chat-facing agent context."
+decision:
+  selected_strategy: "file_payload_specs_with_default_root_scope_size_limit_and_hash_metadata"
+  payload_spec:
+    target_ref: "ToolEffect write target ref that the payload is meant to satisfy."
+    path: "Adapter-local file path containing payload bytes."
+  default_policy:
+    max_payload_bytes: 1048576
+    allow_outside_root: false
+    output_raw_content: false
+    hash_algorithm: "sha256"
+  adapter_owns:
+    - "payload file path resolution"
+    - "default repo-root scope enforcement"
+    - "payload byte-size limit before read"
+    - "payload content hash computation"
+    - "mapping payload bytes into RuntimeOperationEffectPayload"
+  runtime_owns:
+    - "checking RuntimeEffectPayload metadata against staged ToolEffectContract writes"
+    - "excluding payload bytes from RuntimeOperationExecution result"
+  store_owns:
+    - "rechecking payload hash before writing"
+    - "safe repo-relative target path validation"
+    - "locked WAL application"
+rules:
+  - id: "payload_bytes_are_not_chat_output"
+    rule: "RuntimeOperationExecution JSON must contain metadata and results only; raw payload bytes must not be serialized to chat-facing output."
+  - id: "root_scope_by_default"
+    rule: "CLI payload file paths must be under --root unless the caller passes an explicit outside-root override."
+  - id: "size_limit_before_read"
+    rule: "Adapters must check payload byte size before reading content into memory."
+  - id: "hash_metadata_required"
+    rule: "Adapters must compute sha256 content_hash for every loaded payload."
+  - id: "task_success_not_payload_safety"
+    rule: "Payload access safety must be validated separately from whether the operation would otherwise complete."
+tradeoffs:
+  chosen:
+    advantages:
+      - "Prevents accidental payload byte leakage through JSON/chat result surfaces."
+      - "Keeps adapter implementation simple and portable."
+      - "Adds a concrete limit against unbounded memory/context pressure."
+      - "Makes payload rejection testable without running a full operation."
+    disadvantages:
+      - "Default repo-root scoping may require explicit override for generated temp payload files."
+      - "A byte-size cap is a coarse protection, not semantic secret classification."
+      - "No MIME/type policy exists yet."
+      - "No streaming payload support exists yet."
+  rejected:
+    - id: "allow_any_payload_path"
+      reason: "Would make local host files available to execution without a visible trust boundary."
+    - id: "put_payload_bytes_in_json"
+      reason: "Would expose the exact channel AgentLeak and data-leakage evaluations identify as risky."
+    - id: "semantic_secret_scanner_now"
+      reason: "Useful later, but root scope, size, and no-output are enforceable now without false confidence."
+    - id: "streaming_payloads_now"
+      reason: "The current store API applies small file-backed payloads; streaming can be a later adapter/store boundary."
+acceptance:
+  cli:
+    - "Payload outside --root is rejected by default."
+    - "Payload outside --root can be allowed only by explicit flag."
+    - "Payload larger than max_payload_bytes is rejected before read."
+    - "Loaded payload computes sha256 content_hash."
+    - "execute-operation JSON does not include payload content."
+  validation:
+    - "cargo test -p forge-core-cli"
+    - "cargo test --workspace"
+    - "cargo clippy --workspace -- -D warnings"
+evidence_basis:
+  direct_patterns:
+    - source_id: "agentleak_privacy_leakage_2602_11510"
+      supports: "Internal channels, tool inputs, logs, memory, and artifacts leak data; output-only audits miss internal leaks."
+    - source_id: "tool_agent_data_leakage_2606_17114"
+      supports: "Benign tool-using agent tasks can leak data even when task completion succeeds."
+    - source_id: "local_llm_agents_vulnerable_runtimes_2606_21071"
+      supports: "Local agent runtime layers that mediate filesystem/tools are security boundaries."
+    - source_id: "mcp_tool_annotations_2603"
+      supports: "Tool metadata is advisory and cautious defaults are safer when trust is incomplete."
+    - source_id: "owasp_llm06_excessive_agency"
+      supports: "Agent permissions and action surfaces should be minimized and independently controlled."
+  inference_boundary: "The evidence supports minimizing and constraining payload data flow. It does not prove byte-size/root-scope checks detect semantic secrets; those need later content classification or policy engines."
+failure_modes_prevented:
+  - "payload bytes are printed into chat JSON"
+  - "agent reads arbitrary local file as payload by default"
+  - "large payload exhausts memory or context-adjacent surfaces"
+  - "task success hides unsafe payload access"
+  - "payload write reaches store without hash metadata"
+next_boundary:
+  id: "operation_executor_artifact_storage_projection_boundary"
+  question: "After payload loading is constrained, should artifact_id/evidence_id ToolEffect targets be projected to file paths in store, or should they require a separate artifact storage adapter?"

@@ -1,0 +1,75 @@
+schema_version: "0.1"
+contract: "gate_contract"
+status: "draft"
+purpose: "Represent validation gates with explicit scope so lane-local evidence cannot be mistaken for product-area, integration, or release authority."
+design_rules:
+  - id: "scope_is_authority_boundary"
+    rule: "A gate only authorizes mutations at its own scope or narrower; it never promotes itself to integration or release."
+  - id: "release_requires_release_gate"
+    rule: "Release readiness requires release-scoped gate evidence, not lane or product-area pass status."
+  - id: "integration_requires_integration_gate"
+    rule: "Cross-lane merge/integration requires integration-scoped evidence."
+  - id: "gate_is_read_authority"
+    rule: "OperationContract reads GateContract results; gate operation produces or updates GateContract results."
+rust_compatibility:
+  serialization: "serde"
+  id_policy: "stable_ascii_ids"
+  timestamp_policy: "rfc3339_utc"
+  enum_policy: "closed_for_v0_with_unknown_rejected"
+enums:
+  gate_scope:
+    - "lane"
+    - "product_area"
+    - "integration"
+    - "release"
+  status:
+    - "pass"
+    - "fail"
+    - "concerns"
+    - "missing"
+    - "not_applicable"
+  evidence_kind:
+    - "test_report"
+    - "artifact_check"
+    - "integration_check"
+    - "release_check"
+    - "human_approval"
+    - "security_review"
+  promotion_policy:
+    - "no_promotion"
+    - "may_feed_parent_gate"
+    - "requires_parent_gate"
+required_fields:
+  - "id"
+  - "gate.scope"
+  - "gate.status"
+  - "gate.checked_at"
+  - "target.kind"
+  - "target.id"
+  - "promotion.policy"
+field_contract:
+  id: "Stable gate contract id."
+  gate:
+    scope: "Closed gate_scope enum."
+    status: "Closed status enum."
+    checked_at: "RFC3339 UTC timestamp."
+    checked_by: "Agent/runtime/human id that produced the gate result."
+  target:
+    kind: "lane|product_area|project|release."
+    id: "Stable target id."
+    product_area: "Optional Product Area."
+    paths: "Optional paths covered by the gate."
+  evidence_refs:
+    item:
+      kind: "Closed evidence_kind enum."
+      ref: "Stable evidence reference."
+  promotion:
+    policy: "Closed promotion_policy enum."
+    parent_gate_ref: "Optional parent GateContract that must pass before broader authority."
+  blocks:
+    operations: "Operations blocked while status is fail, concerns, or missing."
+failure_modes_prevented:
+  - "lane-local tests are treated as integration readiness"
+  - "product-area pass is treated as release approval"
+  - "agent marks ready without the correct gate scope"
+  - "cross-lane conflict escapes because only lane gates ran"

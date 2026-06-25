@@ -1,0 +1,23 @@
+id: v2-026
+title: AGENTS.md emitter for Claude Code/OpenCode integration
+epic: Extensibility
+lane: skills
+priority: MED
+status: done
+dependencies: v2-008
+evidence: batch4
+acceptance: '`forge emit agents-md --root . --runtime opencode` generates an AGENTS.md
+  draft from the project''s Forge state + facilitation packs. The draft is written
+  to agents-md-draft.md (NOT directly to AGENTS.md — human approval gate per ETH Zurich
+  C8/Principle 8).'
+description: 'Add cmd_emit_agents_md. Reads project state, facilitation packs, lane
+  definitions. Generates an AGENTS.md draft with: project context, agent operating
+  instructions, lane map, claim/handoff conventions. Output is a DRAFT (human must
+  approve before it becomes canonical). Never auto-applies.'
+files: scripts/forge_method_runtime.py (new cmd_emit_agents_md, build_parser)
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

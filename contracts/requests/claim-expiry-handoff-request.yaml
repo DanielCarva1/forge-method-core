@@ -1,0 +1,55 @@
+schema_version: "0.1"
+request_contract:
+  id: "req.fixture.claim_expiry_handoff"
+  contract_ref: "contracts/requests/request-contract-v0.yaml"
+  kind: "claim_expiry_handoff"
+  communication:
+    performative: "handoff"
+    sender:
+      agent_id: "forge-core"
+      role: "runtime"
+    receiver:
+      agent_id: "codex-main"
+      role: "driver"
+    thread_id: "thread.fixture.claim-expiry"
+    correlation_id: "corr.fixture.claim-expiry-handoff"
+    reply_to: null
+  sender_agent_id: "forge-core"
+  sender_role: "runtime"
+  target_driver: "codex-main"
+  requested_operation: "review_expired_claim"
+  target:
+    kind: "story"
+    id: "current"
+    product_area: "runtime-core"
+  reason_code: "heartbeat_expired_handoff_required"
+  evidence_refs:
+    - "contracts/claims/story-current-expired-claim.yaml"
+  payload:
+    kind: "handoff_payload"
+    evidence_refs:
+      - "contracts/claims/story-current-expired-claim.yaml"
+    dependency_refs:
+      - kind: "claim"
+        ref: "contracts/claims/story-current-expired-claim.yaml"
+    summary_digest: "sha256:fixture-claim-expiry-handoff"
+  response:
+    required: true
+    expected_kind: "review_decision"
+    deadline: null
+    allowed_statuses:
+      - "accepted"
+      - "rejected"
+    required_evidence_refs:
+      - "contracts/claims/story-current-expired-claim.yaml"
+  response_required: true
+  deadline: null
+  status: "pending"
+  append_only:
+    path: ".forge-method/requests.ndjson"
+    mutation_allowed: "append_only"
+  safety:
+    may_mutate_integration_state: false
+    driver_must_apply: true
+    release_without_handoff_allowed: false
+    reclaim_without_review_allowed: false

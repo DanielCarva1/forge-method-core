@@ -1,0 +1,29 @@
+[package]
+name = "forge-core-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "forge-core"
+path = "src/main.rs"
+
+[dependencies]
+forge-core-contracts = { path = "../forge-core-contracts" }
+forge-core-runtime = { path = "../forge-core-runtime" }
+forge-core-store = { path = "../forge-core-store" }
+forge-core-validate = { path = "../forge-core-validate" }
+base64.workspace = true
+ed25519-dalek.workspace = true
+p256.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_json_canonicalizer.workspace = true
+serde_yaml.workspace = true
+sha2.workspace = true
+sct.workspace = true
+sigstore-tsa.workspace = true
+rustls-pki-types.workspace = true
+x509-parser.workspace = true
+
+[dev-dependencies]
+rcgen.workspace = true

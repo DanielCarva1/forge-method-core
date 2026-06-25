@@ -1,0 +1,68 @@
+schema_version: "0.1"
+audit: "operation_executor_repair_cli_boundary_grill"
+status: "closed"
+created_at: "2026-06-25"
+grill_question:
+  id: "operation_executor_repair_cli_boundary"
+  question: "Should metadata rebuild be exposed as a CLI/doctor repair command now, or remain a store API until runtime repair flows are defined?"
+  answered_by: "agent_research_and_local_code_inspection"
+input_refs:
+  - "contracts/policies/operation-executor-metadata-rebuild-boundary.yaml"
+  - "contracts/policies/thin-cli-validation-surface-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+decision:
+  selected_option: "narrow_rebuild_effect_index_cli"
+  recommendation_basis:
+    - "The store API is validated, but adapters need a stable command surface to invoke repair without reimplementing store logic."
+    - "The existing CLI already owns validate and execute-operation orchestration while typed crates retain authority."
+    - "A narrow repair command avoids prematurely defining a full doctor workflow."
+    - "Structured JSON preserves agent-readable output and avoids prose-only recovery."
+  command_contract:
+    command: "forge-core rebuild-effect-index"
+    args:
+      - "--root"
+      - "--wal"
+      - "--index"
+      - "--lock"
+      - "--recorded-at"
+      - "--json"
+    exit_policy:
+      failed: 1
+      noop: 0
+      rebuilt: 0
+tradeoffs:
+  pros:
+    - "Adapters and host agents get a stable recovery command immediately."
+    - "Repair authority stays in forge-core-store."
+    - "No full doctor protocol is created before its scope is proven."
+    - "JSON output can be tested and consumed by agents."
+  cons:
+    - "Adds one more CLI command before broader operational command taxonomy is complete."
+    - "Does not solve index dedupe/truncation."
+    - "No automatic detection of when rebuild is necessary yet."
+evidence_basis:
+  - policy_ref: "contracts/policies/thin-cli-validation-surface-boundary.yaml"
+    supports: "CLI should orchestrate typed library behavior and expose JSON for agents."
+  - source_id: "opendev_terminal_agents_2603_05344"
+    supports: "Terminal-native agents need structured feedback and controlled command surfaces."
+  - source_id: "code_as_agent_harness_2605_18747"
+    supports: "Harness infrastructure should expose executable, inspectable behavior."
+  - source_id: "rust_api_guidelines_official"
+    supports: "Public APIs should expose typed data."
+  - source_id: "harnessfix_trace_guided_2606_06324"
+    supports: "Repair operators should be scoped to trace evidence."
+policy_ref: "contracts/policies/operation-executor-repair-cli-boundary.yaml"
+implementation_refs:
+  - "crates/forge-core-cli/src/lib.rs"
+  - "crates/forge-core-cli/src/main.rs"
+  - "crates/forge-core-cli/tests/validate.rs"
+acceptance:
+  - "run_rebuild_effect_index exposes the store repair API."
+  - "forge-core rebuild-effect-index supports defaults and JSON output."
+  - "CLI tests prove JSON status/rebuilt/appended records."
+  - "CLI tests prove raw payload marker is not printed."
+closed_decision: "Expose a narrow rebuild-effect-index CLI command now; defer full doctor and index compaction semantics."
+next_grill_question:
+  id: "sigstore_fulcio_certificate_identity_boundary"
+  question: "How should Forge verify Fulcio certificate chain, certificate identity extensions, expected OIDC issuer, and workflow identity selectors against the trusted-root policy without treating policy validation as cryptographic proof?"
+  recommended_answer: "Add a Forge-owned Sigstore bundle/Fulcio verifier backend that consumes trusted-root policy and returns typed identity, subject, timestamp, and revocation evidence while preserving adapter-neutral authority."

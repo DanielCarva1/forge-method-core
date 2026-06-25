@@ -1,0 +1,81 @@
+schema_version: "0.1"
+audit: "runtime_effect_wal_compaction_and_locking_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+grill_state_machine:
+  state: "S6"
+  closed_question:
+    id: "runtime_effect_wal_compaction_and_locking_boundary"
+    question: "After WAL recovery exists, how should Forge compact WAL records and serialize concurrent file-effect writers without requiring a daemon too early?"
+    selected_answer: "Use Rust standard-library exclusive file locks for cooperating local store writers, add locked WAL apply/recovery wrappers, and compact WAL by dropping closed transactions while retaining incomplete transactions."
+inputs:
+  - "contracts/policies/runtime-effect-wal-recovery-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "crates/forge-core-store/src/lib.rs"
+decision:
+  canonical_term: "Runtime Effect WAL Compaction And Locking"
+  policy_ref: "contracts/policies/runtime-effect-wal-compaction-and-locking-boundary.yaml"
+  selected_strategy: "standard_file_lock_plus_incomplete_transaction_compaction"
+  scope:
+    includes:
+      - "exclusive local lock file"
+      - "try-lock for contention detection"
+      - "locked WAL application"
+      - "locked WAL recovery"
+      - "WAL compaction preserving incomplete transactions"
+    excludes:
+      - "daemon"
+      - "distributed locks"
+      - "network filesystem correctness"
+      - "database-backed transactions"
+      - "stale lock metadata"
+      - "WAL historical audit archive"
+tradeoffs:
+  selected:
+    advantages:
+      - "Uses stable Rust std lock APIs available in the local toolchain."
+      - "Keeps borrowed-shell installs simple."
+      - "Prevents cooperating local writers from interleaving effect commits."
+      - "Bounds WAL growth without losing recovery data for incomplete transactions."
+    disadvantages:
+      - "Advisory locks require cooperating callers."
+      - "Multi-machine correctness still needs daemon/database/distributed coordination."
+      - "Compaction removes closed transaction detail from the recovery WAL."
+  rejected:
+    - id: "daemon_now"
+      reason: "Premature for local borrowed-shell runtime while std lock can cover cooperating local writers."
+    - id: "external_db_now"
+      reason: "Would change install/runtime shape before adapter integration proves need."
+    - id: "fs2_dependency_now"
+      reason: "Rust 1.95 includes stable File::lock/File::try_lock APIs."
+scenario_tests:
+  - id: "second_try_lock"
+    scenario: "One handle holds the effect store lock; another tries to acquire it."
+    expected_result: "Second try-lock returns WouldBlock."
+  - id: "locked_apply"
+    scenario: "A WAL application is run through the lock wrapper."
+    expected_result: "Effect applies and WAL records commit."
+  - id: "wal_compaction"
+    scenario: "WAL contains one closed and one incomplete transaction."
+    expected_result: "Compaction removes closed records and preserves incomplete records."
+evidence_basis:
+  direct_patterns:
+    - source_id: "rust_std_file_lock_official"
+      supports: "File::lock and File::try_lock are stable standard-library lock APIs."
+    - source_id: "aries_wal_1992"
+      supports: "WAL systems can compact/checkpoint closed recovery state."
+    - source_id: "grite_2606_19616"
+      supports: "Repo-local append-only records are viable for coordination state."
+    - source_id: "coagent_2606_15376"
+      supports: "Concurrent agent work needs explicit coordination and conflict handling."
+    - source_id: "storm_state_management_2605_20563"
+      supports: "Write-time state mediation detects and prevents unsafe shared-state mutation."
+  inference_boundary: "The sources support local lock/compaction strategy but not distributed safety; Forge names that boundary instead of hiding it."
+implementation_plan:
+  - "Add EffectStoreLock and lock acquisition APIs."
+  - "Add locked WAL apply and recovery wrappers."
+  - "Add compact_effect_wal and locked wrapper."
+  - "Test try-lock contention, locked apply, and compaction."
+next_grill_question:
+  id: "runtime_store_adapter_integration_boundary"
+  question: "After store supports planning snapshots, command evidence, WAL application, recovery, compaction, and local locking, how should the CLI/runtime adapter expose a single operation execution path without letting host agents bypass it?"

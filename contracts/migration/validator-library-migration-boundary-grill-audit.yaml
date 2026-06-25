@@ -1,0 +1,59 @@
+schema_version: "0.1"
+audit: "validator_library_migration_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/rust-workspace-architecture.yaml"
+  - "contracts/policies/rust-contract-type-order.yaml"
+  - "contracts/policies/operation-contract-rust-type-strictness.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "validator_library_migration_boundary"
+  question: "Which parts of the existing forge-contract-validator binary should move into forge-core-validate first now that OperationContract types compile?"
+  options:
+    - id: "migrate_binary_wholesale"
+      summary: "Move all current validator code into a library immediately."
+      advantages:
+        - "Fast visible consolidation."
+      disadvantages:
+        - "Preserves string-based traversal as architecture."
+        - "Harder to separate typed validation from filesystem checks."
+    - id: "typed_diagnostics_library_first"
+      summary: "Create forge-core-validate with typed diagnostics and pure validations over already-typed contract families."
+      advantages:
+        - "Reusable from CLI, app, MCP, and tests."
+        - "Moves validation toward domain structs instead of path/string scans."
+        - "Keeps legacy filesystem checks alive until side families are typed."
+      disadvantages:
+        - "Temporary overlap with the old validator."
+        - "Does not eliminate the legacy binary in one step."
+    - id: "wait_until_all_contract_types_exist"
+      summary: "Keep the validator binary unchanged until every contract family has Rust structs."
+      advantages:
+        - "Avoids temporary dual validation."
+      disadvantages:
+        - "Delays reusable diagnostics."
+        - "Makes the next type migrations less testable."
+  selected_option: "typed_diagnostics_library_first"
+  decision: "Create forge-core-validate now with typed diagnostics and pure validations for evidence, inventory, command, and operation contracts. Keep filesystem traversal and untyped side-family checks in the legacy binary until their Rust types exist."
+  acceptance_criteria:
+    - "forge-core-validate crate compiles."
+    - "ValidationReport and Diagnostic are public typed APIs."
+    - "Tests validate current evidence, inventory, command, and operation fixture data."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+next_grill_question:
+  id: "side_contract_type_order_after_operation"
+  question: "After operation types and validation library exist, which side-contract family should be typed next?"
+  recommended_answer: "claim_completion_gate_then_request_effect_then_decision_runtime_recovery_eval"
+evidence_basis:
+  direct_patterns:
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Schema-backed contracts benefit from structured diagnostics."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness validation should be executable and inspectable."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy traces and decisions should be structured artifacts."
+    - source_id: "rust_api_guidelines_official"
+      supports: "Public APIs should use predictable typed data."
+  inference_boundary: "This closes the first validator migration boundary. It does not remove the legacy validator binary."

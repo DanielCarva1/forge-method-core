@@ -1,0 +1,65 @@
+schema_version: "0.1"
+policy: "generic_known_ref_validation_boundary"
+status: "accepted"
+purpose: "Move generic known-ref and file-ref checks from forge-contract-validator into reusable Rust validation without duplicating typed ReferenceIndex authority rules."
+decision:
+  selected_strategy: "store_supplies_known_repo_paths_validate_checks_ref_like_contracts_docs_values"
+  validation_scope:
+    included:
+      - "YAML mapping keys that are clearly repo refs, such as contract_ref, schema_ref, policy_ref, policy_refs, supporting_policy_refs, decision_ref, fixture_refs, evidence_refs, instance_globs, and keys ending in _ref or _refs."
+      - "String values under those keys that start with contracts/ or docs/."
+      - "Glob-like values under those keys; validation checks that the non-wildcard parent path exists."
+    excluded:
+      - "Historical inputs lists."
+      - "Narrative strings that merely mention a path."
+      - "crates/ implementation refs, until a crate/source path validation boundary exists."
+      - ".forge-method runtime evidence refs, which need runtime store semantics rather than repo file existence."
+  store_responsibility:
+    - "Collect known repo file paths under contracts and docs/fixtures/operation-contract-v0."
+    - "Supply known paths as adapter input."
+  validate_responsibility:
+    - "Inspect parsed YAML documents already supplied by store/adapters."
+    - "Validate only ref-like keys and contracts/docs path values against known repo paths."
+  rejected_strategies:
+    - id: "scan_every_string"
+      reason: "Would flag historical notes and explanatory text as authority refs."
+    - id: "reuse_reference_index_for_every_path"
+      reason: "ReferenceIndex validates typed authority kind; generic repo path existence is a different concern."
+    - id: "validate_filesystem_directly"
+      reason: "Would put filesystem traversal back into forge-core-validate."
+rules:
+  - id: "ref_like_key_required"
+    rule: "Generic known-ref validation must require a ref-like YAML key before treating a string as a repo ref."
+  - id: "contracts_docs_only_for_now"
+    rule: "The first boundary checks only contracts/ and docs/ values; crates/ and runtime evidence paths require separate policies."
+  - id: "glob_parent_policy"
+    rule: "Glob values are valid when the stable non-wildcard parent path exists."
+  - id: "typed_refs_remain_stronger"
+    rule: "Typed contract fields must continue using ReferenceIndex/ReferenceKind when authority kind matters."
+implementation_target:
+  crate_refs:
+    - "crates/forge-core-validate/src/lib.rs"
+    - "crates/forge-core-store/src/lib.rs"
+    - "crates/forge-core-cli/src/lib.rs"
+    - "crates/forge-contract-validator/tests/parity.rs"
+  acceptance:
+    - "forge-core-store can collect known repo paths for contracts and operation fixtures."
+    - "forge-core-validate can validate generic known refs over parsed YAML documents and known paths."
+    - "forge-core-cli includes yaml_known_repo_refs check."
+    - "Parity test proves a missing inventory supporting_policy_refs item fails in both legacy and new CLI."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+evidence_basis:
+  direct_patterns:
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy refs should be stable and auditable."
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Structured diagnostics should cover semantic contract validity beyond schema shape."
+    - source_id: "utboost_2025_acl"
+      supports: "Targeted negative tests are needed to avoid false validation confidence."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness checks should be executable and inspectable."
+  inference_boundary: "The evidence supports explicit ref validation and targeted parity tests. The ref-like-key heuristic is a Forge-specific compatibility boundary derived from local legacy validator behavior."
+next_boundary:
+  id: "schema_enum_parity_boundary"
+  question: "Which representative schema enum failures should be tested against both forge-contract-validator and forge-core-cli before legacy wrapper or retirement?"

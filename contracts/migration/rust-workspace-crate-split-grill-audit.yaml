@@ -1,0 +1,68 @@
+schema_version: "0.1"
+audit: "rust_workspace_crate_split_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/schema-generation-authority.yaml"
+  - "contracts/inventory/v0-contract-family-lock.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "contracts/migration/schema-generation-strategy-grill-audit.yaml"
+grill_question:
+  id: "rust_workspace_crate_split"
+  question: "What Rust crate/workspace split should the Forge Core use so contracts, validation, CLI, storage, and future MCP/daemon layers can mature without becoming one giant binary?"
+  options:
+    - id: "single_binary_everything"
+      summary: "Keep one binary crate that owns parsing, validation, runtime, storage, CLI, and adapters."
+      advantages:
+        - "Fastest initial coding."
+        - "Few public API boundaries."
+      disadvantages:
+        - "Repeats the giant-script failure mode."
+        - "Makes host quirks and CLI rendering likely to leak into runtime semantics."
+        - "Harder to reuse from standalone app, MCP, or daemon."
+    - id: "layered_workspace_contracts_first"
+      summary: "Use a Cargo workspace with contracts, validation, store, runtime, CLI, MCP, and host-adapter boundaries; implement contracts/validation/CLI first."
+      advantages:
+        - "Separates authority, validation, persistence, runtime, and transport."
+        - "Keeps CLI universal while preserving path to app/MCP/daemon."
+        - "Matches harness-layer evidence and Rust workspace mechanics."
+      disadvantages:
+        - "Requires explicit APIs and stronger type design."
+        - "Can over-fragment if every contract family becomes a crate immediately."
+    - id: "mcp_or_daemon_first"
+      summary: "Build MCP/daemon as the primary core and make CLI a client."
+      advantages:
+        - "Could help future multi-agent coordination and persistent runtime."
+        - "Closer to future standalone/service architecture."
+      disadvantages:
+        - "Adds operational complexity before contracts and store traits are stable."
+        - "Risks transport-driven design."
+        - "Weak fit for universal plugin/CLI compatibility at the beginning."
+  selected_option: "layered_workspace_contracts_first"
+  decision: "Create a layered Rust workspace target. Implement first through contracts, validation, and thin CLI; then add store/runtime; then host adapters/MCP after security and runtime contracts compile."
+  rationale:
+    - "Forge must work in borrowed shells first, so CLI remains the universal adapter."
+    - "Forge must later power a standalone app, so runtime/domain crates cannot depend on Codex or terminal rendering."
+    - "Harness research supports separating execution, tools, context, lifecycle, validation, and governance."
+    - "Cargo workspaces are the native Rust mechanism for related packages developed together."
+acceptance_criteria:
+  - "RustWorkspaceArchitecture policy exists as YAML."
+  - "Policy includes target crates, responsibilities, dependencies, forbidden dependencies, build order, tradeoffs, and evidence_basis."
+  - "No daemon/MCP implementation is allowed before typed contracts and runtime/store boundaries exist."
+  - "No Markdown is created or edited for this decision."
+  - "No Python is used for validation."
+next_grill_question:
+  id: "first_rust_contract_type_order"
+  question: "Which locked contract families should be implemented as Rust/Serde types first to maximize correctness without getting stuck in broad codegen?"
+  recommended_answer: "implement_inventory_evidence_command_and_operation_types_first_then_side_contracts_in_dependency_order"
+evidence_basis:
+  direct_patterns:
+    - source_id: "agent_harness_engineering_survey_2026"
+      supports: "Harnesses decompose into independent infrastructure concerns."
+    - source_id: "opendev_terminal_agents_2603_05344"
+      supports: "Terminal-native agents benefit from strict safety controls, context management, persistent memory, and compound architecture."
+    - source_id: "cargo_workspaces_official"
+      supports: "Rust workspaces organize related packages developed together."
+    - source_id: "rust_api_guidelines_official"
+      supports: "Public APIs should use type safety and custom domain types."
+  inference_boundary: "This closes workspace architecture. It does not yet create the Cargo workspace or migrate the existing validator binary."

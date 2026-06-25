@@ -1,0 +1,25 @@
+schema_version: "0.1"
+gate_contract:
+  id: "gate.product_area.runtime.pass"
+  contract_ref: "contracts/gates/gate-contract-v0.yaml"
+  gate:
+    scope: "product_area"
+    status: "pass"
+    checked_at: "2026-06-25T00:05:00Z"
+    checked_by: "forge-core"
+  target:
+    kind: "product_area"
+    id: "runtime-core"
+    product_area: "runtime-core"
+    paths:
+      - "crates/forge-contracts"
+  evidence_refs:
+    - kind: "test_report"
+      ref: ".forge-method/evidence/runtime-core-validation.json"
+  promotion:
+    policy: "requires_parent_gate"
+    parent_gate_ref: "contracts/gates/integration-missing-gate.yaml"
+  blocks:
+    operations:
+      - "mark_release_ready"
+      - "publish_release"

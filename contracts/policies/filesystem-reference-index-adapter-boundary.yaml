@@ -1,0 +1,80 @@
+schema_version: "0.1"
+policy: "filesystem_reference_index_adapter_boundary"
+status: "accepted"
+purpose: "Define the single Rust boundary that builds ReferenceIndex from repository and runtime state for validation, CLI, app, daemon, and future MCP callers."
+decision:
+  selected_strategy: "forge_core_store_owns_reference_index_builder"
+  owner_crate: "forge-core-store"
+  consumed_by:
+    - "forge-core-cli"
+    - "forge-contract-validator compatibility binary"
+    - "forge-core-runtime"
+    - "forge-core-mcp"
+    - "future standalone app"
+  does_not_belong_in:
+    - "forge-core-validate"
+    - "host adapters"
+    - "MCP transport"
+    - "CLI rendering code"
+  index_sources:
+    repo_files:
+      - "contract definitions"
+      - "policy files"
+      - "operation fixtures"
+      - "contract instances"
+      - "runtime registry and capability manifests"
+      - "command contract stable ids"
+      - "ledger file when materialized"
+    standard_runtime_projections:
+      - ".forge-method/agents/registry.yaml"
+  rejected_strategies:
+    - id: "duplicate_index_builder_per_surface"
+      reason: "Would let CLI, app, daemon, and MCP disagree about what authority refs exist."
+    - id: "put_filesystem_scan_in_validate"
+      reason: "Would undo the pure validation boundary and make forge-core-validate a filesystem CLI again."
+    - id: "delay_until_full_store"
+      reason: "Would leave ReferenceIndex construction duplicated in tests or future binaries while the validator already needs it."
+rules:
+  - id: "one_builder_many_callers"
+    rule: "All Rust callers that need repo-backed ReferenceIndex should use forge-core-store instead of reimplementing traversal."
+  - id: "builder_is_not_policy"
+    rule: "forge-core-store indexes repository/runtime facts; forge-core-validate decides whether a ref kind satisfies a contract field."
+  - id: "runtime_projection_is_explicit"
+    rule: "Standard virtual runtime projection refs must be option-controlled and documented, not hidden as pretend filesystem files."
+  - id: "host_adapters_stay_thin"
+    rule: "Codex, Cursor, Claude, opencode, VS Code, and pi.dev adapters may call the builder but cannot redefine authority discovery."
+implementation_target:
+  crate_refs:
+    - "crates/forge-core-store/Cargo.toml"
+    - "crates/forge-core-store/src/lib.rs"
+    - "crates/forge-core-store/tests/reference_index.rs"
+  workspace_ref: "Cargo.toml"
+  acceptance:
+    - "forge-core-store exists as a library crate."
+    - "ReferenceIndexBuilder builds a ReferenceIndex from current repo state."
+    - "The builder indexes command stable ids as CommandContract refs."
+    - "The builder supports explicit standard runtime projection refs."
+    - "Store tests use the built index to satisfy current cross-file reference validation."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+evidence_basis:
+  direct_patterns:
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness state and verification surfaces should be executable, inspectable, and shared across callers."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy checks and traceable refs should be stable infrastructure, not duplicated prompt behavior."
+    - source_id: "opendev_terminal_agents_2603_05344"
+      supports: "Terminal-agent systems benefit from separated context, memory, planning, execution, and safety components."
+    - source_id: "cargo_workspaces_official"
+      supports: "Rust workspaces support related packages with explicit boundaries."
+    - source_id: "rust_api_guidelines_official"
+      supports: "Public APIs should expose typed data and stable dependency boundaries."
+  inference_boundary: "The sources support separated harness/store/validation boundaries. Forge's choice to use forge-core-store as the ReferenceIndex builder owner follows the existing RustWorkspaceArchitecture policy."
+failure_modes_prevented:
+  - "CLI and app disagree about which refs exist"
+  - "MCP transport becomes authority discovery"
+  - "validator tests keep a private traversal implementation"
+  - "virtual runtime projections are silently treated as real files"
+next_boundary:
+  id: "thin_cli_validation_surface_boundary"
+  question: "How should the Rust CLI consume store-built ReferenceIndex and forge-core-validate reports while replacing or wrapping the legacy validator without widening scope?"

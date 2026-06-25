@@ -1,0 +1,95 @@
+schema_version: "0.1"
+coordination_eval_contract:
+  id: "eval.fixture.minimal_coordination_suite"
+  contract_ref: "contracts/evals/coordination-eval-contract-v0.yaml"
+  status: "required"
+  dimensions:
+    - dimension: "duplicate_work_prevention"
+      metric_kind: "fixture_pass"
+      required_level: "must_pass"
+      fixture_refs:
+        - "docs/fixtures/operation-contract-v0/already-done-story.yaml"
+      threshold: null
+      failure_signal: "Forge repeats completed work instead of reading completion proof."
+      evidence_refs:
+        - "contracts/completion/story-done-completion.yaml"
+    - dimension: "lane_collision_detection"
+      metric_kind: "fixture_pass"
+      required_level: "must_pass"
+      fixture_refs:
+        - "docs/fixtures/operation-contract-v0/multi-agent-lane-claim.yaml"
+      threshold: null
+      failure_signal: "Two agents can claim or write the same lane without typed conflict."
+      evidence_refs:
+        - "contracts/claims/story-current-active-claim.yaml"
+    - dimension: "stale_claim_recovery"
+      metric_kind: "fixture_pass"
+      required_level: "must_pass"
+      fixture_refs:
+        - "docs/fixtures/operation-contract-v0/expired-claim-handoff.yaml"
+      threshold: null
+      failure_signal: "Expired claim releases silently instead of generating handoff/request evidence."
+      evidence_refs:
+        - "contracts/claims/story-current-expired-claim.yaml"
+        - "contracts/requests/claim-expiry-handoff-request.yaml"
+    - dimension: "read_write_conflict_repair"
+      metric_kind: "fixture_pass"
+      required_level: "must_pass"
+      fixture_refs:
+        - "docs/fixtures/operation-contract-v0/read-write-conflict-notify.yaml"
+      threshold: null
+      failure_signal: "Changed read targets are overwritten or blindly aborted instead of notifying repair."
+      evidence_refs:
+        - "contracts/effects/story-file-conflict-effect.yaml"
+    - dimension: "request_lifecycle"
+      metric_kind: "fixture_pass"
+      required_level: "must_pass"
+      fixture_refs:
+        - "docs/fixtures/operation-contract-v0/worker-record-request.yaml"
+      threshold: null
+      failure_signal: "Worker-to-driver mutation request lacks sender, receiver, payload, response, or status lifecycle."
+      evidence_refs:
+        - "contracts/requests/worker-state-transition-request.yaml"
+    - dimension: "integration_gate_scope"
+      metric_kind: "fixture_pass"
+      required_level: "must_pass"
+      fixture_refs:
+        - "docs/fixtures/operation-contract-v0/integration-gate-required.yaml"
+      threshold: null
+      failure_signal: "Lane-level success bypasses integration gate before project-level mutation."
+      evidence_refs:
+        - "contracts/gates/integration-missing-gate.yaml"
+    - dimension: "runtime_handoff_safety"
+      metric_kind: "fixture_pass"
+      required_level: "must_pass"
+      fixture_refs:
+        - "docs/fixtures/operation-contract-v0/runtime-handoff-missing-double-gate.yaml"
+        - "docs/fixtures/operation-contract-v0/runtime-handoff-suggestible.yaml"
+      threshold: null
+      failure_signal: "Forge suggests cross-runtime handoff without registry and capability evidence."
+      evidence_refs:
+        - "contracts/runtimes/runtime-handoff-contract-v0.yaml"
+    - dimension: "destructive_effect_safety"
+      metric_kind: "fixture_pass"
+      required_level: "must_pass"
+      fixture_refs:
+        - "docs/fixtures/operation-contract-v0/destructive-effect-missing-inverse-blocked.yaml"
+        - "docs/fixtures/operation-contract-v0/destructive-effect-with-inverse.yaml"
+      threshold: null
+      failure_signal: "Destructive write executes without inverse metadata or review stop."
+      evidence_refs:
+        - "contracts/effects/tool-effect-contract-v0.yaml"
+    - dimension: "human_guidance_recovery"
+      metric_kind: "fixture_pass"
+      required_level: "must_pass"
+      fixture_refs:
+        - "docs/fixtures/operation-contract-v0/correct-course-frustrated-user.yaml"
+        - "docs/fixtures/operation-contract-v0/host-drift-invented-next-step.yaml"
+      threshold: null
+      failure_signal: "Human correction or host drift does not route to correct-course/recovery."
+      evidence_refs:
+        - "contracts/decisions/decision-close-contract-v0.yaml"
+  pass_policy:
+    required_level: "must_pass"
+    all_must_pass_dimensions_required: true
+    manual_review_blocks_release: true

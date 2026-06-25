@@ -1,0 +1,66 @@
+schema_version: "0.1"
+audit: "first_rust_contract_type_order_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/schema-generation-authority.yaml"
+  - "contracts/policies/rust-workspace-architecture.yaml"
+  - "contracts/inventory/v0-contract-family-lock.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "first_rust_contract_type_order"
+  question: "Which locked contract families should be implemented as Rust/Serde types first to maximize correctness without getting stuck in broad codegen?"
+  options:
+    - id: "operation_only_first"
+      summary: "Implement OperationContract first because it is the central guide/gate output."
+      advantages:
+        - "Directly attacks host-agent drift."
+        - "Creates visible product behavior sooner."
+      disadvantages:
+        - "OperationContract depends on refs, evidence, inventory, side contracts, commands, and diagnostics."
+        - "Risks replacing loose YAML with loose Rust strings."
+    - id: "all_contracts_big_bang"
+      summary: "Generate or hand-author every locked contract type at once."
+      advantages:
+        - "Could reach full coverage quickly if everything is already coherent."
+      disadvantages:
+        - "Hard to debug."
+        - "Encourages broad mechanical translation over semantic type design."
+        - "Conflicts with the need to preserve high-quality Rust ownership and domain types."
+    - id: "foundation_then_authority_response_then_side_contracts"
+      summary: "Implement common/evidence/inventory, then commands, then operation/reference policy, then side contracts by dependency order."
+      advantages:
+        - "Builds reusable type primitives before authority responses."
+        - "Keeps each stage testable with current fixtures."
+        - "Moves toward runtime code without broad codegen churn."
+      disadvantages:
+        - "Runtime behavior waits until OperationContract and core refs compile."
+        - "Some side refs remain typed paths until their family stage."
+  selected_option: "foundation_then_authority_response_then_side_contracts"
+  decision: "Start with common ids/refs, evidence registry, diagnostics, inventory, command, and operation/reference policy types. Implement side contract families after OperationContract deserializes all fixtures."
+  rationale:
+    - "Evidence validation already became a Rust acceptance concern."
+    - "Inventory lock is the boundary for codegen and must compile before family coverage can be trusted."
+    - "CommandContract is a small security-sensitive surface that proves enum/policy/API shape early."
+    - "OperationContract is central, but it should not be implemented before refs/evidence/inventory/diagnostics exist."
+acceptance_criteria:
+  - "RustContractTypeOrder policy exists as YAML."
+  - "Policy defines stage order, family groups, acceptance criteria, rejected strategies, and evidence_basis."
+  - "Operation grill audit advances to cargo/workspace bootstrap or first implementation step."
+  - "No Markdown is created or edited."
+  - "No Python is used for validation."
+next_grill_question:
+  id: "cargo_workspace_bootstrap_plan"
+  question: "Should the next step create the Cargo workspace/crates now or first specify exact Rust type modules and public APIs for forge-core-contracts?"
+  recommended_answer: "create_workspace_and_forge_core_contracts_crate_with_foundation_types_then_migrate_validator_into_library"
+evidence_basis:
+  direct_patterns:
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Schema-backed interfaces need structured diagnostics and semantic validation."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness infrastructure should be executable and verification-oriented."
+    - source_id: "rust_api_guidelines_official"
+      supports: "Rust APIs should encode domain meaning through types."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Lifecycle policy and traces need stable ids."
+  inference_boundary: "This closes type implementation order. It does not yet create or migrate Rust crates."

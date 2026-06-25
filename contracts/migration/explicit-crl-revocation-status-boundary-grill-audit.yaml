@@ -1,0 +1,58 @@
+schema_version: "0.1"
+audit: "explicit_crl_revocation_status_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/certificate-revocation-policy-boundary.yaml"
+  - "contracts/policies/tuf-trusted-root-freshness-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "explicit_crl_revocation_status_boundary"
+  question: "How should Forge verify explicit CRL revocation status without treating short-lived policy, OCSP, CT, Rekor, or TUF freshness as the same evidence?"
+  options:
+    - id: "presence_only_crl"
+      summary: "Accept a CRL path as enough evidence."
+      advantages:
+        - "Smallest implementation."
+      disadvantages:
+        - "Does not verify issuer, signature, freshness, or serial membership."
+        - "Would recreate the presence-only trust bug this release is eliminating."
+    - id: "full_crl_ocsp_network_status_now"
+      summary: "Implement CRL fetching, delta CRLs, indirect CRLs, OCSP request/response validation, responder policy, and offline behavior in one slice."
+      advantages:
+        - "Closer to broad long-lived PKI support."
+      disadvantages:
+        - "Too broad for one verifier boundary."
+        - "Combines local evidence, network behavior, responder trust, cache policy, and update admission."
+    - id: "local_crl_status_verifier"
+      summary: "Verify supplied local CRL status first: issuer binding, certificate signature, CRL signature, CRL freshness, and serial membership."
+      advantages:
+        - "Implements a real RFC 5280 status check."
+        - "Keeps OCSP and network retrieval as separate explicit boundaries."
+        - "Gives adapters typed evidence instead of letting them infer revocation status from prose."
+      disadvantages:
+        - "Does not fetch CRLs from distribution points."
+        - "Does not process delta or indirect CRLs."
+        - "Does not verify OCSP."
+  selected_option: "local_crl_status_verifier"
+  decision: "Forge adds host-adapter-verify-certificate-crl-status as a read-only Rust verifier for supplied local CRL status. It reports good_by_supplied_crl only when issuer binding, certificate signature, CRL signature, freshness, policy, and serial absence all pass; it reports revoked_by_supplied_crl and fails when the serial is listed."
+acceptance_criteria:
+  - "Policy contract exists."
+  - "Runtime exposes read-only host adapter command."
+  - "Runtime passes fresh signed CRL where certificate serial is absent."
+  - "Runtime fails fresh signed CRL where certificate serial is present."
+  - "Runtime fails expired CRL."
+  - "Runtime fails non-explicit revocation policy."
+  - "No Python is introduced."
+  - "No Markdown authority is introduced."
+evidence_basis:
+  direct_patterns:
+    - source_id: "rfc5280_x509_crl_profile"
+      supports: "CRL revocation evidence is explicit issuer-signed metadata with revoked certificate serials and freshness fields."
+    - source_id: "rfc6960_ocsp_certificate_status"
+      supports: "OCSP status is a distinct protocol and remains separate from CRL evidence."
+  inference_boundary: "The decision closes supplied local CRL status only. It does not close OCSP, CRL distribution-point fetching, delta CRLs, indirect CRLs, TUF freshness, or release install/update authority."
+next_grill_question:
+  id: "explicit_ocsp_revocation_status_boundary"
+  question: "How should Forge verify signed OCSP response status, responder authority, nonce/freshness, and offline failure policy without confusing OCSP with CRL evidence?"
+  recommended_answer: "Add OCSP only after choosing a Rust parser/verifier and fixtures for good, revoked, unknown, stale, unauthorized responder, and nonce/freshness behavior."

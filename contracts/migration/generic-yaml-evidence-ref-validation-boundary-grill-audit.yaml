@@ -1,0 +1,73 @@
+schema_version: "0.1"
+audit: "generic_yaml_evidence_ref_validation_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/legacy-validator-parity-retirement-boundary.yaml"
+  - "crates/forge-contract-validator/src/main.rs"
+  - "crates/forge-core-cli/src/lib.rs"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "generic_yaml_evidence_ref_validation_boundary"
+  question: "How should recursive YAML parse coverage and source_id reference validation move from forge-contract-validator into reusable Rust validation without turning forge-core-validate into a filesystem scanner?"
+  options:
+    - id: "store_collects_yaml_documents_validate_runs_generic_evidence_ref_rules"
+      summary: "Store collects parsed YAML documents; validation receives documents and checks recursive source_id refs."
+      advantages:
+        - "Preserves pure validation and single filesystem adapter."
+        - "Moves two concrete legacy gaps into reusable Rust."
+        - "Keeps diagnostics structured for CLI/agents."
+      disadvantages:
+        - "Adds serde_yaml Value to validation boundary for generic docs."
+        - "Does not finish every legacy parity gap."
+    - id: "validate_scans_filesystem"
+      summary: "Let forge-core-validate collect YAML and validate source_id refs directly."
+      advantages:
+        - "Simpler call sites."
+      disadvantages:
+        - "Breaks pure validation boundary."
+        - "Makes future app/MCP/daemon reuse harder."
+    - id: "store_owns_source_id_validation"
+      summary: "Put recursive source_id validation inside forge-core-store."
+      advantages:
+        - "One crate owns collection and checking."
+      disadvantages:
+        - "Mixes storage facts with policy semantics."
+  selected_option: "store_collects_yaml_documents_validate_runs_generic_evidence_ref_rules"
+  decision: "Add parsed YAML document collection to forge-core-store and recursive source_id validation to forge-core-validate. forge-core-cli surfaces both parse diagnostics and source_id diagnostics in validate output."
+acceptance_criteria:
+  - "Store returns repo-relative parsed YAML documents and parse diagnostics."
+  - "Validate checks recursive source_id keys against FieldEvidenceRegistry."
+  - "CLI validate includes generic YAML parse and source_id checks."
+  - "Current repo passes."
+  - "Synthetic unknown source_id test fails with structured diagnostic."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-store/src/lib.rs"
+    - "crates/forge-core-store/tests/reference_index.rs"
+    - "crates/forge-core-validate/src/lib.rs"
+    - "crates/forge-core-validate/tests/current_contracts.rs"
+    - "crates/forge-core-cli/src/lib.rs"
+    - "crates/forge-core-cli/tests/validate.rs"
+  policy_refs:
+    - "contracts/policies/generic-yaml-evidence-ref-validation-boundary.yaml"
+  validation:
+    - "cargo test -p forge-core-validate yaml_source_id_validation_reports_unknown_sources"
+    - "cargo test -p forge-core-store store_collects_validation_yaml_documents_for_source_id_checks"
+    - "cargo test -p forge-core-cli"
+    - "cargo run -p forge-core-cli -- validate --root . --json"
+evidence_basis:
+  direct_patterns:
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy and trace checks should use stable ids and auditable records."
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Structured diagnostics should complement schema validation."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness validation should be executable, inspectable, and reusable."
+    - source_id: "utboost_2025_acl"
+      supports: "Validation gaps need targeted tests, not broad pass claims."
+  inference_boundary: "This closes only recursive YAML parse and source_id validation gaps. Other legacy parity checks remain for the parity matrix boundary."
+next_grill_question:
+  id: "generic_known_ref_validation_boundary"
+  question: "How should generic known-ref/file-ref checks for policy and migration YAML move into reusable Rust validation without duplicating typed cross-file reference rules?"
+  recommended_answer: "store_supplies_yaml_documents_validate_runs_generic_repo_ref_rules_for_contracts_docs_paths_only"

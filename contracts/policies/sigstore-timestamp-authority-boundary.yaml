@@ -1,0 +1,63 @@
+schema_version: "0.1"
+policy: "sigstore_timestamp_authority_boundary"
+status: "active"
+summary: "Forge Core verifies Sigstore trusted-time evidence by checking that an allowed, verified timestamp source places signing time inside the Fulcio certificate validity window, while explicitly deferring CT SCT validation, revocation, TUF freshness, and install authority."
+canonical_terms:
+  trusted_time_source: "A policy-allowed timestamp source that Forge has verified enough to use for certificate validity-window evaluation."
+  rekor_integrated_time: "Transparency log integration timestamp from a Rekor entry whose log id, checkpoint, and inclusion proof have passed Forge's Rekor verifier."
+  rfc3161_tsa_token: "A timestamp authority token that must be parsed and cryptographically verified before Forge may use it as trusted time."
+decision:
+  selected_option: "trusted_time_source_before_full_freshness_stack"
+  rejected_options:
+    - id: "claim_full_sigstore_freshness_now"
+      reason: "Would overclaim CT, revocation, TUF freshness, and RFC3161 CMS/TSA signature validation before focused fixtures and parsers exist."
+    - id: "use_rekor_integrated_time_without_rekor_verification"
+      reason: "Timestamp evidence must be tied to a verified Rekor entry, not just a JSON field."
+    - id: "treat_rfc3161_token_path_as_verified"
+      reason: "A token path proves presence only; RFC3161 requires token parsing, message imprint matching, TSA signature verification, and trusted TSA certificate path."
+rules:
+  - id: "read_only_verifier"
+    rule: "The timestamp authority verifier is read-only and must not install, update, rollback, delete, write project state, or mutate artifacts."
+  - id: "policy_mode_required"
+    rule: "The verifier must load Sigstore trusted-root policy and honor timestamp_authority.mode."
+  - id: "rekor_source_requires_rekor_verification"
+    rule: "When using Rekor integrated time, Forge must run the Rekor verifier and require a passed result before trusting integratedTime."
+  - id: "timestamp_within_certificate_window"
+    rule: "The selected trusted time must fall within the leaf certificate not_before/not_after window."
+  - id: "rfc3161_not_presence_only"
+    rule: "RFC3161 TSA mode must use the dedicated sigstore_rfc3161_tsa_token_boundary and must never pass from token path presence alone."
+  - id: "freshness_not_implied"
+    rule: "Passing trusted-time verification does not verify CT SCTs, revocation, TUF metadata freshness, or release install/update authority."
+evidence_basis:
+  - source_id: "sigstore_timestamps_docs"
+    supports: "Sigstore verifies that timestamp evidence falls within the certificate validity period and can come from Rekor integrated time or RFC3161 TSA material."
+  - source_id: "sigstore_trusted_root_proto"
+    supports: "Trusted root material covers timestamp authorities as distinct trust material."
+  - source_id: "rfc3161_timestamp_protocol"
+    supports: "RFC3161 token verification is more than file presence and has its own security semantics."
+  - source_id: "tuf_specification"
+    supports: "Rollback/freeze freshness belongs to update metadata, not timestamp presence alone."
+implementation_refs:
+  - "contracts/policies/sigstore-timestamp-authority-boundary.yaml"
+  - "contracts/migration/sigstore-timestamp-authority-boundary-grill-audit.yaml"
+  - "crates/forge-core-cli/src/lib.rs"
+  - "crates/forge-core-cli/src/main.rs"
+  - "crates/forge-core-cli/tests/validate.rs"
+acceptance:
+  - "forge-core host-adapter-verify-sigstore-timestamp-authority --json returns status=passed when policy allows Rekor integrated time, Rekor verification passes, and integratedTime is inside the certificate validity window."
+  - "The verifier fails when the Rekor timestamp is outside the certificate validity window."
+  - "The verifier returns status=passed for policy mode rfc3161_tsa only when the dedicated RFC3161 boundary verifies token, timestamped signature bytes, TSA certificate chain, CMS signature, message imprint, and certificate validity window."
+  - "The host adapter manifest exposes host-adapter-verify-sigstore-timestamp-authority as read-only validation with no workflow authority."
+  - "Verifier output includes policy mode, selected timestamp source, observed timestamp, certificate validity bounds, Rekor status, deferred verification list, reasons, verified_evidence, and inference_boundary."
+geographic_coverage:
+  searched_non_western_sources: true
+  result: "This cryptographic boundary is governed by Sigstore, RFC3161, and TUF specs. No China-origin source supersedes those protocol specifications for timestamp/freshness semantics."
+inference_boundary: "This boundary verifies trusted time source selection and certificate validity-window evaluation for Rekor integrated time and RFC3161 TSA token evidence. RFC3161 cryptographic details are governed by sigstore_rfc3161_tsa_token_boundary. It does not verify certificate transparency SCTs, revocation status, TUF metadata freshness, release install/update mutation authority, or post-quantum algorithms."
+failure_modes_prevented:
+  - "Agent uses any integratedTime JSON field without verifying the Rekor entry."
+  - "Certificate validity is checked against current wall clock instead of signing-time evidence."
+  - "A RFC3161 token file path is treated as a verified timestamp."
+  - "Timestamp evidence is mistaken for CT, revocation, TUF freshness, or install authority."
+next_boundary:
+  id: "explicit_crl_ocsp_revocation_status_boundary"
+  question: "How should Forge verify explicit CRL or OCSP certificate revocation status without treating CT, Rekor, timestamp, or short-lived certificate policy evidence as CRL/OCSP evidence?"

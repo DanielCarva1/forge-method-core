@@ -1,0 +1,66 @@
+schema_version: "0.1"
+audit: "sigstore_timestamp_authority_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+superseded_by:
+  - "contracts/migration/sigstore-rfc3161-tsa-token-boundary-grill-audit.yaml"
+inputs:
+  - "contracts/policies/sigstore-trusted-root-policy-boundary.yaml"
+  - "contracts/policies/sigstore-rekor-backend-boundary.yaml"
+  - "contracts/policies/sigstore-fulcio-certificate-identity-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "sigstore_timestamp_authority_boundary"
+  question: "How should Forge verify Sigstore timestamp authority evidence, certificate validity windows, CT SCTs, revocation, and TUF freshness without overclaiming from Rekor inclusion alone?"
+  options:
+    - id: "full_freshness_stack_now"
+      summary: "Implement Rekor, RFC3161, CT, revocation, and TUF freshness in one boundary."
+      advantages:
+        - "Looks closest to complete Sigstore verification."
+      disadvantages:
+        - "Too broad for a safe slice."
+        - "Would mix distinct protocol properties and failure modes."
+        - "Requires RFC3161/CMS, CT, revocation, and TUF fixtures at once."
+    - id: "timestamp_presence_only"
+      summary: "Pass when a Rekor integratedTime or RFC3161 token path exists."
+      advantages:
+        - "Simple implementation."
+      disadvantages:
+        - "Unsafe overclaim; presence is not verification."
+        - "Would reproduce the old Forge mistake of turning metadata into authority."
+    - id: "trusted_time_source_before_full_freshness_stack"
+      summary: "Verify allowed trusted-time source and certificate validity window now; defer RFC3161 token, CT, revocation, and TUF freshness to focused boundaries."
+      advantages:
+        - "Matches Sigstore timestamp semantics for short-lived certificates."
+        - "Uses existing Rekor verifier instead of trusting raw JSON."
+        - "Keeps unsupported RFC3161/CT/revocation/TUF states explicit."
+      disadvantages:
+        - "Does not yet provide complete RFC3161 TSA verification."
+        - "Leaves several trust/freshness boundaries still open."
+  selected_option: "trusted_time_source_before_full_freshness_stack"
+  decision: "Forge adds host-adapter-verify-sigstore-timestamp-authority as a read-only verifier for trusted-time source selection and leaf certificate validity-window evaluation. This initial boundary supported verified Rekor integrated time and deferred RFC3161 TSA token verification to sigstore_rfc3161_tsa_token_boundary."
+post_decision_update:
+  date: "2026-06-25"
+  update: "RFC3161 TSA token verification is now implemented by sigstore_rfc3161_tsa_token_boundary; this audit remains historical for the trusted-time source selection decision."
+acceptance_criteria:
+  - "Policy contract exists."
+  - "Host adapter manifest exposes the timestamp verifier as read-only/no workflow authority."
+  - "CLI command returns typed JSON and non-zero exit on failed verification."
+  - "Rust tests covered Rekor integrated time pass, outside-validity failure, RFC3161 deferred failure at the time, and binary JSON output; RFC3161 positive verification is now covered by sigstore_rfc3161_tsa_token_boundary."
+  - "No Python is introduced."
+  - "No Markdown authority is introduced."
+evidence_basis:
+  direct_patterns:
+    - source_id: "sigstore_timestamps_docs"
+      supports: "Timestamp evidence must fall within the certificate validity period and can use Rekor or RFC3161 sources."
+    - source_id: "sigstore_trusted_root_proto"
+      supports: "Timestamp authorities are separate trust material."
+    - source_id: "rfc3161_timestamp_protocol"
+      supports: "RFC3161 token verification is its own protocol boundary."
+    - source_id: "tuf_specification"
+      supports: "Update freshness/rollback/freeze protection is separate from timestamp evidence."
+  inference_boundary: "This closes trusted-time source and certificate-validity evaluation for Rekor integrated time. RFC3161 token signatures, CT, revocation, TUF freshness, and release install/update authority remain separate boundaries."
+next_grill_question:
+  id: "sigstore_rfc3161_tsa_token_boundary"
+  question: "How should Forge parse and cryptographically verify RFC3161 timestamp tokens, including message imprint, TSA signature, TSA certificate path, and policy matching?"
+  recommended_answer: "Add a dedicated RFC3161 token verifier only after choosing a Rust ASN.1/CMS strategy and fixtures that prove message imprint, TSA signature, TSA certificate path, EKU/policy, and trusted-root matching."

@@ -1,0 +1,16 @@
+schema_version: "0.1"
+runtime_capability:
+  id: "capability.browser_validation"
+  runtime_id: "cursor-browser-agent"
+  capability_kind: "browser_validation"
+  evidence_kind: "capability_manifest"
+  protocol_surface: "mcp"
+  schema_ref: "mcp.tool.browser_validation"
+  constraints:
+    requires_human_visible_browser: false
+    may_access_network: true
+    may_mutate_project_files: false
+    output_must_be_evidence_ref: true
+  safety:
+    unfiltered_agent_card_text_trusted: false
+    prompt_injection_surface: "agent_card_and_tool_description"

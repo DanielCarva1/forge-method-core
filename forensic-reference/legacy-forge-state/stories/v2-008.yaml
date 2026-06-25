@@ -1,0 +1,22 @@
+id: v2-008
+title: --agent-id flag + FORGE_AGENT_ID env threaded through all mutating commands
+epic: Fleet Registry
+lane: runtime-core
+priority: HIGH
+status: done
+dependencies: v2-007
+evidence: .forge-method/evidence/batch3-evidence.md
+acceptance: Every command that calls write_state or append_ledger accepts --agent-id
+  (default from FORGE_AGENT_ID env or 'default'). The agent_id appears in the ledger
+  entry.
+description: Add --agent-id to all mutating command subparsers. In each cmd function,
+  resolve agent_id from args.agent_id or FORGE_AGENT_ID env. Pass to write_state and
+  append_ledger.
+files: scripts/forge_method_runtime.py (build_parser, all cmd_* functions that mutate
+  state)
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

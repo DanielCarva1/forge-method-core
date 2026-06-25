@@ -1,0 +1,25 @@
+schema_version: "0.1"
+gate_contract:
+  id: "gate.story_ready.lane"
+  contract_ref: "contracts/gates/gate-contract-v0.yaml"
+  gate:
+    scope: "lane"
+    status: "pass"
+    checked_at: "2026-06-25T00:05:00Z"
+    checked_by: "forge-core"
+  target:
+    kind: "lane"
+    id: "story-current"
+    product_area: "runtime-core"
+    paths:
+      - "crates/forge-contracts"
+  evidence_refs:
+    - kind: "test_report"
+      ref: ".forge-method/evidence/story-validation.json"
+    - kind: "artifact_check"
+      ref: ".forge-method/artifacts/story-current-result.yaml"
+  promotion:
+    policy: "may_feed_parent_gate"
+    parent_gate_ref: "contracts/gates/integration-missing-gate.yaml"
+  blocks:
+    operations: []

@@ -1,0 +1,91 @@
+schema_version: "0.1"
+policy: "runtime_effect_wal_compaction_and_locking_boundary"
+status: "accepted"
+purpose: "Define local writer serialization and WAL compaction after recoverable file-effect transactions exist, without requiring a daemon or overclaiming distributed filesystem safety."
+decision:
+  selected_strategy: "standard_file_lock_plus_incomplete_transaction_compaction"
+  store_api:
+    - "acquire_effect_store_lock(root, lock_relative_path) -> Result<EffectStoreLock, EffectStoreLockError>"
+    - "try_acquire_effect_store_lock(root, lock_relative_path) -> Result<EffectStoreLock, EffectStoreLockError>"
+    - "apply_file_effect_transaction_with_wal_lock(root, effect, payloads, wal_relative_path, lock_relative_path, tx_id) -> EffectApplicationResult"
+    - "recover_effect_wal_with_lock(root, wal_relative_path, lock_relative_path) -> EffectWalRecoveryResult"
+    - "compact_effect_wal(root, wal_relative_path) -> EffectWalCompactionResult"
+    - "compact_effect_wal_with_lock(root, wal_relative_path, lock_relative_path) -> EffectWalCompactionResult"
+  store_owns:
+    - "repo-relative lock file path validation"
+    - "exclusive local file lock acquisition through Rust std::fs::File"
+    - "lock release on guard drop"
+    - "locked WAL apply and recovery wrappers"
+    - "WAL compaction that drops closed transactions"
+    - "WAL compaction that preserves incomplete transactions for recovery"
+  store_does_not_do:
+    - "distributed locks"
+    - "network filesystem guarantees"
+    - "daemon lifecycle"
+    - "database-backed transactions"
+    - "WAL checkpoint summaries beyond incomplete transaction retention"
+rules:
+  - id: "standard_lock_first"
+    rule: "Use Rust standard-library File::lock/File::try_lock for repo-local effect writer serialization before adding a lock crate."
+  - id: "lock_is_advisory_boundary"
+    rule: "Locking serializes cooperating Forge store callers; it is not a guarantee against non-Forge writers or network filesystem anomalies."
+  - id: "locked_apply_required_for_multi_writer_hosts"
+    rule: "Adapters that may run more than one Forge writer in a repo should use apply_file_effect_transaction_with_wal_lock."
+  - id: "compaction_preserves_incomplete"
+    rule: "WAL compaction may drop closed transactions only; records for incomplete transactions must remain."
+  - id: "compaction_under_lock"
+    rule: "Compaction should use compact_effect_wal_with_lock whenever another writer may be active."
+  - id: "daemon_deferred"
+    rule: "Escalate to daemon/database only when local advisory locking is insufficient for scale, network filesystem use, or cross-machine agents."
+tradeoffs:
+  chosen:
+    advantages:
+      - "Uses stable Rust std APIs and avoids dependency churn."
+      - "Prevents cooperating local Forge writers from interleaving WAL/effect writes."
+      - "Keeps WAL size bounded by dropping closed transactions."
+      - "Preserves repo-local operation for Codex, Cursor, opencode, Claude, VS Code, pi.dev, and future Forge app."
+    disadvantages:
+      - "Advisory locks do not stop non-cooperating tools from writing files."
+      - "Cross-machine/network filesystem behavior is not guaranteed."
+      - "Compaction loses detailed history of closed transactions unless another audit stream preserves it."
+      - "No fairness, timeout, or stale-lock metadata exists yet."
+  rejected:
+    - id: "daemon_first"
+      reason: "Would add install/runtime complexity before local file-backed correctness is exhausted."
+    - id: "third_party_lock_crate_first"
+      reason: "Rust std provides stable cross-platform file lock APIs in the local toolchain."
+    - id: "drop_entire_wal_on_compaction"
+      reason: "Would destroy recovery data for incomplete transactions."
+    - id: "never_compact"
+      reason: "Unbounded WAL growth is unnecessary once closed transactions no longer need recovery data."
+acceptance:
+  store:
+    - "Second try-lock fails while a first effect store lock is held."
+    - "Locked WAL application records a commit."
+    - "Compaction drops closed transaction records and retains incomplete transaction records."
+  validation:
+    - "cargo test -p forge-core-store"
+    - "cargo test --workspace"
+    - "cargo clippy --workspace -- -D warnings"
+evidence_basis:
+  direct_patterns:
+    - source_id: "rust_std_file_lock_official"
+      supports: "Standard-library File lock APIs are stable and release with file handle close/unlock."
+    - source_id: "aries_wal_1992"
+      supports: "WAL systems need recovery metadata and can checkpoint/compact after safe closure."
+    - source_id: "grite_2606_19616"
+      supports: "Repo-local append-only records can back coordination state."
+    - source_id: "coagent_2606_15376"
+      supports: "Concurrent multi-agent work needs explicit conflict/coordination handling rather than blind overwrite."
+    - source_id: "storm_state_management_2605_20563"
+      supports: "Write-time mediation is needed for shared-state mutation."
+  inference_boundary: "The evidence supports local file locks and WAL compaction as a repo-local boundary. It does not prove distributed locking safety, so daemon/database coordination remains future work."
+failure_modes_prevented:
+  - "two cooperating Forge writers interleave WAL records"
+  - "two cooperating Forge writers apply file effects concurrently"
+  - "WAL grows forever after closed transactions"
+  - "compaction deletes recovery data for an incomplete transaction"
+  - "Forge silently claims distributed lock guarantees"
+next_boundary:
+  id: "runtime_store_adapter_integration_boundary"
+  question: "After store supports planning snapshots, command evidence, WAL application, recovery, compaction, and local locking, how should the CLI/runtime adapter expose a single operation execution path without letting host agents bypass it?"

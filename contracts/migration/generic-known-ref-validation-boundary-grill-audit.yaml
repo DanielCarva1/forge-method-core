@@ -1,0 +1,68 @@
+schema_version: "0.1"
+audit: "generic_known_ref_validation_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/legacy-validator-parity-matrix-boundary.yaml"
+  - "crates/forge-contract-validator/src/main.rs"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "generic_known_ref_validation_boundary"
+  question: "How should generic known-ref/file-ref checks for policy and migration YAML move into reusable Rust validation without duplicating typed cross-file reference rules?"
+  options:
+    - id: "store_supplies_known_repo_paths_validate_checks_ref_like_contracts_docs_values"
+      summary: "Store supplies known contracts/docs paths; validate checks only ref-like YAML keys."
+      advantages:
+        - "Avoids filesystem traversal in forge-core-validate."
+        - "Avoids treating narrative text as authority."
+        - "Complements ReferenceIndex without weakening typed authority checks."
+        - "Can be proven with a legacy parity negative test."
+      disadvantages:
+        - "Does not validate crates/ implementation refs yet."
+        - "Heuristic needs future tightening if new ref key names appear."
+    - id: "scan_every_contracts_docs_string"
+      summary: "Check every string that starts with contracts/ or docs/."
+      advantages:
+        - "Simple and broad."
+      disadvantages:
+        - "Likely false positives from historical inputs or explanatory text."
+    - id: "make_reference_index_hold_all_paths"
+      summary: "Use ReferenceIndex for every repo path existence check."
+      advantages:
+        - "One index type."
+      disadvantages:
+        - "Conflates typed authority kind with generic path existence."
+  selected_option: "store_supplies_known_repo_paths_validate_checks_ref_like_contracts_docs_values"
+  decision: "Add known repo path collection to forge-core-store and generic known-ref validation to forge-core-validate. The CLI reports yaml_known_repo_refs. The parity test mutates inventory supporting_policy_refs to prove both legacy and new CLI reject missing repo refs."
+acceptance_criteria:
+  - "Known contracts/docs repo paths are adapter supplied."
+  - "Generic validation is limited to ref-like keys and contracts/docs values."
+  - "Current repo passes."
+  - "Synthetic missing policy ref fails in both legacy and new CLI."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-store/src/lib.rs"
+    - "crates/forge-core-validate/src/lib.rs"
+    - "crates/forge-core-cli/src/lib.rs"
+    - "crates/forge-contract-validator/tests/parity.rs"
+  policy_refs:
+    - "contracts/policies/generic-known-ref-validation-boundary.yaml"
+  validation:
+    - "cargo test -p forge-core-validate yaml_known_repo_ref_validation_reports_missing_refs"
+    - "cargo test -p forge-core-store store_known_paths_satisfy_current_generic_known_refs"
+    - "cargo test -p forge-contract-validator legacy_validator_and_forge_core_cli_both_reject_missing_policy_ref"
+evidence_basis:
+  direct_patterns:
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Stable policy refs should be validated as lifecycle evidence."
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Semantic diagnostics complement schema validation."
+    - source_id: "utboost_2025_acl"
+      supports: "Validation changes need targeted negative tests."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness validation should be executable and inspectable."
+  inference_boundary: "This closes generic contracts/docs known-ref checks. It does not validate crates/ implementation refs or runtime evidence refs."
+next_grill_question:
+  id: "schema_enum_parity_boundary"
+  question: "Which representative schema enum failures should be tested against both forge-contract-validator and forge-core-cli before legacy wrapper or retirement?"
+  recommended_answer: "test_representative_operation_enum_and_command_enum_failures_before_wrapper"

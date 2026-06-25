@@ -1,0 +1,27 @@
+schema_version: "0.1"
+health_recovery_contract:
+  id: "health.fixture.worker_stalled"
+  contract_ref: "contracts/recovery/health-recovery-contract-v0.yaml"
+  status: "stalled"
+  runtime:
+    agent_id: "cursor-worker-1"
+    role: "worker"
+    host: "cursor"
+  heartbeat:
+    last_seen_at: "2026-06-25T00:30:00Z"
+    ttl_seconds: 900
+    missed_heartbeats: 2
+  anomaly:
+    kind: "heartbeat_missed"
+    scope: "story.current"
+    evidence_refs:
+      - "contracts/claims/story-current-expired-claim.yaml"
+  recovery:
+    action: "handoff_to_driver"
+    automatic_allowed: false
+    requires_review: true
+    request_ref: "contracts/requests/claim-expiry-handoff-request.yaml"
+    claim_ref: "contracts/claims/story-current-expired-claim.yaml"
+    handoff_context_refs:
+      - "contracts/claims/story-current-expired-claim.yaml"
+      - "contracts/requests/claim-expiry-handoff-request.yaml"

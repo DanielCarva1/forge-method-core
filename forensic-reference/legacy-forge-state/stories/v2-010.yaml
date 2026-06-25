@@ -1,0 +1,22 @@
+id: v2-010
+title: claims/<lane>.lock with TTL + claim/release/heartbeat commands
+epic: Lane Claims
+lane: runtime-core
+priority: HIGH
+status: done
+evidence: .forge-method/evidence/20260623-151500-v2-010-lane-claims.md
+dependencies: v2-008
+acceptance: '`forge claim <lane> --agent-id X` writes claims/<lane>.lock with agent_id+ts+expires(30min).
+  `forge release <lane>` removes it. Second claim while unexpired = denied. `forge
+  heartbeat <lane>` resets TTL. POC pattern from forge_v2_poc.py.'
+description: Add cmd_claim, cmd_release, cmd_heartbeat. Lock file = .forge-method/claims/<lane>.yaml
+  with {agent_id, lane, ts, expires}. Check expiry before denying. Ledger entries
+  for claim/release.
+files: scripts/forge_method_runtime.py (new cmd_claim, cmd_release, cmd_heartbeat,
+  build_parser)
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

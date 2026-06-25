@@ -1,0 +1,61 @@
+schema_version: "0.1"
+audit: "tuf_trusted_root_freshness_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/sigstore-trusted-root-policy-boundary.yaml"
+  - "contracts/policies/certificate-revocation-policy-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "tuf_trusted_root_freshness_boundary"
+  question: "How should Forge verify TUF trusted-root freshness without pretending to be a full TUF client or giving host adapters update authority?"
+  options:
+    - id: "presence_only_trusted_root"
+      summary: "Accept trusted_root_ref or root.json path as enough."
+      advantages:
+        - "Smallest implementation."
+      disadvantages:
+        - "Does not detect freeze through expired metadata."
+        - "Does not detect rollback below a known version floor."
+        - "Would preserve the host-adapter overclaim problem."
+    - id: "full_tuf_client_now"
+      summary: "Implement repository fetch, root rotation, signature thresholds, snapshot/target hash binding, and update authority now."
+      advantages:
+        - "Closest to complete TUF client semantics."
+      disadvantages:
+        - "Too broad for one boundary."
+        - "Introduces network policy, repository trust, target download, root rotation, and install admission at once."
+        - "Would slow the slice and raise blast radius."
+    - id: "local_metadata_freshness_verifier"
+      summary: "Verify supplied local TUF metadata role type, version floors, and expires timestamps against a fixed update start time."
+      advantages:
+        - "Directly closes the freeze/rollback freshness gap that other Sigstore checks must not imply."
+        - "Keeps TUF signatures, repository fetch, hash binding, and install authority as separate future boundaries."
+        - "Works across borrowed shells because the host only receives typed pass/fail evidence."
+      disadvantages:
+        - "Does not prove metadata authenticity."
+        - "Requires caller to supply trusted update start time and known version floors."
+  selected_option: "local_metadata_freshness_verifier"
+  decision: "Forge adds host-adapter-verify-tuf-trusted-root-freshness as a read-only Rust verifier for supplied local TUF root metadata and optional top-level metadata freshness, while explicitly deferring signatures, root rotation, repository fetch, hash binding, and install/update authority."
+acceptance_criteria:
+  - "Policy contract exists."
+  - "Runtime exposes read-only host adapter command."
+  - "Runtime passes fresh root metadata at or above version floor."
+  - "Runtime fails expired root metadata."
+  - "Runtime fails root metadata below supplied version floor."
+  - "Runtime fails non-TUF Sigstore trust policy."
+  - "No Python is introduced."
+  - "No Markdown authority is introduced."
+evidence_basis:
+  direct_patterns:
+    - source_id: "tuf_specification"
+      supports: "TUF root update workflow checks versions for rollback and metadata expiration for freeze protection."
+    - source_id: "sigstore_security_model_tuf_trust_root"
+      supports: "Sigstore trust root leverages TUF to secure trusted keys and certificates."
+    - source_id: "sigstore_tuf_client_installation_docs"
+      supports: "Sigstore client setup starts from a trusted TUF root and retrieves latest unexpired root as part of workflow."
+  inference_boundary: "The decision closes local metadata freshness and anti-rollback checks only. It does not close TUF signature threshold verification, root rotation, repository download, target hash binding, explicit CRL/OCSP revocation status, or release install authority."
+next_grill_question:
+  id: "explicit_crl_ocsp_revocation_status_boundary"
+  question: "How should Forge verify explicit CRL or OCSP revocation status, freshness, and offline failure policy without blocking the short-lived certificate strategy?"
+  recommended_answer: "Add explicit CRL/OCSP only as a separate read-only boundary if Forge must support long-lived PKI; otherwise keep Sigstore short-lived certificate strategy as the default."

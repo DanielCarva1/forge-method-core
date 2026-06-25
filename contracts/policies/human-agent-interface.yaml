@@ -1,0 +1,57 @@
+schema_version: "0.1"
+policy: human_agent_interface
+status: accepted
+summary: "Humans experience Forge through agent conversation, not by reading Forge runtime documentation directly."
+principles:
+  - id: agent_is_interpreter
+    rule: "The agent is the human's interpreter for Forge contracts, policies, state, workflows, decisions, and evidence."
+    implications:
+      - "Forge documentation is optimized for agent parsing, validation, recovery, and explanation."
+      - "If a human wants to know what a contract or state file says, the agent reads it and explains it in chat."
+      - "Human-facing explanations are generated conversationally by the agent from typed contracts."
+  - id: no_human_doc_consumption_assumption
+    rule: "Forge must not assume the human will read method docs, runtime docs, workflow docs, ADRs, state files, or contracts directly."
+    implications:
+      - "Human readability is secondary to agent correctness for runtime material."
+      - "Long prose written to be read directly by humans is prompt debt unless it is README, installation, or release notes."
+      - "Review and grill flows happen through chat, with the agent summarizing and challenging typed contracts."
+  - id: no_markdown_renderer_for_method_review
+    rule: "Do not create Markdown renders merely so the human can review method/runtime material."
+    implications:
+      - "The human asks the agent; the agent answers."
+      - "A renderer is acceptable only for distribution surfaces such as README, installation, or release notes."
+      - "Generated previews must not become runtime input or authority."
+agent_impact:
+  advantages:
+    - "Typed YAML/JSON is easier to validate, diff, search, test, and convert into Rust/Serde structs than long Markdown prose."
+    - "Enums, ids, explicit authority fields, and side-effect policies reduce interpretation drift."
+    - "Compact contracts reduce context load and make stale-session recovery more deterministic."
+    - "Fixtures can test behavior directly instead of relying on prose compliance."
+  drawbacks:
+    - "Poorly designed contracts can lose narrative rationale that helps an agent explain tradeoffs."
+    - "More schemas and references require better tooling to avoid fragmentation."
+    - "The agent must be responsible for translating terse contracts into rich human conversation."
+mitigations:
+  - "Keep rationale fields short and structured where decisions need explanation."
+  - "Use fixtures and conformance tests to prove contracts are understandable by agents."
+  - "Keep public Markdown generated or distribution-only, never runtime authority."
+  - "During grill, ask questions in chat from the typed contract instead of asking humans to inspect docs."
+final_state:
+  human_reads_directly:
+    - "README, when needed for GitHub/package discovery"
+    - "installation instructions, when needed before an agent can operate"
+    - "release notes, when needed to understand what changed"
+  agent_reads_and_explains:
+    - "contracts"
+    - "policies"
+    - "state"
+    - "workflows"
+    - "decisions"
+    - "evidence"
+    - "fixtures"
+    - "schemas"
+acceptance:
+  - "No runtime or method design depends on a human reading a doc directly."
+  - "New runtime/method material is typed first."
+  - "Any human-facing explanation can be produced by the agent from typed sources."
+  - "Markdown renders are not created for method review."

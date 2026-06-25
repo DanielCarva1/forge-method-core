@@ -1,0 +1,33 @@
+[workspace]
+members = [
+  "crates/forge-contract-validator",
+  "crates/forge-core-contracts",
+  "crates/forge-core-schema",
+  "crates/forge-core-cli",
+  "crates/forge-core-store",
+  "crates/forge-core-validate",
+  "crates/forge-core-runtime",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+base64 = "0.22.1"
+ed25519-dalek = "2.2.0"
+p256 = { version = "0.13.2", features = ["ecdsa", "pem"] }
+schemars = "1.2.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+serde_json_canonicalizer = "0.3"
+serde_yaml = "0.9.34"
+sha2 = "0.10.9"
+sct = "0.7.1"
+sigstore-tsa = { version = "0.9.0", default-features = false }
+rustls-pki-types = { version = "1.14", default-features = false, features = ["alloc"] }
+x509-parser = { version = "0.18.1", features = ["verify"] }
+
+[workspace.dependencies.rcgen]
+version = "0.14.8"

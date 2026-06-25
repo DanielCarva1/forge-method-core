@@ -1,0 +1,59 @@
+schema_version: "0.1"
+contract: "operation_reference_policy"
+status: "draft"
+purpose: "Define the allowed side-contract reference fields inside OperationContract fixtures so side-contract growth does not create scattered, unvalidated authority paths."
+design_rules:
+  - id: "refs_are_policy_not_memory"
+    rule: "OperationContract may depend on side contracts only through approved reference fields."
+  - id: "null_is_explicit"
+    rule: "Optional side contracts use explicit null, not missing semantics."
+  - id: "validator_owns_resolution"
+    rule: "Rust validation must resolve side-contract refs before an operation fixture can be used as evidence."
+allowed_reference_fields:
+  - kind: "claim"
+    field_path: "coordination_scope.write_authority.claim_contract_ref"
+    nullable: true
+  - kind: "completion"
+    field_path: "coordination_scope.completion.completion_contract_ref"
+    nullable: true
+  - kind: "gate"
+    field_path: "gates.required_before_mutation[].gate_contract_ref"
+    nullable: false
+  - kind: "gate"
+    field_path: "gates.gate_contract_refs[]"
+    nullable: false
+  - kind: "effect"
+    field_path: "effect_contract_refs[]"
+    nullable: false
+  - kind: "request"
+    field_path: "request.ref"
+    nullable: false
+  - kind: "decision"
+    field_path: "decision_close.ref"
+    nullable: true
+  - kind: "runtime_handoff"
+    field_path: "runtime_handoff.ref"
+    nullable: false
+future_reference_fields:
+  - kind: "eval"
+    field_path: "eval_refs[]"
+    status: "reserved_not_required"
+  - kind: "health_recovery"
+    field_path: "recovery.ref"
+    status: "reserved_not_required"
+evidence_basis:
+  direct_patterns:
+    - source_id: "llm_as_code_2606_15874"
+      supports: "Agent harness control flow and dependencies should be executable and inspectable."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness infrastructure should handle shared state, verification, and human oversight beyond prompt instructions."
+    - source_id: "mcp_tools_spec"
+      supports: "Schema-backed surfaces reduce ambiguity in tool/action references."
+    - source_id: "agent_protocol_taxonomy_2606_19135"
+      supports: "Layered protocol stacks need explicit payload/schema boundaries."
+  inference_boundary: "The sources support schema-backed, inspectable harness references; Forge's product-specific rule is to keep OperationContract side-contract refs in approved fields and Rust-validate them uniformly."
+failure_modes_prevented:
+  - "new side contract is referenced from a prose-only field"
+  - "operation fixture passes while claim or completion ref points nowhere"
+  - "request ref is typoed and only fails during runtime"
+  - "side-contract families grow without a unified resolution policy"

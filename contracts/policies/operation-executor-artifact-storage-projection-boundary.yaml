@@ -1,0 +1,93 @@
+schema_version: "0.1"
+policy: "operation_executor_artifact_storage_projection_boundary"
+status: "accepted"
+purpose: "Define how file-backed store operations resolve logical artifact/evidence/stream ToolEffect targets without collapsing them into unconstrained generic file paths."
+decision:
+  selected_strategy: "canonical_repo_local_projection_before_artifact_backend"
+  projection_table:
+    file_path: "Use the supplied repo-relative path exactly after safe path validation."
+    artifact_id: "Path-like refs must stay under .forge-method/artifacts/; id-like refs project to .forge-method/artifacts/<safe-id>.yaml."
+    evidence_id: "Path-like refs must stay under .forge-method/evidence/ or .forge-method/snapshots/; id-like refs project to .forge-method/evidence/<safe-id>.json."
+    ledger_stream: "Path-like refs must stay under .forge-method/ledger/ or equal .forge-method/ledger.ndjson; id-like refs project to .forge-method/ledger/<safe-id>.ndjson."
+    request_stream: "Path-like refs must stay under .forge-method/requests/ or equal .forge-method/requests.ndjson; id-like refs project to .forge-method/requests/<safe-id>.ndjson."
+  store_owns:
+    - "safe repo-relative path validation"
+    - "logical target projection"
+    - "rejection of path-like logical refs outside their canonical directories"
+    - "preserving logical refs in applied_refs and WAL target_ref"
+  store_does_not_own_yet:
+    - "artifact metadata index"
+    - "RO-Crate packaging"
+    - "OpenLineage export"
+    - "content-addressable artifact store"
+    - "database/object-store backend"
+rules:
+  - id: "logical_ref_not_generic_path"
+    rule: "ArtifactId, EvidenceId, LedgerStream, and RequestStream refs are logical targets; if they look path-like, they must remain inside their canonical projection directory."
+  - id: "id_projection_is_deterministic"
+    rule: "Id-like logical refs project deterministically through ASCII-safe sanitization and a target-kind-specific extension."
+  - id: "file_path_remains_exact"
+    rule: "FilePath continues to use the supplied repo-relative path exactly after existing safety checks."
+  - id: "legacy_stream_paths_allowed"
+    rule: "Existing .forge-method/requests.ndjson and .forge-method/ledger.ndjson stream paths remain valid legacy projections."
+  - id: "logical_ref_preserved"
+    rule: "Store results and WAL records preserve the logical ref from the ToolEffect contract even when the physical path is projected."
+tradeoffs:
+  chosen:
+    advantages:
+      - "Makes current ToolEffect targets executable without inventing an artifact database."
+      - "Keeps Forge repo-local and easy to inspect in borrowed shells."
+      - "Prevents artifact/evidence logical refs from writing arbitrary project files."
+      - "Preserves enough logical identity for later provenance metadata/indexing."
+    disadvantages:
+      - "No metadata index or provenance graph is generated yet."
+      - "Sanitized id projection may need future migration if naming policy changes."
+      - "Large binary artifacts still need a later storage strategy."
+      - "File-backed projection does not provide database/object-store guarantees."
+  rejected:
+    - id: "separate_artifact_store_now"
+      reason: "Would add backend and migration complexity before file-backed logical projection is exhausted."
+    - id: "treat_all_targets_as_file_path"
+      reason: "Would erase logical artifact/evidence semantics and allow accidental writes outside intended stores."
+    - id: "reject_artifact_id_until_backend"
+      reason: "Would keep canonical current ToolEffect fixtures non-executable even though a safe repo-local projection is available."
+    - id: "content_addressable_store_now"
+      reason: "Useful later for dedupe/large artifacts, but not required for the current execution boundary."
+acceptance:
+  store:
+    - "artifact_id id-like write creates .forge-method/artifacts/<safe-id>.yaml."
+    - "evidence_id id-like append creates .forge-method/evidence/<safe-id>.json."
+    - "request_stream id-like append creates .forge-method/requests/<safe-id>.ndjson."
+    - "artifact_id path-like ref outside .forge-method/artifacts/ is rejected."
+    - "path-like existing refs under canonical directories still work."
+  runtime:
+    - "Runtime operation executor can apply the current story artifact/evidence ToolEffect without mutating target kinds in tests."
+  validation:
+    - "cargo test -p forge-core-store"
+    - "cargo test -p forge-core-runtime"
+    - "cargo test --workspace"
+    - "cargo clippy --workspace -- -D warnings"
+evidence_basis:
+  direct_patterns:
+    - source_id: "w3c_prov_dm"
+      supports: "Artifacts/evidence should remain identifiable generated entities tied to activities and agents."
+    - source_id: "ro_crate_spec_1_1"
+      supports: "Files can be packaged with identifiers, metadata, relations, and provenance."
+    - source_id: "workflow_run_ro_crate_2024"
+      supports: "Workflow run outputs and execution metadata can be captured from file-backed run artifacts."
+    - source_id: "openlineage_object_model"
+      supports: "Logical output identity can be separated from physical storage while metadata/facets evolve later."
+    - source_id: "agentic_harness_engineering_2604_25850"
+      supports: "Harness evolution needs file-level editable components and evidence corpora."
+    - source_id: "harnessfix_trace_guided_2606_06324"
+      supports: "Trace-guided repair needs evidence that can be located at the responsible harness layer."
+  inference_boundary: "The evidence supports stable logical identity plus file-backed projection as a practical first store. It does not prove the final artifact backend should remain filesystem-only."
+failure_modes_prevented:
+  - "artifact_id writes arbitrary project root files"
+  - "evidence_id loses evidence semantics by becoming an unbounded path"
+  - "current artifact/evidence ToolEffect fixtures remain non-executable"
+  - "future provenance export cannot distinguish output kind from file path"
+  - "request/ledger stream ids write outside stream directories"
+next_boundary:
+  id: "sigstore_fulcio_certificate_identity_boundary"
+  question: "How should Forge verify Fulcio certificate chain, certificate identity extensions, expected OIDC issuer, and workflow identity selectors against the trusted-root policy without treating policy validation as cryptographic proof?"

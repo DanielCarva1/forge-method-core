@@ -1,0 +1,63 @@
+schema_version: "0.1"
+policy: "coordination_eval_type_boundary"
+status: "accepted"
+purpose: "Define CoordinationEvalContract as the minimum proof surface for multi-agent/team coordination behavior, not a schema-shape check."
+decision:
+  selected_strategy: "boundary_failure_modes_with_required_fixtures_and_evidence_refs"
+  coordination_eval_contract_owns:
+    - "closed coordination failure-mode dimensions"
+    - "metric kind, required level, fixture refs, optional threshold, failure signal, and evidence refs per dimension"
+    - "pass policy for required level, all-dimension coverage, and manual-review release blocking"
+  explicitly_not_owned:
+    - "external benchmark runner implementation"
+    - "long-running stress harness"
+    - "claim that Forge is production-ready from schema validation alone"
+  rejected_strategies:
+    - id: "schema_shape_eval"
+      reason: "Would let Forge claim coordination quality because YAML deserialized."
+    - id: "solo_task_success_eval"
+      reason: "Cooperative failures can appear even when individual task success is high."
+    - id: "external_benchmark_first"
+      reason: "Useful later, but v0 must first lock local failure dimensions and fixtures that map to Forge contracts."
+rules:
+  - id: "dimensions_are_failure_modes"
+    rule: "Each dimension represents a coordination failure mode, not a feature checklist."
+  - id: "fixtures_and_evidence_required"
+    rule: "Each dimension requires fixture_refs, evidence_refs, and a concrete failure_signal."
+  - id: "all_required_dimensions_covered"
+    rule: "When all_must_pass_dimensions_required is true, every closed v0 dimension must appear exactly once."
+  - id: "threshold_metrics_need_threshold"
+    rule: "threshold and latency_budget metrics require numeric threshold; fixture_pass and manual_review do not."
+  - id: "manual_review_blocks_release"
+    rule: "Manual-review-required dimensions cannot be treated as release-safe unless manual_review_blocks_release is true."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-contracts/src/coordination_eval.rs"
+    - "crates/forge-core-validate/src/lib.rs"
+    - "crates/forge-core-contracts/tests/load_current_contracts.rs"
+    - "crates/forge-core-validate/tests/current_contracts.rs"
+  fixtures:
+    - "contracts/evals/minimal-coordination-eval-suite.yaml"
+  validation:
+    - "cargo test -p forge-core-contracts --test load_current_contracts deserializes_coordination_eval_instances"
+    - "cargo test -p forge-core-validate validates_current_coordination_eval_instances"
+evidence_basis:
+  direct_patterns:
+    - source_id: "cooperbench_2601_13295"
+      supports: "Collaborative coding agents can perform worse together than alone due to communication, commitment, and expectation failures."
+    - source_id: "multiagentbench_2503_01935"
+      supports: "Multi-agent evaluation should measure collaboration/competition quality and milestone KPIs, not only completion."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Agent harnesses need evaluation beyond final task success, including shared state, coordination, and oversight."
+    - source_id: "utboost_2025_acl"
+      supports: "Weak tests can falsely mark bad coding-agent outputs as passed."
+    - source_id: "agentless_fse_2025"
+      supports: "Cost-aware constrained baselines and rigorous task filtering matter for evaluating agents."
+    - source_id: "multi_agent_distributed_systems_2026"
+      supports: "Distributed-systems failures such as stale views and lost updates need explicit tests."
+  inference_boundary: "The sources support coordination-specific and stronger evals. Forge's product-specific v0 maps them to local typed dimensions and fixtures before adding external benchmark runners."
+failure_modes_prevented:
+  - "Forge claims team readiness from solo green tests"
+  - "contract schema validation is mistaken for coordination behavior"
+  - "duplicate work, stale claims, handoff drift, or human correction failures go untested"
+  - "manual review gaps are allowed through release gates"

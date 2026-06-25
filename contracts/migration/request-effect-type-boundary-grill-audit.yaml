@@ -1,0 +1,76 @@
+schema_version: "0.1"
+audit: "request_effect_type_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "contracts/policies/side-contract-type-order.yaml"
+  - "contracts/policies/request-effect-type-boundary.yaml"
+  - "contracts/requests/request-contract-v0.yaml"
+  - "contracts/effects/tool-effect-contract-v0.yaml"
+grill_question:
+  id: "request_effect_type_boundary"
+  question: "How should RequestContract and ToolEffectContract be typed so coordination messages and mutating side effects share refs without becoming one overloaded contract?"
+  options:
+    - id: "request_message_effect_side_effect"
+      summary: "Keep RequestContract as durable coordination communication and ToolEffectContract as tool side-effect safety, linked by refs."
+      advantages:
+        - "Preserves a clear communication lifecycle for workers, drivers, humans, and runtimes."
+        - "Keeps read/write, conflict, inverse, and repair policy close to the actual tool side effect."
+        - "Allows append-only requests without letting requests mutate integration state."
+        - "Matches protocol-layering and policy-first evidence better than a broad event object."
+      disadvantages:
+        - "Requires reference validation between families."
+        - "Consumers must load two contracts when a request is about a tool effect."
+    - id: "single_event_contract"
+      summary: "Merge requests and effects into one generic coordination event."
+      advantages:
+        - "Fewer contract families."
+      disadvantages:
+        - "Overloads communication and mutation safety."
+        - "Makes lifecycle and repair rules weaker and easier for agents to misuse."
+    - id: "nested_contracts"
+      summary: "Allow requests to embed effects or effects to embed requests."
+      advantages:
+        - "Localizes some data for a single read."
+      disadvantages:
+        - "Creates duplicated authority surfaces."
+        - "Makes append-only request lifecycle and effect repair validation harder to reason about."
+  selected_option: "request_message_effect_side_effect"
+  decision: "RequestContract is the durable coordination message. ToolEffectContract is the tool side-effect safety record. They communicate through stable refs, dependencies, notifications, and operation side refs."
+  acceptance_criteria:
+    - "All concrete request fixtures deserialize through Rust/Serde."
+    - "All concrete effect fixtures deserialize through Rust/Serde."
+    - "Validation rejects requests that try to mutate integration state directly."
+    - "Validation rejects destructive effects without complete inverse metadata or a stop/review policy."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-contracts/src/request.rs"
+    - "crates/forge-core-contracts/src/tool_effect.rs"
+    - "crates/forge-core-validate/src/lib.rs"
+    - "crates/forge-core-contracts/tests/load_current_contracts.rs"
+    - "crates/forge-core-validate/tests/current_contracts.rs"
+  validation:
+    - "cargo test -p forge-core-contracts --test load_current_contracts deserializes_request_and_effect_instances"
+    - "cargo test -p forge-core-validate"
+evidence_basis:
+  direct_patterns:
+    - source_id: "communication_centric_llm_mas_2502_14321"
+      supports: "Coordination should have explicit communication goals and protocol structure."
+    - source_id: "agent_protocol_taxonomy_2606_19135"
+      supports: "Agent protocols should separate payload, interaction state, and schema concerns."
+    - source_id: "agentscope_2402_14034"
+      supports: "Message exchange and fault tolerance are central to robust multi-agent applications."
+    - source_id: "coagent_2606_15376"
+      supports: "Fine conflict handling needs read/write and repair metadata around effects."
+    - source_id: "rac_2605_03409"
+      supports: "Side-effect recovery needs compensation metadata, not broad replanning."
+    - source_id: "owasp_llm06_excessive_agency"
+      supports: "High-impact tool actions need constrained authority and independent approval paths."
+  inference_boundary: "The evidence supports structured communication and typed side-effect governance. Forge's selected boundary is an inferred product design that minimizes overlapping authority surfaces."
+next_grill_question:
+  id: "advanced_boundary_type_order"
+  question: "After request/effect Rust types, which advanced boundary families should be typed next: decision close, runtime handoff, health recovery, or coordination eval?"
+  recommended_answer: "decision_close_then_runtime_handoff_then_health_recovery_then_coordination_eval"

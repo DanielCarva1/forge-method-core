@@ -1,0 +1,61 @@
+schema_version: "0.1"
+audit: "legacy_validator_retirement_policy_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/legacy-stdout-compatibility-boundary.yaml"
+  - "contracts/policies/legacy-validator-parity-matrix-boundary.yaml"
+  - "release-notes/latest.json"
+  - ".codex-plugin/plugin.json"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "legacy_validator_retirement_policy_boundary"
+  question: "What deprecation and release policy would be required before removing forge-contract-validator entirely?"
+  options:
+    - id: "supported_wrapper_until_explicit_deprecation_window"
+      summary: "Keep the wrapper supported now; allow future removal only after explicit deprecation, replacement proof, time window, and breaking release boundary."
+      advantages:
+        - "Preserves users and scripts while validation authority has already moved to Rust core."
+        - "Prevents future agents from deleting compatibility code as cleanup."
+        - "Gives a clear path to removal if the wrapper becomes real burden."
+      disadvantages:
+        - "Keeps one compatibility binary in the workspace."
+        - "Requires release policy discipline before deletion."
+    - id: "deprecate_immediately"
+      summary: "Start deprecation now and plan removal in the next major release."
+      advantages:
+        - "Moves faster toward a single CLI surface."
+      disadvantages:
+        - "Premature: the Rust core is still being built and users just received the wrapper."
+        - "Creates churn without evidence that the wrapper is costly."
+    - id: "never_remove"
+      summary: "Declare forge-contract-validator permanent."
+      advantages:
+        - "Maximum compatibility."
+      disadvantages:
+        - "Can preserve stale surface forever even if maintenance cost becomes real."
+  selected_option: "supported_wrapper_until_explicit_deprecation_window"
+  decision: "forge-contract-validator is supported, not deprecated. It may only be deprecated through release notes/latest.json plus human release notes, and may only be removed after at least four months, a major/breaking release boundary, replacement JSON tests, and a repo-wide scan proving no active install/script path depends on it."
+implementation_evidence:
+  policy_refs:
+    - "contracts/policies/legacy-validator-retirement-policy-boundary.yaml"
+  validation:
+    - "cargo test -p forge-contract-validator"
+    - "cargo run -p forge-core-cli -- validate --root . --json"
+evidence_basis:
+  direct_patterns:
+    - source_id: "semver_2_0_0"
+      supports: "Public deprecation and removal should follow versioned compatibility semantics."
+    - source_id: "salesforce_cli_deprecation_policy"
+      supports: "CLI command removal should follow a warning window and name replacements."
+    - source_id: "kubernetes_deprecation_policy"
+      supports: "CLI elements are compatibility surfaces that need policy."
+    - source_id: "rfc8594_sunset"
+      supports: "Consumers need explicit sunset information before a resource becomes unavailable."
+    - source_id: "arduino_cli_versioning"
+      supports: "Removing/renaming/changing command-line elements is breaking."
+  inference_boundary: "The policy adapts API and CLI deprecation practices to Forge's local compatibility binary. It does not start deprecation."
+next_grill_question:
+  id: "rust_runtime_execution_boundary"
+  question: "After validation and compatibility are stabilized, which Rust runtime execution boundary should be implemented next without recreating the old giant Python runtime?"
+  recommended_answer: "start with a narrow runtime operation executor over typed OperationContract and store abstractions, not a monolithic Python-like runtime clone"

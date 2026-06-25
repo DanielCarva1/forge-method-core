@@ -1,0 +1,66 @@
+schema_version: "0.1"
+policy: "health_recovery_type_boundary"
+status: "accepted"
+purpose: "Define HealthRecoveryContract as a typed health/anomaly/recovery-intent contract, not a daemon runtime implementation."
+decision:
+  selected_strategy: "health_status_and_recovery_intent_not_daemon_state"
+  health_recovery_contract_owns:
+    - "runtime identity, role, and host surface"
+    - "heartbeat observation, TTL, and missed heartbeat count"
+    - "anomaly kind, scope, and evidence refs"
+    - "recovery action, automatic/review policy, request ref, claim ref, and compact handoff context refs"
+  explicitly_not_owned:
+    - "daemon scheduler implementation"
+    - "central service storage topology"
+    - "automatic runtime restart mechanics"
+    - "full distributed consensus protocol"
+  rejected_strategies:
+    - id: "daemon_contract_now"
+      reason: "Would prematurely encode a service/runtime topology before Rust store/runtime boundaries are implemented."
+    - id: "claim_ttl_only"
+      reason: "TTL says ownership may be stale, but does not classify anomaly or recovery action."
+    - id: "chat_recovery_plan"
+      reason: "Would let host-agent prose decide reassignment, restart, or new thread behavior."
+rules:
+  - id: "health_not_ownership"
+    rule: "ClaimContract owns lease/ownership. HealthRecoveryContract owns runtime health classification and recovery intent."
+  - id: "unhealthy_needs_action"
+    rule: "Degraded, stalled, or crashed health status cannot use recovery action none."
+  - id: "recovery_review_blocks_automatic_action"
+    rule: "If recovery requires review, automatic_allowed must be false."
+  - id: "reviewed_recovery_refs_request_and_claim"
+    rule: "Reviewed recovery must reference RequestContract and ClaimContract evidence."
+  - id: "handoff_context_is_compact"
+    rule: "Reviewed recovery must preserve handoff_context_refs instead of relying on full chat history."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-contracts/src/recovery.rs"
+    - "crates/forge-core-validate/src/lib.rs"
+    - "crates/forge-core-contracts/tests/load_current_contracts.rs"
+    - "crates/forge-core-validate/tests/current_contracts.rs"
+  fixtures:
+    - "contracts/recovery/worker-stalled-recovery.yaml"
+    - "contracts/recovery/runtime-crashed-recovery.yaml"
+  validation:
+    - "cargo test -p forge-core-contracts --test load_current_contracts deserializes_health_recovery_instances"
+    - "cargo test -p forge-core-validate validates_current_health_recovery_instances"
+evidence_basis:
+  direct_patterns:
+    - source_id: "agentops_survey_2508_02121"
+      supports: "Agent systems need monitoring, anomaly detection, root-cause analysis, and resolution."
+    - source_id: "agentops_observability_2411_05285"
+      supports: "Agent observability should trace runtime artifacts and associated lifecycle data."
+    - source_id: "agentscope_2402_14034"
+      supports: "Robust multi-agent frameworks include fault-tolerance, status, retries, and logs."
+    - source_id: "multi_agent_distributed_systems_2026"
+      supports: "Multi-agent coding systems hit distributed-systems failures such as stale state and missing recovery paths."
+    - source_id: "grite_2606_19616"
+      supports: "Coordination state can live in append-only records and travel with the repo."
+    - source_id: "coagent_2606_15376"
+      supports: "Notify-and-repair preserves work better than blind abort/retry."
+  inference_boundary: "The sources support observability, anomaly classification, fault tolerance, and recovery paths. Forge's product-specific inference is to model health recovery as typed recovery intent tied to claims and requests before implementing any daemon."
+failure_modes_prevented:
+  - "expired claim is mistaken for complete runtime health diagnosis"
+  - "stalled worker is silently reassigned without request or handoff context"
+  - "crashed driver work resumes from chat memory instead of typed refs"
+  - "daemon architecture is frozen before store/runtime boundaries exist"

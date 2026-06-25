@@ -1,0 +1,20 @@
+id: v2-004
+title: Fleet-mode append-only handoff/checkpoint (no state mutation)
+epic: Append-Only Handoffs
+lane: runtime-core
+priority: CRITICAL
+status: done
+evidence: .forge-method/evidence/20260623-083000-v2-004-append-only-handoff.md
+dependencies: ''
+acceptance: In fleet mode (registry.yaml exists), handoff writes file + appends request,
+  does NOT call write_state. --update-state overrides. Verified.
+description: ALREADY IMPLEMENTED (this session). is_fleet_mode + append_request helpers
+  + --update-state flag.
+files: scripts/forge_method_runtime.py (cmd_handoff, cmd_checkpoint, is_fleet_mode,
+  append_request)
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

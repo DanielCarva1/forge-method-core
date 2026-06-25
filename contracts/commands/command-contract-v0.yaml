@@ -1,0 +1,92 @@
+schema_version: "0.1"
+contract: "command_contract"
+status: "draft"
+purpose: "Define safe, typed command execution records referenced by OperationContract without allowing raw shell strings as authority."
+design_rules:
+  - id: "no_raw_shell_authority"
+    rule: "OperationContract references command ids; CommandContract carries executor and args as structured fields."
+  - id: "side_effects_are_declared"
+    rule: "Command side effects, network, environment, platform support, timeout, and output capture are explicit."
+  - id: "command_refs_resolve_by_id"
+    rule: "Rust validation must resolve operation command_refs to known CommandContract ids."
+rust_compatibility:
+  serialization: "serde"
+  id_policy: "stable_ascii_ids"
+  enum_policy: "closed_for_v0_with_unknown_rejected"
+enums:
+  kind:
+    - "test"
+    - "build"
+    - "lint"
+    - "format"
+    - "smoke"
+    - "release"
+  executor:
+    - "cargo"
+    - "node"
+    - "bun"
+    - "powershell"
+    - "sh"
+    - "git"
+  cwd_policy:
+    - "project_root"
+    - "repo_root"
+    - "package_root"
+  side_effect_policy:
+    - "read_only"
+    - "write_project_files"
+    - "network"
+    - "publish"
+  platform:
+    - "windows"
+    - "macos"
+    - "linux"
+  network_policy:
+    - "disabled"
+    - "allowed"
+    - "required"
+  output_capture:
+    - "summary"
+    - "full"
+    - "structured"
+required_fields:
+  - "id"
+  - "contract_ref"
+  - "kind"
+  - "executor"
+  - "args"
+  - "cwd_policy"
+  - "side_effect_policy"
+  - "platforms"
+  - "timeout_ms"
+  - "network_policy"
+field_contract:
+  id: "Stable command id used by OperationContract command_refs."
+  kind: "Closed command kind enum."
+  executor: "Closed executor enum."
+  args: "Array of argv tokens, never a single shell string."
+  cwd_policy: "Closed cwd_policy enum."
+  side_effect_policy: "Closed side_effect_policy enum."
+  platforms: "Supported platform enum values."
+  timeout_ms: "Positive timeout in milliseconds."
+  env_policy:
+    inherit: "minimal|none|project."
+    required: "Required env var names."
+    forbidden: "Forbidden env groups or names."
+  network_policy: "Closed network_policy enum."
+  output_policy:
+    capture: "Closed output_capture enum."
+    max_bytes: "Positive output budget."
+evidence_basis:
+  direct_patterns:
+    - source_id: "mcp_tools_spec"
+      supports: "Tools should expose named capabilities with schemas and metadata."
+    - source_id: "owasp_llm06_excessive_agency"
+      supports: "Excessive functionality and permissions create damaging agent actions."
+    - source_id: "solver_policy_tool_agents_2603_20449"
+      supports: "Tool-call policy should be checked before execution."
+  inference_boundary: "The sources support schema-backed and policy-checked action surfaces; Forge's product-specific rule is to make command execution a typed contract referenced by id."
+failure_modes_prevented:
+  - "operation fixture embeds raw shell command"
+  - "command uses network or writes files without side-effect declaration"
+  - "command ref typo is discovered only during execution"

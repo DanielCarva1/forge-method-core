@@ -1,0 +1,52 @@
+schema_version: "0.1"
+policy: "operation_executor_index_compaction_boundary"
+status: "active"
+summary: "Forge keeps the effect target metadata index append-only for now; dedupe, truncation, and compaction are deferred until a reader/query contract proves duplicate handling needs and preserves audit semantics."
+canonical_terms:
+  append_only_index: "Metadata index whose records are appended as observations and not rewritten by the current runtime."
+  duplicate_tolerant_reader: "Future reader that can collapse repeated logical/effect records without mutating the underlying index."
+  index_compaction: "Future maintenance action that rewrites or truncates index files after a separate safety boundary defines proof, locking, backup, and reader semantics."
+decision:
+  selected_option: "defer_compaction_keep_append_only"
+  rejected_options:
+    - id: "compact_now"
+      reason: "No reader/query contract exists yet, so compaction could destroy evidence before consumer semantics are known."
+    - id: "dedupe_on_write"
+      reason: "Write-time dedupe would require querying current index state during effect execution and could widen lock/latency scope."
+    - id: "truncate_and_rebuild_by_default"
+      reason: "Truncation is destructive maintenance and needs backup, lock, and stale-reader semantics before it is safe."
+rules:
+  - id: "append_only_until_reader_boundary"
+    rule: "Effect metadata index remains append-only until a metadata reader/query boundary is closed."
+  - id: "repair_command_no_compaction"
+    rule: "rebuild-effect-index must not dedupe, truncate, compact, or delete index files."
+  - id: "duplicates_are_reader_concern"
+    rule: "Duplicate records produced by rebuild or repeated repair are tolerated and must be handled by future readers."
+  - id: "compaction_requires_backup_and_lock"
+    rule: "Any future compaction must define lock, backup/restore, stale reader behavior, and validation evidence before implementation."
+evidence_basis:
+  - source_id: "openlineage_object_model"
+    supports: "Lineage systems can model observations as additive runtime events."
+  - source_id: "w3c_prov_dm"
+    supports: "Provenance statements rely on identifiers and relationships; destructive pruning needs clear semantics."
+  - source_id: "aries_wal_1992"
+    supports: "Recovery and audit depend on durable logs; rewrite policies must be deliberate."
+  - source_id: "failure_atomic_updates_fast15"
+    supports: "Maintenance that rewrites files needs explicit failure-atomic handling."
+  - source_id: "harnessfix_trace_guided_2606_06324"
+    supports: "Trace-guided repair benefits from retaining scoped evidence rather than prematurely pruning it."
+implementation_refs:
+  - "crates/forge-core-cli/src/main.rs"
+  - "crates/forge-core-store/src/lib.rs"
+acceptance:
+  - "No compaction/truncation/dedupe implementation is added in this boundary."
+  - "Existing rebuild-effect-index command remains append-only."
+  - "Next work is a reader/query boundary, not destructive maintenance."
+inference_boundary: "The evidence supports append-only metadata until consumer semantics exist. It does not prove Forge should never compact indexes."
+failure_modes_prevented:
+  - "A repair command deletes audit evidence while trying to be tidy."
+  - "A future agent treats duplicate rows as data corruption before a reader contract exists."
+  - "Compaction is implemented without backup, lock, or stale-reader semantics."
+next_boundary:
+  id: "sigstore_fulcio_certificate_identity_boundary"
+  question: "How should Forge verify Fulcio certificate chain, certificate identity extensions, expected OIDC issuer, and workflow identity selectors against the trusted-root policy without treating policy validation as cryptographic proof?"

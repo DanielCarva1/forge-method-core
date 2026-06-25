@@ -1,0 +1,87 @@
+schema_version: "0.1"
+policy: "runtime_effect_transaction_boundary"
+status: "accepted"
+purpose: "Define the first ToolEffect transaction boundary after command evidence recording: load a staged ToolEffectContract, validate it, and block write application unless every non-delete write has explicit runtime payload authority."
+decision:
+  selected_strategy: "payload_gated_transaction_readiness_before_file_application"
+  runtime_api:
+    - "prepare_effect_transaction(staging: &RuntimeEffectStagingPlan, effect_ref: &RepoPath, effect: &ToolEffectContractDocument, payloads: &[RuntimeEffectPayload]) -> RuntimeEffectTransactionPlan"
+  runtime_owns:
+    - "verify staging status is staged"
+    - "verify effect ref exists in staged effect_contract_refs"
+    - "validate ToolEffectContractDocument"
+    - "verify write_set exists"
+    - "require every non-delete write target to have a matching RuntimeEffectPayload"
+    - "return typed RuntimeEffectTransactionPlan with status, reasons, counts, operation id, effect id, and validation counts"
+  runtime_does_not_do:
+    - "read or write filesystem content"
+    - "invent payload content"
+    - "apply append/create/write/delete effects"
+    - "commit or rollback file transactions"
+    - "resolve effect refs from disk"
+    - "convert host-agent prose into payload"
+rules:
+  - id: "staged_effect_required"
+    rule: "A ToolEffectContract can enter transaction readiness only when its repo ref appears in RuntimeEffectStagingPlan.effect_contract_refs."
+  - id: "valid_effect_required"
+    rule: "ToolEffectContract validation errors block transaction readiness."
+  - id: "write_set_required"
+    rule: "A transaction plan without writes is blocked."
+  - id: "payload_required_for_non_delete"
+    rule: "Create, write, and append targets require RuntimeEffectPayload with matching target_ref before application can be considered."
+  - id: "delete_uses_inverse_policy"
+    rule: "Delete writes do not require payload, but destructive inverse/review policy remains enforced by ToolEffectContract validation."
+  - id: "readiness_not_application"
+    rule: "Ready means the effect has enough authority shape to proceed to a later application boundary; it does not mutate files."
+tradeoffs:
+  chosen:
+    advantages:
+      - "Prevents Rust runtime from applying writes that do not have explicit payload authority."
+      - "Makes the current ToolEffectContract gap visible and testable."
+      - "Keeps transaction admission separate from filesystem application and rollback."
+      - "Allows future adapters to provide runtime-generated, human-approved, command-evidence, or external-artifact payloads explicitly."
+    disadvantages:
+      - "Does not yet apply artifacts or state changes."
+      - "Payload content itself is not stored in ToolEffectContract; a later boundary must define content transport and hash checking."
+      - "A ready plan still needs filesystem freshness checks before commit."
+  rejected:
+    - id: "apply_effect_without_payload"
+      reason: "Would force the runtime or host agent to invent write content from context."
+    - id: "inline_payload_into_tool_effect_contract_now"
+      reason: "Would expand all existing effect contracts before proving the right content transport shape."
+    - id: "skip_transaction_readiness"
+      reason: "Would delay discovery of missing payload authority until the dangerous file-write boundary."
+acceptance:
+  crate:
+    - "RuntimeEffectPayload and RuntimeEffectTransactionPlan exist in forge-core-runtime."
+    - "prepare_effect_transaction blocks unstaged, invalid, empty-write, or missing-payload effects."
+    - "prepare_effect_transaction returns ready only for staged valid effects with payloads for every non-delete write."
+  tests:
+    - "story artifact effect blocks when no payloads are supplied."
+    - "story artifact effect is transaction-ready when all write targets have payloads."
+  validation:
+    - "cargo test -p forge-core-runtime"
+    - "cargo test --workspace"
+    - "cargo clippy --workspace -- -D warnings"
+evidence_basis:
+  direct_patterns:
+    - source_id: "cordon_semantic_transactions_2606_17573"
+      supports: "Transactions should stage and validate before commit."
+    - source_id: "coagent_2606_15376"
+      supports: "Long-running multi-agent work should avoid blind abort/retry and use explicit conflict/repair semantics."
+    - source_id: "rac_2605_03409"
+      supports: "Side-effect recovery depends on explicit compensation metadata rather than replanning from prose."
+    - source_id: "runtime_enforcement_2503_18666"
+      supports: "Runtime enforcement can block unsafe actions before execution."
+    - source_id: "storm_state_management_2605_20563"
+      supports: "Write-time consistency checks are needed before accepting shared-state mutations."
+  inference_boundary: "The evidence supports staged transaction readiness, pre-write validation, and explicit recovery metadata. Forge's RuntimeEffectPayload shape is a local minimum to prevent payload invention before full file application exists."
+failure_modes_prevented:
+  - "runtime creates artifact content from prose without payload authority"
+  - "host agent treats effect write_set as already applied"
+  - "unstaged effect is applied because its path looks plausible"
+  - "valid effect contract writes without matching payload"
+  - "delete bypasses destructive inverse/review validation"
+next_boundary:
+  id: "runtime_effect_wal_recovery_boundary"
+  question: "After process-local file-effect application exists, how should Forge record WAL-style transaction intent, committed writes, rollback data, and recovery on startup before claiming crash-durable multi-file effects?"

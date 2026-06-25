@@ -1,0 +1,82 @@
+schema_version: "0.1"
+audit: "legacy_validator_parity_retirement_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "crates/forge-contract-validator/src/main.rs"
+  - "crates/forge-core-cli/src/lib.rs"
+  - "contracts/policies/thin-cli-validation-surface-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "legacy_validator_parity_retirement_boundary"
+  question: "Which legacy forge-contract-validator checks are not yet covered by forge-core-cli typed validation, and should the old binary wrap the new CLI or stay temporarily separate?"
+  options:
+    - id: "audit_then_wrap_or_retire_only_when_coverage_is_proven"
+      summary: "Keep both binaries temporarily and require a coverage matrix before wrapping or retiring the legacy validator."
+      advantages:
+        - "Avoids losing generic YAML/evidence checks."
+        - "Keeps the new typed CLI moving without overclaiming parity."
+        - "Creates a concrete migration checklist."
+      disadvantages:
+        - "Two validators remain during migration."
+        - "Requires another boundary for generic YAML/evidence-ref validation."
+    - id: "wrap_legacy_with_new_cli_now"
+      summary: "Make forge-contract-validator call forge-core-cli immediately."
+      advantages:
+        - "One implementation path sooner."
+      disadvantages:
+        - "Would drop unproven generic YAML and recursive evidence-ref checks."
+        - "Would be a false parity claim."
+    - id: "keep_legacy_forever"
+      summary: "Leave forge-contract-validator as a permanent separate scanner."
+      advantages:
+        - "No immediate migration risk."
+      disadvantages:
+        - "Preserves duplicated authority and string-scanner drift."
+  selected_option: "audit_then_wrap_or_retire_only_when_coverage_is_proven"
+  decision: "Do not retire or wrap forge-contract-validator yet. forge-core-cli is the new structured path, but legacy retirement requires migration of recursive YAML parse coverage, recursive source_id reference checks, policy/migration generic ref checks, and a check-by-check parity matrix."
+coverage_matrix:
+  covered_now:
+    - legacy_area: "typed contract family semantic checks"
+      new_authority: "forge-core-validate validators called by forge-core-cli"
+      evidence: "cargo test -p forge-core-cli"
+    - legacy_area: "operation side refs and current authority refs"
+      new_authority: "forge-core-store ReferenceIndexBuilder plus forge-core-validate cross-reference validators"
+      evidence: "cargo test -p forge-core-store"
+    - legacy_area: "agent-facing structured output"
+      new_authority: "forge-core validate --json"
+      evidence: "cargo run -p forge-core-cli -- validate --root . --json"
+  gaps:
+    - legacy_area: "recursive YAML parse over all contracts and fixtures"
+      status: "resolved_by_generic_yaml_evidence_ref_validation_boundary"
+      required_next: "generic_yaml_parse_validation"
+    - legacy_area: "recursive source_id reference scan over all contracts and fixtures"
+      status: "resolved_by_generic_yaml_evidence_ref_validation_boundary"
+      required_next: "generic_evidence_source_ref_validation"
+    - legacy_area: "generic known-ref scans in policy/migration files"
+      status: "not_proven"
+      required_next: "typed_or_generic_ref_policy_mapping"
+    - legacy_area: "exact legacy stdout summary compatibility"
+      status: "not_proven"
+      required_next: "compatibility_wrapper_decision"
+implementation_evidence:
+  local_audit:
+    - "rg over forge-contract-validator validate_* functions."
+    - "rg over forge-core-cli validation report calls."
+  policy_refs:
+    - "contracts/policies/legacy-validator-parity-retirement-boundary.yaml"
+evidence_basis:
+  direct_patterns:
+    - source_id: "utboost_2025_acl"
+      supports: "Validation adequacy must be proven, not assumed from green tests."
+    - source_id: "agentless_fse_2025"
+      supports: "Constrained baselines and audits help avoid overclaiming agent/system capability."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness verification must include explicit coverage and behavior checks."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy checks need auditable traces and stable refs."
+  inference_boundary: "The evidence supports parity-before-retirement. The specific gap list is derived from local validator source comparison."
+next_grill_question:
+  id: "generic_known_ref_validation_boundary"
+  question: "How should generic known-ref/file-ref checks for policy and migration YAML move into reusable Rust validation without duplicating typed cross-file reference rules?"
+  recommended_answer: "store_supplies_yaml_documents_validate_runs_generic_repo_ref_rules_for_contracts_docs_paths_only"

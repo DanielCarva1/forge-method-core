@@ -1,0 +1,47 @@
+schema_version: "0.1"
+tool_effect_contract:
+  id: "effect.fixture.destructive_file_delete_missing_inverse"
+  contract_ref: "contracts/effects/tool-effect-contract-v0.yaml"
+  effect_kind: "file_edit"
+  operation_ref: "op_fixture_destructive_file_delete_missing_inverse"
+  actor:
+    agent_id: "codex-main"
+    role: "driver"
+  read_set:
+    - target_kind: "file_path"
+      ref: "src/generated-trash.rs"
+      expected_hash: "sha256:fixture-before-delete"
+      expected_version: null
+      required_for_plan: true
+  write_set:
+    - target_kind: "file_path"
+      ref: "src/generated-trash.rs"
+      access_mode: "delete"
+      expected_hash: "sha256:fixture-before-delete"
+      expected_version: null
+      destructive: true
+  conflict_detection:
+    check_against: "filesystem"
+    granularity: "path"
+    conflict_codes:
+      - "missing_inverse_for_destructive_write"
+      - "path_outside_scope"
+    policy: "human_review"
+  notification:
+    required: true
+    recipients:
+      - "human"
+      - "driver"
+    request_contract_ref: "contracts/requests/destructive-effect-review-request.yaml"
+  repair:
+    strategy: "ask_human"
+    automatic_repair_allowed: false
+    inverse_operation_ref: null
+    stop_if_inverse_missing: true
+    inverse:
+      kind: "none"
+      source: "unavailable"
+      ref: null
+      input_mapping_refs: []
+      validation_gate_refs: []
+      review_required: true

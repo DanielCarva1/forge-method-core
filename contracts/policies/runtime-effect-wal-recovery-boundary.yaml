@@ -1,0 +1,92 @@
+schema_version: "0.1"
+policy: "runtime_effect_wal_recovery_boundary"
+status: "accepted"
+purpose: "Define WAL-style recovery for file-backed ToolEffect application so Forge can recover incomplete process-local transactions before claiming stronger multi-file durability."
+decision:
+  selected_strategy: "store_owned_effect_wal_with_before_images_and_startup_recovery"
+  store_api:
+    - "apply_file_effect_transaction_with_wal(root, effect, payloads, wal_relative_path, tx_id) -> EffectApplicationResult"
+    - "recover_effect_wal(root, wal_relative_path) -> EffectWalRecoveryResult"
+  wal_record_stages:
+    - "begin"
+    - "before_image"
+    - "write_applied"
+    - "commit"
+    - "rollback_complete"
+    - "recovered_rollback"
+  store_owns:
+    - "append synced WAL records as JSONL"
+    - "record transaction begin before writes"
+    - "record before-image content and hash before each write"
+    - "record write_applied after each successful write"
+    - "record commit after all writes succeed"
+    - "scan WAL for begin records without commit/rollback/recovered rollback"
+    - "restore before-images for incomplete transactions"
+  store_does_not_do:
+    - "compact or truncate WAL"
+    - "serialize concurrent writers"
+    - "guarantee OS-level directory-entry durability"
+    - "coordinate distributed transactions"
+    - "recover effects whose before-image records are missing or corrupt"
+rules:
+  - id: "wal_before_write"
+    rule: "A before_image record must be appended and synced before applying a file write."
+  - id: "commit_closes_transaction"
+    rule: "A transaction with commit, rollback_complete, or recovered_rollback is closed for recovery scanning."
+  - id: "incomplete_rolls_back"
+    rule: "A transaction with begin but no closing stage is recovered by restoring before-images in reverse order."
+  - id: "before_image_hash_checked"
+    rule: "Recovery must verify before-image content_hash before restoring bytes."
+  - id: "wal_path_is_repo_relative"
+    rule: "WAL path uses the same repo-relative path safety as other store appends."
+  - id: "durability_claim_limited"
+    rule: "This boundary improves crash/interruption recovery but does not claim full ACID, directory fsync, or concurrent writer correctness."
+tradeoffs:
+  chosen:
+    advantages:
+      - "Gives Forge a recovery path for interrupted file-effect transactions."
+      - "Keeps rollback data in store-managed records instead of host-agent memory."
+      - "Aligns effect application with database-style WAL evidence."
+      - "Preserves compatibility with repo-local file-backed operation before daemon/DB."
+    disadvantages:
+      - "WAL grows until a compaction boundary exists."
+      - "Concurrent writers can interleave records without a later lane/lock/daemon boundary."
+      - "Large before-images can produce large WAL records."
+      - "Directory fsync and OS crash semantics remain future hardening."
+  rejected:
+    - id: "no_wal_until_daemon"
+      reason: "Would leave crash recovery entirely manual even though before-image recovery can be implemented safely now."
+    - id: "external_database_now"
+      reason: "Would violate the current universal repo-local shell requirement before proving need."
+    - id: "wal_without_before_images"
+      reason: "Would detect incomplete transactions but not know how to recover them."
+acceptance:
+  store:
+    - "apply_file_effect_transaction_with_wal records begin, before_image, write_applied, and commit."
+    - "recover_effect_wal restores an incomplete transaction from before-image records."
+    - "append_json_line syncs WAL/evidence records before returning."
+  validation:
+    - "cargo test -p forge-core-store"
+    - "cargo test --workspace"
+    - "cargo clippy --workspace -- -D warnings"
+evidence_basis:
+  direct_patterns:
+    - source_id: "aries_wal_1992"
+      supports: "WAL records enable transaction recovery and partial rollback."
+    - source_id: "failure_atomic_updates_fast15"
+      supports: "Failure-atomic application updates require explicit transaction/recovery mechanisms."
+    - source_id: "cordon_semantic_transactions_2606_17573"
+      supports: "Agent tool effects need transaction manager semantics, staged effects, rollback, and audit metadata."
+    - source_id: "rac_2605_03409"
+      supports: "Recovery should use explicit compensation/rollback data rather than replanning."
+    - source_id: "grite_2606_19616"
+      supports: "Repo-local append-only records can travel with code and support coordination state."
+  inference_boundary: "The sources justify WAL-style recovery. Forge's JSONL record shape is a repo-local implementation and does not yet provide full database-grade isolation or compaction."
+failure_modes_prevented:
+  - "process interruption leaves written file without recoverable before-image"
+  - "host agent must guess how to undo an interrupted effect"
+  - "transaction appears incomplete but has no durable transaction id"
+  - "rollback restores corrupted before-image bytes without hash check"
+next_boundary:
+  id: "runtime_store_adapter_integration_boundary"
+  question: "After store supports planning snapshots, command evidence, WAL application, recovery, compaction, and local locking, how should the CLI/runtime adapter expose a single operation execution path without letting host agents bypass it?"

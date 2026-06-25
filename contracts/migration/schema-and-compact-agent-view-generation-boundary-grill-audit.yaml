@@ -1,0 +1,72 @@
+schema_version: "0.1"
+audit: "schema_and_compact_agent_view_generation_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/schema-generation-authority.yaml"
+  - "contracts/policies/rust-workspace-architecture.yaml"
+  - "contracts/migration/coordination-eval-type-boundary-grill-audit.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "schema_and_compact_agent_view_generation_boundary"
+  question: "After all v0 contract families have Rust types, how should Forge generate JSON Schema and compact agent-facing views without reintroducing Markdown or hand-maintained schema drift?"
+  options:
+    - id: "rust_generated_outputs"
+      summary: "Generate JSON Schema and compact agent views from Rust types as outputs, with tests."
+      advantages:
+        - "Keeps Rust/Serde as executable authority."
+        - "Avoids Markdown and hand-maintained schema drift."
+        - "Gives agents compact views instead of full schema dumps."
+        - "Works from CLI/CI without Python."
+      disadvantages:
+        - "Schema output still cannot encode all semantic validators."
+        - "Cross-file reference validation remains a separate typed validator concern."
+    - id: "handwritten_yaml_views"
+      summary: "Write compact agent views manually in YAML."
+      advantages:
+        - "Quick to author."
+      disadvantages:
+        - "Reintroduces stale docs and agent-misleading drift."
+    - id: "json_schema_as_authority"
+      summary: "Promote generated JSON Schema to primary source."
+      advantages:
+        - "Standard external tooling can consume it."
+      disadvantages:
+        - "Contradicts Rust-first authority and leaves semantic invariants outside the primary type system."
+  selected_option: "rust_generated_outputs"
+  decision: "Use forge-core-schema to generate JSON Schema artifacts and compact agent views from Rust/Serde contract document types. The outputs are derived read models; Rust validation remains authority."
+  acceptance_criteria:
+    - "forge-core-schema crate exists."
+    - "generated_contract_schemas covers v0 contract surface plus supporting registry/capability/evidence/inventory documents."
+    - "compact_agent_views are derived from generated schema required fields and enum definitions."
+    - "CLI supports schemas and views modes."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-schema/src/lib.rs"
+    - "crates/forge-core-schema/src/main.rs"
+    - "crates/forge-core-schema/tests/generated_views.rs"
+  validation:
+    - "cargo test -p forge-core-schema"
+    - "cargo run -p forge-core-schema --quiet -- views"
+    - "cargo run -p forge-core-schema --quiet -- schemas"
+evidence_basis:
+  direct_patterns:
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Schema-backed contracts need structured diagnostics and semantic validation."
+    - source_id: "serde_official"
+      supports: "Rust data structures can own serialization behavior across formats."
+    - source_id: "schemars_official"
+      supports: "JSON Schema can be generated from Rust types in a Serde-compatible way."
+    - source_id: "jsonschema_rust_official"
+      supports: "Rust can validate JSON Schema artifacts and instances without Python."
+    - source_id: "jsonschemabench_2501_10868"
+      supports: "JSON Schema features and validators require careful conformance testing."
+    - source_id: "tool_schema_compression_2605_26165"
+      supports: "Large schema surfaces can exhaust agent context; compact views are needed."
+  inference_boundary: "The sources support generated schemas and compact schema views. Forge's implementation uses a Rust crate and CLI output as the first concrete generation surface; cross-file semantic validation remains a separate boundary."
+next_grill_question:
+  id: "legacy_validator_parity_retirement_boundary"
+  question: "Which legacy forge-contract-validator checks are not yet covered by forge-core-cli typed validation, and should the old binary wrap the new CLI or stay temporarily separate?"
+  recommended_answer: "audit_legacy_checks_then_wrap_or_retire_only_when_coverage_is_proven"

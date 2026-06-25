@@ -1,0 +1,46 @@
+schema_version: "0.1"
+tool_effect_contract:
+  id: "effect.fixture.worker_request_append"
+  contract_ref: "contracts/effects/tool-effect-contract-v0.yaml"
+  effect_kind: "request_append"
+  operation_ref: "op_fixture_worker_record_request"
+  actor:
+    agent_id: "cursor-worker-1"
+    role: "worker"
+  read_set:
+    - target_kind: "file_path"
+      ref: "contracts/claims/story-v2-010-active-claim.yaml"
+      expected_hash: "sha256:fixture-claim"
+      expected_version: null
+      required_for_plan: true
+  write_set:
+    - target_kind: "request_stream"
+      ref: ".forge-method/requests.ndjson"
+      access_mode: "append"
+      expected_hash: null
+      expected_version: null
+      destructive: false
+  conflict_detection:
+    check_against: "latest_projection"
+    granularity: "stream"
+    conflict_codes:
+      - "write_target_claimed"
+      - "expected_state_version_mismatch"
+    policy: "driver_review"
+  notification:
+    required: false
+    recipients:
+      - "driver"
+    request_contract_ref: null
+  repair:
+    strategy: "record_request"
+    automatic_repair_allowed: true
+    inverse_operation_ref: null
+    stop_if_inverse_missing: false
+    inverse:
+      kind: "none"
+      source: "unavailable"
+      ref: null
+      input_mapping_refs: []
+      validation_gate_refs: []
+      review_required: false

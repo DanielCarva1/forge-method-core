@@ -1,0 +1,58 @@
+schema_version: "0.1"
+audit_id: "sigstore_fulcio_certificate_identity_boundary_grill_audit"
+status: "closed"
+created_at: "2026-06-25"
+inputs:
+  - "contracts/migration/operation-contract-plan-grill-audit.yaml"
+  - "contracts/policies/sigstore-trusted-root-policy-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+question:
+  id: "sigstore_fulcio_certificate_identity_boundary"
+  text: "How should Forge verify Fulcio certificate chain, certificate identity extensions, expected OIDC issuer, and workflow identity selectors against the trusted-root policy without treating policy validation as cryptographic proof?"
+decision:
+  selected_option: "forge_owned_read_only_fulcio_identity_verifier"
+  answer: "Add a Forge-owned read-only verifier that consumes a trusted-root policy, leaf certificate, issuer certificate chain, and verification time; verifies chain signatures and trust-root refs; extracts SAN/OIDC/workflow identity; and returns typed evidence with explicit non-goals."
+  why:
+    - "Sigstore/Fulcio sources model identity as OIDC-authenticated certificate fields, not a free-form release string."
+    - "RFC 5280 makes SAN and certificate usage part of certificate semantics, so Forge must inspect the certificate instead of only checking policy text."
+    - "Agent-runtime papers support making authority and constraints explicit execution state; this boundary applies that principle to release trust evidence."
+  rejected_options:
+    - id: "policy_only"
+      reason: "Would repeat the bug pattern where an agent records a next step or policy and later treats it as externally verified truth."
+    - id: "delegate_identity_to_host_adapter"
+      reason: "Would make Codex, Cursor, Claude, OpenCode, VS Code, pi.dev, and Forge standalone disagree on release identity semantics."
+    - id: "full_bundle_now"
+      reason: "Would hide too many distinct failure modes in a single pass/fail result."
+evidence_refs:
+  - "sigstore_overview_verification_flow"
+  - "fulcio_spec_oidc_certificate_binding"
+  - "fulcio_oid_info"
+  - "rfc5280_subject_alt_name_and_key_usage"
+  - "sigstore_identity_representation_issue"
+  - "sigstore_fido_identity_assurance_2025"
+  - "constraint_state_governance_2026"
+evidence_limits:
+  - source_id: "sigstore_fido_identity_assurance_2025"
+    limit: "Supports future identity assurance thinking only; current implementation does not enforce FIDO."
+  - source_id: "constraint_state_governance_2026"
+    limit: "Supports explicit state/authority boundaries; it is not a Sigstore cryptography source."
+risks:
+  - id: "path_ref_is_not_tuf_freshness"
+    severity: "medium"
+    mitigation: "Verifier only checks provided chain against declared CA refs and states TUF freshness is outside this boundary."
+  - id: "simple_chain_not_full_pkix_engine"
+    severity: "medium"
+    mitigation: "Boundary states provided-chain verification, validity, usage, issuer/subject, and signatures; revocation/name constraints/path building policy remain future work."
+  - id: "provider_specific_identity_drift"
+    severity: "medium"
+    mitigation: "Use Fulcio provider-generic OID extraction and keep selector matching explicit."
+outcome:
+  policy_ref: "contracts/policies/sigstore-fulcio-certificate-identity-boundary.yaml"
+  implementation_refs:
+    - "crates/forge-core-cli/src/lib.rs"
+    - "crates/forge-core-cli/src/main.rs"
+    - "crates/forge-core-cli/tests/validate.rs"
+next_grill_question:
+  id: "sigstore_bundle_subject_binding_boundary"
+  question: "How should Forge bind artifact digest, Sigstore bundle signature material, Fulcio certificate identity evidence, Rekor transparency evidence, and timestamp evidence without collapsing them into one opaque pass/fail?"
+  recommended_answer: "Create a bundle subject-binding verifier that composes existing artifact/provenance/Rekor/Fulcio evidence by typed evidence ids and checks artifact digest plus certificate public key/signature binding, while leaving revocation and TUF freshness as explicit later boundaries."

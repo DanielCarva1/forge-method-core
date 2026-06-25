@@ -1,0 +1,27 @@
+schema_version: "0.1"
+health_recovery_contract:
+  id: "health.fixture.runtime_crashed"
+  contract_ref: "contracts/recovery/health-recovery-contract-v0.yaml"
+  status: "crashed"
+  runtime:
+    agent_id: "codex-main"
+    role: "driver"
+    host: "codex"
+  heartbeat:
+    last_seen_at: "2026-06-25T00:20:00Z"
+    ttl_seconds: 900
+    missed_heartbeats: 3
+  anomaly:
+    kind: "crash"
+    scope: "project.team-project"
+    evidence_refs:
+      - "contracts/claims/driver-active-claim.yaml"
+  recovery:
+    action: "open_new_thread"
+    automatic_allowed: false
+    requires_review: true
+    request_ref: "contracts/requests/claim-expiry-handoff-request.yaml"
+    claim_ref: "contracts/claims/driver-active-claim.yaml"
+    handoff_context_refs:
+      - "contracts/claims/driver-active-claim.yaml"
+      - "contracts/evals/minimal-coordination-eval-suite.yaml"

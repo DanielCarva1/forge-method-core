@@ -1,0 +1,63 @@
+schema_version: "0.1"
+audit: "operation_executor_metadata_reader_boundary_grill"
+status: "closed"
+created_at: "2026-06-25"
+grill_question:
+  id: "operation_executor_metadata_reader_boundary"
+  question: "What minimal read/query API should expose effect target metadata to agents without requiring raw NDJSON scans or premature compaction?"
+  answered_by: "agent_research_and_local_code_inspection"
+input_refs:
+  - "contracts/policies/operation-executor-metadata-index-boundary.yaml"
+  - "contracts/policies/operation-executor-metadata-rebuild-boundary.yaml"
+  - "contracts/policies/operation-executor-index-compaction-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+decision:
+  selected_option: "read_only_duplicate_tolerant_query"
+  recommendation_basis:
+    - "The index is append-only by policy, so query must not repair, compact, or dedupe on disk."
+    - "Agents need structured discovery of artifact/evidence/request targets instead of raw NDJSON parsing."
+    - "Duplicate rows are expected after rebuild/repair; latest-per-target should be a view, not a write."
+    - "Effect metadata is evidence lookup, not process authority."
+tradeoffs:
+  pros:
+    - "Gives agents a compact structured lookup surface."
+    - "Keeps append-only audit semantics intact."
+    - "Stops host agents from inventing ad hoc parsing and duplicate behavior."
+    - "Keeps raw payload content out of query output."
+  cons:
+    - "Does not yet provide a richer query language."
+    - "Does not compact old duplicate rows."
+    - "Does not decide which higher-level adapter flows should call the query."
+evidence_basis:
+  - source_id: "openlineage_object_model"
+    supports: "Lineage-style runtime observations should be queryable without becoming workflow authority."
+  - source_id: "w3c_prov_dm"
+    supports: "Provenance entities and relations need stable identifiers for lookup."
+  - source_id: "harnessfix_trace_guided_2606_06324"
+    supports: "Scoped evidence retrieval improves harness diagnosis and repair."
+  - source_id: "agentic_harness_engineering_2604_25850"
+    supports: "Harness components need observable evidence tied to outcomes."
+  - source_id: "schema_first_tool_apis_2603_13404"
+    supports: "Structured API contracts reduce interface misuse."
+  - source_id: "agentleak_privacy_leakage_2602_11510"
+    supports: "Agent data surfaces should minimize raw payload exposure."
+  - source_id: "rust_api_guidelines_official"
+    supports: "Typed APIs are preferable to presentation-coupled parsing."
+policy_ref: "contracts/policies/operation-executor-metadata-reader-boundary.yaml"
+implementation_refs:
+  - "crates/forge-core-store/src/lib.rs"
+  - "crates/forge-core-cli/src/lib.rs"
+  - "crates/forge-core-cli/src/main.rs"
+  - "crates/forge-core-store/tests/reference_index.rs"
+  - "crates/forge-core-cli/tests/validate.rs"
+acceptance:
+  - "Store query API reads and validates EffectTargetMetadataRecord NDJSON."
+  - "CLI command exposes typed filters, consumer use, and JSON output."
+  - "Latest view collapses duplicate target records in memory only."
+  - "Invalid records fail the query."
+  - "Query output does not contain raw payload content."
+closed_decision: "Add a read-only duplicate-tolerant store API and query-effect-index CLI command; keep compaction and authority semantics out of this boundary."
+next_grill_question:
+  id: "sigstore_fulcio_certificate_identity_boundary"
+  question: "How should Forge verify Fulcio certificate chain, certificate identity extensions, expected OIDC issuer, and workflow identity selectors against the trusted-root policy without treating policy validation as cryptographic proof?"
+  recommended_answer: "Add a Forge-owned Sigstore bundle/Fulcio verifier backend that consumes trusted-root policy and returns typed identity, subject, timestamp, and revocation evidence while preserving adapter-neutral authority."

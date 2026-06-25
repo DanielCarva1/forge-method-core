@@ -1,0 +1,70 @@
+schema_version: "0.1"
+audit: "schema_generation_strategy_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/inventory/v0-contract-family-lock.yaml"
+  - "contracts/policies/rust-validation-authority.yaml"
+  - "contracts/policies/human-agent-interface.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "contracts/migration/operation-contract-plan-grill-audit.yaml"
+grill_question:
+  id: "schema_generation_strategy"
+  question: "Should Rust schema/type generation start from the locked YAML contract families now, or should Forge first split schema files from instance fixtures more aggressively?"
+  options:
+    - id: "split_yaml_schemas_first"
+      summary: "Create more YAML schema files and normalize every fixture before touching Rust types."
+      advantages:
+        - "Could reduce ambiguity before coding."
+        - "Keeps current YAML-only workflow longer."
+      disadvantages:
+        - "Extends the period where YAML conventions, not Rust types, carry contract authority."
+        - "Delays the executable harness and risks more hand-maintained schema drift."
+    - id: "rust_types_from_locked_inventory"
+      summary: "Use the inventory lock as the input boundary, author Rust/Serde domain types now, then generate JSON Schema and compact agent views."
+      advantages:
+        - "Moves authority into executable, testable Rust sooner."
+        - "Uses the locked inventory to prevent accidental side-contract growth."
+        - "Allows generated JSON Schema and compact agent views instead of duplicated handwritten docs."
+      disadvantages:
+        - "Requires careful translation of YAML contract families into Rust structs."
+        - "Some semantic invariants still need handwritten Rust validation beyond Serde shape."
+    - id: "json_schema_primary_then_rust"
+      summary: "Convert YAML contracts to JSON Schema first and generate Rust types from schema."
+      advantages:
+        - "Could improve external interoperability early."
+        - "Standard schema tooling can validate instances."
+      disadvantages:
+        - "JSON Schema is validation-oriented and can be awkward as a Rust domain-type source."
+        - "Complex schema features can create codegen ambiguity and validator variance."
+        - "Forge domain semantics would live outside Rust ownership/type design too long."
+  selected_option: "rust_types_from_locked_inventory"
+  decision: "Start Rust/Serde type authoring from the locked inventory now. Generate JSON Schema and compact agent views from Rust types after the first typed module compiles and deserializes fixtures."
+  rationale:
+    - "The inventory lock already defines the contract-family boundary."
+    - "The product goal is a Rust core, not a better YAML-only validator."
+    - "Research supports schema-backed boundaries, but also shows schema validity does not replace semantic gates/evals."
+    - "Context-budget evidence argues against exposing full schemas to agents by default."
+acceptance_criteria:
+  - "Schema generation policy exists as YAML and is referenced by the inventory lock supporting policies."
+  - "Rust validator rejects unknown evidence source ids in evidence_basis, inventory evidence_refs, and supporting_research_refs."
+  - "Operation grill audit marks schema_generation_strategy as closed and moves to the next architecture gap."
+  - "No Markdown is created or edited for this decision."
+  - "No Python is used for validation."
+next_grill_question:
+  id: "rust_workspace_crate_split"
+  question: "What Rust crate/workspace split should the Forge Core use so contracts, validation, CLI, storage, and future MCP/daemon layers can mature without becoming one giant binary?"
+  recommended_answer: "start_with_small_workspace_contracts_validator_cli_then_add_storage_runtime_mcp_when_contract_types_compile"
+evidence_basis:
+  direct_patterns:
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Schema-backed tool contracts improve governance but must be paired with diagnostics and semantic checks."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Agent harnesses should be executable, inspectable, stateful, and verification-oriented."
+    - source_id: "serde_official"
+      supports: "Rust data structures can own serialization behavior across formats."
+    - source_id: "schemars_official"
+      supports: "Rust types can generate JSON Schema in a Serde-compatible manner."
+    - source_id: "tool_schema_compression_2605_26165"
+      supports: "Schema surfaces need compact views under context constraints."
+  inference_boundary: "This closes the schema/codegen strategy only. It does not yet implement the generated Rust contract crate or generated schema artifacts."

@@ -1,0 +1,75 @@
+﻿schema_version: "0.1"
+audit: "rust_only_backlog_reconciliation_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/rust-workspace-architecture.yaml"
+  - "contracts/policies/rust-validation-authority.yaml"
+  - "contracts/migration/markdown-debt-inventory.yaml"
+  - "contracts/migration/operation-contract-plan-grill-audit.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "forensic-reference/legacy-forge-state/artifacts/prd-forge-v2.md"
+  - "forensic-reference/legacy-forge-state/stories/v2-*.yaml"
+grill_question:
+  id: "rust_only_backlog_authority"
+  question: "After the Rust-only decision, what is the authoritative backlog: the old Forge v2 Python/Markdown stories, a completely blank rewrite, or a reconciled Rust-only backlog that uses legacy work only as forensic evidence?"
+  options:
+    - id: "continue_legacy_v2_stories"
+      summary: "Keep implementing the existing forensic-reference/legacy-forge-state/stories/v2-* backlog."
+      advantages:
+        - "Fastest apparent continuation."
+        - "Preserves old story ids."
+      disadvantages:
+        - "Most stories point at Python runtime files."
+        - "Done status is misleading for Rust-only core readiness."
+        - "Carries Markdown/prose authority into the new architecture."
+    - id: "blank_rewrite"
+      summary: "Discard all previous backlog and write a new plan later."
+      advantages:
+        - "Cleanest conceptual reset."
+      disadvantages:
+        - "Loses real failure analysis and product constraints already discovered."
+        - "Creates another planning gap before coding can continue."
+    - id: "reconcile_rust_only"
+      summary: "Create a new typed Rust-only backlog, classify old stories as forensic reference, and preserve only evidence-backed requirements."
+      advantages:
+        - "Keeps hard-earned lessons without preserving Python as implementation authority."
+        - "Creates a codable story map with Rust acceptance criteria."
+        - "Makes gaps explicit instead of pretending all v2 stories are ready."
+      disadvantages:
+        - "Adds one planning artifact before more feature implementation."
+        - "Requires remapping old progress to new Rust proof."
+  selected_option: "reconcile_rust_only"
+  decision: "The current implementation authority is contracts/backlog/rust-only-core-backlog.yaml. The old PRD and v2 stories are forensic references only. No story that targets Python runtime files can be considered codable work for the new Rust core."
+local_findings:
+  - id: "legacy_story_python_refs"
+    finding: "The legacy v2 story set contains Python implementation refs such as scripts/forge_method_runtime.py; this conflicts with the Rust-only core rule."
+  - id: "legacy_done_not_rust_done"
+    finding: "The legacy story files are marked done, but done here refers to the old Python/plugin runtime and does not prove Rust implementation readiness."
+  - id: "typed_contracts_exist"
+    finding: "Current Rust contracts already exist for operations, commands, claims, completion, gates, requests, effects, recovery, evals, runtime handoff, inventory, and evidence."
+  - id: "markdown_debt_declared"
+    finding: "contracts/migration/markdown-debt-inventory.yaml explicitly marks architecture Markdown as debt to replace/delete."
+acceptance_criteria:
+  - "A typed Rust-only backlog exists and names legacy Python stories as forensic reference only."
+  - "The backlog has epics, stories, dependencies, evidence refs, acceptance criteria, and Rust validation expectations."
+  - "Open questions are explicit and cannot be silently skipped by an agent."
+  - "No Python implementation path is introduced."
+  - "No Markdown authority is introduced."
+evidence_basis:
+  direct_patterns:
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Story authority should be schema-backed and validated."
+    - source_id: "agent_harness_engineering_survey_2026"
+      supports: "Backlog needs explicit harness layers instead of one monolithic script."
+    - source_id: "swe_agent_2405_15793"
+      supports: "Agent-facing interfaces need deliberate design and validation."
+    - source_id: "multi_agent_failure_modes_2503_13657"
+      supports: "Coordination failures need typed controls and evaluation, not chat discipline."
+    - source_id: "communication_centric_llm_mas_2502_14321"
+      supports: "Coordination requires protocol fields and lifecycle state."
+  inference_boundary: "This audit decides backlog authority and story readiness. It does not implement the listed stories."
+next_grill_question:
+  id: "first_rust_only_story_after_reconciliation"
+  question: "After backlog reconciliation, should the next coding slice finish the already-open DSSE/in-toto boundary or first convert Markdown staging architecture into typed contracts?"
+  recommended_answer: "Finish the already-open DSSE/in-toto boundary first because it is a narrow, partially researched supply-chain verification slice; then run the typed architecture-contract conversion slice so future work is not guided by Markdown debt."

@@ -1,0 +1,84 @@
+schema_version: "0.1"
+audit: "runtime_effect_application_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+grill_state_machine:
+  state: "S6"
+  closed_question:
+    id: "runtime_effect_application_boundary"
+    question: "After effect transaction readiness requires payload authority, how should Forge transport payload content, check filesystem freshness, apply append/create/write/delete in a temp transaction, and rollback on failure?"
+    selected_answer: "Store owns file-backed effect application. It uses materialized payload content plus sha256 hashes, repo-relative path checks, file freshness checks, temp-file replacement, and process-local rollback. Crash-durable multi-file recovery is deferred to WAL."
+inputs:
+  - "contracts/policies/runtime-effect-transaction-boundary.yaml"
+  - "contracts/effects/tool-effect-contract-v0.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "crates/forge-core-store/src/lib.rs"
+decision:
+  canonical_term: "Runtime Effect Application"
+  policy_ref: "contracts/policies/runtime-effect-application-boundary.yaml"
+  selected_strategy: "store_owned_file_effect_application_with_process_local_rollback"
+  scope:
+    includes:
+      - "file-backed create/write/append/delete"
+      - "payload content and sha256 hash verification"
+      - "repo-relative path safety"
+      - "read_set expected_hash checks for file-backed reads"
+      - "write expected_hash checks"
+      - "temp-file replacement"
+      - "reverse-order rollback after apply failure"
+    excludes:
+      - "crash recovery"
+      - "WAL"
+      - "concurrent writer serialization"
+      - "state-key projection application"
+      - "glob mutation"
+      - "gate pass/fail interpretation"
+tradeoffs:
+  selected:
+    advantages:
+      - "Allows real Forge-owned file effects while maintaining typed authority."
+      - "Does not make runtime responsible for filesystem mutation."
+      - "Creates an honest stepping stone toward WAL instead of claiming full ACID."
+    disadvantages:
+      - "A crash between writes can still require manual or future WAL recovery."
+      - "Concurrent writes still need a stronger lock/daemon/claim enforcement boundary."
+      - "Append is not a lock-free concurrent append."
+  rejected:
+    - id: "full_acid_file_transaction_now"
+      reason: "Requires WAL, recovery scanning, directory fsync policy, and concurrent writer semantics not yet implemented."
+    - id: "single_file_only"
+      reason: "Would dodge the real ToolEffect multi-write use case already present in fixtures."
+    - id: "host_agent_applies_effects"
+      reason: "Would preserve the exact failure mode this Rust core is removing."
+scenario_tests:
+  - id: "create_write_append_success"
+    scenario: "Effect has a fresh read, create target absent, write target hash matches, append target exists, and payload hashes match."
+    expected_result: "EffectApplicationStatus::Applied and all files contain expected bytes."
+  - id: "stale_read"
+    scenario: "File-backed read_set expected_hash does not match current bytes."
+    expected_result: "EffectApplicationStatus::Blocked and no target is written."
+  - id: "later_write_failure"
+    scenario: "First write succeeds, second write fails because its parent path is a file."
+    expected_result: "EffectApplicationStatus::RolledBack and first write is removed/restored."
+evidence_basis:
+  direct_patterns:
+    - source_id: "cordon_semantic_transactions_2606_17573"
+      supports: "Stage, validate, commit, rollback, and audit agent effects through runtime boundaries."
+    - source_id: "failure_atomic_updates_fast15"
+      supports: "Do not claim multi-file crash atomicity without explicit filesystem/transaction support."
+    - source_id: "rust_file_sync_all_official"
+      supports: "Use sync_all on temporary file data before replacement."
+    - source_id: "aries_wal_1992"
+      supports: "WAL is the correct next step for crash recovery and partial rollback."
+    - source_id: "storm_state_management_2605_20563"
+      supports: "Write-time freshness checks should mediate mutation."
+  inference_boundary: "The sources justify the boundary shape and its limits. The exact Rust function names and temp/backup implementation are Forge-local."
+implementation_plan:
+  - "Add EffectApplicationPayload and EffectApplicationResult."
+  - "Add apply_file_effect_transaction to forge-core-store."
+  - "Hash payloads and file contents with sha256."
+  - "Use temp write plus backup/replace for file-backed effects."
+  - "Add tests for success, stale-read block, and rollback."
+next_grill_question:
+  id: "runtime_effect_wal_recovery_boundary"
+  question: "After process-local file-effect application exists, how should Forge record WAL-style transaction intent, committed writes, rollback data, and recovery on startup before claiming crash-durable multi-file effects?"

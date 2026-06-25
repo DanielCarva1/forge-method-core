@@ -1,0 +1,59 @@
+schema_version: "0.1"
+audit: "sigstore_rfc3161_tsa_token_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/sigstore-timestamp-authority-boundary.yaml"
+  - "contracts/policies/sigstore-trusted-root-policy-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "sigstore_rfc3161_tsa_token_boundary"
+  question: "How should Forge parse and cryptographically verify RFC3161 timestamp tokens, including message imprint, TSA signature, TSA certificate path, and policy matching?"
+  options:
+    - id: "manual_cms_parser_now"
+      summary: "Implement RFC3161/CMS ASN.1 parsing and signature verification directly inside forge-core-cli."
+      advantages:
+        - "Maximum local control over every field."
+      disadvantages:
+        - "High probability of under-verifying CMS signed attributes, signer certificate selection, and algorithm details."
+        - "Creates a bespoke cryptographic verifier in a product whose trust boundary is already broad."
+    - id: "network_tsa_client_in_runtime"
+      summary: "Call a TSA or online service during verification."
+      advantages:
+        - "Can produce fresh timestamps."
+      disadvantages:
+        - "Not deterministic."
+        - "Turns install/update verification into a network-dependent operation."
+        - "Mixes timestamp issuance with offline evidence verification."
+    - id: "sigstore_tsa_offline_verifier"
+      summary: "Use sigstore-tsa as the offline RFC3161 verifier and wrap it in Forge's typed host-adapter boundary."
+      advantages:
+        - "Matches the Sigstore Rust ecosystem and current Forge supply-chain direction."
+        - "Covers TSTInfo parsing, message imprint, CMS signature, TSA certificate chain, and timestamp extraction."
+        - "Keeps Forge code focused on policy, state, and authority boundaries."
+      disadvantages:
+        - "Adds a cryptographic dependency tree."
+        - "Still leaves CT, revocation, and TUF freshness as separate work."
+  selected_option: "sigstore_tsa_offline_verifier"
+  decision: "Forge integrates sigstore-tsa with default network client features disabled and exposes RFC3161 verification through host-adapter-verify-sigstore-timestamp-authority."
+acceptance_criteria:
+  - "Policy contract exists."
+  - "Runtime requires RFC3161 token bytes, timestamped signature bytes, and policy-declared TSA certificate refs."
+  - "Runtime passes valid offline Sigstore-conformance timestamp fixtures."
+  - "Runtime fails payload/signature mismatch fixtures."
+  - "Runtime keeps CT, revocation, TUF freshness, and install/update authority out of this boundary."
+  - "No Python is introduced."
+  - "No Markdown authority is introduced."
+evidence_basis:
+  direct_patterns:
+    - source_id: "rfc3161_timestamp_protocol"
+      supports: "The token is CMS SignedData carrying TSTInfo and clients must validate signature, imprint, TSA identity, and policy."
+    - source_id: "rfc5652_cms"
+      supports: "CMS SignedData signature validation is an independent cryptographic format."
+    - source_id: "sigstore_tsa_rust_crate_docs"
+      supports: "The Rust verifier performs the required offline token, imprint, signature, and chain checks."
+  inference_boundary: "The decision selects a Rust verifier dependency, not a live TSA client, and does not close CT, revocation, TUF freshness, or installer authority."
+next_grill_question:
+  id: "explicit_crl_ocsp_revocation_status_boundary"
+  question: "How should Forge verify explicit CRL or OCSP certificate revocation status without treating CT, Rekor, timestamp, or short-lived certificate policy evidence as CRL/OCSP evidence?"
+  recommended_answer: "Keep explicit CRL/OCSP status as a separate read-only host-adapter boundary after choosing status sources, freshness, offline behavior, and failure policy."
