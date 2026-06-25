@@ -1,0 +1,55 @@
+schema_version: "0.1"
+policy: "side_contract_type_order"
+status: "accepted"
+purpose: "Define the Rust/Serde implementation order for side-contract families referenced by OperationContract."
+decision:
+  selected_strategy: "ownership_completion_gate_before_coordination_effects"
+  implementation_order:
+    - stage: "basic_runtime_authority"
+      families:
+        - "claim_contract"
+        - "completion_contract"
+        - "gate_contract"
+      reason: "Before build/runtime autonomy can proceed, Forge must know who owns work, whether it is already complete, and which validation scope authorizes action."
+    - stage: "coordination_and_effects"
+      families:
+        - "request_contract"
+        - "tool_effect_contract"
+      reason: "After ownership/completion/gates are typed, multi-agent handoff and mutating side effects can be validated against concrete authority state."
+    - stage: "advanced_boundaries"
+      families:
+        - "decision_close_contract"
+        - "runtime_handoff_contract"
+        - "health_recovery_contract"
+        - "coordination_eval_contract"
+      reason: "Decision close, runtime handoff, recovery, and evals depend on typed claims, completions, gates, requests, and effects."
+  rejected_strategies:
+    - id: "request_effect_first"
+      reason: "Requests/effects need typed claim/completion/gate authority to avoid becoming append-only notes and tool logs without governance."
+    - id: "eval_first"
+      reason: "Coordination evals should assess implemented contract behavior, not precede the authority contracts they evaluate."
+    - id: "runtime_handoff_first"
+      reason: "Runtime handoff requires request/effect/gate/authority refs to be typed enough to preserve context and control."
+rules:
+  - id: "claim_completion_gate_are_foundation"
+    rule: "Claim, completion, and gate contracts are implemented before request/effect side contracts."
+  - id: "side_contracts_have_fixture_tests"
+    rule: "Every current instance file for a typed side-contract family must deserialize through Rust tests."
+  - id: "schema_definition_files_are_not_instances"
+    rule: "*-contract-v0.yaml definition files remain contract definitions; instance tests target concrete family instances."
+evidence_basis:
+  direct_patterns:
+    - source_id: "cooperbench_2601_13295"
+      supports: "Team/coding agent work needs coordination and conflict handling beyond final task success."
+    - source_id: "coagent_2606_15376"
+      supports: "Concurrent agents need typed conflict and repair context rather than blind locks."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy checks at lifecycle boundaries need stable ids and traceable state."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness state and verification should be executable and inspectable."
+  inference_boundary: "The sources support typed ownership, coordination, validation, and lifecycle governance. Forge's exact order is inferred from OperationContract references and current side-contract dependencies."
+failure_modes_prevented:
+  - "requests are recorded without typed owner/completion/gate authority"
+  - "effects are validated before ownership and gate scope are known"
+  - "runtime handoff moves context before requests/effects/gates are typed"
+  - "evals claim readiness before underlying contract families compile"

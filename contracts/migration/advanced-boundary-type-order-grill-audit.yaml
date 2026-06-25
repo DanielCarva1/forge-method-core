@@ -1,0 +1,73 @@
+schema_version: "0.1"
+audit: "advanced_boundary_type_order_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "contracts/policies/rust-contract-type-order.yaml"
+  - "contracts/policies/request-effect-type-boundary.yaml"
+  - "contracts/policies/advanced-boundary-type-order.yaml"
+  - "contracts/decisions/decision-close-contract-v0.yaml"
+  - "contracts/runtimes/runtime-handoff-contract-v0.yaml"
+  - "contracts/recovery/health-recovery-contract-v0.yaml"
+  - "contracts/evals/coordination-eval-contract-v0.yaml"
+grill_question:
+  id: "advanced_boundary_type_order"
+  question: "After request/effect Rust types, which advanced boundary families should be typed next: decision close, runtime handoff, health recovery, or coordination eval?"
+  options:
+    - id: "decision_close_first"
+      summary: "Implement decision close first, then runtime handoff, health recovery, and coordination eval."
+      advantages:
+        - "Directly addresses host-agent drift where chat momentum closes phase, route, handoff, or release decisions."
+        - "Creates authority proof before cross-runtime handoff and recovery actions can be suggested."
+        - "Keeps evals behind implemented behavior."
+      disadvantages:
+        - "Runtime handoff and recovery validation wait one stage longer."
+    - id: "runtime_handoff_first"
+      summary: "Implement runtime handoff first because multi-host compatibility is a product goal."
+      advantages:
+        - "Moves toward Codex/Cursor/OpenCode/Claude compatibility quickly."
+      disadvantages:
+        - "Handoff suggestion is itself a decision boundary and can bypass authority without DecisionCloseContract."
+    - id: "coordination_eval_first"
+      summary: "Implement eval contracts first to measure everything else."
+      advantages:
+        - "Clarifies quality targets before more code."
+      disadvantages:
+        - "Risks measuring intended behavior rather than typed implemented boundaries."
+  selected_option: "decision_close_first"
+  decision: "Implement DecisionCloseContract first, followed by RuntimeHandoffContract, HealthRecoveryContract, and CoordinationEvalContract unless new evidence changes dependencies."
+  acceptance_criteria:
+    - "AdvancedBoundaryTypeOrder policy exists."
+    - "DecisionCloseContract fixtures deserialize through Rust/Serde."
+    - "Decision close validation enforces grill evidence for closed grill-required decisions."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-contracts/src/decision.rs"
+    - "crates/forge-core-validate/src/lib.rs"
+    - "crates/forge-core-contracts/tests/load_current_contracts.rs"
+    - "crates/forge-core-validate/tests/current_contracts.rs"
+  validation:
+    - "cargo test -p forge-core-contracts --test load_current_contracts deserializes_decision_close_instances"
+    - "cargo test -p forge-core-validate validates_current_decision_close_instances"
+evidence_basis:
+  direct_patterns:
+    - source_id: "langgraph_hitl"
+      supports: "High-risk decisions need durable checkpoint state."
+    - source_id: "mixed_initiative_aaai_2025"
+      supports: "Control handoff should be explicit in mixed-initiative collaboration."
+    - source_id: "trustworthy_lma_raci"
+      supports: "Responsibility/accountability boundaries should be explicit."
+    - source_id: "llm_as_code_2606_15874"
+      supports: "Control flow and stopping should be harness-owned."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness authority should be executable and verifiable."
+    - source_id: "agentscope_2402_14034"
+      supports: "Erratic LLM behavior requires explicit coordination mechanics."
+  inference_boundary: "The evidence supports explicit checkpoints and control handoff. Forge's exact order is inferred from local dependency and failure analysis."
+next_grill_question:
+  id: "runtime_handoff_type_boundary"
+  question: "How should RuntimeHandoffContract type runtime identity, capability evidence, payload, and double-gate state without becoming host-specific?"
+  recommended_answer: "runtime_identity_and_capability_evidence_are_typed_refs_payload_is_compact_context_handoff_remains_adapter_agnostic"

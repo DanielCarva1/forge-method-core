@@ -1,0 +1,85 @@
+schema_version: "0.1"
+audit: "rust_runtime_execution_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/rust-workspace-architecture.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "contracts/operations/operation-contract-v0.yaml"
+  - "docs/fixtures/operation-contract-v0/*.yaml"
+  - "crates/forge-core-contracts/src/operation.rs"
+  - "crates/forge-core-validate/src/lib.rs"
+grill_question:
+  id: "rust_runtime_execution_boundary"
+  question: "After validation and compatibility are stabilized, which Rust runtime execution boundary should be implemented next without recreating the old giant Python runtime?"
+  options:
+    - id: "operation_plan_first_no_mutating_executor"
+      summary: "Create forge-core-runtime with a typed plan_operation API that validates OperationContract and returns RuntimePlan, without executing commands or writing files."
+      advantages:
+        - "Turns guide/gate authority into typed runtime output."
+        - "Reduces host-agent drift with small blast radius."
+        - "Keeps command execution and file mutation behind later proven boundaries."
+        - "Works for every borrowed shell and future standalone app."
+      disadvantages:
+        - "Adapters still need to call and respect the plan."
+        - "Does not yet automate the full develop/review loop."
+    - id: "executor_first"
+      summary: "Let Rust execute command_refs and mutate artifacts immediately from OperationContract."
+      advantages:
+        - "More visible automation sooner."
+      disadvantages:
+        - "Expands side effects before governance is proven."
+        - "Raises safety and rollback requirements before runtime planning has tests."
+    - id: "monolithic_runtime_clone"
+      summary: "Port the old runtime flow into Rust in one broad pass."
+      advantages:
+        - "May seem faster on feature parity."
+      disadvantages:
+        - "Repeats the giant-runtime failure mode in a new language."
+        - "Makes correctness and adapter portability harder to prove."
+    - id: "daemon_first"
+      summary: "Start with a long-lived Rust daemon that owns coordination and execution."
+      advantages:
+        - "Potentially useful later for lanes, cache, heartbeat, and performance."
+      disadvantages:
+        - "Premature before contracts, store reads, and operation planning are stable."
+        - "Adds installation and lifecycle complexity across Codex/Cursor/opencode/Claude/pi.dev."
+  selected_option: "operation_plan_first_no_mutating_executor"
+  decision: "Implement a narrow forge-core-runtime operation planner now. It validates OperationContractDocument, classifies status, and returns typed action guidance. It does not execute commands, write files, run LLM calls, start a daemon, or encode host-specific behavior."
+evidence_basis:
+  direct_patterns:
+    - source_id: "natural_language_agent_harnesses_2603_25723"
+      supports: "Explicit harness contracts and lightweight adapters fit Forge's borrowed-shell model."
+    - source_id: "runtime_governance_paths_2603_16586"
+      supports: "Runtime policy over execution paths is stronger than prompt-only control."
+    - source_id: "runtime_governance_embodied_2604_07833"
+      supports: "Dedicated governance layer should mediate execution separately from agent cognition."
+    - source_id: "agentic_harness_engineering_2604_25850"
+      supports: "Harness edits need observable components and outcome evidence."
+    - source_id: "storm_state_management_2605_20563"
+      supports: "State-mediated coordination can outperform isolated worktrees for multi-agent code work."
+    - source_id: "tool_use_orchestration_survey_2603_22862"
+      supports: "Long-horizon tool orchestration needs state, recovery, safety, cost, and verifiability."
+  non_western_coverage:
+    included_sources:
+      - "natural_language_agent_harnesses_2603_25723"
+      - "agentic_harness_engineering_2604_25850"
+      - "storm_state_management_2605_20563"
+      - "tool_use_orchestration_survey_2603_22862"
+    note: "This boundary intentionally includes China-origin work because agent harness, multi-agent state, and tool orchestration research is active there."
+  inference_boundary: "The evidence supports explicit contracts, runtime governance, and state mediation. The exact RuntimePlan API is a Forge-specific design choice constrained by existing Rust types."
+implementation_plan:
+  - "Add forge-core-runtime crate to the Cargo workspace."
+  - "Expose RuntimePlan and RuntimePlanStatus."
+  - "Run forge-core-validate before planning."
+  - "Map fixtures to statuses with Rust tests."
+  - "Keep execution and mutation out of this boundary."
+acceptance:
+  validation:
+    - "cargo test -p forge-core-runtime"
+    - "cargo test --workspace"
+    - "cargo clippy --workspace -- -D warnings"
+policy_ref: "contracts/policies/rust-runtime-execution-boundary.yaml"
+next_grill_question:
+  id: "runtime_store_state_read_boundary"
+  question: "After OperationContract planning is typed, which store-backed state reads should feed guide/gate/doctor/oracle without giving the runtime broad mutation authority?"

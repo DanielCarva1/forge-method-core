@@ -1,0 +1,72 @@
+schema_version: "0.1"
+audit: "thin_cli_validation_surface_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/rust-workspace-architecture.yaml"
+  - "contracts/policies/filesystem-reference-index-adapter-boundary.yaml"
+  - "contracts/policies/validator-library-migration-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "thin_cli_validation_surface_boundary"
+  question: "How should the Rust CLI consume store-built ReferenceIndex and forge-core-validate reports while replacing or wrapping the legacy validator without widening scope?"
+  options:
+    - id: "new_forge_core_cli_with_compat_validator_left_temporary"
+      summary: "Create forge-core-cli with validate command and leave forge-contract-validator as temporary compatibility until parity is audited."
+      advantages:
+        - "Starts the universal CLI surface without editing the legacy string scanner further."
+        - "Uses the new store and validation crates directly."
+        - "Allows agents to consume structured JSON immediately."
+        - "Avoids claiming full legacy parity before auditing remaining checks."
+      disadvantages:
+        - "Two validation binaries exist temporarily."
+        - "Requires a follow-up parity/retirement boundary."
+    - id: "rewrite_forge_contract_validator_in_place"
+      summary: "Turn the existing forge-contract-validator binary into the new CLI."
+      advantages:
+        - "Only one binary name exists."
+      disadvantages:
+        - "Risky because the legacy scanner still carries checks not yet mapped to typed reports."
+        - "Makes rollback and parity comparison harder."
+    - id: "wait_for_runtime_before_cli"
+      summary: "Delay CLI until runtime/guide/gate/doctor are implemented."
+      advantages:
+        - "Avoids an early CLI surface."
+      disadvantages:
+        - "Blocks real agent automation from consuming current typed contracts."
+        - "Leaves validation as library-only plus legacy binary."
+  selected_option: "new_forge_core_cli_with_compat_validator_left_temporary"
+  decision: "Create forge-core-cli now with a validate command that builds ReferenceIndex through forge-core-store and emits structured typed diagnostics from forge-core-validate. Keep forge-contract-validator as a temporary compatibility binary until a parity/retirement audit decides wrapping or deletion."
+acceptance_criteria:
+  - "forge-core-cli is a workspace crate."
+  - "forge-core validate --root <path> --json returns structured JSON."
+  - "The CLI exits 0 on current repo validation pass."
+  - "The CLI uses store-built ReferenceIndex for cross-file validation."
+  - "Tests cover pass summary and JSON shape."
+  - "No Python is used."
+  - "No Markdown is created or edited."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-cli/src/lib.rs"
+    - "crates/forge-core-cli/src/main.rs"
+    - "crates/forge-core-cli/tests/validate.rs"
+  policy_refs:
+    - "contracts/policies/thin-cli-validation-surface-boundary.yaml"
+  validation:
+    - "cargo test -p forge-core-cli"
+    - "cargo run -p forge-core-cli -- validate --root . --json"
+evidence_basis:
+  direct_patterns:
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Validation should be executable and inspectable as harness behavior."
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Structured diagnostics are more reliable agent interfaces than free-form output."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy enforcement should emit auditable structured results."
+    - source_id: "opendev_terminal_agents_2603_05344"
+      supports: "Terminal agent tooling benefits from structured feedback and strict controls."
+  inference_boundary: "The sources support structured CLI/tool output and separated authority. Full parity with forge-contract-validator remains a follow-up audit, not an implied result of this boundary."
+next_grill_question:
+  id: "generic_yaml_evidence_ref_validation_boundary"
+  question: "How should recursive YAML parse coverage and source_id reference validation move from forge-contract-validator into reusable Rust validation without turning forge-core-validate into a filesystem scanner?"
+  recommended_answer: "store_collects_yaml_documents_validate_runs_generic_evidence_ref_rules_over_adapter_supplied_documents"

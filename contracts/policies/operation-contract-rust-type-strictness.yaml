@@ -1,0 +1,56 @@
+schema_version: "0.1"
+policy: "operation_contract_rust_type_strictness"
+status: "accepted"
+purpose: "Define how strict the first Rust/Serde OperationContract types must be while side-contract families are still being migrated into typed Rust modules."
+decision:
+  selected_strategy: "strict_authority_shape_with_typed_refs"
+  strict_now:
+    - "Closed enums for autonomy.mode, recommendation.next_actor, recommendation.host_action, authority.mutation_policy, authority.side_effect_policy, caller_role, execution_policy.mode, retry failure action, human.input_requirement, prompt.mode, gate status, gate scope, operation surface, and known Forge operations."
+    - "deny_unknown_fields on authority-bearing OperationContract structs."
+    - "Typed repo paths and stable ids for side-contract refs, commands, actions, stop conditions, authorities, gates, and load sets."
+    - "All current operation fixtures must deserialize through Rust/Serde."
+  transitional_until_side_family_typed:
+    - "Authority evidence kind remains StableId until the evidence/ref taxonomy becomes a typed family."
+    - "Side contract blocks are typed as explicit ref wrappers until each side family has Rust structs."
+    - "Phase, workflow, action, tone, branch, and stop condition values remain StableId because their canonical enums belong to future workflow/state-machine contracts."
+  rejected_strategies:
+    - id: "loose_value_map"
+      reason: "Would reproduce YAML/string drift inside Rust and fail to constrain host-agent control."
+    - id: "full_side_contract_types_before_operation"
+      reason: "Would delay the central authority response and conflict with the accepted type-order policy."
+    - id: "exhaustive_workflow_enums_now"
+      reason: "Workflow/state-machine contracts are not typed yet; premature enums would either be incomplete or hard-coded from fixtures."
+rules:
+  - id: "operation_fixtures_are_type_tests"
+    rule: "Every file under docs/fixtures/operation-contract-v0 must deserialize into OperationContractDocument."
+  - id: "closed_enums_for_authority"
+    rule: "Authority, autonomy, actor, action surface, execution, retry, human checkpoint, and gate status fields use closed Rust enums."
+  - id: "stable_id_for_unowned_taxonomies"
+    rule: "Fields owned by not-yet-typed workflow/state/evidence taxonomies use StableId instead of loose String."
+  - id: "side_refs_are_explicit"
+    rule: "Request, runtime handoff, decision close, command, effect, claim, completion, and gate refs remain explicit typed refs and cannot be embedded as free-form text."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-contracts/src/operation.rs"
+    - "crates/forge-core-contracts/src/operation_reference.rs"
+    - "crates/forge-core-contracts/tests/load_current_contracts.rs"
+  validation:
+    - "cargo test --workspace"
+evidence_basis:
+  direct_patterns:
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Schema-backed boundaries help govern interfaces, but require diagnostics and semantic validation."
+    - source_id: "llm_as_code_2606_15874"
+      supports: "Control flow such as branching, sequencing, and stopping should move into executable harness logic."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness infrastructure should be executable, inspectable, stateful, and verification-oriented."
+    - source_id: "rust_api_guidelines_official"
+      supports: "Rust APIs should encode domain meaning through type safety and custom types."
+    - source_id: "mixed_initiative_aaai_2025"
+      supports: "Human-agent control handoff and initiative boundaries should be explicit."
+  inference_boundary: "The sources support strict typed authority boundaries. Forge's exact transitional split between closed enums and StableId refs follows the current locked inventory and type-order policy."
+failure_modes_prevented:
+  - "host agent invents a new operation mode that Rust accepts as a string"
+  - "side contract refs hide inside prose"
+  - "operation fixtures pass YAML parsing but fail runtime-owned authority shape"
+  - "workflow enums are frozen before workflow/state-machine contracts exist"

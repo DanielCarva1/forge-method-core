@@ -1,0 +1,74 @@
+schema_version: "0.1"
+audit: "runtime_effect_staging_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/runtime-store-state-read-boundary.yaml"
+  - "contracts/policies/request-effect-type-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "crates/forge-core-runtime/src/lib.rs"
+  - "crates/forge-core-contracts/src/command.rs"
+  - "crates/forge-core-contracts/src/tool_effect.rs"
+grill_question:
+  id: "runtime_effect_staging_boundary"
+  question: "After read snapshots block missing authority refs, how should Forge stage command/effect execution without committing irreversible state directly?"
+  options:
+    - id: "typed_staging_plan_without_commit"
+      summary: "Create RuntimeEffectStagingPlan from a ready RuntimePlan, carrying command/effect refs and forbidding commit."
+      advantages:
+        - "Adds a real runtime step without executing anything."
+        - "Creates an audit point between planning and effects."
+        - "Prevents host-agent prose from becoming execution authority."
+        - "Keeps command runners and effect commit as separate future boundaries."
+      disadvantages:
+        - "Does not yet execute read-only commands."
+        - "Does not inspect full ToolEffectContract bodies at runtime."
+        - "Requires downstream adapters to respect commit_allowed."
+    - id: "read_only_command_runner_now"
+      summary: "Immediately execute read-only commands from CommandContract."
+      advantages:
+        - "Would make validation loops more usable sooner."
+      disadvantages:
+        - "Requires timeout/env/platform/output/audit semantics before they are documented."
+        - "Blurs staging with execution."
+    - id: "full_effect_transaction_now"
+      summary: "Load ToolEffectContract bodies, stage writes, run conflict checks, commit, and rollback in one step."
+      advantages:
+        - "Closer to final runtime."
+      disadvantages:
+        - "Too much surface in one boundary; would combine state freshness, effects, inverse, command runner, and commit."
+    - id: "host_adapter_executes_refs"
+      summary: "Let Codex/Cursor/opencode adapters execute staged refs directly."
+      advantages:
+        - "Lowest Rust work."
+      disadvantages:
+        - "Recreates host-agent drift and makes Forge runtime advisory."
+  selected_option: "typed_staging_plan_without_commit"
+  decision: "Implement stage_operation_effects as a pure Rust runtime function. It accepts RuntimePlan, returns RuntimeEffectStagingPlan, stages command/effect refs only when the plan is ready, and always sets commit_allowed to false."
+evidence_basis:
+  direct_patterns:
+    - source_id: "cordon_semantic_transactions_2606_17573"
+      supports: "Task-level runtime boundaries should stage and validate effects before irreversible commit."
+    - source_id: "runtime_governance_paths_2603_16586"
+      supports: "Execution-path governance should evaluate proposed actions before allowing them."
+    - source_id: "runtime_enforcement_2503_18666"
+      supports: "Runtime enforcement can stop unsafe executions before they occur."
+    - source_id: "solver_policy_tool_agents_2603_20449"
+      supports: "Policy constraints should be checked before tool execution."
+    - source_id: "tool_use_orchestration_survey_2603_22862"
+      supports: "Long-horizon tool orchestration needs intermediate state, recovery, safety, cost, and verifiability."
+  inference_boundary: "The papers support a staged pre-execution boundary. Forge's local decision is to stage refs only first, leaving command runners and effect transactions for later boundaries."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-runtime/src/lib.rs"
+    - "crates/forge-core-runtime/tests/operation_plan.rs"
+  validation:
+    - "cargo test -p forge-core-runtime"
+acceptance:
+  - "Ready mechanical story produces staged command/effect refs and commit_allowed false."
+  - "Non-ready facilitation plan is not stageable."
+  - "Read/write conflict notification stages effect refs only."
+policy_ref: "contracts/policies/runtime-effect-staging-boundary.yaml"
+next_grill_question:
+  id: "runtime_command_runner_boundary"
+  question: "After command/effect refs can be staged without commit, how should Forge execute safe read-only commands with timeout, platform, env, output, and audit semantics?"

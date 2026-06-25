@@ -1,0 +1,97 @@
+schema_version: "0.1"
+contract: "decision_close_contract"
+status: "draft"
+purpose: "Require explicit review evidence before Forge closes direction, phase, handoff, spec-lock, route-change, or release-readiness decisions."
+design_rules:
+  - id: "close_requires_grill"
+    rule: "Decision-closing mutations require grill evidence unless the decision kind is explicitly exempted by a future policy."
+  - id: "chat_is_not_close_evidence"
+    rule: "Host-agent confidence or conversational momentum is not sufficient authority to close a decision."
+  - id: "close_is_reopenable"
+    rule: "Closed decisions must define how they can be challenged or reopened."
+  - id: "mechanical_work_unblocked"
+    rule: "This contract gates decision close, not ordinary mechanical story execution already authorized by scope, claims, gates, and effects."
+rust_compatibility:
+  serialization: "serde"
+  id_policy: "stable_ascii_ids"
+  timestamp_policy: "rfc3339_utc"
+  enum_policy: "closed_for_v0_with_unknown_rejected"
+  nullable_policy: "explicit_null_for_optional_references"
+evidence_basis:
+  direct_patterns:
+    - source_id: "langgraph_hitl"
+      supports: "Durable pause/resume and explicit approve/edit/reject decisions around sensitive actions."
+    - source_id: "mixed_initiative_aaai_2025"
+      supports: "Appropriate reliance and dynamic control handoff in human-agent collaboration."
+    - source_id: "trustworthy_lma_raci"
+      supports: "Explicit accountability and task responsibility boundaries in LLM-based multi-agent SE."
+  runtime_patterns:
+    - source_id: "llm_as_code_2606_15874"
+      supports: "Control flow and stopping policy should be runtime-owned, not inferred by a probabilistic model."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Agent harnesses should be executable, verifiable, stateful, and evaluated beyond final task success."
+  coordination_context:
+    - source_id: "agentscope_2402_14034"
+      supports: "Multi-agent systems need explicit coordination mechanisms because LLM behavior is erratic."
+    - source_id: "fudan_agent4se_survey"
+      supports: "Human interaction and multi-agent synergy are core SE-agent challenges, not UI polish."
+  anti_patterns:
+    - "host-agent chat confidence treated as route authority"
+    - "phase/spec/release state closed from stale next_action"
+    - "human checkpoint omitted because mechanical work was going well"
+  inference_boundary: "No cited source says Forge must run a command named grill; Forge's product-specific decision is to represent high-risk decision close review as grill evidence."
+enums:
+  decision_kind:
+    - "phase_transition"
+    - "handoff"
+    - "spec_lock"
+    - "route_change"
+    - "release_readiness"
+  status:
+    - "open"
+    - "blocked"
+    - "closed"
+    - "reopened"
+  reopen_policy:
+    - "human_correct_course"
+    - "grill_required"
+    - "driver_review"
+    - "release_review"
+  evidence_kind:
+    - "grill_result"
+    - "human_approval"
+    - "gate_result"
+    - "state_rule"
+    - "handoff_request"
+required_fields:
+  - "id"
+  - "decision.kind"
+  - "decision.status"
+  - "requires_grill_evidence"
+  - "grill_contract_ref"
+  - "authority_evidence"
+  - "closed_by"
+  - "closed_at"
+  - "reopen_policy"
+field_contract:
+  id: "Stable decision close id."
+  decision:
+    kind: "Closed decision_kind enum."
+    status: "Closed status enum."
+    target_phase: "Optional phase for phase_transition decisions."
+    target_ref: "Stable artifact/state/release/handoff reference."
+  requires_grill_evidence: "Boolean. True for all v0 decision close kinds."
+  grill_contract_ref: "GateContract or future GrillContract reference proving review happened."
+  authority_evidence:
+    item:
+      kind: "Closed evidence_kind enum."
+      ref: "Stable evidence reference."
+  closed_by: "Agent/runtime/human id that closed or attempted to close."
+  closed_at: "RFC3339 UTC timestamp or null when blocked."
+  reopen_policy: "Closed reopen_policy enum."
+  blocked_reason: "Optional stable reason when status is blocked."
+failure_modes_prevented:
+  - "agent advances phase from stale next_action without review"
+  - "agent locks spec because the chat feels done"
+  - "agent records handoff as final without challenge evidence"
+  - "agent marks release ready from local validation"

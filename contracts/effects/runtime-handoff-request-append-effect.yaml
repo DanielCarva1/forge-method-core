@@ -1,0 +1,46 @@
+schema_version: "0.1"
+tool_effect_contract:
+  id: "effect.fixture.runtime_handoff_request_append"
+  contract_ref: "contracts/effects/tool-effect-contract-v0.yaml"
+  effect_kind: "request_append"
+  operation_ref: "op_fixture_runtime_handoff_suggestible"
+  actor:
+    agent_id: "codex-main"
+    role: "driver"
+  read_set:
+    - target_kind: "file_path"
+      ref: "contracts/runtimes/cursor-browser-validation-runtime.yaml"
+      expected_hash: "sha256:fixture-runtime-handoff"
+      expected_version: 64
+      required_for_plan: true
+  write_set:
+    - target_kind: "request_stream"
+      ref: ".forge-method/requests.ndjson"
+      access_mode: "append"
+      expected_hash: null
+      expected_version: null
+      destructive: false
+  conflict_detection:
+    check_against: "latest_projection"
+    granularity: "stream"
+    conflict_codes:
+      - "expected_state_version_mismatch"
+      - "write_target_claimed"
+    policy: "driver_review"
+  notification:
+    required: true
+    recipients:
+      - "driver"
+    request_contract_ref: "contracts/requests/runtime-handoff-request.yaml"
+  repair:
+    strategy: "record_request"
+    automatic_repair_allowed: true
+    inverse_operation_ref: null
+    stop_if_inverse_missing: false
+    inverse:
+      kind: "none"
+      source: "unavailable"
+      ref: null
+      input_mapping_refs: []
+      validation_gate_refs: []
+      review_required: false

@@ -1,0 +1,63 @@
+schema_version: "0.1"
+audit: "sigstore_dsse_in_toto_subject_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/sigstore-bundle-subject-binding-boundary.yaml"
+  - "contracts/policies/sigstore-fulcio-certificate-identity-boundary.yaml"
+  - "contracts/policies/sigstore-rekor-backend-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "sigstore_dsse_in_toto_subject_boundary"
+  question: "How should Forge verify DSSE Sigstore bundles whose payload is an in-toto statement, including payload type, single-signature constraint, subject digest matching, and certificate identity?"
+  options:
+    - id: "extend_message_signature_verifier"
+      summary: "Add DSSE branches to the existing messageSignature verifier."
+      advantages:
+        - "Less code surface at first."
+      disadvantages:
+        - "Collapses direct digest signatures and typed attestation payload semantics."
+        - "Makes failure output harder for host agents to route."
+    - id: "full_sigstore_bundle_verifier"
+      summary: "Attempt all Sigstore bundle checks in one verifier."
+      advantages:
+        - "Looks product-complete."
+      disadvantages:
+        - "Would overclaim TSA, CT, revocation, TUF freshness, threshold, and install authority before separate tests exist."
+    - id: "separate_dsse_in_toto_subject_verifier"
+      summary: "Create a DSSE-specific read-only verifier that composes existing Fulcio/Rekor checks."
+      advantages:
+        - "Matches protocol semantics and existing Forge boundary style."
+        - "Keeps Message Signature, DSSE subject matching, temporal evidence, and install authority isolated."
+        - "Produces actionable typed failure reasons for host agents."
+      disadvantages:
+        - "Adds another host-adapter command."
+        - "Still leaves TSA/CT/revocation/TUF freshness as explicit future work."
+  selected_option: "separate_dsse_in_toto_subject_verifier"
+  decision: "Forge adds host-adapter-verify-sigstore-dsse-in-toto-subject as a read-only verifier for Sigstore v0.3 DSSE envelopes carrying in-toto statements. It checks payloadType, exactly one signature, DSSE PAE signature, in-toto statement subject digest, certificate rawBytes, Fulcio identity at Rekor integrated time, Rekor inclusion, and supported Rekor DSSE body binding."
+acceptance_criteria:
+  - "Policy contract exists."
+  - "Host adapter manifest exposes the DSSE verifier as read-only/no workflow authority."
+  - "CLI command returns typed JSON and non-zero exit on failed verification."
+  - "Rust tests cover pass, payloadType mismatch, subject mismatch, multiple signatures, Rekor body mismatch, and binary JSON output."
+  - "No Python is introduced."
+  - "No Markdown authority is introduced."
+evidence_basis:
+  direct_patterns:
+    - source_id: "sigstore_bundle_format_docs"
+      supports: "Bundle content can be Message Signature or DSSE envelope."
+    - source_id: "dsse_protocol_spec"
+      supports: "DSSE verification signs PAE(payloadType, payload)."
+    - source_id: "intoto_statement_subject_spec"
+      supports: "Statement subject digest binds attestation to artifact."
+    - source_id: "sigstore_go_artifact_policy"
+      supports: "Artifact digest and certificate identity policies are separate."
+    - source_id: "fulcio_spec_oidc_certificate_binding"
+      supports: "Fulcio certificate binds identity and public key."
+    - source_id: "sigstore_rekor_docs"
+      supports: "Rekor verification is transparency evidence, not install authority."
+  inference_boundary: "This closes DSSE/in-toto subject binding only. Temporal authority, revocation, TUF freshness, CT, and release install/update authority remain separate boundaries."
+next_grill_question:
+  id: "sigstore_timestamp_authority_boundary"
+  question: "How should Forge verify Sigstore timestamp authority evidence, certificate validity windows, CT SCTs, revocation, and TUF freshness without overclaiming from Rekor inclusion alone?"
+  recommended_answer: "Create a timestamp/trust freshness boundary that verifies RFC3161/TSA evidence and certificate-validity timing separately from Rekor inclusion, then layer CT, revocation, and TUF freshness as separate typed checks."

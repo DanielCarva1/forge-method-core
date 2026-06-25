@@ -1,0 +1,68 @@
+schema_version: "0.1"
+audit: "operation_contract_rust_type_strictness_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/rust-contract-type-order.yaml"
+  - "contracts/policies/schema-generation-authority.yaml"
+  - "contracts/operations/operation-contract-v0.yaml"
+  - "contracts/operations/operation-reference-policy-v0.yaml"
+  - "docs/fixtures/operation-contract-v0/*.yaml"
+grill_question:
+  id: "operation_contract_rust_type_strictness"
+  question: "How strict should the first OperationContract Rust types be while side-contract families are still being typed?"
+  options:
+    - id: "loose_value_map"
+      summary: "Represent OperationContract mostly as maps/strings until every side family is typed."
+      advantages:
+        - "Fastest to compile."
+        - "Tolerates fixture drift."
+      disadvantages:
+        - "Does not materially improve over loose YAML."
+        - "Lets host-agent authority fields drift."
+    - id: "full_side_contract_types_before_operation"
+      summary: "Delay OperationContract typing until every referenced side contract family has Rust types."
+      advantages:
+        - "Can make refs deeply typed from day one."
+      disadvantages:
+        - "Blocks the central runtime authority response."
+        - "Creates broad migration before proving operation fixture shape."
+    - id: "strict_authority_shape_with_typed_refs"
+      summary: "Use closed enums and deny_unknown_fields for operation authority/control, while keeping side families as explicit typed refs until their stage."
+      advantages:
+        - "Constrains the fields that caused real host-agent drift."
+        - "Lets all current operation fixtures become Rust tests now."
+        - "Keeps side-contract typing in the accepted dependency order."
+      disadvantages:
+        - "Some refs remain StableId/RepoPath until the side family is implemented."
+        - "Future workflow/state-machine enums still need dedicated contracts."
+  selected_option: "strict_authority_shape_with_typed_refs"
+  decision: "Implement OperationContract and OperationReferencePolicy with strict authority/control enums, deny_unknown_fields, typed path/id refs, and optional side blocks until each side family is typed."
+  implementation_evidence:
+    crate_refs:
+      - "crates/forge-core-contracts/src/operation.rs"
+      - "crates/forge-core-contracts/src/operation_reference.rs"
+      - "crates/forge-core-contracts/tests/load_current_contracts.rs"
+    validation_commands:
+      - "cargo test --workspace"
+  acceptance_criteria:
+    - "All 16 current operation fixtures deserialize into OperationContractDocument."
+    - "OperationReferencePolicy deserializes into typed Rust structs."
+    - "Authority/control fields are closed enums, not loose strings."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+next_grill_question:
+  id: "validator_library_migration_boundary"
+  question: "Which parts of the existing forge-contract-validator binary should move into forge-core-validate first now that OperationContract types compile?"
+  recommended_answer: "move diagnostics_and_evidence_inventory_operation_command_validation_into_library_before_side_contract_families"
+evidence_basis:
+  direct_patterns:
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Schema-backed interfaces need structured validation and diagnostics."
+    - source_id: "llm_as_code_2606_15874"
+      supports: "Control flow should be executable harness behavior instead of prompt convention."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness state and verification should be inspectable and executable."
+    - source_id: "rust_api_guidelines_official"
+      supports: "Rust APIs should use domain types and type safety."
+  inference_boundary: "This closes OperationContract type strictness. It does not yet migrate validator logic into a library crate."

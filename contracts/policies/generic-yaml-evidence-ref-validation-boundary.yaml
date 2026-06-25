@@ -1,0 +1,65 @@
+schema_version: "0.1"
+policy: "generic_yaml_evidence_ref_validation_boundary"
+status: "accepted"
+purpose: "Move recursive YAML parse coverage and source_id reference validation out of the legacy validator without putting filesystem traversal into forge-core-validate."
+decision:
+  selected_strategy: "store_collects_yaml_documents_validate_runs_generic_evidence_ref_rules"
+  store_responsibility:
+    - "Collect repo YAML documents from contracts and operation fixtures."
+    - "Parse YAML and report read/parse diagnostics as data."
+    - "Return parsed documents with repo-relative paths."
+  validation_responsibility:
+    - "Accept parsed YAML documents as inputs."
+    - "Recursively inspect source_id keys."
+    - "Validate source ids against FieldEvidenceRegistry."
+    - "Return structured ValidationReport diagnostics."
+  cli_responsibility:
+    - "Call store document collection."
+    - "Render parse diagnostics and source_id diagnostics in the same JSON summary."
+  rejected_strategies:
+    - id: "validate_walks_filesystem"
+      reason: "Would violate the pure validation boundary."
+    - id: "store_validates_source_ids"
+      reason: "Would put policy semantics into storage."
+    - id: "leave_legacy_generic_checks_only"
+      reason: "Would preserve duplicated validation authority."
+rules:
+  - id: "documents_are_adapter_inputs"
+    rule: "Generic YAML validation operates on parsed documents supplied by adapters or store, never by walking the filesystem from forge-core-validate."
+  - id: "parse_errors_are_diagnostics"
+    rule: "YAML read/parse failures must be represented as structured diagnostics and surfaced by the CLI."
+  - id: "source_id_refs_are_recursive"
+    rule: "Any key named source_id in collected YAML documents must be checked against the field evidence registry."
+  - id: "inventory_evidence_refs_remain_typed"
+    rule: "Inventory supporting_research_refs and family evidence_refs remain covered by ContractFamilyInventory validation; generic source_id scanning complements it."
+implementation_target:
+  crate_refs:
+    - "crates/forge-core-validate/src/lib.rs"
+    - "crates/forge-core-store/src/lib.rs"
+    - "crates/forge-core-cli/src/lib.rs"
+  acceptance:
+    - "forge-core-store collects parsed YAML documents from contracts and operation fixtures."
+    - "forge-core-validate validates recursive source_id refs over adapter-supplied documents."
+    - "forge-core-cli includes YAML parse diagnostics and source_id diagnostics in validate output."
+    - "Rust tests cover current repo pass and a synthetic unknown source_id failure."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+evidence_basis:
+  direct_patterns:
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy checks should be auditable and use stable ids."
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Structured diagnostics are required beyond schema shape."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness verification should be executable and inspectable."
+    - source_id: "utboost_2025_acl"
+      supports: "Validation coverage must include tests that expose missing or weak checks."
+  inference_boundary: "The evidence supports structured validation and explicit coverage. The store/validate split follows Forge's accepted architecture and local parity audit."
+failure_modes_prevented:
+  - "policy YAML silently stops parsing after legacy validator retirement"
+  - "unknown evidence source ids survive in migration/policy contracts"
+  - "forge-core-validate regains hidden filesystem traversal"
+  - "CLI JSON omits generic document diagnostics"
+next_boundary:
+  id: "legacy_validator_parity_matrix_boundary"
+  question: "After generic YAML and source_id checks move, what exact remaining legacy checks require parity tests before forge-contract-validator can wrap forge-core-cli?"

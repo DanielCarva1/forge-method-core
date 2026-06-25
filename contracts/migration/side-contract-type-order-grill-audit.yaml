@@ -1,0 +1,55 @@
+schema_version: "0.1"
+audit: "side_contract_type_order_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/rust-contract-type-order.yaml"
+  - "contracts/policies/operation-contract-rust-type-strictness.yaml"
+  - "contracts/policies/validator-library-migration-boundary.yaml"
+  - "contracts/inventory/v0-contract-family-lock.yaml"
+grill_question:
+  id: "side_contract_type_order_after_operation"
+  question: "After operation types and validation library exist, which side-contract family should be typed next?"
+  options:
+    - id: "claim_completion_gate_then_request_effect"
+      summary: "Implement claim, completion, and gate first; then request/effect; then advanced boundaries."
+      advantages:
+        - "Gives runtime autonomy ownership, completion, and validation authority before mutating coordination."
+        - "Matches OperationContract dependency order."
+      disadvantages:
+        - "Request/effect migration waits one stage longer."
+    - id: "request_effect_first"
+      summary: "Implement request/effect first because multi-agent and tool safety are high-risk."
+      advantages:
+        - "Targets visible multi-agent/tool failures quickly."
+      disadvantages:
+        - "Requests/effects depend on typed claim/completion/gate authority for correct governance."
+    - id: "advanced_boundaries_first"
+      summary: "Implement decision/runtime/recovery/eval contracts first."
+      advantages:
+        - "Targets cross-runtime and audit concerns."
+      disadvantages:
+        - "Depends on lower-level side contracts that are not typed yet."
+  selected_option: "claim_completion_gate_then_request_effect"
+  decision: "Implement claim, completion, and gate Rust types first, then request/effect, then decision/runtime/recovery/eval."
+  acceptance_criteria:
+    - "SideContractTypeOrder policy exists."
+    - "Claim, completion, and gate instance files deserialize through Rust tests."
+    - "Validator library gains basic semantic checks for claim/completion/gate instances."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+next_grill_question:
+  id: "request_effect_type_boundary"
+  question: "How should RequestContract and ToolEffectContract be typed so coordination messages and mutating side effects share refs without becoming one overloaded contract?"
+  recommended_answer: "request_is_durable_coordination_message_effect_is_tool_side_effect_with_explicit_links_between_them"
+evidence_basis:
+  direct_patterns:
+    - source_id: "cooperbench_2601_13295"
+      supports: "Collaborative coding needs explicit coordination and conflict handling."
+    - source_id: "coagent_2606_15376"
+      supports: "Concurrent agent work needs typed conflict and repair context."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Lifecycle policy checks need stable ids and traceable state."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness validation should be executable and inspectable."
+  inference_boundary: "This closes side-contract implementation order. It does not yet type request/effect contracts."

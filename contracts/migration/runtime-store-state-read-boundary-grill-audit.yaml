@@ -1,0 +1,76 @@
+schema_version: "0.1"
+audit: "runtime_store_state_read_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/rust-runtime-execution-boundary.yaml"
+  - "contracts/policies/typed-cross-file-reference-validation-boundary.yaml"
+  - "contracts/policies/filesystem-reference-index-adapter-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "crates/forge-core-runtime/src/lib.rs"
+  - "crates/forge-core-store/src/lib.rs"
+  - "crates/forge-core-validate/src/lib.rs"
+grill_question:
+  id: "runtime_store_state_read_boundary"
+  question: "After OperationContract planning is typed, which store-backed state reads should feed guide/gate/doctor/oracle without giving the runtime broad mutation authority?"
+  options:
+    - id: "adapter_built_read_snapshot"
+      summary: "Store/adapters build a read-only ReferenceIndex snapshot; runtime consumes it to validate operation refs before readiness."
+      advantages:
+        - "Keeps filesystem discovery out of runtime."
+        - "Uses current Rust ReferenceIndex and cross-reference validators."
+        - "Blocks missing authority refs before host-agent action."
+        - "Works across borrowed shells and future standalone app."
+      disadvantages:
+        - "Only proves existence/kind, not freshness or semantic completion."
+        - "Adapters must pass the snapshot explicitly."
+    - id: "runtime_reads_store_directly"
+      summary: "Runtime depends on store and builds ReferenceIndex from root paths."
+      advantages:
+        - "One call could plan from a repo root."
+      disadvantages:
+        - "Couples runtime decisions to filesystem traversal too early."
+        - "Makes future app/daemon/MCP projection harder to keep adapter-specific."
+    - id: "store_decides_runtime_plan"
+      summary: "Store reads state and returns plan status."
+      advantages:
+        - "Centralizes reads and decisions."
+      disadvantages:
+        - "Violates store-is-projection-not-policy and muddies authority boundaries."
+    - id: "full_state_parser_now"
+      summary: "Parse state.yaml, ledger, claims, gates, completion, and effects into a complete runtime state model immediately."
+      advantages:
+        - "Closer to final runtime semantics."
+      disadvantages:
+        - "Too broad for the next safe step; freshness/commit semantics need separate effect-staging design."
+  selected_option: "adapter_built_read_snapshot"
+  decision: "Implement RuntimeReadSnapshot as a read-only ReferenceIndex view supplied by store/adapters. plan_operation_with_snapshot validates operation cross refs and blocks reference errors before readiness. Runtime still does not execute commands, write files, traverse the filesystem, or decide store projections."
+evidence_basis:
+  direct_patterns:
+    - source_id: "storm_state_management_2605_20563"
+      supports: "Explicit state mediation is stronger than isolated worktree/post-hoc merge coordination."
+    - source_id: "runtime_governance_paths_2603_16586"
+      supports: "Proposed next action should be evaluated against path and shared state."
+    - source_id: "cordon_semantic_transactions_2606_17573"
+      supports: "Planning/staging boundaries should precede irreversible effect commits."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy decisions and traces should use stable ids and lifecycle boundaries."
+  non_western_coverage:
+    included_sources:
+      - "storm_state_management_2605_20563"
+    note: "STORM is the most directly relevant China-origin source for this boundary because it empirically evaluates explicit state management for multi-agent code work."
+  inference_boundary: "The evidence supports explicit state checks and separation from irreversible effects. Reusing ReferenceIndex as RuntimeReadSnapshot is a Forge-local step because ReferenceIndex already exists and passes Rust validation."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-runtime/src/lib.rs"
+    - "crates/forge-core-runtime/tests/operation_plan.rs"
+  validation:
+    - "cargo test -p forge-core-runtime"
+acceptance:
+  - "A valid store-built snapshot preserves ready mechanical plans."
+  - "An empty snapshot blocks mechanical plans through reference errors."
+  - "Runtime production code still does not depend on forge-core-store."
+policy_ref: "contracts/policies/runtime-store-state-read-boundary.yaml"
+next_grill_question:
+  id: "runtime_effect_staging_boundary"
+  question: "After read snapshots block missing authority refs, how should Forge stage command/effect execution without committing irreversible state directly?"

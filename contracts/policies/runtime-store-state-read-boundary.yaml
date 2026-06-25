@@ -1,0 +1,106 @@
+schema_version: "0.1"
+policy: "runtime_store_state_read_boundary"
+status: "accepted"
+purpose: "Define how forge-core-runtime may consume store-backed project state without gaining broad filesystem traversal or mutation authority."
+decision:
+  selected_strategy: "adapter_built_read_snapshot"
+  runtime_api:
+    - "plan_operation(document)"
+    - "plan_operation_with_snapshot(document, RuntimeReadSnapshot)"
+  snapshot_input:
+    current_shape: "RuntimeReadSnapshot wraps a read-only ReferenceIndex borrowed from store/adapters."
+    builder_authority: "forge-core-store ReferenceIndexBuilder or a future app/daemon/MCP adapter builds the snapshot."
+    mutation_authority: "none"
+  runtime_may_read_from_snapshot:
+    - "operation side-contract refs"
+    - "claim refs"
+    - "completion refs"
+    - "gate refs"
+    - "request refs"
+    - "tool-effect refs"
+    - "decision-close refs"
+    - "runtime registry/capability refs"
+    - "standard runtime projection refs"
+  runtime_must_not_read_directly:
+    - "filesystem paths"
+    - "network resources"
+    - "host chat transcript"
+    - "full Markdown docs as authority"
+    - "provider-specific hidden state"
+  explicitly_not_implemented_now:
+    - "state.yaml parser"
+    - "ledger projection"
+    - "claim/completion semantic evaluation beyond existing operation refs"
+    - "write-time conflict mediation"
+    - "command execution"
+    - "effect staging or commit"
+rules:
+  - id: "store_builds_runtime_reads"
+    rule: "Filesystem and projection discovery belong to forge-core-store or adapters; forge-core-runtime receives typed read snapshots."
+  - id: "snapshot_refs_block_authority_when_missing"
+    rule: "If a read snapshot is supplied and operation cross-reference validation reports errors, RuntimePlan must be blocked before action readiness."
+  - id: "no_snapshot_keeps_contract_only_planning"
+    rule: "plan_operation remains available for contract-only planning and tests, but host adapters should use plan_operation_with_snapshot when repo state is available."
+  - id: "read_snapshot_is_not_write_lock"
+    rule: "A read snapshot proves referenced state exists; it does not grant mutation authority or freshness for a later write commit."
+  - id: "future_freshness_needs_effect_contract"
+    rule: "Read/write freshness, expected hashes, staged effects, and commit/rollback belong to ToolEffectContract/runtime execution boundaries, not this read boundary."
+tradeoffs:
+  chosen:
+    advantages:
+      - "Moves runtime decisions closer to real repo state without hiding filesystem traversal inside runtime."
+      - "Reuses existing ReferenceIndex and cross-reference validators instead of creating another state model."
+      - "Lets Codex/Cursor/opencode/Claude/VS Code/pi.dev and future Forge app feed the same runtime API."
+      - "Prevents ready-to-execute plans when required authority refs are missing."
+    disadvantages:
+      - "Does not yet validate state freshness or read/write conflict windows."
+      - "Adapters must build and pass snapshots deliberately."
+      - "ReferenceIndex is an existence/kind view, not the final state projection model."
+  rejected:
+    - id: "runtime_reads_filesystem_directly"
+      reason: "Would couple runtime authority to filesystem traversal and repeat adapter/runtime mixing."
+    - id: "runtime_reads_full_project_docs"
+      reason: "Would bring back prompt-shaped document authority and context bloat."
+    - id: "store_decides_plan_status"
+      reason: "Store persists and discovers state; runtime owns policy decisions."
+    - id: "write_freshness_now"
+      reason: "Freshness and commit safety require ToolEffect/read-write execution boundaries, not a read-only planning boundary."
+acceptance:
+  crate:
+    - "RuntimeReadSnapshot type exists in forge-core-runtime."
+    - "plan_operation_with_snapshot runs validate_operation_cross_references."
+    - "missing snapshot refs block ready operation plans."
+    - "forge-core-runtime production dependencies do not include forge-core-store."
+  tests:
+    - "store-built snapshot keeps a valid mechanical operation ready."
+    - "empty snapshot blocks a ready mechanical operation with reference errors."
+    - "existing no-snapshot fixture tests still pass."
+  validation:
+    - "cargo test -p forge-core-runtime"
+    - "cargo test --workspace"
+    - "cargo clippy --workspace -- -D warnings"
+evidence_basis:
+  direct_patterns:
+    - source_id: "storm_state_management_2605_20563"
+      supports: "Agents need explicit state management and local consistency instead of post-hoc merge recovery."
+    - source_id: "runtime_governance_paths_2603_16586"
+      supports: "Runtime governance evaluates a proposed next action against path and shared state."
+    - source_id: "cordon_semantic_transactions_2606_17573"
+      supports: "Irreversible effects should be separated from staged/validated runtime boundaries."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy decisions and traces should use stable ids and lifecycle boundary checks."
+  internal_policy_refs:
+    - policy_ref: "contracts/policies/typed-cross-file-reference-validation-boundary.yaml"
+      supports: "Forge already separates pure semantic validation from adapter-built reference indexes."
+    - policy_ref: "contracts/policies/filesystem-reference-index-adapter-boundary.yaml"
+      supports: "forge-core-store already owns filesystem-backed ReferenceIndex construction."
+  inference_boundary: "The evidence supports explicit state mediation, path-aware governance, and separating read/planning from commit/effects. Forge's exact RuntimeReadSnapshot and ReferenceIndex reuse are local Rust implementation choices."
+failure_modes_prevented:
+  - "runtime marks an operation ready when claim/gate/effect refs are missing"
+  - "host adapter treats chat memory as evidence that a ref exists"
+  - "filesystem traversal leaks into runtime policy code"
+  - "store layer starts deciding workflow authority"
+  - "read-time existence checks are mistaken for write-time freshness guarantees"
+next_boundary:
+  id: "runtime_command_runner_boundary"
+  question: "After command/effect refs can be staged without commit, how should Forge execute safe read-only commands with timeout, platform, env, output, and audit semantics?"

@@ -1,0 +1,38 @@
+schema_version: "0.1"
+runtime_handoff_contract:
+  id: "runtime_handoff.cursor.browser_validation.suggestible"
+  contract_ref: "contracts/runtimes/runtime-handoff-contract-v0.yaml"
+  status: "suggestible"
+  source_runtime:
+    kind: "codex"
+    id: "codex-main"
+  target_runtime:
+    kind: "cursor"
+    id: "cursor-browser-agent"
+    registry_ref: "contracts/runtimes/registry-cursor-browser-agent.yaml"
+  task_boundary:
+    reason_code: "browser_validation_needed"
+    current_runtime_gap: "current_runtime_lacks_interactive_browser_session"
+    required_capability: "browser_validation"
+    product_area: "runtime-core"
+    paths:
+      - "crates/forge-contract-validator"
+  double_gate:
+    requires_registry_evidence: true
+    registry_evidence_ref: "contracts/runtimes/registry-cursor-browser-agent.yaml"
+    requires_capability_evidence: true
+    capability_evidence_ref: "contracts/runtimes/capability-browser-validation.yaml"
+  handoff_payload:
+    state_version: 64
+    context_refs:
+      - "contracts/gates/integration-missing-gate.yaml"
+      - "contracts/claims/driver-active-claim.yaml"
+      - "contracts/decisions/phase-transition-with-grill.yaml"
+    forbidden_context_refs:
+      - "full_chat_history"
+      - "unfiltered_agent_card_description"
+    authority_refs:
+      - "contracts/claims/driver-active-claim.yaml"
+      - "contracts/gates/integration-missing-gate.yaml"
+      - "contracts/effects/story-artifact-write-effect.yaml"
+  blocked_reason: null

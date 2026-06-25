@@ -1,0 +1,60 @@
+schema_version: "0.1"
+audit: "mcp_local_process_security_boundary_grill"
+status: "closed"
+created_at: "2026-06-25"
+grill_question:
+  id: "mcp_local_process_security_boundary"
+  question: "What security boundary must Forge enforce before exposing host-adapter projections through an MCP server or local borrowed-shell process?"
+  answered_by: "agent_research_local_code_inspection_and_rust_tests"
+input_refs:
+  - "contracts/policies/host-adapter-manifest-projection-boundary.yaml"
+  - "contracts/policies/runtime-command-runner-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+decision:
+  selected_option: "deny_by_default_local_process_admission"
+  recommendation_basis:
+    - "MCP security guidance treats tool exposure and authorization as explicit implementation responsibilities."
+    - "Local-agent runtime audit evidence identifies tool dispatch, permissions, environment, and process execution as security boundaries."
+    - "OWASP Excessive Agency supports limiting functionality, permissions, and autonomy before high-impact actions."
+    - "Forge already has runtime command execution policy; host adapters must not bypass it."
+tradeoffs:
+  pros:
+    - "Blocks mutating MCP stdio exposure until installer trust and server hardening exist."
+    - "Gives host adapters a machine-readable admission result before process execution."
+    - "Rejects unknown commands, shell control tokens, environment secrets, and cwd escapes."
+    - "Keeps MCP authorization separate from Forge workflow authority."
+  cons:
+    - "Does not yet implement the MCP server."
+    - "Borrowed-shell mutation still depends on later OperationContract/runtime validation."
+    - "Installer trust, signing, and update provenance remain a separate boundary."
+evidence_basis:
+  - source_id: "mcp_tools_spec"
+    supports: "Schema-backed tool capabilities."
+  - source_id: "mcp_tool_annotations_2603"
+    supports: "Tool annotations are advisory."
+  - source_id: "mcp_security_best_practices_2026"
+    supports: "MCP implementations need explicit security considerations."
+  - source_id: "mcp_authorization_spec_2025_11_25"
+    supports: "MCP authorization is transport-level and separate from application governance."
+  - source_id: "local_llm_agents_vulnerable_runtimes_2606_21071"
+    supports: "Local agent runtime layers are security boundaries."
+  - source_id: "owasp_llm06_excessive_agency"
+    supports: "Limit functionality, permissions, and autonomy."
+  - source_id: "rust_std_child_process_official"
+    supports: "Later process execution must manage child lifecycle explicitly."
+policy_ref: "contracts/policies/mcp-local-process-security-boundary.yaml"
+implementation_refs:
+  - "crates/forge-core-cli/src/lib.rs"
+  - "crates/forge-core-cli/src/main.rs"
+  - "crates/forge-core-cli/tests/validate.rs"
+acceptance:
+  - "HostAdapterProcessSecurityPolicy is emitted by run_host_adapter_process_security_policy."
+  - "HostAdapterInvocationAdmission blocks unknown commands and unsafe local-process conditions."
+  - "MCP stdio blocks execute-operation even when explicit."
+  - "Borrowed shell blocks execute-operation without explicit invocation and admits it with explicit invocation."
+  - "CLI exposes host-adapter-process-policy and host-adapter-admit-invocation."
+closed_decision: "Forge must expose MCP/local borrowed-shell process entry through deny-by-default Rust admission that preserves manifest authority and constrains argv, cwd, env, and stdio before process execution."
+next_grill_question:
+  id: "sigstore_fulcio_certificate_identity_boundary"
+  question: "How should Forge verify Fulcio certificate chain, certificate identity extensions, expected OIDC issuer, and workflow identity selectors against the trusted-root policy without treating policy validation as cryptographic proof?"
+  recommended_answer: "Add a Forge-owned Sigstore bundle/Fulcio verifier backend that consumes trusted-root policy and returns typed identity, subject, timestamp, and revocation evidence while preserving adapter-neutral authority."

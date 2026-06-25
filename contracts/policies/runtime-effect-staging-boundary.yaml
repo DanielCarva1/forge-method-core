@@ -1,0 +1,95 @@
+schema_version: "0.1"
+policy: "runtime_effect_staging_boundary"
+status: "accepted"
+purpose: "Define how forge-core-runtime stages commands and tool-effect refs from a ready RuntimePlan without executing or committing irreversible effects."
+decision:
+  selected_strategy: "typed_staging_plan_without_commit"
+  runtime_api:
+    - "stage_operation_effects(plan: &RuntimePlan) -> RuntimeEffectStagingPlan"
+  staging_plan_owns:
+    - "operation contract id"
+    - "side-effect policy"
+    - "command refs copied from RuntimePlan"
+    - "effect contract refs copied from RuntimePlan"
+    - "staging status and reasons"
+    - "commit_allowed flag, always false in this boundary"
+  runtime_does_not_do:
+    - "execute commands"
+    - "open files for mutation"
+    - "apply ToolEffectContract writes"
+    - "publish network or release effects"
+    - "commit staged effects"
+    - "rollback or compensate effects"
+    - "load full ToolEffectContract bodies"
+  status_order:
+    - "blocked if RuntimePlan is blocked"
+    - "not_stageable if RuntimePlan is not ready"
+    - "blocked if mutating RuntimePlan has no effect refs"
+    - "no_effects if ready plan has no command refs and no effect refs"
+    - "staged if ready plan has command refs or effect refs"
+rules:
+  - id: "ready_plan_required"
+    rule: "Only RuntimePlanStatus::ReadyToCallOperation can produce a staged effect plan."
+  - id: "staging_is_not_commit"
+    rule: "RuntimeEffectStagingPlan.commit_allowed must remain false until an explicit commit/rollback boundary exists."
+  - id: "mutating_plan_needs_effect_refs"
+    rule: "WriteProjectFiles, RunCommands, and Publish plans cannot stage without effect_contract_refs."
+  - id: "commands_are_refs_not_shell"
+    rule: "Runtime staging carries CommandRef ids only; command execution belongs to a later command runner boundary."
+  - id: "effect_bodies_load_later"
+    rule: "This boundary stages ToolEffectContract refs; loading full effect bodies, freshness checks, and write application are later boundaries."
+tradeoffs:
+  chosen:
+    advantages:
+      - "Adds a concrete runtime step after planning without widening into execution."
+      - "Preserves a clean audit point between plan readiness and side effects."
+      - "Keeps command/effect execution host-neutral for Codex, Cursor, opencode, Claude, VS Code, pi.dev, and future Forge app."
+      - "Makes irreversible commit impossible by type-level runtime output in this boundary."
+    disadvantages:
+      - "Does not yet validate effect body freshness, inverse metadata, or command platform constraints at runtime."
+      - "Adapters must still implement or wait for a future command/effect runner."
+      - "A staged plan is useful only if downstream adapters respect commit_allowed."
+  rejected:
+    - id: "execute_commands_now"
+      reason: "Would jump from authority planning to side effects before transaction/commit/rollback semantics exist."
+    - id: "load_and_apply_tool_effects_now"
+      reason: "Would combine staging, freshness, conflict detection, and mutation into one broad step."
+    - id: "host_agent_executes_from_prose"
+      reason: "Would recreate host-agent drift and make RuntimePlan advisory instead of authoritative."
+    - id: "commit_allowed_for_read_only_commands"
+      reason: "Even read-only command execution needs runner, output capture, timeout, and audit semantics."
+acceptance:
+  crate:
+    - "RuntimeEffectStagingPlan exists in forge-core-runtime."
+    - "stage_operation_effects stages refs only and never executes."
+    - "commit_allowed is false for every status."
+  tests:
+    - "mechanical story stages command and effect refs with commit disallowed."
+    - "facilitation plan is not stageable."
+    - "read/write conflict notification stages effect refs only."
+  validation:
+    - "cargo test -p forge-core-runtime"
+    - "cargo test --workspace"
+    - "cargo clippy --workspace -- -D warnings"
+evidence_basis:
+  direct_patterns:
+    - source_id: "cordon_semantic_transactions_2606_17573"
+      supports: "Irreversible effects should be staged and validated before commit."
+    - source_id: "runtime_governance_paths_2603_16586"
+      supports: "Proposed next action should be evaluated in runtime context before action."
+    - source_id: "runtime_enforcement_2503_18666"
+      supports: "Runtime rules can prevent unsafe executions with low overhead."
+    - source_id: "solver_policy_tool_agents_2603_20449"
+      supports: "Tool calls should be checked against formal constraints before execution."
+    - source_id: "tool_use_orchestration_survey_2603_22862"
+      supports: "Long-horizon tool orchestration requires intermediate state, recovery, safety, cost, and verifiability."
+  inference_boundary: "The evidence supports staging and pre-execution governance. Forge's exact RuntimeEffectStagingPlan shape is a local Rust implementation that intentionally stops before command runners and commit semantics."
+failure_modes_prevented:
+  - "ready plan executes shell command directly"
+  - "host agent applies ToolEffectContract writes from prose"
+  - "read-only validation command bypasses timeout/output/audit runner"
+  - "destructive or publish effects commit before transaction boundary"
+  - "effect refs are treated as already applied"
+next_boundary:
+  id: "runtime_command_evidence_recording_boundary"
+  question: "After safe staged commands can execute, how should Forge persist command results as evidence without letting the host agent rewrite or reinterpret them?"

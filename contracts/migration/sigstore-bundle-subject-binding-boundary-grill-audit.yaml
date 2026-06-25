@@ -1,0 +1,59 @@
+schema_version: "0.1"
+audit_id: "sigstore_bundle_subject_binding_boundary_grill_audit"
+status: "closed"
+created_at: "2026-06-25"
+inputs:
+  - "contracts/migration/operation-contract-plan-grill-audit.yaml"
+  - "contracts/policies/sigstore-fulcio-certificate-identity-boundary.yaml"
+  - "contracts/policies/sigstore-rekor-backend-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+question:
+  id: "sigstore_bundle_subject_binding_boundary"
+  text: "How should Forge bind artifact digest, Sigstore bundle signature material, Fulcio certificate identity evidence, Rekor transparency evidence, and timestamp evidence without collapsing them into one opaque pass/fail?"
+decision:
+  selected_option: "message_signature_subject_binding_before_dsse"
+  answer: "Add a Forge-owned read-only verifier for Sigstore v0.3 messageSignature bundles that binds artifact SHA-256, bundle messageDigest, bundle signature, leaf certificate public key, Fulcio identity verification at Rekor integrated time, Rekor body, and Rekor inclusion evidence."
+  why:
+    - "Sigstore bundle format separates verification material from content and explicitly distinguishes messageSignature from DSSE."
+    - "sigstore-go treats artifact policy and certificate identity policy as separate checks and marks skipping artifact checks unsafe."
+    - "Existing Forge boundaries already verify artifact digest, Fulcio identity, and Rekor inclusion separately; this boundary composes them and checks cross-evidence subject binding."
+  rejected_options:
+    - id: "full_bundle_now"
+      reason: "Would overclaim because DSSE, TSA, CT, revocation, policy thresholds, and TUF freshness each need dedicated failure modes and fixtures."
+    - id: "compose_status_only"
+      reason: "Would miss the core bug where all evidence passes but refers to different artifact digest or signature content."
+    - id: "delegate_to_host_surface"
+      reason: "Would reintroduce cross-host drift between Codex, Cursor, Claude, OpenCode, VS Code, pi.dev, and Forge standalone."
+evidence_refs:
+  - "sigstore_bundle_format_docs"
+  - "sigstore_go_artifact_policy"
+  - "sigstore_go_bundle_signing_docs"
+  - "fulcio_spec_oidc_certificate_binding"
+  - "sigstore_rekor_docs"
+  - "intoto_statement_subject_spec"
+  - "software_signing_industry_study_2025"
+evidence_limits:
+  - source_id: "intoto_statement_subject_spec"
+    limit: "Supports future DSSE/in-toto subject matching only; this boundary intentionally handles messageSignature bundles."
+  - source_id: "software_signing_industry_study_2025"
+    limit: "Supports explicit verification boundaries and usability concerns; it is not a cryptographic spec."
+risks:
+  - id: "p256_only"
+    severity: "medium"
+    mitigation: "Boundary explicitly supports P-256 messageSignature verification first; post-quantum and other algorithms remain future boundaries."
+  - id: "dsse_not_supported"
+    severity: "medium"
+    mitigation: "Policy and output state DSSE is outside this boundary and name the next boundary."
+  - id: "tuf_freshness_not_verified"
+    severity: "medium"
+    mitigation: "Trust-root freshness remains a separate boundary and is not implied by subject binding."
+outcome:
+  policy_ref: "contracts/policies/sigstore-bundle-subject-binding-boundary.yaml"
+  implementation_refs:
+    - "crates/forge-core-cli/src/lib.rs"
+    - "crates/forge-core-cli/src/main.rs"
+    - "crates/forge-core-cli/tests/validate.rs"
+next_grill_question:
+  id: "sigstore_dsse_in_toto_subject_boundary"
+  question: "How should Forge verify DSSE Sigstore bundles whose payload is an in-toto statement, including payload type, single-signature constraint, subject digest matching, and certificate identity?"
+  recommended_answer: "Add a DSSE-specific verifier that decodes the in-toto statement payload, checks payloadType, enforces one signature, verifies signature with the Fulcio certificate key, matches statement subject digests to artifacts, and reuses Fulcio/Rekor trust evidence while leaving TSA, revocation, and TUF freshness separate."

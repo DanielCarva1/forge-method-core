@@ -1,0 +1,47 @@
+schema_version: "0.1"
+policy: "schema_enum_parity_boundary"
+status: "accepted"
+purpose: "Prove representative legacy enum_set checks are covered by forge-core-cli typed deserialization before wrapping or retiring forge-contract-validator."
+decision:
+  selected_strategy: "representative_operation_and_command_enum_negative_tests"
+  proven_overlap:
+    - id: "operation_autonomy_mode_invalid"
+      legacy_area: "operation-contract-v0 autonomy.mode enum_set check"
+      new_authority: "OperationContractDocument Serde enum deserialization through forge-core-cli"
+      proof: "cargo test -p forge-contract-validator enum"
+    - id: "command_kind_invalid"
+      legacy_area: "command-contract-v0 command_contract.kind enum_set check"
+      new_authority: "CommandContractDocument Serde enum deserialization through forge-core-cli"
+      proof: "cargo test -p forge-contract-validator enum"
+  remaining_enum_risk:
+    status: "representative_coverage_not_exhaustive"
+    reason: "The tests cover two major contract families and the shared mechanism; they do not mutate every enum field in every contract family."
+  wrapper_decision:
+    status: "still_deferred"
+    reason: "Legacy stdout compatibility remains unresolved."
+rules:
+  - id: "representative_enum_tests_are_required"
+    rule: "At least one operation enum and one command enum must fail in both validators before enum parity can be treated as proven enough for wrapper planning."
+  - id: "serde_enum_is_new_authority"
+    rule: "New CLI enum failures should come from typed Serde/Rust enums or semantic validators, not schema string traversal."
+  - id: "stdout_boundary_still_blocks_retirement"
+    rule: "Enum parity does not authorize deleting or wrapping forge-contract-validator until stdout compatibility is decided."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-contract-validator/tests/parity.rs"
+  validation:
+    - "cargo test -p forge-contract-validator enum"
+evidence_basis:
+  direct_patterns:
+    - source_id: "utboost_2025_acl"
+      supports: "Negative tests improve confidence that validators catch bad states."
+    - source_id: "agentless_fse_2025"
+      supports: "Compare new machinery against simpler baselines before overclaiming capability."
+    - source_id: "rust_api_guidelines_official"
+      supports: "Typed enums are preferable to loose strings for domain states."
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Structured interfaces need semantic validation beyond shape."
+  inference_boundary: "The tests prove representative enum parity via local fixtures. They do not prove every enum field has an explicit negative test."
+next_boundary:
+  id: "legacy_stdout_compatibility_boundary"
+  question: "Should forge-contract-validator preserve the old rust_contract_validation_passed stdout contract as a wrapper, or should release policy migrate users to forge-core-cli JSON?"

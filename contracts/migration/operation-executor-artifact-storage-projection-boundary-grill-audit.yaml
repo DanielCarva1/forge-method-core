@@ -1,0 +1,92 @@
+schema_version: "0.1"
+audit: "operation_executor_artifact_storage_projection_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+grill_state_machine:
+  state: "S6"
+  closed_question:
+    id: "operation_executor_artifact_storage_projection_boundary"
+    question: "After payload loading is constrained, should artifact_id/evidence_id ToolEffect targets be projected to file paths in store, or should they require a separate artifact storage adapter?"
+    selected_answer: "Use canonical repo-local projection in store now. Preserve logical refs, constrain path-like refs to target-specific directories, and defer separate artifact storage until backend/metadata requirements justify it."
+inputs:
+  - "contracts/policies/operation-executor-payload-adapter-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "contracts/effects/story-artifact-write-effect.yaml"
+  - "crates/forge-core-store/src/lib.rs"
+  - "crates/forge-core-runtime/tests/operation_plan.rs"
+decision:
+  canonical_term: "Artifact Storage Projection"
+  policy_ref: "contracts/policies/operation-executor-artifact-storage-projection-boundary.yaml"
+  selected_strategy: "canonical_repo_local_projection_before_artifact_backend"
+  scope:
+    includes:
+      - "artifact_id projection"
+      - "evidence_id projection"
+      - "ledger_stream projection"
+      - "request_stream projection"
+      - "canonical directory enforcement"
+      - "logical ref preservation in results/WAL"
+    excludes:
+      - "metadata index"
+      - "provenance graph"
+      - "object store"
+      - "content-addressable artifact store"
+      - "RO-Crate export"
+tradeoffs:
+  selected:
+    advantages:
+      - "Makes existing logical ToolEffect targets executable now."
+      - "Keeps borrowed-shell installs simple and inspectable."
+      - "Prevents logical targets from becoming arbitrary path writes."
+      - "Leaves provenance/export layers possible later."
+    disadvantages:
+      - "No artifact discovery index exists yet."
+      - "Filesystem paths remain the physical storage backend."
+      - "Binary/large artifact strategy is still unresolved."
+  rejected:
+    - id: "artifact_store_now"
+      reason: "Premature backend complexity for the current file-backed operation executor."
+    - id: "all_logical_refs_are_paths"
+      reason: "Would reproduce the current semantic leak and weaken future provenance."
+    - id: "block_logical_targets"
+      reason: "Would prevent current story artifact/evidence operations from executing."
+scenario_tests:
+  - id: "artifact_id_id_projection"
+    scenario: "ToolEffect writes artifact_id story.current.result."
+    expected_result: "Store writes .forge-method/artifacts/story.current.result.yaml."
+  - id: "evidence_id_id_projection"
+    scenario: "ToolEffect appends evidence_id story.validation."
+    expected_result: "Store writes .forge-method/evidence/story.validation.json."
+  - id: "request_stream_projection"
+    scenario: "ToolEffect appends request_stream worker."
+    expected_result: "Store writes .forge-method/requests/worker.ndjson."
+  - id: "path_like_outside_prefix"
+    scenario: "ToolEffect writes artifact_id src/foo.yaml."
+    expected_result: "Store blocks as InvalidTargetPath."
+  - id: "runtime_story_effect"
+    scenario: "Runtime executes story-artifact-write-effect with artifact_id/evidence_id writes."
+    expected_result: "No test-side target-kind mutation is needed."
+evidence_basis:
+  direct_patterns:
+    - source_id: "w3c_prov_dm"
+      supports: "Generated entities should retain provenance identity."
+    - source_id: "ro_crate_spec_1_1"
+      supports: "File-backed outputs can carry identifiers and metadata."
+    - source_id: "workflow_run_ro_crate_2024"
+      supports: "Workflow run provenance can be packaged from execution files."
+    - source_id: "openlineage_object_model"
+      supports: "Output identity and facets can be layered over physical storage."
+    - source_id: "agentic_harness_engineering_2604_25850"
+      supports: "Evidence corpora should be explicit and inspectable."
+    - source_id: "harnessfix_trace_guided_2606_06324"
+      supports: "Repair needs localized trace/evidence retrieval."
+  inference_boundary: "Projection is a Forge store implementation choice supported by provenance/observability patterns, not a claim that filesystem storage is the final backend."
+implementation_plan:
+  - "Add target-kind-aware projection in forge-core-store."
+  - "Keep FilePath exact."
+  - "Constrain path-like logical refs to canonical directories."
+  - "Add store tests for id projection and invalid path-like refs."
+  - "Remove runtime test workaround that mutates artifact/evidence target kinds."
+next_grill_question:
+  id: "sigstore_fulcio_certificate_identity_boundary"
+  question: "How should Forge verify Fulcio certificate chain, certificate identity extensions, expected OIDC issuer, and workflow identity selectors against the trusted-root policy without treating policy validation as cryptographic proof?"

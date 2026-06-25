@@ -1,0 +1,71 @@
+schema_version: "0.1"
+audit: "legacy_stdout_compatibility_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/legacy-validator-parity-matrix-boundary.yaml"
+  - "contracts/policies/thin-cli-validation-surface-boundary.yaml"
+  - "contracts/policies/schema-enum-parity-boundary.yaml"
+  - "crates/forge-contract-validator/src/main.rs"
+  - "crates/forge-core-cli/src/lib.rs"
+  - "crates/forge-contract-validator/tests/parity.rs"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "legacy_stdout_compatibility_boundary"
+  question: "Should forge-contract-validator preserve the old rust_contract_validation_passed stdout contract as a wrapper, or should release policy migrate users to forge-core-cli JSON?"
+  options:
+    - id: "compatibility_wrapper_with_legacy_stdout"
+      summary: "Make forge-contract-validator call the Rust validation authority and render only the old success stdout."
+      advantages:
+        - "Preserves existing scripts and user installs."
+        - "Removes duplicate validation authority from the legacy binary."
+        - "Lets new agents use JSON without forcing a breaking CLI migration now."
+      disadvantages:
+        - "Keeps one compatibility binary alive."
+        - "Requires tests so the old stdout fields do not drift."
+    - id: "json_only_breaking_migration"
+      summary: "Delete or change forge-contract-validator now and require all consumers to use forge-core-cli JSON."
+      advantages:
+        - "Simplest future-facing interface."
+      disadvantages:
+        - "Breaks unknown existing shell and CI consumers."
+        - "Violates compatibility expectations without a major/deprecation release."
+    - id: "keep_legacy_validator_separate"
+      summary: "Keep forge-contract-validator as a separate scanner and let forge-core-cli evolve independently."
+      advantages:
+        - "Lowest immediate code churn."
+      disadvantages:
+        - "Preserves duplicated authority and future drift."
+  selected_option: "compatibility_wrapper_with_legacy_stdout"
+  decision: "forge-contract-validator becomes a compatibility renderer over forge-core-cli run_validate. It preserves the rust_contract_validation_passed stdout line and exits non-zero with diagnostics on failure. forge-core-cli JSON remains the canonical machine surface."
+proof:
+  implementation_refs:
+    - "crates/forge-contract-validator/src/main.rs"
+    - "crates/forge-contract-validator/tests/parity.rs"
+  validation:
+    - "cargo test -p forge-contract-validator"
+evidence_basis:
+  direct_patterns:
+    - source_id: "semver_2_0_0"
+      supports: "Do not make backward-incompatible public behavior changes without an explicit breaking release boundary."
+    - source_id: "cli_guidelines_clig_dev"
+      supports: "CLI tools should use exit codes and stdout/stderr consistently."
+    - source_id: "rust_cli_machine_readable_output"
+      supports: "JSON should be available for machine consumers."
+    - source_id: "bash_in_the_wild_2022"
+      supports: "Shell-script ecosystems make stdout compatibility materially risky."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Executable harness behavior should be inspectable and tested."
+  inference_boundary: "The sources do not prescribe Forge's exact binary names. The selected wrapper follows local compatibility needs and existing CLI contracts."
+matrix_resolution:
+  resolved:
+    - id: "legacy_stdout_summary_contract"
+      proof: "cargo test -p forge-contract-validator legacy_validator_and_forge_core_cli_both_pass_current_repo"
+    - id: "remaining_generic_policy_refs"
+      proof: "validate_yaml_known_repo_references plus store_known_paths_satisfy_current_generic_known_refs cover generic contracts/docs ref-like keys."
+  wrapper_status: "allowed_as_compatibility_wrapper"
+  retirement_status: "not_allowed_without_deprecation_release"
+next_grill_question:
+  id: "rust_runtime_execution_boundary"
+  question: "After validation and compatibility are stabilized, which Rust runtime execution boundary should be implemented next without recreating the old giant Python runtime?"
+  recommended_answer: "start with a narrow runtime operation executor over typed OperationContract and store abstractions, not a monolithic Python-like runtime clone"

@@ -1,0 +1,42 @@
+schema_version: "0.1"
+completion_contract:
+  id: "completion.fixture.story_done"
+  contract_ref: "contracts/completion/completion-contract-v0.yaml"
+  task:
+    task_id: "story:done"
+    kind: "story"
+    product_area: "runtime-core"
+    lane_id: "story-done"
+  status:
+    value: "done"
+    changed_at: "2026-06-25T00:00:00Z"
+    changed_by: "codex-main"
+    changed_by_role: "driver"
+    checked_at_state_version: 31
+  claim:
+    claim_contract_ref: null
+    claim_expires_at: null
+  proof_policy:
+    required_for_done: true
+    accepted_proof_kinds:
+      - "test_report"
+      - "gate_result"
+      - "artifact_ref"
+  proof_refs:
+    - ".forge-method/evidence/story-done-validation.json"
+    - ".forge-method/artifacts/story-done.yaml"
+  invalidation:
+    invalidated_by: null
+    invalidated_at: null
+    reason_code: null
+    supersedes_completion_id: null
+  storage:
+    canonical_id: "completion.story.done"
+    backend: "file_projection"
+    event_log_ref: ".forge-method/ledger.ndjson"
+    projection_key: "completion:story:done"
+    db_ready: true
+  rust_compatibility:
+    serde_enum_safe: true
+    free_text_status_allowed: false
+    db_migration_requires_shape_change: false

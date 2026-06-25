@@ -1,0 +1,20 @@
+id: v2-018
+title: 'GAP-5: Integration gate (tsc --noEmit + smoke test in gate)'
+epic: Integration Quality
+lane: runtime-core
+priority: MED
+status: done
+dependencies: ''
+evidence: .forge-method/evidence/2026-06-23-v2-011-018-lanes-gate.md
+acceptance: '`forge gate` runs `tsc --noEmit` (if tsconfig.json exists) + `npm test`
+  or smoke script (if present). Integration errors count as gate failures. Per-lane
+  typecheck is not enough.'
+description: 'Extend cmd_gate to run integration-level checks: tsc --noEmit (if tsconfig
+  exists), smoke script (if scripts/smoke*.ps1 exists). Add results to gate output.'
+files: scripts/forge_method_runtime.py (cmd_gate or gate_run)
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

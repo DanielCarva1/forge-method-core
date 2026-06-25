@@ -1,0 +1,48 @@
+schema_version: "0.1"
+tool_effect_contract:
+  id: "effect.fixture.story_file_conflict"
+  contract_ref: "contracts/effects/tool-effect-contract-v0.yaml"
+  effect_kind: "file_edit"
+  operation_ref: "op_fixture_read_write_conflict_notify"
+  actor:
+    agent_id: "cursor-worker-1"
+    role: "worker"
+  read_set:
+    - target_kind: "file_path"
+      ref: "crates/forge-contracts/src/story.rs"
+      expected_hash: "sha256:old-story-rs"
+      expected_version: null
+      required_for_plan: true
+  write_set:
+    - target_kind: "file_path"
+      ref: "crates/forge-contracts/src/story.rs"
+      access_mode: "write"
+      expected_hash: "sha256:old-story-rs"
+      expected_version: null
+      destructive: false
+  conflict_detection:
+    check_against: "filesystem"
+    granularity: "path"
+    conflict_codes:
+      - "read_target_changed"
+      - "overlapping_write_set"
+    policy: "notify_and_repair"
+  notification:
+    required: true
+    recipients:
+      - "driver"
+      - "affected_readers"
+      - "lane_owner"
+    request_contract_ref: "contracts/requests/read-write-conflict-notification-request.yaml"
+  repair:
+    strategy: "record_request"
+    automatic_repair_allowed: false
+    inverse_operation_ref: null
+    stop_if_inverse_missing: false
+    inverse:
+      kind: "none"
+      source: "unavailable"
+      ref: null
+      input_mapping_refs: []
+      validation_gate_refs: []
+      review_required: false

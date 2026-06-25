@@ -1,0 +1,67 @@
+schema_version: "0.1"
+audit: "schema_enum_parity_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/legacy-validator-parity-matrix-boundary.yaml"
+  - "contracts/policies/generic-known-ref-validation-boundary.yaml"
+  - "crates/forge-contract-validator/tests/parity.rs"
+  - "crates/forge-core-contracts/src/operation.rs"
+  - "crates/forge-core-contracts/src/command.rs"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "schema_enum_parity_boundary"
+  question: "Which representative schema enum failures should be tested against both forge-contract-validator and forge-core-cli before legacy wrapper or retirement?"
+  options:
+    - id: "representative_operation_and_command_enum_negative_tests"
+      summary: "Mutate one operation enum and one command enum fixture, then require both validators to reject them."
+      advantages:
+        - "Proves parity at two high-value authority surfaces."
+        - "Keeps the test fast and targeted."
+        - "Exercises the new Rust/Serde enum authority instead of duplicating schema string traversal."
+      disadvantages:
+        - "Representative coverage is not exhaustive coverage for every enum field."
+    - id: "mutate_every_enum_now"
+      summary: "Generate or hand-write invalid-value tests for every enum field in every contract family."
+      advantages:
+        - "Maximizes explicit enum coverage."
+      disadvantages:
+        - "Expensive before wrapper policy is settled."
+        - "Can lock in legacy schema traversal as the design target instead of proving the Rust mechanism."
+    - id: "trust_serde_without_negative_tests"
+      summary: "Rely on Rust enum deserialization and skip parity tests."
+      advantages:
+        - "Fastest path."
+      disadvantages:
+        - "Creates false confidence and violates the parity matrix."
+  selected_option: "representative_operation_and_command_enum_negative_tests"
+  decision: "Add parity tests for invalid autonomy.mode and invalid command_contract.kind. Both forge-contract-validator and forge-core-cli must reject the synthetic bad fixtures and include the invalid value in diagnostics."
+proof:
+  implemented_tests:
+    - "legacy_validator_and_forge_core_cli_both_reject_invalid_operation_enum"
+    - "legacy_validator_and_forge_core_cli_both_reject_invalid_command_enum"
+  implementation_ref: "crates/forge-contract-validator/tests/parity.rs"
+  validation:
+    - "cargo test -p forge-contract-validator enum"
+coverage_statement:
+  proven:
+    - "operation-contract-v0 autonomy.mode enum rejection"
+    - "command-contract-v0 command_contract.kind enum rejection"
+  not_proven:
+    - "Every enum field in every contract family has its own explicit negative test."
+  inference_boundary: "The tests prove representative parity for the shared Rust/Serde enum rejection mechanism. They are enough to close the matrix item for wrapper planning, but not a claim of exhaustive enum mutation coverage."
+evidence_basis:
+  direct_patterns:
+    - source_id: "utboost_2025_acl"
+      supports: "Negative tests are needed because passing existing tests can hide bad states."
+    - source_id: "agentless_fse_2025"
+      supports: "New machinery should be compared against constrained baselines before capability is overclaimed."
+    - source_id: "rust_api_guidelines_official"
+      supports: "Domain states should use typed enums and narrow APIs instead of loose strings."
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Structured interfaces need validation beyond shape."
+  inference_boundary: "The sources support typed negative-case validation. Forge's exact two-fixture selection follows local contract authority surfaces."
+next_grill_question:
+  id: "legacy_stdout_compatibility_boundary"
+  question: "Should forge-contract-validator preserve the old rust_contract_validation_passed stdout contract as a wrapper, or should release policy migrate users to forge-core-cli JSON?"
+  recommended_answer: "choose compatibility or explicit migration policy before wrapping or retiring the legacy validator"

@@ -1,0 +1,21 @@
+id: v2-019
+title: 'GAP-1: forge commit wrapper (stages only files in claimed lanes)'
+epic: Integration Quality
+lane: runtime-core
+priority: MED
+status: done
+evidence: .forge-method/evidence/20260623-151500-v2-019-forge-commit.md
+dependencies: v2-010
+acceptance: '`forge commit -m ''msg''` stages only files whose paths fall under the
+  caller''s claimed lanes. Files outside claimed lanes are NOT staged (prevents git
+  add -A cross-lane sweep). Falls back to `git add -A` in single-agent mode.'
+description: Add cmd_commit. Reads the caller's claimed lanes from claims/*.lock,
+  maps lane IDs to paths (from registry.yaml or product-area-map), runs `git add`
+  only on those paths, then commits. Wrapper around git commit.
+files: scripts/forge_method_runtime.py (new cmd_commit, build_parser)
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

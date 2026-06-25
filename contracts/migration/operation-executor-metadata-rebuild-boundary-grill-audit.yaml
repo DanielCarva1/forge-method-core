@@ -1,0 +1,68 @@
+schema_version: "0.1"
+audit: "operation_executor_metadata_rebuild_boundary_grill"
+status: "closed"
+created_at: "2026-06-25"
+grill_question:
+  id: "operation_executor_metadata_rebuild_boundary"
+  question: "If metadata append fails or an index file is lost, how should Forge rebuild the metadata index from durable transaction evidence without scanning unrelated workspace files?"
+  answered_by: "agent_research_and_local_code_inspection"
+input_refs:
+  - "contracts/policies/operation-executor-metadata-index-boundary.yaml"
+  - "contracts/policies/runtime-effect-wal-recovery-boundary.yaml"
+  - "contracts/policies/runtime-effect-wal-compaction-and-locking-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+decision:
+  selected_option: "wal_committed_metadata_rebuild"
+  recommendation_basis:
+    - "ARIES and failure-atomic update research support durable log records as recovery evidence, but only when the log contains enough facts to drive recovery."
+    - "The local WAL already distinguishes begin/write_applied/commit; the missing piece was non-content target metadata on write_applied."
+    - "W3C PROV/OpenLineage identity needs operation/effect/actor/target facts, which cannot be recovered from file paths alone."
+    - "AgentLeak-style data minimization rules out storing raw payload content in rebuild metadata."
+  wal_extension:
+    field: "target_metadata"
+    stages_using_field:
+      - "write_applied"
+    serde_default: true
+    compatibility: "Legacy WAL remains readable but cannot produce complete rebuild records."
+  rebuild_policy:
+    committed_only: true
+    legacy_without_metadata: "ignore"
+    content_reads_allowed: false
+    append_mode: "append_only_without_dedupe"
+tradeoffs:
+  pros:
+    - "Index loss can be repaired from transaction evidence."
+    - "Rebuild is deterministic over committed WAL facts."
+    - "No raw content is copied into recovery metadata."
+    - "Legacy WAL compatibility remains intact."
+  cons:
+    - "WAL records become slightly larger."
+    - "Compacted WAL may no longer contain enough historical records for rebuild."
+    - "The first API does not define dedupe, truncation, or automatic doctor behavior."
+evidence_basis:
+  - source_id: "aries_wal_1992"
+    supports: "Durable WAL records can drive recovery."
+  - source_id: "failure_atomic_updates_fast15"
+    supports: "Recovery needs explicit completed/incomplete transaction evidence."
+  - source_id: "w3c_prov_dm"
+    supports: "Generated entities need durable activity/agent links."
+  - source_id: "openlineage_object_model"
+    supports: "Lineage observations are event-like and can be reconstructed from job/run/dataset facts."
+  - source_id: "harnessfix_trace_guided_2606_06324"
+    supports: "Scoped traces improve harness diagnosis and repair."
+  - source_id: "agentleak_privacy_leakage_2602_11510"
+    supports: "Internal channels should minimize sensitive data exposure."
+policy_ref: "contracts/policies/operation-executor-metadata-rebuild-boundary.yaml"
+implementation_refs:
+  - "crates/forge-core-store/src/lib.rs"
+  - "crates/forge-core-store/tests/reference_index.rs"
+acceptance:
+  - "New write_applied WAL records include target_metadata."
+  - "Committed WAL rebuild writes metadata index rows."
+  - "Legacy WAL without target_metadata returns noop instead of inferred metadata."
+  - "Rebuilt index does not contain raw payload content."
+closed_decision: "Add target_metadata to write_applied WAL records and implement rebuild_effect_target_metadata_index over committed WAL records."
+next_grill_question:
+  id: "sigstore_fulcio_certificate_identity_boundary"
+  question: "How should Forge verify Fulcio certificate chain, certificate identity extensions, expected OIDC issuer, and workflow identity selectors against the trusted-root policy without treating policy validation as cryptographic proof?"
+  recommended_answer: "Add a Forge-owned Sigstore bundle/Fulcio verifier backend that consumes trusted-root policy and returns typed identity, subject, timestamp, and revocation evidence while preserving adapter-neutral authority."

@@ -1,0 +1,59 @@
+schema_version: "0.1"
+audit: "certificate_transparency_sct_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/sigstore-rfc3161-tsa-token-boundary.yaml"
+  - "contracts/policies/sigstore-trusted-root-policy-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "certificate_transparency_sct_boundary"
+  question: "How should Forge verify Sigstore/Fulcio certificate transparency SCT evidence without treating CT as revocation or update freshness?"
+  options:
+    - id: "presence_only_sct"
+      summary: "Accept SCT path, certificate extension, or policy field presence as enough."
+      advantages:
+        - "Smallest implementation."
+      disadvantages:
+        - "Recreates the exact presence-only trust bug Forge is trying to eliminate."
+        - "Does not verify log signature, log id, certificate binding, or timestamp."
+    - id: "live_ct_log_query_now"
+      summary: "Fetch CT inclusion proof and audit log state during runtime verification."
+      advantages:
+        - "Closer to full CT audit semantics."
+      disadvantages:
+        - "Introduces network availability, log policy, MMD, and trust-root freshness questions into one slice."
+        - "Would blur SCT signature verification with log inclusion proof and update freshness."
+    - id: "offline_sct_signature_verifier"
+      summary: "Use the Rust sct verifier to check supplied SCT bytes against supplied certificate DER and policy-declared CT log material."
+      advantages:
+        - "Implements the smallest cryptographic claim that is still real."
+        - "Uses a focused Rust crate instead of hand-rolled signature parsing."
+        - "Keeps CT inclusion proof, revocation, and TUF freshness as explicit later boundaries."
+      disadvantages:
+        - "Requires raw CT log verification keys for this boundary."
+        - "Does not yet extract embedded SCT certificate extensions."
+        - "Does not prove the certificate was actually included after MMD."
+  selected_option: "offline_sct_signature_verifier"
+  decision: "Forge adds host-adapter-verify-certificate-transparency-sct as a read-only Rust verifier using sct, explicit SCT byte paths, policy CT log ids/public-key refs, and Unix epoch millisecond verification time."
+acceptance_criteria:
+  - "Policy contract exists."
+  - "Runtime exposes read-only host adapter command."
+  - "Runtime verifies valid SCT fixtures with two trusted CT logs."
+  - "Runtime fails unknown log and future timestamp cases."
+  - "Runtime keeps embedded extension extraction, inclusion proof, MMD audit, revocation, TUF freshness, and install/update authority out of this boundary."
+  - "No Python is introduced."
+  - "No Markdown authority is introduced."
+evidence_basis:
+  direct_patterns:
+    - source_id: "rfc6962_certificate_transparency"
+      supports: "SCTs are signed CT log promises and verification is distinct from later inclusion auditing."
+    - source_id: "sigstore_fulcio_certificate_transparency_docs"
+      supports: "Fulcio returns SCT evidence from a CT log and separates that CT log from Rekor artifact transparency."
+    - source_id: "rustls_sct_crate_docs"
+      supports: "The selected Rust crate verifies SCT encodings for supplied DER certificates and trusted CT logs."
+  inference_boundary: "The decision closes offline SCT signature verification only. It does not close revocation, TUF freshness, embedded SCT extraction, live CT inclusion proofs, or release install authority."
+next_grill_question:
+  id: "explicit_crl_ocsp_revocation_status_boundary"
+  question: "How should Forge verify explicit CRL or OCSP certificate revocation status without treating CT, Rekor, timestamp, or short-lived certificate policy evidence as CRL/OCSP evidence?"
+  recommended_answer: "Keep explicit CRL/OCSP status as a separate read-only host-adapter boundary after choosing status sources, freshness, offline behavior, and failure policy."

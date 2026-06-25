@@ -1,0 +1,128 @@
+schema_version: "0.1"
+contract: "operation_contract"
+status: "draft"
+purpose: "Define the authoritative read/operation response shape used by Forge Core to tell host agents what may happen next."
+design_rules:
+  - id: "operation_is_authority_response"
+    rule: "OperationContract is the core authority response; host agents explain and execute within it, but do not invent workflow control."
+  - id: "side_contracts_are_referenced"
+    rule: "Claims, completion, gates, effects, requests, decisions, runtime handoff, evals, and recovery are referenced through approved fields."
+  - id: "autonomy_is_policy"
+    rule: "Execution policy and stop policy define autonomy boundaries instead of prompt-only instructions."
+rust_compatibility:
+  serialization: "serde"
+  id_policy: "stable_ascii_ids"
+  timestamp_policy: "rfc3339_utc"
+  enum_policy: "closed_for_v0_with_unknown_rejected"
+enums:
+  autonomy_mode:
+    - "observe"
+    - "facilitate"
+    - "research"
+    - "plan"
+    - "execute"
+    - "repair"
+    - "gate_review"
+    - "diagnose"
+  next_actor:
+    - "human"
+    - "host_agent"
+    - "forge_core"
+  host_action:
+    - "show_status"
+    - "call_operation"
+    - "request_confirmation"
+  mutation_policy:
+    - "allowed"
+    - "forbidden"
+    - "requires_review"
+  side_effect_policy:
+    - "read_only"
+    - "write_project_files"
+    - "run_commands"
+    - "publish"
+  caller_role:
+    - "driver"
+    - "worker"
+    - "runtime"
+    - "unknown"
+  execution_mode:
+    - "observe_only"
+    - "single_step"
+    - "autonomous_sequence"
+    - "bounded_loop"
+  retry_failure_action:
+    - "stop"
+    - "run_gate"
+    - "record_request"
+    - "ask_human"
+  human_input_requirement:
+    - "none"
+    - "checkpoint"
+    - "required"
+  prompt_mode:
+    - "none"
+    - "status"
+    - "decision"
+    - "question"
+  gate_status:
+    - "pass"
+    - "pending"
+    - "blocked"
+    - "missing"
+    - "not_applicable"
+required_fields:
+  - "contract_id"
+  - "project_ref.state_version"
+  - "source.host"
+  - "autonomy.mode"
+  - "recommendation.next_actor"
+  - "authority.mutation_policy"
+  - "coordination_scope.concurrency.expected_state_version"
+  - "execution_policy.mode"
+  - "stop_policy.stop_when"
+  - "human.input_requirement"
+  - "gates.gate_contract_refs"
+  - "command_refs"
+  - "effect_contract_refs"
+field_contract:
+  contract_id: "Stable operation fixture/response id."
+  project_ref:
+    root: "Project root."
+    project_id: "Stable project id."
+    state_version: "Observed state version."
+  source:
+    host: "Host runtime name."
+    surface: "cli_json|mcp|skill|app."
+    operation: "Read operation that produced this response."
+  autonomy:
+    mode: "Closed autonomy_mode enum."
+    rationale: "Short reason for autonomy level."
+  recommendation:
+    next_actor: "Closed next_actor enum."
+    next_operation: "Optional next Forge operation."
+    host_action: "Closed host_action enum."
+  authority:
+    mutation_policy: "Closed mutation_policy enum."
+    side_effect_policy: "Closed side_effect_policy enum."
+    authority_evidence: "Typed evidence refs."
+  coordination_scope: "Typed target, concurrency, write authority, and completion scope."
+  execution_policy: "Deterministic execution, retry, and branch behavior."
+  stop_policy: "Deterministic stop conditions and handoff target."
+  contract_refs: "Resolved by OperationReferencePolicy v0, not duplicated here."
+evidence_basis:
+  direct_patterns:
+    - source_id: "llm_as_code_2606_15874"
+      supports: "Looping, branching, sequencing, and stopping should be executable harness control flow."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Agent harnesses should be inspectable, stateful, and verification-oriented."
+    - source_id: "mixed_initiative_aaai_2025"
+      supports: "Human-agent collaboration needs explicit next actor and control handoff."
+    - source_id: "parasuraman_levels_automation"
+      supports: "Automation levels should vary by function and risk."
+  inference_boundary: "The sources support executable harness control and explicit autonomy boundaries; Forge's product-specific contract shape is the typed OperationContract response."
+failure_modes_prevented:
+  - "host agent treats Forge state as suggestion and invents next step"
+  - "autonomy level changes without execution policy"
+  - "side effects happen without authority evidence"
+  - "human checkpoint is omitted because prompt text seemed confident"

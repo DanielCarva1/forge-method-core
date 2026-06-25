@@ -1,0 +1,35 @@
+schema_version: "0.1"
+claim_contract:
+  id: "claim.story.current.expired"
+  contract_ref: "contracts/claims/claim-contract-v0.yaml"
+  claim:
+    kind: "story"
+    claimant_agent_id: "cursor-worker-1"
+    claimant_role: "worker"
+    registry_ref: ".forge-method/agents/registry.yaml"
+  scope:
+    kind: "story"
+    id: "current"
+    product_area: "runtime-core"
+    paths:
+      - "crates/forge-contracts"
+  lease:
+    acquired_at: "2026-06-25T00:00:00Z"
+    last_heartbeat_at: "2026-06-25T00:02:00Z"
+    expires_at: "2026-06-25T00:15:00Z"
+    ttl_seconds: 900
+    heartbeat_interval_seconds: 120
+    expected_state_version: 44
+  status:
+    value: "expired"
+    evaluated_at: "2026-06-25T00:30:00Z"
+    reason_code: "heartbeat_expired"
+  expiry_policy:
+    on_expiry: "record_handoff_request"
+    handoff_required: true
+    release_without_handoff_allowed: false
+    reclaim_policy: "driver_review"
+    handoff_request_ref: "contracts/requests/claim-expiry-handoff-request.yaml"
+  evidence_refs:
+    - ".forge-method/ledger.ndjson#claim.story.current.expired"
+    - ".forge-method/agents/registry.yaml#cursor-worker-1"

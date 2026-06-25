@@ -1,0 +1,22 @@
+id: v2-016
+title: Grill-as-default at every decision-close point
+epic: Partner Experience
+lane: workflows
+priority: HIGH
+status: done
+dependencies: ''
+evidence: batch4
+acceptance: Grill-gate triggers before every handoff, phase transition, and spec-lock
+  — not just in phases 1/2/3. The trigger condition is expanded in the workflow routing
+  logic.
+description: Expand grill-gate trigger conditions in the workflow routing / guidance
+  engine. Currently semi-default in phases 1/2/3; extend to fire at handoff, advance,
+  and spec-lock across ALL phases.
+files: scripts/forge_method_runtime.py (workflow routing, guidance engine trigger
+  conditions)
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

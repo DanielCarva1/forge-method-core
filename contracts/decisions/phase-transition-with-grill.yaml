@@ -1,0 +1,20 @@
+schema_version: "0.1"
+decision_close_contract:
+  id: "decision.phase_transition.with_grill"
+  contract_ref: "contracts/decisions/decision-close-contract-v0.yaml"
+  decision:
+    kind: "phase_transition"
+    status: "closed"
+    target_phase: "3-build"
+    target_ref: ".forge-method/state.yaml#phase"
+  requires_grill_evidence: true
+  grill_contract_ref: "contracts/gates/route-authority-missing-gate.yaml"
+  authority_evidence:
+    - kind: "grill_result"
+      ref: ".forge-method/evidence/grill-phase-transition.json"
+    - kind: "state_rule"
+      ref: "phase-transition.requires-grill"
+  closed_by: "codex-main"
+  closed_at: "2026-06-25T00:10:00Z"
+  reopen_policy: "human_correct_course"
+  blocked_reason: null

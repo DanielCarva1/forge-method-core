@@ -1,0 +1,35 @@
+schema_version: "0.1"
+project: "forge-method-rust"
+created_at: "2026-06-25"
+status: "migrated_to_official_root"
+official_root: "C:/forge-method-rust"
+source_snapshot:
+  path: "<user-home>/.codex/.tmp/marketplaces/forge-method-core"
+  role: "source of previously created Rust-only Forge Core material"
+scope:
+  purpose: "Rust-only Forge Core for borrowed shells such as Codex, Cursor, OpenCode, Claude, pi.dev, VS Code, and the future Forge app."
+  not_the_app: "C:/forge-rust-app is the standalone app and is out of scope for this root."
+authority:
+  current_backlog: "contracts/backlog/rust-only-core-backlog.yaml"
+  source_of_truth:
+    - "contracts/**/*.yaml"
+    - "crates/**"
+  forensic_reference_only:
+    - "forensic-reference/**"
+  not_copied:
+    - "old Python runtime scripts"
+    - "old Codex plugin skill surface"
+    - "old tests/templates/assets/examples"
+    - "old .forge-method project state"
+rules:
+  - "Python is not an implementation target for this project."
+  - "Markdown is not runtime or agent-facing authority."
+  - "Typed YAML/JSON/Rust contracts are the source of truth."
+  - "Forensic references can be mined for failures and product lessons, but cannot authorize implementation."
+validation_baseline:
+  package_manager: "cargo"
+  expected_workspace_file: "Cargo.toml"
+  expected_contract_validator: "crates/forge-contract-validator"
+next_safe_step:
+  id: "brownfield_recovery"
+  action: "Inspect MIGRATION.yaml and contracts/backlog/rust-only-core-backlog.yaml before any implementation."

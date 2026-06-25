@@ -1,0 +1,109 @@
+schema_version: "0.1"
+inventory: markdown_debt
+scope:
+  commits: "21e354e..HEAD"
+  reason: "Rust borrowed-shell core design phase created Markdown staging files before the typed-contract migration rule was hardened."
+policy:
+  markdown_final_allowlist:
+    - README
+    - installation_instructions
+    - release_notes
+  markdown_outside_allowlist: "must_delete_or_replace"
+  legacy_markdown_reference_allowed: false
+  runtime_may_load_markdown_debt: false
+already_typed:
+  - path: "docs/fixtures/operation-contract-v0/*.yaml"
+    status: "keep"
+    target: "contracts/fixtures/operation-contract-v0/*.yaml"
+markdown_debt:
+  - path: "CONTEXT.md"
+    created_or_modified: "modified"
+    current_role: "glossary staging"
+    target_contracts:
+      - "contracts/glossary.yaml"
+    removal_rule: "replace with typed glossary and generated render only if a human-facing README needs it"
+  - path: "docs/02-runtime-architecture.md"
+    created_or_modified: "modified"
+    current_role: "legacy architecture staging"
+    target_contracts:
+      - "contracts/architecture/runtime-architecture.yaml"
+    removal_rule: "delete after relevant architecture rules are migrated"
+  - path: "docs/10-agent-facing-contract-migration.md"
+    created_or_modified: "added"
+    current_role: "migration plan staging"
+    target_contracts:
+      - "contracts/migration/agent-facing-contract-migration.yaml"
+      - "contracts/policies/markdown-allowlist.yaml"
+    removal_rule: "delete after migration plan and policy are typed"
+  - path: "docs/11-rust-only-core-system-design.md"
+    created_or_modified: "added"
+    current_role: "core architecture staging"
+    target_contracts:
+      - "contracts/architecture/rust-core.yaml"
+      - "contracts/architecture/crate-boundaries.yaml"
+      - "contracts/surfaces/cli-json.yaml"
+      - "contracts/surfaces/mcp.yaml"
+    removal_rule: "delete after architecture contracts and crate boundary contracts are typed"
+  - path: "docs/12-borrowed-shell-runtime-requirements.md"
+    created_or_modified: "added"
+    current_role: "borrowed-shell requirements staging"
+    target_contracts:
+      - "contracts/requirements/borrowed-shell-runtime.yaml"
+      - "contracts/hosts/host-conformance.yaml"
+    removal_rule: "delete after host/runtime requirements are typed"
+  - path: "docs/13-operation-contract-v0.md"
+    created_or_modified: "added"
+    current_role: "operation contract staging"
+    target_contracts:
+      - "contracts/operations/operation-contract-v0.schema.yaml"
+      - "contracts/operations/operation-contract-v0.rules.yaml"
+    removal_rule: "delete after schema, rules, and examples are typed"
+  - path: "docs/adr/0016-agent-facing-typed-contracts.md"
+    created_or_modified: "added"
+    current_role: "decision staging"
+    target_contracts:
+      - "contracts/decisions/0016-agent-facing-typed-contracts.yaml"
+    removal_rule: "delete after decision contract is typed"
+  - path: "docs/adr/0017-rust-only-forge-core.md"
+    created_or_modified: "added"
+    current_role: "decision staging"
+    target_contracts:
+      - "contracts/decisions/0017-rust-only-forge-core.yaml"
+    removal_rule: "delete after decision contract is typed"
+  - path: "docs/adr/0018-cli-json-and-mcp-surfaces.md"
+    created_or_modified: "added"
+    current_role: "decision staging"
+    target_contracts:
+      - "contracts/decisions/0018-cli-json-and-mcp-surfaces.yaml"
+    removal_rule: "delete after decision contract is typed"
+  - path: "docs/adr/0019-funnel-autonomy.md"
+    created_or_modified: "added"
+    current_role: "decision staging"
+    target_contracts:
+      - "contracts/decisions/0019-funnel-autonomy.yaml"
+    removal_rule: "delete after decision contract is typed"
+  - path: "docs/adr/0020-guide-as-default-protocol-orchestrator.md"
+    created_or_modified: "added"
+    current_role: "decision staging"
+    target_contracts:
+      - "contracts/decisions/0020-guide-as-default-protocol-orchestrator.yaml"
+    removal_rule: "delete after decision contract is typed"
+  - path: "docs/adr/0021-no-generic-advance-operation.md"
+    created_or_modified: "added"
+    current_role: "decision staging"
+    target_contracts:
+      - "contracts/decisions/0021-no-generic-advance-operation.yaml"
+    removal_rule: "delete after decision contract is typed"
+remediation_order:
+  - "operation contract schema and rules"
+  - "markdown allowlist policy"
+  - "decisions"
+  - "glossary"
+  - "borrowed-shell runtime requirements"
+  - "rust core architecture and crate boundaries"
+  - "legacy runtime architecture"
+acceptance:
+  - "No runtime or agent-facing flow loads Markdown outside the allowlist."
+  - "Every markdown_debt entry has a typed target contract."
+  - "Markdown debt files are deleted after typed replacements and tests pass."
+  - "Generated Markdown, if any, is derived from typed contracts and is not committed as authority."

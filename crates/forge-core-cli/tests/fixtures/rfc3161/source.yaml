@@ -1,0 +1,13 @@
+schema_version: "0.1"
+fixture_set: "rfc3161_timestamp_verification"
+source:
+  package: "sigstore-tsa"
+  version: "0.9.0"
+  repository: "https://github.com/prefix-dev/sigstore-rust"
+  copied_from: "test_data/timestamps"
+upstream_notes:
+  - "Upstream tests describe valid_bundle.json and payload_mismatch_bundle.json as sigstore-conformance timestamp data."
+  - "valid_trusted_root.json contains TSA certificate material used only for offline verifier tests."
+usage:
+  scope: "test_only"
+  purpose: "Hermetic RFC3161 TSA verification fixtures for Forge host-adapter tests."

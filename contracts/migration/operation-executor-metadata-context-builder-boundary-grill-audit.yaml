@@ -1,0 +1,60 @@
+schema_version: "0.1"
+audit: "operation_executor_metadata_context_builder_boundary_grill"
+status: "closed"
+created_at: "2026-06-25"
+grill_question:
+  id: "operation_executor_metadata_context_builder_boundary"
+  question: "How should Forge build compact diagnostic and handoff context from metadata query results without raw content, full history, or workflow authority?"
+  answered_by: "agent_research_and_local_code_inspection"
+input_refs:
+  - "contracts/policies/operation-executor-metadata-reader-boundary.yaml"
+  - "contracts/policies/operation-executor-metadata-consumer-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+decision:
+  selected_option: "grouped_bounded_latest_metadata_context"
+  recommendation_basis:
+    - "Agents need compact context, not full append-only metadata history."
+    - "The query result already carries safe metadata and a non-authority boundary."
+    - "Grouping by target_kind plus logical_ref matches the duplicate-tolerant reader key and avoids conflating target namespaces."
+    - "Bounded output protects context budget and makes omissions explicit."
+tradeoffs:
+  pros:
+    - "Small enough for adapters to feed back to agents."
+    - "Preserves latest actionable metadata while retaining record_count as audit signal."
+    - "Keeps raw content out of diagnostic and handoff output."
+    - "Carries authority_boundary forward so context cannot become process control."
+  cons:
+    - "Older per-record history is summarized away from context output."
+    - "Sorting by stable target key favors deterministic output over recency ordering."
+    - "Adapter auto-invocation policy remains a later boundary."
+evidence_basis:
+  - source_id: "tool_schema_compression_2605_26165"
+    supports: "Agent-facing contract views need context compression."
+  - source_id: "harnessfix_trace_guided_2606_06324"
+    supports: "Scoped trace/evidence retrieval improves diagnosis."
+  - source_id: "agentic_harness_engineering_2604_25850"
+    supports: "Harness components need observable evidence tied to outcomes."
+  - source_id: "agentleak_privacy_leakage_2602_11510"
+    supports: "Raw payload exposure should be minimized."
+  - source_id: "natural_language_agent_harnesses_2603_25723"
+    supports: "Durable harness artifacts should remain portable across lightweight adapters."
+  - source_id: "code_as_agent_harness_2605_18747"
+    supports: "Harness behavior should be executable and inspectable."
+policy_ref: "contracts/policies/operation-executor-metadata-context-builder-boundary.yaml"
+implementation_refs:
+  - "crates/forge-core-store/src/lib.rs"
+  - "crates/forge-core-cli/src/lib.rs"
+  - "crates/forge-core-cli/src/main.rs"
+  - "crates/forge-core-store/tests/reference_index.rs"
+  - "crates/forge-core-cli/tests/validate.rs"
+acceptance:
+  - "Context builder groups records by target identity."
+  - "Context builder reports bounded group counts and omissions."
+  - "Context builder preserves non-authority boundary."
+  - "CLI --context emits compact JSON and exits nonzero if source query failed."
+  - "Tests prove payload markers are absent from context output."
+closed_decision: "Build compact metadata context as a read-only grouped latest-metadata view with explicit bounded output and preserved non-authority semantics."
+next_grill_question:
+  id: "sigstore_fulcio_certificate_identity_boundary"
+  question: "How should Forge verify Fulcio certificate chain, certificate identity extensions, expected OIDC issuer, and workflow identity selectors against the trusted-root policy without treating policy validation as cryptographic proof?"
+  recommended_answer: "Add a Forge-owned Sigstore bundle/Fulcio verifier backend that consumes trusted-root policy and returns typed identity, subject, timestamp, and revocation evidence while preserving adapter-neutral authority."

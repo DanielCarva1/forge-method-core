@@ -1,0 +1,18 @@
+schema_version: "0.1"
+decision_close_contract:
+  id: "decision.phase_transition.missing_grill"
+  contract_ref: "contracts/decisions/decision-close-contract-v0.yaml"
+  decision:
+    kind: "phase_transition"
+    status: "blocked"
+    target_phase: "3-build"
+    target_ref: ".forge-method/state.yaml#phase"
+  requires_grill_evidence: true
+  grill_contract_ref: null
+  authority_evidence:
+    - kind: "state_rule"
+      ref: "phase-transition.requires-grill"
+  closed_by: "codex-main"
+  closed_at: null
+  reopen_policy: "grill_required"
+  blocked_reason: "missing_grill_evidence"

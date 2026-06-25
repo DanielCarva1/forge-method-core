@@ -1,0 +1,67 @@
+schema_version: "0.1"
+audit: "coordination_eval_type_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "contracts/policies/advanced-boundary-type-order.yaml"
+  - "contracts/policies/coordination-eval-type-boundary.yaml"
+  - "contracts/evals/coordination-eval-contract-v0.yaml"
+  - "contracts/evals/minimal-coordination-eval-suite.yaml"
+grill_question:
+  id: "coordination_eval_type_boundary"
+  question: "How should CoordinationEvalContract type eval dimensions and fixtures so it measures real coordination behavior rather than schema shape alone?"
+  options:
+    - id: "boundary_failure_modes"
+      summary: "Eval dimensions are closed coordination failure modes with required fixtures, failure signals, and evidence refs."
+      advantages:
+        - "Directly targets duplicate work, lane collision, stale claims, read/write repair, request lifecycle, integration gates, runtime handoff, destructive effects, and human guidance recovery."
+        - "Keeps local evals cheap while making claims falsifiable."
+        - "Prevents schema validation from being mistaken for behavior proof."
+      disadvantages:
+        - "External benchmark/stress runner still remains future work."
+    - id: "schema_shape_only"
+      summary: "Only validate that eval YAML has dimensions and refs."
+      advantages:
+        - "Simpler."
+      disadvantages:
+        - "Too weak; would not prove coordination behavior."
+    - id: "external_benchmark_only"
+      summary: "Wait for CooperBench/MultiAgentBench-style runner integration before accepting eval contracts."
+      advantages:
+        - "Closer to empirical benchmark rigor."
+      disadvantages:
+        - "Blocks local contract progress and leaves Forge with no typed minimum eval surface."
+  selected_option: "boundary_failure_modes"
+  decision: "CoordinationEvalContract measures required coordination failure modes through fixture refs, evidence refs, failure signals, and pass policy. It is not a general quality claim or schema-shape check."
+  acceptance_criteria:
+    - "Coordination eval fixtures deserialize through Rust/Serde."
+    - "All required v0 dimensions are present when all_must_pass_dimensions_required is true."
+    - "Each dimension has fixture refs, evidence refs, and non-empty failure_signal."
+    - "Threshold metrics require threshold; fixture/manual metrics reject threshold."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-contracts/src/coordination_eval.rs"
+    - "crates/forge-core-validate/src/lib.rs"
+  validation:
+    - "cargo test -p forge-core-contracts --test load_current_contracts deserializes_coordination_eval_instances"
+    - "cargo test -p forge-core-validate validates_current_coordination_eval_instances"
+evidence_basis:
+  direct_patterns:
+    - source_id: "cooperbench_2601_13295"
+      supports: "Collaborative coding needs conflict/coordination evaluation beyond individual task ability."
+    - source_id: "multiagentbench_2503_01935"
+      supports: "Multi-agent benchmarks should measure collaboration quality and milestone KPIs."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness evaluation must cover shared state, coordination, and human oversight."
+    - source_id: "utboost_2025_acl"
+      supports: "Weak tests create false positive pass claims."
+    - source_id: "agentless_fse_2025"
+      supports: "Constrained baselines and rigorous benchmark filtering avoid overclaiming autonomous agent quality."
+  inference_boundary: "The papers support coordination-specific and rigorous evals. Forge's local fixture suite is an interim but typed acceptance surface until external benchmark runners exist."
+next_grill_question:
+  id: "schema_and_compact_agent_view_generation_boundary"
+  question: "After all v0 contract families have Rust types, how should Forge generate JSON Schema and compact agent-facing views without reintroducing Markdown or hand-maintained schema drift?"
+  recommended_answer: "generate_json_schema_and_compact_agent_views_from_rust_types_as_outputs_not_authority"

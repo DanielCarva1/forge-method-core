@@ -1,0 +1,60 @@
+schema_version: "0.1"
+audit: "host_adapter_manifest_projection_boundary_grill"
+status: "closed"
+created_at: "2026-06-25"
+grill_question:
+  id: "host_adapter_manifest_projection_boundary"
+  question: "How should Forge project the host-adapter manifest into MCP/tool schemas, borrowed-shell installation surfaces, and app UI without making those projections authoritative?"
+  answered_by: "agent_research_local_code_inspection_and_rust_tests"
+input_refs:
+  - "contracts/policies/host-adapter-manifest-boundary.yaml"
+  - "contracts/policies/operation-executor-metadata-adapter-integration-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+decision:
+  selected_option: "derive_transport_projections_from_rust_manifest"
+  recommendation_basis:
+    - "MCP and A2A sources support discovery metadata and schema-backed tools, not replacing local governance."
+    - "The existing HostAdapterManifest already classifies command authority and mutation behavior."
+    - "Local-runtime security evidence argues against raw shell-string projections."
+    - "Forge needs one projection source for MCP, borrowed shells, IDEs, and app UI."
+tradeoffs:
+  pros:
+    - "Gives hosts useful schemas and UI metadata without duplicating authority rules."
+    - "Preserves mutation and authority classes across MCP, shell, and app projections."
+    - "Creates a testable path toward compatibility with Codex, Cursor, Claude, opencode, VS Code, pi.dev, app, and daemon surfaces."
+    - "Keeps projection out of Markdown."
+  cons:
+    - "Does not implement a running MCP server."
+    - "Does not solve installer trust or binary distribution."
+    - "Host cooperation is still required until adapters enforce the projection."
+evidence_basis:
+  - source_id: "mcp_tools_spec"
+    supports: "Schema-backed tool capability discovery."
+  - source_id: "mcp_tool_annotations_2603"
+    supports: "Read-only/destructive/idempotent annotations are advisory hints."
+  - source_id: "a2a_protocol"
+    supports: "Interoperability through discovery metadata across agent applications."
+  - source_id: "agent_protocol_taxonomy_2606_19135"
+    supports: "Discovery and schema should be explicit protocol dimensions."
+  - source_id: "openai_agents_sdk"
+    supports: "Tools, handoffs, and guardrails are separated surfaces."
+  - source_id: "local_llm_agents_vulnerable_runtimes_2606_21071"
+    supports: "Local tool dispatch and process execution require explicit runtime security boundaries."
+  - source_id: "code_as_agent_harness_2605_18747"
+    supports: "Harness behavior should be executable, inspectable, and verifiable."
+policy_ref: "contracts/policies/host-adapter-manifest-projection-boundary.yaml"
+implementation_refs:
+  - "crates/forge-core-cli/src/lib.rs"
+  - "crates/forge-core-cli/src/main.rs"
+  - "crates/forge-core-cli/tests/validate.rs"
+acceptance:
+  - "HostAdapterProjection is emitted by run_host_adapter_projection."
+  - "forge-core host-adapter-projection --target mcp_tools --json emits projection_authoritative=false."
+  - "MCP projection preserves read-only/destructive/idempotent hints."
+  - "execute-operation projection remains mutating and destructive from the host perspective."
+  - "Tests prove MCP projection is non-authoritative and preserves command safety metadata."
+closed_decision: "Forge projects host metadata from the Rust manifest into MCP, borrowed-shell, and app UI views. Projections are transport-specific views and remain non-authoritative."
+next_grill_question:
+  id: "sigstore_fulcio_certificate_identity_boundary"
+  question: "How should Forge verify Fulcio certificate chain, certificate identity extensions, expected OIDC issuer, and workflow identity selectors against the trusted-root policy without treating policy validation as cryptographic proof?"
+  recommended_answer: "Add a Forge-owned Sigstore bundle/Fulcio verifier backend that consumes trusted-root policy and returns typed identity, subject, timestamp, and revocation evidence while preserving adapter-neutral authority."

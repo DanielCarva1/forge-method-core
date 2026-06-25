@@ -1,0 +1,112 @@
+schema_version: "0.1"
+policy: "rust_runtime_execution_boundary"
+status: "accepted"
+purpose: "Define the first Rust runtime execution boundary so Forge moves authority out of host-agent prose without recreating the old monolithic runtime."
+decision:
+  selected_strategy: "operation_plan_first_no_mutating_executor"
+  runtime_crate: "forge-core-runtime"
+  first_public_api: "plan_operation"
+  input_contracts:
+    - "OperationContractDocument"
+  output_contracts:
+    - "RuntimePlan"
+  implemented_now:
+    - "Validate an OperationContractDocument through forge-core-validate."
+    - "Classify the runtime plan status from typed authority, autonomy, gates, execution policy, stop policy, and human input requirements."
+    - "Return typed next actor, host action, next operation, prompt, command refs, effect refs, and decision reasons."
+  explicitly_not_implemented_now:
+    - "Execute shell commands."
+    - "Mutate project files."
+    - "Run an LLM loop."
+    - "Own host-specific rendering."
+    - "Start a daemon."
+    - "Replace store-backed state projection."
+  status_order:
+    - "blocked_validation_error"
+    - "blocked_gate"
+    - "awaiting_human_required_input"
+    - "gate_required_missing_or_pending"
+    - "review_required"
+    - "read_only_status"
+    - "ready_to_call_operation"
+  autonomy_boundary: "The runtime narrows host-agent freedom at authority boundaries, but does not remove creative reasoning or human facilitation from the host agent."
+rules:
+  - id: "runtime_returns_plan_not_text"
+    rule: "The runtime must return typed decisions and reasons; CLI/adapters render them for humans or agents."
+  - id: "no_side_effects_in_first_runtime_boundary"
+    rule: "The first runtime boundary may not execute commands or write files."
+  - id: "validation_precedes_planning"
+    rule: "Runtime planning must call Rust validation first and block invalid contracts."
+  - id: "human_required_beats_stale_next_step"
+    rule: "If the contract requires human input, the plan must await the human instead of advancing a stale next action."
+  - id: "gate_blocks_mutation"
+    rule: "Blocked, missing, or pending gates must prevent ready-to-execute plans unless the next action is itself the required gate/review operation."
+  - id: "host_agent_may_explain_not_invent"
+    rule: "The host agent may explain the RuntimePlan, ask the human, or call the allowed operation; it may not invent a different next step."
+tradeoffs:
+  chosen:
+    advantages:
+      - "Creates a real Rust authority layer before broad execution."
+      - "Gives Codex, Cursor, opencode, Claude, VS Code, pi.dev, and future Forge app the same typed plan surface."
+      - "Reduces host-agent drift while preserving facilitation and reasoning outside hard authority boundaries."
+      - "Keeps the step small enough to validate thoroughly in Rust."
+    disadvantages:
+      - "Does not yet automate command execution or project mutation."
+      - "Requires adapters to respect RuntimePlan rather than relying only on prose instructions."
+      - "Some old Forge behavior remains outside the Rust runtime until later boundaries migrate it."
+  rejected:
+    - id: "monolithic_runtime_clone"
+      reason: "Would recreate the current giant-script failure mode and hide authority inside broad imperative flow."
+    - id: "executor_first"
+      reason: "Executing commands/files before typed planning and validation would expand side effects before governance is proven."
+    - id: "daemon_first"
+      reason: "Daemon mechanics are not justified before the host-neutral runtime plan and store abstractions compile."
+    - id: "prompt_only_guardrails"
+      reason: "Prompt reminders are not an enforceable runtime boundary."
+acceptance:
+  crate:
+    - "Add forge-core-runtime as a library crate."
+    - "Expose plan_operation(document: &OperationContractDocument) -> RuntimePlan."
+    - "Do not depend on CLI, MCP, terminal styling, or host adapters."
+  tests:
+    - "facilitate-first product idea routes to awaiting_human."
+    - "mechanical story execute routes to ready_to_call_operation."
+    - "release gate required routes to gate_required."
+    - "destructive missing inverse fixture routes to blocked."
+    - "host drift invented next step does not route to ready_to_call_operation."
+  validation:
+    - "cargo test -p forge-core-runtime"
+    - "cargo test --workspace"
+    - "cargo clippy --workspace -- -D warnings"
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-runtime/src/lib.rs"
+    - "crates/forge-core-runtime/tests/operation_plan.rs"
+  validation:
+    - "cargo test -p forge-core-runtime"
+evidence_basis:
+  direct_patterns:
+    - source_id: "natural_language_agent_harnesses_2603_25723"
+      supports: "Harness logic can be externalized through explicit contracts, durable artifacts, and lightweight adapters."
+    - source_id: "runtime_governance_paths_2603_16586"
+      supports: "Prompting alone is not path-level governance; deterministic policy over execution paths is required."
+    - source_id: "runtime_governance_embodied_2604_07833"
+      supports: "Agent cognition and execution oversight should be separated by a dedicated runtime governance layer."
+    - source_id: "agentic_harness_engineering_2604_25850"
+      supports: "Harness components and decisions need observability and evidence-backed evolution."
+    - source_id: "storm_state_management_2605_20563"
+      supports: "State-mediated writes outperform post-hoc worktree merge conflict handling in multi-agent code tasks."
+    - source_id: "tool_use_orchestration_survey_2603_22862"
+      supports: "Long-horizon multi-tool agents require intermediate state, recovery, safety, cost, and verifiability."
+    - source_id: "agent_harness_engineering_survey_2026"
+      supports: "Harness reliability depends on execution, tool, context, lifecycle, observability, validation, and governance boundaries."
+  inference_boundary: "The papers support runtime governance, harness separation, explicit contracts, and state-mediated coordination. The exact RuntimePlan statuses are Forge product-specific and derived from existing OperationContract fields."
+failure_modes_prevented:
+  - "host agent rewrites next_action from its own momentum"
+  - "runtime jumps directly from recommendation to side effect"
+  - "human facilitation is skipped because an old checkpoint contains a mechanical next step"
+  - "multi-agent state conflict is hidden until merge time"
+  - "adapter-specific behavior becomes core authority"
+next_boundary:
+  id: "runtime_effect_staging_boundary"
+  question: "After read snapshots block missing authority refs, how should Forge stage command/effect execution without committing irreversible state directly?"

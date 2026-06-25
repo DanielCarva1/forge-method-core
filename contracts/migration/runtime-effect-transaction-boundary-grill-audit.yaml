@@ -1,0 +1,85 @@
+schema_version: "0.1"
+audit: "runtime_effect_transaction_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+grill_state_machine:
+  state: "S6"
+  closed_question:
+    id: "runtime_effect_transaction_boundary"
+    question: "After read-only command evidence can be recorded, how should Forge load ToolEffectContract bodies, check read/write freshness, and apply append/create/write effects with transaction and rollback semantics?"
+    selected_answer: "Do not apply effects yet. First close a payload-gated transaction readiness boundary because current ToolEffectContract instances authorize targets but do not carry payload content. Runtime must block non-delete writes unless matching RuntimeEffectPayload entries exist."
+inputs:
+  - "contracts/effects/tool-effect-contract-v0.yaml"
+  - "contracts/effects/*.yaml"
+  - "contracts/policies/runtime-command-evidence-recording-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "crates/forge-core-contracts/src/tool_effect.rs"
+  - "crates/forge-core-runtime/src/lib.rs"
+gap_confirmed_by_code:
+  observed:
+    - "ToolEffectContract write_set declares targets and access modes."
+    - "Effect instances do not declare payload/content/body fields."
+    - "Applying create/write/append without payload would require the runtime or host agent to invent content."
+  conclusion: "Effect application must be preceded by payload authority. The first transaction boundary is readiness, not filesystem mutation."
+decision:
+  canonical_term: "Runtime Effect Transaction Readiness"
+  policy_ref: "contracts/policies/runtime-effect-transaction-boundary.yaml"
+  selected_strategy: "payload_gated_transaction_readiness_before_file_application"
+  scope:
+    includes:
+      - "staged effect admission"
+      - "ToolEffectContract validation"
+      - "write_set presence"
+      - "RuntimeEffectPayload matching for non-delete writes"
+      - "typed transaction readiness plan"
+    excludes:
+      - "payload content transport"
+      - "filesystem freshness hashing"
+      - "temp file transaction"
+      - "commit"
+      - "rollback"
+      - "ledger persistence"
+tradeoffs:
+  selected:
+    advantages:
+      - "Prevents applying effects from incomplete authority data."
+      - "Names a real current design gap rather than hiding it behind implementation."
+      - "Keeps future file application smaller and safer."
+    disadvantages:
+      - "Does not yet write files."
+      - "Requires another boundary for payload bytes, freshness, temp transaction, and rollback."
+  rejected:
+    - id: "apply_now_from_write_set"
+      reason: "write_set describes targets, not content."
+    - id: "ask_host_agent_to_generate_payload_later"
+      reason: "Would recreate prose as execution authority."
+    - id: "inline_payloads_in_all_effect_contracts_immediately"
+      reason: "Could be right later, but current evidence only proves the need for payload authority, not the best transport."
+scenario_tests:
+  - id: "story_effect_without_payload"
+    scenario: "The staged story artifact effect has create and append writes but no payloads."
+    expected_result: "RuntimeEffectTransactionStatus::Blocked with MissingPayloadForWrite."
+  - id: "story_effect_with_payloads"
+    scenario: "Payloads are supplied for artifact and evidence write targets."
+    expected_result: "RuntimeEffectTransactionStatus::Ready with TransactionReady."
+evidence_basis:
+  direct_patterns:
+    - source_id: "cordon_semantic_transactions_2606_17573"
+      supports: "Effects should be staged and validated before commit."
+    - source_id: "coagent_2606_15376"
+      supports: "Conflict and repair semantics should be explicit in long-running agent work."
+    - source_id: "rac_2605_03409"
+      supports: "Side effects need explicit recovery/compensation data."
+    - source_id: "runtime_enforcement_2503_18666"
+      supports: "Runtime should block unsafe or underspecified actions before execution."
+    - source_id: "storm_state_management_2605_20563"
+      supports: "Write-time consistency should mediate shared-state mutation."
+  inference_boundary: "The sources support transaction readiness and pre-write blocking. They do not prescribe Forge's exact RuntimeEffectPayload fields."
+implementation_plan:
+  - "Add RuntimeEffectPayload."
+  - "Add RuntimeEffectTransactionPlan."
+  - "Add prepare_effect_transaction."
+  - "Test missing payload block and full payload readiness."
+next_grill_question:
+  id: "runtime_effect_application_boundary"
+  question: "After effect transaction readiness requires payload authority, how should Forge transport payload content, check filesystem freshness, apply append/create/write/delete in a temp transaction, and rollback on failure?"

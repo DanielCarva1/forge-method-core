@@ -1,0 +1,71 @@
+schema_version: "0.1"
+audit: "filesystem_reference_index_adapter_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/rust-workspace-architecture.yaml"
+  - "contracts/policies/typed-cross-file-reference-validation-boundary.yaml"
+  - "contracts/migration/typed-cross-file-reference-validation-boundary-grill-audit.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "filesystem_reference_index_adapter_boundary"
+  question: "Which crate owns building ReferenceIndex from repo/runtime state for CLI, app, daemon, and MCP callers without duplicating traversal rules?"
+  options:
+    - id: "forge_core_store_owns_reference_index_builder"
+      summary: "Create forge-core-store now and put repo/runtime ReferenceIndex construction there."
+      advantages:
+        - "Matches the existing Rust workspace architecture."
+        - "Keeps forge-core-validate pure and reusable."
+        - "Gives CLI, runtime, MCP, daemon, app, and tests one shared builder."
+        - "Starts store with a narrow, useful boundary instead of a full DB/runtime layer."
+      disadvantages:
+        - "Introduces another crate before full runtime/store exists."
+        - "Requires a small public API around projection options."
+    - id: "keep_builder_in_tests_until_cli"
+      summary: "Leave ReferenceIndex construction only in tests and defer shared code."
+      advantages:
+        - "No new crate today."
+      disadvantages:
+        - "Encourages CLI/app/MCP duplication."
+        - "Leaves current validator integration without a reusable repo-state source."
+    - id: "put_builder_in_forge_core_validate"
+      summary: "Move filesystem traversal into forge-core-validate."
+      advantages:
+        - "Fewer crates and simpler call site."
+      disadvantages:
+        - "Violates the just-closed pure validator boundary."
+        - "Makes validation harder to reuse outside filesystem-backed CLI runs."
+  selected_option: "forge_core_store_owns_reference_index_builder"
+  decision: "Create forge-core-store as the owner of repository-backed ReferenceIndex construction. The builder indexes current contract families, command stable ids, runtime manifests, materialized ledger refs, and explicit standard runtime projections. Semantic acceptance stays in forge-core-validate."
+acceptance_criteria:
+  - "forge-core-store exists as workspace crate."
+  - "ReferenceIndexBuilder exposes default options and explicit projection control."
+  - "Store tests build the index from the current repo and pass cross-file validation using forge-core-validate."
+  - "No filesystem traversal is added to forge-core-validate."
+  - "No Python is used."
+  - "No Markdown is created or edited."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-store/src/lib.rs"
+    - "crates/forge-core-store/tests/reference_index.rs"
+  policy_refs:
+    - "contracts/policies/filesystem-reference-index-adapter-boundary.yaml"
+  validation:
+    - "cargo test -p forge-core-store"
+evidence_basis:
+  direct_patterns:
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Shared executable harness state improves verification and coordination."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy decisions should be backed by stable, auditable infrastructure."
+    - source_id: "opendev_terminal_agents_2603_05344"
+      supports: "Compound terminal-agent architecture separates memory/context from planning and execution."
+    - source_id: "cargo_workspaces_official"
+      supports: "Cargo workspaces are the native Rust structure for related packages with separate responsibilities."
+    - source_id: "rust_api_guidelines_official"
+      supports: "Typed APIs and clear dependency boundaries are part of reliable Rust API design."
+  inference_boundary: "The evidence supports separated store/validation boundaries; it does not prescribe the crate name. The crate name follows Forge's accepted RustWorkspaceArchitecture policy."
+next_grill_question:
+  id: "thin_cli_validation_surface_boundary"
+  question: "How should the Rust CLI consume store-built ReferenceIndex and forge-core-validate reports while replacing or wrapping the legacy validator without widening scope?"
+  recommended_answer: "create_thin_cli_or_compat_wrapper_using_store_index_and_validate_reports"

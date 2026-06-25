@@ -1,0 +1,74 @@
+schema_version: "0.1"
+policy: "typed_cross_file_reference_validation_boundary"
+status: "accepted"
+purpose: "Define how Forge Rust core validates cross-file and stable-id references without coupling reusable semantic validation to repository filesystem traversal."
+decision:
+  selected_strategy: "pure_index_then_typed_reference_resolution"
+  core_authority: "forge-core-validate owns typed reference rules and diagnostics."
+  adapter_authority: "Filesystem, runtime store, MCP, app, or daemon adapters build ReferenceIndex inputs outside pure validation rules."
+  reference_index_shape:
+    key: "repo-relative path or stable id"
+    value: "ReferenceKind"
+    error_modes:
+      missing_reference: "A required authority reference is not present in the supplied ReferenceIndex."
+      kind_mismatch: "A reference exists but points to a kind that cannot satisfy the contract field."
+  initial_scope:
+    validates:
+      - "Inventory schema_ref, supporting_policy_refs, and operation family instance refs."
+      - "Operation command, gate, request, tool-effect, ledger, runtime registry, and side-contract refs."
+      - "Claim, completion, gate, request, effect, decision, runtime handoff, health recovery, and coordination eval authority refs."
+      - "Runtime registry and capability evidence refs used for cross-runtime handoff."
+    does_not_validate_yet:
+      - "Arbitrary product source files referenced by read/write sets."
+      - "Unmaterialized runtime evidence blobs under .forge-method/evidence."
+      - "Repository traversal policy, cache freshness, or daemon store implementation."
+      - "Historical Markdown references scheduled for deletion or render-only output."
+rules:
+  - id: "core_rules_are_pure"
+    rule: "forge-core-validate must not walk the repository to discover references inside semantic validators."
+  - id: "reference_kind_is_authority"
+    rule: "A present ref is not enough; the resolved ReferenceKind must match the contract field's accepted authority kinds."
+  - id: "missing_ref_and_kind_mismatch_are_distinct"
+    rule: "Validators must emit distinct diagnostics for unknown refs and wrong-kind refs."
+  - id: "adapter_supplies_index"
+    rule: "CLI, app, daemon, MCP, or tests may build ReferenceIndex values from filesystem/runtime state before calling pure validators."
+  - id: "evidence_blob_refs_are_later_boundary"
+    rule: "Runtime evidence blob existence is not part of the first typed cross-file boundary unless the ref is used as capability, registry, ledger, or contract authority."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-validate/src/lib.rs"
+    - "crates/forge-core-validate/tests/current_contracts.rs"
+  validation:
+    - "cargo test -p forge-core-validate validates_current_cross_file_references_with_pure_index"
+    - "cargo test -p forge-core-validate typed_reference_validation_reports_missing_and_wrong_kind"
+anti_patterns:
+  - id: "filesystem_hidden_inside_core"
+    risk: "The reusable validator becomes another CLI and cannot be reused from Forge app, MCP, daemon, or tests."
+  - id: "string_presence_without_kind"
+    risk: "A ref can point to an unrelated file and still pass existence checks."
+  - id: "schema_only_authority"
+    risk: "Generated schemas prove shape while cross-file authority drift remains unchecked."
+  - id: "prompt_memory_reference_resolution"
+    risk: "Agents decide that a referenced thing exists because chat context implies it, not because runtime state proves it."
+evidence_basis:
+  direct_patterns:
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy checks should be explicit infrastructure with auditable diagnostics instead of prompt-dependent behavior."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Agent harness state and verification should be executable, inspectable, and reusable."
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Schema-backed interfaces need structured diagnostics; shape alone is insufficient."
+    - source_id: "agent_protocol_taxonomy_2606_19135"
+      supports: "Agent protocols need explicit payload, state, and discovery boundaries."
+    - source_id: "grite_2606_19616"
+      supports: "Repo-local coordination state benefits from explicit referenceable artifacts."
+  inference_boundary: "The sources support explicit policy, typed state, structured diagnostics, and protocol boundaries. Forge's specific ReferenceIndex and ReferenceKind design is the local Rust implementation of those patterns."
+acceptance:
+  - "ReferenceIndex exists as a pure input to forge-core-validate."
+  - "MissingReference and ReferenceKindMismatch are distinct DiagnosticCode values."
+  - "Current v0 contract authority refs validate with a test-built pure index."
+  - "Negative test coverage proves missing refs and wrong-kind refs produce different diagnostics."
+  - "Filesystem index construction remains outside core semantic validators."
+next_boundary:
+  id: "legacy_validator_parity_retirement_boundary"
+  question: "Which legacy forge-contract-validator checks are not yet covered by forge-core-cli typed validation, and should the old binary wrap the new CLI or stay temporarily separate?"

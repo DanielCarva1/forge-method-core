@@ -1,0 +1,83 @@
+schema_version: "0.1"
+audit: "legacy_validator_parity_matrix_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/legacy-validator-parity-retirement-boundary.yaml"
+  - "contracts/migration/legacy-validator-parity-retirement-boundary-grill-audit.yaml"
+  - "contracts/migration/generic-yaml-evidence-ref-validation-boundary-grill-audit.yaml"
+  - "crates/forge-contract-validator/src/main.rs"
+  - "crates/forge-contract-validator/tests/parity.rs"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "legacy_validator_parity_matrix_boundary"
+  question: "After generic YAML and source_id checks move, what exact remaining legacy checks require parity tests before forge-contract-validator can wrap forge-core-cli?"
+  options:
+    - id: "matrix_first_overlap_tests_then_wrapper_decision"
+      summary: "Create an explicit remaining-check matrix and add initial overlap tests before considering wrapper/retirement."
+      advantages:
+        - "Prevents false parity claims."
+        - "Keeps concrete remaining work visible."
+        - "Lets source_id migration be proven by negative-case test."
+      disadvantages:
+        - "Keeps both binaries temporarily."
+        - "Requires additional boundaries for remaining generic refs and stdout compatibility."
+    - id: "wrap_now_after_source_id_migration"
+      summary: "Wrap forge-contract-validator now because source_id and current pass are covered."
+      advantages:
+        - "Reduces duplicate binaries immediately."
+      disadvantages:
+        - "Leaves generic known-ref, enum parity, and stdout compatibility unproven."
+    - id: "delete_legacy_now"
+      summary: "Delete forge-contract-validator and rely on forge-core-cli."
+      advantages:
+        - "Simplest codebase."
+      disadvantages:
+        - "Violates retirement policy and loses unproven checks."
+  selected_option: "matrix_first_overlap_tests_then_wrapper_decision"
+  decision: "Keep forge-contract-validator temporarily. Add parity tests for current repo pass and unknown source_id failure. Track remaining known-ref, enum, stdout, and generic policy-ref items before any wrapper or deletion."
+coverage_matrix:
+  proven:
+    - legacy_area: "current repo pass"
+      proof: "cargo test -p forge-contract-validator"
+      implementation_ref: "crates/forge-contract-validator/tests/parity.rs"
+    - legacy_area: "recursive unknown source_id failure"
+      proof: "cargo test -p forge-contract-validator"
+      implementation_ref: "crates/forge-contract-validator/tests/parity.rs"
+  remaining:
+    - "rust_runtime_execution_boundary"
+  resolved_after_initial_matrix:
+    - legacy_area: "generic known-ref/file-ref checks"
+      proof: "cargo test -p forge-contract-validator legacy_validator_and_forge_core_cli_both_reject_missing_policy_ref"
+      policy_ref: "contracts/policies/generic-known-ref-validation-boundary.yaml"
+    - legacy_area: "schema enum_set based checks"
+      proof: "cargo test -p forge-contract-validator enum"
+      policy_ref: "contracts/policies/schema-enum-parity-boundary.yaml"
+    - legacy_area: "legacy stdout summary compatibility"
+      proof: "cargo test -p forge-contract-validator legacy_validator_and_forge_core_cli_both_pass_current_repo"
+      policy_ref: "contracts/policies/legacy-stdout-compatibility-boundary.yaml"
+    - legacy_area: "remaining generic policy/migration refs"
+      proof: "cargo test -p forge-core-store store_known_paths_satisfy_current_generic_known_refs"
+      policy_ref: "contracts/policies/generic-known-ref-validation-boundary.yaml"
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-contract-validator/tests/parity.rs"
+  policy_refs:
+    - "contracts/policies/legacy-validator-parity-matrix-boundary.yaml"
+  validation:
+    - "cargo test -p forge-contract-validator"
+evidence_basis:
+  direct_patterns:
+    - source_id: "utboost_2025_acl"
+      supports: "Validation adequacy needs targeted negative tests."
+    - source_id: "agentless_fse_2025"
+      supports: "New complex machinery should be compared against constrained baselines."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness verification needs explicit, inspectable behavior."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy transitions require stable evidence."
+  inference_boundary: "This boundary proves two overlap cases and identifies remaining parity work. It does not authorize wrapping or deleting forge-contract-validator."
+next_grill_question:
+  id: "rust_runtime_execution_boundary"
+  question: "After validation and compatibility are stabilized, which Rust runtime execution boundary should be implemented next without recreating the old giant Python runtime?"
+  recommended_answer: "start with a narrow runtime operation executor over typed OperationContract and store abstractions, not a monolithic Python-like runtime clone"

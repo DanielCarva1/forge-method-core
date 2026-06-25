@@ -1,0 +1,22 @@
+id: v2-025
+title: JSON schema for workflows/templates
+epic: Extensibility
+lane: runtime-core
+priority: MED
+status: done
+dependencies: ''
+evidence: .forge-method/evidence/final-batch-evidence.md
+acceptance: A JSON schema file exists for workflow definitions (trigger, inputs, steps,
+  outputs, done_when, blocked_when, handoff). `forge workflow validate <id>` checks
+  a workflow against the schema. Evals pass.
+description: Create a JSON schema (Draft 2020-12) for the workflow reference format.
+  Add a validation command that checks workflows against it. Add evals that verify
+  all existing workflows pass validation.
+files: skills/forge-method/schemas/workflow.schema.json, scripts/forge_method_runtime.py
+  (cmd_workflow_validate)
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

@@ -1,0 +1,23 @@
+id: v2-023
+title: Orchestration spawning (agent-team/parallel/subagent actually spawn)
+epic: Advanced Coordination
+lane: runtime-core
+priority: HIGH
+status: done
+dependencies: v2-010
+evidence: .forge-method/evidence/final-batch-evidence.md
+acceptance: '`forge spawn --runtime opencode --lane X --task ''...''` emits a spawn
+  directive (agent_id, runtime, lane, task) that the harness reads and executes. The
+  spawn is recorded in the registry + ledger. Runtime-agnostic (the harness does the
+  actual spawning, not Forge).'
+description: 'Add cmd_spawn that writes a spawn directive to .forge-method/spawns/<id>.yaml.
+  The directive contains: agent_id, runtime_hint, lane, task_description, parent_agent.
+  The harness (Pi/Codex/OpenCode) reads these and spawns. Forge records the spawn
+  in registry + ledger. Does NOT call any runtime API directly (C3).'
+files: scripts/forge_method_runtime.py (new cmd_spawn, build_parser)
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

@@ -1,0 +1,17 @@
+schema_version: "0.1"
+runtime_registry_entry:
+  id: "runtime.cursor.browser_agent"
+  runtime_kind: "cursor"
+  runtime_id: "cursor-browser-agent"
+  status: "available"
+  owner: "team"
+  surface: "ide"
+  protocol_refs:
+    - "a2a"
+    - "mcp"
+  capability_refs:
+    - "contracts/runtimes/capability-browser-validation.yaml"
+  trust_policy:
+    may_receive_handoff: true
+    may_mutate_forge_state: false
+    must_use_requests_for_state_changes: true

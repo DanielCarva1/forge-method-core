@@ -1,0 +1,83 @@
+schema_version: "0.1"
+audit: "operation_executor_payload_adapter_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+grill_state_machine:
+  state: "S6"
+  closed_question:
+    id: "operation_executor_payload_adapter_boundary"
+    question: "After the runtime owns a single operation executor, how should adapters load, validate, and redact effect payload content without putting large or sensitive payload bytes into agent context?"
+    selected_answer: "Use file payload specs with default repo-root scope, pre-read byte-size limit, sha256 hash metadata, explicit outside-root override, and no raw payload bytes in RuntimeOperationExecution JSON."
+inputs:
+  - "contracts/policies/runtime-store-adapter-integration-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "crates/forge-core-cli/src/lib.rs"
+  - "crates/forge-core-runtime/src/lib.rs"
+decision:
+  canonical_term: "Operation Executor Payload Adapter"
+  policy_ref: "contracts/policies/operation-executor-payload-adapter-boundary.yaml"
+  selected_strategy: "file_payload_specs_with_default_root_scope_size_limit_and_hash_metadata"
+  scope:
+    includes:
+      - "payload file specs"
+      - "repo-root scope by default"
+      - "explicit outside-root override"
+      - "pre-read max byte check"
+      - "sha256 payload metadata"
+      - "no raw payload content in execution JSON"
+    excludes:
+      - "semantic secret scanner"
+      - "MIME/type classification"
+      - "streaming payloads"
+      - "encrypted payload store"
+      - "artifact storage projection"
+tradeoffs:
+  selected:
+    advantages:
+      - "Directly addresses internal/tool-channel leakage risk."
+      - "Small enough to enforce in every borrowed-shell adapter."
+      - "Preserves runtime/store hash checks."
+      - "Avoids putting payload bytes into model-visible output."
+    disadvantages:
+      - "Generated temp files outside root require explicit override."
+      - "Large legitimate payloads need later streaming or artifact storage."
+      - "Scope/size checks do not classify semantic sensitivity."
+  rejected:
+    - id: "no_payload_policy_until_later"
+      reason: "The CLI already loads payload bytes, so delaying policy would leave a live unsafe default."
+    - id: "always_allow_absolute_paths"
+      reason: "Local agent runtimes mediate filesystem access and should default to least privilege."
+    - id: "serialize_payload_preview"
+      reason: "Helpful debugging would create a chat-facing leakage channel."
+scenario_tests:
+  - id: "outside_root_default"
+    scenario: "Payload file path is outside --root without override."
+    expected_result: "CLI library rejects payload before reading bytes."
+  - id: "oversized_payload"
+    scenario: "Payload file exceeds max_payload_bytes."
+    expected_result: "CLI library rejects payload before read."
+  - id: "json_redaction"
+    scenario: "execute-operation emits JSON."
+    expected_result: "JSON contains execution metadata but no payload content field."
+evidence_basis:
+  direct_patterns:
+    - source_id: "agentleak_privacy_leakage_2602_11510"
+      supports: "Internal tool/memory/log/artifact channels leak beyond final output."
+    - source_id: "tool_agent_data_leakage_2606_17114"
+      supports: "Benign tasks can leak through tool use and data handling."
+    - source_id: "local_llm_agents_vulnerable_runtimes_2606_21071"
+      supports: "Filesystem/tool mediation is a local runtime security boundary."
+    - source_id: "mcp_tool_annotations_2603"
+      supports: "Use cautious defaults when tool trust metadata is incomplete."
+    - source_id: "owasp_llm06_excessive_agency"
+      supports: "Minimize permissions and constrain agent action surfaces."
+  inference_boundary: "The policy reduces payload data-flow risk; it does not claim complete secret prevention."
+implementation_plan:
+  - "Add PayloadLoadPolicy to forge-core-cli."
+  - "Reject outside-root payload paths by default."
+  - "Reject payloads larger than max_payload_bytes before read."
+  - "Add CLI flags for max bytes and explicit outside-root override."
+  - "Add Rust tests for rejection and JSON redaction."
+next_grill_question:
+  id: "operation_executor_artifact_storage_projection_boundary"
+  question: "After payload loading is constrained, should artifact_id/evidence_id ToolEffect targets be projected to file paths in store, or should they require a separate artifact storage adapter?"

@@ -1,0 +1,20 @@
+id: v2-014
+title: Autonomy anti-patterns (approve-during-autopilot, spec-write-without-gate)
+epic: Guidance Safety
+lane: guidance-safety
+priority: MED
+status: done
+dependencies: v2-013
+evidence: batch4
+acceptance: 'Patterns: ''do not request human approval for work whose spec is locked''
+  (autopilot), ''do not write spec/context without human-approval gate'' (ETH Zurich).
+  Encoded as guidance safety checks.'
+description: Add autonomy-phase-aware guidance safety checks. When autonomy_mode=autopilot,
+  flag approval requests. When writing spec artifacts, require a gate signal.
+files: scripts/forge_method_runtime.py (guidance safety extensions)
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

@@ -1,0 +1,105 @@
+schema_version: "0.1"
+policy: "runtime_store_adapter_integration_boundary"
+status: "accepted"
+purpose: "Define one typed operation execution path that host adapters call instead of recomposing planning, staging, command evidence, and file-effect commit behavior outside Forge Core."
+decision:
+  selected_strategy: "runtime_owned_operation_executor_with_thin_cli_adapter"
+  canonical_terms:
+    operation_executor: "Runtime-owned service that composes operation planning, staging, command execution, evidence append, effect readiness, locked WAL application, and compact typed result reporting."
+    adapter_thin_execute: "CLI/MCP/app host surface that loads contracts and payloads, calls the operation executor, and renders the typed result without inventing control flow."
+  runtime_owns:
+    - "single typed RuntimeOperationExecution result"
+    - "plan_operation_with_snapshot before any execution"
+    - "stage_operation_effects before commands or effects"
+    - "required command admission and failure blocking"
+    - "command evidence record generation and append request"
+    - "effect contract readiness through RuntimeEffectTransactionPlan"
+    - "locked WAL effect application request"
+  store_owns:
+    - "filesystem-backed ReferenceIndex construction"
+    - "append-only command evidence persistence"
+    - "file-effect payload hash validation"
+    - "locked WAL apply/recovery/compaction"
+  adapter_owns:
+    - "loading operation, command, effect, and payload inputs"
+    - "calling exactly one runtime operation executor entrypoint for execution"
+    - "rendering JSON/human output"
+  adapter_must_not:
+    - "call staged commands directly"
+    - "apply ToolEffectContract writes directly"
+    - "update Forge state from chat narration"
+    - "treat OperationContract next_action as executable without RuntimeOperationExecution"
+rules:
+  - id: "single_execution_path"
+    rule: "Any host surface that wants to execute a Forge operation must call the runtime operation executor rather than manually sequencing plan, stage, command, effect, and WAL APIs."
+  - id: "plan_blocks_everything"
+    rule: "If RuntimePlan is not ReadyToCallOperation, the executor must not run commands, append command evidence, or apply effects."
+  - id: "required_command_blocks_effects"
+    rule: "If a required staged command is missing, blocked, timed out, or fails, the executor must not apply effects."
+  - id: "effects_require_ready_transaction"
+    rule: "Each effect must pass RuntimeEffectTransactionPlan before locked WAL application."
+  - id: "store_lock_required_for_file_effects"
+    rule: "File-backed effect application from the executor must use the store's locked WAL apply API."
+  - id: "typed_result_over_chat_memory"
+    rule: "Adapters may explain RuntimeOperationExecution to the human, but may not replace it with host-agent reasoning."
+tradeoffs:
+  chosen:
+    advantages:
+      - "Reduces host-agent bypass by making the safe sequence one callable Rust API."
+      - "Preserves adapter portability for Codex, Cursor, opencode, Claude, VS Code, pi.dev, MCP, and the future Forge app."
+      - "Keeps store as IO authority while runtime owns operation semantics."
+      - "Makes execution outcomes testable without relying on prompt compliance."
+    disadvantages:
+      - "Adds dependency from runtime to store for execution orchestration."
+      - "Still protects only cooperating adapters until host integrations are forced through this path."
+      - "Does not solve distributed/cross-machine execution; daemon/database remains a later boundary."
+      - "Payload loading and UX remain adapter work."
+  rejected:
+    - id: "cli_composes_everything"
+      reason: "Would duplicate execution logic across CLI/MCP/app adapters and recreate the bypass risk."
+    - id: "host_prompt_rule_only"
+      reason: "Prompt instructions do not enforce side-effect boundaries under host-agent drift."
+    - id: "daemon_first"
+      reason: "Daemon can improve enforcement later, but a local Rust executor is needed first and remains useful inside a daemon."
+    - id: "store_executes_operations"
+      reason: "Store should remain persistence/IO; operation semantics belong in runtime."
+acceptance:
+  runtime:
+    - "RuntimeOperationExecution returns AwaitingHuman/Blocked without side effects when plan is not ready."
+    - "Missing required command contract blocks execution before effects."
+    - "Required command failure blocks effects."
+    - "Successful staged command appends command evidence through store."
+    - "Ready effect applies through locked WAL and records effect result."
+  cli:
+    - "forge-core execute-operation --root <path> --operation <path> --json returns structured RuntimeOperationExecution."
+    - "CLI execute path delegates to runtime operation executor."
+  validation:
+    - "cargo test -p forge-core-runtime"
+    - "cargo test -p forge-core-cli"
+    - "cargo test --workspace"
+    - "cargo clippy --workspace -- -D warnings"
+evidence_basis:
+  direct_patterns:
+    - source_id: "natural_language_agent_harnesses_2603_25723"
+      supports: "Harness logic should run through explicit contracts, durable artifacts, and lightweight adapters."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Tool workflows need model-agnostic policy mediation at lifecycle boundaries."
+    - source_id: "parallax_cognitive_executive_separation_2604_12986"
+      supports: "Reasoning and side-effect execution should be separated by an independent execution boundary."
+    - source_id: "cordon_semantic_transactions_2606_17573"
+      supports: "Task-scoped tool execution needs commit, rollback, recovery, and audit boundaries."
+    - source_id: "storm_state_management_2605_20563"
+      supports: "Shared workspace mutation should be mediated at write time."
+    - source_id: "agentic_harness_engineering_2604_25850"
+      supports: "Harness changes and executions should be observable and tied to explicit evidence."
+  inference_boundary: "The evidence supports a single local executor for cooperating host adapters. It does not prove non-cooperating host UIs cannot bypass Forge until integrations enforce the executor as the only available mutating path."
+failure_modes_prevented:
+  - "host agent reads Forge state and writes the next step itself"
+  - "host agent runs staged commands without RuntimePlan readiness"
+  - "host agent applies file effects after failed validation"
+  - "command output exists only as chat narration"
+  - "effect writes bypass locked WAL"
+  - "each adapter reimplements slightly different control flow"
+next_boundary:
+  id: "operation_executor_payload_adapter_boundary"
+  question: "After the runtime owns a single operation executor, how should adapters load, validate, and redact effect payload content without putting large or sensitive payload bytes into agent context?"

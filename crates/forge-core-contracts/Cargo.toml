@@ -1,0 +1,11 @@
+[package]
+name = "forge-core-contracts"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+schemars.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_yaml.workspace = true

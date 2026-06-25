@@ -1,0 +1,53 @@
+schema_version: "0.1"
+request_contract:
+  id: "req.fixture.worker_state_transition"
+  contract_ref: "contracts/requests/request-contract-v0.yaml"
+  kind: "state_transition"
+  communication:
+    performative: "request"
+    sender:
+      agent_id: "cursor-worker-1"
+      role: "worker"
+    receiver:
+      agent_id: "codex-main"
+      role: "driver"
+    thread_id: "thread.fixture.story-ready"
+    correlation_id: "corr.fixture.worker-state-transition"
+    reply_to: null
+  sender_agent_id: "cursor-worker-1"
+  sender_role: "worker"
+  target_driver: "codex-main"
+  requested_operation: "apply_transition"
+  target:
+    kind: "integration_state"
+    id: "story-ready"
+    product_area: "runtime-core"
+  reason_code: "story_ready_for_integration"
+  evidence_refs:
+    - ".forge-method/evidence/story-validation.json"
+  payload:
+    kind: "typed_refs"
+    evidence_refs:
+      - ".forge-method/evidence/story-validation.json"
+    dependency_refs:
+      - kind: "gate"
+        ref: "contracts/gates/story-ready-lane-gate.yaml"
+    summary_digest: "sha256:fixture-worker-state-transition"
+  response:
+    required: true
+    expected_kind: "apply_or_reject"
+    deadline: null
+    allowed_statuses:
+      - "applied"
+      - "rejected"
+    required_evidence_refs:
+      - "contracts/gates/story-ready-lane-gate.yaml"
+  response_required: true
+  deadline: null
+  status: "pending"
+  append_only:
+    path: ".forge-method/requests.ndjson"
+    mutation_allowed: "append_only"
+  safety:
+    may_mutate_integration_state: false
+    driver_must_apply: true

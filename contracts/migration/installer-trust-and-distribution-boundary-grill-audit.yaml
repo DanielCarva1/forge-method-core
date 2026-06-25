@@ -1,0 +1,55 @@
+schema_version: "0.1"
+audit: "installer_trust_and_distribution_boundary_grill"
+status: "closed"
+created_at: "2026-06-25"
+grill_question:
+  id: "installer_trust_and_distribution_boundary"
+  question: "What trust and distribution evidence must Forge require before users install or update Rust host adapters across Codex, Cursor, Claude, opencode, VS Code, pi.dev, and the future app?"
+  answered_by: "agent_research_local_code_inspection_and_rust_tests"
+input_refs:
+  - "contracts/policies/mcp-local-process-security-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+decision:
+  selected_option: "evidence_gated_distribution_admission"
+  recommendation_basis:
+    - "SLSA and in-toto support provenance/attestation evidence before trusting artifacts."
+    - "Sigstore supports signing evidence as artifact origin/integrity proof."
+    - "TUF supports update metadata, version constraints, and rollback/freeze awareness."
+    - "Forge host adapters execute locally, so install/update is a high-impact action."
+tradeoffs:
+  pros:
+    - "Blocks floating-ref installs and updates."
+    - "Gives future installers a typed admission API before mutating local install state."
+    - "Separates install trust from MCP/process execution trust."
+    - "Keeps update summary available for agent-to-human explanation."
+  cons:
+    - "Does not yet perform cryptographic verification."
+    - "Requires release pipeline to produce provenance, checksum/signature, rollback, and summary metadata."
+    - "Dev channel cannot be used as a general install path without a separate policy."
+evidence_basis:
+  - source_id: "slsa_framework_spec"
+    supports: "Provenance and source/build integrity."
+  - source_id: "sigstore_docs"
+    supports: "Artifact signing and verification workflows."
+  - source_id: "tuf_specification"
+    supports: "Secure update metadata and rollback considerations."
+  - source_id: "in_toto_spec"
+    supports: "Supply-chain attestations."
+  - source_id: "owasp_llm06_excessive_agency"
+    supports: "Limit high-impact autonomous actions."
+policy_ref: "contracts/policies/installer-trust-and-distribution-boundary.yaml"
+implementation_refs:
+  - "crates/forge-core-cli/src/lib.rs"
+  - "crates/forge-core-cli/src/main.rs"
+  - "crates/forge-core-cli/tests/validate.rs"
+acceptance:
+  - "HostAdapterDistributionPolicy is emitted by run_host_adapter_distribution_policy."
+  - "HostAdapterDistributionAdmission blocks missing evidence and floating refs."
+  - "Stable complete evidence is admitted."
+  - "Canary needs explicit opt-in and dev is blocked for general install."
+  - "CLI exposes host-adapter-distribution-policy and host-adapter-admit-distribution."
+closed_decision: "Forge distribution is denied by default and admitted only with immutable source ref, artifact checksum or signature, provenance, compatibility, rollback, and update summary evidence."
+next_grill_question:
+  id: "sigstore_fulcio_certificate_identity_boundary"
+  question: "How should Forge verify Fulcio certificate chain, certificate identity extensions, expected OIDC issuer, and workflow identity selectors against the trusted-root policy without treating policy validation as cryptographic proof?"
+  recommended_answer: "Add a Forge-owned Sigstore bundle/Fulcio verifier backend that consumes trusted-root policy and returns typed identity, subject, timestamp, and revocation evidence while preserving adapter-neutral authority."

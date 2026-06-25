@@ -1,0 +1,108 @@
+schema_version: "0.1"
+policy: "rust_contract_type_order"
+status: "accepted"
+purpose: "Define the implementation order for Forge Core Rust/Serde contract types so codegen starts with stable authority primitives instead of broad, unfocused migration."
+decision:
+  selected_strategy: "foundation_then_authority_response_then_side_contracts"
+  implementation_order:
+    - stage: "foundation_types"
+      families:
+        - "common_ids_and_refs"
+        - "evidence_registry"
+        - "diagnostics"
+      reason: "All later contracts need stable ids, path refs, source refs, diagnostics, timestamps, and explicit null/unknown-field policy."
+      acceptance:
+        - "Evidence source ids deserialize into typed registry structs."
+        - "SourceRef newtype is validated against registry data."
+        - "Diagnostic structs can represent validator errors without printing."
+    - stage: "inventory_types"
+      families:
+        - "contract_family_inventory"
+      reason: "Inventory defines the locked contract family surface and drives subsequent type coverage."
+      acceptance:
+        - "v0-contract-family-lock.yaml deserializes into Rust types."
+        - "Inventory family ids, schema refs, instance globs, validator refs, and evidence refs validate through typed diagnostics."
+    - stage: "command_types"
+      families:
+        - "command_contract"
+      reason: "Commands are small, security-sensitive side-effect surfaces and exercise enums, arrays, policies, and platform fields early."
+      acceptance:
+        - "story-validation-fast.yaml deserializes into CommandContract."
+        - "Raw shell-string authority remains impossible in the typed API."
+    - stage: "operation_authority_types"
+      families:
+        - "operation_contract"
+        - "operation_reference_policy"
+      reason: "OperationContract is the central authority response for host agents and must compile before runtime routing can exist."
+      acceptance:
+        - "All operation fixtures deserialize into OperationContract."
+        - "OperationReferencePolicy resolves approved side-contract reference fields through typed paths."
+        - "Autonomy, host_action, mutation_policy, side_effect_policy, caller_role, execution_policy, stop_policy, and human prompt mode are closed enums."
+    - stage: "basic_side_contract_types"
+      families:
+        - "claim_contract"
+        - "completion_contract"
+        - "gate_contract"
+      reason: "Claims, completion, and gates are the minimum side contracts required before build/validation/runtime autonomy can be safe."
+      acceptance:
+        - "Claim TTL/heartbeat/handoff policy deserializes."
+        - "Completion proof policy deserializes."
+        - "Gate scope/status/evidence deserializes."
+    - stage: "coordination_and_effect_types"
+      families:
+        - "request_contract"
+        - "tool_effect_contract"
+      reason: "Requests and effects govern multi-agent coordination, read/write conflicts, and mutating tool safety."
+      acceptance:
+        - "Request communication/payload/response lifecycle deserializes."
+        - "ToolEffect read_set/write_set/conflict/inverse policy deserializes."
+        - "Destructive effect inverse-or-stop policy has typed diagnostics."
+    - stage: "advanced_boundary_types"
+      families:
+        - "decision_close_contract"
+        - "runtime_handoff_contract"
+        - "health_recovery_contract"
+        - "coordination_eval_contract"
+      reason: "These contracts depend on operation, gates, requests, effects, claims, and evidence being typed enough to carry refs safely."
+      acceptance:
+        - "Decision close grill evidence and reopen policy deserialize."
+        - "Runtime handoff double gate deserializes."
+        - "Health recovery anomaly/action deserializes."
+        - "Coordination eval dimensions deserialize."
+  rejected_strategies:
+    - id: "operation_only_first"
+      reason: "OperationContract references inventory/evidence/side contracts and would become a loose string bag without foundational types."
+    - id: "all_contracts_big_bang"
+      reason: "Broad codegen hides semantic gaps and makes debugging type-boundary mistakes harder."
+    - id: "side_contracts_first"
+      reason: "Side contracts need to be shaped by OperationReferencePolicy and the authority response they serve."
+    - id: "runtime_first"
+      reason: "Runtime before typed contracts repeats prompt-driven control flow in Rust."
+rules:
+  - id: "no_runtime_before_operation_types"
+    rule: "Do not implement guide/gate/doctor/oracle runtime behavior before OperationContract and OperationReferencePolicy deserialize all fixtures."
+  - id: "typed_diagnostics_before_cli"
+    rule: "Move validator errors into typed diagnostics before the CLI becomes the main product surface."
+  - id: "source_refs_validate_before_acceptance"
+    rule: "Any contract type with evidence_basis must validate source ids against the registry."
+  - id: "side_contract_refs_stay_strings_until_family_typed"
+    rule: "OperationContract may initially hold side refs as typed path/id refs; the referenced family becomes strongly typed at its stage."
+  - id: "fixture_deserialization_is_acceptance"
+    rule: "A contract family is not accepted as implemented until every current fixture/instance for that family deserializes and passes Rust validation."
+evidence_basis:
+  direct_patterns:
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Schema-backed boundaries help govern tool interfaces, but need diagnostics and semantic validation."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness infrastructure must be executable, inspectable, and verification-oriented."
+    - source_id: "rust_api_guidelines_official"
+      supports: "Rust APIs should encode domain meaning through type safety and custom types."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy decisions and trace records should use stable ids across lifecycle boundaries."
+  inference_boundary: "The sources support typed, verifiable harness boundaries and stable ids. Forge's exact family order is inferred from local contract dependencies."
+failure_modes_prevented:
+  - "runtime code starts before authority response types compile"
+  - "operation contract turns into strings because evidence/inventory/common refs are missing"
+  - "big-bang type migration produces too many simultaneous semantic failures"
+  - "CLI becomes the API before reusable validation diagnostics exist"
+  - "side contracts are typed in isolation from OperationReferencePolicy"

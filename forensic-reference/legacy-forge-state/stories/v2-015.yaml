@@ -1,0 +1,20 @@
+id: v2-015
+title: Research-always-on affordance in all facilitation pack open_floor prompts
+epic: Partner Experience
+lane: facilitation
+priority: HIGH
+status: done
+dependencies: ''
+evidence: .forge-method/evidence/final-batch-evidence.md
+acceptance: 'Every facilitation pack''s open_floor section includes the affordance
+  phrase: the human can say ''I don''t know — research who does this, how, what succeeds,
+  and recommend.'' Grep for the phrase returns >0 matches across all packs.'
+description: 'Add the research affordance phrase to the open_floor or elicitation
+  section of every facilitation/*.md pack. This is the #9 fix refined by reality-evidence-gate.'
+files: skills/forge-method/facilitation/*.md
+created_by: orchestrator
+created_at: '2026-06-23T14:11:37Z'
+claimed_by: ''
+claimed_at: ''
+completed_at: ''
+completed_by: ''

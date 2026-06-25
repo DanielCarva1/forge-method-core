@@ -1,0 +1,77 @@
+schema_version: "0.1"
+audit: "runtime_effect_wal_recovery_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+grill_state_machine:
+  state: "S6"
+  closed_question:
+    id: "runtime_effect_wal_recovery_boundary"
+    question: "After process-local file-effect application exists, how should Forge record WAL-style transaction intent, committed writes, rollback data, and recovery on startup before claiming crash-durable multi-file effects?"
+    selected_answer: "Store records synced JSONL WAL records with begin, before_image, write_applied, commit, rollback_complete, and recovered_rollback stages. Recovery scans incomplete transactions and restores before-images in reverse order."
+inputs:
+  - "contracts/policies/runtime-effect-application-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "crates/forge-core-store/src/lib.rs"
+decision:
+  canonical_term: "Runtime Effect WAL Recovery"
+  policy_ref: "contracts/policies/runtime-effect-wal-recovery-boundary.yaml"
+  selected_strategy: "store_owned_effect_wal_with_before_images_and_startup_recovery"
+  scope:
+    includes:
+      - "synced JSONL WAL append"
+      - "begin and commit records"
+      - "before-image records with content hash"
+      - "write_applied records"
+      - "incomplete transaction detection"
+      - "reverse-order before-image restore"
+    excludes:
+      - "WAL compaction"
+      - "concurrent writer serialization"
+      - "directory fsync policy"
+      - "daemon or database"
+      - "distributed transactions"
+tradeoffs:
+  selected:
+    advantages:
+      - "Adds recoverable rollback data without waiting for a daemon."
+      - "Keeps store as owner of persistence and recovery."
+      - "Creates a path toward stronger durability claims."
+    disadvantages:
+      - "WAL can grow."
+      - "Large files create large before-image records."
+      - "Concurrent writers still need a later locking/compaction boundary."
+  rejected:
+    - id: "declare_process_local_rollback_enough"
+      reason: "Process-local rollback cannot recover interruption after writes."
+    - id: "database_first"
+      reason: "Repo-local portability is still a requirement for borrowed-shell installs."
+    - id: "hashless_before_images"
+      reason: "Recovery data must be checked before restore."
+scenario_tests:
+  - id: "wal_commit"
+    scenario: "A create effect succeeds through WAL application."
+    expected_result: "WAL contains begin, before_image, write_applied, and commit."
+  - id: "wal_recovery"
+    scenario: "WAL contains begin, before_image, and write_applied but no commit."
+    expected_result: "recover_effect_wal restores old bytes and appends recovered_rollback."
+evidence_basis:
+  direct_patterns:
+    - source_id: "aries_wal_1992"
+      supports: "WAL enables recovery and partial rollback."
+    - source_id: "failure_atomic_updates_fast15"
+      supports: "Failure-atomic updates need explicit recovery mechanisms."
+    - source_id: "cordon_semantic_transactions_2606_17573"
+      supports: "Agent runtime effects need transaction manager, rollback, and audit metadata."
+    - source_id: "rac_2605_03409"
+      supports: "Recovery should use logged rollback/compensation data."
+    - source_id: "grite_2606_19616"
+      supports: "Repo-local append-only records are viable coordination state."
+  inference_boundary: "The evidence supports WAL-style recovery. Forge's current implementation is not yet a full storage engine; it is the minimum recoverable file-effect transaction boundary."
+implementation_plan:
+  - "Add EffectWalRecord and EffectWalRecoveryResult."
+  - "Add apply_file_effect_transaction_with_wal."
+  - "Add recover_effect_wal."
+  - "Test commit records and incomplete transaction recovery."
+next_grill_question:
+  id: "runtime_effect_wal_compaction_and_locking_boundary"
+  question: "After WAL recovery exists, how should Forge compact WAL records and serialize concurrent file-effect writers without requiring a daemon too early?"

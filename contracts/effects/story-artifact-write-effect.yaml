@@ -1,0 +1,65 @@
+schema_version: "0.1"
+tool_effect_contract:
+  id: "effect.fixture.story_artifact_write"
+  contract_ref: "contracts/effects/tool-effect-contract-v0.yaml"
+  effect_kind: "artifact_write"
+  operation_ref: "op_fixture_mechanical_story_execute"
+  actor:
+    agent_id: "codex-main"
+    role: "driver"
+  read_set:
+    - target_kind: "state_key"
+      ref: ".forge-method/state.yaml#phase,status,next_action"
+      expected_hash: "sha256:fixture-state"
+      expected_version: 28
+      required_for_plan: true
+    - target_kind: "completion_id"
+      ref: "completion.story.current"
+      expected_hash: "sha256:fixture-completion"
+      expected_version: 28
+      required_for_plan: true
+    - target_kind: "file_path"
+      ref: ".forge-method/stories/current.yaml"
+      expected_hash: "sha256:fixture-story"
+      expected_version: null
+      required_for_plan: true
+  write_set:
+    - target_kind: "artifact_id"
+      ref: ".forge-method/artifacts/story-current-result.yaml"
+      access_mode: "create"
+      expected_hash: null
+      expected_version: null
+      destructive: false
+    - target_kind: "evidence_id"
+      ref: ".forge-method/evidence/story-validation.json"
+      access_mode: "append"
+      expected_hash: null
+      expected_version: null
+      destructive: false
+  conflict_detection:
+    check_against: "latest_projection"
+    granularity: "path"
+    conflict_codes:
+      - "read_target_changed"
+      - "expected_state_version_mismatch"
+      - "completion_now_done"
+      - "path_outside_scope"
+    policy: "notify_and_repair"
+  notification:
+    required: true
+    recipients:
+      - "driver"
+      - "affected_readers"
+    request_contract_ref: "contracts/requests/read-write-conflict-notification-request.yaml"
+  repair:
+    strategy: "refresh_reads"
+    automatic_repair_allowed: true
+    inverse_operation_ref: null
+    stop_if_inverse_missing: false
+    inverse:
+      kind: "none"
+      source: "unavailable"
+      ref: null
+      input_mapping_refs: []
+      validation_gate_refs: []
+      review_required: false

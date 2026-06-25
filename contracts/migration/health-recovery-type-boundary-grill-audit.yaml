@@ -1,0 +1,71 @@
+schema_version: "0.1"
+audit: "health_recovery_type_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "contracts/policies/advanced-boundary-type-order.yaml"
+  - "contracts/policies/runtime-handoff-type-boundary.yaml"
+  - "contracts/policies/health-recovery-type-boundary.yaml"
+  - "contracts/recovery/health-recovery-contract-v0.yaml"
+  - "contracts/recovery/worker-stalled-recovery.yaml"
+  - "contracts/recovery/runtime-crashed-recovery.yaml"
+grill_question:
+  id: "health_recovery_type_boundary"
+  question: "How should HealthRecoveryContract type runtime status, anomaly, evidence, request refs, claim refs, and recovery action without becoming a daemon design too early?"
+  options:
+    - id: "health_status_and_recovery_intent"
+      summary: "Model health recovery as typed status/anomaly/recovery intent tied to claims, requests, and compact context refs."
+      advantages:
+        - "Solves stale/crashed/stalled classification without freezing daemon architecture."
+        - "Separates claim ownership from runtime health."
+        - "Keeps recovery auditable and request/claim-linked."
+      disadvantages:
+        - "Does not yet implement scheduling, heartbeat collection, or daemon storage."
+    - id: "daemon_first_contract"
+      summary: "Model daemon scheduling, storage, heartbeat collection, and recovery loops now."
+      advantages:
+        - "Closer to future autonomous orchestration runtime."
+      disadvantages:
+        - "Prematurely freezes runtime topology before store/runtime crates exist."
+    - id: "claim_ttl_only"
+      summary: "Rely on ClaimContract TTL and handoff policy without a separate health contract."
+      advantages:
+        - "Fewer contract families."
+      disadvantages:
+        - "Does not classify runtime anomalies or recovery actions."
+  selected_option: "health_status_and_recovery_intent"
+  decision: "HealthRecoveryContract records health status, anomaly evidence, and recovery intent. It is not a daemon design. It links reviewed recovery to RequestContract, ClaimContract, and compact handoff context refs."
+  acceptance_criteria:
+    - "Health recovery fixtures deserialize through Rust/Serde."
+    - "Unhealthy status requires a recovery action."
+    - "Review-required recovery cannot be automatic."
+    - "Review-required recovery references request and claim contracts."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-contracts/src/recovery.rs"
+    - "crates/forge-core-validate/src/lib.rs"
+  validation:
+    - "cargo test -p forge-core-contracts --test load_current_contracts deserializes_health_recovery_instances"
+    - "cargo test -p forge-core-validate validates_current_health_recovery_instances"
+evidence_basis:
+  direct_patterns:
+    - source_id: "agentops_survey_2508_02121"
+      supports: "Agent lifecycle anomalies and resolution deserve explicit operational treatment."
+    - source_id: "agentops_observability_2411_05285"
+      supports: "Agent observability should include runtime artifacts and associated data."
+    - source_id: "agentscope_2402_14034"
+      supports: "Fault tolerance and status/logging are central multi-agent platform concerns."
+    - source_id: "multi_agent_distributed_systems_2026"
+      supports: "Stale views and missing recovery paths are real multi-agent coding failures."
+    - source_id: "grite_2606_19616"
+      supports: "Coordination records can be append-only and repo-local."
+    - source_id: "coagent_2606_15376"
+      supports: "Repair paths can preserve work better than abort/retry."
+  inference_boundary: "The evidence supports anomaly/recovery modeling. Forge's choice to defer daemon topology is based on local crate-boundary maturity, not a paper claim."
+next_grill_question:
+  id: "coordination_eval_type_boundary"
+  question: "How should CoordinationEvalContract type eval dimensions and fixtures so it measures real coordination behavior rather than schema shape alone?"
+  recommended_answer: "coordination_eval_measures_boundary_failure_modes_with_required_fixtures_and_evidence_refs"

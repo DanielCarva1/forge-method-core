@@ -1,0 +1,80 @@
+schema_version: "0.1"
+policy: "thin_cli_validation_surface_boundary"
+status: "accepted"
+purpose: "Define the first Rust CLI surface that consumes forge-core-store and forge-core-validate without letting CLI output own validation authority."
+decision:
+  selected_strategy: "new_forge_core_cli_with_compat_validator_left_temporary"
+  owner_crate: "forge-core-cli"
+  binary_name: "forge-core"
+  first_command: "validate"
+  command_contract:
+    input:
+      - "root path"
+      - "json output flag"
+    authority_sources:
+      - "forge-core-store ReferenceIndexBuilder"
+      - "forge-core-validate typed ValidationReport diagnostics"
+      - "forge-core-contracts Serde document types"
+    output:
+      - "structured JSON summary when --json is passed"
+      - "concise human summary otherwise"
+    exit_policy:
+      pass: 0
+      validation_failure: 1
+      usage_error: 2
+  legacy_binary_policy:
+    current_binary: "forge-contract-validator"
+    status: "temporary_compatibility"
+    rule: "The legacy binary may remain during migration, but new CLI work must consume store-built indexes and typed validation reports."
+  rejected_strategies:
+    - id: "extend_legacy_binary_more"
+      reason: "Would keep widening the string-scanning compatibility binary instead of moving authority into typed crates."
+    - id: "cli_owns_validation_logic"
+      reason: "Would make output rendering and validation authority inseparable."
+    - id: "mcp_first_validation_surface"
+      reason: "MCP is an adapter surface and should not precede CLI/store/runtime validation boundaries."
+rules:
+  - id: "cli_is_renderer_and_orchestrator"
+    rule: "forge-core-cli may orchestrate reads and render reports, but validation decisions must come from forge-core-validate."
+  - id: "cli_uses_store_index"
+    rule: "Cross-file validation in CLI must use forge-core-store ReferenceIndexBuilder."
+  - id: "json_is_primary_machine_surface"
+    rule: "The CLI must provide structured JSON output for agents and automation."
+  - id: "human_summary_is_not_authority"
+    rule: "Human text output is a rendering of the structured result, not a separate validation path."
+implementation_target:
+  crate_refs:
+    - "crates/forge-core-cli/Cargo.toml"
+    - "crates/forge-core-cli/src/lib.rs"
+    - "crates/forge-core-cli/src/main.rs"
+    - "crates/forge-core-cli/tests/validate.rs"
+  workspace_ref: "Cargo.toml"
+  acceptance:
+    - "forge-core-cli exists as a workspace crate."
+    - "forge-core validate accepts --root and --json."
+    - "validate command builds ReferenceIndex through forge-core-store."
+    - "validate command runs typed validation reports for current contract families and cross-file refs."
+    - "JSON output contains status, checks, and diagnostics."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+evidence_basis:
+  direct_patterns:
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness infrastructure should expose executable, inspectable validation behavior."
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Structured diagnostics improve agent/tool reliability over free-form documentation alone."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy decisions should produce auditable traces and actionable diagnostics."
+    - source_id: "opendev_terminal_agents_2603_05344"
+      supports: "Terminal-native agents require strict controls and efficient structured feedback."
+    - source_id: "rust_api_guidelines_official"
+      supports: "Public APIs should expose typed data and avoid presentation-coupled behavior."
+  inference_boundary: "The evidence supports structured CLI diagnostics and separated authority/rendering. Forge's exact command name and temporary compatibility policy are product decisions."
+failure_modes_prevented:
+  - "legacy string scanner keeps growing as the real runtime"
+  - "human text output becomes agent authority"
+  - "CLI and tests use different reference indexes"
+  - "future MCP copies validation traversal from CLI"
+next_boundary:
+  id: "generic_yaml_evidence_ref_validation_boundary"
+  question: "How should recursive YAML parse coverage and source_id reference validation move from forge-contract-validator into reusable Rust validation without turning forge-core-validate into a filesystem scanner?"

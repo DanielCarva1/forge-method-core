@@ -1,0 +1,16 @@
+schema_version: "0.1"
+fixture_set: "certificate_transparency_sct"
+origin:
+  crate: "sct"
+  version: "0.7.1"
+  repository: "https://github.com/rustls/sct.rs"
+  source_paths:
+    - "src/testdata/google-cert.bin"
+    - "src/testdata/google-sct0.bin"
+    - "src/testdata/google-sct1.bin"
+    - "src/testdata/google-pilot-pubkey.bin"
+    - "src/testdata/symantec-log-pubkey.bin"
+purpose: "Offline positive and negative verification of RFC6962 SCT signatures against policy-declared CT log keys."
+notes:
+  - "The fixture public keys are raw log verification keys accepted by the sct crate."
+  - "These fixtures prove the verifier boundary, not live CT log inclusion, revocation, or TUF freshness."

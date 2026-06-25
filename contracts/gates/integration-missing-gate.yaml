@@ -1,0 +1,23 @@
+schema_version: "0.1"
+gate_contract:
+  id: "gate.integration.missing"
+  contract_ref: "contracts/gates/gate-contract-v0.yaml"
+  gate:
+    scope: "integration"
+    status: "missing"
+    checked_at: "2026-06-25T00:05:00Z"
+    checked_by: "forge-core"
+  target:
+    kind: "project"
+    id: "active-project"
+    product_area: null
+    paths: []
+  evidence_refs: []
+  promotion:
+    policy: "requires_parent_gate"
+    parent_gate_ref: "contracts/gates/release-missing-gate.yaml"
+  blocks:
+    operations:
+      - "merge_integration"
+      - "mark_ready"
+      - "publish_release"

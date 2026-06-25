@@ -1,0 +1,75 @@
+schema_version: "0.1"
+audit: "cargo_workspace_bootstrap_plan_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/policies/schema-generation-authority.yaml"
+  - "contracts/policies/rust-workspace-architecture.yaml"
+  - "contracts/policies/rust-contract-type-order.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "cargo_workspace_bootstrap_plan"
+  question: "Should the next step create the Cargo workspace/crates now or first specify exact Rust type modules and public APIs for forge-core-contracts?"
+  options:
+    - id: "specify_public_api_only"
+      summary: "Write more YAML about module/API shape before creating crates."
+      advantages:
+        - "Could reduce crate churn before code exists."
+      disadvantages:
+        - "Delays executable proof."
+        - "Keeps acceptance in documentation after the architecture is already decided."
+    - id: "create_workspace_and_foundation_types"
+      summary: "Create Cargo workspace plus forge-core-contracts with foundation, evidence, inventory, and command types."
+      advantages:
+        - "Converts locked contracts into executable Rust evidence."
+        - "Proves the workspace policy through cargo test instead of prose."
+        - "Creates a place for JSON Schema and compact agent views to emerge from Rust types."
+      disadvantages:
+        - "Some APIs will evolve as OperationContract and side contracts become typed."
+    - id: "migrate_validator_first"
+      summary: "Move the existing validator into a library before adding new contract types."
+      advantages:
+        - "Could improve diagnostic reuse early."
+      disadvantages:
+        - "Validator migration lacks typed targets without forge-core-contracts."
+        - "Risks spending effort on old string-based checks before domain types exist."
+  selected_option: "create_workspace_and_foundation_types"
+  decision: "Create the Cargo workspace and forge-core-contracts crate immediately, with foundation/evidence/inventory/command types and fixture deserialization tests. Migrate validator logic after OperationContract begins to compile as typed data."
+  implementation_evidence:
+    committed_in: "a65e74c"
+    crate_refs:
+      - "Cargo.toml"
+      - "crates/forge-core-contracts/Cargo.toml"
+      - "crates/forge-core-contracts/src/common.rs"
+      - "crates/forge-core-contracts/src/evidence.rs"
+      - "crates/forge-core-contracts/src/inventory.rs"
+      - "crates/forge-core-contracts/src/command.rs"
+      - "crates/forge-core-contracts/tests/load_current_contracts.rs"
+    validation_commands:
+      - "cargo test --workspace"
+      - "cargo run --quiet --manifest-path crates/forge-contract-validator/Cargo.toml -- <repo-root>"
+  acceptance_criteria:
+    - "Cargo workspace exists at repo root."
+    - "forge-core-contracts crate compiles."
+    - "Current field evidence registry deserializes."
+    - "Current inventory lock deserializes."
+    - "Current command contract instance deserializes."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+next_grill_question:
+  id: "operation_contract_rust_type_strictness"
+  question: "How strict should the first OperationContract Rust types be while side-contract families are still being typed?"
+  recommended_answer: "strict_closed_enums_and_required_authority_shape_with_typed_path_refs_and_optional_side_contract_blocks_until_each_side_family_is_typed"
+evidence_basis:
+  direct_patterns:
+    - source_id: "cargo_workspaces_official"
+      supports: "Cargo workspaces are appropriate for multiple related Rust packages developed together."
+    - source_id: "rust_api_guidelines_official"
+      supports: "Rust APIs should encode domain meaning and stable type boundaries."
+    - source_id: "serde_official"
+      supports: "Rust data structures can own serialization behavior across formats."
+    - source_id: "schema_first_tool_apis_2603_13404"
+      supports: "Schema-backed boundaries benefit from structured contracts and diagnostics."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Harness contracts should become executable and verifiable infrastructure."
+  inference_boundary: "The evidence supports moving to executable typed contracts. The exact bootstrap crate contents are based on Forge's locked inventory and type-order policy."

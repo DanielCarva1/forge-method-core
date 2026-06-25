@@ -1,0 +1,74 @@
+schema_version: "0.1"
+audit: "runtime_handoff_type_boundary_grill"
+created_at: "2026-06-25"
+status: "closed"
+inputs:
+  - "contracts/research/field-evidence-20260625.yaml"
+  - "contracts/policies/advanced-boundary-type-order.yaml"
+  - "contracts/policies/runtime-handoff-type-boundary.yaml"
+  - "contracts/runtimes/runtime-handoff-contract-v0.yaml"
+  - "contracts/runtimes/registry-cursor-browser-agent.yaml"
+  - "contracts/runtimes/capability-browser-validation.yaml"
+grill_question:
+  id: "runtime_handoff_type_boundary"
+  question: "How should RuntimeHandoffContract type runtime identity, capability evidence, payload, and double-gate state without becoming host-specific?"
+  options:
+    - id: "adapter_agnostic_double_gate"
+      summary: "Runtime handoff stays adapter-agnostic and requires typed registry plus capability evidence before suggestion."
+      advantages:
+        - "Works across Codex, Cursor, Claude, OpenCode, VSCode, pi.dev, Forge standalone, and future hosts."
+        - "Keeps A2A/MCP as protocol/adapters rather than Forge authority."
+        - "Forces compact context refs and authority refs instead of full chat transfer."
+      disadvantages:
+        - "Requires separate registry and capability documents."
+        - "Cross-file ref validation must grow beyond pure struct validation."
+    - id: "host_specific_contracts"
+      summary: "Create different handoff structs for each host."
+      advantages:
+        - "Can model host-specific details early."
+      disadvantages:
+        - "Hard-codes borrowed-shell implementation details into core."
+        - "Conflicts with standalone app and multi-host goal."
+    - id: "message_only_handoff"
+      summary: "Represent handoff as a request/message without registry or capability evidence."
+      advantages:
+        - "Simpler short-term structure."
+      disadvantages:
+        - "Lets agents route by intuition and loses double-gate safety."
+  selected_option: "adapter_agnostic_double_gate"
+  decision: "RuntimeHandoffContract models lifecycle, source/target identity, task boundary, double-gate refs, and compact payload. RuntimeRegistryEntry and RuntimeCapability provide the evidence documents. Forge authority remains in claims/gates/requests/effects/decision refs."
+  acceptance_criteria:
+    - "Suggestible handoff requires registry and capability evidence refs."
+    - "Blocked handoff requires blocked_reason and at least one missing double-gate evidence ref."
+    - "Registry entry prevents direct Forge state mutation."
+    - "Capability output must be evidence-ref addressable."
+    - "No Python is used."
+    - "No Markdown is created or edited."
+implementation_evidence:
+  crate_refs:
+    - "crates/forge-core-contracts/src/runtime.rs"
+    - "crates/forge-core-validate/src/lib.rs"
+  validation:
+    - "cargo test -p forge-core-contracts --test load_current_contracts deserializes_runtime_boundary_instances"
+    - "cargo test -p forge-core-validate validates_current_runtime_boundary_instances"
+evidence_basis:
+  direct_patterns:
+    - source_id: "a2a_protocol"
+      supports: "Agent interoperability should preserve explicit identities and payloads."
+    - source_id: "mcp_tools_spec"
+      supports: "Tools/capabilities should have schemas and metadata."
+    - source_id: "mcp_tool_annotations_2603"
+      supports: "Capability risk hints are advisory and do not replace authorization."
+    - source_id: "openai_agents_handoffs"
+      supports: "Delegating work to another agent/runtime is an established orchestration pattern."
+    - source_id: "langgraph_multi_agent_handoffs"
+      supports: "Handoff context needs explicit engineering."
+    - source_id: "agentscope_2402_14034"
+      supports: "Robust multi-agent systems require explicit coordination."
+    - source_id: "fudan_agent4se_survey"
+      supports: "Agentic SE needs both SE and agent-system perspectives."
+  inference_boundary: "The evidence supports identity, capability schemas, handoff, and compact context engineering. Forge's exact double-gate rule is product-specific governance."
+next_grill_question:
+  id: "health_recovery_type_boundary"
+  question: "How should HealthRecoveryContract type runtime status, anomaly, evidence, request refs, claim refs, and recovery action without becoming a daemon design too early?"
+  recommended_answer: "health_recovery_is_status_and_recovery_intent_contract_not_daemon_runtime_state"

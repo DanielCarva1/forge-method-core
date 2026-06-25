@@ -1,0 +1,178 @@
+schema_version: "0.1"
+policy: "rust_workspace_architecture"
+status: "accepted"
+purpose: "Define the Forge Core Rust workspace split so contracts, validation, storage, runtime, CLI, and host adapters evolve without becoming one giant binary or prompt-shaped script."
+decision:
+  selected_strategy: "layered_workspace_with_contracts_first"
+  workspace_root: "forge-method-core"
+  crate_prefix: "forge-core"
+  architecture_style: "typed_contract_core_with_thin_host_adapters"
+  target_crates:
+    - name: "forge-core-contracts"
+      crate_type: "library"
+      responsibility: "Rust/Serde structs, enums, ids, schema metadata, generated JSON Schema entrypoints, and compact agent view models."
+      depends_on:
+        - "serde"
+        - "schemars"
+      must_not_depend_on:
+        - "filesystem traversal"
+        - "CLI argument parsing"
+        - "MCP transport"
+        - "host-specific adapters"
+      public_api_policy: "stable typed domain surface"
+    - name: "forge-core-validate"
+      crate_type: "library"
+      responsibility: "Cross-file refs, authority rules, destructive-effect policy, inventory checks, evidence refs, gate/completion/request lifecycle validation."
+      depends_on:
+        - "forge-core-contracts"
+      must_not_depend_on:
+        - "CLI output formatting"
+        - "host-specific adapters"
+      public_api_policy: "diagnostic structs, not println-driven validation"
+    - name: "forge-core-store"
+      crate_type: "library"
+      responsibility: "File-backed repository state, ledger, artifacts, requests, evidence, leases, and future storage traits for DB/daemon projections."
+      depends_on:
+        - "forge-core-contracts"
+        - "forge-core-validate"
+      must_not_depend_on:
+        - "LLM provider SDKs"
+        - "MCP transport"
+        - "Codex-specific paths"
+      public_api_policy: "storage traits plus file-store implementation"
+    - name: "forge-core-runtime"
+      crate_type: "library"
+      responsibility: "Guide/gate/doctor/oracle operation engine, Funnel Autonomy, state-machine routing, policy decisions, recovery, and OperationContract generation."
+      depends_on:
+        - "forge-core-contracts"
+        - "forge-core-validate"
+        - "forge-core-store"
+      must_not_depend_on:
+        - "terminal styling"
+        - "MCP server implementation"
+        - "single host CLI assumptions"
+      public_api_policy: "host-neutral runtime services"
+      first_boundary_note: "The initial operation planner may depend only on contracts and validate; store dependency begins at the runtime_store_state_read_boundary."
+    - name: "forge-core-cli"
+      crate_type: "binary"
+      responsibility: "Universal command-line surface for Codex, opencode, Cursor, VS Code, Claude, pi.dev, scripts, and human debugging."
+      depends_on:
+        - "forge-core-runtime"
+      must_not_depend_on:
+        - "private runtime internals beyond public runtime API"
+      public_api_policy: "thin adapter with structured JSON output by default"
+    - name: "forge-core-mcp"
+      crate_type: "binary_or_library"
+      responsibility: "Optional MCP server surface exposing typed Forge operations after local-process security review."
+      depends_on:
+        - "forge-core-runtime"
+      must_not_depend_on:
+        - "CLI-only output contracts"
+      public_api_policy: "adapter boundary; not core authority"
+      maturity: "deferred_until_contracts_runtime_and_security_review_pass"
+    - name: "forge-core-host-adapters"
+      crate_type: "library"
+      responsibility: "Small host-specific helpers for Codex, Cursor, VS Code, Claude, opencode, and pi.dev installation/launch conventions."
+      depends_on:
+        - "forge-core-cli"
+      must_not_depend_on:
+        - "runtime decision internals"
+      public_api_policy: "installation and launch metadata only"
+      maturity: "deferred_until_cli_contract_stable"
+build_order:
+  - stage: "contracts_and_schema"
+    crates:
+      - "forge-core-contracts"
+    acceptance:
+      - "Locked inventory families deserialize into typed Rust structs or explicit transitional enums."
+      - "Serde unknown-field policy is enforced for authority-bearing structs."
+      - "Generated JSON Schema can be emitted by Rust."
+  - stage: "validation_library"
+    crates:
+      - "forge-core-validate"
+    acceptance:
+      - "Existing validator behavior moves from println-oriented binary into reusable diagnostic structs."
+      - "Evidence refs, inventory refs, operation side refs, destructive effects, requests, recovery, and gates are validated without Python."
+  - stage: "repo_index_adapter"
+    crates:
+      - "forge-core-store"
+    acceptance:
+      - "ReferenceIndexBuilder builds repo/runtime reference indexes for validation callers."
+      - "The store boundary may start with reference indexing before full state/ledger/runtime persistence is implemented."
+      - "forge-core-validate remains free of filesystem traversal."
+  - stage: "thin_cli"
+    crates:
+      - "forge-core-cli"
+    acceptance:
+      - "CLI invokes validation and emits structured JSON plus concise human summaries."
+      - "Existing `forge-contract-validator` binary is replaced or kept only as compatibility wrapper."
+  - stage: "store_runtime"
+    crates:
+      - "forge-core-store"
+      - "forge-core-runtime"
+    acceptance:
+      - "Initial runtime operation planning may compile before store-backed state reads."
+      - "Guide/gate/doctor/oracle operations return OperationContract outputs from typed state/store reads."
+      - "Funnel Autonomy is enforced through runtime policy, not host-agent prose."
+  - stage: "adapters"
+    crates:
+      - "forge-core-mcp"
+      - "forge-core-host-adapters"
+    acceptance:
+      - "Adapters are thin and cannot bypass runtime authority."
+      - "MCP/local-process security review passes before MCP is enabled."
+rules:
+  - id: "contracts_have_no_host_dependencies"
+    rule: "Contract types must compile without CLI, storage, MCP, or host adapter dependencies."
+  - id: "runtime_does_not_print_authority"
+    rule: "Runtime returns typed decisions; CLI/adapters render them."
+  - id: "storage_is_projection_not_policy"
+    rule: "Store persists and retrieves state/evidence but does not decide workflow authority."
+  - id: "adapters_are_replaceable"
+    rule: "Codex, Cursor, opencode, Claude, VS Code, and pi.dev integration must live outside runtime semantics."
+  - id: "daemon_is_not_v1_requirement"
+    rule: "A daemon is allowed later only when runtime health, concurrency, or performance evidence proves it is needed; file-backed CLI remains the first universal shell."
+  - id: "public_api_uses_domain_types"
+    rule: "Use newtypes/enums for ids, authority, roles, phases, workflows, gate scopes, and statuses instead of passing loose strings through public APIs."
+tradeoffs:
+  chosen:
+    advantages:
+      - "Separates domain truth from CLI and host quirks."
+      - "Keeps the first implementation compatible with every shell/IDE that can run a binary."
+      - "Leaves a clean path to MCP, daemon, and standalone app without rewriting core contracts."
+      - "Matches harness research that treats execution, tools, context, lifecycle, observability, validation, and governance as separate concerns."
+    disadvantages:
+      - "More crates require more explicit public APIs."
+      - "Early refactors may move code between crates as type boundaries sharpen."
+      - "Cargo workspace feature unification must be managed to avoid unnecessary dependencies in core crates."
+  rejected:
+    - id: "single_binary_everything"
+      reason: "Fast to start but repeats the current giant-script failure mode and couples runtime authority to CLI rendering."
+    - id: "mcp_first"
+      reason: "MCP is an adapter surface; implementing it before typed contracts/runtime creates transport-driven architecture."
+    - id: "daemon_first"
+      reason: "Daemon complexity is not justified before typed contracts, store traits, and health/recovery semantics compile."
+    - id: "one_crate_per_contract_family_immediately"
+      reason: "Over-fragments early implementation and creates public API churn before the contract type model stabilizes."
+evidence_basis:
+  direct_patterns:
+    - source_id: "agent_harness_engineering_survey_2026"
+      supports: "Harness reliability depends on separate infrastructure concerns rather than one prompt/model loop."
+    - source_id: "code_as_agent_harness_2605_18747"
+      supports: "Agent harnesses need executable, verifiable, stateful infrastructure across single- and multi-agent settings."
+    - source_id: "opendev_terminal_agents_2603_05344"
+      supports: "Terminal-native coding agents need strict safety controls, context management, persistent memory, and compound architecture."
+    - source_id: "policy_first_control_2603_18059"
+      supports: "Policy decisions and traces should be structured lifecycle artifacts."
+    - source_id: "cargo_workspaces_official"
+      supports: "Cargo workspaces are the Rust mechanism for multiple related packages developed together."
+    - source_id: "rust_api_guidelines_official"
+      supports: "Rust public APIs should use type safety, custom types, and stable dependency boundaries."
+  non_western_coverage_note: "China-origin sources in the registry support protocol/runtime boundaries and multi-agent coordination; no China-specific Rust workspace source was found in this focused pass."
+  inference_boundary: "The sources support layered harness concerns and Rust workspace mechanics. Forge's exact crate names and build order are product-specific architecture decisions."
+failure_modes_prevented:
+  - "new Rust core becomes one huge binary mirroring the old Python sprawl"
+  - "CLI rendering owns runtime authority"
+  - "MCP/daemon transport dictates domain model"
+  - "host-specific plugin quirks leak into contract semantics"
+  - "storage backend decides workflow policy"

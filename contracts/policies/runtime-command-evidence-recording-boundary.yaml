@@ -1,0 +1,93 @@
+schema_version: "0.1"
+policy: "runtime_command_evidence_recording_boundary"
+status: "accepted"
+purpose: "Define how Forge records read-only command execution output as append-only evidence without letting the host agent rewrite, summarize, or reinterpret runtime results."
+decision:
+  selected_strategy: "runtime_typed_record_plus_store_append_jsonl"
+  runtime_owns:
+    - "derive RuntimeCommandEvidenceRecord from RuntimeCommandExecution and RuntimeEffectStagingPlan"
+    - "preserve command id, operation id, executor, status, reasons, exit code, timeout flag, duration, captured output, truncation flags, and validation counts"
+    - "avoid filesystem writes while producing the record"
+  store_owns:
+    - "append serializable evidence records to repo-relative JSONL paths"
+    - "create parent directories"
+    - "reject absolute paths and parent-directory escapes"
+    - "write exactly one JSON object per append call followed by newline"
+    - "flush writes before returning"
+  adapter_owns_later:
+    - "choose concrete evidence path"
+    - "supply recorded_at timestamp"
+    - "link command evidence to gates, artifacts, or ledger entries"
+    - "coordinate concurrent append ordering when daemon or multi-writer store arrives"
+  runtime_does_not_do:
+    - "persist files directly"
+    - "rewrite stdout or stderr summaries"
+    - "decide gate pass/fail from command output"
+    - "commit ToolEffectContract writes"
+    - "create a new CommandEvidenceContract family"
+rules:
+  - id: "record_is_typed_runtime_output"
+    rule: "Command evidence must be generated from RuntimeCommandExecution, not from host-agent prose."
+  - id: "append_only_store_boundary"
+    rule: "Store persistence for command evidence starts as append_json_line(root, relative_path, record)."
+  - id: "repo_relative_only"
+    rule: "Evidence append paths must be repo-relative and must reject absolute paths, prefixes, root dirs, and parent-directory components."
+  - id: "jsonl_for_append_log"
+    rule: "Append-only command evidence uses JSONL because each command result is an immutable event record, not a hand-authored contract document."
+  - id: "no_new_contract_family"
+    rule: "Do not create CommandEvidenceContract while RuntimeCommandEvidenceRecord plus ToolEffectContract evidence_append/command_run semantics cover the boundary."
+tradeoffs:
+  chosen:
+    advantages:
+      - "Preserves exact runtime output without asking the host agent to summarize it."
+      - "Keeps runtime pure with respect to filesystem writes."
+      - "Keeps store generic and reusable for future evidence, ledger, and daemon projections."
+      - "Avoids expanding the v0 contract family inventory before there is a clear schema need."
+      - "JSONL supports append-only event streams better than multi-document YAML."
+    disadvantages:
+      - "JSONL is less pleasant for direct human reading, but humans are not the direct reader for Forge authority data."
+      - "Concurrent append ordering is not fully solved until a daemon/file-lock/ledger boundary exists."
+      - "Adapters still need to choose canonical evidence paths and timestamps."
+  rejected:
+    - id: "new_command_evidence_contract_family"
+      reason: "Would expand locked v0 family inventory before proving that command evidence needs contract-level authority."
+    - id: "runtime_writes_evidence_files"
+      reason: "Would mix execution semantics with filesystem persistence and violate the store/runtime boundary."
+    - id: "markdown_evidence_summary"
+      reason: "Would recreate agent-facing prose as authority and invite host-agent drift."
+    - id: "yaml_append_log"
+      reason: "YAML is useful for authored contracts; append-only event streams need one unambiguous serialized object per line."
+acceptance:
+  runtime:
+    - "RuntimeCommandEvidenceRecord exists and serializes as typed runtime evidence."
+    - "command_execution_evidence_record preserves operation id, command id, status, reasons, and output from execution."
+  store:
+    - "append_json_line creates parent directories and appends JSON lines."
+    - "append_json_line rejects path escapes."
+  validation:
+    - "cargo test -p forge-core-runtime"
+    - "cargo test -p forge-core-store"
+    - "cargo test --workspace"
+    - "cargo clippy --workspace -- -D warnings"
+evidence_basis:
+  direct_patterns:
+    - source_id: "grite_2606_19616"
+      supports: "Coordination and task evidence can live in append-only repo-local records."
+    - source_id: "cordon_semantic_transactions_2606_17573"
+      supports: "Execution boundaries should produce auditable records before commit."
+    - source_id: "storm_state_management_2605_20563"
+      supports: "State consistency needs write-time mediation instead of post-hoc interpretation."
+    - source_id: "agentic_harness_engineering_2604_25850"
+      supports: "Harness evolution and operation need observable components tied to outcomes."
+    - source_id: "local_llm_agents_vulnerable_runtimes_2606_21071"
+      supports: "Local runtime actions should be auditable at the tool/process boundary."
+  inference_boundary: "The evidence supports append-only auditable runtime evidence and separated persistence. JSONL path shape and exact record fields are Forge-specific implementation choices."
+failure_modes_prevented:
+  - "host agent says tests passed without preserving command output"
+  - "command evidence is overwritten instead of appended"
+  - "runtime command output becomes Markdown narration"
+  - "evidence write escapes the repo root through a relative path"
+  - "new contract family is created before it has authority semantics"
+next_boundary:
+  id: "runtime_effect_application_boundary"
+  question: "After effect transaction readiness requires payload authority, how should Forge transport payload content, check filesystem freshness, apply append/create/write/delete in a temp transaction, and rollback on failure?"
