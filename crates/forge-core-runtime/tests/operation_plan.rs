@@ -22,8 +22,11 @@ use forge_core_runtime::{
 use forge_core_store::build_reference_index;
 use forge_core_validate::ReferenceIndex;
 use sha2::{Digest, Sha256};
+use std::cell::RefCell;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn fixture(name: &str) -> OperationContractDocument {
     let path = repo_root()
@@ -81,11 +84,45 @@ fn hex_sha256(content: &[u8]) -> String {
     format!("{:x}", hasher.finalize())
 }
 
+static TEMP_ROOT_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+thread_local! {
+    static TEMP_ROOT_GUARDS: RefCell<Vec<TempRootGuard>> = const { RefCell::new(Vec::new()) };
+}
+
+struct TempRootGuard {
+    path: PathBuf,
+}
+
+impl Drop for TempRootGuard {
+    fn drop(&mut self) {
+        if let Err(error) = fs::remove_dir_all(&self.path) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                eprintln!(
+                    "failed to remove temp root {}: {error}",
+                    self.path.display()
+                );
+            }
+        }
+    }
+}
+
 fn fresh_temp_root(label: &str) -> PathBuf {
-    let path =
-        std::env::temp_dir().join(format!("forge-core-runtime-{label}-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&path);
+    let counter = TEMP_ROOT_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let timestamp_nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock before UNIX_EPOCH")
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "forge-core-runtime-{label}-{}-{timestamp_nanos}-{counter}",
+        std::process::id()
+    ));
     fs::create_dir_all(&path).expect("create temp root");
+    TEMP_ROOT_GUARDS.with(|guards| {
+        guards
+            .borrow_mut()
+            .push(TempRootGuard { path: path.clone() });
+    });
     path
 }
 
