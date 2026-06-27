@@ -1,0 +1,95 @@
+schema_version: "0.1"
+artifact_kind: "grill"
+grill_kind: "design-fork"
+status: "closed"
+resolved_at: "2026-06-27"
+human_decision: "F1c"
+human_decision_note: |
+  Ship CRC-32C + derive_state now (closes the proven gap for every threat forge
+  actually faces: cooperative agents in one repo). Design origin-bound ed25519
+  signatures as an additive, separately-gated layer for the multi-owner trust
+  boundary case, triggered when coordination crosses an org boundary. Avoids
+  baking key-management into the foundation before the use case is concrete."
+created_at: "2026-06-27"
+project: "forge-method-rust"
+session: "claims-integrity-spine-dogfood"
+authority:
+  feeds: "specification phase (claims integrity spine, P2.1 + P2.2)"
+  closes: "discovery/claims-integrity-spine-discovery.yaml"
+  rule: "every design choice below is reconciled against existing W1/W2/W3 research + v1.1 backlog; the ONE irreversable fork is escalated to the human"
+
+purpose:
+  one_line: "Reconcile the integrity-spine discovery against the already-finished WAL/CRC design, and resolve the one threat-model fork that blocks spec."
+  anti_pattern_avoided: "grill as opinion-bingo; here the design is already 18-sourced, so the grill only resolves what artifacts genuinely cannot."
+
+phase_decision_restated: |
+  Build the claims integrity spine = P2.1 (append-only WAL with CRC-32C +
+  prefix-recovery) + P2.2 (derive_state as the ONLY constructor of claim state,
+  load_claims becomes debug/fallback). This closes the gap proven by the
+  discovery exploit (hand-edited expires_at was silently honored) by making
+  claims derive from an append-only, chain-checked ledger instead of mutable YAML.
+
+reconciliation_against_artifacts:
+  - artifact: "contracts/backlog/v1.1-selfhealing-backlog.yaml"
+    note: "P2.1/P2.2 ARE this work. P1.1-P1.4 + P3.1 already shipped in hardening batch H1.1-H1.3. No conflict; this promotes P2.1/P2.2 from 'deferred v1.1 polish' to 'current excellence target'."
+    resolved: true
+  - artifact: "contracts/research/selfhealing-wal-crc-design-v1.yaml (W2)"
+    note: "Design is FINISHED: FMW1 binary format, CRC-32C/Castagnoli, dual-CRC framing, strict prefix-recovery, fs4 exclusive-lock appends, snapshot+rotate. 18 sources (LevelDB/RocksDB/Postgres/SQLite/POSIX). Not greenfield — it is a build spec already."
+    resolved: true
+  - artifact: "contracts/research/selfhealing-writepath-audit-v1.yaml (W1) + selfhealing-failpoint-audit-v1.yaml (W3)"
+    note: "Write-path + failpoint risks mapped. io_util stale-lock reclaim already shipped (H1.3). WAL will reuse the DirLock primitive."
+    resolved: true
+
+the_one_fork:  # genuinely irreversable; artifacts cannot resolve it
+  id: "F1-threat-model"
+  question: "Does the claims integrity spine need to resist a DETERMINED adversary with filesystem write access, or only accidents / buggy agents / naive hand-edits / torn writes?"
+  why_it_matters: |
+    It changes the on-disk format and the trust model irreversibly.
+    CRC-32C (W2's choice) detects: torn writes, bit-rot, accidental edits,
+    and NAIVE hand-edits (editing one record breaks the chain → recovery stops).
+    CRC-32C does NOT stop an agent that understands the format: it can append a
+    forged record (e.g. release a rival's claim, or steal a lane as another
+    agent_id) with a correctly-recomputed CRC. Determined adversaries also win
+    by deleting/rolling-back the whole WAL — CRC cannot anchor against that.
+    Origin-bound signatures (ed25519, already a workspace dep) stop forging and
+    bind each record to an issuer key — but require key management (where does
+    a CLI invoked by many agents get its key?) and do not by themselves stop
+    rollback without an external anchor.
+  options:
+    - id: "F1a"
+      name: "CRC-32C chain only (build W2 as-is)"
+      threat_covered: "accidents, torn writes, bit-rot, naive/buggy hand-edits, concurrent corruption"
+      threat_uncovered: "an agent that writes WAL records with correct CRCs to forge another agent's identity or kill a rival's claim; rollback/delete"
+      cost: "L (W2 is designed; ~1 crate add: crc32c + fs4 reuse)"
+      reversible_upgrade_path: "signatures are ADDITIVE later (add sig field + verify), not a redesign"
+    - id: "F1b"
+      name: "CRC-32C chain + origin-bound ed25519 signatures per record"
+      threat_covered: "everything in F1a + forging-as-another-agent + rollback-of-individual-records (signed checkpoint anchors)"
+      threat_uncovered: "total WAL deletion (needs external published anchor, out of scope)"
+      cost: "XL (key management: per-agent vs per-machine vs per-repo origin; key provisioning for CLI-invoked agents; signed-checkpoint anchor protocol)"
+      risk: "key management is the hard part and can over-engineer for forge's actual trust boundary (cooperative agents the USER spawned within ONE repo)"
+    - id: "F1c"
+      name: "CRC-32C now (F1a) + non-malleable-authority as a designed v-next layer"
+      rationale: "Ship the spine that closes the proven gap against the realistic threats. Design signatures as an additive, separately-gated layer triggered when coordination crosses an org/trust boundary. Avoids baking key-management into the foundation before the multi-owner use case is real."
+  recommendation: "F1c"
+  recommendation_rationale: |
+    CRC-32C + derive_state closes the discovery gap for every threat forge
+    actually faces today (cooperative agents in one repo: the dangers are bugs,
+    torn writes, concurrency, naive edits — all covered). The adversarial threat
+    (an agent forging another's identity) presumes a trust boundary forge does
+    not yet assume: every agent in the bus was spawned by the same user/org.
+    Origin-binding is real excellence, but it is an additive layer best added
+    when the multi-owner coordination case is concrete, not speculated. F1a-now
+    + F1b-designed keeps excellence without over-engineering the foundation.
+
+assumptions_to_confirm_in_spec:
+  - "Separate claims WAL (claims.wal.*) distinct from effects WAL (effects.ndjson) — different durability/lifecycle. W2 assumes separate."
+  - "derive_state is LAZY (replay on each command) for v1.1; snapshot+rotation (P3.3) is a later perf layer, not a correctness one."
+  - "Clean break on migration: claims-active/ gitignored ephemeral YAML is abandoned, not migrated. Existing leases simply expire."
+  - "Payload encoding = canonical CBOR for deterministic bytes (W2 open question, resolvable in spec)."
+  - "Local-filesystem requirement documented (NFS/SMB/WSL-DrvFS advisory-lock + fsync caveats)."
+
+next_action: |
+  Human answers F1 (a / b / c). Then this grill closes, status→closed, and
+  spec opens: slice spec for the chosen option, then plan stories (each story
+  acquires a claim on a disjoint spine file before editing — full dogfood).

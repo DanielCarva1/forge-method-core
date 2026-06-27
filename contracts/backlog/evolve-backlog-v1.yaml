@@ -1,0 +1,75 @@
+schema_version: "0.1"
+artifact_kind: "backlog"
+id: "evolve-backlog-v1"
+status: "draft"
+created_at: "2026-06-27"
+phase: "6-evolve"
+goal: "Make forge excellent, fast, robust, reliable — and prove it scales with the model. Post-v1 evolve work, built autonomously under light gates (claims on disjoint files + final verify)."
+
+basis:
+  research:
+    - contracts/research/protocol-scale-with-model-v1.yaml          # R1: scale-with-model = gates+freedom, not scripts; personas/scaffolds tax strong models
+    - contracts/research/agentic-throughput-and-fast-quality-mode-v1.yaml  # R2: RADAR dual-lane, outcome-over-volume, structure pays off past ambiguity threshold
+  vision_principles:
+    - "DC9 hard gates + freedom within gates (scale with the model)"
+    - "DC4 funnel of autonomy (light + near-silent in build/evolve)"
+    - "DC1 guide = intelligent classifier, not script"
+    - "DC10 multi-LLM interop via file-backed typed contracts"
+  market_signal: |
+    RADAR (Meta, 535k+ diffs): governed agents beat bare agents on OUTCOME
+    (revert rate 1/3, production-incident rate 1/50) with LOWER review latency.
+    Vibe-coding wins raw volume, loses on rework/incidents. Forge's pitch:
+    protocol that scales with the model AND beats vibe on outcome.
+
+epics:
+  - id: E1
+    name: "Dual-lane risk router (flagship — option A)"
+    why: "Makes forge scale-with-the-model (adaptive rigor), delivers the fast+quality mode, and is the empirical anti-vibe argument. R2-F7/F8/F9 (RADAR pattern)."
+    risk_classifier_inputs:
+      - "changed paths"
+      - "blast-radius / blast-radius fanout"
+      - "diff size"
+      - "test coverage on touched paths"
+      - "historical defect signal"
+      - "human-stated uncertainty"
+    lanes:
+      fast: "machine-checkable evidence only (tests/lint/typecheck pass), near-silent, parallelizable, no prose planning"
+      rigorous: "gates + grill + human contact (high blast-radius / ambiguous / security / data)"
+    status: "to_spec"
+
+  - id: E2
+    name: "Codebase excellence / hardening (comb-through)"
+    why: "'Revira e melhora.' Concrete targets from the comb-through audit — bugs, robustness, missing tests, simplification, type-safety."
+    source: "contracts/audit/comb-through-{logic,io,quality}-v1.yaml (in flight)"
+    status: "awaiting_audit"
+
+  - id: E3
+    name: "Claims integrity spine (WAL + derive_state)"
+    why: "Closes the proven integrity gap (hand-edit exploit). Substrate of trust for the rigorous lane. F1c locked: CRC-32C now, origin-bound signatures as additive v-next."
+    spec: "contracts/spec/claims-integrity-spine-spec.yaml (ready)"
+    status: "spec_ready"
+
+  - id: E4
+    name: "Fast-lane evidence contract"
+    why: "R2-R4: fast lane needs machine-checkable evidence (tests/lint/typecheck pass, changed-files summary, residual risk, rollback note) — no prose. The contract that makes 'fast + quality' real."
+    status: "to_spec"
+
+  - id: E5
+    name: "Outcome observability + eval bank"
+    why: "R2-R3/R8/R12: measure OUTCOME (lead time, agent wall time, rework cycles, defect escape, incidents) not volume. Build eval bank from real failures. The metric that proves forge beats vibe."
+    status: "to_spec"
+
+sequencing_note: |
+  E2 (audit) populates itself — runs now, in parallel with this backlog.
+  E1 + E4 are co-dependent (router routes INTO the fast-lane evidence contract).
+  E3 is independent substrate (disjoint files: claims_wal.rs, claims_wal_recovery.rs,
+  derive_state.rs — fully parallelizable).
+  E5 cross-cuts all (observability hooks).
+  Each epic ships as parallelizable stories on DISJOINT files (proven pattern from
+  hardening batch 1), fanned out to gpt-5.5 subagents under claims.
+
+autonomous_mode_note: |
+  Built under light evolve-phase gates: claims on disjoint files + final verify
+  (green loop re-enabled at slice end). Driver orchestrates + synthesizes;
+  subagents read + build in parallel. Human engaged only at real decision forks
+  (threat-model tier, scope breaks, irreversible infra).
