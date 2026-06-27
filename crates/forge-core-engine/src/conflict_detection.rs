@@ -230,7 +230,35 @@ fn scope_covers_any(claim: &ClaimContract, target_segments: &[String]) -> bool {
         .scope
         .paths
         .iter()
-        .any(|p| path_covers(&normalize_segments(&p.0), target_segments))
+        .any(|p| claim_path_covers(&p.0, target_segments))
+}
+
+/// True iff a raw claim path covers normalized target segments.
+///
+/// `normalize_segments` intentionally returns `[]` for both an empty target and
+/// explicit repo-root spellings such as `.`, `/`, and ``. For claims, those
+/// explicit root spellings are authority over the whole repository; for targets,
+/// an empty path still covers nothing. Keeping the root decision on the claim
+/// side preserves DD28 (a claim with no `scope.paths` governs no path) while
+/// closing the false-negative where a root path governed nothing.
+fn claim_path_covers(raw_claim_path: &str, target_segments: &[String]) -> bool {
+    if target_segments.is_empty() {
+        return false;
+    }
+    if is_explicit_repo_root_path(raw_claim_path) {
+        return true;
+    }
+    path_covers(&normalize_segments(raw_claim_path), target_segments)
+}
+
+/// Is this claim path an explicit spelling of the repository root?
+///
+/// This deliberately accepts only empty, separator-only, or `.`-only spellings
+/// (``, `.`, `/`, `./`, `\\`, etc.). It does not reinterpret arbitrary traversal
+/// expressions as root, which keeps DD29's lexical traversal handling narrow.
+fn is_explicit_repo_root_path(raw: &str) -> bool {
+    raw.split(['/', '\\'])
+        .all(|part| part.is_empty() || part == ".")
 }
 
 /// True iff `claim_segments` contains `target_segments`.
@@ -273,16 +301,18 @@ fn normalize_segments(raw: &str) -> Vec<String> {
                 // only); the integrity spine resolves real on-disk paths.
                 out.pop();
             }
-            // DD30: ASCII-lowercase so matching is case-INsensitive. This is
+            // DD30: Unicode-lowercase so matching is case-INsensitive. This is
             // fail-closed for security: on a case-insensitive filesystem
             // (Windows NTFS, macOS APFS default, and the /mnt/c drvfs this
             // repo lives on) `Contracts/x` and `contracts/x` are the SAME
             // file; byte-exact matching would let a peer bypass a claim by
-            // case-folding. Lowercolding can cause a *false block* on a purely
-            // case-sensitive filesystem where `Foo.rs` and `foo.rs` are
-            // distinct — but a false block is safe (the writer just acquires
-            // its own claim), whereas a missed block is a collision.
-            other => out.push(other.to_ascii_lowercase()),
+            // case-folding. Unicode lowercasing extends the same guard to
+            // non-ASCII path segments (`Épicos` vs `épicos`). Lowercasing can
+            // cause a *false block* on a purely case-sensitive filesystem where
+            // `Foo.rs` and `foo.rs` are distinct — but a false block is safe
+            // (the writer just acquires its own claim), whereas a missed block
+            // is a collision.
+            other => out.push(other.to_lowercase()),
         }
     }
     out
@@ -471,6 +501,23 @@ mod tests {
     }
 
     #[test]
+    fn explicit_repo_root_claim_blocks_descendant_paths() {
+        for root_path in [".", "/", ""] {
+            let claims = vec![live_claim("c1", "alice", &[root_path])];
+            let check = check_write_against_claims(
+                &[RepoPath("src/lib.rs".to_string())],
+                &StableId("bob".to_string()),
+                &claims,
+                NOW,
+            );
+            assert!(
+                check.is_blocked(),
+                "root claim path `{root_path}` must cover repository descendants"
+            );
+        }
+    }
+
+    #[test]
     fn empty_paths_claim_blocks_nothing() {
         let claim = live_claim("c1", "alice", &[]); // no paths
         let check = check_write_against_claims(
@@ -592,6 +639,21 @@ mod tests {
         assert!(
             check.is_blocked(),
             "case-folded path must collide with differently-cased claim"
+        );
+    }
+
+    #[test]
+    fn unicode_case_insensitive_matching_blocks_case_folded_peer() {
+        let claims = vec![live_claim("c1", "alice", &["Contracts/Épicos/S5.0.yaml"])];
+        let check = check_write_against_claims(
+            &[RepoPath("contracts/épicos/s5.0.yaml".to_string())],
+            &StableId("bob".to_string()),
+            &claims,
+            NOW,
+        );
+        assert!(
+            check.is_blocked(),
+            "Unicode case-folded path must collide with differently-cased claim"
         );
     }
 

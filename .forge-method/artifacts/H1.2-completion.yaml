@@ -1,0 +1,24 @@
+schema_version: "0.1"
+story_id: "H1.2"
+status: done
+changes:
+  - "Added claim-path-specific root handling so explicit repo-root claim paths (`.`, `/`, and empty string) cover non-empty descendant targets while empty write targets remain unblocked."
+  - "Replaced ASCII-only path normalization (`to_ascii_lowercase`) with Unicode-aware lowercase normalization (`to_lowercase`) for non-ASCII case-insensitive collision detection."
+  - "Kept scope narrow to `crates/forge-core-engine/src/conflict_detection.rs`; no changes to claim_engine.rs or io_util.rs."
+tests_added:
+  - "explicit_repo_root_claim_blocks_descendant_paths covers `.`, `/`, and empty claim paths blocking `src/lib.rs`."
+  - "unicode_case_insensitive_matching_blocks_case_folded_peer covers `Contracts/Épicos/...` vs `contracts/épicos/...`."
+green_loop_result:
+  status: passed
+  commands:
+    - command: "cargo check -p forge-core-engine"
+      result: "failed initially due Windows cargo / WSL UNC incremental lock issue, not code"
+    - command: "CARGO_PROFILE_DEV_INCREMENTAL=false cargo check -p forge-core-engine --target-dir 'C:\\Users\\Danie\\AppData\\Local\\Temp\\pi-target-6003910c-1'"
+      result: passed
+    - command: "CARGO_PROFILE_DEV_INCREMENTAL=false cargo clippy -p forge-core-engine --target-dir 'C:\\Users\\Danie\\AppData\\Local\\Temp\\pi-target-6003910c-1' -- -D warnings"
+      result: passed
+    - command: "CARGO_PROFILE_DEV_INCREMENTAL=false cargo test -p forge-core-engine --target-dir 'C:\\Users\\Danie\\AppData\\Local\\Temp\\pi-target-6003910c-1'"
+      result: "passed: 115 tests, 0 failed"
+notes:
+  - "context.md and plan.md requested by task were not present in /tmp/pi-worktree-6003910c-1. Proceeded from story + AGENTS.md + task contract."
+  - "Used explicit Windows target-dir because bare Windows cargo cannot create incremental lockfiles under WSL UNC worktree target/."

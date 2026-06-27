@@ -55,11 +55,30 @@ pub fn rfc3339_to_unix(ts: &str) -> Option<i64> {
     let h: i64 = ts.get(11..13)?.parse().ok()?;
     let mi: i64 = ts.get(14..16)?.parse().ok()?;
     let s: i64 = ts.get(17..19)?.parse().ok()?;
-    if !(1..=12).contains(&mo) {
+    let max_day = days_in_month(y, mo)?;
+    if !(1..=max_day).contains(&d)
+        || !(0..=23).contains(&h)
+        || !(0..=59).contains(&mi)
+        || !(0..=59).contains(&s)
+    {
         return None;
     }
     let days = days_from_civil(y, mo, d);
     Some(days * 86_400 + h * 3600 + mi * 60 + s)
+}
+
+fn days_in_month(year: i64, month: i64) -> Option<i64> {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => Some(31),
+        4 | 6 | 9 | 11 => Some(30),
+        2 if is_leap_year(year) => Some(29),
+        2 => Some(28),
+        _ => None,
+    }
+}
+
+fn is_leap_year(year: i64) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
 }
 
 /// Format unix seconds as `YYYY-MM-DDTHH:MM:SSZ`.
@@ -168,6 +187,12 @@ pub enum ClaimRejection {
         claim_id: ClaimId,
         from: ClaimStatus,
         to: ClaimStatus,
+    },
+    /// The request payload is structurally valid Rust data but violates an
+    /// engine invariant (for example, a lease TTL that cannot be represented).
+    InvalidRequest {
+        field: &'static str,
+        message: String,
     },
 }
 
@@ -281,8 +306,11 @@ pub fn acquire(
         }
     }
 
+    let expires_unix = match checked_lease_expiry(now_unix, req.ttl_seconds, "ttl_seconds") {
+        Ok(expires_unix) => expires_unix,
+        Err(rejection) => return ClaimLifecycleDecision::Rejected(rejection),
+    };
     let now = unix_to_rfc3339(now_unix);
-    let expires_unix = now_unix + i64::try_from(req.ttl_seconds).unwrap_or(i64::MAX);
     let claim = ClaimContract {
         id: ClaimId(format!(
             "claim.{}.{}.{}",
@@ -352,8 +380,12 @@ pub fn heartbeat(
             claim_id: claim.id.clone(),
         });
     }
+    let expires_unix =
+        match checked_lease_expiry(now_unix, claim.lease.ttl_seconds, "lease.ttl_seconds") {
+            Ok(expires_unix) => expires_unix,
+            Err(rejection) => return ClaimLifecycleDecision::Rejected(rejection),
+        };
     let mut next = claim.clone();
-    let expires_unix = now_unix + i64::try_from(claim.lease.ttl_seconds).unwrap_or(i64::MAX);
     let now = unix_to_rfc3339(now_unix);
     next.lease.last_heartbeat_at = now;
     next.lease.expires_at = unix_to_rfc3339(expires_unix);
@@ -460,8 +492,27 @@ fn default_expiry_policy() -> ExpiryPolicy {
         handoff_required: true,
         release_without_handoff_allowed: false,
         reclaim_policy: ReclaimPolicy::DriverReview,
-        handoff_request_ref: None,
+        handoff_request_ref: Some(RepoPath(
+            "contracts/requests/claim-expiry-handoff-request.yaml".into(),
+        )),
     }
+}
+
+fn checked_lease_expiry(
+    now_unix: i64,
+    ttl_seconds: u64,
+    field: &'static str,
+) -> Result<i64, ClaimRejection> {
+    let ttl = i64::try_from(ttl_seconds).map_err(|_| ClaimRejection::InvalidRequest {
+        field,
+        message: "lease ttl_seconds exceeds the supported signed epoch range".into(),
+    })?;
+    now_unix
+        .checked_add(ttl)
+        .ok_or_else(|| ClaimRejection::InvalidRequest {
+            field,
+            message: "lease expires_at would overflow the supported signed epoch range".into(),
+        })
 }
 
 fn scope_kind_slug(k: ClaimScopeKind) -> String {
@@ -554,6 +605,17 @@ mod tests {
     }
 
     #[test]
+    fn timestamp_rejects_invalid_calendar_values() {
+        assert!(rfc3339_to_unix("2026-02-31T00:00:00Z").is_none());
+        assert!(rfc3339_to_unix("2026-04-31T00:00:00Z").is_none());
+        assert!(rfc3339_to_unix("2026-01-01T99:00:00Z").is_none());
+        assert!(rfc3339_to_unix("2026-01-01T00:99:00Z").is_none());
+        assert!(rfc3339_to_unix("2026-01-01T00:00:99Z").is_none());
+        assert!(rfc3339_to_unix("2024-02-29T00:00:00Z").is_some());
+        assert!(rfc3339_to_unix("2026-02-29T00:00:00Z").is_none());
+    }
+
+    #[test]
     fn acquire_succeeds_on_free_scope() {
         let d = acquire(&[], &req("s1", "agentA"), T0);
         let ClaimLifecycleDecision::Accepted(c) = d else {
@@ -564,6 +626,42 @@ mod tests {
         assert_eq!(c.scope.id.0, "s1");
         // lease end = T0 + 600s
         assert_eq!(rfc3339_to_unix(&c.lease.expires_at), Some(T0 + 600));
+    }
+
+    #[test]
+    fn acquire_rejects_ttl_overflow() {
+        let mut request = req("s1", "agentA");
+        request.ttl_seconds = u64::MAX;
+        let d = acquire(&[], &request, T0);
+        assert!(matches!(
+            d,
+            ClaimLifecycleDecision::Rejected(ClaimRejection::InvalidRequest { field, .. }) if field == "ttl_seconds"
+        ));
+    }
+
+    #[test]
+    fn acquire_rejects_expires_at_overflow() {
+        let mut request = req("s1", "agentA");
+        request.ttl_seconds = 1;
+        let d = acquire(&[], &request, i64::MAX);
+        assert!(matches!(
+            d,
+            ClaimLifecycleDecision::Rejected(ClaimRejection::InvalidRequest { field, .. }) if field == "ttl_seconds"
+        ));
+    }
+
+    #[test]
+    fn acquire_default_expiry_policy_is_validator_consistent() {
+        let d = acquire(&[], &req("s1", "agentA"), T0);
+        let ClaimLifecycleDecision::Accepted(c) = d else {
+            panic!("should accept: {d:?}");
+        };
+        assert!(c.expiry_policy.handoff_required);
+        assert!(!c.expiry_policy.release_without_handoff_allowed);
+        assert!(
+            c.expiry_policy.handoff_request_ref.is_some(),
+            "validate_claim rejects handoff_required policies without handoff_request_ref"
+        );
     }
 
     #[test]
@@ -626,6 +724,28 @@ mod tests {
         // lease extended by ttl from heartbeat time
         assert_eq!(rfc3339_to_unix(&next.lease.expires_at), Some(later + 600));
         assert_eq!(next.status.value, ClaimStatus::Active);
+    }
+
+    #[test]
+    fn heartbeat_rejects_ttl_overflow() {
+        let mut c = manual_claim("s1", "agentA", T0 + 600, ClaimStatus::Active);
+        c.lease.ttl_seconds = u64::MAX;
+        let d = heartbeat(&c, &StableId("agentA".into()), T0);
+        assert!(matches!(
+            d,
+            ClaimLifecycleDecision::Rejected(ClaimRejection::InvalidRequest { field, .. }) if field == "lease.ttl_seconds"
+        ));
+    }
+
+    #[test]
+    fn heartbeat_rejects_expires_at_overflow() {
+        let mut c = manual_claim("s1", "agentA", T0 + 600, ClaimStatus::Active);
+        c.lease.ttl_seconds = i64::MAX as u64;
+        let d = heartbeat(&c, &StableId("agentA".into()), T0);
+        assert!(matches!(
+            d,
+            ClaimLifecycleDecision::Rejected(ClaimRejection::InvalidRequest { field, .. }) if field == "lease.ttl_seconds"
+        ));
     }
 
     #[test]
