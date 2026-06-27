@@ -23,7 +23,7 @@ use forge_core_contracts::claim::{
     ActorRole, ClaimContract, ClaimIdentity, ClaimKind, ClaimLease, ClaimScope, ClaimScopeKind,
     ClaimStatus, ClaimStatusRecord, ExpiryAction, ExpiryPolicy, ReclaimPolicy,
 };
-use forge_core_contracts::{RepoPath, StableId};
+use forge_core_contracts::{ClaimId, RepoPath, ScopeId, StableId};
 
 // ---------------------------------------------------------------------------
 // timestamp helpers — minimal RFC3339 (UTC "Z") <-> unix epoch, no deps.
@@ -108,7 +108,7 @@ fn civil_from_days(z: i64) -> (i64, i64, i64) {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcquireRequest {
     pub scope_kind: ClaimScopeKind,
-    pub scope_id: StableId,
+    pub scope_id: ScopeId,
     pub agent_id: StableId,
     pub role: ActorRole,
     /// Lease time-to-live in seconds. After this elapses without heartbeat the
@@ -151,21 +151,21 @@ pub enum ClaimLifecycleDecision {
 pub enum ClaimRejection {
     /// The scope is already held live by a different agent.
     AlreadyClaimedByOther {
-        scope_id: StableId,
+        scope_id: ScopeId,
         holder: StableId,
         expires_at: String,
     },
     /// The caller is not the claimant of this claim.
     NotClaimant {
-        claim_id: StableId,
+        claim_id: ClaimId,
         claimant: StableId,
         requested_by: StableId,
     },
     /// The claim has expired; expiry policy requires a handoff, not a silent op.
-    ExpiredRequiresHandoff { claim_id: StableId },
+    ExpiredRequiresHandoff { claim_id: ClaimId },
     /// The requested status transition is not in the allowed set.
     IllegalTransition {
-        claim_id: StableId,
+        claim_id: ClaimId,
         from: ClaimStatus,
         to: ClaimStatus,
     },
@@ -194,7 +194,7 @@ pub struct ActiveClaimsView {
 /// Outcome of an expiry sweep on one claim.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClaimExpiry {
-    pub claim_id: StableId,
+    pub claim_id: ClaimId,
     pub transitioned_to: ClaimStatus,
 }
 
@@ -227,7 +227,7 @@ pub fn is_expired(claim: &ClaimContract, now_unix: i64) -> bool {
 pub fn claim_holds_scope(
     claim: &ClaimContract,
     scope_kind: ClaimScopeKind,
-    scope_id: &StableId,
+    scope_id: &ScopeId,
 ) -> bool {
     claim.scope.kind == scope_kind && claim.scope.id == *scope_id
 }
@@ -284,7 +284,7 @@ pub fn acquire(
     let now = unix_to_rfc3339(now_unix);
     let expires_unix = now_unix + i64::try_from(req.ttl_seconds).unwrap_or(i64::MAX);
     let claim = ClaimContract {
-        id: StableId(format!(
+        id: ClaimId(format!(
             "claim.{}.{}.{}",
             scope_kind_slug(req.scope_kind),
             req.scope_id.0,
@@ -508,7 +508,7 @@ mod tests {
     fn req(scope_id: &str, agent: &str) -> AcquireRequest {
         AcquireRequest {
             scope_kind: ClaimScopeKind::Story,
-            scope_id: StableId(scope_id.into()),
+            scope_id: ScopeId(scope_id.into()),
             agent_id: StableId(agent.into()),
             role: ActorRole::Worker,
             ttl_seconds: 600,

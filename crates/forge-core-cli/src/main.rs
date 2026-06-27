@@ -2161,7 +2161,7 @@ fn resolve_now_unix(flag: Option<i64>) -> i64 {
 
 fn run_claim_acquire(args: &[String]) {
     use forge_core_cli::claim::{parse_role, parse_scope_kind, run_acquire};
-    use forge_core_contracts::{RepoPath, StableId};
+    use forge_core_contracts::{RepoPath, ScopeId, StableId};
     use forge_core_engine::AcquireRequest;
 
     let mut scope_kind: Option<String> = None;
@@ -2245,7 +2245,7 @@ fn run_claim_acquire(args: &[String]) {
 
     let req = AcquireRequest {
         scope_kind: sk,
-        scope_id: StableId(scope_id),
+        scope_id: ScopeId(scope_id),
         agent_id: StableId(agent_id),
         role: role_kind,
         ttl_seconds: ttl,

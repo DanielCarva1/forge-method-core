@@ -13,7 +13,7 @@
 use forge_core_cli::claim::{run_acquire, run_check_write, run_release};
 use forge_core_contracts::{
     claim::{ActorRole, ClaimScopeKind},
-    RepoPath, StableId,
+    RepoPath, ScopeId, StableId,
 };
 use forge_core_engine::AcquireRequest;
 use std::path::PathBuf;
@@ -32,7 +32,7 @@ fn tmp_claims_dir(label: &str) -> PathBuf {
 fn acquire_req(agent: &str, paths: &[&str]) -> AcquireRequest {
     AcquireRequest {
         scope_kind: ClaimScopeKind::Story,
-        scope_id: StableId("S5.0".to_string()),
+        scope_id: ScopeId("S5.0".to_string()),
         agent_id: StableId(agent.to_string()),
         role: ActorRole::Worker,
         ttl_seconds: 600,
@@ -125,11 +125,11 @@ fn two_agents_non_overlapping_claims_both_write_freely() {
     let dir = tmp_claims_dir("disjoint");
 
     let alice_req = AcquireRequest {
-        scope_id: StableId("S5.0".to_string()),
+        scope_id: ScopeId("S5.0".to_string()),
         ..acquire_req("alice", &["src/feature_a.rs"])
     };
     let bob_req = AcquireRequest {
-        scope_id: StableId("S5.1".to_string()),
+        scope_id: ScopeId("S5.1".to_string()),
         ..acquire_req("bob", &["src/feature_b.rs"])
     };
     let a = run_acquire(&dir, &alice_req, NOW);

@@ -1,4 +1,4 @@
-use crate::common::{RepoPath, StableId};
+use crate::common::{ClaimId, RepoPath, ScopeId, StableId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +12,7 @@ pub struct ClaimContractDocument {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ClaimContract {
-    pub id: StableId,
+    pub id: ClaimId,
     pub contract_ref: RepoPath,
     pub claim: ClaimIdentity,
     pub scope: ClaimScope,
@@ -35,7 +35,7 @@ pub struct ClaimIdentity {
 #[serde(deny_unknown_fields)]
 pub struct ClaimScope {
     pub kind: ClaimScopeKind,
-    pub id: StableId,
+    pub id: ScopeId,
     pub product_area: Option<StableId>,
     pub paths: Vec<RepoPath>,
 }
