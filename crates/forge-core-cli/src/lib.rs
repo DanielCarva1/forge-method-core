@@ -1,3 +1,4 @@
+pub mod autonomy_cmd;
 pub mod claim;
 pub mod coordination;
 pub mod guide;
