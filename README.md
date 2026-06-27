@@ -127,6 +127,23 @@ protocol onto host environments (MCP tools, borrowed shells, app UI) and for
 verifying distribution artifacts (provenance, signatures, transparency logs).
 This is the spine that lets the protocol run safely across untrusted hosts.
 
+**Evolve-phase governance contracts** — newly typed contracts for the autonomous
+loop and the fast+quality lane:
+
+- `autonomy_policy` — declares autonomy modes, tool-class risk, and escalation
+  rules for a run, phase, lane, repo, or agent role.
+- `verification_goal` — captures machine-checkable evidence goals such as tests,
+  lint, CI, and residual-risk status.
+- `agent_run` — a run-graph for multi-agent work: workers, steps, claims,
+  dependencies, and handoff status.
+- `memory` — playbook / memory entries with provenance, freshness, promotion
+  status, and supersession links.
+- `checkpoint` — resume / rewind manifests for sessions, including WAL and git
+  anchors.
+- `eval_run` — outcome observability for pass/fail, latency, token/cost, and
+  regression metrics.
+- `telemetry` — export manifest for JSONL / OpenTelemetry-style evidence streams.
+
 ---
 
 ## Install
@@ -185,6 +202,43 @@ forge-core guide describe              # list every workflow in the catalog
 forge-core guide status --phase 1-discovery   # what's required in this phase?
 ```
 
+### Route work through the dual-lane autonomy router
+
+The flagship evolve-phase command is the risk router. It reads an
+`autonomy_policy` contract, optionally reads a `verification_goal`, and returns
+whether the proposed change belongs in the **fast** lane or the **rigorous**
+lane:
+
+```bash
+forge-core autonomy route --policy-file <p> [--goal-file <g>] [--failure-streak <n>]
+```
+
+A manual policy fails closed to the rigorous lane:
+
+```yaml
+# policy-manual.yaml
+schema_version: "0.1"
+autonomy_policy_contract:
+  id: p1
+  applies_to:
+    kind: run
+    ids: [run-1]
+  default_mode: manual
+  tool_classes: []
+  escalation:
+    on_repeated_failure: 3
+    on_high_risk_path: true
+    on_semantic_uncertainty: true
+    max_retries_before_human: 3
+    cooldown_seconds: 60
+  evidence_basis: null
+```
+
+```bash
+forge-core autonomy route --policy-file policy-manual.yaml --no-json
+# lane: rigorous
+```
+
 ### Claim your work, then write
 
 ```bash
@@ -215,19 +269,26 @@ call them.
 
 ---
 
-## Status (v0.1.0)
+## Status (current)
 
 **Proven / working today**
 
-- 394 tests green across the workspace; `cargo check`, `clippy -D warnings`,
-  `cargo fmt` all clean.
+- 462 tests green across the workspace; `cargo check`, `cargo clippy`,
+  `cargo fmt`, and `cargo test` all clean.
 - The full 7-phase method and 110-workflow catalog.
 - Claim engine, conflict detection, worktree isolation, coordination eval —
   validated end to end with parallel workers.
 - Multi-agent governance on the happy path: multiple agents, disjoint files,
   coordinated by claims.
 - Self-hardening batch landed: TTL-overflow safety, RFC-3339 calendar
-  validation, lockfile stale-owner reclaim.
+  validation, lockfile stale-owner reclaim, WAL fsync hardening, path-safety,
+  symlink escape checks, and TOCTOU revalidation.
+- Dual-lane autonomy router exposed as `forge-core autonomy route` for fast vs
+  rigorous lane selection.
+- Seven evolve-phase governance contracts: `autonomy_policy`,
+  `verification_goal`, `agent_run`, `memory`, `checkpoint`, `eval_run`, and
+  `telemetry`.
+- GitHub Actions CI is present for fmt, clippy, tests, and validation.
 
 **Not yet (roadmap)**
 
@@ -239,6 +300,20 @@ call them.
   reconstructed from the claims bus on each invocation; the fuller
   `derive_state`-as-sole-constructor layer remains queued for v0.2.
 - **License** — not yet chosen; set one before public release.
+
+### Patch notes — evolve phase
+
+- Dual-lane risk router: `forge-core autonomy route` returns fast vs rigorous
+  lane decisions from `autonomy_policy` + optional `verification_goal`.
+- Seven new governance contracts: `autonomy_policy`, `verification_goal`,
+  `agent_run`, `memory`, `checkpoint`, `eval_run`, and `telemetry`.
+- Multi-agent ops visibility starts with the `agent_run` run-graph contract.
+- Self-evolve memory now has typed provenance, freshness, promotion, and
+  supersession fields.
+- Outcome observability is represented by `eval_run` and `telemetry` contracts.
+- Durability hardening landed for WAL fsync, path-safety, symlink escape checks,
+  and TOCTOU revalidation.
+- GitHub Actions CI is included.
 
 ### Patch notes — v0.1.0
 
