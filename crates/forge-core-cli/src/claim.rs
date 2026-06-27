@@ -562,6 +562,7 @@ fn reject_code(r: &ClaimRejection) -> String {
         ClaimRejection::NotClaimant { .. } => "not_claimant",
         ClaimRejection::ExpiredRequiresHandoff { .. } => "expired_requires_handoff",
         ClaimRejection::IllegalTransition { .. } => "illegal_transition",
+        ClaimRejection::InvalidRequest { .. } => "invalid_request",
     }
     .into()
 }
