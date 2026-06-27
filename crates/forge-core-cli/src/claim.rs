@@ -80,11 +80,6 @@ impl ClaimResult {
 // run_* operations
 // ============================================================================
 
-/// Run `claim acquire`. Loads existing claims, asks the engine, persists the
-/// new claim on Accept.
-///
-/// # Errors
-/// `EnvConfig` (5) if the claims dir is corrupt; `RejectedByGate` (2) if the
 /// A claim reference as typed by an operator on the CLI argv — parsed ONCE at
 /// the boundary so downstream lookups are type-safe (DD49; parse-don't-validate).
 ///
@@ -104,20 +99,37 @@ pub enum ClaimRef {
 
 /// Parse an operator-typed claim token into a [`ClaimRef`].
 ///
-/// Heuristic: a token beginning with `claim.` is the canonical full id; any
-/// other token is treated as a scope id.
+/// Heuristic: a token beginning with the canonical prefix [`CANONICAL_CLAIM_PREFIX`]
+/// is the full id; any other token is a scope id.
+///
+/// parse-don't-validate completion: acquire REJECTS scope ids that start with the
+/// reserved canonical prefix (see [`is_reserved_claim_prefix`]), so no live
+/// claim's scope id can ever be misclassified here as the `Full` variant.
 #[must_use]
 pub fn parse_claim_ref(token: &str) -> ClaimRef {
-    if token.starts_with("claim.") {
+    if is_reserved_claim_prefix(token) {
         ClaimRef::Full(ClaimId(token.to_string()))
     } else {
         ClaimRef::Scope(ScopeId(token.to_string()))
     }
 }
 
-/// Resolve a parsed [`ClaimRef`] against the loaded claims. The exact full-id
-/// match wins over the scope match so a scope with both a released and an active
-/// record stays unambiguous.
+/// The reserved prefix the engine uses to derive canonical claim ids
+/// (`claim.<kind>.<id>.<id>`). Operator-typed scope ids MUST NOT start with this
+/// or they would be misclassified by [`parse_claim_ref`] (an R8-shaped hole
+/// surfaced by adversarial review of slice 6).
+pub const CANONICAL_CLAIM_PREFIX: &str = "claim.";
+
+/// True if `token` begins with the reserved canonical-claim-id prefix.
+#[must_use]
+pub fn is_reserved_claim_prefix(token: &str) -> bool {
+    token.starts_with(CANONICAL_CLAIM_PREFIX)
+}
+
+/// Resolve a parsed [`ClaimRef`] against the loaded claims by dispatching on the
+/// variant (no cross-type comparison is possible). The `Full` variant matches
+/// the canonical id exactly; the `Scope` variant matches the operator-typed
+/// scope id — they are decided once at parse time and never "compete".
 fn resolve_claim<'a>(claims: &'a [ClaimContract], r: &ClaimRef) -> Option<&'a ClaimContract> {
     match r {
         ClaimRef::Full(id) => claims.iter().find(|c| c.id == *id),
@@ -127,14 +139,32 @@ fn resolve_claim<'a>(claims: &'a [ClaimContract], r: &ClaimRef) -> Option<&'a Cl
 
 /// Run `claim acquire` — declare authority over a scope.
 ///
-/// `EnvConfig` (5) if the claims dir is corrupt; `RejectedByGate` (2) if the
-/// engine refuses with a typed [`ClaimRejection`].
+/// # Errors
+/// `InvalidDecisionShape` (3) if the operator's scope id uses the reserved
+/// canonical-prefix form (starts with `claim.`); `EnvConfig` (5) if the claims
+/// dir is corrupt; `RejectedByGate` (2) if the engine refuses with a typed
+/// [`ClaimRejection`].
 #[must_use]
 pub fn run_acquire(
     claims_dir: &Path,
     req: &AcquireRequest,
     now_unix: i64,
 ) -> CliEnvelope<ClaimResult> {
+    // parse-don't-validate: a scope id that starts with the reserved canonical
+    // prefix would be misclassified as the `Full` variant by `parse_claim_ref`
+    // on every subsequent release/heartbeat — an R8-shaped hole surfaced by the
+    // adversarial review of slice 6. Reject it at the acquire boundary.
+    if is_reserved_claim_prefix(&req.scope_id.0) {
+        return CliEnvelope::err(
+            "claim.acquire",
+            ExitReason::InvalidDecisionShape,
+            format!(
+                "scope id '{}' starts with the reserved canonical prefix '{}'; \
+                 pick a scope id that does not begin with it",
+                req.scope_id.0, CANONICAL_CLAIM_PREFIX
+            ),
+        );
+    }
     // Serialize lifecycle transitions: the pure engine can't see a concurrent
     // writer, so hold the directory lock for the whole load->decide->write.
     let _lock = match crate::io_util::DirLock::acquire(claims_dir, ".forge-claim.lock") {
@@ -846,5 +876,31 @@ mod tests {
         );
         assert_eq!(parse_role("worker"), Some(ActorRole::Worker));
         assert_eq!(parse_role("garbage"), None);
+    }
+
+    // --- R8 structural-fix defenses (slice 6 Frente A) ---
+
+    #[test]
+    fn parse_claim_ref_classifies_scope_vs_full() {
+        // operator scope id -> Scope variant
+        assert!(matches!(parse_claim_ref("s1"), ClaimRef::Scope(_)));
+        // canonical derived id -> Full variant
+        assert!(matches!(
+            parse_claim_ref("claim.lane.s1.s1"),
+            ClaimRef::Full(_)
+        ));
+    }
+
+    #[test]
+    fn acquire_rejects_reserved_prefix_scope_id() {
+        // Adversarial-review hole: a scope id starting with the canonical
+        // prefix would be misclassified as Full on every later release/
+        // heartbeat. Acquire must reject it (parse-don't-validate).
+        let dir = tempfile_dir();
+        let env = run_acquire(&dir, &req("claim.evil", "agentA"), T0);
+        assert!(!env.ok, "reserved-prefix scope id must be rejected");
+        assert_eq!(env.exit_code(), 3, "must be InvalidDecisionShape (3)");
+        // and the bus must stay empty (no claim written)
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
     }
 }
