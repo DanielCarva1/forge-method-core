@@ -1,0 +1,64 @@
+schema_version: "0.1"
+artifact_kind: "slice-spec"
+slice_id: "slice-5-multi-agent-demo"
+title: "Slice 5 — Controlled multi-agent demo under governance"
+status: "active"
+created_at: "2026-06-26"
+
+intent: |
+  Prove the multi-agent governance promise END-TO-END with REAL LLM workers
+  (gpt-5.5 subagents), not just engine tests. Multiple agents work on the same
+  repo simultaneously, each respecting the claim/check-write protocol, none
+  overwriting another's scope. This is the wedge that lets the assistant
+  orchestrate a fleet of workers safely.
+
+demo_design:
+  pattern: "master/worker (driver orchestrates workers via claims)"
+  workers: 2 (start controlled; scale later)
+  isolation: "SAME-repo (no per-worker worktree in this first demo — proves the
+    CLAIM/GOVERNANCE layer, which is the point. Physical worktree layer S4.6 was
+    already proven in isolation. Scopes are disjoint by FILE so there is no
+    physical write conflict.)"
+  task: "each worker writes rustdoc /// doc-comments on the public functions of
+    ONE engine module. Safe (/// never breaks compilation), genuinely useful
+    (improves the real product), naturally isolable (one file per worker)."
+
+  worker_alice:
+    agent_id: "alice"
+    target_file: "crates/forge-core-engine/src/coordination_eval.rs"
+    claim_scope: "lane/worker-coordination"
+    task: "rustdoc on validate_coordination_contract, coordination_fixture_gaps, score_coordination + module-level doc"
+
+  worker_bob:
+    agent_id: "bob"
+    target_file: "crates/forge-core-engine/src/conflict_detection.rs"
+    claim_scope: "lane/worker-conflict"
+    task: "rustdoc on check_write_against_claims, classify_target + module-level doc"
+
+driver_orchestration:
+  step_1: "acquire 2 disjoint claims on the shared bus (driver owns the bus; workers are governed, not bus-writers)"
+  step_2: "dispatch 2 workers PARALLEL — each receives its scope + the check-write command to confirm access before editing"
+  step_3: "workers run check-write (proves they READ the governance bus), then edit ONLY their governed file"
+  step_4: "driver monitors claim status during execution (the coordination picture)"
+  step_5: "driver validates: cargo check + cargo test (acceptance gate — workers must not break the build)"
+  step_6: "driver commits the merged work, releases claims"
+  step_7: "artifact + demo transcript"
+
+success_criteria:
+  SC1: "2 disjoint claims acquired (bus view shows both)"
+  SC2: "each worker runs check-write on its own path → ALLOW (governance participation)"
+  SC3: "cross-path write would be BLOCKED (proven in pre-demo; the protocol is enforced)"
+  SC4: "both workers complete useful work without overwriting each other"
+  SC5: "cargo check + cargo test pass after merge (build integrity preserved)"
+  SC6: "claims released cleanly (lifecycle complete)"
+
+decisions_locked:
+  DD43: "acquire is PERMISSION-LEVEL (logical lane/story ownership, keyed by scope_id). It does NOT check path overlap — two lanes may legitimately share a file (e.g. README, mod.rs). The granular gate is check-write (path-level, DD26-DD30). This is a TWO-TIER model: ownership (acquire) + write-authorization (check-write). Documented; not a bug."
+  DD44: "load_claims is fail-closed on malformed files — a schema/fixture file in the claims dir breaks the bus. R7 (new): load_claims should skip non-claim files (or only load claim-* prefixed). For the demo, use a DEDICATED bus dir free of fixtures."
+  DD45: "demo uses SAME-repo workers (no per-worker git worktree) to prove the governance layer cleanly. Physical worktree isolation (S4.6) is orthogonal and already proven. A future demo can layer both."
+  DD46: "forge-core.exe is a Windows binary via WSL shim. Paths '/mnt/c/...' are interpreted as 'C:\\mnt\\c\\...' (phantom bus). Demos MUST use Windows paths ('C:\\...') or repo-relative paths with CWD at repo root. Same caveat family as S4.6."
+
+risks:
+  R7: "load_claims fail-closed on non-claim files in the bus dir (DD44). Mitigated for demo by dedicated bus. Needs a code fix (skip non-claim files) — future story."
+
+next_workflow: "execute the demo (acquire → dispatch → monitor → validate → commit → release → artifact)"
