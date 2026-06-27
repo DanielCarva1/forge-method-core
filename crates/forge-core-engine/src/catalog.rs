@@ -92,22 +92,85 @@ pub fn load_catalog(dir: &Path) -> CatalogLoadReport {
 
 fn load_one(path: &Path, dir: &Path) -> Result<CatalogEntry, String> {
     let text = fs::read_to_string(path).map_err(|e| format!("read error: {e}"))?;
-    let doc: WorkflowDocument =
-        serde_yaml::from_str(&text).map_err(|e| format!("deserialize error: {e}"))?;
-    let wf = doc.workflow;
+    // Resolve a stable repo-relative reference (`contracts/workflows/<name>`).
     let workflow_ref = path
         .strip_prefix(dir)
-        .map_or(RepoPath(path.to_string_lossy().into_owned()), |rel| {
-            RepoPath(format!("contracts/workflows/{}", rel.to_string_lossy()))
-        });
+        .map_or_else(|_| path.to_string_lossy().into_owned(), |rel| rel.to_string_lossy().into_owned());
+    parse_workflow_yaml(&workflow_ref, &text)
+}
+
+/// Parse a single workflow YAML document from its text. Shared by the disk
+/// loader ([`load_one`]) and the embedded loader ([`load_embedded_catalog`])
+/// so both paths produce identical [`CatalogEntry`]s.
+fn parse_workflow_yaml(workflow_ref: &str, text: &str) -> Result<CatalogEntry, String> {
+    let doc: WorkflowDocument =
+        serde_yaml::from_str(text).map_err(|e| format!("deserialize error: {e}"))?;
+    let wf = doc.workflow;
     Ok(CatalogEntry {
         id: wf.id,
         phases: wf.phases,
-        workflow_ref,
+        workflow_ref: RepoPath(format!("contracts/workflows/{workflow_ref}")),
         triggers: wf.trigger,
         prerequisites: wf.inputs,
         outputs: wf.outputs,
     })
+}
+
+// ============================================================================
+// Embedded catalog — the 110 workflow documents compiled INTO the binary via
+// `include_dir!`. This is what makes forge-core work zero-config on any
+// machine: a freshly `cargo install`ed binary carries its full workflow
+// catalog, so greenfield projects (no local `contracts/workflows/` tree) can
+// still run `guide status`/`describe`/`decide` without a `--catalog-dir`.
+// A local `contracts/workflows/` directory or an explicit `--catalog-dir`
+// still overrides the embedded set for projects that ship custom workflows.
+// ============================================================================
+use include_dir::{include_dir, Dir, DirEntry};
+
+static EMBEDDED_WORKFLOWS: Dir<'static> =
+    include_dir!("$CARGO_MANIFEST_DIR/../../contracts/workflows");
+
+/// Load the catalog from the workflows compiled into the binary.
+///
+/// Produces [`CatalogEntry`]s identical to [`load_catalog`] on the shipped
+/// `contracts/workflows/` tree, so callers can swap between disk and embedded
+/// sources transparently.
+///
+/// # Panics
+/// Never in practice: the embedded dir is a compile-time constant that always
+/// exists (the build fails if `contracts/workflows/` is missing).
+#[must_use]
+pub fn load_embedded_catalog() -> CatalogLoadReport {
+    let mut report = CatalogLoadReport::default();
+    let mut files: Vec<(String, &str)> = Vec::new();
+    collect_yaml(&EMBEDDED_WORKFLOWS, &mut files);
+    files.sort();
+    for (name, text) in &files {
+        match parse_workflow_yaml(name, text) {
+            Ok(entry) => report.catalog.entries.push(entry),
+            Err(reason) => report.errors.push(CatalogFileError {
+                path: RepoPath(name.clone()),
+                reason,
+            }),
+        }
+    }
+    report
+}
+
+fn collect_yaml<'a>(dir: &Dir<'a>, out: &mut Vec<(String, &'a str)>) {
+    for entry in dir.entries() {
+        match entry {
+            DirEntry::Dir(d) => collect_yaml(d, out),
+            DirEntry::File(f) => {
+                let is_yaml = f.path().extension().is_some_and(|ext| ext == "yaml");
+                if is_yaml {
+                    let name = f.path().to_string_lossy().into_owned();
+                    let text = std::str::from_utf8(f.contents()).unwrap_or("");
+                    out.push((name, text));
+                }
+            }
+        }
+    }
 }
 
 /// Return the catalog entries eligible in `current` (a workflow is eligible if
@@ -148,6 +211,30 @@ mod tests {
             .join("../../contracts/workflows")
             .canonicalize()
             .expect("contracts/workflows must exist (run scripts/migrate_workflows.py)")
+    }
+
+    #[test]
+    fn embedded_catalog_loads_cleanly_and_matches_disk_count() {
+        // Regression for the greenfield blocker: the embedded catalog (compiled
+        // into the binary via include_dir!) must load with zero errors and
+        // carry exactly as many workflows as the on-disk catalog. This is what
+        // makes forge-core work zero-config on any machine.
+        let embedded = load_embedded_catalog();
+        assert!(
+            embedded.is_clean(),
+            "embedded catalog must be clean, got errors: {:?}",
+            embedded.errors
+        );
+        let disk = load_catalog(&real_catalog_dir());
+        assert_eq!(
+            embedded.catalog.entries.len(),
+            disk.catalog.entries.len(),
+            "embedded workflow count must equal on-disk count"
+        );
+        assert!(
+            !embedded.catalog.entries.is_empty(),
+            "embedded catalog must not be empty"
+        );
     }
 
     #[test]

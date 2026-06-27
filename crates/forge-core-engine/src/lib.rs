@@ -29,7 +29,8 @@ pub mod isolation;
 pub mod phase_transition;
 
 pub use catalog::{
-    eligible_count, eligible_entries, find_entry, load_catalog, CatalogFileError, CatalogLoadReport,
+    eligible_count, eligible_entries, find_entry, load_catalog, load_embedded_catalog, CatalogFileError,
+    CatalogLoadReport,
 };
 
 pub use autonomy_router::{route_lane, LaneDecision, LaneKind, LaneRouteReason};

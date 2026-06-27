@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 forge-core-contracts = { path = "../forge-core-contracts" }
+include_dir.workspace = true
 serde.workspace = true
 serde_yaml.workspace = true
 

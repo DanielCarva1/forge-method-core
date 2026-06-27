@@ -1969,19 +1969,19 @@ fn run_guide_describe(args: &[String]) {
     use forge_core_cli::guide::{run_describe, DescribePayload};
     use forge_core_contracts::CliEnvelope;
 
-    let mut catalog_dir = std::path::PathBuf::from("contracts/workflows");
+    let mut catalog_dir: Option<std::path::PathBuf> = None;
     let mut want_json = true;
     let mut idx = 0usize;
     while idx < args.len() {
         match args[idx].as_str() {
             "--catalog-dir" => {
                 idx += 1;
-                catalog_dir = std::path::PathBuf::from(require_guide_value(
+                catalog_dir = Some(std::path::PathBuf::from(require_guide_value(
                     args,
                     idx,
                     "describe",
                     "catalog-dir",
-                ));
+                )));
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
@@ -1993,7 +1993,7 @@ fn run_guide_describe(args: &[String]) {
         idx += 1;
     }
 
-    let env: CliEnvelope<DescribePayload> = run_describe(&catalog_dir);
+    let env: CliEnvelope<DescribePayload> = run_describe(catalog_dir.as_deref());
     emit_guide(env, want_json);
 }
 
@@ -2002,7 +2002,7 @@ fn run_guide_decide(args: &[String]) {
     use forge_core_contracts::CliEnvelope;
 
     let mut decision_file: Option<std::path::PathBuf> = None;
-    let mut catalog_dir = std::path::PathBuf::from("contracts/workflows");
+    let mut catalog_dir: Option<std::path::PathBuf> = None;
     let mut gates_file: Option<std::path::PathBuf> = None;
     let mut want_json = true;
     let mut idx = 0usize;
@@ -2019,12 +2019,12 @@ fn run_guide_decide(args: &[String]) {
             }
             "--catalog-dir" => {
                 idx += 1;
-                catalog_dir = std::path::PathBuf::from(require_guide_value(
+                catalog_dir = Some(std::path::PathBuf::from(require_guide_value(
                     args,
                     idx,
                     "decide",
                     "catalog-dir",
-                ));
+                )));
             }
             "--gates-file" => {
                 idx += 1;
@@ -2054,7 +2054,7 @@ fn run_guide_decide(args: &[String]) {
     // YAML file: [{gate_kind: system-design, status: pass}, ...].
     let gates = load_gates(gates_file.as_deref());
 
-    let env: CliEnvelope<DecideAccepted> = run_decide(&decision_file, &catalog_dir, &gates);
+    let env: CliEnvelope<DecideAccepted> = run_decide(&decision_file, catalog_dir.as_deref(), &gates);
     emit_guide(env, want_json);
 }
 
@@ -2063,7 +2063,7 @@ fn run_guide_status(args: &[String]) {
     use forge_core_contracts::CliEnvelope;
 
     let mut phase: Option<String> = None;
-    let mut catalog_dir = std::path::PathBuf::from("contracts/workflows");
+    let mut catalog_dir: Option<std::path::PathBuf> = None;
     let mut want_json = true;
     let mut idx = 0usize;
     while idx < args.len() {
@@ -2074,12 +2074,12 @@ fn run_guide_status(args: &[String]) {
             }
             "--catalog-dir" => {
                 idx += 1;
-                catalog_dir = std::path::PathBuf::from(require_guide_value(
+                catalog_dir = Some(std::path::PathBuf::from(require_guide_value(
                     args,
                     idx,
                     "status",
                     "catalog-dir",
-                ));
+                )));
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
@@ -2098,7 +2098,7 @@ fn run_guide_status(args: &[String]) {
         std::process::exit(3);
     };
 
-    let env: CliEnvelope<StatusPayload> = run_status(&catalog_dir, &phase);
+    let env: CliEnvelope<StatusPayload> = run_status(catalog_dir.as_deref(), &phase);
     emit_guide(env, want_json);
 }
 
