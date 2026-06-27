@@ -1,0 +1,41 @@
+schema_version: "0.1"
+memory_contract:
+  id: memory.project.forge.wave5
+  scope:
+    kind: project
+    target: forge-method-core
+  entries:
+    - entry_id: memory.entry.autonomous-loop
+      kind: playbook_rule
+      content: "Use disjoint-file subagent waves for autonomous evolve work; run heavy verification only at wave boundaries."
+      provenance:
+        source_run_id: run.wave5.parallel-build
+        source_agent: driver.wave5
+        evidence_ref: contracts/backlog/evolve-backlog-v2.yaml
+        captured_at: "1782547200"
+      freshness:
+        ttl_seconds: 2592000
+        last_confirmed_at: "1782547200"
+        stale: false
+      confidence: 96
+      approval: approved
+      supersedes: memory.entry.serial-build-loop
+      invalidation_reason: null
+    - entry_id: memory.entry.fast-lane-evidence
+      kind: lesson_learned
+      content: "Fast mode remains high quality only when backed by machine-checkable evidence such as cargo test, clippy, and syntax checks."
+      provenance:
+        source_run_id: run.wave5.parallel-build
+        source_agent: worker.examples
+        evidence_ref: contracts/examples/verification-goal.yaml
+        captured_at: "1782547200"
+      freshness:
+        ttl_seconds: 2592000
+        last_confirmed_at: "1782547200"
+        stale: false
+      confidence: 93
+      approval: auto_promoted
+      supersedes: null
+      invalidation_reason: null
+  superseded:
+    - memory.entry.serial-build-loop

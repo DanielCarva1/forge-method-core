@@ -1,0 +1,27 @@
+schema_version: "0.1"
+checkpoint_contract:
+  checkpoint_id: checkpoint.run.wave5.0001
+  run_id: run.wave5.parallel-build
+  phase: 6-evolve
+  captured_at: "2026-06-27T18:20:00Z"
+  state_fingerprint:
+    contract_state_hash: sha256:4f2b8a6a5d9f65f5f5dd7d4b9f46db39c8715d4384ad43a3d8e1d1d9a1110001
+    claim_set_hash: sha256:89cd0de8340cf3ad7e79d0fbf913a9e4d15f4a9a3d42c7186b9e2f0c00020002
+    wal_position: 626
+    worktree_commit: 6b9091e
+  resumable:
+    open_decisions: []
+    failing_checks: []
+    next_action: "merge Wave 5 disjoint worker branches, run heavy verification, then push origin only"
+    transcript_ref: /home/danie/.pi/agent/sessions/--mnt-c-Forge-method-core--/subagent-artifacts/progress/e7fa77ed/progress.md
+    agent_states:
+      - agent_id: driver.wave5
+        role: driver
+        last_action: "dispatched parallel workers and assigned examples scope"
+        claim_ref: null
+        blocked: false
+      - agent_id: worker.examples
+        role: worker
+        last_action: "created seven example YAML fixtures"
+        claim_ref: claim.contracts.examples.wave5
+        blocked: false

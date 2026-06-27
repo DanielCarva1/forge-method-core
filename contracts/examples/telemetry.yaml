@@ -1,0 +1,59 @@
+schema_version: "0.1"
+telemetry_contract:
+  id: telemetry.wave5.default
+  enabled: true
+  sink: jsonl_file
+  events:
+    - kind: phase_transition
+      record: true
+      fields:
+        - from_phase
+        - to_phase
+        - gate_status
+        - duration_ms
+    - kind: tool_call
+      record: true
+      fields:
+        - tool
+        - command
+        - exit_code
+        - duration_ms
+    - kind: model_invocation
+      record: true
+      fields:
+        - model_ref
+        - prompt_tokens
+        - completion_tokens
+        - wall_time_ms
+    - kind: verification_run
+      record: true
+      fields:
+        - command
+        - result
+        - test_count
+        - failure_cluster
+    - kind: human_handoff
+      record: true
+      fields:
+        - reason
+        - decision_id
+        - elapsed_ms
+  sampling:
+    rate: 10000
+    max_per_second: 100
+    always_record_kinds:
+      - gate_evaluated
+      - conflict_detected
+      - human_handoff
+  privacy:
+    redact_secrets: true
+    redact_paths: false
+    hash_agent_ids: true
+    denylist_field_globs:
+      - "*.secret"
+      - "*.token"
+      - "env.*"
+  correlation:
+    trace_parent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00"
+    run_id_ref: run.wave5.parallel-build
+    span_id_seed: forge-wave5-examples
