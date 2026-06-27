@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ffi::OsString;
 use std::fmt;
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{self, Write};
@@ -89,6 +90,12 @@ pub struct YamlDocumentCollection {
     pub diagnostics: Vec<Diagnostic>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct KnownRepoPathsCollection {
+    pub paths: HashSet<String>,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
 pub fn collect_validation_yaml_documents(root: impl AsRef<Path>) -> YamlDocumentCollection {
     let root = root.as_ref();
     let mut collection = YamlDocumentCollection::default();
@@ -108,18 +115,24 @@ pub fn collect_validation_yaml_documents(root: impl AsRef<Path>) -> YamlDocument
 }
 
 pub fn collect_known_repo_paths(root: impl AsRef<Path>) -> HashSet<String> {
+    collect_known_repo_paths_with_diagnostics(root).paths
+}
+
+pub fn collect_known_repo_paths_with_diagnostics(
+    root: impl AsRef<Path>,
+) -> KnownRepoPathsCollection {
     let root = root.as_ref();
-    let mut paths = HashSet::new();
-    collect_known_paths_recursive(root, &root.join("contracts"), &mut paths);
+    let mut collection = KnownRepoPathsCollection::default();
+    collect_known_paths_recursive(root, &root.join("contracts"), &mut collection);
     collect_known_paths_recursive(
         root,
         &root
             .join("docs")
             .join("fixtures")
             .join("operation-contract-v0"),
-        &mut paths,
+        &mut collection,
     );
-    paths
+    collection
 }
 
 pub fn append_json_line<T>(
@@ -137,10 +150,29 @@ where
         .ok_or_else(|| AppendJsonLineError::InvalidRelativePath {
             path: relative_path.to_string(),
         })?;
+    let mut line = serde_json::to_vec(record).map_err(|source| AppendJsonLineError::Serialize {
+        path: target.clone(),
+        source,
+    })?;
+    line.push(b'\n');
+
+    let lock_relative_path = append_json_line_lock_relative_path(relative_path);
+    let _lock = acquire_effect_store_lock(root, &lock_relative_path).map_err(|source| {
+        AppendJsonLineError::Lock {
+            path: lock_relative_path,
+            source: source.to_string(),
+        }
+    })?;
 
     fs::create_dir_all(parent).map_err(|source| AppendJsonLineError::CreateDir {
         path: parent.to_path_buf(),
         source,
+    })?;
+    ensure_resolved_parent_within_root(root, &target).map_err(|source| {
+        AppendJsonLineError::CreateDir {
+            path: parent.to_path_buf(),
+            source,
+        }
     })?;
 
     let mut file = OpenOptions::new()
@@ -152,11 +184,7 @@ where
             source,
         })?;
 
-    serde_json::to_writer(&mut file, record).map_err(|source| AppendJsonLineError::Serialize {
-        path: target.clone(),
-        source,
-    })?;
-    file.write_all(b"\n")
+    file.write_all(&line)
         .map_err(|source| AppendJsonLineError::Write {
             path: target.clone(),
             source,
@@ -611,6 +639,17 @@ pub enum EffectWalCompactionReason {
     WalWriteFailed,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct EffectWalCompactionManifest {
+    schema_version: String,
+    wal_relative_path: String,
+    status: String,
+    retained_records: usize,
+    dropped_records: usize,
+    incomplete_transactions: Vec<String>,
+}
+
 pub fn sha256_content_hash(content: &[u8]) -> String {
     let digest = Sha256::digest(content);
     format!("sha256:{digest:x}")
@@ -672,7 +711,20 @@ pub fn apply_file_effect_transaction(
         };
     }
 
-    let writes = prepared.expect("prepared writes when no preflight reasons");
+    let mut writes = prepared.expect("prepared writes when no preflight reasons");
+    if !revalidate_prepared_writes(root, &mut writes, &mut reasons, &mut diagnostics) {
+        return EffectApplicationResult {
+            status: EffectApplicationStatus::Blocked,
+            effect_id: effect_contract.id.clone(),
+            applied_refs: Vec::new(),
+            metadata_records: Vec::new(),
+            rolled_back: false,
+            reasons,
+            diagnostics,
+            validation_error_count,
+            validation_warning_count,
+        };
+    }
     let originals = capture_originals(&writes);
     let mut applied_refs = Vec::new();
 
@@ -787,7 +839,20 @@ pub fn apply_file_effect_transaction_with_wal(
         };
     }
 
-    let writes = prepared.expect("prepared writes when no preflight reasons");
+    let mut writes = prepared.expect("prepared writes when no preflight reasons");
+    if !revalidate_prepared_writes(root, &mut writes, &mut reasons, &mut diagnostics) {
+        return EffectApplicationResult {
+            status: EffectApplicationStatus::Blocked,
+            effect_id: effect_contract.id.clone(),
+            applied_refs: Vec::new(),
+            metadata_records: Vec::new(),
+            rolled_back: false,
+            reasons,
+            diagnostics,
+            validation_error_count,
+            validation_warning_count,
+        };
+    }
     let originals = capture_originals(&writes);
     if append_effect_wal_record(
         root,
@@ -846,43 +911,44 @@ pub fn apply_file_effect_transaction_with_wal(
         if let Err(error) = apply_prepared_write(write) {
             reasons.push(EffectApplicationReason::ApplyFailed);
             diagnostics.push(format!("apply {} failed: {error}", write.target.display()));
-            let rollback = rollback_originals(&originals, &mut diagnostics);
-            let rollback_stage = if rollback {
-                EffectWalStage::RollbackComplete
-            } else {
-                EffectWalStage::RecoveredRollback
-            };
-            let _ = append_effect_wal_record(
+            return rollback_wal_transaction_result(RollbackWalTransaction {
                 root,
                 wal_relative_path,
-                EffectWalRecord::stage(&tx_id, effect_contract.id.clone(), rollback_stage),
-            );
-            if !rollback {
-                reasons.push(EffectApplicationReason::RollbackFailed);
-            }
-            return EffectApplicationResult {
-                status: if rollback {
-                    EffectApplicationStatus::RolledBack
-                } else {
-                    EffectApplicationStatus::RollbackFailed
-                },
+                tx_id: &tx_id,
                 effect_id: effect_contract.id.clone(),
+                originals: &originals,
                 applied_refs,
-                metadata_records: Vec::new(),
-                rolled_back: rollback,
                 reasons,
                 diagnostics,
                 validation_error_count,
                 validation_warning_count,
-            };
+            });
         }
 
-        applied_refs.push(write.reference.clone());
-        let _ = append_effect_wal_record(
+        if let Err(error) = append_effect_wal_record(
             root,
             wal_relative_path,
             EffectWalRecord::write_applied(&tx_id, effect, write),
-        );
+        ) {
+            reasons.push(EffectApplicationReason::WalAppendFailed);
+            diagnostics.push(format!(
+                "failed to append WAL write-applied {}: {error}",
+                write.reference
+            ));
+            return rollback_wal_transaction_result(RollbackWalTransaction {
+                root,
+                wal_relative_path,
+                tx_id: &tx_id,
+                effect_id: effect_contract.id.clone(),
+                originals: &originals,
+                applied_refs,
+                reasons,
+                diagnostics,
+                validation_error_count,
+                validation_warning_count,
+            });
+        }
+        applied_refs.push(write.reference.clone());
     }
 
     if append_effect_wal_record(
@@ -894,22 +960,18 @@ pub fn apply_file_effect_transaction_with_wal(
     {
         reasons.push(EffectApplicationReason::WalAppendFailed);
         diagnostics.push("failed to append WAL commit record".to_string());
-        let rollback = rollback_originals(&originals, &mut diagnostics);
-        return EffectApplicationResult {
-            status: if rollback {
-                EffectApplicationStatus::RolledBack
-            } else {
-                EffectApplicationStatus::RollbackFailed
-            },
+        return rollback_wal_transaction_result(RollbackWalTransaction {
+            root,
+            wal_relative_path,
+            tx_id: &tx_id,
             effect_id: effect_contract.id.clone(),
+            originals: &originals,
             applied_refs,
-            metadata_records: Vec::new(),
-            rolled_back: rollback,
             reasons,
             diagnostics,
             validation_error_count,
             validation_warning_count,
-        };
+        });
     }
 
     reasons.push(EffectApplicationReason::Applied);
@@ -979,20 +1041,17 @@ pub fn recover_effect_wal(
             };
         }
     };
-    let mut records = Vec::new();
-    for (index, line) in text.lines().enumerate() {
-        match serde_json::from_str::<EffectWalRecord>(line) {
-            Ok(record) => records.push(record),
-            Err(error) => {
-                return EffectWalRecoveryResult {
-                    status: EffectWalRecoveryStatus::RecoveryFailed,
-                    recovered_transactions: Vec::new(),
-                    reasons: vec![EffectWalRecoveryReason::WalParseFailed],
-                    diagnostics: vec![format!("parse WAL line {} failed: {error}", index + 1)],
-                };
-            }
+    let (records, parse_diagnostics) = match parse_effect_wal_records_for_recovery(&text) {
+        Ok(parsed) => parsed,
+        Err(diagnostic) => {
+            return EffectWalRecoveryResult {
+                status: EffectWalRecoveryStatus::RecoveryFailed,
+                recovered_transactions: Vec::new(),
+                reasons: vec![EffectWalRecoveryReason::WalParseFailed],
+                diagnostics: vec![diagnostic],
+            };
         }
-    }
+    };
 
     let incomplete = incomplete_wal_transactions(&records);
     if incomplete.is_empty() {
@@ -1000,11 +1059,11 @@ pub fn recover_effect_wal(
             status: EffectWalRecoveryStatus::Noop,
             recovered_transactions: Vec::new(),
             reasons: vec![EffectWalRecoveryReason::NoRecoveryNeeded],
-            diagnostics: Vec::new(),
+            diagnostics: parse_diagnostics,
         };
     }
 
-    let mut diagnostics = Vec::new();
+    let mut diagnostics = parse_diagnostics;
     let mut recovered_transactions = Vec::new();
     let mut recovery_ok = true;
     for tx_id in incomplete {
@@ -1042,6 +1101,32 @@ pub fn recover_effect_wal(
         },
         diagnostics,
     }
+}
+
+fn parse_effect_wal_records_for_recovery(
+    text: &str,
+) -> Result<(Vec<EffectWalRecord>, Vec<String>), String> {
+    let lines = text.lines().collect::<Vec<_>>();
+    let final_line_is_truncated = !text.is_empty() && !text.ends_with('\n');
+    let mut records = Vec::new();
+    let mut diagnostics = Vec::new();
+
+    for (index, line) in lines.iter().enumerate() {
+        match serde_json::from_str::<EffectWalRecord>(line) {
+            Ok(record) => records.push(record),
+            Err(error) if final_line_is_truncated && index + 1 == lines.len() => {
+                diagnostics.push(format!(
+                    "ignored truncated final WAL line {}: {error}",
+                    index + 1
+                ));
+            }
+            Err(error) => {
+                return Err(format!("parse WAL line {} failed: {error}", index + 1));
+            }
+        }
+    }
+
+    Ok((records, diagnostics))
 }
 
 pub fn rebuild_effect_target_metadata_index_with_lock(
@@ -1389,6 +1474,8 @@ pub fn compact_effect_wal(
             };
         }
     };
+    let mut compaction_diagnostics = Vec::new();
+    recover_effect_wal_compaction_debris(&wal_path, &mut compaction_diagnostics);
     if !wal_path.exists() {
         return EffectWalCompactionResult {
             status: EffectWalCompactionStatus::Noop,
@@ -1451,6 +1538,24 @@ pub fn compact_effect_wal(
         }
     }
 
+    if let Err(error) = write_effect_wal_compaction_manifest(
+        &wal_path,
+        wal_relative_path,
+        "begin",
+        retained.len(),
+        dropped_records,
+        &incomplete_transactions,
+    ) {
+        return EffectWalCompactionResult {
+            status: EffectWalCompactionStatus::Failed,
+            retained_records: 0,
+            dropped_records: 0,
+            incomplete_transactions,
+            reasons: vec![EffectWalCompactionReason::WalWriteFailed],
+            diagnostics: vec![format!("write WAL compaction manifest failed: {error}")],
+        };
+    }
+
     if let Err(error) = atomic_replace_file(&wal_path, &content) {
         return EffectWalCompactionResult {
             status: EffectWalCompactionStatus::Failed,
@@ -1462,13 +1567,33 @@ pub fn compact_effect_wal(
         };
     }
 
+    cleanup_effect_wal_atomic_debris(&wal_path, &mut compaction_diagnostics);
+    if let Err(error) = write_effect_wal_compaction_manifest(
+        &wal_path,
+        wal_relative_path,
+        "complete",
+        retained.len(),
+        dropped_records,
+        &incomplete_transactions,
+    ) {
+        return EffectWalCompactionResult {
+            status: EffectWalCompactionStatus::Failed,
+            retained_records: 0,
+            dropped_records: 0,
+            incomplete_transactions,
+            reasons: vec![EffectWalCompactionReason::WalWriteFailed],
+            diagnostics: vec![format!("write WAL compaction manifest failed: {error}")],
+        };
+    }
+
+    let reasons = vec![EffectWalCompactionReason::ClosedRecordsDropped];
     EffectWalCompactionResult {
         status: EffectWalCompactionStatus::Compacted,
         retained_records: retained.len(),
         dropped_records,
         incomplete_transactions,
-        reasons: vec![EffectWalCompactionReason::ClosedRecordsDropped],
-        diagnostics: Vec::new(),
+        reasons,
+        diagnostics: compaction_diagnostics,
     }
 }
 
@@ -1527,6 +1652,10 @@ pub enum AppendJsonLineError {
         path: PathBuf,
         source: io::Error,
     },
+    Lock {
+        path: String,
+        source: String,
+    },
 }
 
 impl fmt::Display for AppendJsonLineError {
@@ -1554,6 +1683,9 @@ impl fmt::Display for AppendJsonLineError {
                     "write append record {}: {source}",
                     path.display()
                 )
+            }
+            Self::Lock { path, source } => {
+                write!(formatter, "lock append record {path}: {source}")
             }
         }
     }
@@ -1848,19 +1980,38 @@ fn collect_yaml_documents_recursive(
     }
 }
 
-fn collect_known_paths_recursive(root: &Path, path: &Path, paths: &mut HashSet<String>) {
+fn collect_known_paths_recursive(
+    root: &Path,
+    path: &Path,
+    collection: &mut KnownRepoPathsCollection,
+) {
     if !path.exists() {
         return;
     }
-    paths.insert(repo_relative(root, path));
+    collection.paths.insert(repo_relative(root, path));
     if !path.is_dir() {
         return;
     }
-    let Ok(entries) = fs::read_dir(path) else {
-        return;
+    let entries = match fs::read_dir(path) {
+        Ok(entries) => entries,
+        Err(source) => {
+            collection.diagnostics.push(Diagnostic::error(
+                DiagnosticCode::YamlReadFailed,
+                repo_relative(root, path),
+                source.to_string(),
+            ));
+            return;
+        }
     };
-    for entry in entries.flatten() {
-        collect_known_paths_recursive(root, &entry.path(), paths);
+    for entry in entries {
+        match entry {
+            Ok(entry) => collect_known_paths_recursive(root, &entry.path(), collection),
+            Err(source) => collection.diagnostics.push(Diagnostic::error(
+                DiagnosticCode::YamlReadFailed,
+                repo_relative(root, path),
+                source.to_string(),
+            )),
+        }
     }
 }
 
@@ -1894,7 +2045,145 @@ fn resolve_safe_repo_relative(
             path: relative_path.to_string(),
         });
     }
-    Ok(root.join(path))
+
+    let canonical_root =
+        canonicalize_maybe_missing(root).map_err(|_| AppendJsonLineError::InvalidRelativePath {
+            path: relative_path.to_string(),
+        })?;
+    let components = path_components(path);
+    if components.is_empty() {
+        return Err(AppendJsonLineError::InvalidRelativePath {
+            path: relative_path.to_string(),
+        });
+    }
+
+    let mut resolved = canonical_root.clone();
+    for (index, component) in components.iter().enumerate() {
+        let candidate = resolved.join(component);
+        if candidate.exists() {
+            let canonical_candidate = fs::canonicalize(&candidate).map_err(|_| {
+                AppendJsonLineError::InvalidRelativePath {
+                    path: relative_path.to_string(),
+                }
+            })?;
+            if !canonical_candidate.starts_with(&canonical_root) {
+                return Err(AppendJsonLineError::InvalidRelativePath {
+                    path: relative_path.to_string(),
+                });
+            }
+            resolved = canonical_candidate;
+        } else {
+            resolved = candidate;
+            for remaining in components.iter().skip(index + 1) {
+                resolved.push(remaining);
+            }
+            break;
+        }
+    }
+
+    if !resolved_parent_stays_within_root(&canonical_root, &resolved) {
+        return Err(AppendJsonLineError::InvalidRelativePath {
+            path: relative_path.to_string(),
+        });
+    }
+    Ok(resolved)
+}
+
+fn canonicalize_maybe_missing(path: &Path) -> io::Result<PathBuf> {
+    if path.exists() {
+        return fs::canonicalize(path);
+    }
+
+    let mut missing = Vec::new();
+    let mut ancestor = path;
+    while !ancestor.exists() {
+        let Some(file_name) = ancestor.file_name() else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "no existing ancestor",
+            ));
+        };
+        missing.push(file_name.to_os_string());
+        let Some(parent) = ancestor.parent() else {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "no existing ancestor",
+            ));
+        };
+        ancestor = parent;
+    }
+
+    let mut resolved = fs::canonicalize(ancestor)?;
+    for component in missing.iter().rev() {
+        resolved.push(component);
+    }
+    Ok(resolved)
+}
+
+fn path_components(path: &Path) -> Vec<OsString> {
+    path.components()
+        .filter_map(|component| match component {
+            Component::Normal(value) => Some(value.to_os_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn resolved_parent_stays_within_root(canonical_root: &Path, resolved: &Path) -> bool {
+    let Some(parent) = resolved.parent() else {
+        return false;
+    };
+    if parent.exists() {
+        return fs::canonicalize(parent)
+            .map(|canonical_parent| canonical_parent.starts_with(canonical_root))
+            .unwrap_or(false);
+    }
+
+    let mut ancestor = parent;
+    while !ancestor.exists() {
+        let Some(next) = ancestor.parent() else {
+            return false;
+        };
+        ancestor = next;
+    }
+    fs::canonicalize(ancestor)
+        .map(|canonical_ancestor| {
+            canonical_ancestor.starts_with(canonical_root) || resolved.starts_with(canonical_root)
+        })
+        .unwrap_or(false)
+}
+
+fn ensure_resolved_parent_within_root(root: &Path, target: &Path) -> io::Result<()> {
+    let canonical_root = fs::canonicalize(root)?;
+    let parent = target
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "target has no parent"))?;
+    let canonical_parent = fs::canonicalize(parent)?;
+    if canonical_parent.starts_with(&canonical_root) {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "repo-relative target parent escapes root",
+        ))
+    }
+}
+
+fn ensure_target_chain_within_root(root: &Path, target: &Path) -> io::Result<()> {
+    let canonical_root = canonicalize_maybe_missing(root)?;
+    if resolved_parent_stays_within_root(&canonical_root, target) {
+        Ok(())
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "repo-relative target parent escapes root",
+        ))
+    }
+}
+
+fn append_json_line_lock_relative_path(relative_path: &str) -> String {
+    let digest = Sha256::digest(relative_path.as_bytes());
+    format!(".forge-method/locks/append-json-line/{digest:x}.lock")
 }
 
 fn resolve_effect_target(
@@ -2014,6 +2303,8 @@ struct PreparedWrite {
     target_kind: EffectTargetKind,
     access_mode: AccessMode,
     destructive: bool,
+    expected_hash: Option<String>,
+    payload_content: Option<Vec<u8>>,
     content: Vec<u8>,
 }
 
@@ -2168,6 +2459,8 @@ fn prepare_file_writes(
             target_kind: write.target_kind,
             access_mode: write.access_mode,
             destructive: write.destructive,
+            expected_hash: write.expected_hash.clone(),
+            payload_content: payload.map(|payload| payload.content.clone()),
             content,
         });
     }
@@ -2177,6 +2470,79 @@ fn prepare_file_writes(
     } else {
         None
     }
+}
+
+fn revalidate_prepared_writes(
+    root: &Path,
+    writes: &mut [PreparedWrite],
+    reasons: &mut Vec<EffectApplicationReason>,
+    diagnostics: &mut Vec<String>,
+) -> bool {
+    let mut ok = true;
+    for write in writes {
+        if let Err(error) = ensure_target_chain_within_root(root, &write.target) {
+            ok = false;
+            reasons.push(EffectApplicationReason::InvalidTargetPath);
+            diagnostics.push(format!(
+                "target parent escaped repo root {}: {error}",
+                write.reference
+            ));
+            continue;
+        }
+
+        let target_exists = write.target.exists();
+        match write.access_mode {
+            AccessMode::Create if target_exists => {
+                ok = false;
+                reasons.push(EffectApplicationReason::TargetExistsForCreate);
+                diagnostics.push(format!("create target exists {}", write.reference));
+                continue;
+            }
+            AccessMode::Write if !target_exists => {
+                ok = false;
+                reasons.push(EffectApplicationReason::TargetMissingForWrite);
+                diagnostics.push(format!("write target missing {}", write.reference));
+                continue;
+            }
+            AccessMode::Delete if !target_exists => {
+                ok = false;
+                reasons.push(EffectApplicationReason::TargetMissingForDelete);
+                diagnostics.push(format!("delete target missing {}", write.reference));
+                continue;
+            }
+            _ => {}
+        }
+
+        if let Some(expected_hash) = &write.expected_hash {
+            match fs::read(&write.target) {
+                Ok(content) if sha256_content_hash(&content) == *expected_hash => {}
+                Ok(_) | Err(_) => {
+                    ok = false;
+                    reasons.push(EffectApplicationReason::ExpectedHashMismatch);
+                    diagnostics.push(format!("write freshness mismatch {}", write.reference));
+                    continue;
+                }
+            }
+        }
+
+        match write.access_mode {
+            AccessMode::Create | AccessMode::Write => {
+                write.content = write.payload_content.clone().unwrap_or_default();
+            }
+            AccessMode::Append => {
+                let mut content = fs::read(&write.target).unwrap_or_default();
+                if let Some(payload_content) = &write.payload_content {
+                    content.extend_from_slice(payload_content);
+                }
+                write.content = content;
+            }
+            AccessMode::Delete => {
+                write.content.clear();
+            }
+            AccessMode::Read => unreachable!("read access mode was rejected"),
+        }
+    }
+    ok
 }
 
 fn effect_target_metadata_records(
@@ -2346,6 +2712,72 @@ fn payload_for<'a>(
         .find(|payload| payload.target_ref == target_ref)
 }
 
+struct RollbackWalTransaction<'a> {
+    root: &'a Path,
+    wal_relative_path: &'a str,
+    tx_id: &'a str,
+    effect_id: StableId,
+    originals: &'a [OriginalFileState],
+    applied_refs: Vec<String>,
+    reasons: Vec<EffectApplicationReason>,
+    diagnostics: Vec<String>,
+    validation_error_count: usize,
+    validation_warning_count: usize,
+}
+
+fn rollback_wal_transaction_result(
+    mut transaction: RollbackWalTransaction<'_>,
+) -> EffectApplicationResult {
+    let rollback = rollback_originals(transaction.originals, &mut transaction.diagnostics);
+    let rollback_recorded = append_effect_wal_record(
+        transaction.root,
+        transaction.wal_relative_path,
+        EffectWalRecord::stage(
+            transaction.tx_id,
+            transaction.effect_id.clone(),
+            EffectWalStage::RollbackComplete,
+        ),
+    )
+    .map_or_else(
+        |error| {
+            transaction
+                .diagnostics
+                .push(format!("failed to append WAL rollback record: {error}"));
+            false
+        },
+        |_| true,
+    );
+
+    if !rollback || !rollback_recorded {
+        push_unique_reason(
+            &mut transaction.reasons,
+            EffectApplicationReason::RollbackFailed,
+        );
+    }
+
+    EffectApplicationResult {
+        status: if rollback && rollback_recorded {
+            EffectApplicationStatus::RolledBack
+        } else {
+            EffectApplicationStatus::RollbackFailed
+        },
+        effect_id: transaction.effect_id,
+        applied_refs: transaction.applied_refs,
+        metadata_records: Vec::new(),
+        rolled_back: rollback,
+        reasons: transaction.reasons,
+        diagnostics: transaction.diagnostics,
+        validation_error_count: transaction.validation_error_count,
+        validation_warning_count: transaction.validation_warning_count,
+    }
+}
+
+fn push_unique_reason(reasons: &mut Vec<EffectApplicationReason>, reason: EffectApplicationReason) {
+    if !reasons.contains(&reason) {
+        reasons.push(reason);
+    }
+}
+
 fn capture_originals(writes: &[PreparedWrite]) -> Vec<OriginalFileState> {
     writes
         .iter()
@@ -2362,7 +2794,13 @@ fn apply_prepared_write(write: &PreparedWrite) -> io::Result<()> {
         AccessMode::Create | AccessMode::Write | AccessMode::Append => {
             atomic_replace_file(&write.target, &write.content)
         }
-        AccessMode::Delete => fs::remove_file(&write.target),
+        AccessMode::Delete => {
+            fs::remove_file(&write.target)?;
+            if let Some(parent) = write.target.parent() {
+                sync_parent_dir(parent)?;
+            }
+            Ok(())
+        }
         AccessMode::Read => unreachable!("read access mode was rejected"),
     }
 }
@@ -2373,7 +2811,13 @@ fn rollback_originals(originals: &[OriginalFileState], diagnostics: &mut Vec<Str
         let result = if original.existed {
             atomic_replace_file(&original.target, &original.content)
         } else if original.target.exists() {
-            fs::remove_file(&original.target)
+            fs::remove_file(&original.target).and_then(|()| {
+                if let Some(parent) = original.target.parent() {
+                    sync_parent_dir(parent)
+                } else {
+                    Ok(())
+                }
+            })
         } else {
             Ok(())
         };
@@ -2414,28 +2858,49 @@ fn atomic_replace_file(target: &Path, content: &[u8]) -> io::Result<()> {
     let had_target = target.exists();
     if had_target {
         fs::rename(target, &backup)?;
+        sync_parent_dir(parent)?;
     }
 
     if let Err(error) = fs::rename(&temp, target) {
-        let _ = fs::remove_file(&temp);
-        if had_target {
-            let _ = fs::rename(&backup, target);
+        if fs::remove_file(&temp).is_ok() {
+            sync_parent_dir(parent)?;
+        }
+        if had_target && fs::rename(&backup, target).is_ok() {
+            sync_parent_dir(parent)?;
         }
         return Err(error);
     }
+    sync_parent_dir(parent)?;
 
     if had_target {
-        let _ = fs::remove_file(&backup);
+        fs::remove_file(&backup)?;
+        sync_parent_dir(parent)?;
     }
 
+    Ok(())
+}
+
+#[cfg(unix)]
+fn sync_parent_dir(parent: &Path) -> io::Result<()> {
+    File::open(parent)?.sync_all()
+}
+
+#[cfg(not(unix))]
+fn sync_parent_dir(parent: &Path) -> io::Result<()> {
+    if parent.as_os_str().is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "parent directory is empty",
+        ));
+    }
+    let _ = File::open(parent).and_then(|file| file.sync_all());
     Ok(())
 }
 
 fn transaction_nonce() -> String {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or(0);
+        .map_or(0, |duration| duration.as_nanos());
     format!("{}-{nanos}", std::process::id())
 }
 
@@ -2628,7 +3093,13 @@ fn rollback_wal_before_images(
                 atomic_replace_file(&target, &original.content)
             }
         } else if target.exists() {
-            fs::remove_file(&target)
+            fs::remove_file(&target).and_then(|()| {
+                if let Some(parent) = target.parent() {
+                    sync_parent_dir(parent)
+                } else {
+                    Ok(())
+                }
+            })
         } else {
             Ok(())
         };
@@ -2659,6 +3130,12 @@ fn acquire_effect_store_lock_inner(
         path: parent.to_path_buf(),
         source,
     })?;
+    ensure_resolved_parent_within_root(root, &path).map_err(|source| {
+        EffectStoreLockError::CreateDir {
+            path: parent.to_path_buf(),
+            source,
+        }
+    })?;
     let file = OpenOptions::new()
         .read(true)
         .write(true)
@@ -2686,6 +3163,117 @@ fn acquire_effect_store_lock_inner(
         })?;
     }
     Ok(EffectStoreLock { file, path })
+}
+
+fn effect_wal_compaction_manifest_path(wal_path: &Path) -> PathBuf {
+    let parent = wal_path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = wal_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("wal");
+    parent.join(format!(".{file_name}.compaction-manifest.json"))
+}
+
+fn write_effect_wal_compaction_manifest(
+    wal_path: &Path,
+    wal_relative_path: &str,
+    status: &str,
+    retained_records: usize,
+    dropped_records: usize,
+    incomplete_transactions: &[String],
+) -> io::Result<()> {
+    let manifest = EffectWalCompactionManifest {
+        schema_version: "0.1".to_string(),
+        wal_relative_path: wal_relative_path.to_string(),
+        status: status.to_string(),
+        retained_records,
+        dropped_records,
+        incomplete_transactions: incomplete_transactions.to_vec(),
+    };
+    let content = serde_json::to_vec(&manifest)
+        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+    let manifest_path = effect_wal_compaction_manifest_path(wal_path);
+    atomic_replace_file(&manifest_path, &content)
+}
+
+fn recover_effect_wal_compaction_debris(wal_path: &Path, diagnostics: &mut Vec<String>) {
+    let manifest_path = effect_wal_compaction_manifest_path(wal_path);
+    if !manifest_path.exists() {
+        return;
+    }
+    if !wal_path.exists() {
+        restore_latest_effect_wal_backup(wal_path, diagnostics);
+    }
+    cleanup_effect_wal_atomic_debris(wal_path, diagnostics);
+}
+
+fn restore_latest_effect_wal_backup(wal_path: &Path, diagnostics: &mut Vec<String>) {
+    let Some(parent) = wal_path.parent() else {
+        return;
+    };
+    let Some(file_name) = wal_path.file_name().and_then(|value| value.to_str()) else {
+        return;
+    };
+    let prefix = format!(".{file_name}.");
+    let mut backups = Vec::new();
+    let Ok(entries) = fs::read_dir(parent) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with(&prefix) && name.ends_with(".forge-bak") {
+            backups.push(entry.path());
+        }
+    }
+    backups.sort();
+    if let Some(backup) = backups.pop() {
+        match fs::rename(&backup, wal_path) {
+            Ok(()) => {
+                let _ = sync_parent_dir(parent);
+                diagnostics.push(format!(
+                    "restored WAL backup {} after interrupted compaction",
+                    backup.display()
+                ));
+            }
+            Err(error) => diagnostics.push(format!(
+                "restore WAL backup {} failed: {error}",
+                backup.display()
+            )),
+        }
+    }
+}
+
+fn cleanup_effect_wal_atomic_debris(wal_path: &Path, diagnostics: &mut Vec<String>) {
+    let Some(parent) = wal_path.parent() else {
+        return;
+    };
+    let Some(file_name) = wal_path.file_name().and_then(|value| value.to_str()) else {
+        return;
+    };
+    let prefix = format!(".{file_name}.");
+    let Ok(entries) = fs::read_dir(parent) else {
+        return;
+    };
+    let mut removed_any = false;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with(&prefix)
+            && (name.ends_with(".forge-tmp") || name.ends_with(".forge-bak"))
+        {
+            match fs::remove_file(entry.path()) {
+                Ok(()) => {
+                    removed_any = true;
+                    diagnostics.push(format!("removed WAL compaction debris {name}"));
+                }
+                Err(error) => diagnostics.push(format!(
+                    "remove WAL compaction debris {name} failed: {error}"
+                )),
+            }
+        }
+    }
+    if removed_any {
+        let _ = sync_parent_dir(parent);
+    }
 }
 
 fn read_effect_wal_records(
