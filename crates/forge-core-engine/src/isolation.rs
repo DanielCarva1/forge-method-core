@@ -191,15 +191,10 @@ pub fn propose_merge(c: &IsolationContract, _now_unix: i64) -> MergePlan {
 /// Canonical branch-name suggestion for an agent + scope (DD32).
 #[must_use]
 pub fn branch_name_for(agent: &StableId, scope: &str) -> String {
-    // slug the scope defensively: lowercase, swap runs of non-alnum for `-`.
-    let slug = scope
-        .to_ascii_lowercase()
-        .trim()
-        .chars()
-        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
-        .collect::<String>();
-    let slug = slug.trim_matches('-');
-    format!("{}/{}", agent.0, slug)
+    // Slug both segments defensively: lowercase, swap non-alnum for `-`.
+    let agent_slug = slug_branch_segment(&agent.0);
+    let scope_slug = slug_branch_segment(scope);
+    format!("{agent_slug}/{scope_slug}")
 }
 
 /// A contract is "live" (can collide / is mergeable) iff it is not terminal.
@@ -236,6 +231,17 @@ fn shell_metachar_check(s: &str) -> Result<(), String> {
         Ok(())
     }
 }
+
+fn slug_branch_segment(segment: &str) -> String {
+    let slug = segment
+        .to_ascii_lowercase()
+        .trim()
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+        .collect::<String>();
+    slug.trim_matches('-').to_string()
+}
+
 /// Reject git-ref-illegal branch names. This is NOT a full git-check-ref-format
 /// port — it blocks the high-risk shapes (`..`, whitespace, `:`, control chars,
 /// leading `-`/`.`, empty). Exotic edge cases surface as git errors at execute
@@ -259,8 +265,11 @@ fn validate_branch_name(name: &str) -> Result<(), IsolationError> {
     if name.contains(|ch: char| ch.is_control()) {
         return Err(illegal_branch("contains control character", name));
     }
-    // refname components must not end in `.lock`.
+    // refname components must not be empty and must not end in `.lock`.
     for component in name.split('/') {
+        if component.is_empty() {
+            return Err(illegal_branch("contains empty component", name));
+        }
         if component.to_ascii_lowercase().ends_with(".lock") {
             return Err(illegal_branch("component ends in '.lock'", name));
         }
@@ -423,6 +432,24 @@ mod tests {
     #[test]
     fn branch_component_lock_suffix_rejected() {
         let c = ok_contract("i1", "alice", "alice/index.lock", "../wt/a");
+        assert!(matches!(
+            validate_isolation_contract(&c),
+            Err(IsolationError::IllegalBranchName { .. })
+        ));
+    }
+
+    #[test]
+    fn branch_trailing_slash_rejected() {
+        let c = ok_contract("i1", "alice", "alice/", "../wt/a");
+        assert!(matches!(
+            validate_isolation_contract(&c),
+            Err(IsolationError::IllegalBranchName { .. })
+        ));
+    }
+
+    #[test]
+    fn branch_empty_component_rejected() {
+        let c = ok_contract("i1", "alice", "alice//s5", "../wt/a");
         assert!(matches!(
             validate_isolation_contract(&c),
             Err(IsolationError::IllegalBranchName { .. })
@@ -599,6 +626,14 @@ mod tests {
     #[test]
     fn branch_name_trims_dashes() {
         assert_eq!(branch_name_for(&StableId("bob".into()), "--x--"), "bob/x");
+    }
+
+    #[test]
+    fn branch_name_slug_normalizes_agent_segment() {
+        assert_eq!(
+            branch_name_for(&StableId("Alice Agent;$(rm)".into()), "S5"),
+            "alice-agent---rm/s5"
+        );
     }
 
     // --- review S4.6 fixes ------------------------------------------------
