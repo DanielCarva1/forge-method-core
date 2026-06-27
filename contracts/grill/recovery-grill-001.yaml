@@ -1,0 +1,221 @@
+schema_version: "0.1"
+artifact_kind: "grill"
+grill_kind: "research-backed"
+status: "closed"
+created_at: "2026-06-25"
+project: "forge-method-rust"
+session: "recovery-after-codex-collapse"
+authority:
+  feeds: "specification phase"
+  closes: "loose ends from discovery forge-rust-recovery-discovery.yaml"
+  rule: "every decision below is backed by cited 2025-2026 evidence; inference is marked explicitly"
+
+purpose:
+  one_line: "Close every discovery loose end, AND educate us by surveying how successful systems solved each problem and what serious recent research (eastern and western) says for and against."
+  anti_pattern_avoided: "grill as opinion-bingo; here every claim has a source or is flagged inference"
+
+# ---------------------------------------------------------------------------
+# evidence basis: sources actually consulted (verifiable)
+# ---------------------------------------------------------------------------
+evidence_basis:
+  western:
+    - id: "anthropic_context_eng_2025"
+      ref: "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents"
+      claim: "right-altitude Goldilocks; hardcoding complex brittle logic in prompts creates fragility"
+    - id: "anthropic_harnesses_2025"
+      ref: "https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents"
+      claim: "agent failure modes: scope-creep-via-test-deletion, hallucinated completeness, progress amnesia"
+    - id: "log_is_the_agent_2605_21997"
+      ref: "https://arxiv.org/pdf/2605.21997v1"
+      claim: "append-only event log is source of truth; working graph is deterministic projection; behaviors on typed edges"
+    - id: "esaa_conversational_2606_23752"
+      ref: "https://arxiv.org/html/2606.23752v1"
+      claim: "event-sourced memory; append-only log; deterministic projection; explicit curation commands"
+    - id: "memory_poisoning_2606_04329"
+      ref: "https://arxiv.org/html/2606.04329v1"
+      claim: "memory poisoning is NOT solved by prompt-injection defenses; MPBench on OpenClaw/HERMES"
+    - id: "non_malleable_authority_2606_24322"
+      ref: "https://arxiv.org/html/2606.24322"
+      claim: "authority must be non-malleable, origin-bound; untrusted-origin label propagates"
+    - id: "memlineage_2605_14421"
+      ref: "https://arxiv.org/html/2605.14421"
+      claim: "lineage-guided enforcement for agent memory"
+    - id: "sdof_state_constrained_dispatch_2605_15204"
+      ref: "https://arxiv.org/html/2605.15204"
+      claim: "IntentRouterAgent wraps LLM core in a harness; state-constrained dispatch with audit trail"
+    - id: "flowswitch_2026_iwsds"
+      ref: "https://aclanthology.org/2026.iwsds-1.2.pdf"
+      claim: "state-aware workflow transitions via dialogue context + hierarchical retrieval, not heuristic rules"
+    - id: "decor_historical_matching_2026_acl"
+      ref: "https://aclanthology.org/2026.acl-long.1852.pdf"
+      claim: "routing as historical-log matching decoupling surface form from task-intrinsic requirements"
+    - id: "latentgate_2026_acl_industry"
+      ref: "https://aclanthology.org/2026.acl-industry.153.pdf"
+      claim: "frozen-backbone SLM probing router; 80% OOD at ~28ms"
+    - id: "redhat_vllm_router_2026"
+      ref: "https://developers.redhat.com/articles/2026/06/02/improve-vllm-semantic-router-accuracy-fine-tuning"
+      claim: "pretrained embedding router ~80% accuracy; fine-tune to 92-96% in enterprise"
+    - id: "persona_double_edged_2025_ijcnlp"
+      ref: "https://aclanthology.org/2025.findings-ijcnlp.51.pdf"
+      claim: "dataset-aligned personas can hurt zero-shot reasoning; persona is double-edged"
+    - id: "principled_personas_2025_emnlp"
+      ref: "https://aclanthology.org/2025.emnlp-main.1364.pdf"
+      claim: "persona effectiveness is mixed; robustness/fidelity desiderata often unmet"
+    - id: "declarative_skills_2606_06923"
+      ref: "https://arxiv.org/pdf/2606.06923v1"
+      claim: "DeclarativeAgent (skill-file) vs programmatic state-machine: trade-offs, not a clean win for either"
+    - id: "htn_procedural_helps_2511_07568"
+      ref: "https://arxiv.org/pdf/2511.07568"
+      claim: "hand-coded HTNs let 20b/70b outperform 120b baseline on agentic tasks"
+    - id: "decomposition_granularity_2604_00690"
+      ref: "https://clawrxiv.io/abs/2604.00690"
+      claim: "too-coarse fails, too-fine drowns in coordination; phase diagram across complexity regimes"
+    - id: "rust_core_cli_split_charleschen"
+      ref: "https://wiki.charleschen.ai/ai/processed/wiki/llm-core/cli/techniques/rust-agentic-cli-workspace-split"
+      claim: "one lib crate owns logic, one binary owns surface; reused across multiple CLIs"
+    - id: "midimon_core_purity"
+      ref: "https://github.com/amiable-dev/midimon/blob/main/ARCHITECTURAL_PURITY_FIX_COMPLETE.md"
+      claim: "core depending on UI lib created coupling; core must stay platform-independent"
+  eastern:
+    - id: "agentscope_2508_16279"
+      ref: "https://arxiv.org/html/2508.16279"
+      origin: "Alibaba / Tongji (China)"
+      claim: "master-worker + ReAct; leverages model reasoning/tool-use rather than constraining with strict prompts/opinionated orchestration"
+    - id: "agentscope_orchestration_docs"
+      ref: "https://docs.agentscope.io/building-blocks/orchestration"
+      claim: "two paradigms: master-worker (central router delegates) and peer-to-peer Msg objects"
+    - id: "metagpt_2308_00352"
+      ref: "https://arxiv.org/html/2308.00352v7"
+      origin: "DeepWisdom (China)"
+      claim: "structured communication protocol + publish-subscribe; SOP-based role specialization"
+    - id: "comm_centric_mas_2502_14321"
+      ref: "https://arxiv.org/abs/2502.14321"
+      origin: "China-origin survey"
+      claim: "protocol-constrained multi-agent communication; topology and coordination as first-class"
+    - id: "blueprint_first_2508_02721"
+      ref: "https://arxiv.org/html/2508.02721"
+      origin: "Alibaba (China)"
+      claim: "deterministic LLM workflow via Blueprint-First; separates probabilistic planning from action execution"
+  prior_session:
+    - id: "format_yaml_vs_md_2602_05447"
+      ref: "arxiv 2602.05447 (prior session)"
+      claim: "YAML most token-efficient for file-native agents; markdown ~60% more tokens"
+    - id: "grite_2606_19616"
+      ref: "arXiv:2606.19616 (prior session, independently verified)"
+      claim: "append-only log in git refs as sole source of truth; projections derived never hand-edited"
+
+research_coverage_notes:
+  completed_batches: ["orchestrator/routing", "state-authority/integrity", "directions-vs-scripts"]
+  incomplete_batch: "recursion/self-hosting + format refresh failed (Exa 429; Gemini/Perplexity no API key)"
+  impact_of_incomplete: "format is already covered by prior-session evidence; recursion is reasoned from established self-hosting wisdom and flagged inference"
+
+# ---------------------------------------------------------------------------
+# grill questions
+# ---------------------------------------------------------------------------
+grill_questions:
+
+  - id: "GQ1"
+    title: "Can a guide reliably route free-text user intent to the correct next workflow?"
+    why_it_matters: "The guide-as-orchestrator (OQ1 resolution) is the novel architecture. If routing is unreliable, the whole product feels like guessing."
+    evidence_for:
+      - "FlowSwitch [flowswitch_2026_iwsds]: state-aware transitions detected from dialogue context + hierarchical retrieval, explicitly NOT heuristic rules."
+      - "SDOF [sdof_state_constrained_dispatch_2605_15204]: an IntentRouterAgent wraps the LLM and state-constrains dispatch with replayable audit trails."
+      - "LangGraph/OpenAI Agents SDK: typed StateGraph + conditional edges + handoffs are the production pattern for routing between workflows."
+      - "DecoR [decor_historical_matching_2026_acl]: routing as historical-log matching decouples surface phrasing from task intent."
+    evidence_against:
+      - "Pure embedding routers plateau ~80% and need fine-tuning to reach 92-96% in enterprise [redhat_vllm_router_2026]. Implication: do NOT make the guide a naive cosine router."
+      - "LatentGate [latentgate_2026_acl_industry]: cheap SLM routers exist but carry an accuracy ceiling (~80% OOD)."
+    how_successful_cases_solved_it: "A typed state object + a conditional routing function + the LLM acting as classifier over a typed catalog (LangGraph), or a master agent delegating to workers (AgentScope master-worker)."
+    eastern_research: "AgentScope [agentscope_2508_16279] explicitly 'leverages model reasoning/tool-use rather than constraining with strict prompts/opinionated orchestration' and uses master-worker routing. Blueprint-First [blueprint_first_2508_02721] separates probabilistic planning from deterministic execution."
+    decision: "Guide = LLM-as-classifier over a TYPED workflow catalog, conditioned on (current phase + project state + user utterance), with hard gates enforcing allowed transitions. NOT pure embeddings. Master-worker style (one orchestrator, workflows as workers)."
+    residual_risk: "Routing accuracy depends on catalog clarity; we need a small eval corpus of utterance->expected-workflow to measure the router."
+
+  - id: "GQ2"
+    title: "Is append-only-log-as-authority the right integrity model, and does reusing the spine block the standalone app?"
+    why_it_matters: "The user caught agents editing their own state to bypass protocol. This is the integrity thesis (G4) plus the reuse-for-standalone-app concern."
+    evidence_for:
+      - "The Log is the Agent [log_is_the_agent_2605_21997]: append-only log is source of truth; working graph is deterministic projection; behaviors on typed edges. INDEPENDENT validation of our WAL+projection model."
+      - "ESAA-Conversational [esaa_conversational_2606_23752]: event-sourced memory, deterministic projection, explicit curation commands."
+      - "grite [grite_2606_19616]: append-only log in git refs, projections never hand-edited (prior-verified)."
+    threat_named_precisely:
+      - "Memory poisoning [memory_poisoning_2606_04329, Zombie Agents, State Contamination 2605.16746]: agents write hostile payloads into their own memory via normal update, causing unauthorized behavior. THIS IS the exact failure mode the Python runtime allowed."
+      - "Defense [non_malleable_authority_2606_24322, memlineage_2605_14421]: authority must be non-malleable and origin-bound; untrusted-origin content is non-actionable and the label PROPAGATES to derived items."
+    coupling_resolution:
+      - "Rust core+cli split [rust_core_cli_split_charleschen]: one lib crate owns logic, one binary owns surface, reused across multiple CLIs. Our forge-core-* lib + forge-core-cli already match this."
+      - "midimon lesson [midimon_core_purity]: a core that depends on UI/host libs becomes coupled and unportable. => keep forge-core-* crates host-agnostic."
+    decision: "Keep the integrity spine as authority (validated by 4 independent 2025-2026 systems). Adopt the non-malleable origin-bound authority model into our effect authority (it already has authority_boundary/forbidden_authority/required_authority_contracts). Expose the core as a host-agnostic library crate that BOTH the borrowed-shell CLI and the standalone app depend on. Reuse does NOT block the standalone app IF the core stays host-free."
+    residual_risk: "Must audit forge-core-* for any host/UI leakage before the standalone app depends on them."
+
+  - id: "GQ3"
+    title: "Is 'directions not scripts' (drop persona/behavior scripts) actually supported, or do structured procedures help?"
+    why_it_matters: "Core thesis G2/G3 and the funnel-of-autonomy G4-funnel. If evidence says scripts help, we must reconsider."
+    evidence_for:
+      - "Anthropic [anthropic_context_eng_2025]: right-altitude Goldilocks; hardcoding complex brittle logic in prompts = fragility + maintenance cost. Direct support for dropping behavior scripts."
+      - "Persona is double-edged [persona_double_edged_2025_ijcnlp, principled_personas_2025_emnlp]: persona benefits are mixed/uncertain; dataset-aligned personas can HURT. => drop 'Presence:' persona scripts."
+      - "AgentScope [agentscope_2508_16279]: leverages model reasoning instead of strict prompts/opinionated orchestration. Eastern corroboration."
+    evidence_against:
+      - "HTNs dramatically help [htn_procedural_helps_2511_07568]: hand-coded HTNs let small models beat much larger ones. Structure is not always bad."
+      - "DeclarativeAgent study [declarative_skills_2606_06923]: skill-file declarative vs programmatic state-machine is a trade-off, not a clean win."
+      - "Decomposition granularity [decomposition_granularity_2604_00690]: too-coarse fails, too-fine drowns. The amount of structure is regime-dependent."
+    decision: "G2/G3 HOLD, with nuance: keep directions + hard gates, drop persona/behavior scripts; AND apply structure through the FUNNEL OF AUTONOMY (G3) - heavy structure + high contact at discovery, light + near-silent at build. Typed YAML contracts the agent reasons over (skill-file style), not imperative step-scripts."
+    residual_risk: "Must design the funnel density explicitly per phase; removing personas must not remove the human-provocation that makes discovery work."
+
+  - id: "GQ4"
+    title: "Is YAML (agent-optimal typed) still the right internal format?"
+    why_it_matters: "G1. The whole artifact system is YAML."
+    evidence_for:
+      - "Prior session [format_yaml_vs_md_2602_05447]: YAML most token-efficient for file-native agents; markdown ~60% more tokens."
+      - "Anthropic [anthropic_context_eng_2025]: use structure (tags/markdown headers) to organize; structured context preferred over prose."
+    inference_boundary: "Format refresh this session failed (provider limits). Prior evidence is sufficient to proceed; revisit when a search key is available. Schema is separated from serialization, so a future format switch is non-destructive."
+    decision: "Proceed with typed YAML for agent-facing artifacts. Markdown remains render/export-only (README). Decision locked; revisit only if new evidence contradicts."
+
+  - id: "GQ5"
+    title: "Is rebuilding forge-method using forge-method-flows too recursive to stay honest?"
+    why_it_matters: "Meta-rebuilding risk: we could deceive ourselves about progress, repeating the prior agent's failure."
+    inference_only: true
+    reasoning: "Self-hosting/bootstrapping is well-understood and technically safe (compilers compiled in their own language since LISP/BCPL). The honesty risk is HUMAN, not technical: believing one's own progress claims. The mitigation is exactly what we already built - a mechanical audit artifact as durable truth + typed contracts as authority + this grill gate. The recursion is safe BECAUSE the management layer is typed contracts, not the lying Python runtime."
+    decision: "Proceed. Manage the rebuild via typed contracts in contracts/project/. The discovery + grill + upcoming specification ARE the method's discovery->spec phases applied to itself."
+    residual_risk: "Watch for scope drift from 'rebuild the method' to 'improve/redesign the method' mid-build. Lock the spec before build."
+
+  - id: "GQ6"
+    title: "Is the minimum viable surface 'usable' or still a toy?"
+    why_it_matters: "The user's PRIMARY goal is a usable product, not a demo."
+    decision: "Usability bar = ONE real guided session end-to-end (init -> guide -> discovery -> spec -> plan -> story_build -> gate) on the Rust core, PLUS proof that an unauthorized state mutation is REJECTED. That is usable for the creator's own next goal (build the standalone app using the method). Full 106-command parity is the 'late' milestone, not the usability gate."
+    residual_risk: "If the orchestrator-guide misroutes in real use, usability suffers; mitigate with the router eval (GQ1)."
+
+# ---------------------------------------------------------------------------
+# synthesis: what this grill changes in the design
+# ---------------------------------------------------------------------------
+design_changes_locked:
+  - id: "DC1"
+    change: "Guide is an LLM-classifier-over-typed-catalog router (not pure embeddings), state-aware, master-worker style."
+    evidence: "GQ1"
+  - id: "DC2"
+    change: "Authority model adopts non-malleable origin-bound authority (memory-poisoning defense); the existing effect authority fields already support this."
+    evidence: "GQ2"
+  - id: "DC3"
+    change: "Core exposed as a host-agnostic library crate; both borrowed-shell CLI and standalone app depend on it; audit core crates for host/UI leakage."
+    evidence: "GQ2"
+  - id: "DC4"
+    change: "Funnel of autonomy made explicit: heavy structure + human contact at discovery, light + near-silent at build; persona scripts removed."
+    evidence: "GQ3"
+  - id: "DC5"
+    change: "Usability bar defined as one end-to-end guided session + integrity-rejection proof (not full command parity)."
+    evidence: "GQ6"
+
+closed_loose_ends: ["GQ1", "GQ2", "GQ3", "GQ4", "GQ5", "GQ6", "OQ1", "OQ2", "OQ3"]
+
+open_loose_ends_remaining:
+  - "OQ4: format-research refresh deferred (provider limits); prior evidence sufficient."
+  - "A router eval corpus (utterance -> expected workflow) must be built to measure guide accuracy (from GQ1 residual)."
+  - "An audit of forge-core-* crates for host/UI leakage before the standalone app depends on them (from GQ2 residual)."
+
+inference_boundaries:
+  - "GQ4 and GQ5 rest partly on prior-session evidence and established wisdom; they are not freshly re-validated this session due to search-provider limits."
+  - "The integrity spine being validated by literature does NOT mean our specific Rust implementation is bug-free; the 6 failing tests must still be fixed and authority-gating verified empirically."
+  - "Eastern research (AgentScope/MetaGPT/Blueprint-First) corroborates our directions-not-scripts and router stance, but none of them is a forge-method analogue; we are still building a novel category."
+
+next_workflow:
+  recommended: "specification"
+  reason: "discovery is closed, grill is closed, design changes are locked. Specification writes the typed contracts for the minimum viable surface (init, guide-as-orchestrator, gate, story, etc.) over the validated integrity spine."
+  precondition_before_build: "fix the 6 failing cargo tests so the spine is green before constructing on top of it"

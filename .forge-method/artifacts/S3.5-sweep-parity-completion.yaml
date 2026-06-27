@@ -1,0 +1,33 @@
+schema_version: "0.1"
+artifact_kind: "story-completion"
+story_id: "S3.5"
+status: "done"
+created_at: "2026-06-26"
+
+intent: "Anti-pattern sweep (R7) + end-to-end parity test proving the full agent loop works through the guide CLI."
+
+sweep_results:
+  ansi_color_on_stdout: "NONE — no color codes anywhere in guide surface"
+  interactive_prompts: "NONE — zero read_line/stdin/confirm on agent path (non-blocking by construction)"
+  timestamps_non_determinism: "NONE — guide output is byte-identical across calls (proven by e2e test)"
+  free_text_to_parse: "NONE — stdout is always the CliEnvelope JSON contract"
+  ambient_hidden_state: "NONE — describe is fully self-describing (workflows+gates+phases+exit_reasons+schema_version)"
+
+delivered:
+  test: "crates/forge-core-cli/tests/guide_e2e.rs (4 end-to-end tests)"
+  cases:
+    - "e2e_full_agent_loop_describe_status_decide — describe -> status -> decide(legal=ok, illegal=rejected typed)"
+    - "e2e_legal_transition_when_gate_provided — blocked without gate, cleared with it"
+    - "e2e_every_envelope_carries_schema_version_and_exit_reason — R1/R6 contract shape invariant"
+    - "e2e_agent_path_is_noninteractive_and_deterministic — R7 byte-identical output"
+
+design_note:
+  dry_run_not_applicable: "guide/* commands are READ/VALIDATE only — no state mutation. --dry-run is moot: every guide command IS already a dry-run by nature. Mutation lives in execute-operation (runtime layer), untouched this slice."
+
+verification:
+  cargo_test_e2e: "PASS — 4 tests"
+  cargo_clippy_pedantic_workspace_all_targets: "PASS — 0 warnings on all new code (envelope.rs, guide.rs, guide_e2e.rs)"
+  cargo_fmt: "PASS — clean"
+  cargo_test_workspace: "PASS — 223 tests, 0 failures"
+
+next_workflow: "slice 3 complete — close slice artifact"

@@ -111,7 +111,7 @@ fn validates_current_operation_fixtures() {
         count += 1;
     }
 
-    assert_eq!(count, 16);
+    assert_eq!(count, 23);
 }
 
 #[test]

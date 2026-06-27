@@ -1,0 +1,37 @@
+schema_version: "0.1"
+workflow:
+  id: "playtest-plan"
+  phases:
+  - "4-build-verify"
+  trigger:
+  - "game prototype or vertical slice needs player feedback"
+  - "mechanic or UX assumption must be tested"
+  inputs:
+  - "prototype build"
+  - "MDA Trace"
+  - "target players"
+  - "assumptions"
+  - "feedback questions"
+  - "playable slice target"
+  steps:
+  - "define test goals and player tasks"
+  - "choose observation and feedback format"
+  - "define pass/fail signals tied to target aesthetics, dynamics, mechanics, and feedback/UI signals"
+  - "define logistics and evidence capture"
+  - "save playtest plan"
+  outputs:
+  - "playtest plan"
+  - "MDA proof map"
+  - "feedback questions"
+  - "success signals"
+  - "decision map"
+  done_when:
+  - "test can be run by another agent or human"
+  - "feel/fun claims are observable enough to accept, reject, or revise"
+  - "signals map to design decisions"
+  - "next evidence step is known"
+  blocked_when:
+  - "playable artifact is unavailable"
+  - "target player is unknown"
+  handoff:
+  - "preserve playtest path, MDA proof map, playable slice, tasks, signals, decision map, and feedback plan"

@@ -1,0 +1,44 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S0.3"
+status: "ready"
+created_at: "2026-06-25"
+project: "forge-method-rust"
+sprint: "sprint-001-recovery"
+slice: "slice_0_unblock"
+title: "Host-dep audit on library crates"
+
+decision_sources:
+  - "contracts/grill/recovery-grill-002.yaml#R3 (medium risk: host-free claim unverified)"
+  - "contracts/spec/forge-rust-v1-specification.yaml#crate_topology (reuse_rule: core has zero host deps)"
+
+intent: "Verify that the LIBRARY crates are genuinely host/UI-free so the standalone forge-rust-app can depend on them later without dragging in shell coupling. DC3 (host-agnostic core) is a load-bearing promise; verify it mechanically, do not assume."
+
+context:
+  library_crates:
+    - "crates/forge-core-contracts"
+    - "crates/forge-core-store"
+    - "crates/forge-core-schema"
+    - "crates/forge-core-runtime"
+  binary_host_surface: "crates/forge-core-cli, crates/forge-contract-validator (these ARE allowed to have host coupling)"
+  what_counts_as_host_dep: "imports that bind to a specific shell/runtime (codex tool defs, cursor adapters, MCP server crates, tokio runtime coupling in library, std::process in library, UI crates)"
+
+tasks:
+  - "grep library crates for host/UI/std::process/tokio/process imports"
+  - "classify each hit: (a) legitimate and unavoidable, (b) should be moved to the CLI/host layer, (c) accidental"
+  - "write the audit artifact listing findings + recommended boundary moves (do NOT refactor yet — that is a separate story if needed)"
+
+acceptance_criteria:
+  - "every library crate's external dependencies are inventoried"
+  - "any host/UI/process coupling in a library crate is explicitly classified and a boundary-fix recommendation is recorded"
+  - "the audit artifact exists at .forge-method/artifacts/S0.3-host-dep-audit.yaml"
+
+checks:
+  - "audit artifact parses as YAML"
+  - "each library crate has a verdict: clean | needs-boundary-move (with the specific move)"
+
+evidence:
+  - ".forge-method/artifacts/S0.3-host-dep-audit.yaml"
+  - "the raw grep output (appended to audit artifact)"
+
+next_workflow: "if clean -> slice 1 proceeds; if needs-boundary-move -> a boundary-refactor story is added before slice 1 build"

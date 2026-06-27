@@ -1,0 +1,32 @@
+schema_version: "0.1"
+workflow:
+  id: "builder-scaffold"
+  phases:
+  - "4-build-verify"
+  trigger:
+  - "user asks to create a workflow, module, agent, skill, template, or eval"
+  - "state.module == runtime-builder"
+  inputs:
+  - "artifact kind"
+  - "id and title"
+  - "purpose"
+  - "validation need"
+  steps:
+  - "classify generated artifact"
+  - "scaffold the smallest valid file set"
+  - "add eval or validation hook"
+  - "run builder validation"
+  - "record generated paths"
+  outputs:
+  - "generated extension"
+  - "validation result"
+  - "ledger entry"
+  done_when:
+  - "generated artifact validates"
+  - "required state-machine sections exist when relevant"
+  - "next action is known"
+  blocked_when:
+  - "artifact id conflicts"
+  - "validation cannot be defined"
+  handoff:
+  - "preserve generated paths, validation command, and next action"

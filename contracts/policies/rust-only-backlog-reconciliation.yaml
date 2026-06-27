@@ -1,4 +1,4 @@
-﻿schema_version: "0.1"
+schema_version: "0.1"
 policy: "rust_only_backlog_reconciliation"
 status: "accepted"
 purpose: "Define how Forge Core separates the legacy Python/Markdown backlog from the new Rust-only borrowed-shell runtime backlog."

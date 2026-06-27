@@ -1,0 +1,57 @@
+schema_version: "0.1"
+artifact_kind: "slice-completion"
+slice: "slice_2_orchestrator"
+status: "done"
+closed_at: "2026-06-26"
+project: "forge-method-rust"
+sprint: "sprint-001-recovery"
+
+intent: "Build the orchestrator-guide scaffolding: a host-LLM-backed router over the typed catalog, producing an auditable GuideDecision the engine validates against hard gates. Engine ships NO model (DC9/AQ1)."
+
+stories:
+  S2.1: "catalog loader + phase-eligibility filter (engine reads 110 workflows; filters by Phase::tag_eligible)"
+  S2.2: "GuideDecision typed contract (auditable guide output)"
+  S2.3: "guide-decision validation (engine validates workflow exists + eligible + transition clears S1.7 gates; closes DC1)"
+  S2.4: "router eval corpus (42 cases) + scorer (R2 resolution infrastructure)"
+
+what_slice_2_produced:
+  engine_modules:
+    - "catalog.rs — load_catalog (accumulator), eligible_entries, find_entry"
+    - "guide_validation.rs — validate_guide_decision, GuideValidation, GuideRejection"
+    - "eval.rs — EvalCorpus, score_router, RouterScore, corpus_coverage_gaps"
+  contract:
+    - "guide_decision.rs — GuideDecisionDocument + GuideDecision"
+  data:
+    - "contracts/eval/router-eval-corpus.yaml (42 cases, all 6 phases + anytime)"
+
+dc1_loop_now_closed_and_tested: |
+  host LLM emits GuideDecision
+    -> engine loads typed catalog (S2.1)
+    -> checks workflow exists + eligible, transition clears gates (S2.3 + S1.7)
+    -> Accepted | Rejected(typed reason)
+  The host reasons freely; the engine blocks the illegal. This IS the product's
+  routing integrity. Scale-with-the-model: smarter hosts route better within the
+  same gates.
+
+verification:
+  total_tests: 199
+  failures: 0
+  clippy_pedantic_engine_code: "0 warnings"
+  fmt: "clean"
+  new_engine_tests: 26 (11 phase_transition + 5 catalog + 7 guide_validation + 3 eval)
+
+decisions_locked_this_slice:
+  DD8: "validator separates recommendation (LLM) from gate evidence (factual state); engine is arbiter"
+  transition_before_eligibility: "proposed transitions are gate-checked first; a cleared transition widens eligibility to the proposed phase"
+  accuracy_as_basis_points: "no floats in core; accuracy_bps u32, accuracy_percent derived"
+
+open_questions:
+  OQ_R2: "the >=90% router accuracy is a release-gate measurement (host run against corpus), not a CI assertion"
+
+next_workflow: |
+  Plan slice 3 (usability arc). Slice 3 is the HUMAN-FACING surface: the `guide`
+  CLI command that a host invokes, which (a) emits the typed catalog/state view
+  for the host to reason over, (b) accepts the host's GuideDecision, (c) runs
+  engine validation, (d) reports Accepted/Rejected. This is where the product
+  becomes USABLE end-to-end (DC5 usability bar). Slice 3 is a natural point for
+  the human to steer the CLI ergonomics.

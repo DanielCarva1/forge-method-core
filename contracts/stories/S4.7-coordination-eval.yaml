@@ -1,0 +1,51 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S4.7"
+title: "Coordination-eval engine + fixtures + slice completion"
+phase: "4-build-verify"
+status: "in-progress"
+created_at: "2026-06-26"
+
+intent: |
+  Close the C5 multi-agent success signal formally. Build the scorer engine over
+  the 9 coordination dimensions (mirror of eval.rs's router scorer, DC9: engine
+  provides MACHINERY + GATE, host provides per-dimension OUTCOME — no model in
+  core). Prove the minimal-coordination-eval-suite is REAL (all fixture/evidence
+  refs resolve) and that the eval machinery produces a typed Passed verdict.
+  Emit the slice-4-completion artifact.
+
+context:
+  contract_type: "crates/forge-core-contracts/src/coordination_eval.rs (exists: CoordinationEvalContract, 9 dims, PassPolicy)"
+  suite: "contracts/evals/minimal-coordination-eval-suite.yaml (22 refs, 0 dangling — already real)"
+  precedent: "crates/forge-core-engine/src/eval.rs (score_router host-provide-fn pattern — the template)"
+
+scope:
+  in:
+    - "Engine module crates/forge-core-engine/src/coordination_eval.rs (pure logic, no IO except fixture-gaps file check like corpus_coverage_gaps)"
+    - "Types: CoordinationOutcome, CoordinationVerdict, CoordinationScore"
+    - "Fns: validate_coordination_contract (structural), coordination_fixture_gaps (dangling refs), score_coordination (host outcome closure -> typed verdict)"
+    - "pass_policy enforcement: required_level + all_must_pass + manual_review_blocks_release"
+    - "CLI command: forge-core coordination validate --suite <path> (structural + gaps report)"
+    - "Tests: real suite loads + validates + 0 gaps + Passed verdict with stub outcome"
+    - "Slice-4-completion artifact"
+  out:
+    - "Built-in self-scorer wiring claim_engine/isolation to dimensions (couples engine to spine — rejected; DC9 keeps eval machinery pure, host provides outcomes)"
+    - "MCP scoring surface (slice 6)"
+    - "Realtime bus (DD15 rejects)"
+
+acceptance:
+  - "Engine module compiles with 0 warnings; all 9 dims covered by validate + score"
+  - "Real suite deserializes, validates structurally, has 0 dangling fixture/evidence refs"
+  - "score_coordination with all-pass outcome -> CoordinationVerdict::Passed"
+  - "One failed must_pass dim -> CoordinationVerdict::Failed"
+  - "manual_review dim + manual_review_blocks_release -> blocks release"
+  - "CLI: forge-core coordination validate --suite <path> exits 0 with typed JSON"
+  - "Workspace: prior tests stay green; new tests added"
+  - "Slice-4-completion artifact written"
+
+decisions:
+  DD40: "Coordination-eval engine is PURE machinery (DC9 mirror). Engine validates contract structure + checks refs resolve + scores HOST-PROVIDED outcomes. No built-in scorer wires slice-4 engines to dimensions (that coupling is rejected; the gate is the value, the host/LLM provides the verdict evidence)."
+  DD41: "Outcomes are file-backed (DC10): a different LLM/operator writes an outcomes payload; the engine scores it deterministically. This is the multi-LLM interop wedge applied to the eval gate."
+  DD42: "Verdict taxonomy: Passed (all required dims pass) | Failed (any must_pass dim fails) | ManualReviewRequired (any manual-review dim open AND manual_review_blocks_release). ShouldPass dims that fail downgrade to a warning, not a hard fail."
+
+next_workflow: "build-story S4.7 -> slice-4-completion -> controlled multi-agent demo (slice 5)"

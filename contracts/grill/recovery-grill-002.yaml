@@ -1,0 +1,101 @@
+schema_version: "0.1"
+artifact_kind: "grill"
+status: "passed-with-risks"
+created_at: "2026-06-25"
+project: "forge-method-rust"
+grill_id: "recovery-grill-002"
+target: "contracts/spec/forge-rust-v1-specification.yaml (+ catalog-audit + engine-architecture)"
+grill_method: "workflow-grill-gate (restate, compare against constraints/evidence, surface contradictions+risky assumptions+irreversible choices, one human question only if unresolvable)"
+
+# ---------------------------------------------------------------------------
+# step 1 - restate the phase decision (compact)
+# ---------------------------------------------------------------------------
+phase_decision_restate: |
+  We are rebuilding Forge Method as a host-agnostic Rust core with: (a) an
+  intelligent orchestrator-guide that routes free-text intent + project state
+  over a typed workflow catalog, never past hard gates; (b) a funnel of
+  autonomy (high-contact discovery, near-silent contractual build) with NO
+  persona scripts; (c) a reused, non-malleable append-only WAL integrity
+  spine that rejects unauthorized mutations; (d) a mandatory system-design
+  gate between spec and plan; (e) 4-layer multi-agent governance on existing
+  + new contracts; (f) the 110 existing workflows migrated to typed YAML
+  contracts; (g) everything amplifying host-agent capability (scale-with-
+  the-model) rather than capping it. Usability bar = one full guided session
+  + a mutation-rejection demo. Full v2 parity is the final slice.
+
+# ---------------------------------------------------------------------------
+# step 2 - comparison against governing artifacts
+# ---------------------------------------------------------------------------
+comparison:
+  against_constraints:
+    - "Rust core, host/UI-free library: CONSISTENT (crate topology enforces it)"
+    - "typed YAML, markdown render-only: CONSISTENT (catalog migration FX6)"
+    - "single README human surface: CONSISTENT"
+    - "reuse integrity spine not rewrite: CONSISTENT (slice 0 assumes it)"
+    - "follow forge-method while rebuilding: CONSISTENT (we are in grill-gate now)"
+  against_reality_evidence:
+    - "research verdict (multi-agent governance) says codex contracts are REAL: CONSISTENT with reuse plan"
+    - "catalog-audit says 110 contracts structurally sound: CONSISTENT with migrate-not-rewrite"
+    - "grill GQ1 (router plateau ~80% for embeddings) SUPPORTS LLM-classifier-over-catalog: CONSISTENT with DC1"
+  against_glossary_decisions:
+    - "DC9 scale-with-model: guide output is typed+auditable, agent reasons freely inside gates: CONSISTENT"
+    - "DC10 multi-LLM interop via file-backed bus: CONSISTENT with 4-layer governance"
+
+# ---------------------------------------------------------------------------
+# step 3 - contradictions / risky assumptions / irreversible choices
+# ---------------------------------------------------------------------------
+findings:
+  risks:
+    - id: "R1"
+      severity: "high"
+      risk: "the 6 failing cargo tests have UNKNOWN cause. If they are fixture drift -> cheap (slice 0 unblocks). If they are spine design bugs -> the 'reuse not rewrite' assumption (Option A) is threatened and slice 0 scope grows."
+      mitigation: "slice 0 MUST triage test failures FIRST before any other work. Decision tree: if fixture drift, proceed; if design bug, escalate to human before touching the spine."
+    - id: "R2"
+      severity: "medium"
+      risk: "C1 promises 'router accuracy >=90%' but NO eval corpus exists yet and 90% is arbitrary. We are promising a metric we cannot yet measure."
+      mitigation: "slice 2 must build the eval corpus BEFORE claiming the metric. Replace '>=90%' with 'measured on corpus, baseline established' until corpus exists."
+    - id: "R3"
+      severity: "medium"
+      risk: "'core has zero host deps' is asserted but the existing CLI bakes in host-adapter-* commands. Need to verify the LIBRARY crates (contracts, store, engine) are truly host-free, not just assume."
+      mitigation: "slice 0 adds a host-dep audit: grep library crates for host/UI imports. Fail = refactor boundary."
+    - id: "R4"
+      severity: "medium"
+      risk: "coordination-eval '9 dimensions' exist in rust contracts but have NOT been audited for soundness, only existence. C5 success depends on them being correct."
+      mitigation: "slice 4 begins by auditing the 9 dimensions against the research before building on them."
+    - id: "R5"
+      severity: "low"
+      risk: "DC9 'freedom within gates' has no defined gate-calibration mechanism. Too-loose = no excellence; too-tight = caps the agent."
+      mitigation: "gate strictness is itself a directional contract per phase (funnel already encodes density). Acceptable for now; revisit if gates prove too loose in slice 3 usability test."
+  missing_definitions:
+    - "the orchestrator-guide's concrete PROMPT CONTRACT and typed output schema are not yet specified (engine-architecture names the output fields but not the prompt that produces them). To close in PLAN (slice 2), not now."
+    - "the coordination-bus (layer 4) on-disk layout is not specified. To close in PLAN (slice 4)."
+  irreversible_choices_flagged:
+    - "reusing the spine as-is (Option A): irreversible-ish. If slice 0 reveals spine is wrong, contingency = revise the specific contract, not rewrite the spine. Bounded."
+    - "host-LLM for routing (no model in core): reversible (could add a fallback router later) but reversal would betray DC9. Keep."
+
+# ---------------------------------------------------------------------------
+# step 4 - one human question (only if unresolvable from artifacts)
+# ---------------------------------------------------------------------------
+human_questions_required: 0
+note: "all contradictions resolved from artifacts + the human's locked decisions (DC1-DC10). R1's spine question resolves by running the tests in slice 0, not by asking. The roadmap reorder (catalog migration -> slice 1) the human already requested. No blocking human question remains."
+
+# ---------------------------------------------------------------------------
+# step 5 - resolved assumptions + decision
+# ---------------------------------------------------------------------------
+resolved_assumptions:
+  - "numbered steps in workflows are DIRECTIONS (what to achieve), not persona scripts (how to talk). Migration KEEPS directional steps, STRIPS talking-verbosity. Aligns with DC9 and the human's explicit preference."
+  - "the 'how to talk/guide' verbosity = the 34 facilitation persona-venom files, which are retired after distillation. references/ is the authority."
+  - "catalog migration is ~85% scriptable (85/110 already pure yaml) + 25 manual cleanups. Cheap enough to move to slice 1."
+decision: "spec is INTERNALLY CONSISTENT and ACCEPTED with the 5 risks above mitigated in their owning slices. No redesign needed."
+
+# ---------------------------------------------------------------------------
+# step 6 - next safe workflow
+# ---------------------------------------------------------------------------
+next_workflow:
+  primary: "plan-sprint (slice the roadmap into stories, starting with slice 0)"
+  must_carry_into_plan:
+    - "slice 0 order: (1) triage 6 failing tests [R1], (2) host-dep audit [R3], (3) rejection demo"
+    - "move catalog migration (FX1 phase, FX2 id, FX6 md->yaml) INTO slice 1 because the orchestrator (slice 2) needs typed contracts"
+    - "slice 2 builds eval corpus before claiming C1 metric [R2]"
+    - "slice 4 audits 9 coordination dimensions before building on them [R4]"
+  anti_pattern_guard: "do NOT over-detail every story of every slice before building slice 0. Map slice 0 + slice 1 stories in detail; later slices stay coarse until their turn (the human's locked anti-over-planning rule)."

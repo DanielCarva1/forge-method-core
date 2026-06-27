@@ -1,0 +1,545 @@
+//! `guide` command family — the agent-first method surface (slice 3).
+//!
+//! These commands are the PRIMARY consumer of host LLMs. Every command emits a
+//! single [`CliEnvelope`] as JSON to stdout; diagnostics go to stderr.
+//! Implements R1/R3/R4 from the slice-3 spec.
+
+use forge_core_contracts::{
+    Catalog, CatalogEntry, CliEnvelope, ExitReason, Phase, ENVELOPE_SCHEMA_VERSION,
+};
+use forge_core_contracts::{GuideDecision, GuideDecisionDocument};
+use forge_core_engine::{load_catalog, CatalogLoadReport};
+use forge_core_engine::{
+    validate_guide_decision, GateKind, GuideRejection, GuideValidation, ProvidedGateResult,
+};
+use std::path::Path;
+
+// ============================================================================
+// guide describe — the compact routing surface (R3 token cliff, DD13).
+// ============================================================================
+
+/// One compact workflow row in `describe`. Deliberately small: id, phase tags,
+/// one-line description derived from the first trigger. The host reads this
+/// ONCE per session and never re-reads unless `schema_version` changes.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct DescribeWorkflow {
+    pub id: String,
+    pub phases: Vec<String>,
+    pub summary: String,
+}
+
+/// One gate row in `describe` — the phase transitions that require it.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct DescribeGate {
+    pub gate: String,
+    pub required_for: Vec<String>,
+}
+
+/// The full `describe` payload.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct DescribePayload {
+    pub schema_version: String,
+    pub phases: Vec<String>,
+    pub workflows: Vec<DescribeWorkflow>,
+    pub gates: Vec<DescribeGate>,
+    pub exit_reasons: Vec<String>,
+}
+
+impl DescribePayload {
+    /// Build the describe payload from a loaded catalog + the static gate map.
+    #[must_use]
+    pub fn from_catalog(catalog: &Catalog) -> Self {
+        let workflows = catalog
+            .entries
+            .iter()
+            .map(compact_workflow)
+            .collect::<Vec<_>>();
+        Self {
+            schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
+            phases: Phase::ALL.iter().map(Phase::to_string).collect(),
+            workflows,
+            gates: gate_table(),
+            exit_reasons: vec![
+                "ok".into(),
+                "rejected_by_gate".into(),
+                "invalid_decision_shape".into(),
+                "conflict".into(),
+                "env_config".into(),
+            ],
+        }
+    }
+}
+
+/// Compress a catalog entry to the compact describe row.
+fn compact_workflow(e: &CatalogEntry) -> DescribeWorkflow {
+    // summary = first trigger (the matching predicate) is the most concise
+    // intent signal available without loading the full workflow text.
+    let summary = e
+        .triggers
+        .first()
+        .cloned()
+        .unwrap_or_else(|| format!("workflow {}", e.id.0));
+    DescribeWorkflow {
+        id: e.id.0.clone(),
+        phases: e.phases.iter().map(|p| p.0.clone()).collect(),
+        summary,
+    }
+}
+
+/// The static map of which gate is required for which forward transition.
+/// Kept in lockstep with forge-core-engine::phase_transition::required_gate_for.
+fn gate_table() -> Vec<DescribeGate> {
+    vec![
+        DescribeGate {
+            gate: "grill-gate".into(),
+            required_for: vec!["1-discovery -> 2-specification".into()],
+        },
+        DescribeGate {
+            gate: "system-design".into(),
+            required_for: vec!["2-specification -> 3-plan".into()],
+        },
+    ]
+}
+
+/// Run `guide describe`. Loads the catalog from `catalog_dir` and emits the
+/// compact routing surface.
+///
+/// # Errors
+/// Returns an error envelope (exit 5) if the catalog directory cannot be read
+/// or any workflow file is malformed.
+#[must_use]
+pub fn run_describe(catalog_dir: &Path) -> CliEnvelope<DescribePayload> {
+    let report = load_catalog(catalog_dir);
+    if !report.is_clean() {
+        return CliEnvelope::err(
+            "guide.describe",
+            ExitReason::EnvConfig,
+            format!("catalog load failed: {} error(s)", report.errors.len()),
+        );
+    }
+    let payload = DescribePayload::from_catalog(&report.catalog);
+    CliEnvelope::ok("guide.describe", payload)
+}
+
+// Re-export the load report type for callers that want the raw errors.
+pub type DescribeReport = CatalogLoadReport;
+
+// ============================================================================
+// guide decide — validate a host-proposed GuideDecision (R2).
+// ============================================================================
+
+/// The success payload for `guide decide` when the decision is Accepted.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct DecideAccepted {
+    pub recommended_workflow: String,
+    pub current_phase: String,
+    pub proposed_next_phase: Option<String>,
+    pub reason: String,
+}
+
+/// The failure payload for `guide decide` when the decision is Rejected.
+/// Carries a machine-readable reject code so the host can self-correct (R2).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct DecideRejected {
+    /// One of: `unrecognized_current_phase` | `unknown_workflow` |
+    /// `not_eligible_in_phase` | `illegal_transition`.
+    pub reject_code: String,
+    pub detail: String,
+}
+
+/// Run `guide decide`. Loads decision + catalog + gates, validates, emits
+/// Accepted|Rejected envelope with the DD10 exit code.
+///
+/// # Errors
+/// Returns an `InvalidDecisionShape` (exit 3) envelope if the decision file
+/// cannot be deserialized; `EnvConfig` (exit 5) if the catalog won't load;
+/// `RejectedByGate` (exit 2) if the engine refuses the decision.
+#[must_use]
+pub fn run_decide(
+    decision_file: &Path,
+    catalog_dir: &Path,
+    gates: &[ProvidedGateResult],
+) -> CliEnvelope<DecideAccepted> {
+    // 1. Load the decision (typed). Shape error -> exit 3.
+    let decision_text = match std::fs::read_to_string(decision_file) {
+        Ok(t) => t,
+        Err(e) => {
+            return CliEnvelope::err(
+                "guide.decide",
+                ExitReason::InvalidDecisionShape,
+                format!("cannot read decision file: {e}"),
+            );
+        }
+    };
+    let decision: GuideDecision =
+        match serde_yaml::from_str::<GuideDecisionDocument>(&decision_text) {
+            Ok(doc) => doc.guide_decision,
+            Err(e) => {
+                return CliEnvelope::err(
+                    "guide.decide",
+                    ExitReason::InvalidDecisionShape,
+                    format!("decision file is not a valid GuideDecisionDocument: {e}"),
+                );
+            }
+        };
+
+    // 2. Load the catalog.
+    let report = load_catalog(catalog_dir);
+    if !report.is_clean() {
+        return CliEnvelope::err(
+            "guide.decide",
+            ExitReason::EnvConfig,
+            format!("catalog load failed: {} error(s)", report.errors.len()),
+        );
+    }
+
+    // 3. Validate against catalog + gates.
+    match validate_guide_decision(&decision, &report.catalog, gates) {
+        GuideValidation::Accepted => CliEnvelope::ok(
+            "guide.decide",
+            DecideAccepted {
+                recommended_workflow: decision.recommended_workflow.0.clone(),
+                current_phase: decision.current_phase.0.clone(),
+                proposed_next_phase: decision.proposed_next_phase.as_ref().map(|p| p.0.clone()),
+                reason: decision.reason.clone(),
+            },
+        ),
+        GuideValidation::Rejected(reason) => {
+            // The reject envelope carries a typed code + detail (R2: host self-corrects).
+            // Encode in error field; exit reason = RejectedByGate (2).
+            let rejected = DecideRejected {
+                reject_code: reject_code(&reason),
+                detail: format!("{reason:?}"),
+            };
+            let mut env: CliEnvelope<DecideAccepted> =
+                CliEnvelope::err("guide.decide", ExitReason::RejectedByGate, &rejected.detail);
+            // stash the typed reject payload in the error code for machine parsing.
+            if let Some(err) = env.error.as_mut() {
+                err.code.0 = format!("{}:{}", rejected.reject_code, rejected.detail);
+            }
+            env
+        }
+    }
+}
+
+/// Map a [`GuideRejection`] to a stable machine-readable code string.
+fn reject_code(r: &GuideRejection) -> String {
+    match r {
+        GuideRejection::UnrecognizedCurrentPhase { .. } => "unrecognized_current_phase",
+        GuideRejection::UnknownWorkflow { .. } => "unknown_workflow",
+        GuideRejection::NotEligibleInPhase { .. } => "not_eligible_in_phase",
+        GuideRejection::IllegalTransition(_) => "illegal_transition",
+    }
+    .into()
+}
+
+// ============================================================================
+// guide status — orient the host: phase + eligible workflows + pending gates.
+// ============================================================================
+
+/// The `guide status` payload. Tells the host WHERE it is and WHAT it may do next.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct StatusPayload {
+    pub schema_version: String,
+    /// The phase this status is oriented to.
+    pub current_phase: String,
+    /// Workflows eligible in `current_phase` (id + phases).
+    pub eligible_workflows: Vec<StatusWorkflow>,
+    /// Gates required to move FORWARD out of this phase, if any.
+    pub pending_gates: Vec<StatusGate>,
+    /// The phase each pending gate unlocks.
+    pub next_phases: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct StatusWorkflow {
+    pub id: String,
+    pub phases: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct StatusGate {
+    pub gate: String,
+    pub unlocks: String,
+}
+
+/// Run `guide status` for a given phase. The host passes its current phase
+/// (it always knows it from the method protocol); the engine reports what is
+/// eligible now and which gates gate forward progress.
+///
+/// # Errors
+/// Returns `EnvConfig` (exit 5) if the catalog won't load;
+/// `InvalidDecisionShape` (exit 3) if `phase` does not categorize.
+#[must_use]
+pub fn run_status(catalog_dir: &Path, phase: &str) -> CliEnvelope<StatusPayload> {
+    // categorize phase
+    let Some(current) = Phase::parse(phase) else {
+        return CliEnvelope::err(
+            "guide.status",
+            ExitReason::InvalidDecisionShape,
+            format!("unrecognized phase '{phase}'"),
+        );
+    };
+
+    let report = load_catalog(catalog_dir);
+    if !report.is_clean() {
+        return CliEnvelope::err(
+            "guide.status",
+            ExitReason::EnvConfig,
+            format!("catalog load failed: {} error(s)", report.errors.len()),
+        );
+    }
+
+    let eligible_workflows = report
+        .catalog
+        .entries
+        .iter()
+        .filter(|e| {
+            e.phases
+                .iter()
+                .any(|tag| Phase::tag_eligible(&tag.0, current))
+        })
+        .map(|e| StatusWorkflow {
+            id: e.id.0.clone(),
+            phases: e.phases.iter().map(|p| p.0.clone()).collect(),
+        })
+        .collect::<Vec<_>>();
+
+    let (pending_gates, next_phases) = forward_gates_for(current);
+
+    CliEnvelope::ok(
+        "guide.status",
+        StatusPayload {
+            schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
+            current_phase: current.to_string(),
+            eligible_workflows,
+            pending_gates,
+            next_phases,
+        },
+    )
+}
+
+/// The forward gate + destination for a phase, in lockstep with `phase_transition`.
+fn forward_gates_for(phase: Phase) -> (Vec<StatusGate>, Vec<String>) {
+    use forge_core_engine::GateKind;
+    let (gate, unlocks) = match phase {
+        Phase::Discovery => (Some(GateKind::Grill), Some(Phase::Specification)),
+        Phase::Specification => (Some(GateKind::SystemDesign), Some(Phase::Plan)),
+        Phase::Plan => (Some(GateKind::StoryReady), Some(Phase::BuildVerify)),
+        Phase::BuildVerify => (Some(GateKind::Readiness), Some(Phase::ReadyOperate)),
+        _ => (None, None),
+    };
+    let pending_gates = gate
+        .map(|g| StatusGate {
+            gate: gate_str(g),
+            unlocks: unlocks.unwrap().to_string(),
+        })
+        .into_iter()
+        .collect();
+    let next_phases = unlocks.map(|p| vec![p.to_string()]).unwrap_or_default();
+    (pending_gates, next_phases)
+}
+
+fn gate_str(g: GateKind) -> String {
+    match g {
+        GateKind::Grill => "grill".into(),
+        GateKind::SystemDesign => "system-design".into(),
+        GateKind::StoryReady => "story-ready".into(),
+        GateKind::Readiness => "readiness".into(),
+        GateKind::Release => "release".into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    fn tempfile_dir() -> std::path::PathBuf {
+        static SEQ: AtomicU64 = AtomicU64::new(0);
+        let n = SEQ.fetch_add(1, Ordering::SeqCst);
+        let p = std::env::temp_dir().join(format!("forge-guide-test-{}-{}", std::process::id(), n));
+        std::fs::create_dir_all(&p).unwrap();
+        p
+    }
+    use forge_core_contracts::{CatalogEntry, StableId};
+
+    fn real_catalog_dir() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../contracts/workflows")
+            .canonicalize()
+            .expect("catalog dir")
+    }
+
+    #[test]
+    fn describe_emits_all_110_workflows_compactly() {
+        let env = run_describe(&real_catalog_dir());
+        assert!(env.ok, "describe should succeed");
+        assert_eq!(env.exit_code(), 0);
+        let payload = env.data.as_ref().expect("payload");
+        assert_eq!(payload.workflows.len(), 110);
+        // every row is compact: id + phases + one summary line
+        for w in &payload.workflows {
+            assert!(!w.id.is_empty());
+            assert!(!w.phases.is_empty());
+            assert!(!w.summary.is_empty());
+        }
+    }
+
+    #[test]
+    fn describe_includes_phases_gates_exit_reasons_and_schema_version() {
+        let env = run_describe(&real_catalog_dir());
+        let p = env.data.as_ref().expect("payload");
+        assert_eq!(p.schema_version, ENVELOPE_SCHEMA_VERSION);
+        assert!(p.phases.contains(&"1-discovery".to_string()));
+        assert!(p.phases.contains(&"6-evolve".to_string()));
+        assert!(p.gates.iter().any(|g| g.gate == "system-design"));
+        assert!(p.exit_reasons.contains(&"rejected_by_gate".to_string()));
+    }
+
+    #[test]
+    fn describe_returns_env_config_envelope_when_catalog_dir_missing() {
+        let env = run_describe(std::path::Path::new("/nonexistent/does/not/exist"));
+        assert!(!env.ok);
+        assert_eq!(env.exit_reason.0, StableId("env_config".into()).0);
+        assert_eq!(env.exit_code(), 5);
+    }
+
+    #[test]
+    fn compact_workflow_uses_first_trigger_as_summary() {
+        let entry = CatalogEntry {
+            id: StableId("x".into()),
+            phases: vec![StableId("1-discovery".into())],
+            workflow_ref: forge_core_contracts::RepoPath("p".into()),
+            triggers: vec!["does X, use when Y".into(), "second".into()],
+            prerequisites: vec![],
+            outputs: vec![],
+        };
+        let cw = compact_workflow(&entry);
+        assert_eq!(cw.summary, "does X, use when Y");
+    }
+
+    #[test]
+    fn payload_serializes_to_json_cleanly() {
+        let env = run_describe(&real_catalog_dir());
+        let json = serde_json::to_string(&env).expect("serialize");
+        assert!(json.contains("\"schema_version\""));
+        assert!(json.contains("\"workflows\""));
+    }
+
+    // --- guide decide tests (S3.3) ---
+
+    use std::io::Write;
+    fn write_decision(tmp: &std::path::Path, name: &str, body: &str) -> std::path::PathBuf {
+        let p = tmp.join(name);
+        let mut f = std::fs::File::create(&p).unwrap();
+        f.write_all(body.as_bytes()).unwrap();
+        p
+    }
+
+    const VALID_DISCOVERY: &str = "schema_version: \"0.1\"\nguide_decision:\n  recommended_workflow: discover-intent\n  reason: start here\n  current_phase: 1-discovery\n";
+    const PLAN_IN_DISCOVERY: &str = "schema_version: \"0.1\"\nguide_decision:\n  recommended_workflow: plan-sprint\n  reason: skip\n  current_phase: 1-discovery\n";
+    const UNKNOWN_WF: &str = "schema_version: \"0.1\"\nguide_decision:\n  recommended_workflow: nope\n  reason: x\n  current_phase: 1-discovery\n";
+    const BAD_YAML: &str = "schema_version: \"0.1\"\nguide_decision: { not valid";
+
+    #[test]
+    fn decide_accepts_valid_in_phase_decision() {
+        let tmp = tempfile_dir();
+        let df = write_decision(&tmp, "d.yaml", VALID_DISCOVERY);
+        let env = run_decide(&df, &real_catalog_dir(), &[]);
+        assert!(env.ok, "should accept: {:?}", env.error);
+        assert_eq!(env.exit_code(), 0);
+        let p = env.data.as_ref().expect("payload");
+        assert_eq!(p.recommended_workflow, "discover-intent");
+    }
+
+    #[test]
+    fn decide_rejects_ineligible_workflow_with_typed_code() {
+        let tmp = tempfile_dir();
+        let df = write_decision(&tmp, "d.yaml", PLAN_IN_DISCOVERY);
+        let env = run_decide(&df, &real_catalog_dir(), &[]);
+        assert!(!env.ok);
+        assert_eq!(env.exit_reason.0, "rejected_by_gate");
+        assert_eq!(env.exit_code(), 2);
+        let code = env.error.as_ref().expect("error").code.0.clone();
+        assert!(code.starts_with("not_eligible_in_phase"), "got: {code}");
+    }
+
+    #[test]
+    fn decide_rejects_unknown_workflow() {
+        let tmp = tempfile_dir();
+        let df = write_decision(&tmp, "d.yaml", UNKNOWN_WF);
+        let env = run_decide(&df, &real_catalog_dir(), &[]);
+        assert!(!env.ok);
+        let code = env.error.as_ref().expect("error").code.0.clone();
+        assert!(code.starts_with("unknown_workflow"), "got: {code}");
+    }
+
+    #[test]
+    fn decide_returns_invalid_decision_shape_on_bad_yaml() {
+        let tmp = tempfile_dir();
+        let df = write_decision(&tmp, "d.yaml", BAD_YAML);
+        let env = run_decide(&df, &real_catalog_dir(), &[]);
+        assert!(!env.ok);
+        assert_eq!(env.exit_reason.0, "invalid_decision_shape");
+        assert_eq!(env.exit_code(), 3);
+    }
+
+    #[test]
+    fn decide_returns_env_config_when_decision_file_unreadable() {
+        let env = run_decide(
+            std::path::Path::new("/no/such/file.yaml"),
+            &real_catalog_dir(),
+            &[],
+        );
+        assert!(!env.ok);
+        // missing decision file = invalid input (no decision to validate) -> exit 3
+        assert_eq!(env.exit_code(), 3);
+    }
+
+    // --- guide status tests (S3.4) ---
+
+    #[test]
+    fn status_reports_eligible_workflows_and_pending_gate() {
+        let env = run_status(&real_catalog_dir(), "2-specification");
+        assert!(env.ok, "{:?}", env.error);
+        let p = env.data.as_ref().expect("payload");
+        assert_eq!(p.current_phase, "2-specification");
+        assert!(!p.eligible_workflows.is_empty());
+        // anytime workflows must be eligible in every phase
+        assert!(p
+            .eligible_workflows
+            .iter()
+            .any(|w| w.id == "adversarial-review"));
+        // the system-design gate unlocks 3-plan
+        assert_eq!(p.pending_gates.len(), 1);
+        assert_eq!(p.pending_gates[0].gate, "system-design");
+        assert_eq!(p.pending_gates[0].unlocks, "3-plan");
+        assert_eq!(p.next_phases, vec!["3-plan".to_string()]);
+    }
+
+    #[test]
+    fn status_rejects_unknown_phase() {
+        let env = run_status(&real_catalog_dir(), "nonsense");
+        assert!(!env.ok);
+        assert_eq!(env.exit_reason.0, "invalid_decision_shape");
+        assert_eq!(env.exit_code(), 3);
+    }
+
+    #[test]
+    fn status_accepts_phase_aliases() {
+        // Phase::parse is permissive: "3", "plan", "3-plan" all categorize.
+        for alias in ["3", "plan", "3-plan"] {
+            let env = run_status(&real_catalog_dir(), alias);
+            assert!(env.ok, "alias '{alias}' should parse: {:?}", env.error);
+            assert_eq!(env.data.as_ref().unwrap().current_phase, "3-plan");
+        }
+    }
+
+    #[test]
+    fn status_terminal_phase_has_no_pending_gate() {
+        // evolve is the last phase; no forward gate.
+        let env = run_status(&real_catalog_dir(), "6-evolve");
+        assert!(env.ok);
+        assert!(env.data.as_ref().unwrap().pending_gates.is_empty());
+    }
+}

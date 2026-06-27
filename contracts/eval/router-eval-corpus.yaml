@@ -1,0 +1,143 @@
+schema_version: "0.1"
+# Router eval corpus (grill R2 resolution; C1 accuracy bar = >=90%).
+# Each case: a free-text user utterance -> the workflow id a correct guide
+# should recommend, tagged with the funnel phase it belongs to.
+# The engine ships no model; an operator runs a host router against this corpus
+# and reports accuracy. Cases are natural phrasings spanning all six phases.
+eval_corpus:
+  # --- 1-discovery (understand the problem/space) ---
+  - utterance: "I have a vague idea for an app but don't know where to start"
+    expected_workflow: discover-intent
+    phase: 1-discovery
+  - utterance: "help me brainstorm features for my game"
+    expected_workflow: brainstorming
+    phase: 1-discovery
+  - utterance: "what's already out there competing with my concept"
+    expected_workflow: domain-scan
+    phase: 1-discovery
+  - utterance: "let's generate a bunch of wild product directions"
+    expected_workflow: creative-session
+    phase: 1-discovery
+  - utterance: "I want to pick the best concept from the ones we explored"
+    expected_workflow: concept-selection
+    phase: 1-discovery
+  - utterance: "run a structured design-thinking exploration"
+    expected_workflow: design-thinking
+    phase: 1-discovery
+
+  # --- 2-specification (define the solution) ---
+  - utterance: "write the product requirements document"
+    expected_workflow: write-spec
+    phase: 2-specification
+  - utterance: "draft the game design document"
+    expected_workflow: gdd
+    phase: 2-specification
+  - utterance: "produce the game's PRD"
+    expected_workflow: game-prd
+    phase: 2-specification
+  - utterance: "design the game mechanics"
+    expected_workflow: mechanics-design
+    phase: 2-specification
+  - utterance: "write the narrative and story arc"
+    expected_workflow: narrative-design
+    phase: 2-specification
+  - utterance: "define the UX flow for the game"
+    expected_workflow: game-ux-design
+    phase: 2-specification
+  - utterance: "capture the architecture decisions for this system"
+    expected_workflow: engine-architecture
+    phase: 2-specification
+
+  # --- 3-plan (sequence the work) ---
+  - utterance: "break the spec into a sprint plan"
+    expected_workflow: plan-sprint
+    phase: 3-plan
+  - utterance: "split the work into epics"
+    expected_workflow: create-epics
+    phase: 3-plan
+  - utterance: "create implementation-ready stories"
+    expected_workflow: story-creation
+    phase: 3-plan
+  - utterance: "plan the acceptance-test-driven development approach"
+    expected_workflow: atdd-plan
+    phase: 3-plan
+  - utterance: "set up the CI quality pipeline"
+    expected_workflow: ci-quality-pipeline
+    phase: 3-plan
+  - utterance: "plan the devops and deployment strategy"
+    expected_workflow: devops-deployment-plan
+    phase: 3-plan
+  - utterance: "build the compliance checklist"
+    expected_workflow: compliance-checklist
+    phase: 3-plan
+
+  # --- 4-build-verify (implement) ---
+  - utterance: "start building the next story"
+    expected_workflow: build-story
+    phase: 4-build-verify
+  - utterance: "scaffold a new builder module"
+    expected_workflow: builder-scaffold
+    phase: 4-build-verify
+  - utterance: "review my code before merge"
+    expected_workflow: code-review
+    phase: 4-build-verify
+  - utterance: "automate the game tests"
+    expected_workflow: game-test-automation
+    phase: 4-build-verify
+  - utterance: "scaffold the end-to-end game tests"
+    expected_workflow: game-e2e-scaffold
+    phase: 4-build-verify
+  - utterance: "what's the status of the game sprint"
+    expected_workflow: game-sprint-status
+    phase: 4-build-verify
+
+  # --- 5-ready-operate (verify/release) ---
+  - utterance: "check if we're ready to release"
+    expected_workflow: release-readiness
+    phase: 5-ready-operate
+  - utterance: "run the release readiness gate"
+    expected_workflow: ready-release
+    phase: 5-ready-operate
+  - utterance: "audit the non-functional requirement evidence"
+    expected_workflow: nfr-evidence-audit
+    phase: 5-ready-operate
+  - utterance: "plan observability and monitoring"
+    expected_workflow: observability-plan
+    phase: 5-ready-operate
+  - utterance: "run a retrospective on the last sprint"
+    expected_workflow: retrospective
+    phase: 5-ready-operate
+
+  # --- 6-evolve (iterate after release) ---
+  - utterance: "evolve the project based on feedback"
+    expected_workflow: evolve-project
+    phase: 6-evolve
+  - utterance: "the product shipped, what's next for iteration"
+    expected_workflow: evolve-project
+    phase: 6-evolve
+
+  # --- anytime (cross-cutting, eligible in every phase) ---
+  - utterance: "run an adversarial review on this work"
+    expected_workflow: adversarial-review
+    phase: anytime
+  - utterance: "review the edge cases we might have missed"
+    expected_workflow: edge-case-review
+    phase: anytime
+  - utterance: "I lost context, recover where we were"
+    expected_workflow: context-recovery
+    phase: anytime
+  - utterance: "show me the documentation index"
+    expected_workflow: doc-index
+    phase: anytime
+  - utterance: "we're heading the wrong direction, correct course"
+    expected_workflow: correct-course
+    phase: anytime
+  - utterance: "preview a checkpoint before committing"
+    expected_workflow: checkpoint-preview
+    phase: anytime
+  - utterance: "customize the runtime configuration"
+    expected_workflow: config-customization
+    phase: anytime
+  - utterance: "convene a council decision on this hard call"
+    expected_workflow: council-decision
+    phase: anytime

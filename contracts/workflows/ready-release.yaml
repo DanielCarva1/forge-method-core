@@ -1,0 +1,35 @@
+schema_version: "0.1"
+workflow:
+  id: "ready-release"
+  phases:
+  - "5-ready-operate"
+  trigger:
+  - "state.phase == 4-build-verify and build scope is complete"
+  - "user asks whether the project is ready"
+  - "state.phase == 5-ready-operate"
+  inputs:
+  - "state"
+  - "sprint summary"
+  - "story files"
+  - "evidence"
+  - "checks"
+  steps:
+  - "run runtime audit"
+  - "confirm no story remains in progress or review"
+  - "write release evidence"
+  - "update state to 5-ready-operate"
+  - "write usage/support/future backlog notes if needed"
+  outputs:
+  - "release evidence"
+  - "ready state"
+  - "next operate/evolve action"
+  done_when:
+  - "audit passes"
+  - "release evidence exists"
+  - "readiness is ready"
+  blocked_when:
+  - "audit fails"
+  - "active work remains"
+  - "release evidence is missing"
+  handoff:
+  - "preserve release evidence path and next operate/evolve action"

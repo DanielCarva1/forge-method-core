@@ -1,0 +1,41 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S0.2"
+status: "blocked_on_S0.1"
+created_at: "2026-06-25"
+project: "forge-method-rust"
+sprint: "sprint-001-recovery"
+slice: "slice_0_unblock"
+title: "Fix failing tests to green"
+
+decision_sources:
+  - "contracts/stories/S0.1-triage-failing-tests.yaml (diagnosis)"
+  - "contracts/grill/recovery-grill-002.yaml#R1"
+  - "contracts/spec/forge-rust-v1-specification.yaml#slice_0_unblock"
+
+intent: "Using the S0.1 diagnosis, fix each failing test so cargo test --workspace exits 0. Fixes must follow the classification: fixture drift -> align fixture to schema; local bug -> fix locally; spine bug -> only proceed if S0.1 did not escalate."
+
+context:
+  spine_reuse_rule: "the integrity spine (forge-core-store WAL + crypto) is REUSED, not rewritten. Fixes that would require redesigning the spine MUST stop and escalate, not be patched around."
+
+tasks:
+  - "for each fixture-drift failure: align the fixture YAML to the current code schema (or the code to the intended schema, if the fixture encodes intent) — prefer whichever the diagnosis says is authoritative"
+  - "for each local bug: fix the specific logic; keep changes minimal and localized"
+  - "re-run cargo test --workspace after each fix to confirm no regression"
+  - "if deserializes_all_operation_fixtures is the cause, ensure fixtures and operation types are back in lockstep and document the drift cause"
+
+acceptance_criteria:
+  - "cargo test --workspace exits 0"
+  - "no test was deleted or #[ignore]d to force green (deletions/ignores require explicit human approval)"
+  - "every fix traces to the S0.1 diagnosis root cause"
+
+checks:
+  - "cargo test --workspace exit code == 0"
+  - "test count did not drop unexplainedly (compare before/after)"
+
+evidence:
+  - ".forge-method/evidence/S0.2-test-report.json (cargo test output)"
+  - "diff summary of changed fixtures/files"
+
+blocks: ["S0.4"]
+next_workflow: "build-story S0.3 (host-dep audit) and S0.4 (rejection demo)"

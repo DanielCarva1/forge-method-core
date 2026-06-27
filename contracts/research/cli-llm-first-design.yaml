@@ -1,0 +1,336 @@
+meta:
+  topic: "Scientific evidence & verified success cases for designing a CLI whose primary consumer is an LLM/agent (human only touches meta commands)"
+  query: "Evidence for machine-first/LLM-first CLI & tool-interface design; how LLMs use CLIs/tools; tool-use benchmarks; contract versioning; anti-patterns; and the human-meta vs agent-programmatic command boundary"
+  date: 2026-06-26
+  researcher_model: "researcher-subagent (web)"
+  confidence: medium
+  sources_consulted: 28
+
+key_findings:
+  # ---------- ANGLE 1: MACHINE-FIRST / LLM-FIRST CLI & TOOL-INTERFACE DESIGN ----------
+  - id: F1
+    finding: "A 2026 arXiv paper formalizes the exact paradigm shift the proposed CLI embodies: from human-oriented interfaces to 'agent interfaces' — software interaction layers designed for machine invocation, characterized by structured inputs, explicit semantics, and deterministic execution, optimized for interpretability, reliable invocation, and composability (vs human interfaces optimized for navigation/usability)."
+    evidence: "arXiv:2603.20300 defines 'agent interfaces' and 'invocable capabilities' as fundamental building blocks of AI-oriented software; lists design principles: machine interpretability, composability, invocation reliability. Builds the human-interface vs agent-interface split directly."
+    sources:
+      - "https://arxiv.org/abs/2603.20300"
+  - id: F2
+    finding: "Multiple converging agent-native CLI specs (The CLI Spec / clispec.dev, posix-agent-standard, cli-agent-spec with 74 documented failure modes + 157 requirements, ACLI) independently converge on the same core requirements: structured JSON stdout (stdout = API contract; everything else to stderr), deterministic & documented exit-code taxonomy, schema introspection / self-describing (--schema, --describe, --help that is itself machine-actionable), stable versioned output schemas treated as a public API, one job per command, idempotency/dry-run, and --no-interactive."
+    evidence: "clispec.dev Principle 1 (Structured Output) + Principle 2 (Schema Introspection); posix-agent-standard (zero custom code, token efficiency, composability); cli-agent-spec enumerates 74 failure modes across runtime/security/output/errors; agent-cli-guide 'Structured Output as API Contract: JSON to stdout, everything else to stderr'. These are practitioner specs, not peer-reviewed — flagged."
+    sources:
+      - "https://clispec.dev/"
+      - "https://github.com/turlockmike/posix-agent-standard/blob/master/SPECIFICATION.md"
+      - "https://github.com/romamo/cli-agent-spec"
+      - "https://github.com/Johnixr/agent-cli-guide/blob/main/GUIDE.md"
+  - id: F3
+    finding: "Production postmortems (Arcjet, AWS CLI pager incident, Cloudflare, OpenAI Codex 'cli-creator' skill) confirm empirically that agents fail specifically on human-oriented affordances: they cannot answer interactive prompts, cannot navigate pagers, misread colored/prose output, hallucinate flags, paste IDs into the wrong place, and keep going after failures. The remediation in every case is: one canonical flag for JSON (--json, not per-command --format variants), --no-interactive by default, semantic exit codes, ANSI suppressed when not a TTY."
+    evidence: "Arcjet postmortem: 'Agents remember old command shapes, hallucinate flags, paste identifiers into the wrong place, misread friendly output, keep going after a command clearly failed. The shell is a weak protocol boundary.' InfoQ/AWS CLI pager incident: 'Agents can't answer prompts, press keys to navigate pagers or interpret color... commands must be deterministic.' OpenAI skills cli-creator reference: 'Write --help for a future Codex thread that only has the binary and a vague task.'"
+    sources:
+      - "https://blog.arcjet.com/designing-a-cli-for-ai-agents/"
+      - "https://www.infoq.com/articles/ai-agent-cli/"
+      - "https://github.com/openai/skills/blob/main/skills/.curated/cli-creator/references/agent-cli-patterns.md"
+
+  # ---------- ANGLE 2: HOW LLMs USE CLIs/TOOLS (function-calling reliability, ReAct, MCP) ----------
+  - id: F4
+    finding: "The Model Context Protocol (MCP) is the de facto open spec (Anthropic, Nov 2024) for agent↔tool invocation. Its design rationale directly validates the proposed design: tools are 'model-controlled' (the LLM discovers via tools/list and invokes via tools/call), each tool is uniquely named with a JSON Schema inputSchema (inputSchema = JSON Schema 2020-12), capability negotiation happens at handshake (servers MUST declare the 'tools' capability; listChanged signaling), and the protocol itself is versioned with explicit protocol-version negotiation. This is the canonical reference for typed, validated, agent-consumed tool surfaces."
+    evidence: "modelcontextprotocol.io spec 2024-11-05 / 2025-06-18: tool = {name, description?, inputSchema: JSON Schema}. tools/call returns typed content. Capability negotiation + protocol versioning are first-class. Anthropic: MCP provides 'a universal, open standard for connecting AI systems.'"
+    sources:
+      - "https://modelcontextprotocol.io/specification/2025-06-18/server/tools"
+      - "https://modelcontextprotocol.io/specification/2024-11-05/architecture"
+      - "https://www.anthropic.com/news/model-context-protocol"
+  - id: F5
+    finding: "Empirical function-calling reliability work shows a dominant, FIXABLE failure class: wrong tool SELECTION (routing) rather than argument errors. At zero reasoning budget, 30.5% of failures are wrong-function selection from the candidate set; brief structured reasoning ('Function: [name] / Key args: [...]') cuts this to 1.5% and drives function hallucination to 0.0%. Crucially, LONG reasoning backfires: at 256 tokens, wrong-selection re-surges to 28.0% and hallucination to 18.0%. Implication: tool NAME clarity and a narrow, well-described candidate set matter more than verbose instructions."
+    evidence: "arXiv:2604.02155 ('Brief Is Better'): three-way error decomposition on BFCL v3 Multiple; Qwen2.5-1.5B, accuracy 44.0%→64.0% (32 tokens) then collapse to 25.0% (256 tokens), McNemar p<0.001. FR-CoT forces valid function-name commitment first."
+    sources:
+      - "https://arxiv.org/abs/2604.02155"
+  - id: F6
+    finding: "Tool description QUALITY is now a measured, first-class failure axis: an ACL 2025 paper shows LLM tool preferences are 'surprisingly fragile' and dominated by description wording/ordering; an NAACL 2025 paper (EASYTOOL) shows conciseness beats verbose docs; a 2026 study (arXiv:2602.14878) catalogs 'smells' in MCP tool descriptions; and arXiv:2602.20426 learns to REWRITE tool descriptions to make them reliable. Confirmed failure drivers: ambiguity, incomplete constraints, redundant text inflating token cost, and similarly-named tools being conflated."
+    evidence: "ACL 2025 'Tool Preferences in Agentic LLMs are Unreliable' (2025.emnlp-main.1060); EASYTOOL NAACL 2025 (2025.naacl-long.44) — redundancy + incompleteness in docs impede use; arXiv:2602.14878 MCP descriptions 'Are Smelly'; arXiv:2602.20426 rewrites descriptions for reliability."
+    sources:
+      - "https://aclanthology.org/2025.emnlp-main.1060/"
+      - "https://aclanthology.org/2025.naacl-long.44.pdf"
+      - "https://arxiv.org/abs/2602.14878"
+      - "https://arxiv.org/abs/2602.20426"
+  - id: F7
+    finding: "Parameter-filling is a distinct, cascading failure surface: a Findings-EMNLP 2025 study ('Butterfly Effects in Toolchains') shows small parameter errors propagate through multi-step toolchains; an attention-based study (arXiv:2606.16364) shows on 80% of tool-selection failures the model already 'looked at' (most-attended) the correct tool but failed at readout/picking — i.e. the fix is interface clarity, not more model capability. Schema misalignment causes models to hallucinate plausible tool names absent from the candidate set (ACL 2026, 2026.acl-long.948)."
+    evidence: "aclanthology 2025.findings-emnlp.907 (parameter failure taxonomy); arXiv:2606.16364 ('Looking Is Not Picking', argmax-over-candidates on 80% of failures); ACL 2026 'Don't Adapt Small Language Models for Tools' (schema misalignment → hallucinated names)."
+    sources:
+      - "https://aclanthology.org/2025.findings-emnlp.907.pdf"
+      - "https://arxiv.org/abs/2606.16364"
+      - "https://aclanthology.org/2026.acl-long.948/"
+
+  # ---------- ANGLE 3: BENCHMARKS on tool-use / tool-description quality ----------
+  - id: F8
+    finding: "Berkeley Function Calling Leaderboard (BFCL) is the field's primary executable benchmark (now at V4), an MLR/COLM 2025 peer-reviewed paper (Patil et al.). It introduced AST-based evaluation for simple/parallel/multiple calls, then enterprise (V2), multi-turn (V3), and agentic (V4). Findings: (a) parallel + multi-step calls are dramatically harder than single calls; (b) V3 revealed agents loop, demand already-provided credentials, and mis-sequence actions — the exact failure modes the proposed engine's hard gates are designed to block."
+    evidence: "Patil et al. 2025 'The BFCL: From Tool Use to Agentic Evaluation' (proceedings.mlr.press/v267/patil25a.html; OpenReview 2GmDdhBdDk). BFCL V3 multi-turn: 'a model loop over and over—listing a directory, trying to write to a file that isn't there, then listing again.'"
+    sources:
+      - "https://proceedings.mlr.press/v267/patil25a.html"
+      - "https://gorilla.cs.berkeley.edu/leaderboard"
+      - "https://gorilla.cs.berkeley.edu/blogs/13_bfcl_v3_multi_turn.html"
+  - id: F9
+    finding: "tau-bench (ICLR 2025, Yao et al.) is the most relevant benchmark to the proposed design: it evaluates Tool-Agent-USER interaction in real domains, scoring agents on whether the final DATABASE STATE matches the task — i.e. outcome/state validity, not just one-call correctness, and explicitly tests rule/policy-following with domain-specific policy guidelines. This directly validates the 'engine validates against hard gates, returns Accepted|Rejected' model: the field measures agent success by whether actions are LEGAL given rules, mirroring a deterministic validation engine."
+    evidence: "arXiv:2406.12045 (τ-bench, ICLR 2025). 'compares the database state at the end of the conversation against a ground-truth.' Agents given 'domain-specific API tools and policy guidelines.'"
+    sources:
+      - "https://arxiv.org/abs/2406.12045"
+      - "https://openreview.net/forum?id=roNSXZpUDN"
+  - id: F10
+    finding: "Scaling laws of tool-use difficulty are quantified: difficulty rises with (1) number of candidate APIs to select among, (2) number of APIs actually needed, and (3) query↔description dissimilarity (ToolACE, arXiv:2409.00920). MetaTool (ICLR 2024, arXiv:2310.03128) shows most LLMs 'struggle to recognize their capability boundaries' and tool selection 'remains unreliable with noticeable variation.' Implication for a CLI: keep the per-invocation candidate surface SMALL and keep descriptions close to how the host will phrase tasks."
+    evidence: "ToolACE arXiv:2409.00920: 'loss of a data sample is generally positively correlated with (1) number of candidate APIs, (2) number of APIs utilized, (3) dissimilarity between query and API descriptions.' MetaTool arXiv:2310.03128 (ICLR 2024): LLMs 'lack a good awareness of tool usage.'"
+    sources:
+      - "https://arxiv.org/abs/2409.00920"
+      - "https://arxiv.org/abs/2310.03128"
+  - id: F11
+    finding: "Additional validated benchmarks confirm the same pattern (larger/richer candidate sets + ambiguous descriptions = lower accuracy): API-Bank (EMNLP 2023), T-Eval step-by-step decomposition (ACL 2024), ToolLLM/ToolBench (arXiv:2307.16789), StableToolBench (Findings-ACL 2024). General-purpose LLMs route (pick name) more reliably than they fill parameters simultaneously (CallNavi, EASE 2025)."
+    evidence: "aclanthology 2023.emnlp-main.187 (API-Bank); ACL 2024 T-Eval (2024.acl-long.515); ToolLLM arXiv:2307.16789; StableToolBench 2024.findings-acl.664; CallNavi EASE 2025 (10.1145/3756681.3756975)."
+    sources:
+      - "https://aclanthology.org/2023.emnlp-main.187.pdf"
+      - "https://arxiv.org/abs/2307.16789"
+      - "https://aclanthology.org/2024.findings-acl.664.pdf"
+
+  # ---------- ANGLE 4: CONTRACT STABILITY & VERSIONING ----------
+  - id: F12
+    finding: "Contract versioning for agent-consumed interfaces is converging on: explicit schema_version / protocolVersion fields, SemVer 2.0.0 with breaking-change classification, capability negotiation at handshake, and response-side version echo. MCP does protocol-version negotiation at initialize handshake; Microsoft's Agent Host Protocol (AHP) states backwards-incompatible changes are 'inevitable' and versioning gives clients/hosts 'a shared vocabulary for negotiating which behaviors are safe'; agent-versioning specs require deprecation/sunset metadata in both manifest and runtime responses."
+    evidence: "MCP spec: protocol version selected at initialize handshake (WebSocket subprotocol-style). Microsoft AHP versioning.md: 'Unlike LSP/DAP — which guarantee backwards compatibility in perpetuity — the design space for agent hosts is open-ended... Backwards-incompatible changes to AHP are inevitable.' Agent Versioning Spec (geodocs.dev): SemVer + deprecation/sunset + version negotiation header."
+    sources:
+      - "https://modelcontextprotocol.io/specification/2024-11-05/architecture"
+      - "https://github.com/microsoft/agent-host-protocol/blob/main/docs/specification/versioning.md"
+      - "https://geodocs.dev/ai-agents/agent-versioning-documentation-spec"
+  - id: F13
+    finding: "JSON Schema 2020-12 (and OpenAPI 3.1, which aligned its Schema Object to it) is the de facto contract language for agent tools — it is literally what MCP, OpenAI, Anthropic, and Google tool-calling all use for inputSchema. Treat CLI output schemas as the same kind of immutable versioned contract: adding optional fields is backward-compatible for deterministic clients but can change model BEHAVIOR if they alter the model-facing schema, so additive changes still need gating."
+    evidence: "sourcemeta.com: 'The only schema language AI speaks is JSON Schema' — OpenAI/Anthropic/Vertex all use JSON Schema for tool parameters; OpenAPI 3.1 Schema Object = JSON Schema 2020-12. zylos.ai contract-testing note: 'even optional fields can change behavior if they affect the model-facing schema.'"
+    sources:
+      - "https://www.sourcemeta.com/blog/ai-only-speaks-json-schema/"
+      - "https://zylos.ai/research/2026-04-26-contract-testing-agent-tool-interfaces"
+      - "https://modelcontextprotocol.io/specification/2025-06-18/server/tools"
+  - id: F14
+    finding: "A controlled study isolates interface-specification quality as a causal variable: holding environment, task semantics, and agent scaffolding constant, varying ONLY the tool-interface specification (free-form NL vs structured schema) and validation feedback changes misuse rates and recovery — i.e. schema-first tool APIs measurably reduce tool misuse. This is direct experimental evidence that a typed contract (the proposed GuideDecision + Accepted|Rejected) outperforms free-form interfaces."
+    evidence: "arXiv:2603.13404 'Schema First Tool APIs for LLM Agents: A Controlled Study of Tool Misuse, Recovery, and Budgeted Performance' — varies only interface specification + validation feedback, holds the rest constant."
+    sources:
+      - "https://arxiv.org/abs/2603.13404"
+
+  # ---------- ANGLE 5: ANTI-PATTERNS ----------
+  - id: F15
+    finding: "The agent-CLI literature (specs + postmortems) enumerates a consistent anti-pattern set that directly degrades agent reliability: (1) free-text stdout requiring regex/grep parsing; (2) non-deterministic output (timestamps, unordered lists, random IDs); (3) interactive prompts / pagers; (4) ANSI color codes on stdout (vs stderr); (5) hidden/ambient state (env vars, config files the agent can't see); (6) per-command-inconsistent --format spellings; (7) prose error messages with no machine code; (8) flags that change meaning across commands; (9) human-judgment confirmation prompts the agent auto-answers 'y'."
+    evidence: "cli-agent-spec: 74 failure modes incl. output/environment/errors categories. Trevin Chow '10 Principles': 'pick one flag. Always --json.' Arcjet: agents 'misread friendly output... keep going after a command clearly failed.' InfoQ: 'Agents can't answer prompts, press keys... interpret color.' agent-cli-guide: 'Never accept passwords via flags; use --password-file/stdin.'"
+    sources:
+      - "https://github.com/romamo/cli-agent-spec"
+      - "https://trevinsays.com/p/10-principles-for-agent-native-clis"
+      - "https://blog.arcjet.com/designing-a-cli-for-ai-agents/"
+      - "https://www.infoq.com/articles/ai-agent-cli/"
+  - id: F16
+    finding: "Token bloat in tool manifests is a measured anti-pattern: a tools/schema that costs ~40k tokens is re-read every turn and 'demonstrably degrades on selection: it grabs adjacent tools, conflates similarly-named ones, or refuses to use the server at all.' Flat-over-nested JSON and minimal model-facing schema are recommended. This argues for keeping the guide command's catalog self-description compact and stable."
+    evidence: "yaw.sh MCP schema guide: 'A schema that takes 40,000 tokens to describe costs you 40,000 tokens every turn — and at that size the model demonstrably degrades.' dev.to uenyioha: 'Flat over nested... Consistent types.'"
+    sources:
+      - "https://yaw.sh/mcp-in-production/mcp-schema-design/"
+      - "https://dev.to/uenyioha/writing-cli-tools-that-ai-agents-actually-want-to-use-39no"
+
+  # ---------- BOUNDARY: human-meta vs agent-programmatic commands ----------
+  - id: F17
+    finding: "The proposed split (human = start/reload/update; agent = everything else) maps precisely onto a named, decades-old HCI construct: Sheridan's SUPERVISORY CONTROL and Parasuraman/Sheridan/Wickens' LEVELS OF AUTOMATION (LOA, IEEE SMC 2000). The human operates at the strategic/management level (initiate, configure, supervise) while a computer agent performs autonomous task-level control within bounded authority — exactly the human-'on-the-loop' (oversight) vs 'in-the-loop' (blocking approval) distinction now standard in agent-oversight literature. No single coinable name exists for the CLI-specific variant, but the canonical term is 'supervisory control' / 'adjustable autonomy'."
+    evidence: "Parasuraman, Sheridan & Wickens (2000) 'A Model for Types and Levels of Human Interaction with Automation,' IEEE Trans. SMC Part A 30(3):286–297 — LOA spectrum from full-human to full-automation. Sheridan (1992) 'Telerobotics, Automation, and Human Supervisory Control.' arXiv:2605.12105 ('Autonomy and Agency') and arXiv:2604.04918 ('Comparing Human Oversight Strategies for CUA') both frame this as delegation-structure × engagement-level, building on Parasuraman et al. 2000 and 'adjustable autonomy'."
+    sources:
+      - "https://www.sift.net/sites/default/files/publications/MP-HumanFactors-2007.pdf"
+      - "https://scispace.com/papers/telerobotics-automation-and-human-supervisory-control-25baod5oel"
+      - "https://arxiv.org/abs/2605.12105"
+      - "https://arxiv.org/abs/2604.04918"
+  - id: F18
+    finding: "Two recent 2026 papers formalize the human-vs-agent interface boundary the proposed CLI assumes. (1) 'From Human Interfaces to Agent Interfaces' (arXiv:2603.20300) makes the human↔agent interface distinction axiomatic and defines agent interfaces as machine-invocation layers. (2) 'Terminal Is All You Need' (arXiv:2603.10664, CHI 2026 CUCHI workshop) argues the Human-Agent-UI triangle requires an interface supporting BOTH human oversight AND agent perception/action, grounding this in HCI theory (representational compatibility, transparency, low entry barrier). Practitioner pattern names for the same idea: 'dual-use tool design', 'Dual-Native Pattern', 'BiModal Design', 'cli-first skill design'."
+    evidence: "arXiv:2603.20300: agent interface = 'machine invocation, structured inputs, explicit semantics, deterministic execution.' arXiv:2603.10664: 'the interface must support two kinds of interaction simultaneously... human must observe/direct/oversee; agent must perceive state/select actions/execute reliably.' Dual-use pattern: same interface serves humans and agents. Arcjet: 'CLI and MCP server are peer clients for the same platform.'"
+    sources:
+      - "https://arxiv.org/abs/2603.20300"
+      - "https://arxiv.org/abs/2603.10664"
+      - "https://github.com/nibzard/awesome-agentic-patterns/blob/main/patterns/dual-use-tool-design.md"
+      - "https://blog.arcjet.com/designing-a-cli-for-ai-agents/"
+  - id: F19
+    finding: "The exact asymmetric boundary (a SMALL fixed human-typed command set gated by confirmation, vs a large agent-invoked programmatic surface) is validated as a deliberate risk-calibrated design choice in production agent patterns: irreversible/consequential actions are gated behind human approval ('human-in-the-loop' at the boundary) while routine operations are agent-autonomous. The proposed start/reload/update set is the 'meta/management' tier; everything else is the 'operational/task' tier."
+    evidence: "Agent Patterns Catalog 'Human-in-the-Loop': 'The agent can propose an action, but the final decision for critical steps is made by a human: approve/reject/revise... involved only where risk is truly high.' AgentEngineering.org: 'you are deciding where the system must pause, what kind of human decision is needed, and which actions should never happen without human authority.'"
+    sources:
+      - "https://www.agentpatternscatalog.org/patterns/human-in-the-loop/"
+      - "https://agentengineering.org/articles/human-in-the-loop-control-design/"
+
+recommendations:
+  - id: R1
+    recommendation: "Make the `guide` command's stdout the API contract: emit a single stable JSON envelope (e.g. {ok, decision, data/accepted_payload or error/typed_reject_reason, meta: {schema_version, command, exit_reason}}) to stdout; ALL diagnostics, progress, and color to stderr. Treat this envelope as a versioned public API (schema_version field)."
+    based_on: [F1, F2, F3, F15]
+    priority: high
+  - id: R2
+    recommendation: "Model the GuideDecision → Accepted|Rejected flow on tau-bench's state-validity evaluation and MCP's tools/call semantics: the engine is the deterministic validator (like tau-bench's DB-state check). Return a typed reject reason (machine-readable enum) so the host agent can self-correct rather than guess. This is exactly what F14 shows reduces misuse."
+    based_on: [F9, F4, F14]
+    priority: high
+  - id: R3
+    recommendation: "Keep the per-invocation candidate surface for the host LLM SMALL and keep guide/workflow descriptions concise and unambiguous: descriptions are the model's 'firing predicate.' Avoid similarly-named workflows; write descriptions as 'does X, returns Y, use when Z' (MCP best practice). Do NOT bloat the catalog — token cost is paid every turn and degrades selection beyond ~40k tokens."
+    based_on: [F5, F6, F10, F16]
+    priority: high
+  - id: R4
+    recommendation: "Implement self-description: a `--schema`/`--describe` (and/or MCP-style tools/list manifest) that the host reads once to learn the guide surface, with versioned JSON Schema inputSchema per subcommand. Add `--dry-run` and `--no-interactive` globally. Stable deterministic exit-code taxonomy (e.g. 0 ok, 2 rejected-by-gate, 3 invalid-decision-shape, 4 conflict/WAL, 5 env/config)."
+    based_on: [F2, F3, F4, F12]
+    priority: high
+  - id: R5
+    recommendation: "Treat human-typed `start/reload/update` as the supervisory/meta tier and ALL other commands as the agent-operational tier. Document this explicitly using the supervisory-control / adjustable-autonomy vocabulary (LOA). Gate any irreversible/production-affecting operational command behind engine hard-gates or explicit confirmation (human-in-the-loop at the boundary), per F19. start/reload/update themselves should be idempotent and side-effect-bounded so an accidental re-run is safe."
+    based_on: [F17, F18, F19]
+    priority: high
+  - id: R6
+    recommendation: "Version the contract defensively: pin a schema_version on every output envelope and every contract YAML; classify changes MAJOR/MINOR/PATCH by worst impact across surfaces (MCP-style protocol-version negotiation at any future MCP bridge); never mutate a published shape in place — add a new schema_version and translate. Use JSON Schema 2020-12 as the type language to stay interoperable with MCP/OpenAI/Anthropic."
+    based_on: [F12, F13, F14]
+    priority: medium
+  - id: R7
+    recommendation: "Eliminate the documented anti-patterns from day one: no free-text stdout requiring parsing, no timestamps/unordered lists in data payloads, no interactive prompts on the agent path, ANSI only on stderr (or suppressed when not a TTY), no hidden ambient config the agent cannot introspect via a `--describe`-style query, one canonical `--json` flag (not per-command format variants)."
+    based_on: [F15, F16]
+    priority: high
+
+gaps:
+  - gap: "No peer-reviewed paper yet specifically names or benchmarks a CLI split as 'human = exactly {start,reload/update}; agent = rest'. The boundary is described via supervisory-control / LOA / dual-use-tool-design framings, but a CLI-specific empirical study of that exact partition was not found."
+    why: "The concept is well-grounded in HCI (Parasuraman/Sheridan) and emerging agent-interface papers (2603.20300, 2603.10664), but the precise, named pattern for a file-backed runtime CLI is a practitioner synthesis, not a citable primary result."
+  - gap: "Several cited 2026 arXiv IDs (2603.20300, 2603.10664, 2604.02155, 2602.14878, 2602.20426, 2606.16364, 2603.13404, 2604.04918, 2605.12105) were verified to resolve via direct fetch of arxiv.org/abs, but most are very recent preprints (not yet peer-reviewed) — their specific quantitative claims should be treated as preprint evidence."
+    why: "arXiv 2026 IDs are valid and resolve, but recency means peer review status is pending for most."
+  - gap: "No verified ORIENTAL (CN/JP/KR) primary source on agent-consumed CLI design specifically was found; oriental contributions appear mainly in the benchmark space (ToolLLM/ToolBench — Tsinghua/OpenBMB; StableToolBench). Pure CLI-design-for-agents primary research from CN/JP/KR orgs was not located."
+    why: "The CLI-for-agents spec/benchmark literature is currently dominated by US (Berkeley, Anthropic, Microsoft, OpenAI, Sierra) authors."
+  - gap: "Exact quantified accuracy deltas attributable SOLELY to structured-vs-freeform stdout (as opposed to input schema) are scarce; F14 isolates input-specification quality but output-envelope shape effects are mostly in practitioner specs, not controlled experiments."
+    why: "Output-contract experiments lag input-schema experiments in the literature."
+
+open_questions:
+  - question: "Does gating the agent path behind a deterministic engine (hard gates returning Accepted|Rejected) measurably improve end-to-end task success vs letting the host retry freely? tau-bench-style state-validity metrics could be adapted to test this for forge-core-cli."
+  - question: "What is the optimal size/token budget for the guide workflow catalog description to keep selection accuracy high (F5/F16 suggest a sharp non-monotonic cliff)?"
+  - question: "Should forge-core-cli ALSO expose an MCP server (tools/list + tools/call) as a peer surface, given MCP is the converging standard and JSON Schema interop is already required?"
+  - question: "Is there a deprecation/sunset mechanism needed for individual guide workflows inside the runtime (not just schema_version), given long-running agent sessions may cache a catalog?"
+
+sources:
+  - url: "https://arxiv.org/abs/2603.20300"
+    title: "From Human Interfaces to Agent Interfaces: Rethinking Software Design in the Age of AI-Native Systems (arXiv:2603.20300, 2026, preprint)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://arxiv.org/abs/2603.10664"
+    title: "Terminal Is All You Need: Design Properties for Human-AI Agent Collaboration (arXiv:2603.10664, CHI 2026 CUCHI workshop, preprint)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://arxiv.org/abs/2604.02155"
+    title: "Brief Is Better: Non-Monotonic Chain-of-Thought Budget Effects in Function-Calling Language Agents (arXiv:2604.02155, 2026, preprint)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://arxiv.org/abs/2406.12045"
+    title: "τ-bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains (arXiv:2406.12045, ICLR 2025)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://proceedings.mlr.press/v267/patil25a.html"
+    title: "The Berkeley Function Calling Leaderboard (BFCL): From Tool Use to Agentic Evaluation (Patil et al., COLM/MLR 2025)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://arxiv.org/abs/2409.00920"
+    title: "ToolACE: Winning the Points of LLM Function Calling (arXiv:2409.00920, 2024, preprint)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://arxiv.org/abs/2310.03128"
+    title: "MetaTool Benchmark for Large Language Models: Deciding Whether to Use Tools and Which to Use (arXiv:2310.03128, ICLR 2024)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://arxiv.org/abs/2307.16789"
+    title: "ToolLLM: Facilitating Large Language Models to Master 16000+ Real-world APIs (arXiv:2307.16789, Tsinghua/OpenBMB)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://arxiv.org/abs/2602.14878"
+    title: "Model Context Protocol (MCP) Tool Descriptions Are Smelly! (arXiv:2602.14878, 2026, preprint)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://arxiv.org/abs/2602.20426"
+    title: "Learning to Rewrite Tool Descriptions for Reliable LLM-Agent Tool Use (arXiv:2602.20426, 2026, preprint)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://arxiv.org/abs/2603.13404"
+    title: "Schema First Tool APIs for LLM Agents: A Controlled Study of Tool Misuse, Recovery, and Budgeted Performance (arXiv:2603.13404, 2026, preprint)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://arxiv.org/abs/2606.16364"
+    title: "Looking Is Not Picking: An Attention-Segment Account of Tool-Selection Failures in LLM Agents (arXiv:2606.16364, 2026, preprint)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://arxiv.org/abs/2605.12105"
+    title: "Autonomy and Agency in Agentic AI: Architectural Tactics for Regulated Contexts (arXiv:2605.12105, 2026, preprint)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://arxiv.org/abs/2604.04918"
+    title: "Comparing Human Oversight Strategies for Computer-Use Agents (arXiv:2604.04918, 2026, preprint)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://aclanthology.org/2025.emnlp-main.1060/"
+    title: "Tool Preferences in Agentic LLMs are Unreliable (EMNLP 2025)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://aclanthology.org/2025.naacl-long.44.pdf"
+    title: "EASYTOOL: Enhancing LLM-based Agents with Concise Tool Instruction (NAACL 2025)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://aclanthology.org/2025.findings-emnlp.907.pdf"
+    title: "Butterfly Effects in Toolchains: A Comprehensive Analysis of Failed Parameter Filling (Findings-EMNLP 2025)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://aclanthology.org/2026.acl-long.948/"
+    title: "Don't Adapt Small Language Models for Tools; Adapt Tool Schemas to the Models (ACL 2026)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://aclanthology.org/2023.emnlp-main.187.pdf"
+    title: "API-Bank: A Comprehensive Benchmark for Tool-Augmented LLMs (EMNLP 2023)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://aclanthology.org/2024.findings-acl.664.pdf"
+    title: "StableToolBench: Towards Stable Large-Scale Benchmarking on Tool Learning (Findings-ACL 2024)"
+    relevance: low
+    accessed: 2026-06-26
+  - url: "https://www.sift.net/sites/default/files/publications/MP-HumanFactors-2007.pdf"
+    title: "Designing for Flexible Interaction Between Humans and Automation: Delegation Interfaces for Supervisory Control (Miller & Parasuraman, Human Factors 2007)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://scispace.com/papers/telerobotics-automation-and-human-supervisory-control-25baod5oel"
+    title: "Sheridan (1992) Telerobotics, Automation, and Human Supervisory Control (foundational — Levels of Automation)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://modelcontextprotocol.io/specification/2025-06-18/server/tools"
+    title: "MCP Specification — Tools (modelcontextprotocol.io, 2025-06-18)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://www.anthropic.com/news/model-context-protocol"
+    title: "Introducing the Model Context Protocol (Anthropic, primary source, 2024)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://github.com/microsoft/agent-host-protocol/blob/main/docs/specification/versioning.md"
+    title: "Microsoft Agent Host Protocol — versioning.md (inevitability of breaking changes; handshake negotiation)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://clispec.dev/"
+    title: "The CLI Spec (clispec.dev) — structured output + schema introspection principles (practitioner spec, non-peer-reviewed)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://github.com/romamo/cli-agent-spec"
+    title: "cli-agent-spec — 74 failure modes, 157 requirements (practitioner spec)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://blog.arcjet.com/designing-a-cli-for-ai-agents/"
+    title: "Designing a CLI for AI agents (Arcjet production postmortem — dual-audience CLI; primary source for their product)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://www.infoq.com/articles/ai-agent-cli/"
+    title: "Keep the Terminal Relevant: Patterns for AI Agent Driven CLIs (InfoQ — references AWS CLI pager incident)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://github.com/openai/skills/blob/main/skills/.curated/cli-creator/references/agent-cli-patterns.md"
+    title: "OpenAI skills — cli-creator agent-cli-patterns reference (codex CLI design guidance)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://yaw.sh/mcp-in-production/mcp-schema-design/"
+    title: "MCP Schema Design: A Practical Guide (2026) — token-cost / selection-degradation threshold"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://www.sourcemeta.com/blog/ai-only-speaks-json-schema/"
+    title: "The only schema language AI speaks is JSON Schema (sourcemeta) — JSON Schema as the agent contract language"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://www.agentpatternscatalog.org/patterns/human-in-the-loop/"
+    title: "Human-in-the-Loop pattern (Agent Patterns Catalog) — approve/reject/revise at risk boundary"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://github.com/nibzard/awesome-agentic-patterns/blob/main/patterns/dual-use-tool-design.md"
+    title: "Dual-Use Tool Design pattern (practitioner) — same interface for humans and agents"
+    relevance: low
+    accessed: 2026-06-26
+  - url: "https://geodocs.dev/ai-agents/agent-versioning-documentation-spec"
+    title: "Agent Versioning Documentation Spec — SemVer + deprecation/sunset + negotiation header"
+    relevance: medium
+    accessed: 2026-06-26

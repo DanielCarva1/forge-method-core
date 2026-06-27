@@ -1,0 +1,125 @@
+schema_version: "0.1"
+artifact_kind: "engine-architecture"
+status: "draft-for-human-review"
+created_at: "2026-06-25"
+project: "forge-method-rust"
+feeds: "forge-rust-v1-specification.yaml"
+evidence:
+  grill: "contracts/grill/recovery-grill-001.yaml"
+  research_coordination: "contracts/research/multi-agent-collaboration-governance-research.yaml"
+  discovery: "contracts/discovery/forge-rust-recovery-discovery.yaml"
+  design_legacy: "forensic-reference/docs/11-rust-only-core-system-design.md"
+
+purpose:
+  one_line: "The technical architecture for the rebuilt Forge Method: a host-agnostic Rust core with an intelligent orchestrator-guide, a funnel of autonomy, an enforced integrity spine, and a 4-layer multi-agent governance model."
+
+# ---------------------------------------------------------------------------
+# crate topology (DC3: host-agnostic core, separate surface)
+# ---------------------------------------------------------------------------
+crate_topology:
+  principle: "one library crate owns logic, one binary owns surface, reused across hosts (charleschen split). Core must stay host/UI-free (midimon lesson)."
+  target:
+    forge_core_contracts:
+      role: "typed contracts: workflow, phase, module, gate, claim, effect, authority, catalog entry. serde-derived. HOST-FREE."
+      status: "exists (2215 lines, 17 files); needs workflow/phase/catalog contracts added"
+    forge_core_store:
+      role: "append-only WAL authority + projections + integrity. HOST-FREE."
+      status: "exists (4054 lines); real spine; tests must be fixed"
+    forge_core_engine:
+      role: "NEW. the state machine, phase transitions, orchestrator-guide dispatch, funnel-of-autonomy density, gate enforcement. HOST-FREE."
+      status: "to build on top of store+contracts (this is the missing forge-core)"
+    forge_core_cli:
+      role: "borrowed-shell binary surface: init, guide, gate, story_*, etc. the command the agent calls. depends on engine."
+      status: "exists as security/verify CLI; needs method-operational commands added"
+    forge_host_adapter:
+      role: "thin shim per host (codex/cursor/opencode/pi) that calls the CLI and maps host capabilities. NOT in core."
+      status: "to define"
+  reuse_rule: "the standalone forge-rust-app depends on forge_core_engine (library), never on forge_core_cli. Core has zero host deps."
+
+# ---------------------------------------------------------------------------
+# the orchestrator-guide (DC1) - the heart of the product
+# ---------------------------------------------------------------------------
+orchestrator_guide:
+  what_it_is: "an intelligent router: maps (current_phase + project_state + user_utterance) -> the correct next workflow(s)."
+  what_it_is_NOT: "not a keyword matcher, not pure embeddings (those plateau ~80%), not a static dispatcher"
+  mechanism:
+    - "inputs: typed workflow catalog (each entry: id, phase, trigger conditions, prerequisites, outputs) + current project state (phase, artifacts, open questions) + the user's free-text utterance"
+    - "engine: the host LLM classifies over the typed catalog, conditioned on state, producing a ranked next-workflow recommendation + the reason"
+    - "hard gates: the engine ENFORCES allowed transitions (e.g., cannot skip spec->system-design gate; cannot start a story before its gate clears) independent of what the LLM suggests"
+    - "style: master-worker (one orchestrator, workflows as workers) per AgentScope validated pattern"
+  evidence: "FlowSwitch state-aware transitions; SDOF intent-router+state-constrained dispatch; LangGraph typed-state conditional routing; AgentScope master-worker (grill GQ1)"
+  deliverable_contract: "the guide output is itself a typed artifact: {recommended_workflow, reason, allowed, blocked_by_gates, phase} so it is auditable and replayable"
+  eval_required: "a router eval corpus (utterance -> expected workflow) must be built to measure accuracy (grill GQ1 residual)."
+
+# ---------------------------------------------------------------------------
+# the funnel of autonomy (DC4) - interaction density per phase
+# ---------------------------------------------------------------------------
+funnel_of_autonomy:
+  principle: "interaction density thins down the funnel: high-contact and provocative at discovery; contractual and near-silent at build."
+  density_by_phase:
+    "1-discovery": {contact: "high", human_role: "source of intent; the agent provokes and extracts", structure: "directions + elicitation, no persona script"}
+    "2-specification": {contact: "high", human_role: "confirms capabilities, constraints, non-goals", structure: "spec-kernel artifact + spec-check gate"}
+    "system-design-gate": {contact: "medium", human_role: "confirms architecture tradeoffs", structure: "mandatory gate (DC6)"}
+    "3-plan": {contact: "medium", human_role: "approves sprint slicing", structure: "cohesion-aware partitioning for multi-agent"}
+    "4-build-verify": {contact: "low", human_role: "only when gate demands human input", structure: "contractual, autonomous, gated done_when"}
+    "5-ready-operate": {contact: "low", human_role: "release sign-off", structure: "readiness gate"}
+    "6-evolve": {contact: "medium", human_role: "correct-course feedback", structure: "retrospective + drift"}
+  persona_scripts: "REMOVED. agents are smart; give directions not role-play. (grill GQ3: persona is double-edged, benefits mixed)."
+  dual_mode_governance_extension: "the funnel also modulates COORDINATION strictness (magi-code dual-mode): normal=speed for single-agent safe work, deep=strong-claim+lease for multi-agent contested work."
+
+# ---------------------------------------------------------------------------
+# integrity integration (DC2)
+# ---------------------------------------------------------------------------
+integrity_integration:
+  spine: "forge_core_store append-only WAL is the sole source of truth; projections are derived, never hand-edited (grite/ActiveGraph model, grill GQ2)."
+  authority_model: "non-malleable, origin-bound. effect metadata already carries authority_boundary + forbidden_authority + required_authority_contracts. Untrusted-origin content is non-actionable and the label propagates (memory-poisoning defense)."
+  enforcement_point: "every state mutation goes through a typed tool-effect with validate-before-write; unauthorized mutations are REJECTED, not logged-after-the-fact."
+  proof_of_usability: "the 'usable' bar includes a demonstrable REJECTION of an attempted unauthorized state mutation."
+
+# ---------------------------------------------------------------------------
+# multi-agent governance (4-layer model, from research)
+# ---------------------------------------------------------------------------
+governance_4_layers:
+  layer_1_isolation:
+    pattern: "git worktree per agent (own checkout, own branch, shared .git); agents cannot overwrite each other"
+    contract_needed: "worktree-isolation contract (NOT yet in rust contracts; lane-claim assumes shared tree)"
+  layer_2_prevention:
+    pattern: "claim-before-edit; others see the claim and work elsewhere; release on done; recover if crashed"
+    contract_exists: "lane-claim-effect + claim-contract-v0 + claim-expiry. MATCHES preclaim/Limen. GOOD."
+  layer_3_authority_and_audit:
+    pattern: "append-only log; witnessed audit; non-malleable authority"
+    contract_exists: "the integrity spine + worker/handoff request contracts. THE DIFFERENTIATOR."
+  layer_4_coordination_bus:
+    pattern: "shared plan, shared claims, inter-agent messaging"
+    contract_needed: "coordination-bus contract (request/handoff contracts exist but no bus/lease runtime surface yet)"
+  differentiation: "forge is a PROTOCOL any borrowed shell adopts, bringing governance with it - vs closed platforms (Cursor/Devin). This is the real wedge (research verdict)."
+
+# ---------------------------------------------------------------------------
+# command surface (full product scope, DC5 revised to 'complete product')
+# ---------------------------------------------------------------------------
+command_surface:
+  principle: "full parity target surpasses python v2's 106 commands; phased delivery MVP->complete"
+  phase_0_unblock: ["fix 6 failing cargo tests", "smoke-test the CLI binary"]
+  mvp_usability_slice:
+    core: ["init", "guide", "status", "next", "resume", "doctor", "preflight", "transition"]
+    discovery: ["discover", "research-closeout", "reality-evidence-gate"]
+    spec: ["spec-write", "spec-check", "system-design (the gate)"]
+    plan: ["plan-sprint", "partition (cohesion-aware)"]
+    build: ["story-add", "story-list", "story-start", "story-done", "gate", "review"]
+    governance_seed: ["claim", "release", "lane-status"]
+  full_parity_additions:
+    catalog: ["all 110 workflows as typed catalog commands", "module add/validate/distribute", "workflow add/validate"]
+    governance_full: ["handoff", "worker-request", "conflict-resolve", "coordination-eval"]
+    quality: ["eval run", "traceability-gate", "readiness-check", "release"]
+    meta: ["grill-gate", "correct-course", "retrospective", "evolve"]
+
+# ---------------------------------------------------------------------------
+# open architecture questions for human
+# ---------------------------------------------------------------------------
+open_questions:
+  - id: "AQ1"
+    question: "does the orchestrator-guide run as a host-LLM call (agent reasons over catalog) or as a built-in small router model?"
+    pi_recommendation: "host-LLM call (zero model shipped in core, leverages whatever model the borrowed shell uses); matches AgentScope 'leverage model reasoning' and keeps core host-free"
+  - id: "AQ2"
+    question: "is the worktree-isolation (layer 1) a core responsibility or a host responsibility?"
+    pi_recommendation: "core defines the contract + default git-worktree provider; hosts may override. Keeps governance portable."

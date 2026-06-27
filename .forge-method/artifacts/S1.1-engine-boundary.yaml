@@ -1,0 +1,124 @@
+schema_version: "0.1"
+artifact_kind: "engine-boundary-decision"
+story_id: "S1.1"
+status: "done"
+created_at: "2026-06-26"
+project: "forge-method-rust"
+sprint: "sprint-001-recovery"
+analyst: "glm-5.2 (pi)"
+
+intent_met: "Engine boundary defined before any engine code is written. The duplicate-crate mistake is prevented: runtime is NOT rebuilt; a new engine crate is added with a clean, single responsibility."
+
+# ---------------------------------------------------------------------------
+# choice: (b) runtime is effect/command-execution; a NEW forge-core-engine owns the method surface
+# ---------------------------------------------------------------------------
+choice: "b"
+choice_summary: |
+  forge-core-runtime is a COHESIVE, FINISHED executor (plan → stage → execute →
+  transaction over operations, commands, and effects). It owns NOTHING about the
+  Forge Method itself — no phase state machine, no gate enforcement, no orchestrator
+  dispatch, no funnel-of-autonomy density. A new crate `forge-core-engine` is created
+  to own the method surface. Runtime is left untouched. Schema is left untouched.
+
+# ---------------------------------------------------------------------------
+# evidence: what runtime actually is (read from real code)
+# ---------------------------------------------------------------------------
+runtime_evidence:
+  loc: 1267
+  pub_items: 32
+  responsibility_emerged_from_code: "secure execution of a single OperationContract — validate, plan, stage effects, run read-only commands, prepare/commit effect transactions with WAL lock"
+  public_surface_inventory:
+    planning: ["RuntimePlan", "RuntimePlanStatus", "RuntimePlanReason", "plan_operation", "plan_operation_with_snapshot"]
+    staging: ["RuntimeEffectStagingPlan", "RuntimeEffectStagingStatus", "RuntimeEffectStagingReason", "stage_operation_effects"]
+    command_execution: ["RuntimeCommandExecution", "RuntimeCommandExecutionStatus", "RuntimeCommandExecutionReason", "RuntimeCommandEvidenceRecord", "RuntimeEvidenceKind", "CommandExecutionContext", "run_staged_read_only_command", "command_execution_evidence_record"]
+    effect_transaction: ["RuntimeEffectPayload", "RuntimeEffectPayloadKind", "RuntimeEffectTransactionPlan", "RuntimeEffectTransactionStatus", "RuntimeEffectTransactionReason", "prepare_effect_transaction"]
+    operation_execution: ["RuntimeOperationCommandInput", "RuntimeOperationEffectInput", "RuntimeOperationEffectPayload", "RuntimeOperationExecutionContext", "RuntimeOperationExecution", "RuntimeOperationExecutionStatus", "RuntimeOperationExecutionReason", "execute_operation"]
+    snapshot: ["RuntimeReadSnapshot"]
+  verdict: "Every public item is about EXECUTING one operation safely. This is the lowest runtime layer — it answers 'how do I run this validated operation with integrity', not 'what should happen next in the project'."
+  external_deps: "forge-core-contracts, forge-core-store, forge-core-validate, serde — host-free confirmed (S0.3 audit verdict: clean)"
+
+  phase_machine_check:
+    terms_searched: ["phase", "sprint", "discovery", "specification", "build_story", "ready_check", "transition", "guide", "oracle", "doctor", "story", "orchestr", "classify", "route"]
+    result: "NO phase state machine. The only 'phase' hit is `pub phase: StableId` (RuntimeReadSnapshot field) copied verbatim from operation.recommendation.phase — a data field, not logic. There is no discovery→spec→plan→build→ready→evolve machine anywhere in runtime."
+
+# ---------------------------------------------------------------------------
+# decision rationale: why (b) over (a) extend-runtime or (c) merge-schema
+# ---------------------------------------------------------------------------
+rationale:
+  against_extend_runtime_option_a:
+    - "Single responsibility: runtime is a cohesive finished executor. Adding phase-machine + orchestrator-dispatch + gate-enforcement would bloat a 1267-line crate that is already at its natural boundary."
+    - "Dependency direction: engine DEPENDS ON runtime (it decides which operation to run, then asks runtime to execute it). Runtime must NOT depend on engine. Merging inverts this and creates a cycle-risk."
+    - "Testability: engine logic (phase transitions, routing) should be unit-testable with a mock executor, not coupled to real std::process::Command."
+  against_merge_schema_option_c:
+    - "forge-core-schema is a host-free lib+bin that generates JSON schemas + agent views from contract types (S0.3 verdict: clean). It is a tool, not a contract. Merging into contracts mixes a code-generator with data-types for no benefit."
+    - "Decision: schema is OUT OF SCOPE for this story. Left untouched."
+  for_separate_engine_option_b:
+    - "engine-architecture.yaml#crate_topology already lists forge_core_engine as NEW with role 'state machine, phase transitions, orchestrator-guide dispatch, funnel-of-autonomy density, gate enforcement'. This investigation confirms that role is EMPTY today — nothing in the workspace does it."
+    - "Clean dependency: contracts → store/validate → runtime → engine → cli/app. Engine sits at the top, depends downward, never imported by lower layers."
+
+# ---------------------------------------------------------------------------
+# target crate topology (the locked boundary)
+# ---------------------------------------------------------------------------
+target_crate_topology:
+  forge_core_contracts:
+    role: "typed contracts (workflow, phase, module, gate, claim, effect, authority, catalog). serde-derived. HOST-FREE."
+    action: "extend (S1.2 adds workflow/phase/catalog contracts) — no new crate"
+  forge_core_store:
+    role: "append-only WAL authority + projections + integrity. HOST-FREE."
+    action: "unchanged"
+  forge_core_validate:
+    role: "validation rules over contract documents + cross-file reference resolution. HOST-FREE."
+    action: "unchanged"
+  forge_core_runtime:
+    role: "secure execution of a single operation: plan, stage, run read-only command, prepare/commit effect transaction with WAL. HOST-FREE."
+    action: "unchanged — it is the FINISHED executor"
+  forge_core_engine:
+    role: "NEW. the Forge Method surface: phase state machine (discovery→spec→plan→build→ready→evolve), orchestrator-guide dispatch (LLM classifier over typed catalog, state-aware), gate enforcement (phase-transition + story-ready gates), funnel-of-autonomy density. HOST-FREE."
+    action: "create as new crate; depends on contracts + store + validate + runtime"
+    key_internal_modules_planned:
+      phase: "Phase / PhaseTransition / phase-guard logic"
+      orchestrator: "the guide: classify human intent → typed workflow → next phase/action (host-LLM-backed, no model in core per AQ1)"
+      gates: "enforce system-design gate (DC6), story-ready gate, phase-transition gate"
+      catalog: "typed view over the migrated workflow catalog (110 workflows)"
+      funnel: "density selection per phase (heavy at discovery, near-silent at build)"
+  forge_core_cli:
+    role: "binary surface: host entry points. may depend on engine + runtime."
+    action: "extend later (slice 3 usability)"
+  forge_core_schema:
+    role: "schema/view generation tool (host-free lib+bin)"
+    action: "unchanged"
+
+dependency_direction: "contracts → store/validate → runtime → engine → cli/app"
+cycle_risk: "none — engine is a pure consumer of the layers below it"
+
+# ---------------------------------------------------------------------------
+# what this unblocks / blocks
+# ---------------------------------------------------------------------------
+unblocks: ["S1.2 (typed contract schema — extends contracts)", "S1.7 (gate enforcement — now has a home in engine)"]
+implies_engine_build_in_slice: 2
+
+# ---------------------------------------------------------------------------
+# acceptance criteria
+# ---------------------------------------------------------------------------
+acceptance_criteria:
+  - criterion: "boundary decision recorded with rationale and references to actual runtime/schema code"
+    result: "PASS — runtime_evidence cites real loc/pub_items/field; rationale cites engine-architecture.yaml#crate_topology"
+  - criterion: "no crate duplication; chosen crates have a clear single responsibility"
+    result: "PASS — runtime stays as executor; engine is new and owns the method surface; responsibilities are disjoint"
+  - criterion: "decision artifact exists at .forge-method/artifacts/S1.1-engine-boundary.yaml"
+    result: "PASS"
+
+checks:
+  - "artifact parses as YAML"
+  - "choice is one of (a/b/c) with evidence — choice: b"
+
+# ---------------------------------------------------------------------------
+# safety assessment for autonomous fan-out (the question S1.1 was meant to answer)
+# ---------------------------------------------------------------------------
+autonomous_fanout_safety:
+  question: "Is it safe to run the catalog migration (S1.3-S1.6) via parallel subagents while the human is away?"
+  answer: "YES — the autonomous work is purely MECHANICAL (md→yaml migration + phase/id normalization on 110 existing files), it touches no engine/runtime code, and the engine crate does not exist yet so there is nothing to conflict with."
+  caveat: "the engine crate itself (the NEW method-surface logic) is NOT part of the fan-out. It is built serially by the parent after the catalog is migrated, because it makes architecture decisions that benefit from focused context. The fan-out only migrates the existing catalog."
+  engine_decisions_during_absence: "if an engine-build subagent hits ambiguity, it records an open_question and proceeds conservatively — per human direction (research best practice → go with best recommendation; do not invent)."
+
+next_workflow: "S1.2 — extend forge-core-contracts with workflow/phase/catalog typed contracts (the schema the migrated catalog will deserialize into)"

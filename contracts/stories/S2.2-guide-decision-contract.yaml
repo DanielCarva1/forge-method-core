@@ -1,0 +1,29 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S2.2"
+status: "ready_after_S2.1"
+slice: "slice_2_orchestrator"
+title: "GuideDecision typed contract"
+
+decision_sources:
+  - "contracts/spec/engine-architecture.yaml#orchestrator_guide (deliverable_contract: {recommended_workflow, reason, allowed, blocked_by_gates, phase})"
+  - "contracts/spec/forge-rust-v1-specification.yaml#G2 (guide output is a typed auditable artifact)"
+
+intent: "Define the auditable guide output the host LLM produces and the engine validates. Not free text — a typed artifact so guidance is replayable and the engine can check it against hard gates."
+
+tasks:
+  - "define GuideDecision in forge-core-contracts: recommended_workflow (StableId), reason (String), allowed_actions (Vec<StableId>), blocked_by_gates (Vec<String>), current_phase (Phase-as-string), proposed_next_phase (Option<Phase-as-string>)"
+  - "it is serde-derived, host-free, deny_unknown_fields (consistent with other contract docs)"
+  - "wrap in a GuideDecisionDocument (schema_version + decision) matching the established pattern"
+  - "round-trip test (serialize->deserialize->equal)"
+
+acceptance_criteria:
+  - "GuideDecision type exists in forge-core-contracts"
+  - "round-trips through serde_yaml"
+  - "fields match engine-architecture#deliverable_contract"
+
+checks:
+  - "unit test: round-trip"
+  - "cargo test -p forge-core-contracts green"
+blocks: ["S2.3"]
+next_workflow: "build-story S2.3 (guide validation)"

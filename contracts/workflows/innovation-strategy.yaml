@@ -1,0 +1,33 @@
+schema_version: "0.1"
+workflow:
+  id: "innovation-strategy"
+  phases:
+  - "1-discovery"
+  trigger:
+  - "user asks for new product, market, or concept possibilities"
+  - "idea needs strategic differentiation"
+  inputs:
+  - "opportunity area"
+  - "audience"
+  - "constraints"
+  - "reality/evidence stance"
+  - "existing alternatives"
+  steps:
+  - "identify adjacent possibilities"
+  - "compare novelty, usefulness, feasibility, and required evidence"
+  - "choose a focused innovation bet"
+  - "define proof needed"
+  outputs:
+  - "opportunity map"
+  - "selected bet"
+  - "proof plan"
+  done_when:
+  - "selected direction has a reason"
+  - "feasibility and proof are explicit"
+  - "blocked ideas are reframed before market claims"
+  - "next validation step is known"
+  blocked_when:
+  - "market or audience is undefined"
+  - "novelty conflicts with feasibility constraints"
+  handoff:
+  - "preserve opportunity, selected bet, proof plan, and next step"

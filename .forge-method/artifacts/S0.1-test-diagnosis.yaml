@@ -1,0 +1,158 @@
+schema_version: "0.1"
+artifact_kind: "test-diagnosis"
+story_id: "S0.1"
+created_at: "2026-06-25"
+project: "forge-method-rust"
+status: "diagnosis-complete"
+verdict_headline: "NO SPINE DESIGN BUG. Option A (reuse the spine) CONFIRMED SAFE. ~30 of 40 failing tests trace to ONE missing directory the codex designed (doc 13 'Fixture Set') but never committed. Escalation clause does NOT trigger."
+
+# ---------------------------------------------------------------------------
+# what was run
+# ---------------------------------------------------------------------------
+procedure:
+  command: "cargo test --workspace --no-fail-fast"
+  raw_output: ".forge-method/evidence/S0.1-raw-test-output.log"
+  targets_failed: 6
+  total_tests_failed: 40
+  targets_failed_names:
+    - "forge-contract-validator (parity)          -> 21 fail / 0 pass"
+    - "forge-core-cli (validate)                  -> 5 fail / 10 pass"
+    - "forge-core-contracts (load_current_contracts) -> 3 fail / 19 pass"
+    - "forge-core-runtime (operation_plan)        -> 4 fail / 75 pass"
+    - "forge-core-store (reference_index)         -> 5 fail / 9 pass"
+    - "forge-core-validate (current_contracts)    -> 2 fail / 2 pass"
+
+# ---------------------------------------------------------------------------
+# ROOT CAUSE - single dominant cause
+# ---------------------------------------------------------------------------
+root_cause_primary:
+  id: "RC1"
+  category: "(d) missing assets / incomplete work"
+  title: "docs/fixtures/operation-contract-v0/ directory (16 operation-contract fixtures) was DESIGNED and TESTED but NEVER CREATED"
+  evidence:
+    - "the dir does not exist: ls docs/ -> 'No such file or directory'"
+    - "git log --all -- docs/ -> empty (docs/ NEVER in git history)"
+    - "all 6 expected fixture filenames are absent from the entire repo"
+    - "design doc forensic-reference/docs/13-operation-contract-v0.md line 530 'Fixture Set' LISTS the expected fixtures: facilitate-first-product-idea, mechanical-story-execute, release-gate-required, host-drift-invented-next-step (+ implied 16 total per validates_current_operation_fixtures assert_eq count==16)"
+  cascade: "this single missing dir breaks the validator (reference_index_build_failed), the store reference index, the runtime fixture loader, and the CLI validate command. ~28 of 40 failures cascade from here."
+  is_spine_design_bug: false
+  spine_implicated: false
+  why_not_spine: "the integrity spine (WAL append, validate_tool_effect before write, ed25519/sigstore crypto) is NOT touched by any failure. The spine LOGIC is sound; it is the TEST DATA + VALIDATION HARNESS that is incomplete. The spine never received its fixtures to prove itself."
+
+# ---------------------------------------------------------------------------
+# ROOT CAUSE - minor secondary
+# ---------------------------------------------------------------------------
+root_cause_secondary:
+  id: "RC2"
+  category: "(a) drift (assertion text) - latent, verify after RC1 fixed"
+  title: "2 payload-rejection tests assert specific error substrings ('outside root', 'too large')"
+  tests:
+    - "execute_operation_rejects_payload_outside_root_by_default (validate.rs:3887) asserts error contains 'outside root'"
+    - "execute_operation_rejects_payload_larger_than_policy (validate.rs:3913) asserts error contains 'too large'"
+  nuance: "these tests ALSO depend on the missing fixture (operation_path = facilitate-first-product-idea.yaml), so RC1 blocks them first. AFTER fixtures exist, they may still fail if the payload-validation error wording drifted. Must verify post-RC1. If wording drifted, it is a local string-align fix, not a spine bug."
+
+# ---------------------------------------------------------------------------
+# per-test classification (every failing test accounted for)
+# ---------------------------------------------------------------------------
+per_target_classification:
+  forge_core_runtime_operation_plan:
+    failing: 4 binaries... (actually 13 individual tests across the runtime binary panic at operation_plan.rs:35)
+    root_cause: "RC1 - fixture() helper at line 33-35 reads docs/fixtures/operation-contract-v0/<name>.yaml which does not exist"
+    tests:
+      - destructive_missing_inverse_fixture_blocks
+      - facilitation_fixture_waits_for_human
+      - host_drift_fixture_does_not_become_ready_to_execute
+      - mechanical_story_plan_stages_commands_and_effects_without_commit
+      - mechanical_story_execute_fixture_can_call_operation
+      - non_ready_facilitation_plan_is_not_stageable
+      - read_write_conflict_notification_stages_effect_refs_only
+      - release_gate_fixture_requires_gate_before_advance
+      - missing_snapshot_references_block_ready_operation
+      - staged_read_only_command_executes_with_typed_result
+      - staged_mutating_command_is_blocked_before_spawn
+      - shell_executor_is_blocked_even_when_staged
+      - unstaged_command_is_not_run
+      - zero_timeout_command_is_blocked_before_spawn
+      - effect_transaction_is_ready_when_staged_effect_has_payloads
+      - effect_transaction_blocks_write_without_payload
+      - execute_operation_blocks_missing_required_command_before_effects
+      - execute_operation_records_command_evidence_and_applies_effect_with_wal_lock
+      - execute_operation_waits_without_side_effects_when_plan_needs_human
+      - command_execution_evidence_record_preserves_runtime_output
+    classification: "(d) RC1 missing fixture"
+  forge_core_validate_current_contracts:
+    failing: 2
+    root_cause: "RC1 - tests read_dir docs/fixtures/operation-contract-v0/ (does not exist); validates_current_operation_fixtures asserts count==16"
+    tests: ["deserializes_all_operation_fixtures", "validates_current_operation_fixtures", "validates_current_cross_file_references_with_pure_index", "validates_current_claim_completion_and_gate_instances"]
+    classification: "(d) RC1 missing dir + fixtures"
+  forge_core_store_reference_index:
+    failing: 5
+    root_cause: "RC1 - build_reference_index over docs/fixtures/operation-contract-v0 (NotFound)"
+    tests: ["store_reference_index_satisfies_current_cross_file_validation", "store_known_paths_satisfy_current_generic_known_refs", "store_collects_validation_yaml_documents_for_source_id_checks", "standard_runtime_projection_refs_are_option_controlled", "store_snapshot_keeps_valid_mechanical_operation_ready"]
+    classification: "(d) RC1 missing dir"
+  forge_core_cli_validate:
+    failing: 4
+    root_cause: "RC1 cascades to validate command producing reference_index_build_failed diagnostic; + RC2 for the 2 payload tests"
+    tests:
+      - "validate_library_passes_current_repo (RC1 - validate fails because reference index build fails)"
+      - "validate_binary_outputs_json_summary (RC1 - validate exits non-success)"
+      - "execute_operation_rejects_payload_outside_root_by_default (RC1+RC2)"
+      - "execute_operation_rejects_payload_larger_than_policy (RC1+RC2)"
+    classification: "(d) RC1 + (a) RC2"
+  forge_contract_validator_parity:
+    failing: 5
+    root_cause: "RC1 - parity.rs:19 both_pass_current_repo runs legacy validator over repo (fails because reference index build fails); parity.rs:260 copy_dir copies a missing fixture source"
+    tests: ["legacy_validator_and_forge_core_cli_both_pass_current_repo", "legacy_validator_and_forge_core_cli_both_reject_unknown_source_id", "legacy_validator_and_forge_core_cli_both_reject_invalid_operation_enum", "legacy_validator_and_forge_core_cli_both_reject_invalid_command_enum", "legacy_validator_and_forge_core_cli_both_reject_missing_policy_ref"]
+    classification: "(d) RC1 missing fixtures / dir"
+  forge_core_contracts_load_current_contracts:
+    failing: 3
+    root_cause: "RC1 or related contract-shape drift; the 3 that fail here likely reference the missing fixture set or a contract that drifted - confirm in S0.2 once fixtures exist"
+    tests: ["deserializes_claim_completion_and_gate_instances", "host_drift_fixture_does_not_become_ready_to_execute", "command_execution_evidence_record_preserves_runtime_output"]
+    classification: "(d) RC1 most likely; verify in S0.2"
+
+# ---------------------------------------------------------------------------
+# the spine is healthy - explicit proof
+# ---------------------------------------------------------------------------
+spine_health:
+  cargo_check_workspace: "exit 0 (compiles clean - audit confirms)"
+  wal_append: "not implicated by any failure"
+  validate_before_write: "not implicated by any failure"
+  crypto_ed25519_sigstore: "not implicated by any failure"
+  authority_boundary_enforcement: "not implicated; this is exactly what S0.4 will PROVE with the rejection demo"
+  conclusion: "the 'reuse not rewrite' assumption (Option A, grill R1 mitigation) HOLDS. No spine redesign required. The spine simply never received the fixtures it needs to demonstrate itself."
+
+# ---------------------------------------------------------------------------
+# escalation clause status
+# ---------------------------------------------------------------------------
+escalation_clause:
+  triggered: false
+  reason: "ZERO failures classified as (b) spine design bug. All failures are (d) missing assets (RC1) or (a) drift (RC2). Human escalation not required; S0.2 may proceed to CREATE the missing fixtures + align 2 strings."
+
+# ---------------------------------------------------------------------------
+# fix path for S0.2 (diagnosis only here, but scoped to enable planning)
+# ---------------------------------------------------------------------------
+fix_path_for_S0_2:
+  step_1_create_fixtures:
+    action: "create docs/fixtures/operation-contract-v0/ with 16 operation-contract fixtures matching the OperationContractDocument schema"
+    source_of_truth:
+      - "forensic-reference/docs/13-operation-contract-v0.md (the Fixture Set section lists the canonical names + the contract shape)"
+      - "contracts/operations/operation-contract-v0.yaml (the schema/enums: autonomy_mode, next_actor, etc.)"
+      - "existing effect/request fixtures in contracts/effects/ and contracts/requests/ (the side contracts the fixtures reference must already exist - verify)"
+    must_satisfy:
+      - "all 16 deserialize into OperationContractDocument without error"
+      - "all 16 pass validate_operation (no errors) - per validates_current_operation_fixtures"
+      - "the 7 named fixtures (mechanical-story-execute, facilitate-first-product-idea, release-gate-required, destructive-effect-missing-inverse-blocked, host-drift-invented-next-step, read-write-conflict-notify) must carry the behavior their test expects (e.g., destructive-missing-inverse must be BLOCKED; release-gate-required must REQUIRE the gate)"
+    note: "the fixtures encode INTENT (which operations are blocked, which wait for human). The test names tell us the expected behavior. This is real work but well-specified."
+  step_2_verify_payload_strings:
+    action: "after fixtures exist, re-run the 2 payload tests; if they still fail, align the error message to contain 'outside root' / 'too large' (or update the assertion if the new wording is better)"
+  step_3_green:
+    action: "cargo test --workspace must exit 0 with NO tests deleted or #[ignore]d"
+
+risk_to_watch_in_S0_2:
+  - "if creating the 16 fixtures reveals that OperationContractDocument schema does not match what the tests expect (e.g., a field the test sets that the type rejects), THAT would be a schema drift (a) - still not a spine bug, but worth flagging"
+  - "if a fixture's expected behavior contradicts the runtime logic (e.g., destructive-missing-inverse should block but runtime allows it), THAT would be a runtime logic bug - inspect carefully, escalate if it touches the WAL/effect spine"
+
+evidence_refs:
+  - ".forge-method/evidence/S0.1-raw-test-output.log"
+  - "forensic-reference/docs/13-operation-contract-v0.md#Fixture Set (line 530)"
+  - "contracts/operations/operation-contract-v0.yaml"

@@ -1,0 +1,29 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S1.1"
+status: "ready_after_slice_0"
+slice: "slice_1_engine_core_and_catalog"
+title: "Inspect forge-core-runtime; define engine boundary (build-vs-extend)"
+
+decision_sources:
+  - "contracts/spec/forge-rust-v1-specification.yaml#crate_topology (forge_core_engine is listed as NEW, but forge-core-runtime ALREADY EXISTS)"
+  - "contracts/spec/engine-architecture.yaml#crate_topology"
+
+intent: "forge-core-runtime and forge-core-schema ALREADY EXIST. Do NOT blindly create a forge_core_engine crate and duplicate logic. First inspect what runtime/schema actually do, then decide: extend runtime into the engine, or split a new engine crate. Prevents the duplicate-crate mistake that bloats the workspace."
+
+tasks:
+  - "read crates/forge-core-runtime/src and crates/forge-core-schema/src; inventory what they own"
+  - "map their responsibilities against engine-architecture.yaml#crate_topology (state machine, phase transitions, gate enforcement, orchestrator dispatch, funnel density)"
+  - "decide: (a) runtime IS the engine -> rename/extend, (b) runtime is effect-execution and a new forge_core_engine is needed for phase/gate/orchestrator, (c) merge schema into contracts"
+  - "write the boundary decision artifact before writing any engine code"
+
+acceptance_criteria:
+  - "the boundary decision is recorded with rationale and references to actual runtime/schema code"
+  - "no crate duplication; the chosen crate(s) have a clear single responsibility"
+  - "the decision artifact exists at .forge-method/artifacts/S1.1-engine-boundary.yaml"
+
+checks:
+  - "decision artifact parses as YAML"
+  - "choice is one of (a/b/c) with evidence"
+blocks: ["S1.2", "S1.7"]
+next_workflow: "build-story S1.2 (typed contract schema)"

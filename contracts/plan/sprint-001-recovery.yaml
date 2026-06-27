@@ -1,0 +1,144 @@
+schema_version: "0.1"
+artifact_kind: "sprint-plan"
+status: "accepted"
+created_at: "2026-06-25"
+project: "forge-method-rust"
+sprint_id: "sprint-001-recovery"
+closes_phase: "3-plan"
+authority:
+  decision_sources_accepted:
+    - "contracts/spec/forge-rust-v1-specification.yaml (spec accepted)"
+    - "contracts/grill/recovery-grill-002.yaml (grill passed-with-risks)"
+    - "contracts/spec/catalog-audit.yaml (110 workflows verified sound)"
+    - "contracts/spec/engine-architecture.yaml"
+  rule: "only slice 0 + slice 1 stories are implementation-ready detail. Slices 2-6 are coarse batches to be detailed in their own plan turn (anti-over-planning rule, locked)."
+
+# ---------------------------------------------------------------------------
+# step 1-2: accepted sources verified, split into story batches
+# ---------------------------------------------------------------------------
+principle: "slice by dependency + risk; slice 0 de-risks the spine BEFORE building on it (grill R1). Move ONLY slice 0 work into phase-4 build; slice 1 ready when slice 0 exits."
+
+# ---------------------------------------------------------------------------
+# slice 0 - UNBLOCK (de-risk the spine) - DETAILED, build-ready
+# ---------------------------------------------------------------------------
+slice_0_unblock:
+  goal: "prove the integrity spine is healthy and truly host-free, then build the rejection demo"
+  sequencing_reason: "grill R1 (unknown test-failure cause) + R3 (unverified host-free claim) are the highest risks. Resolve before any feature work."
+  stories:
+    - id: "S0.1"
+      title: "Triage the 6 failing cargo tests"
+      detail: "contracts/stories/S0.1-triage-failing-tests.yaml"
+    - id: "S0.2"
+      title: "Fix failing tests to green"
+      detail: "contracts/stories/S0.2-fix-failing-tests.yaml"
+      depends_on: ["S0.1"]
+    - id: "S0.3"
+      title: "Host-dep audit on library crates"
+      detail: "contracts/stories/S0.3-host-dep-audit.yaml"
+    - id: "S0.4"
+      title: "Rejection demo (unauthorized mutation rejected at write time)"
+      detail: "contracts/stories/S0.4-rejection-demo.yaml"
+      depends_on: ["S0.2"]
+  exit_criteria:
+    - "cargo test --workspace exits 0 (green)"
+    - "library crates (forge-core-contracts, forge-core-store, forge-core-schema, forge-core-runtime) have ZERO host/UI imports, OR boundary refactor is scoped"
+    - "a runnable demo shows an out-of-authority effect being REJECTED before write"
+  next_workflow_after_slice_0: "plan slice 1 in detail, then build slice 1"
+
+# ---------------------------------------------------------------------------
+# slice 1 - ENGINE CORE + CATALOG - DETAILED ENOUGH TO BUILD
+# ---------------------------------------------------------------------------
+slice_1_engine_core_and_catalog:
+  goal: "the missing state machine + typed contract schema + the 110 workflows migrated to typed YAML (the orchestrator in slice 2 needs real typed catalog data)"
+  sequencing_reason: "orchestrator (slice 2) cannot route without typed catalog. Migration is cheap (85/110 already pure yaml). Doing it now also fixes FX1+FX2 structural bugs."
+  stories:
+    - id: "S1.1"
+      title: "Inspect forge-core-runtime; define engine boundary (new crate vs extend runtime)"
+      detail: "contracts/stories/S1.1-engine-boundary.yaml"
+      note: "forge-core-runtime ALREADY EXISTS. Do NOT blindly create forge_core_engine. First inspect what runtime does; decide build-vs-extend. Prevents duplicate-crate mistake."
+    - id: "S1.2"
+      title: "Typed contract schema: workflow, phase, catalog entry, gate"
+      detail: "contracts/stories/S1.2-typed-contract-schema.yaml"
+      depends_on: ["S1.1"]
+    - id: "S1.3"
+      title: "Migrate 85 scriptable workflows md->pure YAML (FX6 part 1)"
+      detail: "contracts/stories/S1.3-migrate-85-yaml.yaml"
+      depends_on: ["S1.2"]
+    - id: "S1.4"
+      title: "Clean up 25 workflows with markdown pollution (FX6 part 2)"
+      detail: "contracts/stories/S1.4-clean-25-manual.yaml"
+      depends_on: ["S1.3"]
+    - id: "S1.5"
+      title: "FX1: add phase declaration to all 110 workflows"
+      detail: "contracts/stories/S1.5-add-phase.yaml"
+      depends_on: ["S1.3", "S1.4"]
+    - id: "S1.6"
+      title: "FX2: normalize canonical id (filename==id), fix double-prefix + start/start-runtime"
+      detail: "contracts/stories/S1.6-normalize-ids.yaml"
+      depends_on: ["S1.3", "S1.4"]
+    - id: "S1.7"
+      title: "Phase-transition + gate enforcement in engine"
+      detail: "contracts/stories/S1.7-phase-transition-gates.yaml"
+      depends_on: ["S1.2"]
+  exit_criteria:
+    - "110 workflows are pure typed YAML, each with a declared phase and a single canonical id matching filename"
+    - "engine can transition phases and enforce a gate that blocks a forbidden transition"
+    - "cargo test green including the migrated catalog"
+  next_workflow_after_slice_1: "plan slice 2 in detail (orchestrator), then build"
+
+# ---------------------------------------------------------------------------
+# slices 2-6 - COARSE BATCHES (detail in their own plan turn)
+# ---------------------------------------------------------------------------
+coarse_batches:
+  slice_2_orchestrator:
+    goal: "intelligent guide command + router eval corpus [grill R2: build corpus before claiming accuracy]"
+    rough_stories: ["guide command scaffolds router over typed catalog", "router eval corpus", "typed guide output contract (recommended_workflow, reason, allowed, blocked_by_gates, phase)", "baseline accuracy measurement"]
+  slice_3_usability_arc:
+    goal: "the happy path end-to-end (the primary usability success signal)"
+    rough_stories: ["discover command", "spec-write + spec-check", "system-design GATE promoted to mandatory (FX3)", "plan-sprint", "story-add/list/start/done", "gate", "review", "ONE full guided session demo"]
+  slice_4_governance:
+    goal: "multi-agent coordination surface [grill R4: audit 9 coordination dimensions first]"
+    rough_stories: ["audit coordination-eval 9 dimensions against research", "worktree-isolation contract + default provider (layer 1)", "claim/release/lane-status commands (layer 2)", "handoff + worker-request commands (layer 4)", "coordination-bus on-disk layout", "coordination-eval passes"]
+  slice_5_catalog_hardening:
+    goal: "finish catalog quality + extensibility turnkey"
+    rough_stories: ["FX4 assign/retire 12 orphan workflows", "FX5 retire 34 facilitation persona-venom after distillation", "FX7 module-builder turnkey (scaffold+validate+gate)"]
+  slice_6_parity_and_release:
+    goal: "full command parity + single README + release"
+    rough_stories: ["remaining commands to parity", "readiness-check + release-readiness", "single GitHub README (intro + patch notes + install)", "ready-release gate"]
+
+# ---------------------------------------------------------------------------
+# step 3-5: sequencing, decision-source map, deferred/blocked
+# ---------------------------------------------------------------------------
+sequencing_logic:
+  - "slice 0 first because grill R1 (unknown test failure) + R3 (host-free unverified) are the load-bearing risks"
+  - "slice 1 before slice 2 because the orchestrator needs typed catalog data"
+  - "slice 3 (usability) before slice 4 (governance) — user locked; governance follows immediately (promised)"
+  - "within slice 0: S0.1 (diagnose) -> S0.2 (fix) -> S0.4 (demo); S0.3 (audit) parallel"
+
+deferred_or_blocked:
+  - item: "FX3 system-design gate promotion"
+    deferred_to: "slice 3 (it is part of the usability arc spec->plan transition)"
+    reason: "gate belongs in the spec->plan flow, which is built in slice 3"
+  - item: "router accuracy metric >=90%"
+    deferred_to: "slice 2 after eval corpus exists"
+    reason: "grill R2: cannot promise a metric we cannot yet measure"
+  - item: "9 coordination dimensions validation"
+    deferred_to: "slice 4 entry"
+    reason: "grill R4: existence confirmed, soundness not yet"
+  - item: "detailed stories for slices 2-6"
+    deferred_to: "their own plan turn"
+    reason: "anti-over-planning rule"
+
+# ---------------------------------------------------------------------------
+# step 6-7: next executable story + readiness
+# ---------------------------------------------------------------------------
+next_executable_story: "S0.1 (triage the 6 failing cargo tests)"
+next_workflow: "readiness-check on slice 0, then build-story S0.1"
+readiness_for_build:
+  ready: true
+  checks_known:
+    - "S0.1 check: diagnosis artifact exists with per-test root-cause classification (fixture-drift vs spine-bug)"
+    - "S0.2 check: cargo test --workspace exit 0"
+    - "S0.3 check: audit artifact + grep shows no host/UI imports in library crates"
+    - "S0.4 check: demo run shows REJECTION of out-of-authority effect"
+  manual_or_explicit: "all checks are runnable commands or artifact inspections, none are vague"

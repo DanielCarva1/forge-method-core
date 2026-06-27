@@ -1,0 +1,38 @@
+schema_version: "0.1"
+artifact_kind: "story-completion"
+story_id: "S3.2"
+status: "done"
+created_at: "2026-06-26"
+
+intent: "guide describe — host LLM reads the compact routing surface ONCE per session. Implements R3 (token cliff), R4 (self-describing), DD13."
+
+delivered:
+  module: "crates/forge-core-cli/src/guide.rs"
+  types:
+    - "DescribeWorkflow {id, phases, summary} — compact row (DD13)"
+    - "DescribeGate {gate, required_for}"
+    - "DescribePayload {schema_version, phases, workflows, gates, exit_reasons}"
+  fn: "run_describe(catalog_dir) -> CliEnvelope<DescribePayload>"
+  wired: "main.rs dispatch: `forge-core guide describe [--catalog-dir] [--no-json]`. JSON default (agent-first, R1)."
+
+design:
+  compact_by_design: "summary = first trigger predicate (concise intent signal, no full workflow text). Honors R3/F16 (token cliff)."
+  deterministic: "phases from Phase::ALL; gates from static table in lockstep with phase_transition; exit_reasons enumerate DD10."
+  self_describing: "payload includes schema_version + exit_reasons so the host learns the contract from one call (R4)."
+
+acceptance_criteria:
+  AC_describe_110: "PASS — all 110 workflows emitted compactly"
+  AC4_token_budget: "PASS — full describe = 5,593 tokens (< 8k cliff target). 110 workflows + 7 phases + 2 gates + 5 exit reasons."
+  AC_diagnostics_stderr: "PASS — JSON contract to stdout; human fallback to stderr-quality"
+
+verification:
+  cargo_test_cli_lib: "PASS — 5 guide tests (110 workflows; phases/gates/exit_reasons; missing dir -> exit 5; first-trigger summary; json serialize)"
+  cargo_clippy_pedantic_all_targets: "PASS — 0 warnings on guide.rs (fixed: import scoping in mod tests)"
+  cargo_test_workspace: "PASS — 210 tests, 0 failures"
+  live_cli: "PASS — `forge-core guide describe` emits valid envelope, exit 0"
+
+evidence_basis:
+  R3: "arXiv:2604.02155 (brief>verbose); ~40k token cliff (yaw.sh); 5.6k tokens measured"
+  R4: "MCP tools/list; clispec.dev self-description"
+
+next_workflow: "build-story S3.3 (guide decide)"

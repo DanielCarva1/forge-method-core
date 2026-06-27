@@ -1,0 +1,35 @@
+schema_version: "0.1"
+workflow:
+  id: "performance-plan"
+  phases:
+  - "3-plan"
+  - "4-build-verify"
+  trigger:
+  - "game or interactive product has performance risk"
+  - "target platform or frame budget matters"
+  inputs:
+  - "target platform"
+  - "engine profile"
+  - "performance goal"
+  - "current architecture"
+  - "known bottlenecks"
+  steps:
+  - "define frame, load, memory, network, or input-latency budget"
+  - "identify likely bottlenecks"
+  - "define critical gameplay scenarios"
+  - "define measurement commands or manual checks"
+  - "save performance plan"
+  outputs:
+  - "performance plan"
+  - "measurement checks"
+  - "critical scenarios"
+  - "risk list"
+  done_when:
+  - "budget is measurable"
+  - "checks are assigned"
+  - "next optimization story is known"
+  blocked_when:
+  - "platform target is unknown"
+  - "performance cannot be measured"
+  handoff:
+  - "preserve engine profile, budget, scenarios, checks, bottlenecks, and next story"

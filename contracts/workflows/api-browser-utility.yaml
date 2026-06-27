@@ -1,0 +1,39 @@
+schema_version: "0.1"
+workflow:
+  id: "api-browser-utility"
+  phases:
+  - "4-build-verify"
+  - "5-ready-operate"
+  - "6-evolve"
+  trigger:
+  - "project repeatedly needs reusable API, browser, or connector test utilities"
+  - "test automation needs helper commands before scenarios can be stable"
+  - "user asks for generic API/browser utility layer instead of one-off test code"
+  inputs:
+  - "target API/browser/provider surface"
+  - "auth and secret boundary"
+  - "fixture/data strategy"
+  - "semantic locator or request contract"
+  - "command surface and evidence expectations"
+  steps:
+  - "decide whether the utility belongs in project tests, Forge module code, or a provider-specific artifact"
+  - "define request/browser actions, fixtures, auth handling, retries, timeouts, and cleanup"
+  - "require semantic selectors or stable API contracts rather than brittle sleeps or hidden state"
+  - "map utility commands to test-framework, test-automation, CI, and release evidence"
+  - "record proof, manual remainder, and next workflow"
+  outputs:
+  - "API/browser utility contract"
+  - "command and fixture map"
+  - "auth/secret boundary"
+  - "evidence and failure policy"
+  done_when:
+  - "utility is reusable across at least two checks or justified as a project-local helper"
+  - "auth, fixture, retry, timeout, and cleanup boundaries are explicit"
+  - "commands are tied to visible assertions or API response contracts"
+  - "next test/release workflow is clear"
+  blocked_when:
+  - "credentials cannot be scoped safely"
+  - "provider tool is unavailable and no manual/semi-automated evidence path is acceptable"
+  - "utility would duplicate a project framework without reducing repeated work"
+  handoff:
+  - "preserve provider, commands, fixtures, auth boundary, assertions, evidence links, manual remainder, and next workflow"

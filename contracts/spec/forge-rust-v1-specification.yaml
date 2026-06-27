@@ -1,0 +1,190 @@
+schema_version: "0.1"
+artifact_kind: "spec-kernel"
+status: "draft-for-human-review"
+created_at: "2026-06-25"
+project: "forge-method-rust"
+session: "recovery-after-codex-collapse"
+
+authority:
+  closes_phase: "2-specification"
+  supersedes: "contracts/discovery/forge-rust-recovery-discovery.yaml (discovery is accepted; this refines into spec)"
+  companions:
+    catalog_evidence: "contracts/spec/catalog-audit.yaml"
+    architecture: "contracts/spec/engine-architecture.yaml"
+    grill: "contracts/grill/recovery-grill-001.yaml"
+    research_coordination: "contracts/research/multi-agent-collaboration-governance-research.yaml"
+  rule: "until human accepts this spec and plan begins, scope items here are proposals not commitments"
+
+# ---------------------------------------------------------------------------
+# why (the product thesis)
+# ---------------------------------------------------------------------------
+why: "Forge Method is a navigation protocol, not a behavior script. It guides a human+agent team from raw idea to shipped product by provoking and extracting early (discovery), locking a real spec (specification), forcing sound system design (gate), partitioning cleanly (plan), then running autonomously against contracts (build) - all on an engine that cannot be bypassed by the agent it governs. The borrowed shell (codex/cursor/opencode/pi) becomes a client; Forge owns the protocol authority and brings multi-agent governance with it."
+
+# ---------------------------------------------------------------------------
+# capabilities (what the product DOES) - each with id, intent, success
+# ---------------------------------------------------------------------------
+capabilities:
+  - id: "C1_intelligent_routing"
+    intent: "the guide maps free-text user intent + project state to the correct next workflow"
+    success: "router accuracy >=90% on the eval corpus; never routes past a hard gate"
+  - id: "C2_funneled_guidance"
+    intent: "interaction density thins from discovery to build; persona scripts removed"
+    success: "discovery is high-contact and provocative; build is contractual and near-silent; no Presence/persona prose remains"
+  - id: "C3_enforced_integrity"
+    intent: "state is append-only, authority-bound, mutation-rejecting"
+    success: "an unauthorized state mutation is demonstrably REJECTED; replay reproduces state"
+  - id: "C4_system_design_gate"
+    intent: "no serious build starts without a sound system design between spec and plan"
+    success: "spec->plan transition is blocked until system-design gate clears"
+  - id: "C5_multi_agent_governance"
+    intent: "multiple agents/people share a repo without version/commit/overwrite/conflict pain"
+    success: "coordination-eval passes on its 9 dimensions; claim-before-edit prevents conflicts"
+  - id: "C6_build_anything"
+    intent: "any domain is buildable by adding a module; cross-cutting core is strong for every domain"
+    success: "a new domain module can be scaffolded, validated, and gated turnkey; core discovery->release works for software, game, and one novel domain"
+  - id: "C7_host_portability"
+    intent: "the same core serves any borrowed shell and the standalone app"
+    success: "core has zero host deps; CLI works via codex/cursor/pi; standalone app reuses the library"
+
+# ---------------------------------------------------------------------------
+# constraints (what bends design)
+# ---------------------------------------------------------------------------
+constraints:
+  fixed:
+    - "core language Rust; no new Python implementation targets for the core"
+    - "core crates are host/UI-free (midimon lesson)"
+    - "method-internal artifacts are typed YAML; markdown is render-only"
+    - "single human surface: one GitHub README"
+    - "integrity spine (existing WAL+crypto) is reused, not rewritten"
+    - "follow forge-method flows while rebuilding the method"
+  format:
+    - "typed contracts consumed by the rust engine"
+    - "guide output is a typed auditable artifact, not free text"
+
+# ---------------------------------------------------------------------------
+# non_goals (what this must not become)
+# ---------------------------------------------------------------------------
+non_goals:
+  - "must not become a step-by-step behavior script that underuses smart agents"
+  - "must not keep Python as the acceptance center"
+  - "must not require humans to read internal artifacts"
+  - "must not ship a model inside the core (use the host LLM)"
+  - "must not chase universal domain coverage at the cost of a weak cross-cutting core"
+  - "must not pursue integrity-fix as the PRIMARY goal; usable product is primary (discovery decision_log step 4)"
+
+# ---------------------------------------------------------------------------
+# success_signal (how we know it is done/superior to v2)
+# ---------------------------------------------------------------------------
+success_signal:
+  usability: "ONE real guided session end-to-end (init->guide->discovery->spec->system-design->plan->build->gate) on the Rust core, PLUS an unauthorized-mutation REJECTION demo"
+  v2_superiority:
+    - "engine enforces its own contracts (v2 Python lied about append-only)"
+    - "intelligent orchestrator-guide (v2 had a static dispatcher)"
+    - "mandatory system-design gate (v2 had none)"
+    - "real multi-agent governance with 4 layers (v2 promised but lacked enforcement)"
+    - "typed YAML contracts (v2 was 677 markdown files)"
+  forgive_users_metric: "shipping this re-launch, demonstrably better, addresses the 3-week user complaints"
+
+# ---------------------------------------------------------------------------
+# scope: the complete product territory (surpasses v2)
+# ---------------------------------------------------------------------------
+scope:
+  catalog_source: "110 existing workflows (audited structurally complete) to be migrated to typed YAML + fixed (FX1-FX7)"
+  new_work:
+    - "forge_core_engine crate (the missing state machine + orchestrator + funnel)"
+    - "orchestrator-guide command + router eval corpus"
+    - "system-design gate (promote architecture workflow)"
+    - "4-layer governance runtime surface (claim/release/lane/handoff/bus) on existing contracts"
+    - "host-adapter shim definition"
+  surpasses_v2_by: "enforcement, intelligent routing, system-design gate, real multi-agent governance, typed contracts, host portability"
+
+# ---------------------------------------------------------------------------
+# delivery roadmap (phased, NOT over-planned per story)
+# ---------------------------------------------------------------------------
+roadmap:
+  principle: "spec the whole territory now; plan slices; build slice-by-slice with the funnel. Avoid the over-planning anti-pattern the human named."
+  slice_0_unblock:
+    goal: "prove the spine is healthy"
+    work: ["triage 6 failing cargo tests [grill R1: fixture drift vs spine bug]", "host-dep audit on library crates [grill R3]", "rejection demo: unauthorized mutation rejected at write time", "smoke-test CLI binary"]
+    exit: "cargo test green; rejection demo works"
+  slice_1_engine_core_and_catalog:
+    goal: "the missing state machine + typed contracts + the 110 workflows migrated to typed YAML (the orchestrator needs real typed catalog data to route)"
+    work:
+      - "forge_core_engine crate (state machine, phase transitions, gate enforcement)"
+      - "workflow/phase/catalog typed contract schema"
+      - "MIGRATE the 110 workflows md->yaml (85% scriptable: 85 already pure yaml; 25 need manual cleanup)"
+      - "FX1: add phase declaration to all 110 (closes the 101/101 gap)"
+      - "FX2: normalize 1 canonical id per workflow, filename==id (fix double-prefix + start/start-runtime)"
+      - "keep directional steps (what to achieve); strip talking-verbosity (the persona venom lives in facilitation/, not here)"
+    exit: "catalog is pure typed YAML with phase + canonical ids; init->transition cycle runs on contracts"
+  slice_2_orchestrator:
+    goal: "the intelligent guide"
+    work: ["guide command", "router over typed catalog", "router eval corpus"]
+    exit: "C1 success signal"
+  slice_3_usability_arc:
+    goal: "the happy path end-to-end"
+    work: ["discover, spec-write/check, system-design gate, plan-sprint, story-*, gate, review"]
+    exit: "usability success signal (one full guided session)"
+  slice_4_governance:
+    goal: "multi-agent coordination surface"
+    work: ["worktree-isolation contract", "claim/release/lane/handoff commands", "coordination-bus", "coordination-eval fixtures"]
+    exit: "C5 success signal"
+  slice_5_catalog_hardening:
+    goal: "finish catalog quality + extensibility turnkey"
+    work: ["FX3 system-design promoted to mandatory gate", "FX4 assign or retire 12 orphan workflows", "FX5 retire 34 facilitation persona-venom files after distillation", "FX7 make module-builder turnkey (scaffold+validate+gate a new domain)"]
+    exit: "system-design gate enforced; venom retired; build-anything turnkey"
+  slice_6_parity_and_release:
+    goal: "full command parity + release"
+    work: ["remaining commands", "readiness/release", "single README"]
+    exit: "v2-superiority signal met; ready-release"
+
+# ---------------------------------------------------------------------------
+# decisions locked this session
+# ---------------------------------------------------------------------------
+decisions_locked:
+  - "DC1 guide = intelligent LLM-classifier-over-typed-catalog router, state-aware, master-worker"
+  - "DC2 authority = non-malleable origin-bound; mutations rejected at write time"
+  - "DC3 core = host-agnostic library; CLI and standalone app both depend on it; zero host deps"
+  - "DC4 funnel of autonomy; persona scripts removed"
+  - "DC5 usability bar = one full guided session + rejection demo (primary milestone); full parity is slice 6"
+  - "DC6 system-design = mandatory gate in spec->plan (the human-flagged gap)"
+  - "DC7 guide always exists in agent-optimal format; persona-venom (34 facilitation .md) is migrated away"
+  - "DC8 multi-agent governance = 4-layer model on existing + new contracts; protocol-not-platform is the wedge"
+  - "DC9 SCALE-WITH-THE-MODEL (the human's locked lema): the product must AMPLIFY host agent capability, never cap it. Consequences: (a) hard gates + freedom within gates — the agent reasons freely inside safety/excellence/sequence gates; (b) no model shipped in core, routing uses the host LLM so it improves as models improve; (c) no persona role-play that underuses smart agents; (d) no rigid step-by-step scripting. As models get smarter, execution within gates gets better automatically; the gates are the durable value. This is the opposite of v2's 18k-line god-script."
+  - "DC10 MULTI-LLM INTEROP: different people will run different LLMs/agents on the same repo. They CANNOT share hidden memory. They communicate THROUGH a file-backed typed-contract bus (claims/handoffs/messages as YAML on disk) + the append-only WAL as shared authority. Any LLM that can read/write files and follow the protocol participates. Coordination is model-agnostic by construction (this is why file-driven governance beats in-process coordination for cross-actor work)."
+  - "AQ1 resolved = A (host LLM, no model in core) — see DC9"
+  - "AQ2 resolved = A (core defines worktree-isolation contract + default provider; hosts may override)"
+  - "slice order confirmed: slice 3 (usability) first; slice 4 (governance) follows immediately — governance is promised, not deferred"
+
+# ---------------------------------------------------------------------------
+# validation_verdict
+# ---------------------------------------------------------------------------
+validation_verdict:
+  capabilities_have_id_intent_success: true
+  constraints_bend_design: true
+  non_goals_and_success_explicit: true
+  load_bearing_claims_preserved:
+    - "integrity spine is real (audit) - preserved, reused"
+    - "coordination contracts are real (research) - preserved, extended"
+    - "110 workflow contracts structurally sound (catalog-audit) - preserved, migrated"
+  open_items_before_plan:
+    - "human accepts this spec (capabilities, constraints, roadmap slices)"
+    - "AQ1 (guide = host-LLM call) and AQ2 (worktree = core contract) resolved"
+    - "confirm slice order (0->6) is acceptable, especially slice 3 (usability) before slice 4 (governance) - or invert?"
+
+# ---------------------------------------------------------------------------
+# preservation_map (what survives from legacy)
+# ---------------------------------------------------------------------------
+preservation_map:
+  keep_and_migrate: ["110 workflow contracts (references/)", "9 module definitions", "research basis in backlog.yaml", "integrity spine + coordination contracts in rust"]
+  keep_as_reference_only: ["python forge_method_runtime.py (18k lines)", "facilitation/*.md persona scripts (after distillation)"]
+  retire: ["markdown as runtime authority", "stale state injection", "claims of append-only that are not enforced"]
+
+# ---------------------------------------------------------------------------
+# next_workflow
+# ---------------------------------------------------------------------------
+next_workflow:
+  recommended: "grill-gate on this spec (cheap, locks honesty), then plan (slice the roadmap into stories)"
+  alternatives:
+    - "skip grill, go straight to plan (faster, repeats the no-verification sin)"
+  pi_position: "the human wants the complete scope mapped (done here); now confirm spec, then a light grill, then plan sprints. Do NOT over-detail every story before building slice 0 (avoid the over-planning anti-pattern)."

@@ -1,0 +1,32 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S1.7"
+status: "blocked_on_S1.1_S1.2"
+slice: "slice_1_engine_core_and_catalog"
+title: "Phase-transition + gate enforcement in engine"
+
+decision_sources:
+  - "contracts/spec/engine-architecture.yaml#orchestrator_guide (hard gates: engine ENFORCES allowed transitions independent of LLM)"
+  - "contracts/spec/forge-rust-v1-specification.yaml#DC6 (system-design mandatory gate in spec->plan)"
+  - "contracts/gates/gate-contract-v0.yaml"
+
+intent: "The engine must enforce that a phase transition is only allowed when its gate clears, regardless of what the LLM suggests. This is the 'hard gate' half of DC1 (the orchestrator reasons freely WITHIN gates; the engine blocks illegal transitions). The system-design gate (DC6) is the first enforced mandatory gate."
+
+tasks:
+  - "implement phase-transition logic: from-state + to-state + gate-result -> allowed | blocked(reason)"
+  - "wire gate evaluation using existing gate-contract-v0 shape"
+  - "make the spec->plan transition REQUIRE a system-design gate result (DC6), even before the full system-design workflow exists (scaffold the gate, fill content in slice 3)"
+  - "block transitions that skip phases (no discovery->build jumps) unless explicitly waived with owner+rationale (waiver discipline from catalog-audit)"
+
+acceptance_criteria:
+  - "a legal transition with a passing gate is allowed"
+  - "a transition missing its required gate is REJECTED with a typed reason"
+  - "the spec->plan transition specifically requires the system-design gate"
+  - "an attempted phase-skip is rejected unless a valid waiver exists"
+
+checks:
+  - "unit tests: allowed-transition, blocked-no-gate, blocked-skip-phase, waived-skip allowed"
+  - "system-design gate reference resolves (content filled in slice 3)"
+blocks: []
+exit_signal_for_slice_1: "S1.2..S1.7 done + 110 workflows typed with phase+ids + transitions enforced == slice 1 complete"
+next_workflow: "plan slice 2 (orchestrator) in detail, then build"

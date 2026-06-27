@@ -1,0 +1,133 @@
+schema_version: "0.1"
+artifact_kind: "research"
+research_kind: "governance-and-coordination"
+status: "verified"
+created_at: "2026-06-25"
+project: "forge-method-rust"
+session: "recovery-after-codex-collapse"
+authority:
+  answers: "did the codex agent invent the multi-agent coordination contracts, or are they real?"
+  also_answers: "what does serious 2025-2026 research (east and west) say actually works for multi-agent same-repo collaboration?"
+purpose:
+  one_line: "Verify the multi-agent governance promise is buildable, and learn from systems already solving it."
+
+# ---------------------------------------------------------------------------
+# verdict first
+# ---------------------------------------------------------------------------
+verdict:
+  codex_invented_the_multi_agent_contracts: false
+  text: "The codex agent did NOT invent the coordination contracts. They map precisely to the current 2025-2026 best-practice patterns (file claiming, leases, worktree isolation, conflict detection). He built the right contract model but, as with everything else, did not build the operational surface on top of it."
+  market_validates_the_vision: true
+  market_text: "Multiple production systems (east and west) are building exactly forge's promised governance layer RIGHT NOW. The promise is real and the patterns are known. Forge's differentiation is being a protocol any borrowed shell can adopt, not a closed platform."
+
+# ---------------------------------------------------------------------------
+# did the existing rust contracts match real patterns? YES - point by point
+# ---------------------------------------------------------------------------
+existing_rust_contracts_vs_reality:
+  lane_claim_effect:
+    rust_has: "write_set with conflict_detection.check_against=latest_projection, conflict_codes=[write_target_claimed, completion_now_done, expected_state_version_mismatch], policy=block"
+    real_world_match: "preclaim (paulveth/preclaim): claim-before-edit, others see the claim, block on write_target_claimed, release on commit. IDENTICAL pattern."
+  claim_contract_v0_with_expiry:
+    rust_has: "claim-contract-v0.yaml + claim-expiry-request-append-effect + story-current-active/expired-claim"
+    real_world_match: "Limen (Meirtz): 'advisory, boundary-scoped, time-bounded lease + witnessed audit trail'; genesis-ssmp: 'scoped leases'. Claims expiring is the lease pattern."
+  worker_request_and_runtime_handoff:
+    rust_has: "worker-request-append-effect, runtime-handoff-contract-v0, worker-state-transition-request, worker-stalled-recovery"
+    real_world_match: "Cursor planner/worker/judge model; CAID/OpenHands async handoff; CooperBench names exactly the failure these address (agents deviate from commitments, unverifiable code-state claims)."
+  coordination_eval_9_dimensions:
+    rust_has: "duplicate_work_prevention, lane_collision_detection, stale_claim_recovery, read_write_conflict_repair, request_lifecycle, integration_gate_scope, runtime_handoff_safety, destructive_effect_safety, human_guidance_recovery"
+    real_world_match: "This eval matrix is STRICTER than most production systems bother to define. It is not theater; it names the real failure taxonomy (CooperBench 2601.13295, Specification Gap 2603.24284, decomposition granularity 2604.00690)."
+  story_file_conflict_effect:
+    rust_has: "story-file-conflict-effect + read-write-conflict-notification-request"
+    real_world_match: "The 'merge conflicts cascade' problem (STEPTEN, CooperBench). Detection-before-merge is the known fix."
+
+# ---------------------------------------------------------------------------
+# what actually works: the 4-layer pattern (synthesized from evidence)
+# ---------------------------------------------------------------------------
+what_works:
+  layer_1_isolation:
+    pattern: "git worktree per agent (own checkout, own branch, shared .git)"
+    who: "Cursor Background Agents, CAID/OpenHands, Devin (isolated VMs), amux (30 agents), ruah-orch"
+    effect: "agents physically cannot overwrite each other; conflicts surface at merge"
+    citation: "amux.io/blog/parallel-agents-isolated-worktrees; openhands.dev/blog/asynchronous-software-engineering-agents"
+  layer_2_prevention:
+    pattern: "file/region claiming before edit; others see the claim and work elsewhere; release on done; recover if crashed"
+    who: "preclaim, ruah (claims), magi-code (File Mutex), Limen (leases)"
+    effect: "prevents merge conflicts BEFORE they happen, not after"
+    citation: "github.com/paulveth/preclaim; github.com/Meirtz/Limen; github.com/MistRipple/magi-code"
+  layer_3_authority_and_audit:
+    pattern: "append-only log as source of truth; leases with witnessed audit trail; authority non-malleable and origin-bound"
+    who: "grite/libgrite-git (append-only WAL in git refs + CRDT sync + distributed locks), Limen (witnessed audit), genesis-ssmp (scoped leases + anchor-hash conflict)"
+    effect: "who did what, when, with what authority; tamper-evident; recoverable"
+    citation: "crates.io/crates/libgrite-git; github.com/TomOstt/genesis-ssmp"
+    note: "THIS IS THE LAYER FORGE'S INTEGRITY SPINE ALREADY PROVIDES. This is the differentiator."
+  layer_4_coordination_bus:
+    pattern: "shared plan, shared claims, inter-agent messaging (worktree isolation cannot provide this)"
+    who: "SYNAPSE CHANNEL (websocket bus), agent-state-db (SQLite+WAL shared state), ruah (workspace providers)"
+    effect: "agents coordinate in real time, not just stay apart"
+    citation: "dev.to/anulum coordinating-agents-without-git-worktrees; github.com/vystartasv/agent-state-db"
+
+why_multi_agent_fails_without_governance:
+  - failure: "specification gap"
+    evidence: "arxiv 2603.24284 - agents fail to agree on shared internal representations when the spec leaves them implicit"
+    forge_answer: "forge forces specification maturity before build; this is the #1 thing forge prevents"
+  - failure: "communication breakdown"
+    evidence: "CooperBench arxiv 2601.13295 - channels jammed with vague/ill-timed messages; agents deviate from commitments; unverifiable code-state claims"
+    forge_answer: "coordination via typed contracts and requests, not free chat; claims make code-state verifiable"
+  - failure: "coordination defects dominate"
+    evidence: "arxiv 2605.03310 - 41-87% multi-agent failure rate from coordination defects, not base-model capability"
+    forge_answer: "governance is an architectural layer, not an afterthought"
+  - failure: "bad partitioning"
+    evidence: "arxiv 2606.00953 (cohesion-aware partitioning); arxiv 2604.00690 (granularity phase diagram)"
+    forge_answer: "partition by cohesion (call graphs, shared files); the dispatch test = do these units share nothing?"
+  - failure: "merge cascades"
+    evidence: "STEPTEN multi-agent-git-coordination; human merge strategies do not translate"
+    forge_answer: "claim-before-edit prevents, not detects"
+
+crdt_vs_ot_vs_worktree:
+  finding: "For MULTI-AGENT REPO WORK, the consensus is worktree + claim + merge, NOT realtime CRDT/OT."
+  reason: "OT and CRDT (Yjs/Automerge) solve collaborative TEXT editing (sub-ms, online). Multi-agent coding is async, file-granular, and merge-friendly. grite is the exception that brings CRDT semantics to the git WAL for distributed sync."
+  implication: "forge should use worktree+claim+lease+WAL, not a CRDT text engine. The integrity spine + lane-claim contracts are the right model."
+
+# ---------------------------------------------------------------------------
+# eastern research: systems building exactly this NOW (market validation)
+# ---------------------------------------------------------------------------
+eastern_systems_building_this_now:
+  files_driven_governance:
+    ref: "github.com/TeamZaobi/files-driven-governance"
+    origin: "China"
+    thesis: "treats project rules, docs, state, flows, and tool entries as ONE governance asset; multi-person/multi-agent/multi-tool collaboration converges on shared-storage facts, write-authority, and recovery governance"
+    relevance: "this is almost word-for-word the forge thesis. Validates the category."
+  polaris:
+    ref: "github.com/dainsiahtill-dev/Polaris"
+    origin: "China"
+    thesis: "transaction-driven AI software factory kernel; demotes LLM to constrained decision component; kernel owns execution/audit/budget/rollback; PM/Architect/Director/QA role separation; KernelOne runtime + ContextOS 3-layer memory + EDA task marketplace"
+    relevance: "very close to forge + the rust integrity spine. Confirms the 'demote the LLM, elevate the kernel' architecture."
+  magi_code:
+    ref: "github.com/MistRipple/magi-code"
+    origin: "China"
+    thesis: "zero-conflict engine = File Mutex + strong realtime read + intent-driven editing; DUAL-MODE governance: normal=speed, deep=strong constraints"
+    relevance: "the dual-mode governance IS the funnel-of-autonomy applied to coordination. Confirms DC4 extends to governance, not just discovery/build."
+  dkod:
+    ref: "github.com/dkod-io/dkod-cli"
+    origin: "pivoted from parallel-agent/AST-merge to git-native flight recorder with per-line blame and intent-vs-output drift"
+    relevance: "shows the hard path (AST merge) was abandoned in favor of git-native recording; reinforces worktree+log, not merge-magic"
+
+# ---------------------------------------------------------------------------
+# implications for forge design
+# ---------------------------------------------------------------------------
+design_implications_for_forge:
+  - "The multi-agent governance promise is BUILDABLE with known patterns. forge does not need to invent algorithms; it needs to orchestrate the 4 layers (isolation, prevention, authority, coordination) as contracts."
+  - "forge's differentiation: a protocol any borrowed shell adopts, bringing governance with it - vs closed platforms (Cursor/Dein). This is the real wedge."
+  - "The existing rust coordination contracts are the RIGHT model and match production systems. Build the operational surface (claim/lane/handoff commands) on top, do not redesign the contracts."
+  - "Partitioning intelligence (cohesion-aware, share-nothing test) should be a first-class planning concern, not an afterthought. This belongs in the plan/system-design phase."
+  - "Dual-mode governance (normal/deep) from magi-code validates that the funnel-of-autonomy should also modulate coordination strictness, not just human-contact density."
+
+gaps_in_existing_contracts_to_close:
+  - "No explicit worktree-isolation contract (layer 1) in the rust contracts yet; lane-claim assumes a shared tree. Add a worktree/isolation contract or document the assumption."
+  - "No cohesion/partition planner contract; partitioning is hand-waved. This connects to the system-design gap."
+  - "coordination-eval is draft status with cheap fixtures; needs the fixture cases to actually exist (cheap-first is fine, but they must exist before claiming multi-agent works)."
+
+inference_boundaries:
+  - "Patterns are validated by production systems and research, but forge's specific orchestration of all 4 layers is novel; integration risk remains."
+  - "Eastern systems validate the category and offer patterns, but none is a direct protocol-for-borrowed-shells analogue; forge's wedge is unproven until shipped."
+  - "The contracts being real does not mean the runtime enforces them at runtime; that verification is still pending (tied to fixing the failing tests)."

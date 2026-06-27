@@ -1,0 +1,47 @@
+schema_version: "0.1"
+artifact_kind: "slice-completion"
+slice: "slice_1_engine_core_and_catalog"
+status: "done"
+closed_at: "2026-06-26"
+project: "forge-method-rust"
+sprint: "sprint-001-recovery"
+
+intent: "Establish the engine core and migrate the full workflow catalog to typed contracts."
+
+stories:
+  S1.1: "engine boundary defined — runtime is the FINISHED executor; NEW forge-core-engine owns the method surface (choice b)"
+  S1.2: "typed contract schema — Workflow/Phase/Catalog types in forge-core-contracts (DD1-DD4)"
+  S1.3: "110 workflows migrated md->typed-yaml via deterministic script (DD5-DD6); '85 pure-yaml' premise corrected"
+  S1.4: "no-op — 0 persona-venom in the catalog (audit confirmed)"
+  S1.5: "phases injected from authoritative catalog/workflows.json; schema refined to multi-phase (DD7)"
+  S1.6: "no-op — ids already canonical and aligned (110/110, 0 mismatch)"
+  S1.7: "phase-transition + gate enforcement built in the NEW engine crate (DC1 hard-gate, DC6 system-design gate)"
+
+what_slice_1_produced:
+  new_crate: "forge-core-engine (the method surface; 11 tests; phase-transition hard gates)"
+  new_contracts: "Phase (7 variants + anytime wildcard), Workflow (7-field state machine + phases), Catalog/CatalogEntry"
+  catalog: "110 typed workflow YAMLs in contracts/workflows/, all deserializing into WorkflowDocument with sound phase tags"
+  migration_tooling: "scripts/migrate_workflows.py (deterministic, reproducible, catalog-aware)"
+  evidence_tests: "bulk_workflow_deserialize (110/110), all_phase_tags_canonical_or_anytime, workflow_schema round-trips"
+
+verification:
+  total_tests: 181
+  failures: 0
+  clippy_pedantic_new_code: "0 warnings"
+  fmt: "clean"
+  regressions: "none (slice 0 spine intact: 156 -> 181, +25 from slice 1 contracts+engine)"
+
+key_decisions_locked_this_slice:
+  DD5: "no fan-out for mechanical conversion — single deterministic script beats LLM variance"
+  DD6: "drop unknown top-level keys (state: is runtime config, not workflow contract) — recorded as open_question"
+  DD7: "phases are multi-valued (Vec); Phase enum has 7 funnel variants + anytime wildcard; compound names match authoritative catalog + spec"
+
+open_questions_inherited:
+  - id: OQ1
+    question: "where does the 'state.allowed_phases' runtime routing config (dropped from start-runtime) live in the rust architecture?"
+    home: "the runtime/state config layer (slice 3 usability), NOT the workflow catalog"
+  - id: OQ2
+    question: "router/orchestrator accuracy metric (R2 from grill-002) — how is the guide classifier measured?"
+    home: "slice 2 planning (needs a router eval corpus: utterance -> expected workflow)"
+
+next_workflow: "plan slice 2 (orchestrator-guide) in detail. Slice 2 is the intellectual core: an intelligent router (host-LLM-backed per AQ1/DC9) over the typed catalog, producing an auditable GuideDecision that the S1.7 engine validates against hard gates."

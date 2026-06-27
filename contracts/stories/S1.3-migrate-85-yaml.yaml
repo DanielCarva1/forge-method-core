@@ -1,0 +1,29 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S1.3"
+status: "blocked_on_S1.2"
+slice: "slice_1_engine_core_and_catalog"
+title: "Migrate 85 scriptable workflows md->pure YAML (FX6 part 1)"
+
+decision_sources:
+  - "contracts/spec/catalog-audit.yaml (85/110 already pure YAML under the comment header)"
+  - "contracts/spec/forge-rust-v1-specification.yaml#FX6"
+
+intent: "Convert the 85 workflows that are already pure YAML (just under a '# workflow: x' comment) into canonical typed YAML catalog entries consumable by the engine. This is mostly mechanical/scriptable."
+
+tasks:
+  - "write a migration script: strip the comment header, normalize to the Workflow schema from S1.2, output to the new catalog location"
+  - "verify each of the 85 deserializes into Workflow"
+  - "preserve the directional steps verbatim (these are directions, not persona — keep them)"
+  - "run S1.2 deserialization test over the migrated set"
+
+acceptance_criteria:
+  - "85 workflows are pure typed YAML at the new catalog path"
+  - "all 85 deserialize into Workflow"
+  - "no directional step content was lost (diff shows only structural normalization)"
+
+checks:
+  - "script idempotent (re-run produces same output)"
+  - "deserialization test covers all 85"
+blocks: ["S1.4", "S1.5", "S1.6"]
+next_workflow: "build-story S1.4 (clean the 25)"

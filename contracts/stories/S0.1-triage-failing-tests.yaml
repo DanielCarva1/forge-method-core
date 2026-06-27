@@ -1,0 +1,55 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S0.1"
+status: "ready"
+created_at: "2026-06-25"
+project: "forge-method-rust"
+sprint: "sprint-001-recovery"
+slice: "slice_0_unblock"
+title: "Triage the 6 failing cargo tests"
+
+decision_sources:
+  - "contracts/grill/recovery-grill-002.yaml#R1 (highest risk: unknown test-failure cause)"
+  - "contracts/spec/forge-rust-v1-specification.yaml#slice_0_unblock"
+  - "contracts/discovery/forge-rust-recovery-discovery.yaml (mechanical audit: 6 targets fail)"
+
+intent: "Classify the root cause of each failing test BEFORE fixing anything. The single highest risk in the project is that we do not know WHY the tests fail: if it is fixture drift it is cheap; if it is a spine design bug the 'reuse not rewrite' assumption is threatened. This story produces a diagnosis, not a fix."
+
+context:
+  known_failures:
+    - target: "forge-contract-validator"
+    - target: "forge-core-cli"
+    - target: "forge-core-contracts"
+    - target: "forge-core-runtime"
+    - target: "forge-core-store"
+    - target: "forge-core-validate"
+  known_symptom: "deserializes_all_operation_fixtures panics at line ~105 (fixtures/code desync)"
+  cargo: "/mnt/c/Users/Danie/.cargo/bin/cargo.exe"
+
+tasks:  # directional, not prescriptive
+  - "run cargo test --workspace and capture the full failure output per target"
+  - "for each failing test, classify root cause into: (a) fixture drift (fixture yaml out of sync with code schema), (b) spine design bug (logic in WAL/effect/integrity path), (c) env/toolchain issue, (d) other"
+  - "for fixture-drift cases, identify exactly which fixture field diverges from which type"
+  - "for spine-bug cases, identify the failing invariant and whether the fix is local or touches the integrity spine design"
+  - "write a compact diagnosis artifact; do NOT fix yet (that is S0.2)"
+
+acceptance_criteria:
+  - "every failing test has a classified root cause (a/b/c/d) with the specific line or field"
+  - "the spine-reuse assumption (Option A) is either confirmed safe or flagged for human escalation with evidence"
+  - "the diagnosis artifact exists at .forge-method/artifacts/S0.1-test-diagnosis.yaml"
+
+checks:
+  - "diagnosis artifact parses as YAML"
+  - "no failing test is left unclassified"
+  - "if ANY spine design bug is found, story BLOCKS and escalates before S0.2 (escalation_clause)"
+
+escalation_clause:
+  trigger: "one or more failures classified as spine design bug (b)"
+  action: "STOP. Do not attempt fix. Write the evidence into the diagnosis artifact and surface to human. The reuse-vs-revisit decision is a human call (grill R1 mitigation)."
+
+evidence:
+  - ".forge-method/artifacts/S0.1-test-diagnosis.yaml"
+  - "captured cargo test output (appended to diagnosis artifact)"
+
+blocks: ["S0.2"]
+next_workflow: "build-story S0.2 (only if diagnosis is fixture drift or local) OR human escalation (if spine bug)"

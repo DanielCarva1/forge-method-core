@@ -1,0 +1,38 @@
+schema_version: "0.1"
+workflow:
+  id: "config-customization"
+  phases:
+  - "anytime"
+  trigger:
+  - "user asks to customize Forge behavior for a project or team"
+  - "project conventions should affect future workflows"
+  - "user asks for overrides, capability index, config inspect, or config validation"
+  inputs:
+  - "desired convention"
+  - "team or local scope"
+  - "current config"
+  - "validation rules"
+  steps:
+  - "choose team or local config scope"
+  - "map the request to supported override keys or custom capability entries"
+  - "reject unsupported behavior before writing config"
+  - "write supported keys only"
+  - "run config validate"
+  - "run config index when agents need a compact effective registry"
+  - "document runtime-visible impact in state, artifact, or checkpoint"
+  outputs:
+  - "config update"
+  - "validation result"
+  - "optional capability index"
+  - "impact summary"
+  done_when:
+  - "config validates"
+  - "unsupported keys are absent"
+  - "valid overrides affect inspect, guide metadata, or capability index predictably"
+  - "next workflow can read convention or index"
+  blocked_when:
+  - "requested setting has no supported key"
+  - "team and local scopes conflict"
+  - "override points to missing workflow, pack, template, agent, or capability reference"
+  handoff:
+  - "preserve config path, changed keys, scope, validation result, index path, and affected workflow or agent"

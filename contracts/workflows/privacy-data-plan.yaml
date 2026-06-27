@@ -1,0 +1,34 @@
+schema_version: "0.1"
+workflow:
+  id: "privacy-data-plan"
+  phases:
+  - "3-plan"
+  trigger:
+  - "project collects, stores, processes, or transmits user data"
+  - "privacy or retention requirements matter"
+  inputs:
+  - "data inventory"
+  - "user flows"
+  - "storage and integration notes"
+  - "regulatory constraints"
+  steps:
+  - "classify data categories"
+  - "define collection, retention, deletion, and consent rules"
+  - "identify privacy risks and checks"
+  - "link required evidence, owners, open questions, and release impact"
+  - "save privacy/data plan"
+  outputs:
+  - "privacy and data plan"
+  - "data classification"
+  - "required checks"
+  - "release impact"
+  done_when:
+  - "data handling rules are explicit"
+  - "retention and deletion are defined"
+  - "required privacy evidence or waiver is explicit"
+  - "release risks are recorded"
+  blocked_when:
+  - "data categories are unknown"
+  - "legal requirement needs human input"
+  handoff:
+  - "preserve data plan path, classifications, checks, evidence links, risks, open questions, and release impact"

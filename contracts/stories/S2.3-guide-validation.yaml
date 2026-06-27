@@ -1,0 +1,29 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S2.3"
+status: "ready_after_S2.2"
+slice: "slice_2_orchestrator"
+title: "Guide decision validation (engine enforces routing gates)"
+
+decision_sources:
+  - "contracts/spec/engine-architecture.yaml#orchestrator_guide (hard gates: engine ENFORCES allowed transitions independent of LLM)"
+  - "crates/forge-core-engine/src/phase_transition.rs (S1.7 evaluate_transition)"
+
+intent: "When the host LLM emits a GuideDecision, the engine VALIDATES it: the recommended workflow exists in the catalog, is eligible in the current phase, and any proposed phase transition clears the S1.7 hard gates. Illegal guidance is rejected with a typed reason. This closes the DC1 loop: host reasons freely, engine blocks the illegal."
+
+tasks:
+  - "validate_guide_decision(decision, catalog) -> Result<(), GuideRejection> covering: UnknownWorkflow, NotEligibleInPhase, IllegalTransition(TransitionBlockReason)"
+  - "re-use evaluate_transition from phase_transition for the transition check"
+  - "if proposed_next_phase differs from current, run the transition gate; map TransitionBlockReason into GuideRejection"
+
+acceptance_criteria:
+  - "a valid decision (known workflow, eligible, no transition) is Accepted"
+  - "an unknown workflow id is rejected (UnknownWorkflow)"
+  - "a workflow not eligible in current phase is rejected (NotEligibleInPhase)"
+  - "a decision proposing a gated transition without the gate is rejected (IllegalTransition)"
+
+checks:
+  - "unit tests: accept-valid, reject-unknown, reject-ineligible, reject-illegal-transition"
+  - "uses S1.7 evaluate_transition (no duplicate gate logic)"
+blocks: []
+next_workflow: "build-story S2.4 (eval corpus)"

@@ -1,0 +1,52 @@
+schema_version: "0.1"
+artifact_kind: "slice-plan"
+slice: "slice_2_orchestrator"
+status: "planned"
+planned_at: "2026-06-26"
+project: "forge-method-rust"
+sprint: "sprint-001-recovery"
+detailing_rule: "anti-over-planning: only slice 2 is detailed now. Slices 3-6 remain coarse."
+
+goal: "Build the orchestrator-guide: a host-LLM-backed router over the typed catalog that produces an auditable GuideDecision, which the engine validates against hard gates. The engine ships NO model (DC9/AQ1); it provides typed structure + eligibility + validation."
+
+capability_targets:
+  C1_router_guide: "router accuracy >=90% on eval corpus; never routes past a hard gate"
+  C2_funneled_guidance: "interaction density derives from phase (funnel-of-autonomy)"
+
+design_locks_applied:
+  DC1: "guide = intelligent orchestrator (LLM classifier over typed catalog, state-aware). Engine ENFORCES; host REASONS."
+  DC9: "scale-with-the-model — no model in core; hard gates + freedom within gates"
+  AQ1: "host-LLM-backed router, not a built-in small model"
+
+scope_split:
+  engine_builds_deterministic: ["catalog loader", "phase-eligibility filter", "GuideDecision typed contract", "decision validation against S1.7 gates", "eval corpus harness"]
+  host_side_out_of_engine: ["the actual LLM classification (the host agent reads catalog+state, reasons, emits a GuideDecision)"]
+
+stories:
+  - id: "S2.1"
+    title: "Catalog loader + phase-eligibility filter in engine"
+    detail: "contracts/stories/S2.1-catalog-eligibility.yaml"
+    intent: "engine loads contracts/workflows/*.yaml into the typed Catalog at runtime; provides eligibility filtering given a current project phase (Phase::tag_eligible over workflow.phases). Foundation every other slice-2 story depends on."
+  - id: "S2.2"
+    title: "GuideDecision typed contract"
+    detail: "contracts/stories/S2.2-guide-decision-contract.yaml"
+    intent: "the auditable guide output: {recommended_workflow, reason, allowed_actions, blocked_by_gates, current_phase, proposed_next_phase}. Lives in forge-core-contracts. This is what the host LLM fills and the engine validates."
+  - id: "S2.3"
+    title: "Guide decision validation"
+    detail: "contracts/stories/S2.3-guide-validation.yaml"
+    intent: "engine validates a host-proposed GuideDecision: recommended workflow EXISTS in catalog, is ELIGIBLE in current_phase, and the proposed transition CLEARS the S1.7 hard gates. Rejects illegal guidance with typed reasons. This is the DC1 hard-gate applied to routing."
+  - id: "S2.4"
+    title: "Router eval corpus + measurement harness"
+    detail: "contracts/stories/S2.4-router-eval-corpus.yaml"
+    intent: "resolve grill R2: build an eval corpus (utterance -> expected workflow, >=40 cases spanning all 6 phases) + a harness that measures host-router accuracy against it. Baseline measurement is a host-side activity; the engine provides the corpus + scorer. accuracy>=90% is the C1 success bar."
+
+sequencing: "S2.1 -> S2.2 -> S2.3 (S2.3 needs both catalog + decision contract). S2.4 parallelizable after S2.1."
+
+exit_signal: "guide scaffolding complete: catalog loads, eligibility filters, decisions validate against gates, eval corpus exists. Slice 2 done when a host can produce a GuideDecision that the engine accepts/rejects correctly."
+
+open_question_carried:
+  - id: OQ_R2
+    question: "the >=90% accuracy bar is measured HOW, given no LLM in CI? The harness measures a host run; the bar is a release gate checked by running the corpus against the target host, not a unit test."
+    resolution: "S2.4 ships the corpus + scorer + a documented run procedure. The 90% number is reported, not asserted in CI."
+
+next_workflow: "build-story S2.1 (catalog loader + eligibility)"

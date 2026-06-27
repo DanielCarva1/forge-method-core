@@ -1,0 +1,82 @@
+schema_version: "0.1"
+artifact_kind: "slice-completion"
+slice: "slice_3_guide_cli"
+status: "done"
+closed_at: "2026-06-26"
+project: "forge-method-rust"
+
+intent: "Build the agent-first CLI surface for the guide method command. Host LLM is the PRIMARY consumer; humans touch only start/reload/update. The product is now USABLE end-to-end (DC5)."
+
+research_basis: "contracts/research/cli-llm-first-design.yaml (19 findings F1-F19, 7 recommendations R1-R7)"
+spec: "contracts/spec/slice-3-guide-cli-spec.yaml"
+
+stories:
+  S3.1: "CliEnvelope contract + DD10 exit taxonomy (R1, R6)"
+  S3.2: "guide describe — compact routing surface, 5.6k tokens (R3, R4, DD13)"
+  S3.3: "guide decide — validate GuideDecision, typed Accepted|Rejected (R2)"
+  S3.4: "guide status — phase + eligible + pending gate (DD14)"
+  S3.5: "anti-pattern sweep (R7) + e2e parity test"
+
+what_slice_3_produced:
+  contract:
+    - "envelope.rs — CliEnvelope<T>, ExitReason (0/2/3/4/5), CliError, ENVELOPE_SCHEMA_VERSION"
+  cli_surface:
+    - "guide.rs — run_describe, run_decide, run_status + compact payload types"
+    - "main.rs — run_guide_command dispatcher + run_guide_{describe,decide,status} + load_gates + emit_guide"
+  tests:
+    - "guide.rs unit tests — 14 (5 describe + 5 decide + 4 status)"
+    - "guide_e2e.rs integration — 4 (full agent loop, gate-cleared transition, contract invariant, determinism)"
+
+dc1_loop_now_usable_through_cli: |
+  The loop that was closed in code (slice 2) is now invocable from the shell:
+    host LLM
+      -> `forge-core guide describe` (learns surface once, 5.6k tokens)
+      -> `forge-core guide status --phase X` (orients)
+      -> reasons -> writes GuideDecision YAML
+      -> `forge-core guide decide --decision-file d.yaml [--gates-file g.yaml]`
+      -> stdout: {ok, exit_reason, data|error:typed_code} + exit code 0|2|3|4|5
+  The host reasons freely; the engine blocks the illegal with a typed reason the
+  host can self-correct from. Scale-with-the-model (DC9). Agent-first (DC10).
+
+verification:
+  total_tests: 223
+  failures: 0
+  clippy_pedantic_new_code: "0 warnings"
+  fmt: "clean"
+  live_cli_validated:
+    - "guide describe -> ok, exit 0, 110 workflows"
+    - "guide decide (valid) -> ok, exit 0, payload"
+    - "guide decide (illegal) -> rejected_by_gate, exit 2, code=not_eligible_in_phase"
+    - "guide status --phase 2-specification -> ok, 36 eligible, system-design gate"
+
+decisions_locked_this_slice:
+  DD9: "stdout = CliEnvelope JSON contract"
+  DD10: "exit codes 0/2/3/4/5 documented + deterministic"
+  DD11: "two-tier: supervisory (human start/reload/update) vs operational (agent guide/*, host-adapter/*)"
+  DD12: "MCP server deferred to slice 6; JSON Schema interop preserved"
+  DD13: "describe is compact (id+phase+summary); full text fetched on demand"
+  DD14: "status takes --phase as explicit input (host knows its phase from protocol)"
+
+evidence_validated:
+  R1_stdout_contract: "every guide command emits one CliEnvelope JSON; nothing else to stdout"
+  R2_engine_validator: "decide returns typed reject_code (host self-corrects); tau-bench model"
+  R3_compact_catalog: "5,593 tokens for all 110 workflows (< 8k cliff target)"
+  R4_self_describing: "describe returns phases+gates+exit_reasons+schema_version"
+  R5_two_tier: "guide/* agent-only; start/reload/update human (stubbed)"
+  R6_versioned: "schema_version='0.1' on every envelope"
+  R7_no_antipatterns: "swept clean — no ANSI, no prompts, no timestamps, deterministic (proven)"
+
+out_of_scope_done_elsewhere:
+  - "start/reload/update full impl (stubbed; supervisory tier, future slice)"
+  - "MCP server peer surface (DD12, slice 6)"
+  - "host-adapter-* refactor (untouched; already had --json)"
+
+open_questions:
+  - "Should guide read current_phase from a project state file (slice 4 governance) instead of requiring --phase? Tracked as future enhancement."
+  - "MCP server as a peer surface — when? (slice 6 release decision)"
+
+next_workflow: |
+  Slice 3 done. The product is now USABLE end-to-end (DC5 met): describe/decide/
+  status form a complete agent loop validated against the real 110-workflow
+  catalog. Natural next slices: governance (multi-agent, slice 4) or catalog
+  hardening (slice 5). Await human steering on priority.

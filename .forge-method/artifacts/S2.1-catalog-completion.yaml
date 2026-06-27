@@ -1,0 +1,36 @@
+schema_version: "0.1"
+artifact_kind: "story-completion"
+story_id: "S2.1"
+status: "done"
+created_at: "2026-06-26"
+project: "forge-method-rust"
+sprint: "sprint-001-recovery"
+
+intent: "Engine loads the 110 typed workflows into a Catalog at runtime and filters by phase eligibility."
+
+delivered:
+  module: "crates/forge-core-engine/src/catalog.rs"
+  api:
+    - "load_catalog(dir) -> CatalogLoadReport (accumulator: loads ALL files, collects per-file errors, non-short-circuit per Diagnostic convention)"
+    - "eligible_entries(catalog, phase) -> Vec<&CatalogEntry> (Phase::tag_eligible over entry.phases)"
+    - "eligible_count, find_entry helpers"
+    - "CatalogFileError / CatalogLoadReport::is_clean"
+
+acceptance_criteria:
+  - "load_catalog succeeds on contracts/workflows and yields exactly 110 — PASS"
+  - "eligible_in(Discovery) returns only phase-matching or anytime entries — PASS (verified each returned entry is actually eligible)"
+  - "anytime-tagged workflow eligible in EVERY phase — PASS (asserted across Phase::ALL)"
+  - "malformed file reported not panicked — PASS (1 good + 1 bad => 1 error + 1 loaded)"
+
+verification:
+  cargo_test_engine: "PASS — 16 tests (11 phase_transition + 5 catalog)"
+  cargo_clippy_pedantic_engine: "PASS — 0 warnings in engine code (2 map_unwrap_or lints fixed)"
+  cargo_fmt: "PASS — clean"
+  cargo_test_workspace: "PASS — 186 tests, 0 failures"
+
+design_note: |
+  The eligibility filter is the routing substrate: the host LLM reasons over the
+  ELIGIBLE subset (current_phase ∩ workflow.phases, plus anytime), not all 110.
+  This is what makes DC1 scale — the host sees a focused, state-aware catalog.
+
+next_workflow: "build-story S2.2 (GuideDecision contract) + S2.3 (validation)"

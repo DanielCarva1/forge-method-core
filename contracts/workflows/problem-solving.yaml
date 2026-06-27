@@ -1,0 +1,37 @@
+schema_version: "0.1"
+workflow:
+  id: "problem-solving"
+  phases:
+  - "1-discovery"
+  trigger:
+  - "user has a stuck, ambiguous, or messy problem"
+  - "user is frustrated but has not identified the wrong route yet"
+  - "direct implementation would be premature"
+  inputs:
+  - "raw user description"
+  - "problem statement"
+  - "symptoms"
+  - "constraints"
+  - "known failed attempts"
+  steps:
+  - "capture current vs desired behavior"
+  - "bound where the problem appears and does not appear"
+  - "separate symptoms, likely causes, and unknowns"
+  - "generate candidate explanations"
+  - "choose one reversible probe or repair"
+  - "define success signal and next workflow"
+  outputs:
+  - "problem-solving artifact"
+  - "current vs desired frame"
+  - "candidate causes"
+  - "chosen probe"
+  - "next action"
+  done_when:
+  - "next action is reversible"
+  - "assumptions are explicit"
+  - "success signal is known"
+  blocked_when:
+  - "problem has no observable signal"
+  - "required evidence is inaccessible"
+  handoff:
+  - "preserve problem frame, hypotheses, probes, and next action"

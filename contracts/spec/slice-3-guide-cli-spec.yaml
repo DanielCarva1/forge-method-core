@@ -1,0 +1,89 @@
+schema_version: "0.1"
+artifact_kind: "slice-specification"
+slice: "slice_3_guide_cli"
+project: "forge-method-rust"
+created_at: "2026-06-26"
+status: "locked"
+research_basis: "contracts/research/cli-llm-first-design.yaml (19 findings, 7 recommendations)"
+
+intent: |
+  Build the agent-first CLI surface for the `guide` method command. The host LLM
+  is the PRIMARY consumer; humans only touch the supervisory tier (start/reload/
+  update). This is where the product becomes USABLE end-to-end (DC5).
+
+evidence_backed_principles:
+  - id: R1_stdout_is_contract
+    rule: "stdout = versioned JSON envelope; all diagnostics/progress/ANSI to stderr"
+    source: "arXiv:2603.20300 (agent interfaces); cli-agent-spec; Arcjet postmortem"
+  - id: R2_engine_is_validator
+    rule: "engine deterministically validates GuideDecision; typed reject reason lets host self-correct"
+    source: "tau-bench (arXiv:2406.12045); arXiv:2603.13404 (schema-first reduces misuse)"
+  - id: R3_compact_catalog
+    rule: "small candidate surface per call; concise 'does X, returns Y, use when Z' descriptions"
+    source: "arXiv:2604.02155 (brief>verbose: selection err 30.5%->1.5%); arXiv:2409.00920; ~40k token cliff"
+  - id: R4_self_describing
+    rule: "--describe/--schema; --dry-run; --no-interactive default; deterministic exit codes"
+    source: "MCP tools/list; clispec.dev Principle 2"
+  - id: R5_two_tier
+    rule: "supervisory tier (human: start/reload/update) vs operational tier (agent: guide/*, host-adapter/*)"
+    source: "Parasuraman/Sheridan/Wickens 2000 (Levels of Automation); arXiv:2603.20300"
+  - id: R6_versioned_contract
+    rule: "schema_version on every envelope + every YAML; JSON Schema 2020-12 as type language; never mutate published shape"
+    source: "MCP protocol-version negotiation; Microsoft AHP versioning"
+  - id: R7_no_antipatterns
+    rule: "no free-text-to-parse, no timestamps in data, no interactive prompts, ANSI on stderr/TTY-gated only, one canonical --json"
+    source: "cli-agent-spec 74 failure modes; InfoQ AWS pager incident"
+
+decisions_locked:
+  DD9: "stdout = CliEnvelope<T> JSON contract (R1+R6). Single shape for ALL guide/* commands."
+  DD10: "exit code taxonomy: 0=ok, 2=rejected-by-gate, 3=invalid-decision-shape, 4=conflict/WAL, 5=env/config. Stable, documented in --describe."
+  DD11: "two-tier split: SUPERVISORY (human-typed: start/reload/update) vs OPERATIONAL (agent-invoked: guide/*, host-adapter/*). guide/* is agent-only."
+  DD12: "MCP server (tools/list + tools/call) DEFERRED to slice 6/release. Build CLI-first; MCP is a peer surface later. JSON Schema interop preserved now."
+  DD13: "guide describe returns COMPACT view (id, phase, one-line desc) — not full workflow text. Full text fetched on demand. Honors R3 token cliff."
+
+command_surface:
+  operational_tier_agent:
+    - id: "guide describe"
+      does: "emits the routing surface (workflows, gates, phases, schema_version) as CliEnvelope"
+      host_reads: "once per session to learn what it can recommend"
+    - id: "guide decide"
+      does: "validates a host-proposed GuideDecision; returns Accepted|Rejected(typed reason) + exit code"
+      host_invokes: "after reasoning over describe output"
+    - id: "guide status"
+      does: "emits current project phase, eligible workflows, pending gates"
+      host_invokes: "to orient before deciding"
+  supervisory_tier_human:
+    - id: "forge start"
+      does: "initialize a forge project (out of slice-3 scope; stub returns envelope)"
+    - id: "forge reload"
+      does: "rebuild state from WAL (out of slice-3 scope; stub)"
+    - id: "forge update"
+      does: "self-update core (out of slice-3 scope; stub)"
+
+stories:
+  S3.1: "CliEnvelope contract + exit-code taxonomy (R1, R6, DD9, DD10)"
+  S3.2: "guide describe — compact routing surface (R3, R4, DD13)"
+  S3.3: "guide decide — validate GuideDecision, emit Accepted|Rejected (R2)"
+  S3.4: "guide status — current phase + eligible + pending gates"
+  S3.5: "anti-pattern sweep + end-to-end parity test (R7)"
+
+acceptance_criteria:
+  AC1: "every guide/* command emits CliEnvelope JSON to stdout; nothing else to stdout"
+  AC2: "exit codes follow DD10 taxonomy deterministically"
+  AC3: "guide decide rejects illegal routing with TYPED reason (host can self-correct, R2)"
+  AC4: "guide describe fits well under the token cliff (target: full describe < 8k tokens)"
+  AC5: "no interactive prompts on agent path; --no-interactive is default behavior"
+  AC6: "workspace green: all tests pass, clippy pedantic clean on new code, fmt clean"
+
+out_of_scope:
+  - "start/reload/update full implementation (stub only this slice)"
+  - "MCP server (DD12 — slice 6)"
+  - "host-adapter-* refactor (untouched; they already have --json)"
+
+risks:
+  - id: R6_1
+    risk: "CLI main.rs is hand-rolled arg parsing (1945 lines); adding guide/* naively bloats it"
+    mitigation: "add a thin `guide` dispatch module; do not refactor existing host-adapter commands this slice"
+  - id: R6_2
+    risk: "envelope generic over T complicates serde/deserialize"
+    mitigation: "keep CliEnvelope<T> generic; use concrete T per command in CLI layer"

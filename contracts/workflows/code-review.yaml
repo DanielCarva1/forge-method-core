@@ -1,0 +1,33 @@
+schema_version: "0.1"
+workflow:
+  id: "code-review"
+  phases:
+  - "4-build-verify"
+  - "6-evolve"
+  trigger:
+  - "user asks to review code, a diff, or an implementation"
+  - "story/release needs findings before repair or readiness"
+  inputs:
+  - "changed files or diff"
+  - "linked story and acceptance criteria"
+  - "requirements, architecture, UX, risk, and validation evidence"
+  - "tests and commands"
+  steps:
+  - "identify changed surface and expected behavior"
+  - "inspect for bugs, regressions, missing evidence, and weak tests"
+  - "classify findings by severity and actionability"
+  - "create durable review findings when blocking or repairable issues exist"
+  - "write code review artifact and route repair, readiness-check, or retrospective"
+  outputs:
+  - "code review findings"
+  - "durable review findings when needed"
+  - "repair or gate recommendation"
+  done_when:
+  - "actionable findings are explicit and evidenced"
+  - "no finding is hidden in prose only"
+  - "next workflow is repair, readiness-check, or closure"
+  blocked_when:
+  - "changed surface cannot be identified"
+  - "acceptance criteria or expected behavior are unavailable"
+  handoff:
+  - "preserve findings, severity, affected files, evidence, commands reviewed, and next workflow"

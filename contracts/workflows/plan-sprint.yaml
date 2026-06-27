@@ -1,0 +1,39 @@
+schema_version: "0.1"
+workflow:
+  id: "plan-sprint"
+  phases:
+  - "3-plan"
+  trigger:
+  - "state.phase == 3-plan"
+  - "specification artifact exists"
+  inputs:
+  - "specification artifact"
+  - "approved decision sources"
+  - "acceptance criteria"
+  - "current repository structure"
+  - "known checks"
+  steps:
+  - "verify accepted sources before sequencing work"
+  - "split acceptance criteria into story batches"
+  - "sort by user value, dependency, risk, and learning"
+  - "map each ready story to decision sources and validation evidence"
+  - "mark deferred or blocked work with reason"
+  - "update sprint summary and next executable story"
+  - "move only implementation-ready work into phase 4"
+  outputs:
+  - "sprint plan artifact"
+  - "ordered story batch"
+  - "decision-source map"
+  - "validation and evidence plan"
+  - "updated state"
+  done_when:
+  - "each executable story has acceptance criteria and decision sources"
+  - "next ready story is known"
+  - "blocked/deferred work has a reason"
+  - "checks are known or explicitly marked manual"
+  blocked_when:
+  - "approved decision sources are missing"
+  - "architecture choice changes story boundaries materially"
+  - "validation cannot be defined"
+  handoff:
+  - "preserve story order, next story, source map, validation plan, deferred work, and unresolved risks"

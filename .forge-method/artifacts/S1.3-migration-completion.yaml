@@ -1,0 +1,53 @@
+schema_version: "0.1"
+artifact_kind: "story-completion"
+story_id: "S1.3"
+status: "done"
+created_at: "2026-06-26"
+project: "forge-method-rust"
+sprint: "sprint-001-recovery"
+
+intent: "Migrate the markdown workflows into typed YAML that deserializes into the S1.2 schema."
+
+key_finding_that_changed_the_approach: |
+  The story assumed "85 already-pure-yaml workflows". AUDIT PROVED THIS FALSE:
+  the .md files were never machine-parsed YAML. List items used markdown ordered-
+  list syntax ("1. foo") which YAML collapses into a single scalar string; inline
+  code spans (backticks) are illegal YAML tokens. The Python v2 fed these to an
+  LLM as TEXT, never parsed them. Consequence: the migration is a real text
+  transformation, not a re-wrap. Because it is 100% deterministic, a SINGLE script
+  is MORE consistent than 4 LLM subagents (which would introduce variance). The
+  fan-out plan was correctly REPLACED by one deterministic script.
+
+delivered:
+  - path: "scripts/migrate_workflows.py"
+    role: "deterministic converter: extract id from '# workflow: <id>' header, normalize 'N. ' markdown ordered-lists to '- ' YAML sequences, strip backtick inline-code, wrap in WorkflowDocument shape, emit double-quoted string values (Vec<String>-safe). QuotedDumper + key-unquoting regex."
+  - path: "contracts/workflows/*.yaml"
+    role: "110 typed workflow documents (one per source .md)"
+  - path: "crates/forge-core-contracts/tests/bulk_workflow_deserialize.rs"
+    role: "acceptance test: bulk-deserialize ALL 110 into WorkflowDocument (deny_unknown_fields), assert unique ids, assert each has trigger+steps+done_when. PINS count at 110 so partial migrations fail."
+
+migration_report: ".forge-method/artifacts/S1.3-migration-report.yaml"
+conversion_result:
+  total_md_files: 110
+  converted: 110
+  anomalies: 0
+  dropped_fields: {state: 1}
+  dropped_fields_note: "'state' on start-runtime is runtime routing config (allowed_phases), NOT a workflow contract field. Correctly excluded from the Workflow schema; recorded as open_question for the engine (it belongs in the runtime/state config, not the catalog)."
+
+acceptance_criteria:
+  - criterion: "all 85 pure-yaml workflows deserialize into Workflow without error"
+    result: "SUPERSEDED — all 110 (not 85) now deserialize. Proven by bulk_workflow_deserialize test (110/110, deny_unknown_fields, 0 failures)."
+  - criterion: "the migration is reproducible"
+    result: "PASS — scripts/migrate_workflows.py is deterministic; same input → same output. Re-runnable."
+
+verification:
+  cargo_test_workspace: "PASS — 167 tests, 0 failures (was 161; +2 bulk-deserialize, +4 net across schema/bulk tests)"
+  cargo_clippy_pedantic_new_code: "PASS — phase.rs/workflow.rs/catalog.rs/migrate script: 0 new warnings (1 self-introduced map_or lint fixed)"
+  cargo_fmt: "PASS — clean"
+  pre_existing_warnings_untouched: "command.rs '3 bools', runtime.rs '3 bools' — pre-existing, out of scope for this story"
+
+design_decisions:
+  DD5_no_fanout_for_mechanical_conversion: "the conversion is deterministic text processing with no per-file judgment, so a single script maximizes consistency. Fan-out is reserved for S1.5 (phase assignment) where judgment IS needed."
+  DD6_drop_unknown_top_level_keys: "the Workflow schema uses deny_unknown_fields; only the 7 canonical state-machine fields survive. Non-schema keys (state:) are reported, not silently lost."
+
+next_workflow: "S1.4 (clean persona-venom) — audit shows 0 venom, expected to close as no-op with evidence"

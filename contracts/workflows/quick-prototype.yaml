@@ -1,0 +1,34 @@
+schema_version: "0.1"
+workflow:
+  id: "quick-prototype"
+  phases:
+  - "4-build-verify"
+  trigger:
+  - "game or product idea needs a fast proof"
+  - "scope should stay intentionally small"
+  inputs:
+  - "prototype goal"
+  - "success signal"
+  - "constraints"
+  - "engine profile"
+  - "available assets or code"
+  steps:
+  - "define the smallest playable proof"
+  - "choose asset stubs and engine/runtime assumptions"
+  - "create prototype story and proof check"
+  - "run or specify the proof check"
+  - "record outcome and next decision"
+  outputs:
+  - "prototype scope"
+  - "prototype story"
+  - "proof command or manual check"
+  - "result evidence"
+  done_when:
+  - "proof target is testable"
+  - "outcome is recorded"
+  - "next decision is known"
+  blocked_when:
+  - "prototype cannot be tested"
+  - "scope exceeds one focused proof"
+  handoff:
+  - "preserve prototype goal, player action, story, proof check, result, and next decision"

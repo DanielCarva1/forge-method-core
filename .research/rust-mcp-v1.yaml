@@ -1,0 +1,270 @@
+meta:
+  topic: "MCP servers for Rust development — code intelligence, cargo/clippy, crates.io/docs, compiler errors"
+  query: "Quais servidores MCP maduros existem para um agente LLM autônomo escrever código Rust melhor (rust-analyzer, cargo/clippy, crates.io, docs.rs, E0xxx)?"
+  date: 2026-06-26
+  researcher_model: "claude-sonnet (researcher subagent)"
+  confidence: high
+  sources_consulted: 12
+
+key_findings:
+
+  - id: F1
+    finding: >
+      Não existe um wrapper MCP oficial mantido pela equipe rust-analyzer ou rust-lang.
+      Todos os servidores MCP que integram rust-analyzer são projetos comunitários independentes.
+      O ecossistema é fragmentado: múltiplos repos competindo com sobreposição de features,
+      nenhum com adoção massiva (>500 stars). Não há um "padrão de facto".
+    evidence: >
+      Busca em awesome-mcp lists, GitHub topic mcp-server rust, e registry oficial
+      não retornou nenhum server sob a org rust-lang ou rust-analyzer.
+      Todos os candidatos são repositórios pessoais.
+    sources:
+      - https://github.com/punkpeye/awesome-mcp-servers
+      - https://github.com/modelcontextprotocol/rust-sdk
+
+  - id: F2
+    finding: >
+      zeenix/rust-analyzer-mcp é o server MCP de rust-analyzer mais instalável e "pronto":
+      publicado no crates.io (v0.2.0), instala com `cargo install rust-analyzer-mcp`,
+      tem suite de testes completa (integration, property/fuzzing, stress, unit).
+      Expõe 10 tools de LSP: symbols, definition, references, hover, completion,
+      format, code_actions, diagnostics, workspace_diagnostics, set_workspace.
+      Escrito em Rust, stdio transport, config MCP é trivial (command: rust-analyzer-mcp).
+      Requer rust-analyzer instalado no PATH (`rustup component add rust-analyzer`).
+    evidence: >
+      README confirmado via clone do repo. Cargo.toml presente, testes em tests/integration/,
+      tests/property/, tests/stress/. Crates.io page: https://crates.io/crates/rust-analyzer-mcp
+    sources:
+      - https://github.com/zeenix/rust-analyzer-mcp
+      - https://crates.io/crates/rust-analyzer-mcp
+
+  - id: F3
+    finding: >
+      cezarbbb/ra-mcp é o server MCP de rust-analyzer com o maior conjunto de tools
+      (30+ tools) incluindo recursos avançados que outros não têm:
+      expand_macro, view_hir, structural search-replace (ra_ssr), related_tests,
+      symbol index persistente (ra_build_index / ra_query_index), crate_graph.
+      NÃO publicado no crates.io — requer git clone + cargo build --release.
+      Tem testes, inclui "skills" (arquivos .md para guiar o agente).
+    evidence: >
+      README confirmado via clone. Tools listadas em tabela. skills/ directory presente.
+      Instalação: git clone + cargo build --release, depois configurar target/release/ra-mcp.
+    sources:
+      - https://github.com/cezarbbb/ra-mcp
+
+  - id: F4
+    finding: >
+      Vaiz/rust-mcp-server (v0.3.8) é o server MCP mais maduro para toolchain/cargo:
+      publicado no crates.io + docs.rs, instala com `cargo install rust-mcp-server`.
+      Expõe 30+ tools cobrindo: cargo build/check/test/clippy/doc/fmt/clean,
+      cargo add/remove/update/search/info/metadata/tree, cargo-deny (segurança),
+      cargo-machete (deps não usadas), cargo-hack (feature powerset),
+      cargo-expand, rustc-explain (erros E0xxx), rustup-show/toolchain-add/update.
+      Tem flags CLI: --disable-tool, --workspace, --registry, --log-level, --log-file.
+      Já integrado com GitHub Copilot Coding Agent (documentação dedicada).
+      ~27 stars no GitHub.
+    evidence: >
+      README completo confirmado via clone. Cargo.toml, CHANGELOG.md, docs/copilot-coding-agent.md.
+      crates.io: https://crates.io/crates/rust-mcp-server — v0.3.8.
+      docs.rs: https://docs.rs/crate/rust-mcp-server/latest
+    sources:
+      - https://github.com/Vaiz/rust-mcp-server
+      - https://crates.io/crates/rust-mcp-server
+      - https://docs.rs/crate/rust-mcp-server/latest
+
+  - id: F5
+    finding: >
+      Degens-World/rust-expert-mcp é o melhor server para conhecimento/erros/docs Rust:
+      acesso live à org rust-lang no GitHub (busca de código fonte em rustc/std/cargo/clippy),
+      explain_compiler_error (E0xxx direto do rustc), RFCs, The Book, The Reference,
+      Nomicon, Rust by Example, Edition Guide, e get_crate_info (metadata do crates.io).
+      Construído com rmcp (SDK oficial Rust MCP). Requer git clone + cargo build.
+      Recomenda GITHUB_TOKEN para evitar rate limit (10 req/min sem token).
+    evidence: >
+      README confirmado via clone. 14 tools listadas. MIT license. Build: cargo build --release.
+      Config Claude: `claude mcp add rust-expert -- /path/to/rust-expert-mcp`
+    sources:
+      - https://github.com/Degens-World/rust-expert-mcp
+
+  - id: F6
+    finding: >
+      dexwritescode/rust-mcp oferece 19+ tools incluindo features únicas de code generation
+      (generate_struct, generate_enum, generate_trait_impl, generate_tests) e refactoring
+      (rename_symbol, extract_function, inline_function, move_items, change_signature)
+      além de análise LSP padrão. Não publicado no crates.io; build from source.
+    evidence: README confirmado via clone. src/tools/ modular. CI no GitHub Actions.
+    sources:
+      - https://github.com/dexwritescode/rust-mcp
+
+  - id: F7
+    finding: >
+      ciresnave/rust-analyzer-mcp-server foca em instalação multiplataforma fácil:
+      tem installers PowerShell (.ps1), Batch (.bat), Shell (.sh), quick-install.sh,
+      e pre-built binaries no GitHub releases. Features LSP básicas (6 tools).
+      Boa opção Windows-first.
+    evidence: README confirmado via clone. install.ps1, install.sh, test-suite.sh presentes.
+    sources:
+      - https://github.com/ciresnave/rust-analyzer-mcp-server
+
+  - id: F8
+    finding: >
+      johnhnguyen97/lsp-mcp é um server MCP multi-linguagem (Rust, TS/JS, Python, Go, C/C++)
+      que expõe LSP features genéricas. Útil se o agente trabalha em múltiplas linguagens.
+      Para Rust puro, é menos capaz que os servers dedicados (sem macros, sem index, sem SSR).
+      Instala com `cargo install --path .` (não no crates.io como binário standalone).
+    evidence: README confirmado via clone. 8 tools lsp_* genéricas.
+    sources:
+      - https://github.com/johnhnguyen97/lsp-mcp
+
+  - id: F9
+    finding: >
+      NÃO existe um MCP server maduro e dedicado para busca de documentação de crates
+      no docs.rs. Degens-World/rust-expert-mcp tem get_crate_info (metadata) mas não
+      busca de docs de API. Context7 MCP é a alternativa genérica mais citada para
+      fetch de docs versionadas de libraries (incluindo crates Rust), mas é um server
+      genérico multi-linguagem, não específico de Rust. laptou/rust-docs-mcp-server
+      apareceu em uma lista mas não foi possível validar maturidade (sem GitHub stars confirmados).
+    evidence: >
+      Shuttle.dev comparison article cita Context7 como solução para docs Rust.
+      Nenhum server dedicado a docs.rs encontrado nos awesome-mcp lists.
+    sources:
+      - https://www.shuttle.dev/blog/2025/09/15/mcp-servers-rust-comparison
+
+recommendations:
+
+  - id: R1
+    recommendation: >
+      Para code intelligence semântica (tipos, go-to-definition, find references, hover,
+      diagnostics): instale zeenix/rust-analyzer-mcp. É o único publicado no crates.io
+      com testes completos.
+    based_on: [F2]
+    priority: high
+    install: |
+      # Pré-requisito
+      rustup component add rust-analyzer
+      # Instalar o MCP server
+      cargo install rust-analyzer-mcp
+      # Config MCP (pi-mcp-adapter ou .mcp.json)
+      # command: "rust-analyzer-mcp"
+
+  - id: R2
+    recommendation: >
+      Para toolchain completo (cargo build/check/test/clippy, dependency management,
+      rustc-explain de erros E0xxx, cargo-deny, cargo-machete): instale Vaiz/rust-mcp-server.
+      É o server cargo mais maduro, publicado no crates.io com release-plz e CI.
+    based_on: [F4]
+    priority: high
+    install: |
+      cargo install rust-mcp-server
+      # Config MCP:
+      # command: "rust-mcp-server"
+      # args: ["--workspace", "/path/to/rust/project"]
+
+  - id: R3
+    recommendation: >
+      Para conhecimento Rust profundo (compiler errors E0xxx com explicação completa,
+      RFCs, The Book, Reference, busca no código-fonte do rustc/std, crate info do crates.io):
+      instale Degens-World/rust-expert-mcp. Complementa os outros dois sem sobreposição.
+    based_on: [F5]
+    priority: medium
+    install: |
+      git clone https://github.com/Degens-World/rust-expert-mcp
+      cd rust-expert-mcp && cargo build --release
+      # Config MCP:
+      # command: "/path/to/rust-expert-mcp/target/release/rust-expert-mcp"
+      # env: { GITHUB_TOKEN: "ghp_..." }  # opcional mas recomendado
+
+  - id: R4
+    recommendation: >
+      Combinação recomendada para um agente de código Rust autônomo (3 servers,
+      sem sobreposição significativa):
+        1. zeenix/rust-analyzer-mcp → code intelligence semântica (LSP)
+        2. Vaiz/rust-mcp-server → cargo/clippy/rustc-explain/toolchain
+        3. Degens-World/rust-expert-mcp → docs/erros/RFCs/crates.io metadata
+      Total: ~50 tools cobrindo todas as necessidades listadas pelo usuário.
+    based_on: [F2, F4, F5]
+    priority: high
+
+  - id: R5
+    recommendation: >
+      Se precisar de features avançadas de rust-analyzer (macro expansion, HIR view,
+      structural search-replace, symbol index persistente) que zeenix não tem,
+      considere cezarbbb/ra-mcp como alternativa/replacement ao R1. Avaliar
+      trade-off: mais features vs. sem publish no crates.io.
+    based_on: [F3, F2]
+    priority: low
+
+gaps:
+
+  - gap: "Não existe MCP server oficial de rust-analyzer mantido pela rust-lang/rust-analyzer team."
+    why: "Todos são wrappers comunitários. Risco de abandono, inconsistência de protocolo."
+
+  - gap: "Não existe MCP server dedicado e maduro para busca de documentação de API em docs.rs."
+    why: "Degens-World tem metadata de crate mas não busca de docs de API. Context7 é genérico. laptou/rust-docs-mcp-server não validado."
+
+  - gap: "Não foi possível confirmar star counts exatos de todos os repos via API."
+    why: "Search results não incluíram stars para todos. Vaiz/rust-mcp-server tem ~27 estrelas (confirmado). Outros provavelmente baixos (<100)."
+
+  - gap: "Nenhum server testado em produção com o pi-mcp-adapter especificamente."
+    why: "Compatibilidade MCP stdio deve funcionar, mas não há relatos de uso com o agent pi."
+
+  - gap: "Nenhum dos servers oferece cargo-watch (re-build on file change) como tool MCP."
+    why: "cargo-watch é uma ferramenta de dev loop, não naturalmente uma tool MCP síncrona."
+
+  - gap: "Integração crates.io é limitada a metadata (search/info). Nenhum server oferece detecção de crates deprecated ou análise de popularidade comparativa."
+    why: "API do crates.io é suportada mas nenhum server implementa lógica de 'está deprecado?' ou 'alternativa melhor?'."
+
+open_questions:
+  - "cezarbbb/ra-mcp ou zeenix/rust-analyzer-mcp — qual é mais estável em projetos grandes (1000+ arquivos)?"
+  - "Existe compatibilidade real entre os 3 servers recomendados rodando simultaneamente (conflito de rust-analyzer)?"
+  - "rust-expert-mcp escala bem com rate limit do GitHub sem token em uso intensivo de agente?"
+
+sources:
+  - url: https://github.com/zeenix/rust-analyzer-mcp
+    title: "zeenix/rust-analyzer-mcp — rust-analyzer MCP server (crates.io v0.2.0)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://crates.io/crates/rust-analyzer-mcp
+    title: "rust-analyzer-mcp no crates.io"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://github.com/Vaiz/rust-mcp-server
+    title: "Vaiz/rust-mcp-server — cargo/clippy/toolchain MCP server (crates.io v0.3.8)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://crates.io/crates/rust-mcp-server
+    title: "rust-mcp-server no crates.io"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://docs.rs/crate/rust-mcp-server/latest
+    title: "rust-mcp-server docs.rs"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://github.com/Degens-World/rust-expert-mcp
+    title: "Degens-World/rust-expert-mcp — Rust knowledge/compiler errors/RFCs/crates.io MCP"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://github.com/cezarbbb/ra-mcp
+    title: "cezarbbb/ra-mcp — advanced rust-analyzer MCP (macros, HIR, SSR, index)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://github.com/dexwritescode/rust-mcp
+    title: "dexwritescode/rust-mcp — 19 tools: analysis + generation + refactoring"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://github.com/ciresnave/rust-analyzer-mcp-server
+    title: "ciresnave/rust-analyzer-mcp-server — cross-platform installers"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://github.com/johnhnguyen97/lsp-mcp
+    title: "johnhnguyen97/lsp-mcp — multi-language LSP MCP server"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://github.com/modelcontextprotocol/rust-sdk
+    title: "modelcontextprotocol/rust-sdk (RMCP) — SDK oficial Rust para MCP (3.5k stars)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://www.shuttle.dev/blog/2025/09/15/mcp-servers-rust-comparison
+    title: "Shuttle.dev — Hands-on Comparison of Best MCP Servers for Rust Developers"
+    relevance: medium
+    accessed: 2026-06-26

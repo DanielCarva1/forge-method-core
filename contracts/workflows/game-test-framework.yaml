@@ -1,0 +1,32 @@
+schema_version: "0.1"
+workflow:
+  id: "game-test-framework"
+  phases:
+  - "3-plan"
+  - "4-build-verify"
+  trigger:
+  - "game project needs a test framework before automation"
+  - "engine/platform test strategy is unclear"
+  inputs:
+  - "engine architecture"
+  - "game PRD or GDD"
+  - "platform constraints"
+  - "current test tooling"
+  steps:
+  - "choose engine-appropriate test layers"
+  - "define deterministic seams for mechanics, content, UI, saves, and multiplayer if relevant"
+  - "map manual playtest evidence to automated checks where practical"
+  - "record commands, fixtures, and limitations"
+  outputs:
+  - "game test framework plan"
+  - "test layer map"
+  - "command/evidence expectations"
+  done_when:
+  - "test layers and commands are explicit"
+  - "manual vs automated coverage is clear"
+  - "first automation target is known"
+  blocked_when:
+  - "engine/tooling cannot be identified"
+  - "no stable success signal exists"
+  handoff:
+  - "preserve framework plan, commands, first automation target, and known limitations"

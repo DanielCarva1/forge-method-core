@@ -1,0 +1,31 @@
+schema_version: "0.1"
+workflow:
+  id: "evolve-project"
+  phases:
+  - "6-evolve"
+  trigger:
+  - "state.phase == 6-evolve"
+  - "ready project receives feedback, defects, or new intent"
+  inputs:
+  - "current ready state"
+  - "feedback or defect"
+  - "existing artifacts"
+  - "recent evidence"
+  steps:
+  - "classify the change as defect, enhancement, pivot, or new module"
+  - "decide whether discovery, specification, planning, or direct build is required"
+  - "create new stories or update artifacts"
+  - "transition to the earliest phase that can handle the change safely"
+  outputs:
+  - "change classification"
+  - "new or updated stories"
+  - "updated state"
+  done_when:
+  - "next phase is explicit"
+  - "state contains the next action"
+  - "no feedback item remains unclassified"
+  blocked_when:
+  - "feedback contradicts current ready state"
+  - "requested change would invalidate core constraints"
+  handoff:
+  - "preserve classification and next phase"

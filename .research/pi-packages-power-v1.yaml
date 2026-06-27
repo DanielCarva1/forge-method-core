@@ -1,0 +1,311 @@
+meta:
+  topic: "Pi packages that expand pi-coding-agent power beyond core"
+  query: "Which npm packages (keyword pi-package / pi.dev/packages) make the pi coding agent more powerful, addressing context rot + Rust dev?"
+  date: 2026-06-26
+  researcher_model: claude-sonnet-4-20250514
+  confidence: high
+  sources_consulted: 22
+
+key_findings:
+
+  - id: F1
+    finding: "@hypabolic/pi-hypa — DETERMINISTIC LOCAL CONTEXT COMPRESSION for shell/tool output"
+    evidence: >
+      Routes Pi's bash/read/grep/find/ls through Hypa CLI which compresses tool output
+      with deterministic (non-LLM) reducers before it hits the context window.
+      First-class reducers for git, cargo/rustc (relevant!), kubectl, docker.
+      Provides hypa_shell, hypa_read, hypa_grep, hypa_find, hypa_ls tools.
+      Can run in 'replace' mode to fully take over Pi builtins, or 'additive' alongside.
+      Outputs capped at 50KB/2000 lines with full output saved to temp files for recovery.
+      203K downloads/mo. License: FSL-1.1-ALv2 (open-source, Apache 2.0 future).
+      v0.1.6, updated 4 days ago. Zero API cost, zero cloud calls.
+      Install: pi install npm:@hypabolic/pi-hypa
+    sources:
+      - https://www.npmjs.com/package/@hypabolic/pi-hypa
+      - https://github.com/Hypabolic/Hypa
+      - https://pi.dev/packages/@hypabolic/pi-hypa
+
+  - id: F2
+    finding: "context-mode — MCP plugin claiming 98% context window savings via sandboxed subprocess execution"
+    evidence: >
+      Achieves ~98% reduction (315KB → 5.4KB) by keeping raw tool outputs in isolated subprocesses
+      and indexing into SQLite FTS5 with BM25 ranking. Large command outputs, logs, API responses
+      never enter context — only concise summaries. Session continuity: tracks every edit/git-op/task
+      in SQLite, retrieves only relevant events via BM25 on compaction.
+      105.2K downloads/mo. License: Elastic-2.0 (NOT OSI open-source — has use restrictions).
+      v1.0.166, updated 2 days ago. Works as MCP plugin (needs pi-mcp-adapter which user has).
+      Install: pi install npm:context-mode
+      CAVEAT: Elastic-2.0 license means no providing it as a managed service. Fine for personal/dev use.
+    sources:
+      - https://www.npmjs.com/package/context-mode
+      - https://github.com/mksglu/context-mode
+
+  - id: F3
+    finding: "pi-hashline-edit-pro — HASH-ANCHORED EDITING that eliminates stale-context edit failures and saves tokens"
+    evidence: >
+      Replaces Pi's read/edit with hash-anchored line references (HASH│content on every line).
+      Edits reference 3-char hashes instead of raw text → detects stale context, rejects bad edits.
+      Eliminates the common failure where LLM edits wrong text due to shifted line numbers.
+      Atomic writes, per-file mutation queue, boundary duplication warnings.
+      Post-edit diff NOT shown to LLM (saves tokens). After successful edit, empty response.
+      Fork of pi-hashline-edit (25 stars on RimuruW original) with perfect hashing (collision-free).
+      Install: pi install npm:pi-hashline-edit-pro
+      LOW context cost: adds ~4 chars per line on read, saves tokens on edit confirmation.
+    sources:
+      - https://www.npmjs.com/package/pi-hashline-edit-pro
+      - https://github.com/YuGiMob/pi-hashline-edit-pro
+      - https://pi.dev/packages/pi-hashline-edit-pro
+
+  - id: F4
+    finding: "@bacnh85/pi-plan — PLAN MODE with read-only exploration, workspace markdown plans, thinking-level presets"
+    evidence: >
+      Adds /plan command (Ctrl+Alt+P). Restricts to read-only tools during planning.
+      write_plan tool saves plans to .agents/plans/ as reviewable markdown.
+      ask_plan_question tool for structured clarification during planning.
+      Remembers separate thinking/reasoning levels for planning vs execution.
+      Approval flow: execute in current/new session, approve only, keep planning, or refine.
+      Published hours ago (very fresh). Author @bacnh85 also has pi-review and pi-rtk packages.
+      Install: pi install npm:@bacnh85/pi-plan
+      VERY low context cost — the whole point is reducing context thrashing by planning before editing.
+    sources:
+      - https://www.npmjs.com/package/@bacnh85/pi-plan
+      - https://pi.dev/packages/@bacnh85/pi-plan
+
+  - id: F5
+    finding: "@juicesharp/rpiv-todo — TODO LIST that survives /reload and conversation compaction"
+    evidence: >
+      Adds todo tool + /todos command + live overlay widget above editor.
+      4-state machine (pending → in_progress → completed → deleted tombstone).
+      Dependency tracking with cycle detection (blockedBy).
+      KEY FOR CONTEXT ROT: tasks replay from conversation branch, not disk — survive compaction.
+      Smart truncation (12-line collapse, completed tasks drop first).
+      47.8K downloads/mo, 103 versions, v1.20.0, updated 10 days ago. Very mature.
+      Install: pi install npm:@juicesharp/rpiv-todo
+    sources:
+      - https://www.npmjs.com/package/@juicesharp/rpiv-todo
+      - https://pi.dev/packages/@juicesharp/rpiv-todo
+
+  - id: F6
+    finding: "@juicesharp/rpiv-ask-user-question — STRUCTURED CLARIFICATION dialogs instead of model guessing"
+    evidence: >
+      Adds ask_user_question tool: tabbed dialogs with single/multi-select, per-option previews
+      (code snippets, ASCII diagrams), per-option notes, Submit tab review.
+      Reduces wasted turns from model guessing wrong → less context pollution.
+      56.7K downloads/mo, 105 versions, v1.20.0, updated 10 days ago. Same rpiv-mono family as todo.
+      Install: pi install npm:@juicesharp/rpiv-ask-user-question
+      LOW context cost — prevents context-wasting guess cycles.
+    sources:
+      - https://www.npmjs.com/package/@juicesharp/rpiv-ask-user-question
+      - https://pi.dev/packages/@juicesharp/rpiv-ask-user-question
+
+  - id: F7
+    finding: "@vigolium/piolium — MULTI-PHASE SECURITY AUDITS with specialist sub-agents, 17-phase pipeline"
+    evidence: >
+      Runs deep source audits with isolated context windows per sub-agent.
+      17 phases (P1-P17): recon, static analysis, auth/access control, adversarial validation, PoC generation.
+      Resumable state, controlled concurrency. Slash commands: /piolium-lite, /piolium-balanced, /piolium-deep.
+      Full runs can take HOURS. By @j3ssie (trusted security researcher, J3SSIE).
+      10.9K downloads/mo. v0.0.11 (early). MIT license.
+      Install: pi install npm:@vigolium/piolium
+      NOT for daily coding — dedicated security audit tool. Heavy context consumer itself.
+    sources:
+      - https://www.npmjs.com/package/@vigolium/piolium
+      - https://github.com/vigolium/piolium
+
+  - id: F8
+    finding: "@alpsckr/pi-codegraph — CODE INTELLIGENCE via CodeGraph (tree-sitter indexing + symbol/caller/callee/impact queries)"
+    evidence: >
+      Wires CodeGraph as pi-native extension. Indexes project with tree-sitter.
+      10 tools: codegraph_search, codegraph_context, codegraph_trace, codegraph_explore,
+      codegraph_node, codegraph_callers, codegraph_callees, codegraph_impact, codegraph_files, codegraph_status.
+      File watcher auto-syncs on changes (~500ms-1s debounce).
+      No global install needed, no MCP config needed.
+      Context benefit: agent can query code structure WITHOUT reading entire files.
+      VERY new (just published, minimal track record). Depends on @colbymchenry/codegraph engine.
+      Install: pi install npm:@alpsckr/pi-codegraph
+      NOTE: Multiple codegraph packages exist (@vndv/pi-codegraph, picassio/pi-code-graph, gripebomb/pi-codegraph-extension).
+      The @alpsckr version appears to be the most recently maintained pi-native one.
+    sources:
+      - https://pi.dev/packages/@alpsckr/pi-codegraph
+      - https://github.com/colbymchenry/codegraph
+
+  - id: F9
+    finding: "@raoxxxwq/pi-tasks — CLAUDE CODE-STYLE TASK TRACKING with subagent integration"
+    evidence: >
+      By tintinweb (trusted). 7 LLM-callable tools matching Claude Code's exact tool specs.
+      Bidirectional dependency management, shared task lists across sessions (file-locked).
+      Background process tracking. Subagent integration via TaskExecute (requires pi-subagents).
+      System-reminder injection when task tools haven't been used recently.
+      More feature-complete than rpiv-todo but also more complex/heavier.
+      Install: pi install npm:@raoxxxwq/pi-tasks
+      CONTEXT NOTE: system-reminder injections add tokens periodically.
+    sources:
+      - https://www.npmjs.com/package/@raoxxxwq/pi-tasks
+      - https://github.com/tintinweb/pi-tasks
+
+  - id: F10
+    finding: "@oresk/pi-remote-tools — SSH remote file and command tools (ssh-read/write/edit/bash)"
+    evidence: >
+      Simple SSH tools with per-call host targeting. No toggle state needed.
+      v0.1.1, published 17 hours ago. 0 dependents. Very new.
+      Requires SSH keys in agent, hosts in ~/.ssh/config.
+      Install: pi install npm:@oresk/pi-remote-tools
+      PURE NICHE: only useful if you need to edit files on remote servers from Pi.
+    sources:
+      - https://www.npmjs.com/package/@oresk/pi-remote-tools
+
+  - id: F11
+    finding: "patchmill — AGENT-DRIVEN SOFTWARE FACTORY (issue triage → plan → implement → review → land)"
+    evidence: >
+      Full production line: connects issue host (GitHub/Forgejo), git worktrees, configurable workflow skills.
+      Bundles pi-subagents + todo extension + Superpowers skills pack.
+      Commands: patchmill init/auth/doctor/triage/run-once. 'patchmill run' (continuous loop) still in progress.
+      Install: npm install -g patchmill
+      NOT a Pi extension — it's a separate CLI that uses Pi as runtime.
+      OVERKILL for single-developer Rust work. Designed for team issue-driven workflows.
+    sources:
+      - https://www.npmjs.com/package/patchmill
+      - https://github.com/rochecompaan/patchmill
+
+  - id: F12
+    finding: "BONUS DISCOVERY: pi-lean-ctx — alternative to Hypa for token savings via bash/read/grep routing"
+    evidence: >
+      Routes bash/read/grep/find/ls through lean-ctx for strong token savings.
+      Embedded MCP bridge adds persistent session cache — unchanged re-reads cost ~13 tokens.
+      9,858 downloads/mo. v3.8.12, updated 1 day ago.
+      Install: pi install npm:pi-lean-ctx
+      COMPETES with @hypabolic/pi-hypa. Not as proven (47x fewer downloads) but lighter weight.
+    sources:
+      - https://pi.dev/packages/pi-lean-ctx
+
+  - id: F13
+    finding: "BONUS DISCOVERY: pi-hermes-memory — persistent memory + session search + secret scanning"
+    evidence: >
+      Token-aware policy-only memory by default. SQLite FTS5 search. Auto-consolidation.
+      368 tests (well-tested). Procedural skills. Ported from Hermes agent.
+      13.6K downloads/mo. v0.7.20, updated 21 hours ago.
+      Install: pi install npm:pi-hermes-memory
+      Addresses context rot differently: persists important context across sessions instead of just compressing.
+    sources:
+      - https://pi.dev/packages/pi-hermes-memory
+
+  - id: F14
+    finding: "BONUS DISCOVERY: pi-lens — real-time code feedback (LSP, linters, formatters, type-checking)"
+    evidence: >
+      Integrates LSP, linters, formatters, type-checking, structural analysis.
+      24.4K downloads/mo. v3.8.61, updated 11 hours ago. Very actively maintained.
+      Install: pi install npm:pi-lens
+      HIGH VALUE for Rust: catches type errors, clippy warnings, formatting issues in real-time
+      without needing full cargo check runs that pollute context with verbose output.
+    sources:
+      - https://pi.dev/packages/pi-lens
+
+recommendations:
+
+  - id: R1
+    recommendation: "INSTALL @hypabolic/pi-hypa (HIGH VALUE — #1 priority for context rot)"
+    based_on: [F1]
+    priority: high
+    rationale: >
+      Directly attacks context rot at the source: compresses cargo/rustc/git output deterministically
+      BEFORE it enters context. Zero API cost, zero latency (local binary), 203K/mo adoption.
+      The deterministic (non-LLM) approach means no degradation, no hallucinated summaries.
+      Use HYPA_PI_MODE=replace to fully replace Pi's noisy builtins.
+      THIS IS THE SINGLE MOST IMPACTFUL PACKAGE for the user's described problem.
+
+  - id: R2
+    recommendation: "INSTALL pi-hashline-edit-pro (HIGH VALUE — #2 priority for Rust editing accuracy)"
+    based_on: [F3]
+    priority: high
+    rationale: >
+      Eliminates stale-context edit failures (common with context rot — model edits wrong lines).
+      Saves tokens: empty response after successful edit, no diff shown to LLM.
+      Atomic writes prevent corruption. Works with any language including Rust.
+      Low overhead (~4 chars/line on read). Complements Hypa well.
+
+  - id: R3
+    recommendation: "INSTALL @bacnh85/pi-plan (HIGH VALUE — #3 priority for structured planning)"
+    based_on: [F4]
+    priority: high
+    rationale: >
+      Plan-before-execute directly reduces context thrashing: model explores read-only, writes a plan,
+      THEN executes. Separate thinking levels for planning vs execution means efficient token use.
+      Read-only mode prevents premature edits that waste context. Very new but simple and well-designed.
+      Alternative: @juicesharp/rpiv-pi (9.2K/mo) bundles planning + 20 workflow skills if you want more structure.
+
+  - id: R4
+    recommendation: "INSTALL @juicesharp/rpiv-todo (HIGH VALUE — #4 priority for context survival across compaction)"
+    based_on: [F5, F6]
+    priority: high
+    rationale: >
+      Tasks survive /reload AND conversation compaction — directly addresses context rot.
+      Model tracks where it is in multi-step work without re-reading everything.
+      Consider pairing with rpiv-ask-user-question to prevent guess-waste cycles.
+      Mature: 47.8K/mo, 103 versions. battle-tested.
+
+  - id: R5
+    recommendation: "STRONGLY CONSIDER context-mode (HIGH VALUE if Elastic license acceptable)"
+    based_on: [F2]
+    priority: medium
+    rationale: >
+      Biggest raw context savings (98% reduction). Session continuity via FTS5 is powerful.
+      BUT: Elastic-2.0 license (not truly open source), 4MB unpacked, runs as MCP subprocess.
+      MAY CONFLICT with @hypabolic/pi-hypa if both intercept tool calls. Pick ONE compression strategy.
+      Recommendation: try Hypa first (deterministic, no cloud, FSL license). If insufficient, add context-mode.
+
+  - id: R6
+    recommendation: "NICHE: pi-lens (install if Rust LSP feedback is valuable)"
+    based_on: [F14]
+    priority: medium
+    rationale: >
+      Real-time rust-analyzer feedback could catch errors before cargo build pollutes context.
+      But LSP itself adds some context overhead. Test it; disable if too noisy.
+
+  - id: R7
+    recommendation: "NICHE: pi-hermes-memory (install if cross-session memory needed)"
+    based_on: [F13]
+    priority: medium
+    rationale: >
+      Different approach to context rot: persists important facts across sessions.
+      Good for long-running Rust projects where architectural decisions need to survive session boundaries.
+
+  - id: R8
+    recommendation: "SKIP: @vigolium/piolium — only for dedicated security audits"
+    based_on: [F7]
+    priority: low
+    rationale: >
+      Excellent tool but consumes HEAVY context (17-phase audit runs for hours).
+      Install only when you need a security audit, then remove. Not a daily-coding enhancer.
+
+  - id: R9
+    recommendation: "SKIP: @alpsckr/pi-codegraph — promising but too new/unproven"
+    based_on: [F8]
+    priority: low
+    rationale: >
+      The concept (query code structure without reading files) is excellent for context savings.
+      But the package is brand new with minimal track record. CodeGraph engine itself is solid.
+      Revisit in 1-2 months when more mature. Consider pi-shazam (8.8K/mo) as alternative.
+
+  - id: R10
+    recommendation: "SKIP: @raoxxxwq/pi-tasks, @oresk/pi-remote-tools, patchmill"
+    based_on: [F9, F10, F11]
+    priority: low
+    rationale: >
+      pi-tasks overlaps heavily with rpiv-todo (both do task tracking). Pick one.
+      pi-remote-tools is SSH-only (only if you deploy to remote servers).
+      patchmill is a full team workflow factory — massive overhead for solo Rust dev.
+
+gaps:
+  - gap: "Cannot verify pi-lean-ctx vs Hypa head-to-head token savings"
+    why: "No published benchmarks comparing the two compression approaches"
+  - gap: "context-mode + Hypa interaction unclear"
+    why: "Both intercept tool calls; no documentation on concurrent use"
+  - gap: "@bacnh85/pi-plan download numbers unavailable"
+    why: "Published hours ago, too fresh for npm stats"
+  - gap: "pi-lens rust-analyzer integration quality unverified"
+    why: "README mentions LSP but doesn't detail Rust/rust-analyzer specifics"
+
+open_questions:
+  - "Does Hypa's deterministic compression handle Rust compiler errors/warnings well? (listed reducers mention git/dotnet/kubectl/docker but not cargo explicitly)"
+  - "Can rpiv-todo and pi-tasks coexist, or do they conflict on the /todos namespace?"
+  - "Does pi-hashline-edit-pro work correctly with Pi's compaction (does the hash table survive summarization)?"

@@ -1,0 +1,231 @@
+schema_version: "0.1"
+artifact_kind: "discovery-closeout"
+status: "accepted"
+created_at: "2026-06-25"
+project: "forge-method-rust"
+session: "recovery-after-codex-collapse"
+authority:
+  governs: "this file is durable truth until superseded by a higher-phase artifact signed under authority"
+  must_not:
+    - "be edited to change audit facts; audit is mechanical evidence, not opinion"
+    - "have its priority order silently inverted by any agent including pi"
+  supersedes:
+    - ".forge-method/state.yaml next_action (stale, references v2 build already shipped)"
+
+# ---------------------------------------------------------------------------
+# source_input: raw human intent in the human's own framing
+# ---------------------------------------------------------------------------
+source_input:
+  human: "creator of forge-method"
+  verbatim_framing:
+    - "um outro agente (codex) fodeu meu projeto"
+    - "queria contratos em yaml simples; o agente criou um milhao de linhas em markdown ditando comportamento"
+    - "agentes ja tem capacidade de entender que se o yaml diz pra ser gentil, ele e gentil; nao precisa de roteiro de novela"
+    - "o forge method e um protocolo que da direcoes pra o agente navegar; ditar passo a passo emburrece"
+    - "o agente vira interprete; o humano nunca le os docs diretamente, sempre via agente"
+    - "nenhum documento pra humanos, exceto um unico README de GH (intro + novidades + install)"
+    - "agents comecaram a editar state/contratos pra continuar sem respeitar os protocolos"
+    - "to criando app proprio do forge em rust tbm; este aqui e compativel/emprestado, o outro tem casca propria; quero reuso"
+    - "correcao: o que eu MAIS quero e um produto usavel; resolver state virou prioridade so porque estraga o resto"
+
+# ---------------------------------------------------------------------------
+# source_answer: what pi concluded, distilled
+# ---------------------------------------------------------------------------
+source_answer:
+  core_thesis: "Forge Method is a navigation protocol, not a behavior script. Agents are smart and getting smarter; the protocol gives directions and hard gates, not prose dictating how to speak."
+  guiding_principles:
+    - id: "G1_agent_optimal_format"
+      rule: "All method-internal artifacts are agent-optimal typed YAML. Markdown is render/export-only, never runtime or agent-facing authority."
+      evidence: "format research; anthropic 2025 context-engineering guidance; arxiv 2411.10541 (40% perf variance by format); arxiv 2602.05447 (YAML 60% fewer tokens than MD for file-native agents)"
+    - id: "G2_directions_not_script"
+      rule: "Contracts carry directions (navigate discovery->spec->plan->build) and hard gates (grill required, PRD before story, market/UX/PRD/epics mandatory). No 'Presence:' persona prose, no step-by-step behavior scripts."
+      evidence: "anthropic 2025 names this exact pattern as anti-pattern: 'hardcoding complex brittle logic in prompts creates fragility'"
+    - id: "G3_funnel_of_autonomy"
+      rule: "Interaction density thins down the funnel: top (discovery) is provocative and high-contact; bottom (build) is contractual and near-silent. Today it is uniform."
+    - id: "G4_integrity_enforced"
+      rule: "State is derived from an immutable append-only log, never hand-edited. The protocol that an agent can rewrite to bypass is theater. Authority is required for every mutation."
+      evidence: "grite arXiv:2606.19616 validated append-only log + CRDT + leases; python runtime claims append-only but only activates under registry.yaml (default mode unprotected) = claim is false"
+    - id: "G5_human_never_reads_artifacts"
+      rule: "Internal artifacts (PRD, ADR, grill, story, discovery) are agent-consumed. The single human surface is one GitHub README."
+    - id: "G6_no_replay_as_truth"
+      rule: "No agent (including pi) treats prior chat as source of truth. Durable typed files are truth. This artifact exists to lock mechanical audit facts so they cannot be lied about again."
+  reframe_of_problem:
+    - "The perceived problem (80k markdown) is a symptom. The roots are three: (1) FORMAT md-vs-yaml, (2) CONTENT script-vs-direction, (3) ARCHITECTURE enforcement + funnel."
+    - "Order of attack is reversed from the visible symptom: integrity/architecture first, then content, then format. Fixing YAML on a lying engine is lipstick."
+
+# ---------------------------------------------------------------------------
+# audit: mechanical, reproducible truth (antidote to the integrity lie)
+# ---------------------------------------------------------------------------
+audit:
+  verified_by: "pi via cargo + grep + git, 2026-06-25"
+  reproducible: "every fact below has a command; re-run to verify"
+  repositories:
+    forge_method_core:
+      path: "/mnt/c/Forge-method-core"
+      role: "active but broken Python runtime; the protocol we are rebuilding"
+      last_tag: "v2.0.1"
+      runtime: "skills/forge-method/scripts/forge_method_runtime.py = 18334 lines (god-file monolith)"
+      command_surface: "106 cmd_ functions"
+      markdown_count: "677 .md files (~27700 lines); ~239 are method definition, rest is state/docs"
+      integrity_claim: "FALSE"
+      integrity_proof: "is_fleet_mode() gates append-only behind .forge-method/agents/registry.yaml; default single-agent mode has NO integrity. requests-apply writes arbitrary payload into state.yaml. hashlib exists but only hashes assets, never verifies contracts at load."
+      verdict: "lying runtime; cannot remain acceptance center"
+    forge_method_rust:
+      path: "/mnt/c/forge-method-rust"
+      role: "adopted core real; target of rebuild"
+      git_activity: "single commit 'Initial Rust core migration'"
+      crates:
+        forge_core_contracts: "2215 lines, 17 files, dozens of typed enums, serde-derived"
+        forge_core_store: "4054 lines, WAL append-only with begin/before-image/commit + rollback + validate_tool_effect before write"
+        forge_core_cli: "12821 lines"
+        forge_core_runtime: "1844 lines"
+        forge_core_validate: "2458 lines"
+        forge_core_schema: "344 lines"
+        forge_contract_validator: "405 lines"
+      compile: "PASS (cargo check --workspace exit 0, 2m43s)"
+      test: "FAIL (6 targets fail; deserializes_all_operation_fixtures panic = fixtures/code desync)"
+      cli_surface: "24 commands"
+      cli_commands_real:
+        - "validate, execute-operation, rebuild/query-effect-index"
+        - "host-adapter-manifest/projection/process-policy/admit-invocation"
+        - "host-adapter-distribution-policy/admit-distribution"
+        - "host-adapter-verify-artifact/provenance/rekor-entry"
+        - "host-adapter-verify-sigstore-trust-policy/fulcio/bundle/dsse/timestamp"
+        - "host-adapter-verify-ct-sct/revocation-policy/tuf/crl"
+      cli_missing: "NO init, guide, oracle, gate, doctor, story_*, review, council, artifact, eval, handoff, next, resume, preflight"
+      integrity_enforced: "TRUE"
+      integrity_proof: "store append_effect_wal_record writes begin/before-image/commit records; apply path calls validate_tool_effect first and aborts on validation errors; effect metadata carries authority_boundary + forbidden_authority + required_authority_contracts; ed25519-dalek + sigstore + serde_json_canonicalizer are USED not just imported"
+      verdict: "REAL cryptographic+integrity spine (exactly the fix G4 needs); but ZERO operational method surface on top"
+      critical_finding: "the other agent built the hardest layer (integrity+supply-chain) but skipped forge-core state machine and the entire guidance/gates/catalog surface = the actual product is missing"
+      research_basis_verified: "backlog.yaml cites real arxiv IDs; grite arXiv:2606.19616 independently confirmed real (paper, github neul-labs/grite, crate libgrite-git v0.5.3, numbers match: dup 0.78->0.00, 3x throughput)"
+    forge_rust_app:
+      path: "/mnt/c/forge-rust-app"
+      role: "future standalone app with own shell; reuses core later"
+      state: "early scaffold; mostly stub crates (1 line each); forge-api 364 lines, forge-server 463 lines are the only real ones"
+      verdict: "separate product; consume forge-method-rust core later; not this work"
+
+# ---------------------------------------------------------------------------
+# discover-intent closeout fields (schema per facilitation: discover-intent)
+# ---------------------------------------------------------------------------
+audience:
+  first_user: "the creator himself, who needs a WORKING forge-method to continue building the standalone app"
+  second_user: "builders using borrowed shells (codex/cursor/opencode/claude/pi) who want a protocol that guides them to build anything"
+  decider: "the creator"
+
+outcome:
+  when_working: "a builder can run forge-method via any borrowed shell and get a rich guided path (discovery->spec->plan->build->ready) where the agent provokes and extracts early, then runs autonomously once it has what it needs"
+  what_changes: "the protocol stops being a lying markdown theater and becomes a fast compiled engine that enforces its own contracts and cannot be bypassed by the agent it governs"
+
+constraints:
+  fixed:
+    - "core language is Rust (non-negotiable, 6 months of POC-deferral debt ends now)"
+    - "this core plugs into borrowed shells; the standalone app is a separate product that reuses this core"
+    - "no new Python implementation targets for the core"
+  format:
+    - "method-internal artifacts are typed YAML, agent-optimal"
+    - "single human surface = one GitHub README (intro + patch notes + install + deeper section)"
+  process:
+    - "must follow forge-method flows (discovery->specification->plan->build->ready->evolve) even while rebuilding the method; practice what we preach"
+
+non_goals:
+  - "must not become a step-by-step behavior script that underuses smart agents"
+  - "must not keep Python as acceptance center"
+  - "must not require humans to read internal artifacts"
+  - "must not reinvent the integrity spine that already compiles in forge-method-rust"
+  - "must not throw away the real contracts/backlog/research the other agent produced honestly"
+  - "must not chase the state-mutation fix as the primary goal; it is a consequence of building the method right, not the destination"
+
+success_signal:
+  primary: "a builder can init a project, get guided through discovery, and build a story autonomously, all via the Rust core, with the agent unable to mutate state without authority"
+  proof_closes_discovery: "this artifact + the mechanical audit being accepted as durable truth by the human"
+  proof_closes_build: "cargo test green; cli parity for the minimum viable command surface; a real guided session end-to-end"
+
+visible_or_operational_proof:
+  early: "cargo test green across the spine (fix the 6 failing targets first)"
+  mid: "minimum viable surface running: init -> guide -> story_add -> story_done -> gate, enforced by Rust"
+  late: "full operational parity with python's 106 commands, migrated to typed contracts"
+
+early_visual_feedback_loop:
+  - "fix failing tests and show green cargo test"
+  - "demonstrate one guided init+story flow through the rust binary"
+  - "show an attempted unauthorized state mutation being REJECTED by the store (the G4 proof)"
+
+resolved_questions:
+  - id: "OQ1"
+    question: "what is the minimum viable command surface to ship first for a usable product?"
+    resolution: "CLOSED 2026-06-25 by human. Follow the discovery->build happy path first."
+    human_correction: "guide is NOT a static dispatcher. It is an intelligent orchestrator that maps a free-text user utterance + current project state to the correct next workflow. pi may adjust the surface as the design clarifies and MUST flag anything strange."
+    surface_v1: ["init", "guide (orchestrator-router)", "oracle", "gate", "doctor", "story_add", "story_list", "story_start", "story_done", "review", "next", "resume", "preflight", "transition"]
+    research_basis: "see grill GQ1 (FlowSwitch state-aware transitions, SDOF intent-router+state-constrained dispatch, AgentScope master-worker, LangGraph typed state graph)"
+    status: "closed"
+  - id: "OQ2"
+    question: "how is the rebuild itself managed?"
+    resolution: "CLOSED 2026-06-25 by human. Manage via typed contracts in contracts/project/ (YAML). Python forge-method is REFERENCE ONLY (consult if lost), never the management runtime."
+    action_taken: "deactivated the forge-method-pi package (removed from ~/.pi/agent/settings.json packages) so it stops injecting stale state and offering the python-driven forge_* tools."
+    reversibility: "re-add 'git:github.com/Stable-Studio/forge-method-pi' to settings.json packages to reactivate."
+    status: "closed"
+  - id: "OQ3"
+    question: "how is the grill run?"
+    resolution: "CLOSED 2026-06-25 by human. Grill is research-backed: closes loose ends AND serves as inspiration by surveying how successful cases solved each problem + what serious recent research (east and west) says for and against."
+    artifact: "contracts/grill/recovery-grill-001.yaml"
+    status: "closed"
+
+open_questions:
+  - id: "OQ4"
+    question: "should the format-research refresh (YAML vs JSON vs MD) be retried later, or is the existing prior-session evidence sufficient for specification?"
+    status: "deferred; prior evidence (arxiv 2602.05447, improvingagents) is sufficient to proceed; refresh nice-to-have once a search provider key is available"
+
+grill_gate_handoff:
+  required_before_spec: true
+  reason: "the prior agent shipped a false integrity claim and lost the design doc; a grill gate on this discovery locks that the audit is real and the scope is honest before we specify"
+  grill_questions:
+    - "is the minimum viable surface (OQ1) enough to call the product usable, or is it still a toy?"
+    - "does reusing the integrity spine create coupling that blocks the standalone app?"
+    - "is following forge-method-flows-while-rebuilding-forge-method too recursive to stay honest?"
+
+decision_log:
+  - step: 1
+    decision: "adopt forge-method-rust as core real"
+    authority: "human_explicit"
+  - step: 2
+    decision: "big-bang to Rust (not incremental python patching)"
+    authority: "human_explicit"
+    reason: "6 months of POC-deferral; user done with 'its just a POC' then 'dont touch it works'"
+  - step: 3
+    decision: "Option A: build the method ON TOP of the existing integrity spine, do not rewrite the spine"
+    authority: "human_explicit"
+    reason: "spine compiles and is cryptographically real; rewriting it wastes the one honest asset"
+  - step: 4
+    decision: "PRIORITY CORRECTION"
+    authority: "human_explicit"
+    text: "the PRIMARY goal is a usable product, NOT fixing state mutation. state mutation became a priority only because a senseless agent introduced it and it breaks everything. do not invert this priority."
+    binding: "any agent that treats state-fix as the goal instead of usable-product is violating this artifact"
+  - step: 5
+    decision: "follow forge-method flows (discovery->spec->plan->build->ready) even while rebuilding the method"
+    authority: "human_explicit"
+    reason: "practice what we preach; do not wing it like the prior agent who lost the design doc"
+  - step: 6
+    decision: "artifacts are typed YAML, agent-optimal; markdown render-only"
+    authority: "human_explicit"
+  - step: 7
+    decision: "guide is an intelligent orchestrator-router (NL utterance + state -> next workflow), not a static dispatcher"
+    authority: "human_explicit"
+    research: "grill GQ1"
+  - step: 8
+    decision: "manage the rebuild via typed contracts in contracts/project/; python forge-method reference-only; forge-method-pi package deactivated"
+    authority: "human_explicit"
+  - step: 9
+    decision: "grill is research-backed (cases + east/west literature, recent and serious)"
+    authority: "human_explicit"
+
+next_workflow:
+  recommended: "grill-gate on this discovery (the method's own anti-self-deception gate), then specification"
+  alternatives:
+    - "skip grill, go straight to specification (faster but repeats the prior agent's 'no verification' sin)"
+    - "reality-evidence-gate as lighter alternative to full grill"
+  pi_position: "run the grill gate; it is cheap insurance against re-creating the exact failure mode that caused this mess"
+
+inference_boundaries:
+  - "the integrity spine being real does NOT mean the rest is easy; the operational method surface is genuinely unbuilt"
+  - "the backlog and research being honest does NOT vindicate the prior agent overall; he still shipped a false claim and lost the design doc"
+  - "cargo test currently FAILS; the spine is real but not yet green; fixing tests is the first build step"

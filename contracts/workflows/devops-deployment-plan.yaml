@@ -1,0 +1,35 @@
+schema_version: "0.1"
+workflow:
+  id: "devops-deployment-plan"
+  phases:
+  - "3-plan"
+  - "5-ready-operate"
+  trigger:
+  - "project needs deployment, CI, environment, or operational setup"
+  - "release readiness depends on infrastructure"
+  inputs:
+  - "architecture artifact"
+  - "runtime requirements"
+  - "environments"
+  - "deployment target"
+  steps:
+  - "define environments and deployment path"
+  - "identify build, test, secret, and rollback needs"
+  - "define CI or release checks"
+  - "link deployment evidence, owners, blockers, and release impact"
+  - "save DevOps plan"
+  outputs:
+  - "deployment plan"
+  - "environment checklist"
+  - "release checks"
+  - "release impact"
+  done_when:
+  - "deployment path is explicit"
+  - "rollback or recovery is defined"
+  - "release checks are known"
+  - "release gate can inspect evidence or blockers"
+  blocked_when:
+  - "deployment target is unknown"
+  - "secrets or environments are inaccessible"
+  handoff:
+  - "preserve deployment path, checks, environments, rollback, evidence links, blockers, and release impact"

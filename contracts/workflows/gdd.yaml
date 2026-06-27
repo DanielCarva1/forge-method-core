@@ -1,0 +1,36 @@
+schema_version: "0.1"
+workflow:
+  id: "gdd"
+  phases:
+  - "2-specification"
+  trigger:
+  - "game brief exists"
+  - "game needs a durable design document"
+  inputs:
+  - "game brief"
+  - "MDA Trace"
+  - "mechanics notes"
+  - "narrative notes"
+  - "technical constraints"
+  steps:
+  - "carry forward or update MDA Trace before expanding design"
+  - "define pillars, loop, systems, content, and progression"
+  - "capture controls, UX, and feedback rules"
+  - "connect narrative, mechanics, engine/profile assumptions, and validation proof"
+  - "list prototype and playable slice requirements"
+  - "save GDD artifact"
+  outputs:
+  - "GDD artifact"
+  - "updated or preserved MDA Trace"
+  - "playable slice scope"
+  - "design risks"
+  done_when:
+  - "target aesthetics, dynamics, mechanics, and proof are traceable from brief to GDD"
+  - "core systems are explicit"
+  - "playable slice is bounded"
+  - "build stories can reference GDD sections"
+  blocked_when:
+  - "core mechanic is unresolved"
+  - "target platform changes design constraints"
+  handoff:
+  - "preserve GDD path, MDA Trace, pillars, playable slice scope, risks, proof checks, and next workflow"

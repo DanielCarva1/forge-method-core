@@ -1,0 +1,41 @@
+schema_version: "0.1"
+workflow:
+  id: "ux-plan"
+  phases:
+  - "3-plan"
+  trigger:
+  - "user-facing experience is part of the product"
+  - "requirements mention interface, onboarding, content, or human workflow"
+  inputs:
+  - "product requirements"
+  - "target user"
+  - "brand or tone constraints"
+  - "workflow goals"
+  - "references and anti-references"
+  - "accessibility, device, density, localization, and support constraints"
+  steps:
+  - "calibrate taste with references, anti-references, tone, density, and rejected patterns"
+  - "map primary user journeys, first-session success, and repeated workflows"
+  - "define surfaces, controls, information hierarchy, copy tone, and interaction rules"
+  - "identify empty, error, loading, success, permission, and recovery states"
+  - "define accessibility and usability proof targets"
+  - "save UX plan artifact and rejection log"
+  outputs:
+  - "UX plan artifact"
+  - "taste calibration and rejection log"
+  - "user journeys"
+  - "interaction states"
+  - "accessibility and proof targets"
+  - "copy and tone constraints"
+  done_when:
+  - "primary workflow is testable"
+  - "taste choices and rejected patterns are explicit"
+  - "key states are listed"
+  - "accessibility and proof target are defined"
+  - "implementation stories can reference UX decisions"
+  blocked_when:
+  - "audience or product posture is unknown"
+  - "visual or content direction conflicts with requirements"
+  - "references, anti-references, or workflow expectations are too vague to guide implementation"
+  handoff:
+  - "preserve UX plan path, taste decisions, journeys, states, accessibility, proof target, copy constraints, risks, and next workflow"
