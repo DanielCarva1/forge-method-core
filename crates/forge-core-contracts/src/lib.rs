@@ -4,6 +4,9 @@ pub mod command;
 pub mod common;
 pub mod envelope;
 
+pub mod agent_run;
+pub mod autonomy_policy;
+pub mod checkpoint;
 pub mod completion;
 pub mod coordination_eval;
 pub mod decision;
@@ -12,6 +15,7 @@ pub mod gate;
 pub mod guide_decision;
 pub mod inventory;
 pub mod isolation;
+pub mod memory;
 pub mod operation;
 pub mod operation_reference;
 pub mod phase;
@@ -19,13 +23,12 @@ pub mod recovery;
 pub mod request;
 pub mod runtime;
 pub mod tool_effect;
-pub mod workflow;
-pub mod agent_run;
-pub mod autonomy_policy;
-pub mod checkpoint;
-pub mod memory;
 pub mod verification_goal;
+pub mod workflow;
 
+pub use agent_run::{AgentRunContract, AgentRunContractDocument};
+pub use autonomy_policy::{AutonomyPolicyContract, AutonomyPolicyContractDocument};
+pub use checkpoint::{CheckpointContract, CheckpointContractDocument};
 pub use claim::{ClaimContract, ClaimContractDocument};
 pub use command::{CommandContract, CommandContractDocument};
 pub use common::{ClaimId, RepoPath, ScopeId, SourceId, StableId};
@@ -45,6 +48,7 @@ pub use isolation::{
     GitAction, IsolationContract, IsolationContractDocument, IsolationError, IsolationStatus,
     MergePlan, MergePolicy, MergeStep,
 };
+pub use memory::{MemoryContract, MemoryContractDocument};
 pub use operation::{OperationContract, OperationContractDocument};
 pub use operation_reference::OperationReferencePolicyDocument;
 pub use recovery::{
@@ -57,10 +61,6 @@ pub use runtime::{
     RuntimeRegistryEntryDocument,
 };
 pub use tool_effect::{ToolEffectContract, ToolEffectContractDocument};
-pub use agent_run::{AgentRunContract, AgentRunContractDocument};
-pub use autonomy_policy::{AutonomyPolicyContract, AutonomyPolicyContractDocument};
-pub use checkpoint::{CheckpointContract, CheckpointContractDocument};
-pub use memory::{MemoryContract, MemoryContractDocument};
 pub use verification_goal::{VerificationGoalContract, VerificationGoalContractDocument};
 
 pub use catalog::{Catalog, CatalogDocument, CatalogEntry};
