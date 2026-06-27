@@ -1,0 +1,356 @@
+meta:
+  topic: "Best missing features for Forge Method Core agent-governance engine"
+  query: "2024-2026 peer-reviewed papers and production case studies on agentic coding governance, coordination, evaluation, observability, trust/security, self-evolution, and eastern/western AI coding systems"
+  date: 2026-06-27
+  researcher_model: "OpenAI research subagent via web_search/fetch_content"
+  confidence: high
+  sources_consulted: 24
+key_findings:
+  - id: F1
+    finding: "The strongest production evidence favors layered, calibrated risk routing rather than uniform gates."
+    evidence: "Meta RADAR combines source classification, eligibility gates, static heuristics, Diff Risk Score, LLM code review, and deterministic validation; it reviewed 535K+ diffs, landed 331K+, reached 25K diffs/day, reported a 60.31% approve rate after p25->p50 calibration, 35% lower review wall time, and much lower revert/production-incident rates than non-RADAR diffs."
+    sources:
+      - "https://arxiv.org/html/2605.30208"
+      - "https://engineering.fb.com/2025/08/06/developer-tools/diff-risk-score-drs-ai-risk-aware-software-development-meta/"
+  - id: F2
+    finding: "Repository-structure-aware context retrieval is a repeatable differentiator for coding agents."
+    evidence: "AutoCodeRover used AST/code-search APIs plus optional spectrum-based fault localization; on SWE-bench Lite it reached 22.33% union resolved, and SBFL improved one-run resolution from 17.00% to 20.33%. Alibaba LingmaAgent reports a top-down repository knowledge graph deployed in TONGYI Lingma to overcome local-only context."
+    sources:
+      - "https://arxiv.org/html/2404.05427v2"
+      - "https://arxiv.org/abs/2406.01422v2"
+      - "https://doi.org/10.1145/3696630.3728549"
+  - id: F3
+    finding: "Self-evolving runtime tool creation is a 2025 frontier with large benchmark gains but needs governance controls."
+    evidence: "Live-SWE-agent reports 75.4% on SWE-bench Verified and 45.8% on SWE-Bench Pro without test-time scaling; ablation on 50 Verified tasks improved from 62.0% without tool creation to 76.0% with reflection-guided tool creation, while weak models degraded, showing the need for capability gating."
+    sources:
+      - "https://arxiv.org/html/2511.13646v1"
+      - "https://arxiv.org/html/2504.15228v2"
+  - id: F4
+    finding: "Multi-agent coordination is moving from file locks to shared-state and convergence models."
+    evidence: "CodeR uses multi-agent task graphs and reports 28.33% on SWE-bench Lite; emerging CodeCRDT and blackboard work proposes observable shared state, deterministic convergence, and shared memory as alternatives to brittle explicit messaging."
+    sources:
+      - "https://ar5iv.labs.arxiv.org/html/2406.01304"
+      - "https://arxiv.org/pdf/2510.18893"
+      - "https://arxiv.org/html/2507.01701v1"
+      - "https://doi.org/10.5281/zenodo.18911614"
+  - id: F5
+    finding: "Evaluation is shifting from simple pass/fail to outcome, overfitting, cost, location accuracy, and generated-test robustness."
+    evidence: "Agentless reports metrics such as percent resolved, cost, tokens, and correct location; AutoCodeRover manually checked plausible patches and found only 65.7% correct among 67 plausible patches; UTBoost targets insufficient SWE-bench tests by strengthening evaluation."
+    sources:
+      - "https://arxiv.org/pdf/2407.01489v1"
+      - "https://arxiv.org/html/2404.05427v2"
+      - "https://aclanthology.org/2025.acl-long.189.pdf"
+  - id: F6
+    finding: "Enterprise deployments emphasize adoption analytics and workflow-level outcome telemetry, not just model benchmarks."
+    evidence: "Cursor reports Coinbase moved to 2,400+ developers, 75% agent-created PRs, 55% more merged PRs per engineer, and 90% shorter idea-to-production time; Claude Code exposes team analytics for usage and engineering velocity; Devin publishes real-world strengths/weaknesses across customer environments."
+    sources:
+      - "https://cursor.com/blog/coinbase"
+      - "https://code.claude.com/docs/en/analytics"
+      - "https://cognition.ai/blog/devin-annual-performance-review-2025"
+  - id: F7
+    finding: "Chinese/eastern coding systems show strong emphasis on agentic IDE integration, whole-repo understanding, long context, and open benchmark competition."
+    evidence: "TRAE Agent reports 75.2% on SWE-bench Verified; Qwen3-Coder advertises 256K native and 1M extended context with strong agentic coding/tool-use; Tongyi Lingma describes autonomous planning, project perception, terminal/tool use, and Alibaba reports LingmaAgent repository exploration."
+    sources:
+      - "https://developer.volcengine.com/articles/7524179117001211913"
+      - "https://qwenlm.github.io/zh/blog/qwen3-coder/"
+      - "https://lingma.aliyun.com/"
+      - "https://arxiv.org/abs/2406.01422v2"
+  - id: F8
+    finding: "Agent trust/security needs runtime enforcement plus supply-chain provenance, beyond durable logs."
+    evidence: "2025-2026 security reports and projects highlight prompt-injection/code-execution/data-exfiltration risk in AI IDEs, recommend sandboxing, egress/file/process telemetry, and SLSA-like attestations for agent code, MCP tools, model/config provenance, and deployment admission."
+    sources:
+      - "https://labs.cloudsecurityalliance.org/wp-content/uploads/2026/04/CSA_research_note_ai-coding-assistant-attack-surface_20260403-csa-styled.pdf"
+      - "https://www.armosec.io/blog/how-to-detect-prompt-injection-in-production-ai-agent-workloads/"
+      - "https://github.com/slsa-framework/slsa/issues/1594"
+      - "https://getzil.dev/"
+feature_catalog:
+  - id: FEAT-01
+    name: "Calibrated diff-risk scoring with approval thresholds"
+    what: "A learned or rules+ML risk score for each proposed change, calibrated against reverts/incidents, with configurable thresholds per org, repo, runbook, file class, or phase."
+    source_of_proof: "Meta RADAR / Diff Risk Score production case."
+    impact_metric: "535K+ reviewed diffs; 331K+ landed; 25K/day; 60.31% approve rate after p25->p50; 35% lower review wall time; PI/revert rates far below non-RADAR diffs."
+    why_for_forge: "Forge has phase gates and a dual-lane risk router in progress, but the missing high-impact feature is empirical risk calibration tied to observed outcomes, not static policy. Inference: add a risk model over contract type, files, agent history, tests, ownership, churn, and prior incidents."
+    additive_or_foundational: additive
+    effort: L
+    confidence: high
+  - id: FEAT-02
+    name: "Source/runbook-specific eligibility and volume controls"
+    what: "Treat deterministic codemods, AI codemods, recurring runbooks, and human/agent diffs differently; require safety history, denylist, daily caps, and per-source thresholds."
+    source_of_proof: "Meta RADAR distinguishes deterministic codemods, AI codemods, RACER runbooks, and human diffs with 60-day risk history, caps up to 2,000/day, denylists, and different DRS thresholds."
+    impact_metric: "Part of RADAR's 331K+ landed diffs at production safety levels."
+    why_for_forge: "Forge has claims and gates, but likely lacks a first-class 'automation source/runbook reputation' object that can earn or lose autonomy over time."
+    additive_or_foundational: additive
+    effort: M
+    confidence: high
+  - id: FEAT-03
+    name: "Semantic automated-review classifier as a gate"
+    what: "An LLM reviewer that classifies the actual diff into safe categories and risk signals, requiring high confidence before auto-approval."
+    source_of_proof: "Meta RADAR ACR requires confidence >=8/10 and all changes in safe categories; any security/performance/logic-risk signal routes to human review."
+    impact_metric: "Enabled RADAR's automated review/landing with lower wall time and low incident indicators across 535K+ diffs."
+    why_for_forge: "Forge gates require evidence, but likely do not yet include a semantic reviewer contract that explains why a change is safe or unsafe in typed categories."
+    additive_or_foundational: additive
+    effort: M
+    confidence: high
+  - id: FEAT-04
+    name: "Program-structure-aware context and impact map"
+    what: "Index AST/LSP symbols, call graph, dependencies, ownership, tests, and touched contracts so agents retrieve semantic entities instead of only files or grep hits."
+    source_of_proof: "AutoCodeRover's AST search solved 22.33% union on SWE-bench Lite and uniquely solved tasks via fine-grained context; Alibaba LingmaAgent uses a repository knowledge graph for whole-repo exploration."
+    impact_metric: "AutoCodeRover 15.95% full SWE-bench; 22.33% SWE-bench Lite union; LingmaAgent accepted at ACM ISSTA 2025 and deployed in TONGYI Lingma."
+    why_for_forge: "Forge governs files and contracts; semantic impact maps would improve claim precision, required evidence selection, reviewer routing, and conflict detection beyond paths."
+    additive_or_foundational: additive
+    effort: L
+    confidence: high
+  - id: FEAT-05
+    name: "Execution-guided validation: reproducer synthesis + fault localization"
+    what: "Generate or capture failing reproducers, run tests, derive suspicious methods/paths, and feed execution evidence back into plans/gates."
+    source_of_proof: "AutoCodeRover added spectrum-based fault localization and patch validation; SBFL improved SWE-bench Lite one-run resolution from 17.00% to 20.33%."
+    impact_metric: "+3.33 percentage points absolute solve rate in the reported SBFL setting; 20 unique tasks resolved by SBFL variant."
+    why_for_forge: "Forge has required evidence gates; it likely lacks automatic evidence discovery that says which tests/reproducers are necessary for this change and why."
+    additive_or_foundational: additive
+    effort: L
+    confidence: high
+  - id: FEAT-06
+    name: "Patch overfitting and semantic-correctness audit"
+    what: "Evaluate whether patches merely pass current tests or are semantically equivalent/acceptable, with labels for correct location, wrong patch, wrong file, and no patch."
+    source_of_proof: "AutoCodeRover manually audited plausible patches: 65.7% correct among 67 plausible patches; it published a taxonomy of wrong patch/location/file/no patch."
+    impact_metric: "Revealed that test-pass alone overstated quality by about one-third for AutoCodeRover's plausible patches."
+    why_for_forge: "Forge promises outcome quality; typed verification should separate 'tests passed' from 'credible semantic fix' and preserve audit labels for eval regression."
+    additive_or_foundational: additive
+    effort: M
+    confidence: high
+  - id: FEAT-07
+    name: "Eval bank with cost, latency, location, and regression dimensions"
+    what: "A maintained evaluation corpus for agents/routing/gates with percent resolved, correct location, cost, tokens, latency, patch correctness, flaky-test rate, and incident proxies."
+    source_of_proof: "Agentless reports resolved %, cost, tokens, and correct location; UTBoost strengthens SWE-bench by addressing insufficient tests; Meta uses production telemetry not just offline benchmarks."
+    impact_metric: "Agentless and AutoCodeRover show location/cost metrics expose different failure modes; UTBoost is designed to catch under-tested patches."
+    why_for_forge: "Forge has a router eval corpus, but likely needs a broader outcome eval bank tied to governance decisions and phase gates, including generated-test adequacy."
+    additive_or_foundational: additive
+    effort: M
+    confidence: high
+  - id: FEAT-08
+    name: "Live tool/skill creation under typed governance"
+    what: "Allow agents to synthesize task-specific tools during a run, but require manifesting purpose, permissions, sandbox profile, tests, provenance, and expiry before use/reuse."
+    source_of_proof: "Live-SWE-agent reached 75.4% SWE-bench Verified and 45.8% SWE-Bench Pro; ablation improved 62.0%->76.0% on 50 tasks with reflection-guided tool creation."
+    impact_metric: "+14 percentage points in ablation with Claude 4.5 Sonnet; however GPT-5-Nano degraded, implying capability/risk gating is necessary."
+    why_for_forge: "Forge already governs agent work; this would make agent self-extension safe and auditable instead of forbidding or blindly allowing generated scripts."
+    additive_or_foundational: additive
+    effort: L
+    confidence: medium
+  - id: FEAT-09
+    name: "Shared blackboard with typed observations and decision provenance"
+    what: "A shared-state memory where agents publish observations, hypotheses, decisions, evidence, and blockers with schemas, freshness, ownership, and contradiction handling."
+    source_of_proof: "Blackboard MAS papers argue shared information across roles improves multi-agent problem solving; SE-Blackboard provides SWE-bench Verified experimental configurations; surveys identify shared memory/coordination as core MAS design concerns."
+    impact_metric: "Evidence is promising but less mature than RADAR/AutoCodeRover; reported artifacts focus on experimental configurations rather than large production metrics."
+    why_for_forge: "Forge has claims/authority but likely lacks a typed shared cognition layer that prevents duplicated discovery and makes cross-agent reasoning reviewable."
+    additive_or_foundational: additive
+    effort: M
+    confidence: medium
+  - id: FEAT-10
+    name: "CRDT/OT-inspired convergent edit model for agent work"
+    what: "Represent concurrent edits as operations over shared state with deterministic merge/convergence, not only path-level exclusion."
+    source_of_proof: "CodeCRDT proposes observation-driven coordination for multi-agent LLM code generation using CRDTs to enable lock-free coordination and deterministic convergence."
+    impact_metric: "Preprint-level evidence; impact numbers were not verifiable from fetched content, but the model directly addresses parallel speedup limits from coordination overhead."
+    why_for_forge: "Forge already claims disjoint files and detects path conflicts; CRDT/operation-level isolation could unlock safe same-file or generated-contract collaboration later."
+    additive_or_foundational: foundational
+    effort: L
+    confidence: low
+  - id: FEAT-11
+    name: "Task graph decomposition with role-specific agents and consensus checkpoints"
+    what: "Break issues into a graph of locate/understand/patch/test/review subtasks with role-specific agents and explicit handoff contracts."
+    source_of_proof: "CodeR uses multi-agent task graphs for issue resolution and reports 28.33% solved on SWE-bench Lite; RTADev uses role-playing agents aligned by consensus over requirements/design/code/test."
+    impact_metric: "CodeR 28.33% on SWE-bench Lite in one submission."
+    why_for_forge: "Forge has 7 phases but may benefit from intra-phase typed task graphs and consensus checkpoints for complex tickets, not only phase transitions."
+    additive_or_foundational: additive
+    effort: M
+    confidence: medium
+  - id: FEAT-12
+    name: "Human-intervention triggers and autonomy levels"
+    what: "Define when agents must ask humans: insufficient context, high-risk areas, repeated failed validation, semantic uncertainty, policy exceptions, or low model/tool capability."
+    source_of_proof: "AutoCodeRover explicitly identifies human involvement criteria as needed when agents get stuck; RADAR routes risky/blocked diffs to humans; Live-SWE-agent shows weak models can degrade with autonomy."
+    impact_metric: "No single universal number; evidence is convergent across papers/cases as a safety and effectiveness guardrail."
+    why_for_forge: "Forge has waivers and gates; explicit autonomy levels would turn 'ask for review' into a measurable policy rather than ad hoc escalation."
+    additive_or_foundational: additive
+    effort: M
+    confidence: high
+  - id: FEAT-13
+    name: "Runtime sandbox policy per agent/tool/action"
+    what: "Constrain generated tools and coding agents with filesystem, network, process, secret, package-install, and resource policies; record violations as governance events."
+    source_of_proof: "CSA and ARMO document AI coding assistant attack surfaces and prompt-injection detection telemetry; sandbox projects for Claude/coding agents use namespaces, Landlock/cgroups/net allowlists and attest actions."
+    impact_metric: "Security evidence is threat-driven rather than productivity-number-driven; CSA reports broad vulnerability patterns across AI IDEs, and ARMO lists concrete process/filesystem/Kubernetes telemetry."
+    why_for_forge: "Forge has WAL/audit direction, but governance is incomplete if the agent can execute unbounded shell/tool actions while satisfying typed contracts."
+    additive_or_foundational: additive
+    effort: L
+    confidence: high
+  - id: FEAT-14
+    name: "Signed agent-action and artifact provenance"
+    what: "Keyless/signature-backed attestations for prompts, model/tool versions, policies, eval results, generated patches, waivers, and contract transitions, with admission checks."
+    source_of_proof: "SLSA AI-agent proposal frames provenance for agent code, MCP server integrity, model provenance, and configuration integrity; Zil and LLM supply-chain attestation projects show manifest/eval/signing patterns."
+    impact_metric: "Emerging practice; direct impact numbers unavailable, but maps to established software supply-chain integrity controls."
+    why_for_forge: "Forge has typed contracts and effects WAL; signing turns logs/contracts into verifiable artifacts across hosts, CI, and external review."
+    additive_or_foundational: additive
+    effort: M
+    confidence: medium
+  - id: FEAT-15
+    name: "Prompt-injection and tool-abuse detection telemetry"
+    what: "Detect anomalous child processes, unexpected file reads, secret access, network egress, MCP/tool calls, and policy drift during agent sessions."
+    source_of_proof: "ARMO recommends process, filesystem, Kubernetes API, and eBPF-level telemetry for prompt injection in production agent workloads; CSA highlights coding assistants as attack surfaces for code execution and exfiltration."
+    impact_metric: "Threat detection guidance; no controlled productivity metric, but directly addresses high-severity agent risk."
+    why_for_forge: "Forge's governance should observe actual behavior, not only final diffs. This complements WAL durability with runtime security semantics."
+    additive_or_foundational: additive
+    effort: M
+    confidence: high
+  - id: FEAT-16
+    name: "Team analytics for adoption, throughput, quality, and reviewer load"
+    what: "Dashboards linking agent usage to merged PRs, cycle time, review latency, reverts, incidents, test failures, and human-review burden."
+    source_of_proof: "Cursor reports Coinbase 2,400+ developers, 75% agent-created PRs, 55% more merged PRs per engineer, and 90% shorter idea-to-production time; Claude Code provides team analytics for usage and velocity."
+    impact_metric: "Coinbase case: 90% idea-to-production reduction and 55% more PRs merged per engineer, vendor-reported."
+    why_for_forge: "Forge is a protocol engine; it needs outcome telemetry to prove quality/velocity claims and tune gates."
+    additive_or_foundational: additive
+    effort: M
+    confidence: medium
+  - id: FEAT-17
+    name: "Long-context and whole-repo budget manager"
+    what: "A policy engine that chooses when to use long-context models, compacted repo graphs, local indexes, or small-model routes based on task risk and context need."
+    source_of_proof: "Qwen3-Coder reports 256K native context and 1M extension for agentic coding; Trae and Lingma emphasize project perception and cross-file agentic editing; AutoCodeRover shows structured search can beat naive context stuffing."
+    impact_metric: "Qwen source reports open-model SOTA claims; AutoCodeRover provides benchmark evidence that structured retrieval yields 22.33% SWE-bench Lite union."
+    why_for_forge: "Forge has a router eval corpus and risk router in progress; it likely needs typed context-budget decisions as a governed resource."
+    additive_or_foundational: additive
+    effort: M
+    confidence: medium
+  - id: FEAT-18
+    name: "Enterprise policy DSL for human-agent collaboration"
+    what: "A domain-specific policy language for who/what can modify, review, waive, or merge under conditions such as ownership, risk, source, and project norms."
+    source_of_proof: "Automated-governance DSL research for human-agent collaboration in software projects argues OSS and mixed human/AI projects lack explicit enforceable policies."
+    impact_metric: "Vision/preprint-level; no production impact number found."
+    why_for_forge: "Forge already uses typed YAML contracts; a policy DSL could formalize authority/waivers across repos and orgs instead of hard-coded gates."
+    additive_or_foundational: additive
+    effort: L
+    confidence: low
+top_5_missing:
+  - FEAT-01
+  - FEAT-04
+  - FEAT-05
+  - FEAT-08
+  - FEAT-13
+gaps:
+  - gap: "Direct evidence for Factory, Devin, Cursor, Claude Code, and Chinese commercial tools is often vendor-reported."
+    why: "Many production numbers are published as case studies/blogs rather than peer-reviewed papers with raw data; confidence is medium for impact magnitudes but high that the feature categories exist."
+  - gap: "CodeCRDT, SE-Blackboard, and AI-agent SLSA practices are promising but not yet backed by large independent production results."
+    why: "Available sources are preprints, datasets, GitHub proposals, or early projects; mark as lower confidence or foundational/longer-term."
+  - gap: "Forge's actual current implementation was not inspected due to the no-local-file-reading instruction."
+    why: "Missing-feature judgments are inferred from the user's provided inventory; if Forge already has a hidden feature, recommendations should be deduplicated in review."
+open_questions:
+  - question: "Which outcome labels can Forge collect now: reverts, incidents, failed CI, reviewer comments, post-merge defects, customer-impact events, or only local validation results?"
+  - question: "Should Forge's risk router start as transparent rules/logistic scoring before ML, to build calibration data and operator trust?"
+  - question: "What sandbox boundary is acceptable for host agents: advisory policy only, containerized execution, or OS-level enforcement with network/secret isolation?"
+  - question: "Can generated tools be allowed only after a typed tool-manifest contract, test, and signed attestation are produced?"
+  - question: "Will Forge support same-file collaboration eventually, or intentionally keep file-claim isolation as a simpler invariant?"
+sources:
+  - url: "https://arxiv.org/html/2605.30208"
+    title: "Automating Low-Risk Code Review at Meta: RADAR, Risk Calibration, and Review Efficiency"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://engineering.fb.com/2025/08/06/developer-tools/diff-risk-score-drs-ai-risk-aware-software-development-meta/"
+    title: "Diff Risk Score: AI-driven risk-aware software development - Engineering at Meta"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://arxiv.org/html/2404.05427v2"
+    title: "AutoCodeRover: Autonomous Program Improvement"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://arxiv.org/pdf/2407.01489v1"
+    title: "Agentless: Demystifying LLM-based Software Engineering Agents"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://ar5iv.labs.arxiv.org/html/2406.01304"
+    title: "CodeR: Issue Resolving with Multi-Agent and Task Graphs"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://arxiv.org/html/2511.13646v1"
+    title: "Live-SWE-agent: Can Software Engineering Agents Self-Evolve on the Fly?"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://arxiv.org/html/2504.15228v2"
+    title: "A Self-Improving Coding Agent"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://arxiv.org/pdf/2510.18893"
+    title: "CodeCRDT: Observation-Driven Coordination for Multi-Agent LLM Code Generation"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://arxiv.org/html/2507.01701v1"
+    title: "Exploring Advanced LLM Multi-Agent Systems Based on Blackboard Architecture"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://doi.org/10.5281/zenodo.18911614"
+    title: "SE-Blackboard: A Shared-State Architecture for Multi-Agent Software Engineering Pipelines"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://arxiv.org/html/2404.04834"
+    title: "LLM-Based Multi-Agent Systems for Software Engineering: Literature Review, Vision and the Road Ahead"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://aclanthology.org/2025.findings-acl.80.pdf"
+    title: "RTADev: Intention Aligned Multi-Agent Framework for Software Development"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://aclanthology.org/2025.acl-long.189.pdf"
+    title: "UTBoost: Rigorous Evaluation of Coding Agents on SWE-Bench"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://developer.volcengine.com/articles/7524179117001211913"
+    title: "TRAE Agent 在 SWE-bench Verified 上得分 75.2%，并已开源"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://www.infoq.cn/article/ep5bS0fMyaLbANwhohoE"
+    title: "从补全到 Agentic Edit：Trae 在代码编辑上的落地与进化"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://qwenlm.github.io/zh/blog/qwen3-coder/"
+    title: "Qwen3-Coder: 在世界中自主编程"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://lingma.aliyun.com/"
+    title: "通义灵码_你的智能编码助手-阿里云"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://arxiv.org/abs/2406.01422v2"
+    title: "Alibaba LingmaAgent: Improving Automated Issue Resolution via Comprehensive Repository Exploration"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://doi.org/10.1145/3696630.3728549"
+    title: "Alibaba LingmaAgent: Improving Automated Issue Resolution via Comprehensive Repository Exploration (ACM)"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://mfe-prod.idc.com/getdoc.jsp?containerId=prCHC53557425"
+    title: "AI Coding市场迎来爆发期，IDC发布一季度中国市场代码生成产品评估"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://cursor.com/blog/coinbase"
+    title: "Coinbase reduces time from idea to production by 90% with Cursor"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://cognition.ai/blog/devin-annual-performance-review-2025"
+    title: "Devin's 2025 Performance Review: Learnings From 18 Months of Agents At Work"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://code.claude.com/docs/en/analytics"
+    title: "Track team usage with analytics - Claude Code Docs"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://labs.cloudsecurityalliance.org/wp-content/uploads/2026/04/CSA_research_note_ai-coding-assistant-attack-surface_20260403-csa-styled.pdf"
+    title: "AI Coding Assistants as Attack Surface: Code, Skills, and Secrets"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://www.armosec.io/blog/how-to-detect-prompt-injection-in-production-ai-agent-workloads/"
+    title: "How to Detect Prompt Injection in Production AI Agent Workloads"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://github.com/slsa-framework/slsa/issues/1594"
+    title: "Proposal: SLSA levels for AI agent deployments"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://getzil.dev/"
+    title: "Zil — A framework for production AI agents"
+    relevance: medium
+    accessed: 2026-06-27
