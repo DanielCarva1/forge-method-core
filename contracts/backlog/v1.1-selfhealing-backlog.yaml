@@ -1,0 +1,136 @@
+schema_version: "0.1.0"
+artifact:
+  id: v1.1-selfhealing-backlog
+  kind: backlog
+  status: queued
+  created: 2026-06-27
+  target_version: "1.1"
+  deferred_from: "v1 (self-healing é endurecimento pós-lançamento, NÃO pré-requisito da promessa central)"
+
+  rationale: |
+    Self-healing (WAL + prefix-recovery + fail-loud) NÃO bloqueia a promessa central
+    do produto (multi-agent sem conflito no happy path, já provado). Os 3 workers de
+    preparação gpt-5.5 confirmaram o gap é real e mapearam tudo. Trabalho preservado
+    como backlog priorizado da v1.1 para não desperdiçar.
+
+    Decisão: o v1 lança SEM self-healing. A v1.1 endurece com os itens abaixo.
+
+  source_research:
+    - contracts/research/selfhealing-writepath-audit-v1.yaml  # W1: mapa E/S, corruption/concurrency risk por operação
+    - contracts/research/selfhealing-wal-crc-design-v1.yaml   # W2: design WAL completo (18 sources, CRC-32C, format layout)
+    - contracts/research/selfhealing-failpoint-audit-v1.yaml  # W3: 15 fail-points (6 HIGH), tiered invariants
+
+  cross_validation: |
+    3 fontes independentes convergem (não achismo):
+    - 2 reviews adversariais (claim_engine.rs, conflict_detection.rs) — 10 bugs
+    - W1 write-path audit — confirma: sem WAL, lockfile órfão sem detectar dono, sem fsync, TOCTOU
+    - W3 failpoint audit — 6 HIGH no claim_engine (TTL overflow, rfc3339 inválido), panics no store commit path
+
+priority_1_high:
+  - id: P1.1
+    title: "fix: TTL lease overflow (debug panic / release wrap)"
+    files: [crates/forge-core-engine/src/claim_engine.rs]
+    lines: ["285", "356"]
+    problem: "now_unix + ttl com i64::try_from(ttl).unwrap_or(i64::MAX) pode overflow. Debug = panic, release = wrap (corrompe expires_at)."
+    fix: "checked_add / saturating_add com rejection path (InvalidRequest) para TTL irrepresentável."
+    source: [W3 F-line 285/356, review-claim-engine F3]
+    effort: S
+
+  - id: P1.2
+    title: "fix: rfc3339_to_unix aceita datas inválidas (viola fail-closed + DD21)"
+    files: [crates/forge-core-engine/src/claim_engine.rs]
+    lines: ["53-62"]
+    problem: "Aceita 2026-02-31, hora 99:99:99. Lease corrompido tratado como vivo."
+    fix: "Validar day vs mês/leap-year + h(0..23) m(0..59) s(0..59) antes de days_from_civil. Retornar None → fail-closed."
+    source: [W3 lines 54-57, review-claim-engine F2]
+    effort: S
+
+  - id: P1.3
+    title: "fix: acquire() gera claim inválida pelo próprio validador"
+    files: [crates/forge-core-engine/src/claim_engine.rs]
+    lines: ["319", "457-463"]
+    problem: "default_expiry_policy() = handoff_required=true + handoff_request_ref=None → validador rejeita. Toda claim nova é inválida."
+    fix: "Tornar default_expiry_policy() internamente válido, ou mudar policy/default contract juntos. Teste: acquire() result passa validate_claim."
+    source: [review-claim-engine F1]
+    effort: M
+    note: "Investigar se o validador roda em runtime ou só em build-time — pode ser que afete apenas validação estática, não runtime. Confirmar antes de priorizar."
+
+  - id: P1.4
+    title: "fix: root paths (./) viram escopo vazio → false negative em conflito"
+    files: [crates/forge-core-engine/src/conflict_detection.rs]
+    lines: ["242-243", "264-268"]
+    problem: "normalize('.')/''/'' → segmentos vazios → path_covers retorna false → claim root não bloqueia nada."
+    fix: "Rejeitar '.','/','' na acquisition COM erro tipado, OU representar root explicitamente. Testes: '.','/', '', child 'src/lib.rs'."
+    source: [review-conflict-detection F1]
+    effort: M
+
+priority_2_medium:
+  - id: P2.1
+    title: "feat: WAL append-only hand-rolled (CRC-32C + prefix-recovery)"
+    design: contracts/research/selfhealing-wal-crc-design-v1.yaml
+    summary: "Formato FMW1 + header(24B) + payload + CRC-32C duplo. 6 record types. Prefix recovery estrito (para no 1º inválido, trunca sob lock exclusivo). Append durável via fs4 lock + O_APPEND + write_all + sync_data."
+    crates_new: ["fs4", "crc32c"]
+    effort: L
+    depends_on: [P1.1, P1.2]  # não buildar WAL sobre aritmética buggy
+
+  - id: P2.2
+    title: "feat: derive_state como ÚNICO construtor do estado de claims"
+    summary: "Hoje cada comando re-read todos YAMLs. Mudar: derive_state(WAL replay) vira a única fonte. load_claims legado vira fallback/debug."
+    source: [W1 q2]
+    effort: M
+    depends_on: [P2.1]
+
+  - id: P2.3
+    title: "feat: reconcile loop via tokio interval (NÃO notify — UNSOUND no WSL)"
+    summary: "Reconcilia estado (detecta claims expirados, heartbeat stale) num interval, não via fs-watch. notify tem issue #254 no WSL."
+    effort: M
+    depends_on: [P2.2]
+
+  - id: P2.4
+    title: "feat: fail-loud tiered invariants"
+    summary: "Resultado do W3: 7 Result/Diagnostic, 5 debug_assert, 1 abort_at_commit. Converter panics do store commit-path em tiered failures."
+    source: [W3 tiered_invariant_recommendations]
+    effort: M
+    depends_on: [P2.1]
+
+priority_3_low:
+  - id: P3.1
+    title: "feat: lockfile com stale-owner detection (pid/timestamp + timeout)"
+    files: [crates/forge-core-cli/src/io_util.rs]
+    lines: ["41-66", "73"]
+    problem: "Lockfile órfão (crash antes do Drop) bloqueia mutators sem remediação. Drop remove por path sem validar ownership."
+    fix: "lockfile com pid+timestamp; acquire detecta idade/dono; timeout retorna EnvConfig com remediação."
+    source: [W1 io_util.rs entries, W3 recommendation]
+    effort: M
+
+  - id: P3.2
+    title: "fix: case-fold ASCII-only em conflito (Unicode quebra WSL/Windows)"
+    files: [crates/forge-core-engine/src/conflict_detection.rs]
+    lines: ["276-285"]
+    fix: "Unicode case folding ou canonical path identity no IO boundary."
+    source: [review-conflict-detection F3]
+    effort: S
+
+  - id: P3.3
+    title: "feat: WAL rotation (snapshot + checkpoint_ref)"
+    summary: "WAL cresce sem bound. Trigger: >64MiB, >100k records, replay >250ms. Protocol do W2 step-by-step."
+    source: [W2 rotation_strategy]
+    effort: L
+    depends_on: [P2.1]
+
+  - id: P3.4
+    title: "feat: proptest de WAL (truncation, bitflip, 50-process stress, recovery idempotence)"
+    source: [W2 open_questions]
+    effort: M
+    depends_on: [P2.1]
+
+explicit_non_goals_for_v1:
+  - "TOCTOU do check-write: é ADVISORY por design (documentado em claim.rs:347-354). Não fechar no v1."
+  - "Durabilidade fsync no WSL/DrvFS: best-effort, documentado."
+
+verification_status_at_handoff:
+  repo: GREEN
+  tests: "382 passed, 0 failed"
+  clippy: clean
+  fmt: clean
+  git_head: "e8a158c (parallel stress test) + este backlog commit"
