@@ -1,0 +1,465 @@
+meta:
+  topic: "Robustness, self-healing, diagnosability/observability for a file-backed WAL multi-agent governance runtime (50+ concurrent agents)"
+  query: "Proven patterns for (1) self-healing/auto-recovery for file+WAL state machines, (2) observability for multi-agent systems, (3) continuous invariant checking, (4) failure-mode taxonomy & blast-radius bounding at 50 agents — applied to a file-backed (not networked) Rust runtime."
+  date: 2026-06-26
+  researcher_model: "researcher (gemini-class)"
+  confidence: high
+  sources_consulted: 30
+
+# ---------------------------------------------------------------------------
+# KEY FINDINGS
+# ---------------------------------------------------------------------------
+key_findings:
+
+  - id: F1
+    finding: "Level-triggered reconciliation (the Kubernetes controller pattern) is the only failure shape that survives partial failures gracefully, and it is fully applicable to a FILE-BACKED runtime because it depends on 'observe current state, diff against desired, act' — not on networking."
+    evidence: >
+      Kubernetes docs and controller-runtime define Reconcile(ctx, req) as a function that
+      "compares the state specified in an object against the actual cluster state, then performs
+      operations to make actual state reflect desired state," and emphasize the defining property
+      is level-triggered: "it reacts to the current state of the world, not to an event."
+      The toolkit.whysonil summary states the pattern is universal because "if your controller
+      crashes mid-act, the next iteration of the loop just observes again, computes a fresh diff,
+      and acts on whatever is still wrong." For Forge Method: a reconcile loop that re-derives
+      claim/scope state from the WAL and re-asserts invariants every tick is the canonical shape.
+    sources:
+      - https://kubernetes.io/docs/concepts/architecture/controller/
+      - https://github.com/kubernetes-sigs/controller-runtime/blob/main/pkg/reconcile/reconcile.go
+      - https://toolkit.whysonil.dev/learn/kubernetes/internals/controllers/
+
+  - id: F2
+    finding: "ARIES write-ahead-logging recovery (repeat-history-redo + undo with compensation records) is the textbook integrity spine and maps almost 1:1 onto an append-only WAL whose state is derived, never hand-edited."
+    evidence: >
+      The ARIES paper (Mohan et al., IBM/DB2) establishes three properties: (1) WAL — log record
+      reaches stable storage before the data change; (2) Repeating history during redo — replay
+      the log forward from the last checkpoint re-applying every update; (3) Logging during undo —
+      write a CLR for each undo so recovery is itself idempotent. CMU 15-445 (Spring 2026) and
+      PostgreSQL's xlogrecovery.c (PerformWalRecovery() replays rmgr-specific redo routines,
+      FinishWalRecovery() does end-of-recovery checks) confirm this is live production practice.
+      Critically, ARIES is STEAL+NO-FORCE and assumes only a durable log, not a distributed
+      network — so it transfers directly to a local file-backed WAL.
+    sources:
+      - https://people.eecs.berkeley.edu/~brewer/cs262/Aries.pdf
+      - https://15445.courses.cs.cmu.edu/spring2026/notes/23-recovery.pdf
+      - https://github.com/postgres/postgres/blob/e18b0cb7/src/backend/access/transam/xlogrecovery.c
+
+  - id: F3
+    finding: "Continuous runtime invariant checking that FAILS LOUD (rejects the update rather than persisting corruption) is a proven database/filesystem technique — exemplified by PostgreSQL amcheck, MongoDB's tiered assertions, and the Recon runtime-consistency checker."
+    evidence: >
+      PostgreSQL amcheck "verifies various invariants in the structure of the representation...
+      the correctness of the access method functions relies on these invariants always holding"
+      and can be run online against live relations. MongoDB's exception architecture defines three
+      tiers: massert (per-operation, operation-fatal), fassert (process-fatal), invariant (process
+      -fatal, for "pointer should never be null" logic errors) — i.e. a deliberate fail-loud ladder.
+      The Recon system (Fryer et al., FAST'14 / ACM TOSEM) is the closest analog: it expresses
+      filesystem consistency as a set of invariants derived from an offline checker, checks them at
+      runtime, and "when kernel bugs or memory corruption lead to metadata updates that violate
+      these consistency invariants, a corruption is detected and the updates are prevented from
+      reaching the disk." This is exactly the 'prevent silent corruption' behavior Forge Method wants.
+    sources:
+      - https://www.postgresql.org/docs/16/amcheck.html
+      - https://github.com/mongodb/mongo/blob/master/docs/exception_architecture.md
+      - https://www.usenix.org/system/files/conference/fast14/fast14-paper_fryer.pdf
+      - https://www.eecg.utoronto.ca/~ashvin/publications/checking-tx-integrity-tos.pdf
+
+  - id: F4
+    finding: "MAS-specific observability literature exists and is nascent but real; the most rigorous whole-system framework (LumiMAS, AAMAS 2026) shows that operational+semantic features logged per agent-execution enable sub-0.1s anomaly detection and automated root-cause attribution — directly relevant to cutting the 2-hour manual diagnosis cost."
+    evidence: >
+      LumiMAS logs a predefined, platform-agnostic event set (Application-Started/Ended,
+      Agent-Started/Finished, LLM-Call, Tool-Usage) capturing operational features (tool-invocation
+      counts, duration, tokens) and semantic features (LLM-output embeddings). Three LSTM
+      autoencoders (EPI, Semantic, Combined) flag reconstruction-error anomalies; a classification
+      agent + RCA agent attribute the anomaly to the originating agent and a causal chain.
+      Evaluation on 7 MAS apps across CrewAI+LangGraph: combined detector avg accuracy 0.750,
+      F1 0.754, avg decision time 0.057s — 148x faster than LLM-as-judge baselines (8.448s).
+      Crucially, LumiMAS's logging layer is agnostic to the transport; a file-bus is just another
+      event source. The MAST taxonomy (Cemri et al., cited within) classifies MAS failures into
+      Specification Issues, Inter-Agent Misalignment, and Verification/Termination Deficiencies.
+    sources:
+      - https://www.arxiv.org/pdf/2508.12412
+      - https://arxiv.org/html/2411.05285v2
+
+  - id: F5
+    finding: "Causal/execution tracing adapted from distributed tracing is the emerging standard for multi-agent diagnosability; treating each agent step as a span with a trace-context gives cross-agent correlation without a daemon."
+    evidence: >
+      AgentTrace (arXiv) "reconstructs causal graphs from execution logs, traces backward from
+      error manifestations, and ranks candidate root causes." Cisco/Outshift, Microsoft Learn, and
+      Oracle docs all describe applying OpenTelemetry-style distributed tracing (spans, trace
+      context propagation, correlation IDs) to multi-agent AI systems. The key transferable idea
+      for Forge Method: every claim/handoff/outcome written to the file-bus carries a trace-id +
+      span-id + parent-span-id, so the append-only WAL IS the trace store — no separate collector
+      needed. AgentSight (arXiv) even correlates LLM prompts with kernel/eBPF events at boundaries.
+    sources:
+      - https://arxiv.org/pdf/2603.14688
+      - https://outshift.cisco.com/blog/ai-ml/ai-observability-multi-agent-systems-opentelemetry
+      - https://learn.microsoft.com/en-us/training/modules/aaai-implement-distributed-observability-multi-agent-opentelemetry/
+      - https://arxiv.org/pdf/2602.10133
+
+  - id: F6
+    finding: "Build-system invariant checking (Bazel/Buck) shows how to enforce write-scope exclusivity and determinism at scale via a verified action graph — directly analogous to claim-based write gating across 50 agents."
+    evidence: >
+      Bazel's Actions.java enforces verifyGeneratingActionKeys / ActionConflictException so that no
+      two actions generate the same output (the blast-radius primitive for parallel agents). Bazel's
+      core correctness contract is action determinism: "build actions must be deterministic... when
+      they aren't, builds can fail in subtle and frustrating ways, eroding trust" (jmmv.dev).
+      Buck's MultiThreadedActionGraphBuilder documents explicit concurrency semantics: "incomplete
+      rules from the current thread behave as if the rule does not exist" to prevent races. For
+      Forge Method, the analog is: claim acquisition = action-graph node; two live claims over the
+      same write path = ActionConflictException equivalent = hard block with typed reason.
+    sources:
+      - https://github.com/bazelbuild/bazel/blob/master/src/main/java/com/google/devtools/build/lib/actions/Actions.java
+      - https://jmmv.dev/2025/07/bazel-action-determinism.html
+      - https://buck.build/javadoc/com/facebook/buck/core/rules/resolver/impl/MultiThreadedActionGraphBuilder.html
+
+  - id: F7
+    finding: "At 50 concurrent agents the dominant failure modes are NOT crashes but silent cascades: stale reads (TOCTOU between read-state and write), artifact mutability divergence (agents acting on different versions of the same file), context/memory poisoning, and mid-flight TTL expiry — and these are invisible to standard monitoring by design."
+    evidence: >
+      The Cascade Problem analysis: "it's a systems failure that unit tests structurally cannot
+      catch... race conditions, retry amplification, shared state corruption only emerge when
+      multiple agent instances interact with the same real-world resources simultaneously." Zylos
+      on artifact mutability: "when two agents analyze the same git branch... without explicit
+      version pinning, agents silently diverge — producing confident findings about different
+      realities." Redis/tianpan on context poisoning: "unlike crashes or exceptions, context
+      poisoning is invisible to standard monitoring" and "accumulated reasoning errors build up
+      and anchor every subsequent decision." The Stale World Model piece documents the exact
+      read-preview-then-write race pattern that matches the --id vs claim-id bug class.
+    sources:
+      - https://tianpan.co/blog/2026-04-19-agent-side-effects-cascade-problem-production
+      - https://zylos.ai/research/2026-04-22-artifact-mutability-multi-agent-workflows/
+      - https://redis.io/blog/context-poisoning-agent-reasoning/
+      - https://tianpan.co/blog/2026-04-10-stale-world-model-long-running-agents
+
+  - id: F8
+    finding: "POSIX write() atomicity guarantees DO NOT protect multi-agent shared-file coordination: concurrent write() to a regular file are atomic per-syscall but reads may see torn/partial state, and there is no cross-process compare-and-swap on a plain file — so claim-based gating must be enforced by the runtime, not assumed by the OS."
+    evidence: >
+      POSIX (pubs.opengroup) guarantees read()/write() to regular files are atomic with respect to
+      each other in effects, BUT only at the level of "each call shall either see all of the
+      specified effects of the other or none." This does NOT prevent a reader observing a file that
+      a writer is mid-replacing unless the writer uses atomic rename (write-temp + rename). The
+      Linux VFS commit (bgamari/linux 9c225f2) notes concurrent write() previously could overwrite
+      each other's data via f_pos races. ext4 atomic block writes exist but require Direct I/O +
+      hardware support. Implication: Forge Method's file-bus writes MUST be atomic-via-rename and
+      the runtime's claim check must be the single serialization authority, because the filesystem
+      will not serialize two agents editing the same YAML.
+    sources:
+      - https://pubs.opengroup.org/onlinepubs/9699919799/functions/write.html
+      - https://stackoverflow.com/questions/10650861/atomicity-of-write2-to-a-local-filesystem
+      - https://docs.kernel.org/filesystems/ext4/atomic_writes.html
+
+  - id: F9
+    finding: "Blast-radius bounding for autonomous agents is an active 2025-2026 practice area but the rigorous literature is thin (mostly vendor/spec work, not peer-reviewed); the convergent primitive is deterministic pre-action authorization enforced structurally at the runtime layer, not probabilistically via the model."
+    evidence: >
+      arXiv 2603.20953 "Deterministic Pre-Action Authorization for Autonomous AI Agents" distinguishes
+      pre-action authorization (deterministic block) from sandboxed execution (contains but doesn't
+      prevent) and model-based screening (probabilistic), showing they are complementary. AgentPatterns
+      frames least-privilege: "the damage an agent can do is bounded by the permissions you grant...
+      enforced at the runtime layer — the execution environment filters which tools are available
+      before the model ever sees a request, so even a successfully injected prompt cannot invoke a
+      restricted tool." This maps cleanly onto Forge Method's claim + check-write gating as the
+      deterministic authorization boundary. CAVEAT: the gravity.fast 'blast radius playbook' and
+      agentic-blast-radius-framework are industry/vendor artifacts, not peer-reviewed evidence.
+    sources:
+      - https://arxiv.org/pdf/2603.20953
+      - https://agentpatterns.ai/security/blast-radius-containment/
+
+# ---------------------------------------------------------------------------
+# RECOMMENDATIONS (prioritized by impact-for-OUR-system: file-backed Rust, 50 agents)
+# ---------------------------------------------------------------------------
+recommendations:
+
+  - id: R1
+    recommendation: >
+      Implement a level-triggered reconcile loop (Kubernetes controller pattern, F1) that runs on
+      every tick (or every WAL append) and re-derives the entire claim/scope/handoff state from the
+      WAL, then re-asserts all invariants. Because state is already WAL-derived, the loop is a pure
+      function of the log — crash-safe by construction. Make it idempotent and re-runnable so a
+      crash mid-reconcile just resumes. This is the single highest-leverage change: it converts the
+      runtime from edge-triggered (events) to level-triggered (current truth), which is the
+      documented prerequisite for surviving 50-agent partial failures.
+    based_on: [F1, F2]
+    priority: high
+
+  - id: R2
+    recommendation: >
+      Encode a continuous invariant monitor (Recon/amcheck style, F3) as a fail-loud gate on every
+      WAL append: before an append is accepted, assert invariants such as (a) every active claim
+      points at a real declared scope, (b) no two live claims overlap a write path, (c) WAL tail is
+      parseable and monotonically sequenced, (d) every handoff references an existing claim. On
+      violation, REJECT the append with a typed reason (never silently persist). Adopt MongoDB's
+      tiered assertion ladder (per-operation fail / process-fatal) to decide severity. This catches
+      the --id-vs-claim-id class of bug at write time instead of during a demo.
+    based_on: [F3, F6, F8]
+    priority: high
+
+  - id: R3
+    recommendation: >
+      Make the file-bus writes atomic via write-temp-then-rename and treat the runtime's
+      claim+check-write as the ONLY serialization authority (F8). Do not rely on POSIX per-syscall
+      atomicity for multi-agent coordination. Additionally, embed a trace-id/span-id/parent-span-id
+      in every claim/handoff/outcome record (F5) so the WAL itself is the distributed-trace store —
+      this gives cross-agent causal correlation with zero new infrastructure and directly targets the
+      2-hour manual diagnosis cost by enabling backward root-cause tracing from any failed outcome.
+    based_on: [F5, F8, F7]
+    priority: high
+
+  - id: R4
+    recommendation: >
+      Adopt a structured event log modeled on LumiMAS's platform-agnostic event set (F4):
+      Application-Started/Ended, Agent-Started/Finished, LLM-Call, Tool-Usage, plus Forge-specific
+      Claim-Acquired/Check-Write/Handoff/Outcome events, each carrying operational features (agent id,
+      scope, latency, token count) and the trace context from R3. Start with rule-based/EPI-style
+      detectors (deterministic, no ML needed) before considering autoencoders — e.g. flag any write
+      where the acting agent's claim-id ≠ the resolved claim-id, or any handoff whose source claim
+      has expired. This gives fast (sub-second) detection of the dominant silent-cascade failure
+      modes (F7) without the retraining overhead of statistical detectors.
+    based_on: [F4, F7, F5]
+    priority: high
+
+  - id: R5
+    recommendation: >
+      Bound blast radius structurally (F9) by making claim scoping the deterministic authorization
+      boundary: each agent's claim enumerates exact file globs it may touch, and check-write hard-
+      blocks anything outside with a typed reason. Add per-agent audit logs (write-only append) so
+      every cross-scope rejection is recorded for forensics. Add a canary/preview mode where an
+      agent's proposed writes are validated against invariants before commit. Treat capability
+      scoping + atomic rename + invariant gate as the three-layer containment stack.
+    based_on: [F9, F6, F8]
+    priority: medium
+
+  - id: R6
+    recommendation: >
+      Address stale-read / artifact-mutability divergence (F7) by version-pinning every contract:
+      each claim/handoff records the WAL sequence number (or content hash) of the state it read, and
+      check-write rejects an append if the underlying file has advanced past the read version
+      (optimistic-concurrency / compare-by-sequence-number). This converts silent divergence into a
+      loud, retryable conflict — the same pattern databases and distributed stores use. Explicitly
+      document TTL-expiry-mid-flight as a typed failure so it appears in metrics, not as a silent
+      stall.
+    based_on: [F7, F2, F8]
+    priority: medium
+
+  - id: R7
+    recommendation: >
+      Adopt ARIES-style recovery for the WAL (F2): on startup, replay forward from the last
+      checkpoint (repeat history), then for any incomplete multi-step transaction log a
+      compensation/undo record so recovery is idempotent and re-runnable. Add an offline/amcheck-
+      style WAL validator that can be run on demand (CI + cron) to catch structural corruption
+      before agents ever read it. This is cheap insurance that turns 'rederive state' from a
+      recovery path into a continuously-verified invariant.
+    based_on: [F2, F3]
+    priority: medium
+
+# ---------------------------------------------------------------------------
+# GAPS (be honest where the literature is thin)
+# ---------------------------------------------------------------------------
+gaps:
+
+  - gap: "No peer-reviewed research specifically on file-backed (non-networked) typed-contract-bus coordination among LLM agents."
+    why: >
+      All located MAS-observability work (LumiMAS, AgentTrace, AgentOps, AgentSight) assumes agents
+      communicate via a framework's in-process message bus or network APIs, not via YAML files on a
+      shared filesystem. The concepts transfer (events are events), but no one has published
+      empirical results on file-bus-specific pathologies (torn reads, rename races, stale file
+      caches across processes) at 50-agent scale.
+
+  - gap: "Blast-radius bounding for autonomous agents is mostly vendor/industry material, not rigorous evidence."
+    why: >
+      The gravity.fast 'playbook', agentic-blast-radius-framework, and Tracehold scoring are industry
+      artifacts (2026). The arXiv pre-action-authorization paper is the most rigorous but is itself
+      recent (2603.xxxxx). There are no longitudinal production post-mortems of 50+ concurrent
+      autonomous coding agents sharing one repo, because that deployment scale is itself new.
+
+  - gap: "Statistical anomaly detection (LumiMAS autoencoders) requires benign-run training data Forge Method does not yet have."
+    why: >
+      LumiMAS trained on 2000+ benign runs per app. At 2 agents today, there is insufficient baseline
+      data to train a reconstruction-error model. Recommendation R4 therefore prioritizes
+      deterministic/rule-based detectors first; statistical detection is a later phase once a benign
+      run corpus exists.
+
+  - gap: "No direct evidence on how filesystem-level concurrency behaves at 50 processes on one repo on common dev OSes (Windows via WSL, macOS APFS, Linux ext4)."
+    why: >
+      POSIX semantics are specified, but real-world atomic-rename durability, directory-entry
+      visibility latency across processes, and mmap coherence differ by filesystem and are not
+      benchmarked in the located literature for this access pattern. Empirical measurement on the
+      target platform is needed.
+
+# ---------------------------------------------------------------------------
+# OPEN QUESTIONS
+# ---------------------------------------------------------------------------
+open_questions:
+  - "Should the reconcile loop (R1) run as a dedicated watchdog process, or piggyback on the first agent's runtime per tick? A dedicated process is cleaner but reintroduces a daemon (violating the no-daemon wedge)."
+  - "Can the trace-id/span-id scheme (R3) reuse OpenTelemetry's W3C TraceContext format so off-the-shelf OTel exporters work against the WAL, or should it stay a bespoke format to avoid daemon dependencies?"
+  - "What is the observed inter-process file-visibility latency on the target platforms (WSL/ext4, APFS)? This bounds how 'real-time' the reconcile loop can claim to be."
+  - "For optimistic-concurrency on contracts (R6): is WAL-sequence-number or content-hash the cheaper correctness token given Rust + YAML serialization cost?"
+  - "Does the MAST taxonomy (Cemri et al.) need extension for file-bus-specific failure classes (torn read, rename race, cross-process stale cache) that the networked MAS literature does not cover?"
+
+# ---------------------------------------------------------------------------
+# SOURCES (full bibliography)
+# ---------------------------------------------------------------------------
+sources:
+
+  - url: https://kubernetes.io/docs/concepts/architecture/controller/
+    title: "Controllers | Kubernetes"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://github.com/kubernetes-sigs/controller-runtime/blob/main/pkg/reconcile/reconcile.go
+    title: "pkg/reconcile/reconcile.go (controller-runtime) — Reconcile interface definition"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://toolkit.whysonil.dev/learn/kubernetes/internals/controllers/
+    title: "Kubernetes Controller Pattern — the reconcile loop"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://www.golinuxcloud.com/kubernetes-reconcile-loop-explained/
+    title: "Kubernetes Reconcile Loop Explained: Workqueue, Reconcile() & Code (2026)"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://book-v1.book.kubebuilder.io/basics/what_is_a_controller
+    title: "What is a Controller — The Kubebuilder Book (level-triggered property)"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://wasilzafar.com/pages/series/systems-thinking-architecture/systems-thinking-architecture-cdp-k8s-reconciliation.html
+    title: "Kubernetes Reconciliation Architecture (observe/diff/act, self-healing)"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://people.eecs.berkeley.edu/~brewer/cs262/Aries.pdf
+    title: "ARIES: A Recovery Algorithm Supporting Partial Rollbacks (Mohan et al., IBM)"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://15445.courses.cs.cmu.edu/spring2026/notes/23-recovery.pdf
+    title: "CMU 15-445 Database Systems — Database Crash Recovery (WAL, redo, undo)"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://github.com/postgres/postgres/blob/e18b0cb7/src/backend/access/transam/xlogrecovery.c
+    title: "PostgreSQL src/backend/access/transam/xlogrecovery.c — WAL replay implementation"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://www.postgresql.org/docs/16/amcheck.html
+    title: "PostgreSQL amcheck — tools to verify table and index consistency (online invariant checking)"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://github.com/mongodb/mongo/blob/master/docs/exception_architecture.md
+    title: "MongoDB exception architecture — massert / fassert / invariant tiered assertions"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://www.usenix.org/system/files/conference/fast14/fast14-paper_fryer.pdf
+    title: "Checking the Integrity of Transactional Mechanisms (Recon, FAST'14) — runtime consistency invariants"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://www.eecg.utoronto.ca/~ashvin/publications/checking-tx-integrity-tos.pdf
+    title: "Checking the Integrity of Transactional Mechanisms (ACM TOSEM journal version)"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://www.arxiv.org/pdf/2508.12412
+    title: "LumiMAS: A Comprehensive Framework for Real-Time Monitoring and Enhanced Observability in Multi-Agent Systems (AAMAS 2026)"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://arxiv.org/html/2411.05285v2
+    title: "AgentOps: Enabling Observability of LLM Agents"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://arxiv.org/pdf/2603.14688
+    title: "AgentTrace: Causal Graph Tracing for Root Cause Analysis in Deployed Multi-Agent Systems"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://arxiv.org/pdf/2602.10133
+    title: "AgentTrace (structured logging variant): A Structured Logging Framework for Agent System Observability / AgentSight"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://arxiv.org/pdf/2411.03455
+    title: "Watson: A Cognitive Observability Framework for the Reasoning of LLM-Powered Agents"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://outshift.cisco.com/blog/ai-ml/ai-observability-multi-agent-systems-opentelemetry
+    title: "AI observability in multi-agent systems using OpenTelemetry (Cisco/Outshift)"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://learn.microsoft.com/en-us/training/modules/aaai-implement-distributed-observability-multi-agent-opentelemetry/
+    title: "Implement Distributed Observability for Multi-Agent Solutions with OpenTelemetry (Microsoft Learn)"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://github.com/bazelbuild/bazel/blob/master/src/main/java/com/google/devtools/build/lib/actions/Actions.java
+    title: "Bazel Actions.java — verifyGeneratingActionKeys / ActionConflictException (write-scope exclusivity)"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://jmmv.dev/2025/07/bazel-action-determinism.html
+    title: "Bazel and action (non-)determinism (jmmv.dev) — determinism erodes trust"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://buck.build/javadoc/com/facebook/buck/core/rules/resolver/impl/MultiThreadedActionGraphBuilder.html
+    title: "Buck MultiThreadedActionGraphBuilder — concurrent-access semantics"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://pubs.opengroup.org/onlinepubs/9699919799/functions/write.html
+    title: "POSIX write() — atomicity guarantees for regular files"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://docs.kernel.org/filesystems/ext4/atomic_writes.html
+    title: "Linux Kernel docs — ext4 Atomic Block Writes (torn-write prevention, DIO+HW only)"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://tianpan.co/blog/2026-04-19-agent-side-effects-cascade-problem-production
+    title: "The Cascade Problem: Why Agent Side Effects Explode at Scale (unit tests structurally cannot catch multi-agent races)"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://zylos.ai/research/2026-04-22-artifact-mutability-multi-agent-workflows/
+    title: "Artifact Mutability in Multi-Agent Workflows: Version Pinning, Stale State Detection (silent divergence)"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://redis.io/blog/context-poisoning-agent-reasoning/
+    title: "Context Poisoning: How Bad Data Breaks Agent Reasoning (invisible to standard monitoring)"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://tianpan.co/blog/2026-04-10-stale-world-model-long-running-agents
+    title: "The Stale World Model Problem in Long-Running Agents (read-preview-then-write race)"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://arxiv.org/pdf/2603.20953
+    title: "Deterministic Pre-Action Authorization for Autonomous AI Agents (authorization vs sandbox vs model screening)"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://agentpatterns.ai/security/blast-radius-containment/
+    title: "Blast Radius Containment: Least Privilege for AI Agents (runtime-layer enforcement)"
+    relevance: medium
+    accessed: 2026-06-26
+
+  # Lower-relevance / supporting Rust ecosystem (WAL + reconciliation crates confirm pattern viability)
+  - url: https://docs.rs/ministate/latest/ministate/
+    title: "ministate — Rust durable WAL state (fsync-before-apply, crash recovery via replay)"
+    relevance: low
+    accessed: 2026-06-26
+
+  - url: https://github.com/andreahlert/tessera
+    title: "Tessera — Rust miniature control plane with declarative reconciliation loop"
+    relevance: low
+    accessed: 2026-06-26
