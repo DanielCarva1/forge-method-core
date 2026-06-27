@@ -33,11 +33,4 @@ autonomy_policy_contract:
     on_semantic_uncertainty: true
     max_retries_before_human: 3
     cooldown_seconds: 300
-  evidence_basis:
-    direct_patterns:
-      - source_id: radar-meta-case-study
-        supports: "Risk-calibrated automation can reduce revert and incident rates while preserving fast lanes."
-      - source_id: community-trends-fe2
-        supports: "Users request autonomy knobs: approval modes, YOLO paths, and sandboxed automatic execution."
-    non_western_coverage_note: "Includes eastern agentic-coding product research from FE-1/FE-2."
-    inference_boundary: "This policy declares allowed autonomy for the run; the engine router enforces fast vs rigorous lane selection."
+  evidence_basis: null
