@@ -1,0 +1,29 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S1.4"
+status: "blocked_on_S1.3"
+slice: "slice_1_engine_core_and_catalog"
+title: "Clean up 25 workflows with markdown pollution (FX6 part 2)"
+
+decision_sources:
+  - "contracts/spec/catalog-audit.yaml (25/110 fail pure-yaml parse due to markdown/backticks mixed in)"
+  - "contracts/spec/forge-rust-v1-specification.yaml#FX6"
+
+intent: "The 25 workflows that are NOT pure YAML (have prose, backticks, markdown mixed into the contract) need manual cleanup. Keep directional content; strip markdown that breaks typed parsing. This is human-attention work, not scriptable."
+
+tasks:
+  - "identify the 25 (those that failed the S1.2 parse sweep)"
+  - "for each: extract the directional contract fields, rewrite as clean YAML, drop markdown formatting that is render-only"
+  - "preserve the step DIRECTIONS; remove only render-only markdown (backticks, emphasis) and any persona prose that leaked in"
+  - "verify each now deserializes into Workflow"
+
+acceptance_criteria:
+  - "all 25 now parse as pure YAML Workflow"
+  - "no directional step lost; only render-only markdown removed"
+  - "zero persona/Presence prose remains in any migrated workflow"
+
+checks:
+  - "deserialization test covers all 110"
+  - "persona-scan (grep for Presence/excited/you-are) returns 0 in migrated catalog"
+blocks: ["S1.5", "S1.6"]
+next_workflow: "build-story S1.5 and S1.6 (phase + ids)"

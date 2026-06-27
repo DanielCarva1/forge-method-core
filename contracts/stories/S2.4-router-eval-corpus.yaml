@@ -1,0 +1,29 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S2.4"
+status: "ready_after_S2.1"
+slice: "slice_2_orchestrator"
+title: "Router eval corpus + measurement harness"
+
+decision_sources:
+  - "contracts/grill/recovery-grill-002.yaml#R2 (router accuracy metric must be backed by a corpus, not asserted)"
+  - "contracts/spec/forge-rust-v1-specification.yaml#C1 (router accuracy >=90% on eval corpus)"
+
+intent: "Resolve grill R2. Provide a router eval corpus (utterance -> expected workflow id) spanning all 6 phases, and a scorer that measures how often a host-produced GuideDecision matches expected. The engine ships the corpus + scorer; the 90% number is reported by running the target host against it, NOT asserted in CI (no LLM in core)."
+
+tasks:
+  - "author the corpus: >=40 cases (utterance, expected_workflow_id, phase) covering discovery/spec/plan/build/ready/evolve + anytime"
+  - "corpus is typed YAML under contracts/eval/router-eval-corpus.yaml"
+  - "scorer: given [(utterance, expected)] and a host router fn, compute accuracy; ship as a harness binary or test-with-feature-gate"
+  - "document the run procedure (how an operator measures a host's accuracy)"
+
+acceptance_criteria:
+  - "corpus has >=40 cases spanning all 6 phases"
+  - "every expected_workflow_id resolves in the 110-workflow catalog"
+  - "scorer compiles and runs on a stub router (sanity)"
+
+checks:
+  - "corpus deserializes; all expected ids exist in catalog"
+  - "scorer smoke test with a deterministic stub"
+blocks: []
+next_workflow: "slice 2 complete -> slice 3 (usability arc) planning"

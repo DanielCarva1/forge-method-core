@@ -1,0 +1,34 @@
+schema_version: "0.1"
+workflow:
+  id: "observability-plan"
+  phases:
+  - "5-ready-operate"
+  trigger:
+  - "ready project needs monitoring, logging, metrics, or support signals"
+  - "production operation depends on feedback loops"
+  inputs:
+  - "architecture"
+  - "user journeys"
+  - "failure modes"
+  - "operational goals"
+  steps:
+  - "identify critical signals"
+  - "define logs, metrics, traces, alerts, and dashboards"
+  - "map signals to support actions"
+  - "link signal evidence, gaps, support owners, and release impact"
+  - "save observability plan"
+  outputs:
+  - "observability plan"
+  - "signal checklist"
+  - "support actions"
+  - "release impact"
+  done_when:
+  - "critical failures have observable signals"
+  - "support path is defined"
+  - "release gate can inspect monitoring evidence or gaps"
+  - "ready gate can inspect the plan"
+  blocked_when:
+  - "production environment is unknown"
+  - "signals cannot be collected"
+  handoff:
+  - "preserve signal map, alert needs, dashboards, support action, evidence links, gaps, and release impact"

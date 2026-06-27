@@ -1,0 +1,67 @@
+schema_version: "0.1"
+artifact_kind: "story-completion"
+story_id: "S4.5"
+status: "done"
+created_at: "2026-06-26"
+closed_at: "2026-06-26"
+
+intent: "Write-before-claim conflict detection — the engine half of layer-2 prevention. Before an agent edits a file, the engine answers: does another agent hold a LIVE claim over this path? If yes -> BLOCKED (exit 2). If the writer holds the claim -> ALLOWED (governed_by_self). If no claim covers it -> ALLOWED but ungoverned. This makes the multi-agent collision promise REAL: two agents with disjoint claims work freely; a cross-write into a peer's claimed scope is blocked with a typed, machine-readable reason."
+
+delivered:
+  engine_module: "crates/forge-core-engine/src/conflict_detection.rs"
+  cli_command: "forge-core claim check-write --agent <id> --target <path> [--target <path>...] [--claims-dir] [--now-unix] [--no-json]"
+  cli_fn: "crates/forge-core-cli/src/claim.rs :: run_check_write + conflict_code_str helper"
+  acquire_extension: "claim acquire now accepts repeatable --path <repo-path> (the write set the agent intends to touch); stored in scope.paths"
+  envelope_extension: "CliEnvelope::reject(command, exit, message, data) — carries structured data alongside a non-zero exit (for gates whose rejection is itself rich info)"
+
+decisions_locked:
+  DD26: "path containment = path-segment prefix match (exact file OR directory containment), NOT string prefix. Defeats the sibling trap (src/ev does NOT cover src/evil.rs)."
+  DD27: "only LIVE claims block (status Active|Stale AND not expired). Expired/Released/HandoffRequired have no active owner -> do not block. Consistent with DD21 fail-closed lease."
+  DD28: "a claim with empty scope.paths governs no path. Project/area claims coordinate generally, do not block individual writes."
+  DD29: "lexical path normalization (drop `.` and collapse `..`), no symlink resolution. Repo-root escape is the spine's job, not the engine's."
+  DD30: "ASCII-case-folding in normalize_segments. Matching is case-INSENSITIVE. Rationale: fail-closed — a false block (writer just acquires its own claim) is SAFE; a missed block (collision) is UNSAFE. The repo lives on /mnt/c (case-insensitive drvfs); targets are primarily Windows/macOS. ASCII-only fold (non-ASCII uppercase is a documented low-severity residual gap)."
+
+hardening_from_adversarial_review:
+  review_pass1: ".forge-method/reviews/S4.5-conflict-detection-review-v1.yaml"
+  review_pass2: ".forge-method/reviews/S4.5-conflict-detection-review-v2-verify.yaml"
+  pass1_verdict: "YELLOW (0 critical, 4 medium, 1 low)"
+  pass2_verdict: "GREEN (all 5 closed, 2 new low nits, no regression)"
+  critical_finding: "ZERO — the security-critical path matcher was SOUND. Reviewer tried unicode/null/full-width-slash/long-path/traversal/double-slash/case and found NO bypass on the byte-exact matcher (pass1 confirmed; case handled in pass2 via DD30)."
+  mediums_closed:
+    - "M1 structured-payload-dead-on-block: CLOSED — new CliEnvelope::reject carries WriteCheckPayload{blocks} on block; conflict_code via stable snake_case match (conflict_code_str), NOT Debug"
+    - "M2 blocked_path-normalized-vs-raw: CLOSED — classify_target takes raw_target; all reported paths echo the EXACT submitted input"
+    - "M3 case-folding-bypass: CLOSED — ASCII lowercase in normalize (DD30); tested"
+    - "M4 TOCTOU-undocumented: CLOSED — '# Time-of-check vs time-of-use' doc paragraph in run_check_write"
+  lows_closed:
+    - "L1 over-pop .. doc: CLOSED — comment in normalize_segments"
+    - "N1 duplicated # Errors doc: CLOSED"
+    - "N2 missing reject serde test: CLOSED — reject_envelope_carries_both_data_and_error_with_nonzero_exit"
+
+key_security_properties_proven:
+  sibling_trap: "claim src/ev does NOT cover src/evil.rs (segment-aware, not string prefix)"
+  traversal: "contracts/claims/../secret normalizes to 'secret', escapes the claim (not blocked falsely)"
+  fail_closed: "any single colliding target blocks the whole write set"
+  peer_trumps_own: "a peer's live claim is a hard block even if the writer also claims the same path"
+  determinism: "blocks attributed in sorted claim-id order, stable across input reordering"
+  case_insensitive: "Contracts/x and contracts/x collide (DD30, this repo's /mnt/c filesystem)"
+
+c5_success_signal_live_verified:
+  two_disjoint_agents: "alice(S5.0,src/feature_a.rs) + bob(S5.1,src/feature_b.rs) both acquire ok"
+  owner_writes_free: "alice writes feature_a (exit 0); bob writes feature_b (exit 0)"
+  cross_write_blocked: "alice writes feature_b -> exit 2 (WriteTargetClaimed, owner=bob)"
+  bus_view: "claim status shows both active claims with agents + scopes"
+
+verification:
+  engine_unit_tests: "16 (incl 2 new: case_insensitive_matching, blocked_path_reports_raw_input)"
+  cli_unit_tests: "16"
+  e2e_governance_tests: "5 (claim_e2e.rs: owner/peer/ungoverned/disjoint/released)"
+  workspace_total: "281 tests, 0 failures"
+  clippy: "0 warnings (--workspace --all-targets)"
+  fmt: "clean"
+  adversarial_review: "2-pass (YELLOW->GREEN); 0 criticals; path matcher proven sound against active attack attempts"
+  live_cli: "full C5 multi-agent demo verified against built binary"
+
+outstanding_known_gaps:
+  - "ASCII-only case fold (DD30). Non-ASCII uppercase (Cyrillic/İ/Σ) and NFC pre/decomposition not handled. Low severity — repo paths overwhelmingly ASCII. Documented in pass2 review N-note."
+
+next_workflow: "build-story S4.6 (worktree isolation contract — layer 1 physical isolation; hardens what claims already prevent)"

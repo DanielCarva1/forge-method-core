@@ -1,0 +1,55 @@
+schema_version: "0.1"
+artifact_kind: "story-completion"
+story_id: "S4.4"
+status: "done"
+created_at: "2026-06-26"
+closed_at: "2026-06-26"
+
+intent: "Governance CLI — expose the S4.3 claim engine to agents via shell, same CliEnvelope contract as guide/* (DD17). An agent DECLARES a claim to reserve a scope, heartbeats to keep it alive, releases to hand back, and reads status for the whole coordination picture (the bus view, DD15)."
+
+delivered:
+  module: "crates/forge-core-cli/src/claim.rs"
+  main_dispatcher: "crates/forge-core-cli/src/main.rs (run_claim_command + 4 subcommands)"
+  commands:
+    - "forge-core claim acquire --scope <kind> --id <scope-id> --agent <id> [--role worker] [--ttl 600] [--claims-dir <p>] [--now-unix <epoch>] [--no-json]"
+    - "forge-core claim heartbeat --id <claim-id> --agent <id> [--claims-dir] [--now-unix] [--no-json]"
+    - "forge-core claim release --id <claim-id> --agent <id> [--claims-dir] [--now-unix] [--no-json]"
+    - "forge-core claim status [--claims-dir] [--now-unix] [--no-json]  # the coordination-bus view"
+  envelope: "CliEnvelope<ClaimResult|ActiveClaimsView> with DD10 exit codes (0 ok, 2 rejected_by_gate, 3 invalid_input, 5 env_config)"
+  typed_reject_codes: "already_claimed_by_other | not_claimant | expired_requires_handoff | illegal_transition (+ claim_not_found -> exit 3)"
+
+decisions_locked:
+  DD22: "Coordination-bus = directory of claim-state YAML files (one per claim), rewritten on each transition. Integrity spine (layer 3, proven S0.4) audits writes — no parallel event-log. Claim file IS materialized state."
+  DD23: "Time injected: --now-unix <epoch> optional (replay/tests), default = real system time. Pure engine stays deterministic. Malformed --now-unix REJECTED (exit 3), never silently epoch 0."
+  DD24: "Heartbeat is agent-driven (DC9). Engine never babysits; agent explicitly calls `claim heartbeat`."
+  DD25: "LIFECYCLE LOCK: mutating ops (acquire/heartbeat/release) hold an exclusive advisory directory lock for the whole load->decide->write, so the pure engine is never defeated by a concurrent writer. Atomic temp+rename writes prevent partial-file DoS."
+
+hardening_from_adversarial_review:
+  review_file: ".forge-method/reviews/S4.4-governance-cli-review-v1.yaml"
+  verdict_was: "RED (4 critical + 8 medium)"
+  criticals_fixed:
+    - "race (load->decide->write): CLOSED — ClaimLock advisory lockfile serializes mutating ops; verified 5 concurrent acquirers -> exactly 1 winner"
+    - "partial-write DoS: CLOSED — atomic_write (temp sibling + rename); readers never see a truncated YAML"
+    - "now-unix garbage -> epoch 0: CLOSED — parse_strict exits 3 on malformed value; require_value exits 3 on missing/trailing flag"
+  criticals_documented_as_risk:
+    - "hand-edit bypass (R6): ACCEPTED for S4.4 — a malicious agent COULD forge authority by editing claim YAML directly. Mitigated cooperatively (DC10) + by S4.6 worktree isolation; spine integration deferred. Documented as R6 with partial mitigation status. Crypto-signing every file deliberately rejected (over-engineering for file-backed wedge)."
+  mediums_fixed:
+    - "read_dir errors now distinguish NotFound (empty/new dir OK) from IO/permission (surfaces as EnvConfig)"
+    - "dir entry errors collected (no silent .flatten() drop)"
+    - "strict value/numeric parsing across all 4 subcommands (ttl/heartbeat-interval/now-unix/claims-dir/id/agent/scope)"
+
+live_demo_verified:
+  round_trip: "acquire(agentA,S4.5) ok exit0 -> status shows 2 active -> heartbeat ok -> release ok(released) -> agentB re-acquires freed scope ok"
+  conflict_rejection: "agentB acquire same scope as agentA -> exit 2 + already_claimed_by_other (typed)"
+  security_hardened: "agentA release of EXPIRED claim -> exit 2 + expired_requires_handoff (not silent release, S4.3 rule)"
+  concurrency: "5 concurrent acquirers of same scope -> exactly 1 active claim (lock serializes)"
+  strict_input: "--now-unix garbage -> exit 3 invalid-input (not silent epoch 0)"
+
+verification:
+  cargo_test_workspace: "PASS — 259 tests, 0 failures (16 new claim-module tests)"
+  cargo_clippy_workspace_all_targets: "PASS — 0 warnings"
+  fmt: "clean"
+  live_cli: "round-trip + conflict + concurrency demos all verified against the built binary"
+  adversarial_review: "gpt-5.5 xhigh pass; all fixable criticals closed; hand-edit documented as R6"
+
+next_workflow: "build-story S4.5 (conflict detection: write-before-claim enforcement — engine blocks writes into paths claimed by another agent)"

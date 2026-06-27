@@ -1,0 +1,256 @@
+meta:
+  story: "S4.6-worktree-isolation"
+  pass: 1
+  reviewer_model: "adversarial-reviewer"
+  date: "2026-06-26"
+  verdict: "RED"
+  critical_count: 1
+  summary: >
+    RED — confirmed command-injection in `suggested_worktree_commands`
+    (crates/forge-core-cli/src/isolation.rs). The three fields
+    `branch_name`, `worktree_path`, and `base_ref` are interpolated RAW into a
+    shell command string that the host agent is expected to copy-paste. None of
+    the three validators blocks shell metacharacters: `base_ref` is validated
+    only for non-emptiness, `worktree_path` blocks only empty + leading `-`,
+    and `validate_branch_name` blocks whitespace/control/`:`/`..` but NOT
+    `;` `&` `|` `$` backtick `()` `<>`. The sibling `merge_back_commands`
+    correctly POSIX-single-quote-escapes its args, proving the author knew the
+    safe pattern and failed to apply it consistently. Per the review bar, any
+    command-injection vector in suggested_git_commands is an automatic RED.
+    Everything else (lock discipline, atomic write, slug safety, state machine,
+    load robustness, claim.rs regression) is sound.
+
+critical_findings:
+  - id: C1
+    severity: critical
+    location: "crates/forge-core-cli/src/isolation.rs :: suggested_worktree_commands"
+    title: "Shell command injection via raw interpolation of branch_name / worktree_path / base_ref into suggested_git_commands"
+    attack: >
+      `suggested_worktree_commands` builds the agent-facing command with:
+      `format!("git worktree add -b {} {} {}", c.branch_name, c.worktree_path.0, c.base_ref)`
+      and `format!("cd {}", c.worktree_path.0)` — NO escaping. Three independent
+      exploits, all of which PASS the engine validators and then execute
+      attacker-controlled shell when a host agent runs the suggested command:
+
+      (a) base_ref — TRIVIAL. `validate_isolation_contract` only checks
+          `base_ref.trim().is_empty()`. Propose with `--base-ref 'main;touch pwned'`.
+          Suggested command becomes:
+            `git worktree add -b alice/s5 ../wt/a main;touch pwned`
+          Shell splits on `;` → `git worktree add ... main` runs, then `touch pwned`
+          runs. Spaces are allowed because base_ref has no whitespace rule.
+
+      (b) worktree_path — EASY. `validate_worktree_path` blocks only empty +
+          leading `-`. Propose with `--worktree-path '../wt/a;touch pwned'`.
+          Suggested command: `git worktree add -b alice/s5 ../wt/a;touch pwned main`
+          AND `cd ../wt/a;touch pwned` — both inject.
+
+      (c) branch_name — needs a whitespace-free injection because
+          `validate_branch_name` rejects whitespace, but it ALLOWS `;` `$` `()`
+          backtick `&` `|`. Propose with
+          `--branch-name 'alice$(touch${IFS}pwned)'`.
+          Validation walk: not empty; does not start with `-`/`.`; no `..`; no
+          `:`; no whitespace char; no control char; single slash-component does
+          not end in `.lock` → RETURNS Ok. Suggested command:
+            `git worktree add -b alice$(touch${IFS}pwned) ../wt/a main`
+          `${IFS}` supplies the whitespace the validator forbade; `$(...)`
+          command substitution executes `touch pwned` at shell-eval time.
+
+      Contrast: `merge_back_commands` (same file) escapes each arg with
+      `format!("'{}'", a.replace('\'', "'\\''"))` — correct POSIX single-quoting.
+      So the injection is asymmetric and clearly an oversight, not a design
+      choice. DD31 says the commands are "descriptive strings only"; the review
+      brief and R6 both state agents WILL copy-paste them, so this is live.
+    impact: >
+      Arbitrary command execution as the host agent / user running forge-core.
+      A malicious or compromised agent (or a user pasting a craft-able
+      --base-ref) achieves RCE the moment `isolation propose` output is
+      executed. Because base_ref is essentially unvalidated, even a benign typo
+      like a stray `;` in a ref name becomes a silent second command. This is
+      the exact class of bug governance code must not ship with.
+    fix_suggestion: >
+      Apply the SAME POSIX single-quote escaping already used in
+      `merge_back_commands` to `suggested_worktree_commands`. Extract a helper:
+        `fn shell_quote(s: &str) -> String { format!("'{}'", s.replace('\'', "'\\''")) }`
+      and emit:
+        `format!("git worktree add -b {} {} {}", shell_quote(&c.branch_name), shell_quote(&c.worktree_path.0), shell_quote(&c.base_ref))`
+        `format!("cd {}", shell_quote(&c.worktree_path.0))`
+      Defense-in-depth: also reject shell metacharacters in
+      `validate_branch_name` / `validate_worktree_path` and add a non-empty +
+      git-ref-shape check on `base_ref` (currently it is the weakest field).
+      Add regression tests asserting a `;`/`$()`/backtick in each field is
+      either rejected OR rendered fully single-quoted in the output.
+
+medium_findings:
+  - id: M1
+    severity: medium
+    location: "crates/forge-core-engine/src/isolation.rs :: normalize_path"
+    title: "worktree-path collision bypass via un-collapsed '..' (contradicts DD29)"
+    description: >
+      DD29 (locked in S4.5) states normalization must "drop `.` AND collapse
+      `..`". `normalize_path` here only does `filter(|s| !s.is_empty() && *s !=
+      ".")` — it DROPS `..` segments' effect never collapses them. Result:
+      `../wt/shared` normalizes to `[.., wt, shared]` while
+      `../wt/x/../shared` normalizes to `[.., wt, x, .., shared]`. These are
+      unequal vectors, so `detect_isolation_conflict` reports NO collision even
+      though both resolve to the same physical directory. Agent B can evade
+      Agent A's worktree-path uniqueness (DD33) by inserting a `seg/../` hop.
+      Git may then refuse the duplicate worktree path at execute time (fail-loud)
+      OR, on a permissive setup, two agents land in the same tree — exactly the
+      silent overwrite layer-1 exists to prevent.
+    fix_suggestion: >
+      Actually collapse `..` against the preceding segment in `normalize_path`
+      (standard lexical canonicalization: pop on `..`, push otherwise, never
+      pop past the first segment unless `..` is leading). Reuse the S4.5
+      `normalize_segments` helper if its contract matches, or port the logic.
+
+  - id: M2
+    severity: medium
+    location: "crates/forge-core-contracts/src/isolation.rs :: IsolationStatus / MergePolicy enums"
+    title: "status/policy enums serialize PascalCase but every display/parse path uses snake_case — hand-written YAML with lowercase values fails to deserialize"
+    description: >
+      `IsolationStatus` and `MergePolicy` derive Serialize/Deserialize with NO
+      `#[serde(rename_all = "snake_case")]`. serde therefore writes the variant
+      name verbatim: on disk the YAML is `status: Active`, `merge_policy:
+      Rebase`. But `status_str`/`policy_str` return lowercase ("active",
+      "rebase"), `parse_status`/`parse_merge_policy` accept only lowercase, and
+      the `isolation status` summary payload exposes lowercase. So an agent or
+      human who reads the displayed `status: "active"` and hand-writes a
+      contract YAML with `status: active` gets a deserialize failure →
+      `load_isolations` flags it malformed → EnvConfig exit 5 on the WHOLE
+      directory (see L1). Note `IsolationError` IS annotated
+      `rename_all = "snake_case"`, making the inconsistency within the same
+      module more surprising. Round-trip works only because the CLI both writes
+      and reads via serde (PascalCase); the bug surfaces on any external/human
+      authoring following the documented lowercase convention.
+    fix_suggestion: >
+      Add `#[serde(rename_all = "snake_case")]` to both `IsolationStatus` and
+      `MergePolicy` so on-disk and display agree, then add a test asserting a
+      lowercase `status: active` / `merge_policy: rebase` round-trips.
+
+  - id: M3
+    severity: medium
+    location: "crates/forge-core-engine/src/isolation.rs :: detect_isolation_conflict (branch comparison)"
+    title: "branch-name collision check is byte-exact (case-sensitive) while path check case-folds — inconsistent on case-insensitive filesystems like this repo's /mnt/c drvfs"
+    description: >
+      `detect_isolation_conflict` compares `old.branch_name == new.branch_name`
+      (exact), but compares paths via `normalize_path` (ASCII-lowercased). On
+      the project's actual /mnt/c drvfs, git stores refs as files under
+      `.git/refs/heads/`, so `alice/s5` and `Alice/s5` map to the SAME file →
+      git ref corruption / silent overwrite, yet the engine reports them as
+      disjoint and lets both contracts coexist. The path side already adopted
+      DD30 case-folding for exactly this reason; the branch side did not.
+    fix_suggestion: >
+      Either ASCII-case-fold branch names for the collision comparison
+      (mirroring normalize_path) or document explicitly that branch uniqueness
+      is case-sensitive by design and agents MUST use the lowercasing
+      `branch_name_for` helper (and reject hand-supplied branches that differ
+      only by case).
+
+low_findings:
+  - id: L1
+    severity: low
+    location: "crates/forge-core-cli/src/isolation.rs :: load_isolations / env_config_if_errors"
+    title: "a single malformed file blinds the entire coordination view (all-or-nothing EnvConfig)"
+    description: >
+      If any one `*.yaml` is malformed, `load_isolations` returns it in `errs`
+      and `env_config_if_errors` converts the WHOLE result into an EnvConfig
+      error with ZERO contracts returned. That is fail-closed (safe — no
+      decisions on partial state) but aggressive: one corrupt file makes every
+      OTHER valid isolation invisible to `isolation status`, so agents cannot
+      see live peers. This matches the claim.rs behavior, so it is consistent,
+      but worth a doc note that the directory must be clean for the bus view to
+      render.
+    fix_suggestion: >
+      Optional: in `run_status` (read-only), still report the valid contracts
+      alongside the error list (the bus view is informational). Keep the
+      all-or-nothing behavior for mutating commands (propose/transition).
+
+  - id: L2
+    severity: low
+    location: "crates/forge-core-contracts/src/isolation.rs :: Display for IsolationError (IllegalTransition arm)"
+    title: "Display uses Debug format ({:?}) for status enums, inconsistent with the stable snake_case rejection code"
+    description: >
+      The `IllegalTransition` Display arm writes
+      `write!(f, "illegal transition {:?} -> {:?}", from, to,)`, emitting
+      `Proposed`/`Active` PascalCase in the human message. The stable
+      machine-readable code (`illegal_transition`) is fine, so wire compat is
+      unaffected, but the prose is stylistically inconsistent with the
+      snake_case convention used everywhere else. Trivial.
+    fix_suggestion: >
+      Use the lowercase status names (or a small `status_str`-equivalent) in
+      the Display impl instead of `{:?}`.
+
+  - id: L3
+    severity: low
+    location: "crates/forge-core-engine/src/isolation.rs :: validate_branch_name"
+    title: "git-check-ref-format coverage is partial (per-component leading dot, '@{', backslash, etc.)"
+    description: >
+      The validator blocks leading `-`/`.` only on the WHOLE name, not per
+      slash-component; it also does not block `@{`, backslash, `~`, `^`, `:`
+      inside components, trailing `/`, etc. The doc comment acknowledges this is
+      intentional ("exotic edge cases surface as git errors at execute time")
+      and fail-loud-at-git is acceptable. Note this is a SECONDARY concern only
+      because the PRIMARY injection vector (C1) is via the unescaped command
+      string; once C1 is fixed by shell-quoting, residual ref-illegality just
+      fails at git with a clear error.
+    fix_suggestion: >
+      Acceptable as-is given the fail-loud stance, but consider porting
+      `git-check-ref-format` rules (or shelling out to `git check-ref-format`
+      in the CLI layer only) if stricter guarantees are ever wanted.
+
+positive_observations:
+  - "Lock discipline is correct in BOTH mutating paths. `run_propose` acquires
+    DirLock BEFORE `load_isolations` and holds it (`let _ = lock;`) through
+    `detect_isolation_conflict` AND `save_isolation`. `run_transition` does the
+    same. There is NO TOCTOU window between detect and save — two racing
+    `propose` calls on the same branch cannot both win because the second
+    blocks on the lockfile and then sees the first's persisted contract."
+  - "`merge_back_commands` correctly POSIX-single-quote-escapes every arg
+    (`format!(\"'{}'\", a.replace('\\'', \"'\\\\''\"))`). The merge-plan command
+    path is injection-safe. This is precisely the pattern C1 demands be applied
+    to the worktree-add path too."
+  - "`slug_for_file` (claim.rs, reused by save_isolation) maps every non-
+    [A-Za-z0-9_-] char to `-`, so a crafted `isolation_id` like
+    `../../etc/passwd` becomes `-----etc-passwd` — no path traversal, no
+    cross-contract file overwrite. The `slug_for_file_never_allows_traversal`
+    test proves it."
+  - "io_util extraction is regression-free. claim.rs now imports
+    `crate::io_util::{DirLock, atomic_write}` and compiles using the shared
+    primitives; the atomic temp+rename and create_new-lockfile behavior is
+    identical to before. No duplication remains."
+  - "State machine is airtight: terminal states (Merged/Abandoned) reject all
+    outgoing transitions; `is_live` correctly returns false for them so their
+    branch/path is released for reuse (verified by
+    `merged_contract_releases_branch_for_reuse` and the e2e lifecycle test).
+    `Merging` remains live, so a mid-merge branch cannot be re-proposed. The
+    `Merging -> Active` abort loop is allowed but harmless."
+  - "`load_isolations` robustness matches DD22: missing dir (NotFound) =>
+    empty + no error (fresh bus); permission/IO error => EnvConfig exit 5;
+    malformed YAML => surfaced error, never silently dropped. The
+    `.forge-isolation.lock` lockfile is filtered out by the `yaml` extension
+    filter."
+  - "`deny_unknown_fields` is present on IsolationContractDocument,
+    IsolationContract, MergePlan, and MergeStep — schema is strict and
+    round-trips cleanly (`save_then_load_round_trips`)."
+  - "R6 is honestly reflected: the doc comments and lock model acknowledge the
+    bus is shared/trusted and that a malicious hand-edit bypasses the engine
+    (cooperative multi-agent model per DC10). The advisory lock prevents
+    accidental concurrent overwrite, which is the layer-1 promise; it does not
+    claim to stop a determined bus forger, which is correct."
+
+regression_check:
+  claim_cli_still_works: "yes — claim.rs now consumes the shared crate::io_util::{DirLock, atomic_write}; the lock-acquire, load->decide->write, and atomic-rename behavior is byte-for-byte equivalent to the pre-extraction inline versions. slug_for_file remains pub in claim.rs and is imported by isolation.rs. No duplicated logic, no behavioral drift."
+  envelope_contract_held: "yes — IsolationProposePayload/MergePlan are returned via CliEnvelope::ok; rejections use RejectedByGate (exit 2) with a stable snake_case code in the message; not-found uses InvalidDecisionShape (exit 3); IO/dir errors use EnvConfig (exit 5). Consistent with DD9/DD10/DD17 and the claim/* surface."
+
+final_assessment: >
+  NOT shippable as-is. The single blocking issue is C1: `suggested_worktree_commands`
+  emits unescaped shell commands built from three under-validated fields, the
+  weakest of which (`base_ref`) is checked only for non-emptiness — a stray
+  semicolon in `--base-ref` yields immediate arbitrary command execution when an
+  agent runs the suggested command. The fix is small and already proven in the
+  adjacent `merge_back_commands`: apply POSIX single-quote escaping (and
+  harden `base_ref` validation). Once C1 is closed, M1 (collapse `..` per
+  DD29) and M2 (snake_case serde on the enums) should be addressed to make
+  collision detection and on-disk YAML consistent, then this is GREEN — the
+  lock/atomic-write/state-machine/load-robustness core is solid and the
+  io_util extraction introduced no regression.

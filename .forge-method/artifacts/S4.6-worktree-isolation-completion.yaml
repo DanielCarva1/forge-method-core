@@ -1,0 +1,91 @@
+schema_version: "0.1"
+artifact_kind: "story-completion"
+story_id: "S4.6"
+status: "done"
+created_at: "2026-06-26"
+closed_at: "2026-06-26"
+
+intent: |
+  Layer-1 physical isolation for multi-agent work: one agent, one git worktree,
+  one branch. Two agents therefore cannot overwrite each other's files — their
+  working trees are disjoint and writes land on separate branches; conflicts
+  surface at merge time, never silently mid-edit. The forge engine DESCRIBES
+  and VALIDATES the isolation and emits a deterministic merge plan; it NEVER
+  shells out to git (DD31). The host agent (DC9) executes git. This hardens
+  what the layer-2 claims already prevent, and makes worktree coordination a
+  tracked, visible, typed-contract artifact any participating LLM can read.
+
+delivered:
+  contract_type: "crates/forge-core-contracts/src/isolation.rs — IsolationContract, IsolationStatus, MergePolicy, MergePlan, MergeStep, GitAction, IsolationError (+ Display)"
+  engine_module: "crates/forge-core-engine/src/isolation.rs — validate_isolation_contract, detect_isolation_conflict, transition_status, propose_merge, branch_name_for, is_live, validate_branch_name, validate_worktree_path, normalize_path, contains_shell_metachar"
+  cli_module: "crates/forge-core-cli/src/isolation.rs — run_propose, run_status, run_merge_plan, run_transition, load_isolations, save_isolation, shell_quote, suggested_worktree_commands, merge_back_commands"
+  shared_io: "crates/forge-core-cli/src/io_util.rs — EXTRACTED atomic_write + DirLock (was duplicated in claim.rs; now shared by claim.rs + isolation.rs; regression-free)"
+  cli_commands: "forge-core isolation propose|status|merge-plan|transition"
+  e2e_tests: "crates/forge-core-cli/tests/isolation_e2e.rs (9 tests)"
+
+decisions_locked:
+  DD31: "Engine DESCRIBES/VALIDATES isolation; NEVER shells out to git. The host agent (DC9) executes `git worktree add`. MergePlan + suggested_git_commands are descriptive strings only. Raciocínio: mantém engine pura/determinística/testável; não acopla a subprocesso git; consistente com claims (agent declara, engine valida)."
+  DD32: "Branch naming + uniqueness validation (git-ref legality: blocks `..`, whitespace, `:`, control chars, leading `-`/`.`, `.lock` suffix)."
+  DD33: "Worktree path uniqueness validation (empty + leading-dash + shell-metachar blocked)."
+  DD34: "Merge policy default = rebase. Engine GERA plano determinístico (checkout→fetch→rebase→checkout | checkout→merge --no-ff | checkout→merge --squash); never executes."
+  DD35: "Status state machine Proposed→Active→Merging→Merged|Abandoned. Illegal transitions rejected (same pattern as claim_engine + phase_transition). Terminal states reject all outgoing. Merging→Active (abort) allowed."
+  DD36: "Isolation↔Claim linkage OPTIONAL (claim_id). When present, engine cross-checks agent consistency."
+  DD37: "Command-injection defense is TWO layers: (1) engine rejects shell metacharacters (`; & | $ \` ( ) < > \n { }`) in branch_name/worktree_path/base_ref at validation; (2) CLI shell_quote (POSIX single-quote) at emission. Both must pass. Even if a hand-crafted contract bypassed layer 1, layer 2 guarantees safety."
+  DD38: "Path normalization collapses `..` (lexical canonicalization, DD29 echo): `../wt/x/../shared` == `../wt/shared`. Leading `..` preserved (repo-root escape is the spine's job)."
+  DD39: "Branch collision comparison is case-INSENSITIVE (eq_ignore_ascii_case), mirroring DD30 path case-fold — git refs are files on case-insensitive filesystems (/mnt/c, Windows, macOS). Fail-closed: a false block (agent uses its own case-variant) is safe; a missed block (silent ref overwrite) is not."
+
+hardening_from_adversarial_review:
+  review_pass1: ".forge-method/reviews/S4.6-worktree-isolation-review-v1.yaml"
+  review_pass2: ".forge-method/reviews/S4.6-worktree-isolation-review-v2-verify.yaml"
+  pass1_verdict: "RED — 1 critical (C1 command injection), 3 mediums (M1/M2/M3), 3 lows (L1/L2/L3)"
+  pass2_verdict: "GREEN — all 5 fixed (C1+M1+M2+M3+L2), 1 new low nit (N1 dead code, removed), no regression"
+  critical_finding_and_fix:
+    C1: "Command injection in suggested_worktree_commands: branch_name/worktree_path/base_ref interpolated RAW into `git worktree add -b {} {} {}` and `cd {}` that agents copy-paste. base_ref was validated ONLY for non-emptiness. FIX: added shell_quote helper (POSIX single-quote, correct for ALL inputs incl empty/quote-only/newline) used in BOTH suggested_worktree_commands AND merge_back_commands (removed prior duplication); PLUS defense-in-depth engine rejection via contains_shell_metachar in all 3 validators + new ShellMetacharInField error variant. Reviewer re-attempted injection in pass 2 — defeated."
+  mediums_closed:
+    M1: "normalize_path now COLLAPSES `..` (was filter-only) — `../wt/x/../shared` collides with `../wt/shared`. DD29 echo."
+    M2: "IsolationStatus + MergePolicy now have #[serde(rename_all = \"snake_case\")] — on-disk YAML matches status_str/parse_status (was PascalCase, breaking hand-authored lowercase YAML)."
+    M3: "Branch collision comparison is case-INSENSITIVE (eq_ignore_ascii_case) — `alice/s5` collides with `Alice/s5` (same git ref on case-insensitive FS). DD39."
+  lows:
+    L1: "ACCEPTED — a single malformed file blinds the dir (all-or-nothing EnvConfig). Consistent with claim.rs behavior; fail-closed is correct for mutating ops."
+    L2: "CLOSED — Display IllegalTransition arm uses lowercase status names via status_lc() helper (was {:?} PascalCase)."
+    L3: "ACCEPTED — validate_branch_name partial git-check-ref-format coverage. Documented fail-loud-at-git stance; acceptable because shell_quote is the real injection guarantee."
+    N1: "CLOSED — removed dead duplicate contains_shell_metachar(&base_ref) block (pass-2 nit, zero runtime impact)."
+
+key_security_properties_proven:
+  command_injection: "TWO layers defeat `;`/`$()`/backtick/`&`/`|`/`()`/`<>`/`{}`/newline in branch_name/worktree_path/base_ref: engine rejection (exit 2) + shell_quote emission. Verified by 4 regression tests."
+  branch_uniqueness: "two agents cannot hold the same branch (byte-exact OR case-variant) while live; merged/abandoned releases it."
+  worktree_path_uniqueness: "two agents cannot hold the same path (incl `..`-collapsed and case-folded variants) while live."
+  state_machine_integrity: "terminal states (Merged/Abandoned) reject all outgoing; illegal skips (Proposed→Merging) rejected."
+  io_durability: "atomic_write (temp+rename) prevents partial-file DoS; DirLock serializes load→decide→write on mutating ops; missing dir = fresh bus (not error)."
+  lock_discipline: "run_propose AND run_transition hold DirLock across the entire load→decide→write — no TOCTOU window (verified by reviewer)."
+
+live_demo_verified:
+  path_caveat: "Demo must use a /mnt/c path (NOT /tmp): forge-core.exe is a Windows binary via WSL shim; /tmp is not shared between Linux-WSL and Windows-exe, causing invisible writes / false duplicates. Tests use std::env::temp_dir() which the .exe resolves consistently."
+  c1_blocked: "base_ref 'main;touch pwned' → exit 2 (shell_metachar_in_field)"
+  m2_snake_case: "persisted YAML shows 'status: proposed', 'merge_policy: rebase'"
+  m3_case_fold: "branch 'Alice/s5' vs held 'alice/s5' → exit 2 (duplicate_branch)"
+  shell_quoted_output: "git worktree add -b 'alice/s5' '../wt/a' 'main' — every field single-quoted"
+  disjoint_parallel: "alice(alice/s5) + bob(bob/s6) both active; status shows 2"
+
+r6_risk_status:
+  previous: "PARTIAL — hand-edit bypass of the claims bus."
+  after_s46: "STILL PARTIAL. Worktree isolation closes ACCIDENTAL code overwrite (each agent has its own working tree), but does NOT close malicious hand-edit of the SHARED claims/isolations bus (agents still coordinate via one shared directory per DC10). Full R6 closure remains spine integration (crypto audit of claim/isolation writes) — future slice. This is honestly reflected in doc comments + the cooperative multi-agent model (DC10)."
+
+verification:
+  engine_unit_tests: "31 (incl 5 new regression: shell-metachar branch/path/base, dotdot-collapse, leading-dotdot, case-fold branch)"
+  cli_unit_tests: "21 (incl 4 new: shell_quote, suggested_commands_quoted, status/policy snake_case serde)"
+  e2e_isolation_tests: "9"
+  workspace_total: "342 tests, 0 failures"
+  clippy: "0 warnings (--workspace --all-targets)"
+  fmt: "clean"
+  adversarial_review: "2-pass (RED→GREEN); 1 critical found+fixed; injection bar met absolutely; reviewer re-attempted attack in pass 2 — defeated"
+  live_cli: "full C5 layer-1 demo verified against built binary on /mnt/c path"
+  regression: "io_util extraction is regression-free — claim.rs uses shared atomic_write/DirLock, behavior byte-for-byte equivalent (confirmed by reviewer + 259 prior tests still green)"
+
+outstanding_known_gaps:
+  - "ASCII-only case fold (DD39 echo of DD30). Non-ASCII uppercase (Cyrillic/İ/Σ) and NFC pre/decomposition not handled. Low severity — repo paths/branches overwhelmingly ASCII."
+  - "L3: validate_branch_name is partial git-check-ref-format (intentional; fail-loud-at-git is the documented stance)."
+  - "L1: a malformed file blinds the whole dir (intentional fail-closed; consistent with claim.rs)."
+  - "R6 PARTIAL: worktree closes accidental code overwrite, not malicious bus hand-edit (needs spine integration)."
+
+next_workflow: "build-story S4.7 (coordination-eval engine + fixtures → closes C5 success signal + slice-4-completion artifact)"

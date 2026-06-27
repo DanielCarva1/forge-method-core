@@ -1,0 +1,35 @@
+schema_version: "0.1"
+workflow:
+  id: "risk-register"
+  phases:
+  - "3-plan"
+  - "5-ready-operate"
+  trigger:
+  - "project has unresolved technical, product, delivery, security, or operational risks"
+  - "enterprise or release work needs risk visibility"
+  inputs:
+  - "requirements"
+  - "architecture"
+  - "open findings"
+  - "team constraints"
+  steps:
+  - "list risks with category and impact"
+  - "assign mitigation, owner, or accepted status"
+  - "link risks to stories or checks"
+  - "record release impact and waiver status"
+  - "save risk register"
+  outputs:
+  - "risk register"
+  - "mitigations"
+  - "linked checks"
+  - "release impact"
+  done_when:
+  - "high risks have mitigation or explicit acceptance"
+  - "risks are linked to checks or stories"
+  - "waivers have owner, rationale, and revisit trigger"
+  - "next action is known"
+  blocked_when:
+  - "risk owner is required but unknown"
+  - "risk cannot be evaluated with available evidence"
+  handoff:
+  - "preserve risk register path, high risks, owners, linked checks, waivers, release impact, and next mitigation"

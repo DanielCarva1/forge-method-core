@@ -1,0 +1,224 @@
+meta:
+  topic: "pi-primitives e packages oficiais/comunitários-core para pi-coding-agent"
+  query: "Existe pi-primitives? Quais são os packages oficiais @earendil-works/* e @badlogic que valem instalar?"
+  date: 2026-06-26
+  researcher_model: claude-sonnet
+  confidence: high
+  sources_consulted: 12
+
+key_findings:
+  - id: F1
+    finding: "pi-primitives NÃO EXISTE em nenhuma forma verificável"
+    evidence: >
+      Busca em npm (pi-primitives, @earendil-works/pi-primitives, @badlogic/pi-primitives,
+      @earendil-works/primitives) não retornou resultados. Não está no catálogo pi.dev/packages
+      (4435+ packages indexados). Não há repo no GitHub earendil-works, badlogic, ou mitsuhiko
+      com esse nome. O termo é uma invenção/confusão — provável mistura com o conceito de
+      'primitives' (as 4 tools base: read, write, edit, bash) ou com o fork can1357/oh-my-pi
+      que adiciona 'primitives' mais poderosas (LSP, hash-anchored edits, subagents).
+    sources:
+      - https://www.npmjs.com/package/@earendil-works/pi-coding-agent
+      - https://pi.dev/packages
+      - https://github.com/earendil-works/pi
+
+  - id: F2
+    finding: "Os 4 packages oficiais core sob @earendil-works/ são: pi-ai, pi-agent-core, pi-coding-agent, pi-tui"
+    evidence: >
+      README oficial do monorepo earendil-works/pi lista exatamente 4 packages na tabela 'All Packages':
+      (1) @earendil-works/pi-ai — Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.)
+      (2) @earendil-works/pi-agent-core — Agent runtime com tool calling e state management
+      (3) @earendil-works/pi-coding-agent — Interactive coding agent CLI (o produto principal)
+      (4) @earendil-works/pi-tui — Terminal UI library com differential rendering
+      Todos vêm do mesmo monorepo, publicados em sincronia de versão (~v0.74+ atual).
+      pi-coding-agent depende dos outros 3 internamente.
+    sources:
+      - https://github.com/earendil-works/pi/blob/main/README.md
+      - https://pi.dev/docs/latest/packages
+
+  - id: F3
+    finding: "Existem 2 packages @earendil-works adicionais além do core 4: pi-web-ui e gondolin"
+    evidence: >
+      @earendil-works/pi-web-ui — Reusable web UI components para interfaces de chat AI
+      (mini-lit + Tailwind v4), construído sobre pi-ai e pi-agent-core. Independente do CLI.
+      @earendil-works/gondolin — Sistema de containerização/micro-VM para isolar tools do pi
+      (routing de built-in tools e !commands para Linux micro-VM). Apache-2.0, v0.12.0.
+      Há também referência a earendil-works/pi-chat (repo separado) para automação de Slack/chat.
+    sources:
+      - https://www.npmjs.com/package/@earendil-works/pi-web-ui
+      - https://www.npmjs.com/package/@earendil-works/gondolin
+      - https://github.com/earendil-works/pi/blob/main/README.md
+
+  - id: F4
+    finding: "O scope npm @mariozechner/* é o legado (pré-migração para @earendil-works em maio/2026)"
+    evidence: >
+      Em 2026-05-07, pi migrou de badlogic/pi-mono para earendil-works/pi, e packages passaram
+      de @mariozechner/* para @earendil--works/*. Commit 551385e documenta a migração.
+      Packages @mariozechner/pi-ai, @mariozechner/pi-agent-core, @mariozechner/pi-agent ainda
+      existem no npm mas são versões antigas/deprecated. Usar @earendil-works/* sempre.
+    sources:
+      - https://pi.dev/news/2026/5/7/pi-has-a-new-home
+      - https://github.com/earendil-works/pi/commit/551385e40946d5531e823edea533410c816926ce
+      - https://registry.npmjs.org/@mariozechner/pi-agent-core
+
+  - id: F5
+    finding: "badlogic/pi-skills oferece 8 skills (não packages npm — são git-clone direto)"
+    evidence: >
+      Repo github.com/badlogic/pi-skills contém skills compatíveis com pi, Claude Code, Codex CLI,
+      Amp e Droid. Skills: brave-search (web search via Brave), browser-tools (Chrome DevTools),
+      gccli (Google Calendar), gdcli (Google Drive), gmcli (Gmail), transcribe (Groq Whisper),
+      vscode (diffs/comparison), youtube-transcript. Instalação via git clone para ~/.pi/agent/skills/.
+      Algumas skills precisam de npm packages @mariozechner/gccli, gdcli, gmcli instalados globalmente.
+      Útil para quem quer integrações Google/Brave/browser, mas não adiciona 'primitives' ao core.
+    sources:
+      - https://github.com/badlogic/pi-skills/blob/main/README.md
+      - https://github.com/badlogic/pi-skills
+
+  - id: F6
+    finding: "NÃO EXISTE nenhum package oficial que adiciona 'primitives'/capacidades base avançadas"
+    evidence: >
+      A filosofia de design do pi é intencionalmente minimal: o README diz 'Pi ships with powerful
+      defaults but skips features like sub-agents and plan mode. Ask Pi to build what you want, or
+      install a package that does it your way.' As 4 tools base (read, write, edit, bash) SÃO as
+      primitives. Não há package @earendil-works ou @badlogic que melhore edição/search/memory/tool-use.
+      Tudo isso é deixado para a comunidade via pi.dev/packages (4435+ packages).
+    sources:
+      - https://pi.dev/
+      - https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/index.md
+
+  - id: F7
+    finding: "can1357/oh-my-pi (omp) é o fork que adiciona 'primitives' mais poderosas"
+    evidence: >
+      Fork do pi por Can Bölük (can1357), 15K stars. Descrição: 'hash-anchored edits, optimized
+      tool harness, LSP, Python, browser, subagents, and more'. Publica sob scope npm @oh-my-pi/*
+      (pi-coding-agent, pi-agent-core, pi-ai, pi-tui, pi-catalog). É um fork completo, não um
+      package — substitui o pi, não o estende. Provável fonte da confusão com 'pi-primitives':
+      omp é literalmente 'pi com primitives melhores'.
+    sources:
+      - https://github.com/can1357/oh-my-pi
+      - https://github.com/can1357/oh-my-pi/blob/main/README.md
+      - https://github.com/can1357/oh-my-pi/releases
+
+  - id: F8
+    finding: "Packages comunitários mais populares que funcionam como 'primitives estendidas'"
+    evidence: >
+      Do catálogo pi.dev/packages (por downloads semanais):
+      - pi-subagents (94.9K/mo) — delegação para subagents com chains, parallel, TUI
+      - pi-web-access (118.3K/mo) — web search, URL fetch, GitHub clone, PDF, YouTube
+      - context-mode (105.2K/mo) — economiza 98% do context window, sandboxed exec, FTS5
+      - pi-mcp-adapter (99.5K/mo) — MCP adapter para conectar Pi a qualquer MCP server
+      - pi-lens (24.4K/mo) — LSP, linters, formatters, type-checking em tempo real
+      - pi-hermes-memory (13.6K/mo) — persistent memory + session search + SQLite FTS5
+      - pi-shazam (8.8K/mo) — 9 tools de análise estrutural de codebase
+      Nenhum é oficial — todos são comunidade. Mas são os mais instalados e confiáveis.
+    sources:
+      - https://pi.dev/packages
+
+recommendations:
+  - id: R1
+    recommendation: "Aceitar que 'pi-primitives' não existe e parar de procurá-lo"
+    based_on: [F1, F6]
+    priority: high
+
+  - id: R2
+    recommendation: >
+      Para 'primitives melhores' sem trocar de ferramenta: instalar packages comunitários
+      pi-subagents + pi-web-access + pi-mcp-adapter como conjunto base de extensão.
+      São os mais baixados, maintained, e cobrem os gaps mais comuns (subagents, web, MCP).
+    based_on: [F8, F6]
+    priority: medium
+
+  - id: R3
+    recommendation: >
+      Se quer um pi com 'primitives' nativamente mais poderosas (LSP, hash-anchored edits,
+      subagents built-in), considerar migrar para can1357/oh-my-pi (omp). É um fork completo
+      e não um package — substitui pi ao invés de estendê-lo.
+    based_on: [F7]
+    priority: low
+
+  - id: R4
+    recommendation: >
+      badlogic/pi-skills vale para quem precisa de integrações Google (Calendar/Drive/Gmail),
+      Brave Search, ou browser automation. Instalar via git clone, não npm. Útil mas
+      complementar — não é 'primitives'.
+    based_on: [F5]
+    priority: low
+
+gaps:
+  - gap: "pi-primitives não existe — provável confusão com: (a) o conceito das 4 tools base do pi, (b) oh-my-pi que adiciona primitives melhores, ou (c) algum package comunitário não-oficial"
+    why: "Busca exaustiva em npm, pi.dev/packages, GitHub não encontrou nada com esse nome"
+
+  - gap: "Lista completa de TODOS os packages sob scope @earendil-works no npm pode incluir outros além dos 6 identificados (pi-ai, pi-agent-core, pi-coding-agent, pi-tui, pi-web-ui, gondolin)"
+    why: "npm não tem endpoint público de 'list all packages in scope'; confirmei os 6 via README + busca direta. Pode haver packages internos/privados."
+
+  - gap: "earendil-works/pi-chat não foi investigado a fundo — é um repo separado para automação Slack/chat, pode ter packages npm próprios"
+    why: "Fora do escopo da pergunta (foco em coding-agent)"
+
+open_questions:
+  - "Haverá no futuro um package oficial @earendil-works que unifica 'primitives estendidas'? Não há indicação disso nos RFCs públicos (rfc.earendil.com)."
+  - "O pi-web-ui está em estágio utilizável para construção de interfaces customizadas, ou é experimental?"
+
+sources:
+  - url: https://github.com/earendil-works/pi
+    title: "earendil-works/pi — monorepo oficial"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://github.com/earendil-works/pi/blob/main/README.md
+    title: "README oficial com tabela 'All Packages'"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://pi.dev/packages
+    title: "Catálogo de packages do pi (4435+ packages comunitários)"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://pi.dev/docs/latest/packages
+    title: "Documentação: Pi Packages — como criar e instalar packages"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://pi.dev/
+    title: "pi.dev homepage — filosofia de design minimal"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://www.npmjs.com/package/@earendil-works/pi-coding-agent
+    title: "npm: @earendil-works/pi-coding-agent"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://www.npmjs.com/package/@earendil-works/pi-ai
+    title: "npm: @earendil-works/pi-ai"
+    relevance: high
+    accessed: 2026-06-26
+
+  - url: https://www.npmjs.com/package/@earendil-works/pi-tui
+    title: "npm: @earendil-works/pi-tui (via npmx.dev)"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://www.npmjs.com/package/@earendil-works/pi-web-ui
+    title: "npm: @earendil-works/pi-web-ui"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://www.npmjs.com/package/@earendil-works/gondolin
+    title: "npm: @earendil-works/gondolin — containerização/micro-VM"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://pi.dev/news/2026/5/7/pi-has-a-new-home
+    title: "News: Pi migrou para @earendil-works em maio/2026"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://github.com/badlogic/pi-skills/blob/main/README.md
+    title: "badlogic/pi-skills — 8 skills para pi (Google, Brave, browser, etc.)"
+    relevance: medium
+    accessed: 2026-06-26
+
+  - url: https://github.com/can1357/oh-my-pi
+    title: "can1357/oh-my-pi — fork com primitives melhores (15K stars)"
+    relevance: medium
+    accessed: 2026-06-26

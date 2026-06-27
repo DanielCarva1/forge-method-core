@@ -1,0 +1,43 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S0.4"
+status: "blocked_on_S0.2"
+created_at: "2026-06-25"
+project: "forge-method-rust"
+sprint: "sprint-001-recovery"
+slice: "slice_0_unblock"
+title: "Rejection demo - unauthorized mutation rejected at write time"
+
+decision_sources:
+  - "contracts/spec/forge-rust-v1-specification.yaml#success_signal (usability bar INCLUDES a rejection demo)"
+  - "contracts/spec/forge-rust-v1-specification.yaml#DC2 (authority non-malleable, rejected at write time)"
+  - "contracts/grill/recovery-grill-002.yaml (validation_verdict)"
+
+intent: "Prove the central integrity promise mechanically: an out-of-authority effect is REJECTED before it touches the WAL, not merely logged after the fact. This is the differentiator vs v2 (which lied about append-only). The demo is the proof that 'reuse not rewrite' delivered a real spine."
+
+context:
+  mechanism_expected: "validate_tool_effect runs BEFORE append_effect_wal_record; an effect whose authority_boundary is violated or whose forbidden_authority matches is rejected"
+  existing_contracts: "contracts/effects/tool-effect-contract-v0.yaml, contracts/policies/*-boundary.yaml"
+  demo_form: "a small runnable example (test or bin) that attempts an out-of-authority write and asserts it is blocked"
+
+tasks:
+  - "construct an effect that violates authority_boundary (or hits forbidden_authority)"
+  - "attempt to apply it through the real validate-before-write path"
+  - "capture that the operation is REJECTED with the correct reason_code"
+  - "package as a runnable demo + a test so it can be re-run in CI"
+
+acceptance_criteria:
+  - "the out-of-authority effect is rejected, and state projection is UNCHANGED by the attempt"
+  - "the rejection carries a typed reason_code, not a panic"
+  - "the demo is reproducible (a test or a documented command)"
+
+checks:
+  - "demo/test runs green and asserts rejection"
+  - "WAL projection hash before == after the rejected attempt"
+
+evidence:
+  - ".forge-method/evidence/S0.4-rejection-demo.json"
+  - "the test or bin source path"
+
+exit_signal_for_slice_0: "S0.2 green + S0.3 audit done + S0.4 demo green == slice 0 complete, spine proven healthy"
+next_workflow: "plan slice 1 in detail, then build S1.1"

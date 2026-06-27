@@ -1,4 +1,4 @@
-﻿schema_version: "0.1"
+schema_version: "0.1"
 audit: v2_design_coverage_for_rust_core
 status: active
 purpose: "Prevent the Rust OperationContract redesign from rediscovering v2 work while still auditing v2 critically before carrying ideas into the Rust core."

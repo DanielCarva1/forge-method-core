@@ -1,0 +1,40 @@
+schema_version: "0.1"
+workflow:
+  id: "guidance-engine"
+  phases:
+  - "anytime"
+  trigger:
+  - "user asks what to do next, expresses doubt, corrects course, gives feedback, or introduces new intent"
+  - "state.phase == 5-ready-operate and new feedback or product intent appears"
+  - "guide needs to choose a workflow from human language and durable state"
+  inputs:
+  - "latest user message"
+  - ".forge-method/state.yaml"
+  - ".forge-method/sprint.yaml"
+  - "available module and workflow manifests"
+  - "recent artifacts and evidence when present"
+  steps:
+  - "classify the user intent before repeating the old next action"
+  - "{'detect signals': 'correction, frustration, confusion, brainstorm, research, product, UX, quick-dev, story lifecycle, creative, game, quality, builder, mechanical, or operation'}"
+  - "choose the next workflow and phase from state plus signals"
+  - "explain why this workflow is better than the stale state action"
+  - "return one recommended action, alternatives, a human prompt, and commands"
+  - "never update state directly from guide output; return the state update command for the agent to run"
+  outputs:
+  - "intent classification"
+  - "detected signals"
+  - "recommended phase and workflow"
+  - "recommended action"
+  - "human prompt"
+  - "alternatives"
+  - "state update requirement and suggested state fields"
+  - "next commands"
+  done_when:
+  - "the next workflow is explicit"
+  - "the human can see why this route was chosen"
+  - "state mutation, if needed, is returned as a command instead of silently applied"
+  blocked_when:
+  - "latest user message is empty and no state action is available"
+  - "multiple routes require a taste, scope, or risk tradeoff from the human"
+  handoff:
+  - "preserve intent classification, route reason, recommended workflow, alternatives, state update requirement, and command list"

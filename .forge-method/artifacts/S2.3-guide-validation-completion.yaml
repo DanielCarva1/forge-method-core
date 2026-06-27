@@ -1,0 +1,37 @@
+schema_version: "0.1"
+artifact_kind: "story-completion"
+story_id: "S2.3"
+status: "done"
+created_at: "2026-06-26"
+
+intent: "Engine validates a host-proposed GuideDecision against catalog + S1.7 hard gates; rejects illegal routing with typed reasons. Closes DC1."
+delivered: "crates/forge-core-engine/src/guide_validation.rs (validate_guide_decision; GuideValidation {Accepted|Rejected}; GuideRejection {UnrecognizedCurrentPhase, UnknownWorkflow, NotEligibleInPhase, IllegalTransition})"
+
+design_decisions:
+  DD8_clean_separation: "validator takes (decision, catalog, gates) as SEPARATE inputs — the recommendation (LLM) is distinct from the factual gate evidence (project state). The engine is the arbiter."
+  transition_checked_before_eligibility: "if a transition is proposed, the S1.7 gate is checked FIRST; a cleared transition widens eligibility to the proposed phase (recommending a next-phase workflow while proposing the move into it is coherent). An illegal transition rejects before eligibility."
+
+acceptance_criteria:
+  - "valid in-phase decision accepted — PASS"
+  - "unknown workflow rejected — PASS"
+  - "ineligible-in-phase rejected — PASS"
+  - "unrecognized phase rejected — PASS"
+  - "illegal transition (missing gate) rejected — PASS"
+  - "transition accepted when gate provided+passing — PASS"
+  - "anytime workflow never rejected as ineligible — PASS (across all Phase::ALL)"
+
+verification:
+  cargo_test_engine: "PASS — 7 guide_validation tests"
+  cargo_clippy_pedantic_engine: "PASS — 0 warnings"
+  cargo_test_workspace: "PASS — 196 tests, 0 failures"
+
+dc1_loop_closure: |
+  The full routing integrity loop now exists and is tested:
+    host LLM emits GuideDecision
+      -> engine loads catalog (S2.1)
+      -> engine checks workflow exists + eligible (S2.3)
+      -> engine checks transition clears S1.7 gates (S2.3 + S1.7)
+      -> Accepted | Rejected(typed reason)
+  The host reasons freely; the engine blocks the illegal. Scale-with-the-model (DC9).
+
+next_workflow: "build-story S2.4 (router eval corpus) — last slice-2 story"

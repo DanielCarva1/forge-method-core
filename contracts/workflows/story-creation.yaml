@@ -1,0 +1,38 @@
+schema_version: "0.1"
+workflow:
+  id: "story-creation"
+  phases:
+  - "3-plan"
+  trigger:
+  - "approved decisions need implementation-ready stories"
+  - "user asks to create stories, story backlog, implementation-ready stories, or a build slice"
+  - "plan-sprint or create-epics has enough decision input to produce executable work"
+  inputs:
+  - "accepted PRD, spec, quick-dev, game PRD, or GDD"
+  - "architecture, UX, risk, test, or validation artifacts relevant to the track"
+  - "epics or sprint plan when present"
+  - "acceptance criteria and evidence expectations"
+  steps:
+  - "verify approved decision sources exist before writing implementation stories"
+  - "attach explicit decision_sources to each ready story"
+  - "map each story to user value, source artifact, constraints, acceptance criteria, checks, and evidence"
+  - "separate implementation-ready stories from planned/deferred discovery or design work"
+  - "write or update story files and the story-creation artifact"
+  - "run readiness-check before build-story starts"
+  outputs:
+  - "implementation-ready story files"
+  - "decision-source map"
+  - "validation map"
+  - "blocked/deferred story notes"
+  - "next build-story target"
+  done_when:
+  - "every ready story has acceptance criteria, checks, and explicit decision_sources"
+  - "stories are sequenced by dependency, risk, and user-visible value"
+  - "missing decision work is blocked or routed before build"
+  - "next workflow is readiness-check or build-story"
+  blocked_when:
+  - "no accepted decision artifact exists"
+  - "architecture, UX, security, or validation choices change story boundaries"
+  - "acceptance evidence cannot be named"
+  handoff:
+  - "preserve story artifact path, story ids, decision-source map, validation map, blocked items, and next workflow"

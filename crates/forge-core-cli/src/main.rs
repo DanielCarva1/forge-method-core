@@ -49,6 +49,10 @@ fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     let command = args.first().map(String::as_str).unwrap_or("validate");
     match command {
+        "guide" => run_guide_command(&args),
+        "claim" => run_claim_command(&args),
+        "isolation" => run_isolation_command(&args),
+        "coordination" => run_coordination_command(&args),
         "validate" => run_validate_command(&args),
         "execute-operation" => run_execute_operation_command(&args),
         "rebuild-effect-index" => run_rebuild_effect_index_command(&args),
@@ -1917,6 +1921,553 @@ fn parse_update_channel(value: &str) -> HostAdapterUpdateChannel {
     }
 }
 
+fn run_guide_command(args: &[String]) {
+    // Subcommand: `forge-core guide <subcommand> [...]`.
+    let sub = args.get(1).map(String::as_str).unwrap_or("--help");
+
+    match sub {
+        "describe" => run_guide_describe(&args[2..]),
+        "decide" => run_guide_decide(&args[2..]),
+        "status" => run_guide_status(&args[2..]),
+        "--help" | "-h" | "help" => {
+            println!("forge-core guide <subcommand> [options]");
+            println!("  describe [--catalog-dir <path>] [--no-json]");
+            println!("  decide --decision-file <path> [--catalog-dir <path>] [--gates-file <path>] [--no-json]");
+            println!("  status --phase <phase> [--catalog-dir <path>] [--no-json]");
+        }
+        other => {
+            eprintln!("forge-core guide: unknown subcommand '{other}'. Try: describe | decide");
+            std::process::exit(2);
+        }
+    }
+}
+
+fn run_guide_describe(args: &[String]) {
+    use forge_core_cli::guide::{run_describe, DescribePayload};
+    use forge_core_contracts::CliEnvelope;
+
+    let mut catalog_dir = std::path::PathBuf::from("contracts/workflows");
+    let mut want_json = true;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--catalog-dir" => {
+                idx += 1;
+                if idx < args.len() {
+                    catalog_dir = std::path::PathBuf::from(&args[idx]);
+                }
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core guide describe [--catalog-dir <path>] [--no-json]");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+
+    let env: CliEnvelope<DescribePayload> = run_describe(&catalog_dir);
+    emit_guide(env, want_json);
+}
+
+fn run_guide_decide(args: &[String]) {
+    use forge_core_cli::guide::{run_decide, DecideAccepted};
+    use forge_core_contracts::CliEnvelope;
+
+    let mut decision_file: Option<std::path::PathBuf> = None;
+    let mut catalog_dir = std::path::PathBuf::from("contracts/workflows");
+    let mut gates_file: Option<std::path::PathBuf> = None;
+    let mut want_json = true;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--decision-file" => {
+                idx += 1;
+                if idx < args.len() {
+                    decision_file = Some(std::path::PathBuf::from(&args[idx]));
+                }
+            }
+            "--catalog-dir" => {
+                idx += 1;
+                if idx < args.len() {
+                    catalog_dir = std::path::PathBuf::from(&args[idx]);
+                }
+            }
+            "--gates-file" => {
+                idx += 1;
+                if idx < args.len() {
+                    gates_file = Some(std::path::PathBuf::from(&args[idx]));
+                }
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core guide decide --decision-file <path> [--catalog-dir <path>] [--gates-file <path>] [--no-json]");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+
+    let Some(decision_file) = decision_file else {
+        eprintln!("guide decide: --decision-file is required");
+        std::process::exit(3);
+    };
+
+    // Gates are optional (only needed for phase transitions). Loaded from a simple
+    // YAML file: [{gate_kind: system-design, status: pass}, ...].
+    let gates = load_gates(gates_file.as_deref());
+
+    let env: CliEnvelope<DecideAccepted> = run_decide(&decision_file, &catalog_dir, &gates);
+    emit_guide(env, want_json);
+}
+
+fn run_guide_status(args: &[String]) {
+    use forge_core_cli::guide::{run_status, StatusPayload};
+    use forge_core_contracts::CliEnvelope;
+
+    let mut phase: Option<String> = None;
+    let mut catalog_dir = std::path::PathBuf::from("contracts/workflows");
+    let mut want_json = true;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--phase" => {
+                idx += 1;
+                if idx < args.len() {
+                    phase = Some(args[idx].clone());
+                }
+            }
+            "--catalog-dir" => {
+                idx += 1;
+                if idx < args.len() {
+                    catalog_dir = std::path::PathBuf::from(&args[idx]);
+                }
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!(
+                    "forge-core guide status --phase <phase> [--catalog-dir <path>] [--no-json]"
+                );
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+
+    let Some(phase) = phase else {
+        eprintln!("guide status: --phase is required");
+        std::process::exit(3);
+    };
+
+    let env: CliEnvelope<StatusPayload> = run_status(&catalog_dir, &phase);
+    emit_guide(env, want_json);
+}
+
+/// Parse the gates-file into ProvidedGateResult rows. Empty/absent = no gates provided.
+fn load_gates(path: Option<&std::path::Path>) -> Vec<forge_core_engine::ProvidedGateResult> {
+    use forge_core_contracts::gate::GateStatus;
+    use forge_core_engine::GateKind;
+    let Some(path) = path else {
+        return Vec::new();
+    };
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    #[derive(serde::Deserialize)]
+    struct GateRow {
+        gate_kind: String,
+        status: String,
+    }
+    let rows: Vec<GateRow> = serde_yaml::from_str(&text).unwrap_or_default();
+    rows.into_iter()
+        .filter_map(|r| {
+            let gk = match r.gate_kind.as_str() {
+                "system-design" => Some(GateKind::SystemDesign),
+                "grill" | "grill-gate" => Some(GateKind::Grill),
+                _ => None,
+            }?;
+            let status = match r.status.as_str() {
+                "pass" => GateStatus::Pass,
+                "fail" => GateStatus::Fail,
+                "concerns" => GateStatus::Concerns,
+                "missing" => GateStatus::Missing,
+                _ => GateStatus::NotApplicable,
+            };
+            Some(forge_core_engine::ProvidedGateResult {
+                gate_kind: gk,
+                status,
+            })
+        })
+        .collect()
+}
+
+/// Emit a guide envelope to stdout (JSON) or stderr (text) and exit with the envelope's code.
+fn emit_guide<T: serde::Serialize>(env: forge_core_contracts::CliEnvelope<T>, want_json: bool) {
+    let code = env.exit_code();
+    if want_json {
+        println!("{}", serde_json::to_string_pretty(&env).unwrap());
+    } else if !env.ok {
+        eprintln!(
+            "guide failed: {}",
+            env.error
+                .as_ref()
+                .map(|e| e.message.as_str())
+                .unwrap_or("unknown")
+        );
+    }
+    std::process::exit(code);
+}
+
+// ============================================================================
+// claim command family — governance surface (slice 4, S4.4). Same envelope
+// contract as guide/* (DD17).
+// ============================================================================
+
+fn run_claim_command(args: &[String]) {
+    let sub = args.get(1).map(String::as_str).unwrap_or("--help");
+    match sub {
+        "acquire" => run_claim_acquire(&args[2..]),
+        "heartbeat" => run_claim_heartbeat(&args[2..]),
+        "release" => run_claim_release(&args[2..]),
+        "status" => run_claim_status(&args[2..]),
+        "check-write" => run_claim_check_write(&args[2..]),
+        "--help" | "-h" | "help" => {
+            println!("forge-core claim <subcommand> [options]");
+            println!("  acquire --scope <kind> --id <scope-id> --agent <id> [--role worker] [--ttl 600] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  heartbeat --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  release --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  status [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  check-write --agent <id> --target <path> [--target <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+        }
+        other => {
+            eprintln!("forge-core claim: unknown subcommand '{other}'. Try: acquire | heartbeat | release | status | check-write");
+            std::process::exit(2);
+        }
+    }
+}
+
+/// Resolve --now-unix to epoch seconds, defaulting to real system time (DD23).
+fn resolve_now_unix(flag: Option<i64>) -> i64 {
+    flag.unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| i64::try_from(d.as_secs()).unwrap_or(0))
+            .unwrap_or(0)
+    })
+}
+
+fn run_claim_acquire(args: &[String]) {
+    use forge_core_cli::claim::{parse_role, parse_scope_kind, run_acquire};
+    use forge_core_contracts::{RepoPath, StableId};
+    use forge_core_engine::AcquireRequest;
+
+    let mut scope_kind: Option<String> = None;
+    let mut scope_id: Option<String> = None;
+    let mut agent_id: Option<String> = None;
+    let mut role = "worker".to_string();
+    let mut ttl: u64 = 600;
+    let mut heartbeat_interval: u64 = 120;
+    let mut paths: Vec<String> = Vec::new();
+    let mut claims_dir = std::path::PathBuf::from("contracts/claims");
+    let mut now_unix: Option<i64> = None;
+    let mut want_json = true;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--scope" => {
+                idx += 1;
+                scope_kind = Some(require_value(args, idx, "scope"));
+            }
+            "--id" => {
+                idx += 1;
+                scope_id = Some(require_value(args, idx, "id"));
+            }
+            "--agent" => {
+                idx += 1;
+                agent_id = Some(require_value(args, idx, "agent"));
+            }
+            "--role" => {
+                idx += 1;
+                role = require_value(args, idx, "role");
+            }
+            "--ttl" => {
+                idx += 1;
+                ttl = parse_strict(&require_value(args, idx, "ttl"), "ttl");
+            }
+            "--heartbeat-interval" => {
+                idx += 1;
+                heartbeat_interval = parse_strict(
+                    &require_value(args, idx, "heartbeat-interval"),
+                    "heartbeat-interval",
+                );
+            }
+            "--path" => {
+                idx += 1;
+                paths.push(require_value(args, idx, "path"));
+            }
+            "--claims-dir" => {
+                idx += 1;
+                claims_dir = std::path::PathBuf::from(require_value(args, idx, "claims-dir"));
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict(
+                    &require_value(args, idx, "now-unix"),
+                    "now-unix",
+                ));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core claim acquire --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+
+    let (Some(scope_kind_str), Some(scope_id), Some(agent_id)) = (scope_kind, scope_id, agent_id)
+    else {
+        eprintln!("claim acquire: --scope, --id, --agent are all required");
+        std::process::exit(3);
+    };
+    let Some(sk) = parse_scope_kind(&scope_kind_str) else {
+        eprintln!("claim acquire: unknown --scope '{scope_kind_str}'");
+        std::process::exit(3);
+    };
+    let Some(role_kind) = parse_role(&role) else {
+        eprintln!("claim acquire: unknown --role '{role}'");
+        std::process::exit(3);
+    };
+
+    let req = AcquireRequest {
+        scope_kind: sk,
+        scope_id: StableId(scope_id),
+        agent_id: StableId(agent_id),
+        role: role_kind,
+        ttl_seconds: ttl,
+        heartbeat_interval_seconds: heartbeat_interval,
+        paths: paths.iter().map(|p| RepoPath(p.clone())).collect(),
+        product_area: None,
+        expected_state_version: None,
+    };
+    let env = run_acquire(&claims_dir, &req, resolve_now_unix(now_unix));
+    emit_envelope("claim", env, want_json);
+}
+
+fn run_claim_heartbeat(args: &[String]) {
+    use forge_core_cli::claim::run_heartbeat;
+    run_claim_single_target(args, "heartbeat", |claims_dir, claim_id, agent_id, now| {
+        run_heartbeat(claims_dir, claim_id, agent_id, now)
+    });
+}
+
+fn run_claim_release(args: &[String]) {
+    use forge_core_cli::claim::run_release;
+    run_claim_single_target(args, "release", |claims_dir, claim_id, agent_id, now| {
+        run_release(claims_dir, claim_id, agent_id, now)
+    });
+}
+
+/// Shared arg parsing for heartbeat/release (both take --id + --agent + optional dirs/time).
+fn run_claim_single_target(
+    args: &[String],
+    sub: &str,
+    op: impl Fn(
+        &std::path::Path,
+        &forge_core_contracts::StableId,
+        &forge_core_contracts::StableId,
+        i64,
+    ) -> forge_core_contracts::CliEnvelope<forge_core_cli::claim::ClaimResult>,
+) {
+    use forge_core_contracts::StableId;
+    let mut claim_id: Option<String> = None;
+    let mut agent_id: Option<String> = None;
+    let mut claims_dir = std::path::PathBuf::from("contracts/claims");
+    let mut now_unix: Option<i64> = None;
+    let mut want_json = true;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--id" => {
+                idx += 1;
+                claim_id = Some(require_value(args, idx, "id"));
+            }
+            "--agent" => {
+                idx += 1;
+                agent_id = Some(require_value(args, idx, "agent"));
+            }
+            "--claims-dir" => {
+                idx += 1;
+                claims_dir = std::path::PathBuf::from(require_value(args, idx, "claims-dir"));
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict(
+                    &require_value(args, idx, "now-unix"),
+                    "now-unix",
+                ));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core claim {sub} --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    let (Some(claim_id), Some(agent_id)) = (claim_id, agent_id) else {
+        eprintln!("claim {sub}: --id and --agent are required");
+        std::process::exit(3);
+    };
+    let env = op(
+        &claims_dir,
+        &StableId(claim_id),
+        &StableId(agent_id),
+        resolve_now_unix(now_unix),
+    );
+    emit_envelope("claim", env, want_json);
+}
+
+fn run_claim_status(args: &[String]) {
+    use forge_core_cli::claim::run_status;
+    let mut claims_dir = std::path::PathBuf::from("contracts/claims");
+    let mut now_unix: Option<i64> = None;
+    let mut want_json = true;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--claims-dir" => {
+                idx += 1;
+                claims_dir = std::path::PathBuf::from(require_value(args, idx, "claims-dir"));
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict(
+                    &require_value(args, idx, "now-unix"),
+                    "now-unix",
+                ));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core claim status [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    let env = run_status(&claims_dir, resolve_now_unix(now_unix));
+    emit_envelope("claim", env, want_json);
+}
+
+fn run_claim_check_write(args: &[String]) {
+    use forge_core_cli::claim::run_check_write;
+    use forge_core_contracts::StableId;
+    let mut claims_dir = std::path::PathBuf::from("contracts/claims");
+    let mut now_unix: Option<i64> = None;
+    let mut want_json = true;
+    let mut agent_id = String::new();
+    let mut targets: Vec<String> = Vec::new();
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--agent" => {
+                idx += 1;
+                agent_id = require_value(args, idx, "agent");
+            }
+            "--target" => {
+                idx += 1;
+                targets.push(require_value(args, idx, "target"));
+            }
+            "--claims-dir" => {
+                idx += 1;
+                claims_dir = std::path::PathBuf::from(require_value(args, idx, "claims-dir"));
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict(
+                    &require_value(args, idx, "now-unix"),
+                    "now-unix",
+                ));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core claim check-write --agent <id> --target <path> [--target <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    if agent_id.is_empty() {
+        eprintln!("claim check-write: --agent <id> is required");
+        std::process::exit(3);
+    }
+    if targets.is_empty() {
+        eprintln!("claim check-write: at least one --target <path> is required");
+        std::process::exit(3);
+    }
+    let env = run_check_write(
+        &claims_dir,
+        &StableId(agent_id),
+        &targets,
+        resolve_now_unix(now_unix),
+    );
+    emit_envelope("claim", env, want_json);
+}
+
+/// Emit a CliEnvelope to stdout (JSON) / stderr (text) and exit with its code.
+/// Used by both guide/* and claim/* (DD17: shared envelope contract).
+fn emit_envelope<T: serde::Serialize>(
+    _family: &str,
+    env: forge_core_contracts::CliEnvelope<T>,
+    want_json: bool,
+) {
+    let code = env.exit_code();
+    if want_json {
+        println!("{}", serde_json::to_string_pretty(&env).unwrap());
+    } else if !env.ok {
+        eprintln!(
+            "{} failed: {}",
+            _family,
+            env.error
+                .as_ref()
+                .map(|e| e.message.as_str())
+                .unwrap_or("unknown")
+        );
+    }
+    std::process::exit(code);
+}
+
+/// Strict value: exit 3 (invalid-input, DD10) if a flag is missing its value
+/// or the value looks like another flag. Governance commands must not silently
+/// coerce a missing/typo'd value into a default (review S4.4 medium).
+fn require_value(args: &[String], idx: usize, flag: &str) -> String {
+    match args.get(idx) {
+        Some(v) if !v.is_empty() && !v.starts_with("--") => v.clone(),
+        _ => {
+            eprintln!("claim: --{flag} requires a value");
+            std::process::exit(3);
+        }
+    }
+}
+
+/// Strict numeric parse: exit 3 (invalid-input, DD10) on a malformed number.
+/// `--now-unix garbage` must NOT silently become epoch 0 (review S4.4 bug #4).
+fn parse_strict<T: std::str::FromStr>(s: &str, flag: &str) -> T {
+    match s.parse::<T>() {
+        Ok(v) => v,
+        Err(_) => {
+            eprintln!("claim: invalid value for --{flag}: '{s}'");
+            std::process::exit(3);
+        }
+    }
+}
 fn usage() -> &'static str {
     concat!(
         "usage: forge-core validate [--root <path>] [--json]\n",
@@ -1942,4 +2493,266 @@ fn usage() -> &'static str {
         "       forge-core host-adapter-verify-tuf-trusted-root-freshness --trust-policy-path <path> --root-metadata-path <path> [--timestamp-metadata-path <path>] [--snapshot-metadata-path <path>] [--targets-metadata-path <path>] --update-start-time-unix <seconds> [--min-root-version <n>] [--min-timestamp-version <n>] [--min-snapshot-version <n>] [--min-targets-version <n>] [--json]",
         "\n       forge-core host-adapter-verify-certificate-crl-status --trust-policy-path <path> --certificate-path <path> --issuer-certificate-path <path> --crl-path <path> --verification-time-unix <seconds> [--json]",
     )
+}
+
+// ============================================================================
+// isolation (layer-1 worktree governance, S4.6)
+// ============================================================================
+
+fn run_isolation_command(args: &[String]) {
+    let sub = args.get(1).map(String::as_str).unwrap_or("--help");
+    match sub {
+        "propose" => run_isolation_propose(&args[2..]),
+        "status" => run_isolation_status(&args[2..]),
+        "merge-plan" => run_isolation_merge_plan(&args[2..]),
+        "transition" => run_isolation_transition(&args[2..]),
+        "--help" | "-h" | "help" => {
+            println!("forge-core isolation <subcommand> [options]");
+            println!("  propose --agent <id> --branch <name> --worktree-path <path> --base-ref <ref> [--id <isolation-id>] [--merge-policy rebase|merge|squash] [--claim <claim-id>] [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  status [--agent <id>] [--isolation-dir <path>] [--no-json]");
+            println!("  merge-plan --id <isolation-id> [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  transition --id <isolation-id> --to proposed|active|merging|merged|abandoned [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+        }
+        other => {
+            eprintln!("forge-core isolation: unknown subcommand '{other}'. Try: propose | status | merge-plan | transition");
+            std::process::exit(2);
+        }
+    }
+}
+
+fn run_coordination_command(args: &[String]) {
+    use forge_core_cli::coordination::dispatch;
+    let (json, exit) = dispatch(args);
+    if !json.is_empty() {
+        println!("{json}");
+    }
+    std::process::exit(exit);
+}
+
+fn run_isolation_propose(args: &[String]) {
+    use forge_core_cli::claim::slug_for_file;
+    use forge_core_cli::isolation::{parse_merge_policy, run_propose};
+    use forge_core_contracts::isolation::MergePolicy;
+    use forge_core_contracts::StableId;
+
+    let mut isolation_dir = std::path::PathBuf::from("contracts/isolations");
+    let mut now_unix: Option<i64> = None;
+    let mut want_json = true;
+    let mut agent = String::new();
+    let mut branch = String::new();
+    let mut worktree_path = String::new();
+    let mut base_ref = String::from("main");
+    let mut merge_policy = MergePolicy::Rebase;
+    let mut claim_id: Option<String> = None;
+    let mut isolation_id: Option<String> = None;
+
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--agent" => {
+                idx += 1;
+                agent = require_value(args, idx, "agent");
+            }
+            "--branch" => {
+                idx += 1;
+                branch = require_value(args, idx, "branch");
+            }
+            "--worktree-path" => {
+                idx += 1;
+                worktree_path = require_value(args, idx, "worktree-path");
+            }
+            "--base-ref" => {
+                idx += 1;
+                base_ref = require_value(args, idx, "base-ref");
+            }
+            "--id" => {
+                idx += 1;
+                isolation_id = Some(require_value(args, idx, "id"));
+            }
+            "--merge-policy" => {
+                idx += 1;
+                merge_policy = match parse_merge_policy(&require_value(args, idx, "merge-policy")) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!("isolation propose: {e}");
+                        std::process::exit(3);
+                    }
+                };
+            }
+            "--claim" => {
+                idx += 1;
+                claim_id = Some(require_value(args, idx, "claim"));
+            }
+            "--isolation-dir" => {
+                idx += 1;
+                isolation_dir = std::path::PathBuf::from(require_value(args, idx, "isolation-dir"));
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict(
+                    &require_value(args, idx, "now-unix"),
+                    "now-unix",
+                ));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core isolation propose --agent <id> --branch <name> --worktree-path <path> --base-ref <ref> [--id <id>] [--merge-policy rebase|merge|squash] [--claim <claim-id>] [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    if agent.is_empty() || branch.is_empty() || worktree_path.is_empty() {
+        eprintln!("isolation propose: --agent, --branch, --worktree-path are all required");
+        std::process::exit(3);
+    }
+    let now = resolve_now_unix(now_unix);
+    let id = isolation_id.unwrap_or_else(|| format!("iso-{}-{}", slug_for_file(&branch), now));
+    let env = run_propose(
+        &isolation_dir,
+        &StableId(agent),
+        &branch,
+        &worktree_path,
+        &base_ref,
+        merge_policy,
+        claim_id.map(StableId),
+        &id,
+        now,
+    );
+    emit_envelope("isolation", env, want_json);
+}
+
+fn run_isolation_status(args: &[String]) {
+    use forge_core_cli::isolation::run_status;
+    use forge_core_contracts::StableId;
+    let mut isolation_dir = std::path::PathBuf::from("contracts/isolations");
+    let mut want_json = true;
+    let mut agent: Option<String> = None;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--agent" => {
+                idx += 1;
+                agent = Some(require_value(args, idx, "agent"));
+            }
+            "--isolation-dir" => {
+                idx += 1;
+                isolation_dir = std::path::PathBuf::from(require_value(args, idx, "isolation-dir"));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core isolation status [--agent <id>] [--isolation-dir <path>] [--no-json]");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    let env = run_status(
+        &isolation_dir,
+        agent.as_ref().map(|a| StableId(a.clone())).as_ref(),
+    );
+    emit_envelope("isolation", env, want_json);
+}
+
+fn run_isolation_merge_plan(args: &[String]) {
+    use forge_core_cli::isolation::run_merge_plan;
+    use forge_core_contracts::StableId;
+    let mut isolation_dir = std::path::PathBuf::from("contracts/isolations");
+    let mut now_unix: Option<i64> = None;
+    let mut want_json = true;
+    let mut id = String::new();
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--id" => {
+                idx += 1;
+                id = require_value(args, idx, "id");
+            }
+            "--isolation-dir" => {
+                idx += 1;
+                isolation_dir = std::path::PathBuf::from(require_value(args, idx, "isolation-dir"));
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict(
+                    &require_value(args, idx, "now-unix"),
+                    "now-unix",
+                ));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core isolation merge-plan --id <isolation-id> [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    if id.is_empty() {
+        eprintln!("isolation merge-plan: --id <isolation-id> is required");
+        std::process::exit(3);
+    }
+    let env = run_merge_plan(&isolation_dir, &StableId(id), resolve_now_unix(now_unix));
+    emit_envelope("isolation", env, want_json);
+}
+
+fn run_isolation_transition(args: &[String]) {
+    use forge_core_cli::isolation::{parse_status, run_transition};
+    use forge_core_contracts::StableId;
+    let mut isolation_dir = std::path::PathBuf::from("contracts/isolations");
+    let mut now_unix: Option<i64> = None;
+    let mut want_json = true;
+    let mut id = String::new();
+    let mut to_raw = String::new();
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--id" => {
+                idx += 1;
+                id = require_value(args, idx, "id");
+            }
+            "--to" => {
+                idx += 1;
+                to_raw = require_value(args, idx, "to");
+            }
+            "--isolation-dir" => {
+                idx += 1;
+                isolation_dir = std::path::PathBuf::from(require_value(args, idx, "isolation-dir"));
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict(
+                    &require_value(args, idx, "now-unix"),
+                    "now-unix",
+                ));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core isolation transition --id <isolation-id> --to proposed|active|merging|merged|abandoned [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    if id.is_empty() || to_raw.is_empty() {
+        eprintln!("isolation transition: --id and --to are both required");
+        std::process::exit(3);
+    }
+    let to = match parse_status(&to_raw) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("isolation transition: {e}");
+            std::process::exit(3);
+        }
+    };
+    let env = run_transition(
+        &isolation_dir,
+        &StableId(id),
+        to,
+        resolve_now_unix(now_unix),
+    );
+    emit_envelope("isolation", env, want_json);
 }

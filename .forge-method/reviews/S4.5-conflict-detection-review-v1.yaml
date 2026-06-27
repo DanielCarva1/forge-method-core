@@ -1,0 +1,222 @@
+meta:
+  story: "S4.5-conflict-detection"
+  reviewer_model: "codex-reviewer (adversarial)"
+  date: "2026-06-26"
+  verdict: "YELLOW"
+  critical_count: 0
+  summary: >
+    The path-matching core (path_covers / normalize_segments) is genuinely solid
+    against the threat model: segment-aware containment defeats the sibling trap,
+    lexical `..`/`.` normalization is consistent on both sides, empty paths cover
+    nothing, and the fail-closed whole-write block holds. I could not construct a
+    string-level bypass that escapes a live claim or falsely blocks a free path on
+    a case-sensitive filesystem. However the CLI layer has real defects: the
+    blocked verdict returns a PROSE message and never populates the structured
+    WriteCheckPayload.blocks (the DD17 machine-readable self-correction surface is
+    effectively dead in the only branch where it matters), the blocked_path is
+    reported NORMALIZED while governed/ungoverned paths are reported RAW (breaking
+    agent target<->block correlation), and path matching is byte-exact so it can
+    be bypassed by case-folding on case-insensitive filesystems (Windows NTFS,
+    macOS APFS default) — undocumented. No critical security bypass; four mediums.
+
+findings:
+  - id: M1
+    severity: medium
+    location: "forge-core-cli/src/claim.rs :: run_check_write (Blocked branch, ~line 2tc..4tj)"
+    title: "Structured conflict payload is never emitted on block — self-correction surface is prose-only"
+    description: >
+      In the `WriteCheck::Blocked { blocks }` arm, run_check_write builds a
+      human-readable `msg` string and returns `CliEnvelope::err("check-write",
+      RejectedByGate, msg)`. It NEVER constructs a `WriteCheckPayload { blocks:
+      Vec<WriteBlock>, .. }`. Because `CliEnvelope::err` carries `data: None`,
+      the entire `WriteBlock { blocked_path, blocking_claim_id, claimant,
+      conflict_code }` structure — which exists precisely so an offending agent
+      can self-correct (DD10/DD17) — is dead code in the only branch where a
+      conflict exists. The claimant, claim id, and conflict_code are reachable
+      only by parsing the prose message, and conflict_code appears there solely
+      via `format!("{:?}", b.conflict_code)` (Debug-format of an enum variant).
+      Debug formatting is not a contracted serialization: adding a #[display]
+      attribute, a renamed variant, or a non-unit variant would silently change
+      the string agents grep for.
+    impact: >
+      An agent cannot reliably, programmatically identify which of its targets
+      collided, who owns the blocking claim, or why. It must regex a prose
+      string. This undermines the layer-2 self-correction loop the module
+      advertises and makes conflict_code brittle to refactor. Not a security
+      bypass (the block still fires and exits 2), but a correctness defect in
+      the documented machine-readable contract.
+    fix_suggestion: >
+      Return the structured payload even on block. Either (a) make
+      `CliEnvelope::err` accept an optional structured `data` and populate a
+      `WriteCheckPayload { allowed: false, blocks: <mapped>, .. }`, or (b) add a
+      sibling `WriteCheckBlockedPayload` variant and serialize the per-target
+      BlockDetail list (with conflict_code via a stable `as_str()`/serde rename,
+      NOT Debug). At minimum, set `err.code.0` to a stable machine code such as
+      `write_target_claimed:<blocking_claim_id>` so agents can match without
+      parsing prose, mirroring what `rejected_envelope` already does for the
+      lifecycle rejections.
+
+  - id: M2
+    severity: medium
+    location: "forge-core-engine/src/conflict_detection.rs :: classify_target + check_write_against_claims"
+    title: "blocked_path is NORMALIZED but governed/ungoverned paths are RAW — inconsistent identity"
+    description: >
+      `classify_target` constructs `BlockDetail.blocked_path =
+      RepoPath(target_segments.join("/"))` from the NORMALIZED segment list,
+      while `check_write_against_claims` pushes `target.clone()` (the ORIGINAL
+      input RepoPath) into `governed_by_self` and `ungoverned`. Concrete repro:
+      writer submits target `a/../contracts/stories/S4.5.yaml` against alice's
+      claim on `contracts/stories/S4.5.yaml`. The block detail reports
+      `contracts/stories/S4.5.yaml`, but the writer's request listed
+      `a/../contracts/stories/S4.5.yaml`. A client that correlates a block back
+      to its request by string equality will fail to find the match and may
+      treat the target as unhandled.
+    impact: >
+      Advisory-layer correlation break: the writer cannot reliably map a
+      reported collision back to the exact target string it submitted. Raises
+      the chance an agent ignores the block and relies on the spine to catch
+      the write (defeating the cheap pre-check). Symmetric problem in the other
+      direction is avoided because governed/ungoverned use the raw input.
+    fix_suggestion: >
+      Pick one identity and use it everywhere. Simplest: store the ORIGINAL
+      `target` RepoPath in BlockDetail (pass the raw target into
+      classify_target, or attach it after classification in
+      check_write_against_claims). Keep the normalized form only for matching,
+      never for reporting. Add a unit test: target `a/../b/c.yaml` blocked by
+      claim `b/c.yaml` must report `blocked_path == "a/../b/c.yaml"` (or
+      document that all reported paths are normalized and apply it uniformly).
+
+  - id: M3
+    severity: medium
+    location: "forge-core-engine/src/conflict_detection.rs :: path_covers (segment `==` comparison)"
+    title: "Byte-exact segment match is bypassable by case-folding on case-insensitive filesystems"
+    description: >
+      Segments are compared with `c == t` (exact `String` equality). On a
+      case-insensitive filesystem (Windows NTFS default, macOS APFS
+      case-insensitive variant, and the `/mnt/c` drvfs mount this very repo
+      lives on), `Contracts/Stories/S4.5.yaml` and
+      `contracts/stories/S4.5.yaml` are the SAME file but two different
+      segment strings. Concrete repro: alice acquires a claim with path
+      `Contracts/Stories/S4.5.yaml`; bob runs check-write with target
+      `contracts/stories/S4.5.yaml`. path_covers compares `Contracts` !=
+      `contracts` => not covered => NOT blocked => bob writes the same on-disk
+      file alice claimed. The design decisions (DD26-DD29) never mention case
+      folding, so this is an undocumented gap rather than an intentional
+      choice.
+    impact: >
+      Real cross-agent write collision on Windows/macOS and on this repo's
+      /mnt/c mount. Does not affect pure-Linux case-sensitive repos. Severity
+      is bounded because the integrity spine is the final authority on the
+      real on-disk path, but the cheap pre-check is silently defeated.
+    fix_suggestion: >
+      Either (a) normalize all segments to lowercase (or NFC + fold) before
+      comparison in `path_covers`/`normalize_segments` and document it as a
+      DD30, or (b) explicitly document case-sensitivity as a Linux-only
+      assumption and add a startup check / doc note that the engine is unsafe
+      on case-insensitive filesystems. At minimum add a test asserting current
+      behavior so the choice is visible.
+
+  - id: M4
+    severity: medium
+    location: "forge-core-cli/src/claim.rs :: run_check_write (no ClaimLock)"
+    title: "check-write takes no lock and does not document the check-then-write TOCTOU window"
+    description: >
+      `run_acquire` / `run_heartbeat` / `run_release` all acquire `ClaimLock`
+      (the S4.4 advisory lock) to serialize load->decide->write.
+      `run_check_write` does NOT acquire the lock, and its doc-comment does
+      not mention the race. Window: agent A calls check-write (clear), agent B
+      acquires a claim on the same path, agent A writes — collision not
+      prevented by layer 2. The acquire's atomic-rename prevents a corrupt
+      read, so there is no torn-read bug, only a stale-verdict race.
+    impact: >
+      Layer-2 prevention is advisory, not airtight: a clean verdict can go
+      stale before the write lands. This is inherent to check-then-write and
+      cannot be fully closed by holding the lock during the (separate, later)
+      write — but the gap is undocumented at the function that exposes it, so
+      callers may trust the verdict more than they should.
+    fix_suggestion: >
+      Add a `# Time-of-check / time-of-use` paragraph to the
+      `run_check_write` doc-comment stating explicitly that the verdict is a
+      point-in-time advisory and the integrity spine is the authoritative gate
+      at write time. Optionally acquire `ClaimLock` for the read so the claim
+      set is at least consistent with any concurrent acquire in flight (narrows
+      but does not eliminate the window). Reference DD21 fail-closed lease
+      semantics for why a stale read still fails safe at the spine.
+
+  - id: L1
+    severity: low
+    location: "forge-core-engine/src/conflict_detection.rs :: normalize_segments"
+    title: "Leading/over-popping `..` segments are silently discarded (consistent but unmarked)"
+    description: >
+      `out.pop()` on an empty Vec is a no-op, so `../../etc/passwd` normalizes
+      to `["etc", "passwd"]` and `..` alone normalizes to `[]`. This is
+      internally consistent (both claim and target normalize identically) and
+      the empty result covers/is-covered-by nothing, so no bypass. But a path
+      that escapes the repo root lexically is silently reinterpreted as a
+      repo-relative path, which could mask a writer that genuinely meant to
+      write outside the repo.
+    impact: >
+      Minimal. The spine resolves real on-disk paths and the engine is
+      documented as lexical-only (DD29). Worth a doc note so reviewers do not
+      mistake the silent discard for a bug later.
+    fix_suggestion: >
+      Add a one-line comment in `normalize_segments` stating that leading
+      `..` (over-pop) is intentionally absorbed and that repo-root escape is
+      the spine's responsibility. No behavior change required.
+
+strengths:
+  - >
+    Segment-aware containment is implemented correctly and defeats the classic
+    sibling trap: claim `src/ev` does NOT cover `src/evil.rs` because
+    `target_segments.len() <= claim_segments.len()` short-circuits and the zip
+    compares whole segments. Verified by the `sibling_directory_is_not_containment` test and re-derived by hand.
+  - >
+    Normalization is applied symmetrically to BOTH claim paths and target paths
+    (scope_covers_any re-normalizes each claim path; check_write_against_claims
+    normalizes each target), so `.`/`..`/double-slash/trailing-slash/`\`
+    differences cannot create an asymmetry that bypasses matching. The
+    `path_traversal_does_not_escape_claim` and `windows_style_separators_supported`
+    tests cover the two most likely asymmetry vectors.
+  - >
+    Empty scope.paths and empty/`.`-only paths all reduce to `[]`, and
+    path_covers returns false on any empty side — DD28 (empty claim governs
+    nothing) holds by construction, with a dedicated test.
+  - >
+    Fail-closed semantics are correct: any single colliding target blocks the
+    whole multi-target write (blocks.is_empty() gate), and a peer's live claim
+    is a hard block even when the writer also holds an own claim on the same
+    path (peer_claim_trumps_own_claim_for_same_path). Determinism holds:
+    iteration is over a sorted claim copy and the first peer hit wins, so the
+    attributed blocking_claim_id is stable regardless of input order
+    (determinism_blocks_reported_in_sorted_claim_order).
+  - >
+    No panic paths found in the engine or in run_check_write: no unwrap/expect
+    on user input, Vec::pop is safe on empty, load_claims surfaces (never
+    swallows) malformed files as EnvConfig, and claim persistence uses the S4.4
+    atomic-rename so a crash cannot leave a torn YAML that DoSes the claims dir.
+
+notes_for_author:
+  - >
+    Attempts that DID NOT bypass the matching (so you do not waste time
+    re-checking): full-width slash U+FF0F `／` (not a separator, so it just
+    creates a different literal directory name — the write lands elsewhere, no
+    escape); null bytes (stay inside a segment, OS rejects them anyway);
+    unicode confusables (different bytes = legitimately different paths);
+    `.` after `..` (e.g. `a/.././b` -> `["b"]`, consistent both sides); very
+    long paths (no recursion, no buffer). The lexical matcher is sound for the
+    stated threat model on case-sensitive filesystems.
+  - >
+    Two peer claims on the SAME path: only the lexicographically-first
+    (sorted) claim is reported in blocks, not both. The doc says blocks lists
+    "every colliding target" (per-target, true) — but for one target with two
+    peer claimants, only one claimant is attributed. Likely fine, but flag if
+    multi-claimant diagnostics matter.
+  - >
+    Duplicate targets in the input are not deduped: submitting the same path
+    twice yields two identical BlockDetail / two ungoverned entries. Cosmetic
+    only.
+  - >
+    The e2e test `peer_write_into_claimed_path_is_blocked` asserts
+    exit_reason but not exit_code == 2 directly; consider asserting
+    `check.exit_code() == 2` to lock the exit-code contract (M1's fix will
+    touch this path).

@@ -1,0 +1,35 @@
+schema_version: "0.1"
+workflow:
+  id: "compliance-checklist"
+  phases:
+  - "3-plan"
+  - "5-ready-operate"
+  trigger:
+  - "project has policy, audit, contract, or regulatory obligations"
+  - "enterprise track needs compliance proof"
+  inputs:
+  - "requirements"
+  - "security and privacy plans"
+  - "known standards"
+  - "release scope"
+  steps:
+  - "list applicable obligations"
+  - "map obligations to evidence or checks"
+  - "record gaps and owners"
+  - "record waiver/audit trail and release impact"
+  - "save compliance checklist"
+  outputs:
+  - "compliance checklist"
+  - "evidence map"
+  - "open gaps"
+  - "audit trail"
+  done_when:
+  - "each obligation has evidence, waiver, or owner"
+  - "gaps are explicit"
+  - "release impact is explicit"
+  - "release gate can inspect checklist"
+  blocked_when:
+  - "applicable standard is unknown"
+  - "legal or policy interpretation is required"
+  handoff:
+  - "preserve checklist path, evidence map, gaps, owners, waivers, audit trail, and release impact"

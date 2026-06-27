@@ -1,0 +1,31 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S1.2"
+status: "blocked_on_S1.1"
+slice: "slice_1_engine_core_and_catalog"
+title: "Typed contract schema: workflow, phase, catalog entry, gate"
+
+decision_sources:
+  - "contracts/spec/engine-architecture.yaml#orchestrator_guide (catalog entry shape: id, phase, trigger conditions, prerequisites, outputs)"
+  - "contracts/spec/forge-rust-v1-specification.yaml#G1 (markdown is not runtime authority; typed contracts consumed by rust engine)"
+  - "AGENTS.md (agent-facing workflow docs are compact state machines)"
+
+intent: "Define the serde-derived Rust types that the 110 workflows will deserialize into, and that the orchestrator routes over. This is the type spine of the whole product: workflow, phase, catalog entry, gate, trigger condition."
+
+tasks:
+  - "define Workflow struct with the 7 contract fields (trigger, inputs, steps, outputs, done_when, blocked_when, handoff) PLUS phase + canonical id"
+  - "define Phase enum (1-discovery .. 6-evolve) and CatalogEntry (id, phase, triggers, prerequisites, outputs)"
+  - "define Gate struct compatible with existing contracts/gates/gate-contract-v0.yaml"
+  - "steps are directional text (what to achieve), NOT persona scripts (DC9)"
+  - "ensure serde_yaml round-trips the 85 already-pure-yaml workflows"
+
+acceptance_criteria:
+  - "all 85 pure-yaml workflows deserialize into Workflow without error"
+  - "types are in forge-core-contracts (the host-free contract crate)"
+  - "a unit test round-trips a sample workflow through serialize->deserialize->equal"
+
+checks:
+  - "cargo test on the new types green"
+  - "deserialization test covers the 85 pure-yaml workflows"
+blocks: ["S1.3", "S1.5", "S1.6", "S1.7"]
+next_workflow: "build-story S1.3 (migrate 85) and S1.7 (phase transitions, parallel)"

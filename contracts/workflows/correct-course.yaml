@@ -1,0 +1,37 @@
+schema_version: "0.1"
+workflow:
+  id: "correct-course"
+  phases:
+  - "anytime"
+  trigger:
+  - "new evidence contradicts current plan"
+  - "user says the route, scope, taste, artifact, or implementation is wrong"
+  - "user asks to pivot, simplify, rewind, or rescue work"
+  inputs:
+  - "current state"
+  - "affected artifacts"
+  - "new constraint or evidence"
+  - "open stories"
+  steps:
+  - "identify what changed"
+  - "{'classify contradiction': 'route, scope, taste, evidence, implementation, communication, or state'}"
+  - "classify impact on requirements, architecture, plan, stories, evidence, and human trust"
+  - "preserve decisions and discarded paths"
+  - "{'choose repair': 'rollback, insert missing workflow, rewrite artifact, split scope, defer, or escalate'}"
+  - "update affected artifacts or create new stories"
+  - "set the next safe action"
+  outputs:
+  - "correction artifact"
+  - "impact map"
+  - "selected repair path"
+  - "updated stories or blockers"
+  - "next action"
+  done_when:
+  - "impacted scope is explicit"
+  - "stale work is updated, deferred, or blocked"
+  - "state points to the next safe workflow"
+  blocked_when:
+  - "correction requires a human tradeoff"
+  - "impacted work cannot be identified"
+  handoff:
+  - "preserve changed decision, impacted artifacts, story updates, and next action"

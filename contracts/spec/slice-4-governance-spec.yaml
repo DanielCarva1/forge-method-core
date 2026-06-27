@@ -1,0 +1,135 @@
+schema_version: "0.1"
+artifact_kind: "specification"
+spec_id: "slice-4-governance-spec"
+created_at: "2026-06-26"
+project: "forge-method-rust"
+closes_capability: "C5_multi_agent_governance"
+
+intent: |
+  Build the operational surface for multi-agent governance ON TOP of the proven
+  data model (claim/runtime/coordination_eval contracts) and integrity spine
+  (layer 3, already proven slice 0). Deliver the C5 promise: multiple agents /
+  people / LLMs work on the same repo without collision, versioning pain, or
+  silent overwrite.
+
+research_basis: "contracts/research/multi-agent-collaboration-governance-research.yaml"
+audit_basis: ".forge-method/artifacts/S4.1-governance-audit.yaml"
+
+the_four_layer_pattern:
+  layer_1_isolation: "git worktree per agent — physical non-overwrite. (GAP — build S4.6)"
+  layer_2_prevention: "claim-before-edit — others see the claim, work elsewhere. (GAP — build S4.3+S4.4+S4.5)"
+  layer_3_authority_audit: "append-only WAL, origin-bound authority, tamper-evident. (DONE — integrity spine, proven S0.4)"
+  layer_4_coordination_bus: "shared plan, shared claims, agents see each other. (PARTIAL — filesystem is the bus per DC10; add semantic claim logic S4.3)"
+
+decisions_locked:
+  DD15: "Coordination-bus = filesystem + WAL, NOT a new websocket/sqlite layer. DC10 file-backed protocol is forge's wedge. agent-state-db/SYNAPSE patterns are explicitly NOT adopted."
+  DD16: "Claim lifecycle is a typed engine state machine: Active -(heartbeat)-> Active | -(ttl expiry)-> Stale -> Expired -> HandoffRequired; release -> Released. Transitions reject illegal (same pattern as phase_transition S1.7)."
+  DD17: "Governance CLI uses the SAME CliEnvelope contract (DD9) + exit taxonomy (DD10) as guide/*. Consistency over novelty."
+  DD18: "Logical prevention (claims) BEFORE physical isolation (worktree). Claims prevent collision semantically and unblock parallel agents sooner; worktree hardens later. Both required for full C5."
+  DD19: "reclaim_policy is a DRIVER/HUMAN governance decision, NOT an engine decision (DC9). The engine enforces only NON-DELEGABLE rules: no steal, no duplicate authority, no silent loss of handoff."
+  DD20: "expiry boundary is INCLUSIVE: now_unix >= expires_at => expired."
+  DD21: "is_expired is FAIL-CLOSED: unparseable expires_at => expired. A corrupt lease is never live; it routes to handoff/recovery."
+  DD22: "Coordination-bus = a directory of claim-state YAML files (one per claim), rewritten on each lifecycle transition. The append-only integrity spine (layer 3, proven S0.4) audits every write — we do NOT duplicate layer 3 with a parallel claim event-log. The claim file IS the materialized state."
+  DD23: "Time is injected: --now-unix <epoch> is optional (for replay/tests); default = real system time. The pure engine stays deterministic given now_unix. Malformed --now-unix is REJECTED (exit 3), never silently coerced to epoch 0."
+  DD24: "Heartbeat is agent-driven (DC9). The engine never babysits a claim; an agent explicitly calls `claim heartbeat` to refresh its lease."
+  DD25: "LIFECYCLE LOCK: mutating claim operations (acquire/heartbeat/release) hold an exclusive advisory directory lock for the whole load->decide->write, so the pure engine is never defeated by a concurrent writer. Atomic temp+rename writes prevent partial-file DoS."
+
+
+risks_known:
+  R6_hand_edit_bypass: |
+    A claim file is plain YAML that load_claims trusts as authoritative state. An agent
+    with filesystem write access COULD forge authority by hand-editing a claim YAML
+    (make itself claimant, resurrect a released claim, fake an expires_at). The pure
+    engine only validates transitions AFTER loading this state — it cannot detect a
+    forged initial state. This is ACCEPTED for S4.4 because: (a) the multi-LLM model
+    (DC10) is cooperative — agents follow the typed-contract protocol by design, the
+    same way state.yaml is trusted not to be hand-edited; (b) physical isolation via
+    git worktree (S4.6, layer 1) prevents one agent from touching another's bus; (c)
+    the integrity spine will be wired to audit claim writes in a later slice so that
+    forged/unauthorized claim files are detectable. Cryptographic signing of every
+    claim file was deliberately NOT added (over-engineering for the file-backed wedge).
+    Mitigation status: PARTIAL until S4.6 (worktree) + claim-write spine integration.
+
+autonomy_priority_rationale: |
+  The user asked to prioritize stories that LIBERATE AGENT AUTONOMY (so the system
+  itself enables multi-agent work, letting development continue with less human
+  dependence). The ordering below builds the SEMANTIC coordination layer first:
+  after S4.3+S4.4 an agent can SEE active claims and DECLARE its own via CLI —
+  that alone lets agents avoid collision. S4.5 adds enforcement. S4.6+S4.7
+  complete the promise. Each slice independently raises what agents can do alone.
+
+stories:
+  S4.2:
+    title: "Slice 4 specification (this document)"
+    detail: "contracts/spec/slice-4-governance-spec.yaml"
+    status: "done"
+    autonomy_value: "medium — fixes the territory so building can be autonomous"
+
+  S4.3:
+    title: "Claim engine: typed lifecycle state machine"
+    detail: "contracts/stories/S4.3-claim-engine.yaml"
+    status: "pending"
+    autonomy_value: "HIGH — the semantic core that makes claims MEAN something"
+    scope:
+      - "ClaimEngine in forge-core-engine: acquire, heartbeat, release, expire_stale, list_active"
+      - "ClaimLifecycleDecision typed result (Accepted | Rejected(ClaimRejection)) mirroring GuideValidation"
+      - "ClaimRejection variants: AlreadyClaimedByOther, StaleCannotHeartbeat, NotClaimant, IllegalTransition, ExpiredRequiresHandoff"
+      - "Lease/TTL computation: now - last_heartbeat > ttl_seconds => Stale; Stale past grace => Expired"
+      - "Reads claim files from registry dir; returns projected state (who holds what, since when, expires when)"
+    exit: "engine funcs compile, unit-tested against synthetic claim fixtures, reject illegal transitions with typed reasons"
+
+  S4.4:
+    title: "Governance CLI: claim / release / status / list"
+    detail: "contracts/stories/S4.4-governance-cli.yaml"
+    status: "done"
+    autonomy_value: "HIGH — exposes S4.3 to agents via shell, same envelope as guide/* (DD17)"
+    scope:
+      - "`forge-core claim acquire --scope story --id S4.5 --agent <id> [--ttl 600]` -> writes claim file, WAL append, envelope ok/rejected"
+      - "`forge-core claim heartbeat --id <claim-id> --agent <id>` -> refreshes lease"
+      - "`forge-core claim release --id <claim-id> --agent <id>` -> Released (or HandoffRequired if expiry_policy)"
+      - "`forge-core claim status` -> list active claims (agent, scope, since, expires) — THE coordination-bus view"
+      - "All emit CliEnvelope<ClaimResult> with DD10 exit codes"
+    exit: "CLI round-trips (acquire->status->release) work live; typed rejections (acquire on already-claimed returns exit 2 + AlreadyClaimedByOther)"
+
+  S4.5:
+    title: "Conflict detection: write-before-claim enforcement"
+    detail: "contracts/stories/S4.5-conflict-detection.yaml"
+    status: "done"
+    autonomy_value: "HIGH — engine BLOCKS writes into paths claimed by another agent (layer 2 prevention becomes real)"
+    scope:
+      - "Engine fn: check_write_against_claims(path, agent_id, active_claims) -> WriteOk | WriteBlocked(ClaimedBy)"
+      - "Integrate with existing effect model (lane-claim-effect conflict_codes: write_target_claimed)"
+      - "Wires into execute-operation path (the spine's validate-before-write already rejects; add claim-aware check)"
+      - "Path-scope matching: claim.scope.paths covers the write target"
+    exit: "test: agent B write into path claimed by agent A is blocked with typed reason; same-agent write allowed"
+
+  S4.6:
+    title: "Worktree isolation contract + support (layer 1)"
+    detail: "contracts/stories/S4.6-worktree-isolation.yaml"
+    status: "done"
+    autonomy_value: "medium — physical isolation; hardens what claims already prevent"
+    scope_coarse: "Add worktree/isolation contract (research gap G1); support per-agent worktree creation; merge-back handoff. Decompose when reached."
+
+  S4.7:
+    title: "Coordination-eval engine + fixtures + slice completion"
+    detail: "contracts/stories/S4.7-coordination-eval.yaml"
+    status: "done"
+    autonomy_value: "medium — proofs that the 9 dims pass; closes C5 success signal"
+    scope_coarse: "Scorer over the 9 coordination dimensions; lift minimal-coordination-eval-suite fixtures from draft to real; slice-4-completion artifact. Decompose when reached."
+
+success_signal_C5:
+  - "Two simulated agents can acquire non-overlapping claims and the engine reports both active"
+  - "Agent B's write into agent A's claimed path is blocked with a typed reason"
+  - "claim status shows the full coordination picture (the bus view)"
+  - "coordination-eval fixtures exercise the real failure taxonomy"
+
+out_of_scope:
+  - "Realtime websocket bus (DD15 rejects — file-backed is the wedge)"
+  - "CRDT/OT text engine (research explicitly rejects for repo work)"
+  - "Full runtime-handoff execution (contracts exist; operational handoff engine is a later slice)"
+
+open_questions:
+  - "Should claim TTL defaults be per-scope (story vs lane vs driver)? Decide in S4.3 with sensible defaults."
+  - "Is heartbeat automatic (engine pings) or agent-driven (CLI)? Lean agent-driven (DC9 — engine doesn't babysit)."
+
+next_workflow: "build-story S4.3 (claim engine)"

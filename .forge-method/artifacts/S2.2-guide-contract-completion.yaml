@@ -1,0 +1,14 @@
+schema_version: "0.1"
+artifact_kind: "story-completion"
+story_id: "S2.2"
+status: "done"
+created_at: "2026-06-26"
+
+intent: "Define the auditable GuideDecision typed contract."
+delivered: "crates/forge-core-contracts/src/guide_decision.rs (GuideDecisionDocument + GuideDecision with recommended_workflow, reason, allowed_actions, blocked_by_gates, current_phase, proposed_next_phase; +phase categorizers)"
+design_note: "Field shape follows engine-architecture.yaml#deliverable_contract. Typed (not free text) so guidance is replayable and the engine can validate it."
+verification:
+  cargo_test: "PASS — 3 round-trip/categorization tests"
+  clippy_pedantic: "PASS — 0 warnings (doc_markdown fixed)"
+  blocks_resolved: "S2.3"
+next_workflow: "build-story S2.3 (validation) — DONE in same session"

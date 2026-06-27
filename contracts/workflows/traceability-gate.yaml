@@ -1,0 +1,34 @@
+schema_version: "0.1"
+workflow:
+  id: "traceability-gate"
+  phases:
+  - "4-build-verify"
+  - "5-ready-operate"
+  trigger:
+  - "user asks for traceability or coverage from requirements to tests"
+  - "release gate needs requirement/test/evidence mapping"
+  inputs:
+  - "requirements or stories"
+  - "tests and checks"
+  - "evidence artifacts"
+  - "risk register"
+  steps:
+  - "choose phase 1 coverage mapping or phase 2 release decision"
+  - "map requirements and risks to checks and evidence"
+  - "identify uncovered, weakly covered, over-tested, and missing-evidence areas"
+  - "decide pass, concerns, fail, missing evidence, or waived and record follow-up work"
+  outputs:
+  - "traceability matrix"
+  - "coverage gaps"
+  - "coverage status"
+  - "gate decision"
+  done_when:
+  - "every high-risk requirement has coverage status"
+  - "gate decision uses pass, concerns, fail, missing evidence, or waived"
+  - "waivers include owner, rationale, release impact, and revisit trigger"
+  - "follow-up work is recorded"
+  blocked_when:
+  - "requirements or evidence are missing"
+  - "coverage cannot be tied to a stable artifact"
+  handoff:
+  - "preserve phase, matrix path, coverage status, gate decision, gaps, waivers, release impact, and follow-up stories"

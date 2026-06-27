@@ -1,0 +1,93 @@
+operation_contract:
+  schema_version: "0.1"
+  contract_id: "op_fixture_correct_course_frustrated_user"
+  created_at: "2026-06-25T00:00:00Z"
+  project_ref:
+    root: "."
+    project_id: "forge-method-rust"
+    state_version: 1
+  source:
+    host: "codex"
+    surface: "cli_json"
+    operation: "guide"
+    human_input_digest: "sha256:fixture"
+  autonomy:
+    mode: "facilitate"
+    rationale: "fixture"
+  recommendation:
+    next_actor: "human"
+    next_operation: null
+    host_action: "request_confirmation"
+    phase: "6-evolve"
+    workflow: "correct-course"
+    action: "address_user_frustration"
+  authority:
+    mutation_policy: "forbidden"
+    side_effect_policy: "read_only"
+    authority_sources: []
+    authority_evidence: []
+    missing_authority:
+    - "human_explicit_direction"
+  coordination_scope:
+    target:
+      kind: "none"
+      id: null
+      product_area: null
+      paths: []
+    concurrency:
+      expected_state_version: 1
+      agent_id: null
+      caller_role: "driver"
+      fleet_mode: false
+      registry_ref: null
+    write_authority:
+      requires_driver_claim: false
+      requires_lane_claim: false
+      claim_contract_ref: null
+    completion:
+      must_check_completion: false
+      completion_contract_ref: null
+  execution_policy:
+    mode: "observe_only"
+    max_steps: 0
+    retry_policy:
+      max_attempts: 0
+      on_failure: "stop"
+    branch_policy:
+      allowed_branches: []
+      default_branch: "stop"
+  stop_policy:
+    stop_when:
+    - "human_input_required"
+    on_stop:
+      next_actor: "human"
+      next_operation: null
+      host_action: "show_status"
+  request: null
+  decision_close: null
+  runtime_handoff: null
+  allowed_actions:
+  - "read_contract"
+  forbidden_actions:
+  - "change_state"
+  human:
+    input_requirement: "required"
+    prompt:
+      mode: "question"
+      text: "Course correction: what is frustrating the user right now?"
+      options: []
+    tone_contract: "curious_direct"
+  loads:
+    required: []
+    optional: []
+  gates:
+    required_before_mutation: []
+    current_gate_status: "not_applicable"
+    gate_contract_refs: []
+  stop_conditions:
+  - "human_answer_required"
+  command_refs: []
+  effect_contract_refs: []
+  diagnostics:
+    warnings: []
+    errors: []

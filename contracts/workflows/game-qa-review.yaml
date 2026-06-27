@@ -1,0 +1,33 @@
+schema_version: "0.1"
+workflow:
+  id: "game-qa-review"
+  phases:
+  - "4-build-verify"
+  trigger:
+  - "game story is ready for review"
+  - "prototype, mechanic, UX, or content needs validation"
+  inputs:
+  - "story acceptance criteria"
+  - "game artifacts"
+  - "build or prototype evidence"
+  - "playtest or QA notes"
+  - "performance or stability evidence if relevant"
+  steps:
+  - "verify acceptance criteria"
+  - "check playability, feedback, stability, performance, and scope"
+  - "record findings"
+  - "approve, block, or request repair"
+  outputs:
+  - "QA review result"
+  - "findings"
+  - "evidence references"
+  - "repair/readiness route"
+  done_when:
+  - "findings are recorded"
+  - "approval or blocker is explicit"
+  - "story can move safely"
+  blocked_when:
+  - "build or evidence is missing"
+  - "acceptance criteria cannot be tested"
+  handoff:
+  - "preserve review result, findings, evidence, repair path, and next game workflow"

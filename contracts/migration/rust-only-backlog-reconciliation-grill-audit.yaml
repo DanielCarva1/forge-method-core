@@ -1,4 +1,4 @@
-﻿schema_version: "0.1"
+schema_version: "0.1"
 audit: "rust_only_backlog_reconciliation_grill"
 created_at: "2026-06-25"
 status: "closed"

@@ -1,0 +1,37 @@
+verdict: yellow
+summary: "All 5 claimed fixes are materially closed for the reported cases; one remaining policy gap lets acquire silently reuse an expired open claim when handoff_required=false even if other expiry/reclaim policy fields imply recovery/review."
+fix_verification:
+  bug_1_acquire_expired_handoff:
+    status: closed
+    evidence: "claim_engine.rs:274-281 checks matching Active/Stale claims that are expired and have expiry_policy.handoff_required, then returns ExpiredRequiresHandoff before the new claim is built. The live precheck at lines 263-271 no longer skips this path; it only handles non-expired live claims."
+  bug_2_same_agent_duplicate:
+    status: closed
+    evidence: "claim_engine.rs:263-271 rejects any is_live same-scope claim with AlreadyClaimedByOther and does not compare claimant_agent_id, so same-agent and other-agent live duplicates are both blocked."
+  bug_3_heartbeat_resurrect:
+    status: closed
+    evidence: "claim_engine.rs:348-356 rejects any heartbeat whose status is not Active or Stale with IllegalTransition before extending lease at lines 365-369, so Released/HandoffRequired/HandoffRecorded/Expired cannot be resurrected."
+  bug_4_release_policy:
+    status: closed
+    evidence: "claim_engine.rs:385-393 restricts release sources to Active/Stale, and lines 394-402 reject expired claims when handoff_required is true or release_without_handoff_allowed is false. In-lease releases still proceed to Released at lines 404-412."
+  bug_5_is_expired_fail_closed:
+    status: closed
+    evidence: "claim_engine.rs:219-224 now returns true on parse failure via the None => true branch; the Some branch uses now_unix >= exp at line 221."
+new_issues:
+  - file_line: "claim_engine.rs:274-283, claim_engine.rs:333"
+    severity: medium
+    issue: "acquire only blocks expired open Active/Stale claims when handoff_required is true. If handoff_required=false but release_without_handoff_allowed=false, on_expiry=BlockUntilRecovered/DriverReview/HumanReview, or reclaim_policy requires review, acquire falls through and accepts a new claim without an explicit recovery/reclaim decision. This is not one of the 5 fixed holes as stated, but it remains a design-rule risk because reclaim_policy is a closed enum and expired open claims should route through recovery rather than silent reuse."
+  - file_line: "claim_engine.rs:221"
+    severity: nit
+    issue: "Boundary semantics are strict: now_unix == expires_at is expired because is_expired uses >=. This is consistent with the current code/tests but differs from the module state diagram text at claim_engine.rs:9, which says now > expires_at. Clarify the contract and add an explicit boundary test."
+regression_check:
+  in_lease_release_still_works:
+    status: pass
+    evidence: "For Active/Stale non-expired claims, release passes claimant check at lines 376-384, source-status check at lines 385-393, skips the expired-policy rejection at lines 394-402, and writes Released at lines 404-412. Existing test release_allowed_for_unexpired_claim at lines 722-729 covers this path."
+  boundary_now_equals_expires:
+    observation: "At exact equality, is_expired returns true (claim_engine.rs:221). Therefore acquire treats Active/Stale+handoff_required as ExpiredRequiresHandoff, heartbeat rejects as ExpiredRequiresHandoff, and release rejects if handoff_required or release_without_handoff_allowed=false."
+  released_plus_expired_active_handoff_same_scope:
+    status: pass
+    evidence: "acquire scans every same-scope claim in lines 259-283. A Released prior claim is ignored because it is not live and does not match Active/Stale at line 274, but a later or earlier expired Active/Stale claim with handoff_required still matches lines 274-276 and rejects at lines 278-281."
+remaining_concerns:
+  - "No current engine operation enforces reclaim_policy review decisions during acquire; if this is intentionally delegated to persistence/CLI recovery, document that boundary and add tests for each ExpiryPolicy combination."
+  - "No validation command was run in this verification pass; this is a code-reading review only."

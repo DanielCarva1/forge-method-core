@@ -1,0 +1,42 @@
+schema_version: "0.1"
+workflow:
+  id: "game-project"
+  phases:
+  - "1-discovery"
+  trigger:
+  - "user starts a game project"
+  - "state.module == game-studio"
+  inputs:
+  - "game idea"
+  - "engine preference"
+  - "platform target"
+  - "core mechanic"
+  - "art/audio constraints"
+  steps:
+  - "define game type and target player"
+  - "define core mechanic"
+  - "create prototype goal"
+  - "create game brief"
+  - "create game context handoff"
+  - "choose engine profile and setup path"
+  - "create or update GDD"
+  - "create technical architecture for selected engine"
+  - "plan playable slice and move tasks into sprint"
+  outputs:
+  - "game brief"
+  - "GDD"
+  - "game context"
+  - "engine setup"
+  - "engine architecture"
+  - "playable slice plan"
+  - "sprint stories"
+  done_when:
+  - "game concept, mechanic, and target engine are explicit"
+  - "first playable slice has acceptance criteria and proof"
+  - "implementation stories exist"
+  blocked_when:
+  - "engine choice changes architecture materially"
+  - "playable target is undefined"
+  - "required assets are unavailable"
+  handoff:
+  - "preserve game brief path, game context, engine profile, playable slice target, and next implementation story"

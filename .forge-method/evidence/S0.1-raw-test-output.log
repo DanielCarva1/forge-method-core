@@ -1,0 +1,580 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 27.70s
+     Running unittests src\main.rs (target\debug\deps\forge_contract_validator-371a03961cdf702d.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\parity.rs (target\debug\deps\parity-ab782e078012e4e3.exe)
+
+running 5 tests
+test legacy_validator_and_forge_core_cli_both_reject_unknown_source_id ... FAILED
+test legacy_validator_and_forge_core_cli_both_reject_invalid_operation_enum ... FAILED
+test legacy_validator_and_forge_core_cli_both_reject_invalid_command_enum ... FAILED
+test legacy_validator_and_forge_core_cli_both_reject_missing_policy_ref ... FAILED
+test legacy_validator_and_forge_core_cli_both_pass_current_repo ... FAILED
+
+failures:
+
+---- legacy_validator_and_forge_core_cli_both_reject_unknown_source_id stdout ----
+
+thread 'legacy_validator_and_forge_core_cli_both_reject_unknown_source_id' (58244) panicked at crates\forge-contract-validator\tests\parity.rs:260:39:
+read source dir: Os { code: 3, kind: NotFound, message: "O sistema não pode encontrar o caminho especificado." }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- legacy_validator_and_forge_core_cli_both_reject_invalid_operation_enum stdout ----
+
+thread 'legacy_validator_and_forge_core_cli_both_reject_invalid_operation_enum' (59052) panicked at crates\forge-contract-validator\tests\parity.rs:260:39:
+read source dir: Os { code: 3, kind: NotFound, message: "O sistema não pode encontrar o caminho especificado." }
+
+---- legacy_validator_and_forge_core_cli_both_reject_invalid_command_enum stdout ----
+
+thread 'legacy_validator_and_forge_core_cli_both_reject_invalid_command_enum' (18600) panicked at crates\forge-contract-validator\tests\parity.rs:260:39:
+read source dir: Os { code: 3, kind: NotFound, message: "O sistema não pode encontrar o caminho especificado." }
+
+---- legacy_validator_and_forge_core_cli_both_reject_missing_policy_ref stdout ----
+
+thread 'legacy_validator_and_forge_core_cli_both_reject_missing_policy_ref' (51464) panicked at crates\forge-contract-validator\tests\parity.rs:260:39:
+read source dir: Os { code: 3, kind: NotFound, message: "O sistema não pode encontrar o caminho especificado." }
+
+---- legacy_validator_and_forge_core_cli_both_pass_current_repo stdout ----
+
+thread 'legacy_validator_and_forge_core_cli_both_pass_current_repo' (14288) panicked at crates\forge-contract-validator\tests\parity.rs:19:5:
+legacy stderr: error reference_index_build_failed reference_index: read dir C:\forge-method-rust\docs/fixtures/operation-contract-v0: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+
+
+failures:
+    legacy_validator_and_forge_core_cli_both_pass_current_repo
+    legacy_validator_and_forge_core_cli_both_reject_invalid_command_enum
+    legacy_validator_and_forge_core_cli_both_reject_invalid_operation_enum
+    legacy_validator_and_forge_core_cli_both_reject_missing_policy_ref
+    legacy_validator_and_forge_core_cli_both_reject_unknown_source_id
+
+test result: FAILED. 0 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.65s
+
+error: test failed, to rerun pass `-p forge-contract-validator --test parity`
+     Running unittests src\lib.rs (target\debug\deps\forge_core_cli-b27f5194a0577353.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\main.rs (target\debug\deps\forge_core-07117112631c7b30.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\validate.rs (target\debug\deps\validate-4c4ec51d2ae9efb6.exe)
+
+running 80 tests
+test execute_operation_rejects_payload_larger_than_policy ... FAILED
+test execute_operation_rejects_payload_outside_root_by_default ... FAILED
+test host_adapter_artifact_verification_passes_for_matching_digest_and_metadata ... ok
+test host_adapter_artifact_verification_fails_for_mismatch_or_missing_metadata ... ok
+test host_adapter_certificate_crl_status_verification_fails_without_explicit_policy ... ok
+test host_adapter_certificate_crl_status_verification_fails_expired_crl ... ok
+test host_adapter_certificate_crl_status_verification_fails_revoked_certificate ... ok
+test host_adapter_certificate_revocation_policy_verification_fails_excessive_lifetime ... ok
+test host_adapter_certificate_revocation_policy_verification_passes_short_lived_policy ... ok
+test host_adapter_distribution_admission_blocks_weak_evidence_and_allows_complete_evidence ... ok
+test host_adapter_distribution_admission_requires_canary_opt_in_and_blocks_dev ... ok
+test host_adapter_distribution_policy_requires_supply_chain_evidence ... ok
+test host_adapter_certificate_crl_status_verification_passes_good_by_supplied_crl ... ok
+test host_adapter_invocation_admission_enforces_target_and_process_controls ... ok
+test host_adapter_certificate_transparency_sct_verification_fails_future_sct ... ok
+test host_adapter_certificate_revocation_policy_verification_fails_explicit_status_required ... ok
+test host_adapter_manifest_library_classifies_command_authority ... ok
+test host_adapter_certificate_transparency_sct_verification_passes_supplied_scts ... ok
+test host_adapter_process_policy_blocks_mcp_mutating_operations ... ok
+test host_adapter_projection_library_preserves_non_authority_boundary ... ok
+test host_adapter_fulcio_certificate_identity_verification_fails_undeclared_root ... ok
+test host_adapter_fulcio_certificate_identity_verification_passes_matching_policy ... ok
+test host_adapter_certificate_transparency_sct_verification_fails_unknown_log ... ok
+test host_adapter_fulcio_certificate_identity_verification_fails_oidc_issuer_mismatch ... ok
+test host_adapter_provenance_verification_fails_when_source_ref_mismatches ... ok
+test host_adapter_provenance_verification_passes_signed_slsa_statement ... ok
+test host_adapter_rekor_verification_passes_signed_checkpoint_and_inclusion ... ok
+test host_adapter_rekor_verification_fails_when_log_id_mismatches ... ok
+test host_adapter_sigstore_bundle_subject_verification_fails_digest_mismatch ... ok
+test host_adapter_sigstore_dsse_in_toto_subject_verification_fails_multiple_signatures ... ok
+test host_adapter_sigstore_bundle_subject_verification_passes_matching_bundle ... ok
+test host_adapter_sigstore_bundle_subject_verification_fails_rekor_body_mismatch ... ok
+test host_adapter_sigstore_dsse_in_toto_subject_verification_fails_payload_type_mismatch ... ok
+test host_adapter_sigstore_dsse_in_toto_subject_verification_fails_rekor_body_mismatch ... ok
+test host_adapter_sigstore_dsse_in_toto_subject_verification_fails_subject_mismatch ... ok
+test host_adapter_sigstore_timestamp_authority_verification_fails_missing_rfc3161_tsa_refs ... ok
+test host_adapter_sigstore_timestamp_authority_verification_fails_outside_certificate_window ... ok
+test host_adapter_sigstore_dsse_in_toto_subject_verification_passes_matching_bundle ... ok
+test host_adapter_sigstore_timestamp_authority_verification_fails_rfc3161_payload_mismatch ... ok
+test host_adapter_sigstore_trust_policy_verification_passes_complete_policy ... ok
+test host_adapter_sigstore_timestamp_authority_verification_passes_rekor_integrated_time ... ok
+test host_adapter_sigstore_trust_policy_verification_fails_missing_fulcio_refs ... ok
+test host_adapter_tuf_trusted_root_freshness_verification_fails_expired_root ... ok
+test host_adapter_tuf_trusted_root_freshness_verification_fails_invalid_expiry_format ... ok
+test host_adapter_tuf_trusted_root_freshness_verification_fails_rollback_version ... ok
+test host_adapter_tuf_trusted_root_freshness_verification_passes_fresh_metadata ... ok
+test host_adapter_tuf_trusted_root_freshness_verification_fails_non_tuf_policy ... ok
+test host_adapter_sigstore_timestamp_authority_verification_passes_rfc3161_tsa_token ... ok
+test host_adapter_admit_distribution_binary_blocks_missing_evidence ... ok
+test execute_operation_binary_outputs_json_even_when_awaiting_human ... FAILED
+test host_adapter_admit_invocation_binary_blocks_mcp_mutation ... ok
+test host_adapter_distribution_policy_binary_outputs_json ... ok
+test host_adapter_manifest_binary_outputs_json ... ok
+test host_adapter_process_policy_binary_outputs_json ... ok
+test host_adapter_projection_binary_outputs_mcp_json ... ok
+test host_adapter_verify_artifact_binary_blocks_mismatched_digest ... ok
+test host_adapter_verify_artifact_binary_outputs_json_and_exit_status ... ok
+test host_adapter_verify_certificate_crl_status_binary_outputs_json ... ok
+test host_adapter_verify_certificate_revocation_policy_binary_outputs_json ... ok
+test host_adapter_verify_certificate_transparency_sct_binary_outputs_json ... ok
+test host_adapter_verify_fulcio_certificate_identity_binary_outputs_json_and_exit_status ... ok
+test host_adapter_verify_provenance_binary_blocks_bad_signature ... ok
+test host_adapter_verify_provenance_binary_outputs_json_and_exit_status ... ok
+test query_effect_index_library_filters_metadata_records ... ok
+test host_adapter_verify_rekor_entry_binary_blocks_wrong_key ... ok
+test host_adapter_verify_rekor_entry_binary_outputs_json_and_exit_status ... ok
+test host_adapter_verify_sigstore_timestamp_authority_binary_outputs_json_and_exit_status ... ok
+test host_adapter_verify_sigstore_bundle_subject_binary_outputs_json_and_exit_status ... ok
+test validate_library_passes_current_repo ... FAILED
+test host_adapter_verify_sigstore_trust_policy_binary_blocks_missing_tsa_source ... ok
+test host_adapter_verify_sigstore_dsse_in_toto_subject_binary_outputs_json_and_exit_status ... ok
+test rebuild_effect_index_library_rebuilds_from_committed_wal ... ok
+test host_adapter_verify_sigstore_trust_policy_binary_outputs_json_and_exit_status ... ok
+test host_adapter_verify_tuf_trusted_root_freshness_binary_outputs_json ... ok
+test query_effect_index_binary_outputs_json ... ok
+test query_effect_index_context_outputs_bounded_json ... ok
+test query_effect_index_rejects_workflow_authority_consumer_use ... ok
+test validate_binary_outputs_json_summary ... FAILED
+test rebuild_effect_index_binary_outputs_json ... ok
+test host_adapter_verify_sigstore_timestamp_authority_binary_outputs_json_for_rfc3161 ... ok
+
+failures:
+
+---- execute_operation_rejects_payload_larger_than_policy stdout ----
+
+thread 'execute_operation_rejects_payload_larger_than_policy' (50864) panicked at crates\forge-core-cli\tests\validate.rs:3913:5:
+assertion failed: error.to_string().contains("too large")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- execute_operation_rejects_payload_outside_root_by_default stdout ----
+
+thread 'execute_operation_rejects_payload_outside_root_by_default' (59520) panicked at crates\forge-core-cli\tests\validate.rs:3887:5:
+assertion failed: error.to_string().contains("outside root")
+
+---- execute_operation_binary_outputs_json_even_when_awaiting_human stdout ----
+
+thread 'execute_operation_binary_outputs_json_even_when_awaiting_human' (42344) panicked at crates\forge-core-cli\tests\validate.rs:3849:53:
+json output: Error("EOF while parsing a value", line: 1, column: 0)
+
+---- validate_library_passes_current_repo stdout ----
+
+thread 'validate_library_passes_current_repo' (20476) panicked at crates\forge-core-cli\tests\validate.rs:1066:5:
+assertion `left == right` failed
+  left: Failed
+ right: Passed
+
+---- validate_binary_outputs_json_summary stdout ----
+
+thread 'validate_binary_outputs_json_summary' (54956) panicked at crates\forge-core-cli\tests\validate.rs:1084:5:
+stderr: 
+
+
+failures:
+    execute_operation_binary_outputs_json_even_when_awaiting_human
+    execute_operation_rejects_payload_larger_than_policy
+    execute_operation_rejects_payload_outside_root_by_default
+    validate_binary_outputs_json_summary
+    validate_library_passes_current_repo
+
+test result: FAILED. 75 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.56s
+
+error: test failed, to rerun pass `-p forge-core-cli --test validate`
+     Running unittests src\lib.rs (target\debug\deps\forge_core_contracts-eee9d852c9b5ec5a.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\load_current_contracts.rs (target\debug\deps\load_current_contracts-dc87115114cdf205.exe)
+
+running 11 tests
+test deserializes_all_operation_fixtures ... FAILED
+test deserializes_coordination_eval_instances ... ok
+test deserializes_runtime_boundary_instances ... ok
+test deserializes_command_contract_instance ... ok
+test deserializes_contract_family_inventory_lock ... ok
+test deserializes_claim_completion_and_gate_instances ... FAILED
+test deserializes_decision_close_instances ... ok
+test deserializes_health_recovery_instances ... ok
+test deserializes_operation_reference_policy ... ok
+test deserializes_request_and_effect_instances ... ok
+test deserializes_field_evidence_registry ... ok
+
+failures:
+
+---- deserializes_all_operation_fixtures stdout ----
+
+thread 'deserializes_all_operation_fixtures' (41888) panicked at crates\forge-core-contracts\tests\load_current_contracts.rs:105:37:
+read operation fixture dir: Os { code: 3, kind: NotFound, message: "O sistema não pode encontrar o caminho especificado." }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- deserializes_claim_completion_and_gate_instances stdout ----
+
+thread 'deserializes_claim_completion_and_gate_instances' (60456) panicked at crates\forge-core-contracts\tests\load_current_contracts.rs:217:35:
+deserialize C:\forge-method-rust\contracts/claims\story-s0-1-active-claim.yaml: claim_contract: unknown field `purpose`, expected one of `id`, `contract_ref`, `claim`, `scope`, `lease`, `status`, `expiry_policy`, `evidence_refs` at line 28 column 3
+
+
+failures:
+    deserializes_all_operation_fixtures
+    deserializes_claim_completion_and_gate_instances
+
+test result: FAILED. 9 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+error: test failed, to rerun pass `-p forge-core-contracts --test load_current_contracts`
+     Running unittests src\lib.rs (target\debug\deps\forge_core_runtime-4c2277fc13f2aa2e.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\operation_plan.rs (target\debug\deps\operation_plan-dc4ce477c7a4f1a9.exe)
+
+running 21 tests
+test host_drift_fixture_does_not_become_ready_to_execute ... FAILED
+test command_execution_evidence_record_preserves_runtime_output ... FAILED
+test execute_operation_records_command_evidence_and_applies_effect_with_wal_lock ... FAILED
+test execute_operation_blocks_missing_required_command_before_effects ... FAILED
+test execute_operation_waits_without_side_effects_when_plan_needs_human ... FAILED
+test destructive_missing_inverse_fixture_blocks ... FAILED
+test facilitation_fixture_waits_for_human ... FAILED
+test mechanical_story_plan_stages_commands_and_effects_without_commit ... FAILED
+test effect_transaction_is_ready_when_staged_effect_has_payloads ... FAILED
+test non_ready_facilitation_plan_is_not_stageable ... FAILED
+test mechanical_story_execute_fixture_can_call_operation ... FAILED
+test effect_transaction_blocks_write_without_payload ... FAILED
+test read_write_conflict_notification_stages_effect_refs_only ... FAILED
+test release_gate_fixture_requires_gate_before_advance ... FAILED
+test staged_mutating_command_is_blocked_before_spawn ... FAILED
+test shell_executor_is_blocked_even_when_staged ... FAILED
+test missing_snapshot_references_block_ready_operation ... FAILED
+test staged_read_only_command_executes_with_typed_result ... FAILED
+test store_snapshot_keeps_valid_mechanical_operation_ready ... FAILED
+test unstaged_command_is_not_run ... FAILED
+test zero_timeout_command_is_blocked_before_spawn ... FAILED
+
+failures:
+
+---- host_drift_fixture_does_not_become_ready_to_execute stdout ----
+
+thread 'host_drift_fixture_does_not_become_ready_to_execute' (41472) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\host-drift-invented-next-step.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- command_execution_evidence_record_preserves_runtime_output stdout ----
+
+thread 'command_execution_evidence_record_preserves_runtime_output' (33764) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\mechanical-story-execute.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- execute_operation_records_command_evidence_and_applies_effect_with_wal_lock stdout ----
+
+thread 'execute_operation_records_command_evidence_and_applies_effect_with_wal_lock' (29004) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\mechanical-story-execute.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- execute_operation_blocks_missing_required_command_before_effects stdout ----
+
+thread 'execute_operation_blocks_missing_required_command_before_effects' (14184) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\mechanical-story-execute.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- execute_operation_waits_without_side_effects_when_plan_needs_human stdout ----
+
+thread 'execute_operation_waits_without_side_effects_when_plan_needs_human' (56128) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\facilitate-first-product-idea.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- destructive_missing_inverse_fixture_blocks stdout ----
+
+thread 'destructive_missing_inverse_fixture_blocks' (19276) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\destructive-effect-missing-inverse-blocked.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- facilitation_fixture_waits_for_human stdout ----
+
+thread 'facilitation_fixture_waits_for_human' (34984) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\facilitate-first-product-idea.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- mechanical_story_plan_stages_commands_and_effects_without_commit stdout ----
+
+thread 'mechanical_story_plan_stages_commands_and_effects_without_commit' (12336) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\mechanical-story-execute.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- effect_transaction_is_ready_when_staged_effect_has_payloads stdout ----
+
+thread 'effect_transaction_is_ready_when_staged_effect_has_payloads' (45644) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\mechanical-story-execute.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- non_ready_facilitation_plan_is_not_stageable stdout ----
+
+thread 'non_ready_facilitation_plan_is_not_stageable' (48364) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\facilitate-first-product-idea.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- mechanical_story_execute_fixture_can_call_operation stdout ----
+
+thread 'mechanical_story_execute_fixture_can_call_operation' (34440) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\mechanical-story-execute.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- effect_transaction_blocks_write_without_payload stdout ----
+
+thread 'effect_transaction_blocks_write_without_payload' (24728) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\mechanical-story-execute.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- read_write_conflict_notification_stages_effect_refs_only stdout ----
+
+thread 'read_write_conflict_notification_stages_effect_refs_only' (42672) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\read-write-conflict-notify.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- release_gate_fixture_requires_gate_before_advance stdout ----
+
+thread 'release_gate_fixture_requires_gate_before_advance' (44572) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\release-gate-required.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- staged_mutating_command_is_blocked_before_spawn stdout ----
+
+thread 'staged_mutating_command_is_blocked_before_spawn' (13172) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\mechanical-story-execute.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- shell_executor_is_blocked_even_when_staged stdout ----
+
+thread 'shell_executor_is_blocked_even_when_staged' (9824) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\mechanical-story-execute.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- missing_snapshot_references_block_ready_operation stdout ----
+
+thread 'missing_snapshot_references_block_ready_operation' (50956) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\mechanical-story-execute.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- staged_read_only_command_executes_with_typed_result stdout ----
+
+thread 'staged_read_only_command_executes_with_typed_result' (38848) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\mechanical-story-execute.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- store_snapshot_keeps_valid_mechanical_operation_ready stdout ----
+
+thread 'store_snapshot_keeps_valid_mechanical_operation_ready' (35988) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\mechanical-story-execute.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- unstaged_command_is_not_run stdout ----
+
+thread 'unstaged_command_is_not_run' (62444) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\mechanical-story-execute.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+---- zero_timeout_command_is_blocked_before_spawn stdout ----
+
+thread 'zero_timeout_command_is_blocked_before_spawn' (47436) panicked at crates\forge-core-runtime\tests\operation_plan.rs:35:33:
+failed to read C:\forge-method-rust\crates\forge-core-runtime\../..\docs\fixtures\operation-contract-v0\mechanical-story-execute.yaml: O sistema não pode encontrar o caminho especificado. (os error 3)
+
+
+failures:
+    command_execution_evidence_record_preserves_runtime_output
+    destructive_missing_inverse_fixture_blocks
+    effect_transaction_blocks_write_without_payload
+    effect_transaction_is_ready_when_staged_effect_has_payloads
+    execute_operation_blocks_missing_required_command_before_effects
+    execute_operation_records_command_evidence_and_applies_effect_with_wal_lock
+    execute_operation_waits_without_side_effects_when_plan_needs_human
+    facilitation_fixture_waits_for_human
+    host_drift_fixture_does_not_become_ready_to_execute
+    mechanical_story_execute_fixture_can_call_operation
+    mechanical_story_plan_stages_commands_and_effects_without_commit
+    missing_snapshot_references_block_ready_operation
+    non_ready_facilitation_plan_is_not_stageable
+    read_write_conflict_notification_stages_effect_refs_only
+    release_gate_fixture_requires_gate_before_advance
+    shell_executor_is_blocked_even_when_staged
+    staged_mutating_command_is_blocked_before_spawn
+    staged_read_only_command_executes_with_typed_result
+    store_snapshot_keeps_valid_mechanical_operation_ready
+    unstaged_command_is_not_run
+    zero_timeout_command_is_blocked_before_spawn
+
+test result: FAILED. 0 passed; 21 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p forge-core-runtime --test operation_plan`
+     Running unittests src\lib.rs (target\debug\deps\forge_core_schema-308f72859601dfc2.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\main.rs (target\debug\deps\forge_core_schema-a064301ca0d2cc4b.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\generated_views.rs (target\debug\deps\generated_views-02c9c54dc93b8a6b.exe)
+
+running 2 tests
+test generated_schemas_cover_v0_contract_surface ... ok
+test compact_agent_views_are_derived_and_nonempty ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src\lib.rs (target\debug\deps\forge_core_store-2460126231aae3cb.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\reference_index.rs (target\debug\deps\reference_index-ba83acab969216d4.exe)
+
+running 23 tests
+test append_json_line_rejects_path_escape ... ok
+test apply_file_effect_transaction_blocks_stale_read_without_writing ... ok
+test apply_file_effect_transaction_rejects_path_like_artifact_outside_projection ... ok
+test apply_file_effect_transaction_projects_request_stream_id ... ok
+test build_effect_metadata_context_groups_latest_records_without_authority ... ok
+test apply_file_effect_transaction_rolls_back_when_later_write_fails ... ok
+test apply_file_effect_transaction_projects_artifact_and_evidence_ids ... ok
+test append_json_line_creates_parent_and_appends_records ... ok
+test effect_store_lock_blocks_second_try_lock_until_released ... ok
+test query_effect_target_metadata_index_fails_on_invalid_record ... ok
+test query_effect_target_metadata_index_filters_and_returns_latest_view ... ok
+test standard_runtime_projection_refs_are_option_controlled ... FAILED
+test compact_effect_wal_drops_closed_records_and_keeps_incomplete ... ok
+test apply_file_effect_transaction_applies_create_write_and_append ... ok
+test append_effect_target_metadata_records_writes_append_only_index ... ok
+test store_reference_index_satisfies_current_cross_file_validation ... FAILED
+test apply_file_effect_transaction_with_wal_records_commit ... ok
+test apply_file_effect_transaction_with_wal_lock_records_commit ... ok
+test rebuild_effect_target_metadata_index_noops_for_legacy_wal_without_metadata ... ok
+test rebuild_effect_target_metadata_index_from_committed_wal ... ok
+test recover_effect_wal_restores_incomplete_transaction ... ok
+test store_collects_validation_yaml_documents_for_source_id_checks ... FAILED
+test store_known_paths_satisfy_current_generic_known_refs ... FAILED
+
+failures:
+
+---- standard_runtime_projection_refs_are_option_controlled stdout ----
+
+thread 'standard_runtime_projection_refs_are_option_controlled' (14648) panicked at crates\forge-core-store\tests\reference_index.rs:284:10:
+default index: ReadDir { path: "C:\\forge-method-rust\\docs/fixtures/operation-contract-v0", source: Os { code: 3, kind: NotFound, message: "O sistema não pode encontrar o caminho especificado." } }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- store_reference_index_satisfies_current_cross_file_validation stdout ----
+
+thread 'store_reference_index_satisfies_current_cross_file_validation' (33356) panicked at crates\forge-core-store\tests\reference_index.rs:197:46:
+build reference index: ReadDir { path: "C:\\forge-method-rust\\docs/fixtures/operation-contract-v0", source: Os { code: 3, kind: NotFound, message: "O sistema não pode encontrar o caminho especificado." } }
+
+---- store_collects_validation_yaml_documents_for_source_id_checks stdout ----
+
+thread 'store_collects_validation_yaml_documents_for_source_id_checks' (25800) panicked at crates\forge-core-store\tests\reference_index.rs:299:5:
+parse diagnostics: [Diagnostic { severity: Error, code: YamlParseFailed, path: "contracts/backlog/rust-only-core-backlog.yaml", message: "parse yaml C:\\forge-method-rust\\contracts\\backlog\\rust-only-core-backlog.yaml: deserializing from YAML containing more than one document is not supported" }, Diagnostic { severity: Error, code: YamlParseFailed, path: "contracts/migration/rust-only-backlog-reconciliation-grill-audit.yaml", message: "parse yaml C:\\forge-method-rust\\contracts\\migration\\rust-only-backlog-reconciliation-grill-audit.yaml: deserializing from YAML containing more than one document is not supported" }, Diagnostic { severity: Error, code: YamlParseFailed, path: "contracts/migration/v2-design-coverage-audit.yaml", message: "parse yaml C:\\forge-method-rust\\contracts\\migration\\v2-design-coverage-audit.yaml: deserializing from YAML containing more than one document is not supported" }, Diagnostic { severity: Error, code: YamlParseFailed, path: "contracts/policies/rust-only-backlog-reconciliation.yaml", message: "parse yaml C:\\forge-method-rust\\contracts\\policies\\rust-only-backlog-reconciliation.yaml: deserializing from YAML containing more than one document is not supported" }]
+
+---- store_known_paths_satisfy_current_generic_known_refs stdout ----
+
+thread 'store_known_paths_satisfy_current_generic_known_refs' (43064) panicked at crates\forge-core-store\tests\reference_index.rs:322:5:
+assertion failed: known_paths.contains("docs/fixtures/operation-contract-v0")
+
+
+failures:
+    standard_runtime_projection_refs_are_option_controlled
+    store_collects_validation_yaml_documents_for_source_id_checks
+    store_known_paths_satisfy_current_generic_known_refs
+    store_reference_index_satisfies_current_cross_file_validation
+
+test result: FAILED. 19 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+error: test failed, to rerun pass `-p forge-core-store --test reference_index`
+     Running unittests src\lib.rs (target\debug\deps\forge_core_validate-f572d19f443e2734.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\current_contracts.rs (target\debug\deps\current_contracts-890a2aca284e4b4e.exe)
+
+running 13 tests
+test yaml_known_repo_ref_validation_reports_missing_refs ... ok
+test validates_current_operation_fixtures ... FAILED
+test validates_current_cross_file_references_with_pure_index ... FAILED
+test validates_current_command_contract ... ok
+test validates_current_health_recovery_instances ... ok
+test validates_current_coordination_eval_instances ... ok
+test validates_current_decision_close_instances ... ok
+test typed_reference_validation_reports_missing_and_wrong_kind ... ok
+test validates_current_runtime_boundary_instances ... ok
+test validates_current_claim_completion_and_gate_instances ... FAILED
+test validates_current_request_and_effect_instances ... ok
+test validates_current_evidence_and_inventory ... ok
+test yaml_source_id_validation_reports_unknown_sources ... ok
+
+failures:
+
+---- validates_current_operation_fixtures stdout ----
+
+thread 'validates_current_operation_fixtures' (28688) panicked at crates\forge-core-validate\tests\current_contracts.rs:98:37:
+read operation fixture dir: Os { code: 3, kind: NotFound, message: "O sistema não pode encontrar o caminho especificado." }
+
+---- validates_current_cross_file_references_with_pure_index stdout ----
+
+thread 'validates_current_cross_file_references_with_pure_index' (440) panicked at crates\forge-core-validate\tests\current_contracts.rs:528:37:
+read operation fixture dir: Os { code: 3, kind: NotFound, message: "O sistema não pode encontrar o caminho especificado." }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- validates_current_claim_completion_and_gate_instances stdout ----
+
+thread 'validates_current_claim_completion_and_gate_instances' (44284) panicked at crates\forge-core-validate\tests\current_contracts.rs:39:31:
+deserialize C:\forge-method-rust\contracts/claims\story-s0-1-active-claim.yaml: claim_contract: unknown field `purpose`, expected one of `id`, `contract_ref`, `claim`, `scope`, `lease`, `status`, `expiry_policy`, `evidence_refs` at line 28 column 3
+
+
+failures:
+    validates_current_claim_completion_and_gate_instances
+    validates_current_cross_file_references_with_pure_index
+    validates_current_operation_fixtures
+
+test result: FAILED. 10 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+error: test failed, to rerun pass `-p forge-core-validate --test current_contracts`
+   Doc-tests forge_core_cli
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests forge_core_contracts
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests forge_core_runtime
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests forge_core_schema
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests forge_core_store
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests forge_core_validate
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: 6 targets failed:
+    `-p forge-contract-validator --test parity`
+    `-p forge-core-cli --test validate`
+    `-p forge-core-contracts --test load_current_contracts`
+    `-p forge-core-runtime --test operation_plan`
+    `-p forge-core-store --test reference_index`
+    `-p forge-core-validate --test current_contracts`

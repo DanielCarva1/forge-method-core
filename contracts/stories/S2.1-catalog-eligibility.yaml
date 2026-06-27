@@ -1,0 +1,32 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S2.1"
+status: "ready"
+slice: "slice_2_orchestrator"
+title: "Catalog loader + phase-eligibility filter in engine"
+
+decision_sources:
+  - "contracts/plan/slice-2-orchestrator-plan.yaml"
+  - "contracts/spec/engine-architecture.yaml#orchestrator_guide (inputs: typed catalog + current project state)"
+  - "crates/forge-core-contracts/src/catalog.rs (Catalog/CatalogEntry)"
+
+intent: "The engine must be able to (a) load the 110 typed workflow documents into the typed Catalog at runtime, and (b) filter the catalog to workflows eligible in a given current project phase. This is the routing substrate every other slice-2 story depends on (the host LLM reasons over the ELIGIBLE subset, not all 110)."
+
+tasks:
+  - "add a catalog module to forge-core-engine: load_catalog(dir) reads contracts/workflows/*.yaml, deserializes each into WorkflowDocument, builds a Catalog of CatalogEntry (id, phases, workflow_ref, triggers, prerequisites, outputs)"
+  - "add eligibility filter: eligible_in(catalog, current_phase) -> Vec<&CatalogEntry> using Phase::tag_eligible over entry.phases"
+  - "handle the 'anytime' wildcard: workflows tagged anytime are eligible in every phase"
+  - "cache/load once; the catalog is static for a project session"
+
+acceptance_criteria:
+  - "load_catalog succeeds on contracts/workflows/ and yields exactly 110 entries"
+  - "eligible_in(Discovery) returns only workflows whose phases include 1-discovery or anytime"
+  - "an anytime-tagged workflow appears in eligible_in for EVERY phase"
+  - "a malformed workflow file fails load_catalog with a typed error (not a panic)"
+
+checks:
+  - "unit tests: load-110, eligibility-per-phase, anytime-universal, malformed-rejected"
+  - "cargo clippy -p forge-core-engine -- -W pedantic clean"
+
+blocks: ["S2.3", "S2.4"]
+next_workflow: "build-story S2.2 (GuideDecision contract)"

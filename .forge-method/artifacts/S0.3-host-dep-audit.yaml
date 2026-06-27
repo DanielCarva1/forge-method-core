@@ -1,0 +1,206 @@
+schema_version: "0.1"
+artifact_kind: "host-dep-audit"
+story_id: "S0.3"
+status: "done"
+created_at: "2026-06-26"
+project: "forge-method-rust"
+sprint: "sprint-001-recovery"
+analyst: "glm-5.2 (pi)"
+
+intent_met: "Library crates verified mechanically host/UI-free. DC3 (host-agnostic core) HOLDS. Risk R3 (grill-002: host-free claim unverified) is RESOLVED."
+
+# ---------------------------------------------------------------------------
+# scope: what was audited
+# ---------------------------------------------------------------------------
+scope:
+  library_crates_audited:
+    - crate: "forge-core-contracts"
+      path: "crates/forge-core-contracts"
+      verdict: "clean"
+    - crate: "forge-core-store"
+      path: "crates/forge-core-store"
+      verdict: "clean"
+    - crate: "forge-core-schema"
+      path: "crates/forge-core-schema"
+      verdict: "clean"
+    - crate: "forge-core-runtime"
+      path: "crates/forge-core-runtime"
+      verdict: "clean-with-recommendation"
+  transitive_library_audited:
+    - crate: "forge-core-validate"
+      reason: "transitive dep of store + runtime; if it had host deps they would leak. Audited for completeness."
+      verdict: "clean"
+  binary_host_surface_allowed:
+    - "crates/forge-core-cli (lib+bin)"
+    - "crates/forge-contract-validator (bin-only)"
+
+# ---------------------------------------------------------------------------
+# external dependency inventory (per library crate)
+# ---------------------------------------------------------------------------
+dependency_inventory:
+  forge-core-contracts:
+    deps: ["schemars", "serde"]
+    dev_deps: ["serde_yaml"]
+    host_deps_found: 0
+    note: "pure data-modeling crate (JSON-schema + serde)"
+  forge-core-store:
+    deps: ["forge-core-contracts", "forge-core-validate", "serde", "serde_json", "serde_yaml", "sha2"]
+    dev_deps: []
+    host_deps_found: 0
+    note: "sha2 = crypto hashing for content-addressed storage; serde_yaml for WAL serialization. All pure data/crypto."
+  forge-core-schema:
+    deps: ["forge-core-contracts", "schemars", "serde", "serde_json"]
+    dev_deps: []
+    host_deps_found: 0
+    note: "schema/view generation from contract types. Lib surface (src/lib.rs) is pure. Mixed crate also has a binary (src/main.rs) which is permitted host surface."
+  forge-core-runtime:
+    deps: ["forge-core-contracts", "forge-core-store", "forge-core-validate", "serde"]
+    dev_deps: ["serde_yaml", "sha2"]
+    host_deps_found: 0
+    note: "see runtime-finding below for the std::process discussion; no external host/UI/shell crate is pulled in."
+  forge-core-validate: # transitive
+    deps: ["forge-core-contracts", "serde", "serde_yaml"]
+    dev_deps: ["serde", "serde_yaml"]
+    host_deps_found: 0
+    note: "pure validation rules over contract documents."
+
+workspace_dependency_check:
+  finding: "workspace [workspace.dependencies] declares ZERO host/UI/shell/network crates"
+  absent: ["tokio", "crossterm", "ratatui", "tui", "egui", "iced", "reqwest", "hyper", "axum", "tauri", "mcp-server", "duct", "subprocess"]
+  implication: "library crates cannot accidentally pull host coupling through the shared dependency set — it is not available to pull."
+
+# ---------------------------------------------------------------------------
+# hit classification (every grep hit, classified a/b/c per story)
+# ---------------------------------------------------------------------------
+hits:
+  - crate: "forge-core-contracts"
+    pattern: "Mcp / Cursor / Codex"
+    locations: ["completion.rs:128", "operation.rs:243", "runtime.rs:147-148", "runtime.rs:175", "tool_effect.rs:183"]
+    classification: "(a) legitimate and unavoidable"
+    reason: "These are ENUM VARIANT DEFINITIONS (RuntimeKind::{Codex,Cursor,...}, ToolKind::Mcp, etc.) — data modeling of which runtime a contract describes. They are serialized values in YAML contracts, NOT imports of mcp/cursor runtime crates. A contract must be able to say 'this work runs on Codex' without coupling to Codex's API."
+
+  - crate: "forge-core-store"
+    pattern: "std::process::id()"
+    locations: ["src/lib.rs:2439 (transaction_nonce)"]
+    classification: "(a) legitimate and unavoidable"
+    reason: "Used inside transaction_nonce() to build a unique WAL transaction id (PID + nanoseconds). This is OS process identity for uniqueness, available in every environment. It does NOT spawn a process, read stdin, or bind to any shell. Not host coupling."
+
+  - crate: "forge-core-store"
+    pattern: "adapter_*"
+    locations: ["src/lib.rs:455-534, 1295, 1348, 2242-2252"]
+    classification: "(a) legitimate and unavoidable"
+    reason: "These are DATA STRUCTURES describing how an effect should be presented to an adapter (EffectMetadataAdapterTrigger, EffectMetadataAdapterPresentation). They model presentation metadata; they do not import or instantiate any adapter. The word 'adapter' here names a contract field, not a runtime binding."
+
+  - crate: "forge-core-schema"
+    pattern: "std::process::exit / eprintln! / println!"
+    locations: ["src/main.rs:11,19,10,16,18"]
+    classification: "out-of-scope (binary entry point)"
+    reason: "forge-core-schema is a MIXED lib+bin crate. src/main.rs is the BINARY entry point (an internal schema-printing tool), which is permitted host surface. The LIBRARY surface (src/lib.rs) contains NONE of this — it is pure schema generation with deps schemars/serde. As a library dependency it pulls no host coupling."
+    lib_surface_verdict: "clean"
+
+  - crate: "forge-core-runtime"
+    pattern: "use std::process::{Command, Stdio} + Command::new().spawn()"
+    locations: ["src/lib.rs:26 (import)", "src/lib.rs:867 (spawn)"]
+    classification: "(a) legitimate AND deliberate core capability — with an optional future enhancement"
+    detail: |
+      The runtime spawns child processes via the STANDARD RUST OS interface (std::process::Command), not via any
+      shell-specific API. It executes GENERIC, CONTRACT-GATED tools: executor_program() maps
+      CommandExecutor::{Cargo,Node,Bun,Git,...} to "cargo","node","bun","git". It EXPLICITLY BLOCKS shell
+      executors (shell_executor() returns true for Powershell|Sh, which pushes ShellExecutorBlocked before spawn).
+      Every spawn is preceded by validation gates: non-readonly check, network-disabled check, safety-flag check,
+      platform check, timeout check, env-policy check. This is the Forge Method's deliberate "borrowed-shell
+      runtime" thesis — safely executing validated commands through the host environment.
+    dc3_assessment: |
+      DC3 forbids "shell coupling" (binding to a specific shell/runtime API like codex tool defs, cursor adapters,
+      mcp server crates). std::process::Command is the portable OS interface; the executors are generic CLI tools
+      present on any dev machine. This does NOT bind to any one shell. DC3 HOLDS.
+    optional_enhancement:
+      id: "EH1"
+      recommendation: "For the standalone forge-rust-app, consider extracting the spawn behind a `trait CommandRunner { fn run(&self, plan: ValidatedCommandPlan) -> CommandResult }` and injecting the concrete std::process-backed runner at the app boundary. This would let the app own/mock execution without the library knowing how spawning happens."
+      priority: "low"
+      timing: "optional; only if the app needs to mock execution or run commands via a non-std backend. Not required for DC3 compliance."
+      blocks_slice_1: false
+
+# ---------------------------------------------------------------------------
+# verdicts
+# ---------------------------------------------------------------------------
+verdicts:
+  - crate: "forge-core-contracts"
+    verdict: "clean"
+  - crate: "forge-core-store"
+    verdict: "clean"
+  - crate: "forge-core-schema"
+    verdict: "clean"
+  - crate: "forge-core-runtime"
+    verdict: "clean" # w.r.t. DC3; EH1 is a deferred optional enhancement, not a defect
+  - crate: "forge-core-validate (transitive)"
+    verdict: "clean"
+
+# ---------------------------------------------------------------------------
+# risk resolution
+# ---------------------------------------------------------------------------
+risk_resolution:
+  risk_id: "R3"
+  source: "contracts/grill/recovery-grill-002.yaml"
+  original: "host-free claim unverified (medium risk)"
+  resolution: "RESOLVED. All 4 library crates (+ the transitive validate crate) carry ZERO host/UI/shell-runtime coupling. The workspace does not even DECLARE host/UI crates, so accidental coupling is impossible. The only std::process usage is (1) PID-for-nonce in store and (2) deliberate, contract-gated, generic-tool execution in runtime — neither binds to a specific shell. DC3 holds."
+
+# ---------------------------------------------------------------------------
+# boundary moves (none required)
+# ---------------------------------------------------------------------------
+boundary_moves_required: 0
+recommended_refactor_stories: []
+
+# ---------------------------------------------------------------------------
+# acceptance criteria
+# ---------------------------------------------------------------------------
+acceptance_criteria:
+  - criterion: "every library crate's external dependencies are inventoried"
+    result: "PASS — see dependency_inventory (5 crates incl. transitive validate)"
+  - criterion: "any host/UI/process coupling in a library crate is explicitly classified and a boundary-fix recommendation is recorded"
+    result: "PASS — all 5 hits classified (a)/(a)/out-of-scope/(a). EH1 enhancement recorded for runtime."
+  - criterion: "the audit artifact exists at .forge-method/artifacts/S0.3-host-dep-audit.yaml"
+    result: "PASS"
+
+checks:
+  - "audit artifact parses as YAML"
+  - "each library crate has a verdict: clean | needs-boundary-move (all clean; runtime has a low-priority optional enhancement, NOT needs-boundary-move)"
+
+evidence:
+  raw_grep_output: "appended below in raw_grep_appendix"
+  repo_test_state: "green (155 tests, 0 failures) — no .rs files were edited during this audit; read-only."
+
+next_workflow: "S0.4 (rejection demo) to complete slice 0. Slice 1 proceeds without a boundary-refactor story — none is required."
+
+# ---------------------------------------------------------------------------
+# RAW GREP OUTPUT (as required by story evidence clause)
+# ---------------------------------------------------------------------------
+raw_grep_appendix: |
+  # === [1] std::process / Command / std::io::stdin in lib crates ===
+  crates/forge-core-store/src/lib.rs:2439:    format!("{}-{nanos}", std::process::id())          # nonce — (a)
+  crates/forge-core-schema/src/main.rs:11:            std::process::exit(2);                       # BINARY — out of scope
+  crates/forge-core-schema/src/main.rs:19:            std::process::exit(1);                       # BINARY — out of scope
+  crates/forge-core-runtime/src/lib.rs:26:use std::process::{Command, Stdio};                       # deliberate core capability — (a) + EH1
+  crates/forge-core-runtime/src/lib.rs:867:    let mut process = Command::new(executor_program(command_contract.executor));
+
+  # === [2] tokio (runtime coupling) ===
+  (nenhum hit) — zero async runtime coupling in any library crate
+
+  # === [3] codex/cursor/mcp/adapter (shell-specific) ===
+  crates/forge-core-contracts/src/completion.rs:128:    McpService,                    # enum variant — (a)
+  crates/forge-core-contracts/src/operation.rs:243:    Mcp,                            # enum variant — (a)
+  crates/forge-core-contracts/src/runtime.rs:147:    Codex,                          # enum variant — (a)
+  crates/forge-core-contracts/src/runtime.rs:148:    Cursor,                         # enum variant — (a)
+  crates/forge-core-contracts/src/runtime.rs:175:    McpToolSchema,                  # enum variant — (a)
+  crates/forge-core-contracts/src/tool_effect.rs:183:    McpAnnotation,             # enum variant — (a)
+  crates/forge-core-store/src/lib.rs:455-534: adapter_* fields/structs             # data modeling — (a)
+
+  # === [4] println!/eprintln!/dbg! ===
+  crates/forge-core-schema/src/main.rs:10,16,18   # BINARY only — out of scope
+  (zero in any library src/lib.rs)
+
+  # === [5] async/.await ===
+  (nenhum hit) — library crates are fully synchronous
+
+  # === workspace [workspace.dependencies] host/UI/shell/network check ===
+  ZERO matches for: tokio crossterm ratatui tui egui iced reqwest hyper axum warp tauri mcp-server duct subprocess

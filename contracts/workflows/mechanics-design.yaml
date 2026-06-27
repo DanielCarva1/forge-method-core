@@ -1,0 +1,36 @@
+schema_version: "0.1"
+workflow:
+  id: "mechanics-design"
+  phases:
+  - "2-specification"
+  trigger:
+  - "game needs rules, systems, economy, balance, or progression"
+  - "mechanic must be testable before build"
+  inputs:
+  - "game brief or GDD"
+  - "MDA Trace"
+  - "target player behavior"
+  - "constraints"
+  - "prototype target"
+  steps:
+  - "map target aesthetics to desired dynamics and supporting mechanics"
+  - "define rules, resources, feedback, and failure states"
+  - "map player decisions, progression, economy, and balance assumptions"
+  - "define prototype and playtest signals"
+  - "save mechanics artifact"
+  outputs:
+  - "mechanics artifact"
+  - "MDA Trace changes"
+  - "balance assumptions"
+  - "prototype and playtest tests"
+  done_when:
+  - "mechanic supports a named player experience hypothesis"
+  - "mechanic can be prototyped"
+  - "success and failure states are clear"
+  - "tests and evidence are defined"
+  blocked_when:
+  - "target aesthetics or desired dynamics are unknown"
+  - "player behavior target is unknown"
+  - "rule conflicts with technical limits"
+  handoff:
+  - "preserve mechanics path, MDA Trace, assumptions, playable slice, tests, and next prototype story"

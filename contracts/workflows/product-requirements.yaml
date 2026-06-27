@@ -1,0 +1,40 @@
+schema_version: "0.1"
+workflow:
+  id: "product-requirements"
+  phases:
+  - "2-specification"
+  trigger:
+  - "state.phase == 2-specification"
+  - "product intent exists"
+  inputs:
+  - "discovery artifact"
+  - "target users"
+  - "constraints"
+  - "success criteria"
+  - "existing PRD/spec when updating or validating"
+  - "evidence, UX notes, architecture constraints, and risk notes"
+  steps:
+  - "{'choose mode': 'create, update, validate, or addendum'}"
+  - "define or verify problem, users, goals, non-goals, constraints, and success metrics"
+  - "write or update functional requirements with acceptance evidence"
+  - "record decisions, rejected scope, contradictions, risks, and assumptions"
+  - "validate requirement testability and route unresolved visual alignment, UX, platform ops, architecture, research, or quality gaps"
+  - "save product requirements artifact and decision/addendum log"
+  outputs:
+  - "product requirements artifact"
+  - "acceptance criteria"
+  - "decision log or addendum"
+  - "validation findings"
+  - "open assumptions"
+  done_when:
+  - "requirements are testable"
+  - "non-goals and constraints are explicit"
+  - "decisions and rejected scope are preserved"
+  - "validation findings are resolved or routed"
+  - "next visual, platform, architecture, or planning workflow is known"
+  blocked_when:
+  - "target user is unknown"
+  - "success definition changes the product shape"
+  - "evidence contradicts a core requirement without a decision"
+  handoff:
+  - "preserve requirements path, mode, decisions, addendum, findings, assumptions, risks, and next workflow"

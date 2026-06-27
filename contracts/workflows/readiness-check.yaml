@@ -1,0 +1,42 @@
+schema_version: "0.1"
+workflow:
+  id: "readiness-check"
+  phases:
+  - "3-plan"
+  trigger:
+  - "planning is complete"
+  - "build phase is about to begin"
+  inputs:
+  - "requirements"
+  - "UX plan or explicit UX non-goal"
+  - "architecture"
+  - "track decision and track-required artifact map"
+  - "epics or story backlog"
+  - "validation strategy"
+  - "open risks and inputs"
+  steps:
+  - "verify required artifacts exist"
+  - "check track-specific artifacts, unresolved inputs, findings, and risks"
+  - "ensure stories have acceptance criteria and checks"
+  - "map PRD/spec, UX, architecture, risk, stories, validation, enterprise evidence, open inputs, and review findings"
+  - "run artifact enterprise-readiness --path <readiness-matrix-artifact> when selected_track is enterprise"
+  - "run artifact enterprise-check --path <readiness-matrix-artifact>"
+  - "move ready work into build phase only when missing sources are explicit"
+  outputs:
+  - "generated readiness matrix artifact"
+  - "blocked items or build clearance"
+  - "track artifact coverage"
+  - "updated state"
+  done_when:
+  - "build can start without hidden planning decisions"
+  - "first story is ready"
+  - "readiness matrix links required sources to checks and evidence"
+  - "generated enterprise artifact is registered when enterprise is selected"
+  - "enterprise artifact gaps are resolved, blocked, or waived with owner and release impact"
+  blocked_when:
+  - "required artifact is missing"
+  - "story checks are undefined"
+  - "open input or review finding blocks build"
+  - "enterprise security/privacy/risk/quality/release evidence is missing without waiver"
+  handoff:
+  - "preserve readiness matrix path, blockers, enterprise evidence status, first story, required checks, waivers, and next workflow"

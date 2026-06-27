@@ -1,0 +1,35 @@
+schema_version: "0.1"
+workflow:
+  id: "game-ux-design"
+  phases:
+  - "2-specification"
+  - "3-plan"
+  trigger:
+  - "game project needs game-specific UX decisions"
+  - "player interaction, onboarding, HUD, controls, or accessibility are unclear"
+  inputs:
+  - "game brief or GDD"
+  - "MDA Trace"
+  - "target platform"
+  - "player loop"
+  - "input constraints"
+  steps:
+  - "identify primary player tasks and friction points"
+  - "map screens, controls, HUD, feedback, and onboarding needs to target aesthetics and desired dynamics"
+  - "define accessibility and platform-specific constraints"
+  - "record UX risks and prototype checks"
+  outputs:
+  - "game UX plan"
+  - "UI/feedback signals for MDA Trace"
+  - "interaction map"
+  - "UX validation checks"
+  done_when:
+  - "core loop interactions are explicit"
+  - "UI and feedback signals support the intended player feeling"
+  - "platform/input constraints are recorded"
+  - "UX checks can be attached to stories"
+  blocked_when:
+  - "player loop is unknown"
+  - "target platform or input model is unavailable"
+  handoff:
+  - "preserve UX plan path, MDA Trace updates, screen/control assumptions, accessibility constraints, and checks"

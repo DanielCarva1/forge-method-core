@@ -245,6 +245,14 @@ fn copy_validation_tree(source: &Path, target: &Path) {
             .join("fixtures")
             .join("operation-contract-v0"),
     );
+    // completion contracts reference the append-only ledger; copy it so cross-refs resolve
+    let ledger_source = source.join(".forge-method").join("ledger.ndjson");
+    if ledger_source.exists() {
+        let ledger_target = target.join(".forge-method").join("ledger.ndjson");
+        fs::create_dir_all(ledger_target.parent().expect("ledger parent"))
+            .expect("create .forge-method dir");
+        fs::copy(&ledger_source, &ledger_target).expect("copy ledger.ndjson");
+    }
 }
 
 fn temp_repo_root(prefix: &str) -> PathBuf {

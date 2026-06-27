@@ -1,0 +1,37 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S1.6"
+status: "blocked_on_S1.3_S1.4"
+slice: "slice_1_engine_core_and_catalog"
+title: "FX2 - normalize canonical id (filename==id), fix double-prefix + start/start-runtime"
+
+decision_sources:
+  - "contracts/spec/catalog-audit.yaml#data_integrity_bugs (double-prefix files; filename/header mismatch)"
+  - "contracts/spec/forge-rust-v1-specification.yaml#FX2"
+
+intent: "A router that keys on filename vs canonical id will fail to resolve ambiguous workflows. Enforce ONE canonical id per workflow, filename == id, and fix the known integrity bugs."
+
+context:
+  known_bugs:
+    - "double-prefix: workflow-workflow-analyze.md, workflow-workflow-builder.md, workflow-workflow-validate.md (strips ambiguously to analyze vs workflow-analyze)"
+    - "mismatch: workflow-start.md has header id 'start-runtime'; modules reference 'start-runtime'"
+    - "module references to phantom ids: start-runtime, workflow-analyze, workflow-builder, workflow-validate"
+  rule: "exactly one canonical id per workflow; file basename (minus ext) == id; header id == id; module refs use canonical id"
+
+tasks:
+  - "decide canonical id for each buggy workflow (e.g., is it 'analyze' or 'workflow-analyze'? pick one, rename file + header + all refs)"
+  - "rename files so basename == canonical id (drop the double-prefix)"
+  - "align header '# workflow: X' with the canonical id"
+  - "fix all module references to use canonical ids (resolve the 4 phantom refs)"
+  - "add a validator test: for every workflow, basename == header id == catalog id"
+
+acceptance_criteria:
+  - "for every workflow: filename basename == header id == catalog entry id"
+  - "zero phantom module references (every referenced workflow resolves)"
+  - "validator test enforces the invariant going forward"
+
+checks:
+  - "id-consistency validator test green"
+  - "module->workflow reference resolution test green (no dangling refs)"
+blocks: []
+next_workflow: "slice 1 exit check"

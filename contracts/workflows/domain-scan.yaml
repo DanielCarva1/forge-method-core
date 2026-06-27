@@ -1,0 +1,39 @@
+schema_version: "0.1"
+workflow:
+  id: "domain-scan"
+  phases:
+  - "1-discovery"
+  trigger:
+  - "reality/evidence gate needs domain rules, ethics, safety, or expert context"
+  - "product touches regulated, high-trust, cultural, legal, health, finance, education, children, or specialist work"
+  - "idea depends on workflow norms, domain behavior, or source material rules"
+  inputs:
+  - "idea, requirement, or domain claim"
+  - "affected users, subjects, stakeholders, and risk surface"
+  - "known rules, norms, policies, source material, or expert notes"
+  - "decision the research must unlock"
+  steps:
+  - "frame the claim, decision_to_unlock, and what would make the direction unsafe or invalid"
+  - "identify domain constraints, norms, duties, risks_or_harms, and trust requirements"
+  - "separate primary source evidence, expert judgment, inference, and assumption"
+  - "decide whether qualified or expert_review_needed blocks downstream work"
+  - "run artifact research-scan with domain_constraints, risks_or_harms, expert_review_needed, contradictions_or_falsifiers, uncertainty, stance, and next_workflow"
+  - "run artifact research-check --path <research-scan-artifact>"
+  - "route to research-closeout, product-requirements, architecture, or correct-course"
+  outputs:
+  - "domain scan artifact"
+  - "constraints and norms summary"
+  - "risks, harms, and review needs"
+  - "research stance and next workflow"
+  done_when:
+  - "major constraints, harms, and accepted/rejected patterns are explicit"
+  - "source quality and unresolved uncertainty are labeled"
+  - "unsafe, illegal, or incoherent directions are blocked or reframed"
+  - "artifact research-scan has registered the durable scan"
+  - "artifact research-check passes"
+  blocked_when:
+  - "affected user, subject, or domain boundary is unknown"
+  - "qualified legal, clinical, financial, safety, or expert review is required"
+  - "source access is missing and cannot be waived safely"
+  handoff:
+  - "preserve artifact path, claim, sources, constraints, risks_or_harms, expert_review_needed, uncertainty, stance, and next workflow"

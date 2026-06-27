@@ -487,6 +487,7 @@ dependencies = [
  "base64",
  "ed25519-dalek",
  "forge-core-contracts",
+ "forge-core-engine",
  "forge-core-runtime",
  "forge-core-store",
  "forge-core-validate",
@@ -509,6 +510,17 @@ version = "0.1.0"
 dependencies = [
  "schemars",
  "serde",
+ "serde_json",
+ "serde_yaml",
+]
+
+[[package]]
+name = "forge-core-engine"
+version = "0.1.0"
+dependencies = [
+ "forge-core-contracts",
+ "serde",
+ "serde_json",
  "serde_yaml",
 ]
 

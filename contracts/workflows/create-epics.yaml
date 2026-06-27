@@ -1,0 +1,32 @@
+schema_version: "0.1"
+workflow:
+  id: "create-epics"
+  phases:
+  - "3-plan"
+  trigger:
+  - "requirements are ready for planning"
+  - "architecture or UX constraints must shape stories"
+  inputs:
+  - "requirements artifact"
+  - "architecture artifact"
+  - "UX plan artifact"
+  - "validation strategy"
+  steps:
+  - "group requirements into epics"
+  - "define story boundaries and dependencies"
+  - "attach acceptance criteria and checks"
+  - "write epics artifact"
+  - "import or update story backlog"
+  outputs:
+  - "epics artifact"
+  - "story backlog"
+  - "validation map"
+  done_when:
+  - "every story has acceptance criteria"
+  - "dependencies are explicit"
+  - "first ready story is known"
+  blocked_when:
+  - "architecture changes story boundaries"
+  - "validation cannot be assigned"
+  handoff:
+  - "preserve epics path, backlog path, dependencies, and first story"

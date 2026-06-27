@@ -1,0 +1,179 @@
+meta:
+  topic: "Best practices for writing autonomous code-agent skill/instruction files (Rust conventions focus)"
+  query: "How to write a skill/instruction markdown file that an autonomous LLM code agent applies consistently and at decision-time, without human intervention — specifically for Rust ownership/borrowing, error handling, clippy::pedantic, module organization, and cargo tests"
+  date: 2026-06-26
+  researcher_model: glm-5.2
+  confidence: high
+  sources_consulted: 9
+
+key_findings:
+  - id: F1
+    finding: "Vague instructions ('write clean code', 'follow best practices', 'be idiomatic') have ZERO measurable effect on model output. Empirical before/after testing across dozens of rules showed Cursor/LLMs ignore them completely because the model already tries to do these things and has nothing concrete to act on or verify against."
+    evidence: "nedcodes tested 'Write clean, maintainable code' — identical output with and without the rule. 'Write safe code' — zero effect. The author's conclusion: 'The problem is the rule gives Cursor nothing to act on... Cursor can't verify its own compliance because there's nothing concrete to check.'"
+    sources:
+      - "https://dev.to/nedcodes/how-to-write-cursorrules-that-actually-work-2imd"
+
+  - id: F2
+    finding: "Rules that actually change behavior share THREE properties: SPECIFIC (exact pattern, not direction), VERIFIABLE (compliance checkable in 2-second code review), and ADDITIVE (asks for something the model wouldn't do by default). Before adding any rule, test the prompt WITHOUT it — if output is identical, the rule is dead weight."
+    evidence: "nedcodes: 'Every async function must return a Result type' changed output every time; 'Handle errors properly' never did. Tested 'All interface properties must be readonly by default' — control had zero readonly, rule version added it everywhere."
+    sources:
+      - "https://dev.to/nedcodes/how-to-write-cursorrules-that-actually-work-2imd"
+
+  - id: F3
+    finding: "LLM instruction-following degrades non-linearly past ~3 concurrent constraints per instruction, and the compliance curve is a CLIFF not a slope. At 500 instructions, even the best frontier model fails 30%+ of the time. At moderate density (~5-15 rules in a single section), adherence already drops measurably. The dominant failure mode is silent omission, not error."
+    evidence: "IFScale benchmark (arXiv): 'Even leading models can consecutively satisfy around three constraints on average' (GPT-4 = 3.3, GPT-3.5 = 2.9). At 500 instructions: Gemini 2.5 Pro 68.9%, Claude 3.7 Sonnet 52.7%, GPT-4o 15.4%. Threshold decay, linear decay, and exponential decay patterns documented across architectures."
+    sources:
+      - "https://tianpan.co/blog/2026-04-17-instruction-complexity-cliff-llm-compliance"
+      - "https://ar5iv.labs.arxiv.org/html/2507.11538"
+
+  - id: F4
+    finding: "'Lost in the Middle' effect: models attend to the BEGINNING and END of prompts most reliably; content in the middle receives significantly less attention (30%+ accuracy drop). Primacy bias dominates in 70% of cases — the first third of a rule list captures >40% of attention. Rules buried at position 11 of 18 sit in the attention valley."
+    evidence: "Multi-document QA showed 30%+ accuracy drops when relevant info moved from position 1 to position 10 of 20. Serial position research across 104 model-task combinations: primacy present in 70%. Root cause: RoPE long-term decay + causal attention."
+    sources:
+      - "https://tianpan.co/blog/2026-04-17-instruction-complexity-cliff-llm-compliance"
+      - "https://zeroshotlog.com/en/blog/2026/02/04/llm-prompt-design-pitfalls/"
+
+  - id: F5
+    finding: "The `description` field in YAML frontmatter is the PRIMARY trigger mechanism for skill loading. It must state BOTH what the skill does AND when to use it, in third person, with specific keywords/contexts. Claude uses this to decide whether to load the full SKILL.md body. Vague descriptions cause under-triggering; Claude has a documented tendency to under-trigger skills."
+    evidence: "Anthropic official: 'The description is critical for skill selection: Claude uses it to choose the right Skill from potentially 100+ available Skills.' Also: 'Include both what the skill does AND specific contexts for when to use it. All when-to-use info goes here, not in the body.' Also: 'Claude has a tendency to undertrigger skills — be slightly pushy.'"
+    sources:
+      - "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices"
+      - "https://anthropics-skills.mintlify.app/creating-skills/best-practices"
+
+  - id: F6
+    finding: "Progressive disclosure is the recommended architecture: (1) metadata (name+description) always in context, (2) SKILL.md body loaded on-demand when relevant, (3) reference files loaded only as needed. Keep SKILL.md under 500 lines. Split deep content into separate files linked one level deep from SKILL.md. This prevents context bloat while making detailed knowledge available."
+    evidence: "Anthropic: 'Keep SKILL.md body under 500 lines for optimal performance.' 'Keep references one level deep from SKILL.md.' 'No context penalty for large files until accessed.' Claude Code CLAUDE.md target is 200 lines per file; topic-specific rules go in .claude/rules/ with paths: frontmatter for path-scoped loading."
+    sources:
+      - "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices"
+      - "https://startdebugging.net/2026/04/how-to-write-a-claude-md-that-actually-changes-model-behaviour/"
+
+  - id: F7
+    finding: "Conditional trigger pattern (Anthropic's own format): description starts with 'Use this [skill/agent] when [conditions]. Typical triggers include [scenario 1 as prose], [scenario 2], and [scenario 3].' Then the SKILL.md body includes a 'When to invoke' section with worked examples using <example> blocks containing Context, user message, assistant response, and <commentary> explaining WHY the trigger fires."
+    evidence: "From anthropics/claude-plugins-official SKILL.md: 'description: Use this agent when [triggering conditions]. Typical triggers include [scenario 1 in prose], [scenario 2 in prose].' The triggering-examples.md reference provides the full <example>/<commentary> format."
+    sources:
+      - "https://github.com/anthropics/claude-plugins-official/blob/main/plugins/plugin-dev/skills/agent-development/SKILL.md"
+      - "https://github.com/anthropics/claude-code/blob/main/plugins/plugin-dev/skills/agent-development/references/triggering-examples.md"
+
+  - id: F8
+    finding: "Match degrees of freedom to task fragility. For Rust conventions, decisions like 'when to clone vs borrow' are MEDIUM freedom (preferred pattern exists, some variation acceptable). Error handling is MEDIUM. Cargo commands and verification steps are LOW freedom (exact sequence, consistency critical). Code style is HIGH freedom (model already knows idiomatic Rust)."
+    evidence: "Anthropic: 'Narrow bridge with cliffs on both sides: There's only one safe way forward. Provide specific guardrails (low freedom). Open field with no hazards: Many paths lead to success. Give general direction (high freedom).' The analogy maps directly to Rust decision categories."
+    sources:
+      - "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices"
+
+  - id: F9
+    finding: "Before/after code examples are the most effective format for teaching specific patterns — more than checklists or prose descriptions. Examples let the model pattern-match against concrete input/output pairs. BUT: poorly designed examples can reroute reasoning in unintended ways, so examples must be tested."
+    evidence: "nedcodes: branded types example ('type UserId = string & { readonly brand: unique symbol }') caused Cursor to create separate branded types every time. Anthropic: 'Provide input/output pairs just like in regular prompting. Examples help Claude understand the desired style more clearly than descriptions alone.'"
+    sources:
+      - "https://dev.to/nedcodes/how-to-write-cursorrules-that-actually-work-2imd"
+      - "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices"
+
+  - id: F10
+    finding: "Feedback loops (run validator → fix errors → repeat) dramatically improve autonomous output quality. For Rust, this maps to: after every code change, run cargo check + cargo clippy + cargo test, then fix until clean. Stating this explicitly as a workflow step with a checklist is more effective than a passive rule."
+    evidence: "Anthropic: 'This pattern greatly improves output quality.' Provides explicit workflow examples with numbered steps and checkboxes. Claude Code best practices: include build/test/lint commands in CLAUDE.md so the agent runs them autonomously."
+    sources:
+      - "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices"
+      - "https://code.claude.com/docs/en/best-practices"
+
+recommendations:
+  - id: R1
+    recommendation: "Structure the Rust skill file with these sections in order: (1) YAML frontmatter with trigger-rich description, (2) 'When This Skill Applies' (decision triggers as prose), (3) 'Decision Rules' (compact, ≤8 rules, each Specific+Verifiable+Additive), (4) 'Patterns: Before/After' (concrete Rust code examples for borrow-vs-clone, thiserror-vs-anyhow, ?-propagation), (5) 'Anti-Patterns' (what NOT to do, with the failure mode explained), (6) 'Verification' (cargo check/clippy/test loop as explicit workflow). Put the most critical rules first (primacy bias)."
+    based_on: [F1, F2, F3, F4, F5, F7, F9]
+    priority: high
+
+  - id: R2
+    recommendation: "For the description field, write third-person trigger text like: 'Applies Rust ownership, borrowing, and error-handling conventions when editing .rs files. Triggers include: writing or modifying Rust functions, implementing traits, handling Result/Option, choosing between &T and Clone, defining error types, and any cargo build/test operation.' Include specific Rust keywords the model can pattern-match against."
+    based_on: [F5, F7]
+    priority: high
+
+  - id: R3
+    recommendation: "Limit each decision-rule section to ≤5-8 rules maximum. Each rule must pass the 3-criteria test (Specific, Verifiable, Additive). Example GOOD rule: 'Use &T when the callee only reads; use Clone only when ownership transfer is required or lifetime management would be more complex than the clone cost. Never .clone() to satisfy a borrow checker error without a comment explaining why the borrow cannot be restructured.' Example BAD rule: 'Use references appropriately.'"
+    based_on: [F2, F3]
+    priority: high
+
+  - id: R4
+    recommendation: "Write the borrow/clone decision as a conditional trigger: 'WHEN the borrow checker errors on a reference AND restructuring lifetimes (adding lifetime params, splitting borrows) resolves it → do that. WHEN the value is small (Copy type, ≤16 bytes) or the clone enables a simpler API → Clone is acceptable. NEVER clone just to silence a borrow error without first attempting lifetime restructuring.' This 'WHEN X → do Y' format is what the model pattern-matches at decision-time."
+    based_on: [F2, F5, F9]
+    priority: high
+
+  - id: R5
+    recommendation: "For error handling, use MEDIUM freedom: state the preferred pattern (thiserror for library public APIs, anyhow for application/binary code) with a concrete before/after example showing the trait + #[derive(Error)] pattern, then a rule: 'WHEN defining a public API error type → use thiserror. WHEN writing binary/application code → use anyhow::Result. WHEN you need both context and typed errors → use anyhow with .context() on ? operators.'"
+    based_on: [F8, F9]
+    priority: medium
+
+  - id: R6
+    recommendation: "Include a verification section as an explicit numbered workflow (LOW freedom — exact sequence): 'After ANY .rs file edit: 1. Run cargo check. 2. Fix all errors. 3. Run cargo clippy -- -W clippy::pedantic. 4. Fix all warnings or add #[allow] with a justifying comment. 5. Run cargo test. 6. If any test fails, fix before considering the task complete.' This is more effective than 'always run clippy.'"
+    based_on: [F8, F10]
+    priority: high
+
+  - id: R7
+    recommendation: "Put the 2-3 MOST CRITICAL rules at the very top (primacy bias, F4) and the verification loop at the very bottom (recency bias). Rules in the middle of the file receive the least attention. For a Rust skill, lead with: error handling pattern choice, borrow-vs-clone decision, and the cargo verification loop — these are the decisions that happen at every edit."
+    based_on: [F4]
+    priority: high
+
+  - id: R8
+    recommendation: "Keep the total skill file ≤200-250 lines (target the CLAUDE.md 200-line ceiling for always-loaded content). If deeper Rust knowledge is needed (e.g., async patterns, trait object safety, Pin/Unpin), put it in a separate reference file linked from SKILL.md, loaded on demand via progressive disclosure. Do NOT dump a comprehensive Rust style guide into the main skill."
+    based_on: [F3, F6]
+    priority: high
+
+  - id: R9
+    recommendation: "Use emphasis (IMPORTANT, MUST, NEVER) ONLY for rules where violation breaks compilation or correctness. If every rule is IMPORTANT, none are. Reserve MUST/NEVER for: 'NEVER use unwrap() in production code paths — use expect() with context or proper ? propagation' and 'MUST run cargo check before declaring an edit complete.'"
+    based_on: [F1]
+    priority: medium
+
+gaps:
+  - gap: "No controlled study specifically measuring autonomous Rust code-agent instruction adherence. All evidence is from general prompt-engineering research, Cursor/Claude Code field reports, and TypeScript/Python-oriented testing. Rust-specific behavioral data (e.g., does the model default to unnecessary clones?) would strengthen the recommendations."
+    why: "The research literature on instruction-following is model-general; no Rust-specific benchmarks exist for agent rule adherence."
+  - gap: "Exact optimal token count for a skill that is ALWAYS loaded (like a project-level CLAUDE.md) vs one that is ON-DEMAND (like a SKILL.md) — the thresholds (200 lines vs 500 lines) come from different systems with different loading mechanics."
+    why: "Anthropic's 500-line guidance is for Skills loaded on-demand; Claude Code's 200-line guidance is for always-loaded CLAUDE.md. The user's use case (autonomous, always-active Rust conventions) maps more closely to always-loaded."
+  - gap: "Whether <example> trigger blocks (Anthropic's format with Context/user/assistant/commentary) improve triggering for CODE-EDITING scenarios specifically, or only for conversational agent dispatch."
+    why: "Anthropic's triggering-example documentation is oriented toward plugin/agent dispatch, not in-file code convention application."
+
+open_questions:
+  - "Does the model treat path-scoped rules (Cursor .mdc globs, Claude .claude/rules/ paths) with higher adherence than global rules? The loading-on-demand mechanism suggests yes (less context competition), but this is not empirically quantified."
+  - "For a fully autonomous agent (no human in the loop), should the verification workflow (cargo check/clippy/test) be a hook (deterministic) or a skill instruction (advisory)? Anthropic/Claude Code docs strongly recommend hooks for must-run actions."
+
+sources:
+  - url: "https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices"
+    title: "Skill authoring best practices — Claude Platform Docs (official Anthropic)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://startdebugging.net/2026/04/how-to-write-a-claude-md-that-actually-changes-model-behaviour/"
+    title: "How to Write a CLAUDE.md That Actually Changes Model Behaviour"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://tianpan.co/blog/2026-04-17-instruction-complexity-cliff-llm-compliance"
+    title: "The Instruction Complexity Cliff: Why LLMs Follow 5 Rules Reliably but Not 15"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://dev.to/nedcodes/how-to-write-cursorrules-that-actually-work-2imd"
+    title: "How to Write .cursorrules That Actually Work — empirical before/after testing"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://github.com/anthropics/claude-plugins-official/blob/main/plugins/plugin-dev/skills/agent-development/SKILL.md"
+    title: "Anthropic official agent-development SKILL.md (trigger pattern template)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://github.com/anthropics/claude-code/blob/main/plugins/plugin-dev/skills/agent-development/references/triggering-examples.md"
+    title: "Anthropic triggering-examples.md — <example>/<commentary> format reference"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://code.claude.com/docs/en/best-practices"
+    title: "Best practices for Claude Code — official Anthropic docs"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://code.claude.com/docs/en/memory"
+    title: "How Claude remembers your project — official memory/CLAUDE.md docs"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://github.com/PostHog/posthog/blob/master/.cursor/rules/rust.mdc"
+    title: "PostHog Rust .cursor/rules/rust.mdc — real-world Rust cursor rule (production)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://ar5iv.labs.arxiv.org/html/2507.11538"
+    title: "How Many Instructions Can LLMs Follow at Once? (IFScale benchmark, arXiv)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://anthropics-skills.mintlify.app/creating-skills/best-practices"
+    title: "Best Practices — Anthropic Skills (unofficial mirror, includes 'be slightly pushy' guidance)"
+    relevance: medium
+    accessed: 2026-06-26

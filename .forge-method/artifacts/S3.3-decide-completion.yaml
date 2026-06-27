@@ -1,0 +1,41 @@
+schema_version: "0.1"
+artifact_kind: "story-completion"
+story_id: "S3.3"
+status: "done"
+created_at: "2026-06-26"
+
+intent: "guide decide — host proposes a GuideDecision; engine validates against catalog + S1.7 gates; emits Accepted|Rejected(typed) + exit code. This closes the DC1 loop through the CLI surface (R2)."
+
+delivered:
+  module: "crates/forge-core-cli/src/guide.rs"
+  types:
+    - "DecideAccepted {recommended_workflow, current_phase, proposed_next_phase, reason}"
+    - "DecideRejected {reject_code, detail}"
+  fn: "run_decide(decision_file, catalog_dir, gates) -> CliEnvelope<DecideAccepted>"
+  main.rs_wiring:
+    - "`forge-core guide decide --decision-file <p> [--catalog-dir] [--gates-file] [--no-json]`"
+    - "load_gates(): parses gates-file YAML -> ProvidedGateResult[] (gate_kind: system-design|grill, status: pass|fail|concerns|missing)"
+    - "emit_guide(): JSON to stdout, exit with envelope code (R1)"
+
+acceptance_criteria:
+  AC_valid_accepted: "PASS — discover-intent in discovery -> ok=true, exit 0, payload echoes decision"
+  AC_illegal_rejected_typed: "PASS — plan-sprint in discovery -> ok=false, exit 2, code='not_eligible_in_phase:...'"
+  AC_unknown_workflow: "PASS — 'nope' -> unknown_workflow"
+  AC_bad_yaml: "PASS — malformed -> invalid_decision_shape, exit 3"
+  AC_missing_file: "PASS — absent file -> invalid_decision_shape, exit 3 (input missing, not env)"
+  AC_typed_code_self_correctable: "PASS — reject_code is machine-readable enum string (R2)"
+
+verification:
+  cargo_test_cli_lib: "PASS — 10 guide tests (5 describe + 5 decide)"
+  cargo_clippy_pedantic_all_targets: "PASS — 0 warnings on guide.rs"
+  cargo_test_workspace: "PASS — 215 tests, 0 failures"
+  live_cli_valid: "PASS — exit 0, ok=true, payload"
+  live_cli_illegal: "PASS — exit 2, ok=false, code=not_eligible_in_phase"
+
+evidence_basis:
+  R2: "tau-bench (arXiv:2406.12045) state-validity; arXiv:2603.13404 schema-first reduces misuse. Typed reject code lets host self-correct without guessing."
+
+decision_clarified:
+  missing_decision_file: "absent --decision-file returns exit 3 (invalid_decision_shape) — it is a malformed/absent INPUT, not an environment error. EnvConfig (5) is reserved for catalog/state/env problems."
+
+next_workflow: "build-story S3.4 (guide status)"

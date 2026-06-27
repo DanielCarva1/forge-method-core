@@ -1,0 +1,34 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "S1.5"
+status: "blocked_on_S1.3_S1.4"
+slice: "slice_1_engine_core_and_catalog"
+title: "FX1 - add phase declaration to all 110 workflows"
+
+decision_sources:
+  - "contracts/spec/catalog-audit.yaml#phase_declaration_gap (101/110 omit phase; breaks orchestrator routing)"
+  - "contracts/spec/forge-rust-v1-specification.yaml#FX1"
+
+intent: "The orchestrator-guide (slice 2) cannot route by phase if 92% of workflows do not declare it. Assign each of the 110 workflows its owning phase(s) so the router can reason about 'what is legal next'."
+
+context:
+  already_declared: "9 workflows already declare phase in trigger (discover-intent=1, write-spec/product-requirements=2, plan-sprint/test-strategy=3, build-story/ready-release=4, guidance-engine=5, evolve-project=6)"
+  gap: "101 workflows have NO phase declared"
+  phase_enum: ["1-discovery", "2-specification", "3-plan", "4-build-verify", "5-ready-operate", "6-evolve"]
+
+tasks:
+  - "for each of the 101 unphased workflows, assign its phase by reading its trigger+inputs (e.g., reality-evidence-gate -> 1-discovery; code-review -> 4-build-verify; traceability-gate -> 4/5)"
+  - "some workflows are cross-phase (gates, reviews) -> allow a list of phases"
+  - "write phase into the Workflow.phase field (from S1.2)"
+  - "produce a phase-coverage report: count per phase, and flag any phase that is starved"
+
+acceptance_criteria:
+  - "every workflow has at least one declared phase"
+  - "phase assignment is defensible from the workflow's trigger/inputs (auditable)"
+  - "phase-coverage report shows no phase is empty"
+
+checks:
+  - "no workflow has phase == null or missing"
+  - "phase-coverage report exists at .forge-method/artifacts/S1.5-phase-coverage.yaml"
+blocks: []
+next_workflow: "slice 1 exit check"

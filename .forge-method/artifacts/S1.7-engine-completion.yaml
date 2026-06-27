@@ -1,0 +1,55 @@
+schema_version: "0.1"
+artifact_kind: "story-completion"
+story_id: "S1.7"
+status: "done"
+created_at: "2026-06-26"
+project: "forge-method-rust"
+sprint: "sprint-001-recovery"
+
+intent: "Implement phase-transition + gate enforcement in the NEW forge-core-engine crate. The engine must enforce that a phase transition is only allowed when its gate clears, regardless of what the LLM suggests (DC1 hard-gate half; DC6 system-design mandatory gate)."
+
+delivered:
+  new_crate: "crates/forge-core-engine (registered in workspace members; depends on forge-core-contracts only — host-free)"
+  lib: "crates/forge-core-engine/src/lib.rs (re-exports Phase + transition API)"
+  module: "crates/forge-core-engine/src/phase_transition.rs (the hard-gate state machine)"
+
+api_surface:
+  types:
+    - "GateKind { Grill, SystemDesign, StoryReady, Readiness, Release }"
+    - "ProvidedGateResult { gate_kind, status }"
+    - "Waiver { owner, rationale } (Waiver::is_valid — non-empty owner+rationale)"
+    - "TransitionRequest { from, to, gates, waiver }"
+    - "TransitionDecision { Allowed | Blocked(reason) }"
+    - "TransitionBlockReason { ForwardSkipWithoutWaiver, InvalidWaiver, RequiredGateMissing, RequiredGateNotPassing }"
+  entry_fn: "evaluate_transition(&TransitionRequest) -> TransitionDecision (deterministic, authoritative)"
+
+rules_enforced:
+  forward_skip: "to.rank - from.rank > 1 blocked unless a valid Waiver (owner+rationale) is supplied"
+  cyclic_funnel: "backward transitions (rework / evolve->discovery new cycle) and same-phase re-entry are ALLOWED without waiver — the funnel is cyclic"
+  required_gates: "adjacent forward transitions mandate a gate: Discovery->Spec=Grill, Spec->Plan=SystemDesign(DC6), Plan->Build=StoryReady, Build->Ready=Readiness, Ready->Evolve=Release"
+  gate_clearing: "GateStatus::Pass | NotApplicable clear a gate; Fail | Concerns | Missing do not"
+
+acceptance_criteria:
+  - "legal transition with passing gate allowed — PASS (adjacent_forward_with_passing_gate_is_allowed)"
+  - "transition missing required gate rejected with typed reason — PASS (spec_to_plan_without_system_design_gate_is_blocked)"
+  - "spec->plan specifically requires system-design gate — PASS (+ concerns/fail variants)"
+  - "phase-skip rejected unless valid waiver — PASS (forward_skip_without_waiver blocked; with_valid_waiver allowed; empty_rationale blocked)"
+
+verification:
+  cargo_test_engine: "PASS — 11 tests (allowed-transition, blocked-no-gate, blocked-skip, waived-skip, invalid-waiver, backward-allowed, same-phase, grill-required, route-entry-no-gate, concerns-not-clearing, failing-gate)"
+  cargo_clippy_pedantic_engine: "PASS — 0 warnings (the 2 'bools' warnings are pre-existing in forge-core-contracts command.rs/runtime.rs, untouched)"
+  cargo_fmt: "PASS — clean"
+  cargo_test_workspace: "PASS — 181 tests, 0 failures"
+
+design_note: |
+  This is the first METHOD-surface logic (everything before was the integrity
+  spine + typed contracts). It deliberately contains NO model/LLM: per AQ1+DC9,
+  the host LLM reasons over the typed catalog and SUGGESTS transitions; this
+  engine module is the deterministic ENFORCER that blocks illegal ones. The
+  orchestrator (slice 2) will wrap this: it produces the suggestion, the engine
+  validates it. Scale-with-the-model: smarter hosts make better suggestions
+  within the same gates.
+
+exit_signal: "S1.2..S1.7 done + 110 workflows typed + transitions enforced == SLICE 1 COMPLETE"
+
+next_workflow: "plan slice 2 (orchestrator-guide) in detail, then build"

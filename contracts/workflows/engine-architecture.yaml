@@ -1,0 +1,35 @@
+schema_version: "0.1"
+workflow:
+  id: "engine-architecture"
+  phases:
+  - "3-plan"
+  trigger:
+  - "game needs engine or technical architecture decisions"
+  - "prototype or vertical slice depends on tooling"
+  inputs:
+  - "game brief or GDD"
+  - "target platform"
+  - "engine preference"
+  - "engine setup artifact if present"
+  - "technical constraints"
+  steps:
+  - "choose engine path or confirm current engine profile"
+  - "verify setup assumptions or route engine-setup first"
+  - "define project structure, game loop, core systems, data/content boundaries, and integration points"
+  - "identify performance, asset, save, input, and platform constraints"
+  - "save engine architecture artifact"
+  outputs:
+  - "engine architecture artifact"
+  - "engine profile"
+  - "technical risks"
+  - "prototype constraints"
+  done_when:
+  - "engine decision is explicit"
+  - "core systems are mapped"
+  - "performance budget is measurable"
+  - "build setup story is known"
+  blocked_when:
+  - "engine choice requires human decision"
+  - "target platform is unknown"
+  handoff:
+  - "preserve engine profile, architecture path, constraints, performance budget, and setup/prototype story"

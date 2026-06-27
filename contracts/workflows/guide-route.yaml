@@ -1,0 +1,33 @@
+schema_version: "0.1"
+workflow:
+  id: "guide-route"
+  phases:
+  - "anytime"
+  trigger:
+  - "user asks what Forge Method should do next"
+  - "state route is unclear to the human"
+  inputs:
+  - "preflight result"
+  - "current state or missing-state route"
+  - "user question"
+  steps:
+  - "inspect state, route, track, next story, blockers, and readiness"
+  - "recommend one next action and optional alternatives"
+  - "suggest a track when no project state exists"
+  - "include Reality/Evidence Gate guidance when a new idea or market claim appears"
+  - "keep runtime commands as implementation details"
+  outputs:
+  - "human guidance"
+  - "compact human_experience guidance"
+  - "optional track recommendation"
+  - "optional reality/evidence assessment"
+  - "next command for the agent"
+  done_when:
+  - "next action is concrete"
+  - "required human choice is explicit"
+  - "no broad docs are loaded"
+  blocked_when:
+  - "route requires a workspace or project choice"
+  - "user asks for a conflicting direction"
+  handoff:
+  - "preserve route, selected track, reality stance, next command, and unresolved choices"

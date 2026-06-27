@@ -1,0 +1,32 @@
+schema_version: "0.1"
+workflow:
+  id: "test-engagement-model"
+  phases:
+  - "2-specification"
+  - "3-plan"
+  trigger:
+  - "user asks what kind of test architecture help is needed"
+  - "quality request is broad or ambiguous"
+  inputs:
+  - "product/spec context"
+  - "risk level"
+  - "lifecycle phase"
+  - "available checks"
+  steps:
+  - "classify the engagement as advice, design, implementation, review, audit, or release gate"
+  - "identify lifecycle phase, risk level, source artifacts, constraints, and evidence needs"
+  - "choose the next test workflow and required template"
+  - "record mode, blocked conditions, and handoff criteria"
+  outputs:
+  - "quality engagement model"
+  - "next quality workflow"
+  - "evidence expectations"
+  done_when:
+  - "quality mode is explicit"
+  - "next workflow is selected"
+  - "evidence expectations are known"
+  blocked_when:
+  - "product risk cannot be described"
+  - "no artifact or system is available to evaluate"
+  handoff:
+  - "preserve engagement mode, selected workflow, required evidence, blocked conditions, and open risks"

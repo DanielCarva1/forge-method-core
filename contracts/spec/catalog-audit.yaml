@@ -1,0 +1,145 @@
+schema_version: "0.1"
+artifact_kind: "catalog-audit"
+status: "verified"
+created_at: "2026-06-25"
+project: "forge-method-rust"
+audited: "Forge-method-core/skills/forge-method/references/ + modules/ + facilitation/"
+method: "deterministic grep + structural parse (reproducible), not opinion"
+
+purpose:
+  one_line: "Mechanically verify the existing 110-workflow catalog: are they well-made, do they cover 'build anything', and where are the gaps and integrity bugs."
+
+# ---------------------------------------------------------------------------
+# headline findings
+# ---------------------------------------------------------------------------
+headline:
+  structure_is_sound: true
+  text: "The 110 workflow contracts are structurally COMPLETE (all 7 state-machine fields) and COMPACT (33-61 lines). The references/workflow-*.md set is NOT the problem. Problems are: (1) 101/110 omit their phase in trigger, breaking router dispatch; (2) data-integrity bugs in IDs/filenames; (3) system-design is present but not a mandatory gate; (4) 34 facilitation .md files carry persona-venom duplicated against clean references; (5) coverage is broad but not universal."
+
+# ---------------------------------------------------------------------------
+# structural truth (reproducible)
+# ---------------------------------------------------------------------------
+structural_truth:
+  total_workflows: 110
+  contract_fields_required: ["trigger", "inputs", "steps", "outputs", "done_when", "blocked_when", "handoff"]
+  workflows_complete_all_7: 110
+  workflows_incomplete: 0
+  size_range_lines: "33-61"
+  largest: "build-story (61 lines)"
+  smallest: "collaboration-handoff (33 lines)"
+  verdict: "compact state-machines as AGENTS.md requires; no bloat in references/"
+
+# ---------------------------------------------------------------------------
+# phase declaration gap (critical for orchestrator DC1)
+# ---------------------------------------------------------------------------
+phase_declaration_gap:
+  workflows_declaring_phase_in_trigger: 9
+  workflows_omitting_phase: 101
+  declared:
+    "1-discovery": ["discover-intent"]
+    "2-specification": ["write-spec", "product-requirements"]
+    "3-plan": ["plan-sprint", "test-strategy"]
+    "4-build-verify": ["build-story", "ready-release"]
+    "5-ready-operate": ["guidance-engine"]
+    "6-evolve": ["evolve-project"]
+  why_it_matters: "the guide-orchestrator (DC1) cannot route by phase if 92% of workflows do not declare it. Every workflow MUST declare its owning phase (or phases) in trigger for the router to reason."
+
+# ---------------------------------------------------------------------------
+# data-integrity bugs (routing hazards)
+# ---------------------------------------------------------------------------
+data_integrity_bugs:
+  - bug: "double-prefix filenames"
+    files: ["workflow-workflow-analyze.md", "workflow-workflow-builder.md", "workflow-workflow-validate.md"]
+    problem: "ID resolves ambiguously (analyze vs workflow-analyze); modules reference workflow-analyze; file strips to 'analyze'"
+  - bug: "filename/header mismatch"
+    file: "workflow-start.md"
+    header_id: "start-runtime"
+    module_reference: "start-runtime"
+    problem: "file name and canonical ID diverge"
+bug_implication: "a router that keys on filename vs canonical id will fail to resolve these. Must normalize: 1 canonical id per workflow, filename == id."
+
+# ---------------------------------------------------------------------------
+# module coverage (the 'build anything' promise, part 1)
+# ---------------------------------------------------------------------------
+module_coverage:
+  domains_shipped: 9
+  modules:
+    core-runtime: {fluxos: 20, role: "the method operating itself; routing, context, recovery"}
+    software-builder: {fluxos: 38, role: "general software: spec->arch->story->build->release"}
+    game-studio: {fluxos: 30, role: "games: GDD, MDA, mechanics, playtest"}
+    creative-studio: {fluxos: 16, role: "creative/narrative/storytelling"}
+    enterprise: {fluxos: 23, role: "compliance, team-operating-model, governance"}
+    platform-ops: {fluxos: 22, role: "devops, observability, ci, security"}
+    launch-ops: {fluxos: 16, role: "release/readiness/launch"}
+    test-architect: {fluxos: 25, role: "test strategy, framework, eval"}
+    runtime-builder: {fluxos: 35, role: "meta: build new forge modules/workflows/agents"}
+  orphan_workflows_no_module: ["start", "validate", "analyze", "builder", "collaboration-handoff", "product-area-map", "team-operating-model", "hook-event-plan", "isolated-eval-runner", "repo-split-plan", "trunk-based-plan", "api-browser-utility"]
+  orphan_implication: "12 workflows have no module home; either assign them to core-runtime or retire. Mostly cross-cutting utilities."
+
+# ---------------------------------------------------------------------------
+# the 'build anything' promise - assessed honestly
+# ---------------------------------------------------------------------------
+build_anything_assessment:
+  verdict: "promessa SERÁ sustentável via extensibilidade, NÃO por cobertura universal embarcada"
+  extensibility_mechanism:
+    - "module-builder + module-ideation + module-distribution: scaffold a new domain module"
+    - "workflow-builder + workflow-analyze + workflow-validate: add a new workflow"
+    - "runtime-builder: assemble agents/templates/packs"
+  shipped_coverage_gaps:
+    - "no data-science/ML module (training, eval, MLOps)"
+    - "no hardware/IoT module"
+    - "no mobile-app-specific module (iOS/Android lifecycle, store, signing)"
+    - "no web-frontend-specific module (component design, design-system, SSR)"
+    - "no research/academic module"
+    - "no content/marketing/SEO module"
+  assessment: "the framework is domain-agnostic and extensible enough that ANY domain can be added as a module. The promise holds IF (a) adding a module is genuinely turnkey (today it is manual and under-specified), and (b) the cross-cutting core (discovery, spec, system-design-gate, plan, build, gate) is strong for every domain."
+
+# ---------------------------------------------------------------------------
+# system-design gate (the gap the human flagged)
+# ---------------------------------------------------------------------------
+system_design_gate:
+  status: "PARTIALLY PRESENT, NOT ENFORCED"
+  existing_workflow: "architecture"
+  architecture_covers: ["system boundaries", "components", "data ownership", "interfaces", "dependencies", "integration contracts", "tradeoffs", "rejected options", "platform/security/privacy/ops hooks"]
+  why_still_a_gap:
+    - "trigger is conditional ('track requires technical design') not mandatory"
+    - "not enforced as a gate between specification (the WHAT) and plan (sprints)"
+    - "naming conflates; no distinct system-design contract; engine-architecture exists separately for games"
+  required_fix: "make a system-design GATE mandatory in the spec->plan transition for all serious product builds (DC6). The architecture workflow content is the seed; promote it to a gate."
+
+# ---------------------------------------------------------------------------
+# persona-venom (the 'contexto venenoso' the codex left)
+# ---------------------------------------------------------------------------
+persona_venom:
+  facilitation_md_files_with_presence_script: 34
+  references_md_files_with_presence_script: 0
+  interpretation: "the codex DID produce clean contract versions in references/. But it left 34 duplicated facilitation .md files carrying 'Presence: The agent is an excited expert friend...' persona scripts. These are the poison. Migration = adopt references/ as authority, retire facilitation/ persona layer, distill any unique content into typed contracts."
+
+# ---------------------------------------------------------------------------
+# fixes required (concrete, for the plan phase)
+# ---------------------------------------------------------------------------
+fixes_required:
+  - id: "FX1"
+    fix: "every workflow declares owning phase(s) in trigger (closes 101/101 gap)"
+    blocks: "orchestrator routing DC1"
+  - id: "FX2"
+    fix: "normalize 1 canonical id per workflow; filename == id; fix double-prefix and start/start-runtime"
+    blocks: "routing integrity"
+  - id: "FX3"
+    fix: "promote system-design to a mandatory gate in spec->plan transition"
+    blocks: "product excellence (DC6)"
+  - id: "FX4"
+    fix: "assign or retire the 12 orphan workflows"
+  - id: "FX5"
+    fix: "retire the 34 facilitation persona-venom files after distilling unique content"
+    blocks: "context-poisoning cleanup"
+  - id: "FX6"
+    fix: "convert references/workflow-*.md from md-with-yaml-block to pure typed YAML contracts consumed by the rust engine"
+    blocks: "G1 (markdown is not runtime authority)"
+  - id: "FX7"
+    fix: "make module-builder turnkey (scaffold + validate + gate a new domain module end-to-end)"
+    blocks: "build-anything promise credibility"
+
+inference_boundaries:
+  - "structural audit is mechanical and reproducible; content-quality (are steps actually good?) was spot-checked on load-bearing workflows (discover-intent, write-spec, build-story, architecture) and found sound, not exhaustively reviewed on all 110."
+  - "full content review of 110 workflows is a plan-phase task; this audit is the territory map."
