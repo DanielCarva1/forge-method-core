@@ -229,6 +229,7 @@ fn reject_code(r: &GuideRejection) -> String {
         GuideRejection::UnknownWorkflow { .. } => "unknown_workflow",
         GuideRejection::NotEligibleInPhase { .. } => "not_eligible_in_phase",
         GuideRejection::IllegalTransition(_) => "illegal_transition",
+        GuideRejection::UnrecognizedProposedPhase { .. } => "unrecognized_proposed_phase",
     }
     .into()
 }
