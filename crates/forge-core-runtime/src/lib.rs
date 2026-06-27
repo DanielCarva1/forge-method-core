@@ -317,6 +317,9 @@ pub enum RuntimeOperationExecutionStatus {
     AwaitingHuman,
     Blocked,
     Failed,
+    /// File effects were committed, but appending the effect metadata index failed.
+    /// Repair by rebuilding the effect index from committed WAL records.
+    AppliedButMetadataMissing,
     Completed,
 }
 
@@ -335,6 +338,8 @@ pub enum RuntimeOperationExecutionReason {
     EffectTransactionBlocked,
     EffectApplicationFailed,
     EffectMetadataAppendFailed,
+    /// Suggested repair: run `forge-core rebuild-effect-index` with this execution's WAL, index, and lock paths.
+    RebuildEffectIndexSuggested,
     OperationCompleted,
 }
 
@@ -569,8 +574,9 @@ pub fn execute_operation(
         {
             effect_applications.push(application);
             reasons.push(RuntimeOperationExecutionReason::EffectMetadataAppendFailed);
+            reasons.push(RuntimeOperationExecutionReason::RebuildEffectIndexSuggested);
             return RuntimeOperationExecution {
-                status: RuntimeOperationExecutionStatus::Failed,
+                status: RuntimeOperationExecutionStatus::AppliedButMetadataMissing,
                 operation_id,
                 plan,
                 staging: Some(staging),
@@ -1264,4 +1270,126 @@ fn effect_tx_id(prefix: &str, effect_id: &StableId) -> String {
         })
         .collect();
     format!("{prefix}-{sanitized}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use forge_core_contracts::tool_effect::EffectTargetKind;
+    use forge_core_store::{build_reference_index, sha256_content_hash};
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn repo_root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+    }
+
+    fn operation_fixture(name: &str) -> OperationContractDocument {
+        let path = repo_root()
+            .join("docs")
+            .join("fixtures")
+            .join("operation-contract-v0")
+            .join(name);
+        let input = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+        serde_yaml::from_str(&input)
+            .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()))
+    }
+
+    fn effect_fixture(name: &str) -> ToolEffectContractDocument {
+        let path = repo_root().join("contracts").join("effects").join(name);
+        let input = fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+        serde_yaml::from_str(&input)
+            .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()))
+    }
+
+    fn fresh_temp_root(label: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "forge-core-runtime-lib-{label}-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&path);
+        fs::create_dir_all(&path).expect("create temp root");
+        path
+    }
+
+    fn runtime_payload(target_ref: &str, content: &[u8]) -> RuntimeOperationEffectPayload {
+        RuntimeOperationEffectPayload {
+            target_ref: target_ref.to_string(),
+            payload_kind: RuntimeEffectPayloadKind::RuntimeGenerated,
+            content_hash: sha256_content_hash(content),
+            content: content.to_vec(),
+        }
+    }
+
+    #[test]
+    fn execute_operation_reports_applied_but_metadata_missing_when_index_append_fails() {
+        let mut document = operation_fixture("mechanical-story-execute.yaml");
+        document.operation_contract.command_refs.clear();
+        let index = build_reference_index(repo_root()).expect("reference index");
+        let mut effect = effect_fixture("story-artifact-write-effect.yaml");
+        effect.tool_effect_contract.read_set.truncate(1);
+        effect.tool_effect_contract.read_set[0].target_kind = EffectTargetKind::FilePath;
+        effect.tool_effect_contract.read_set[0].reference =
+            ".forge-method/stories/current.yaml".to_string();
+        effect.tool_effect_contract.read_set[0].expected_hash = None;
+        effect.tool_effect_contract.read_set[0].expected_version = None;
+        let effect_input = RuntimeOperationEffectInput {
+            effect_ref: RepoPath("contracts/effects/story-artifact-write-effect.yaml".to_string()),
+            document: effect,
+        };
+        let artifact_payload = runtime_payload(
+            ".forge-method/artifacts/story-current-result.yaml",
+            b"story: completed\n",
+        );
+        let evidence_payload = runtime_payload(
+            ".forge-method/evidence/story-validation.json",
+            br#"{"status":"passed"}"#,
+        );
+        let temp_root = fresh_temp_root("metadata-append-failure");
+        let index_path = temp_root.join(".forge-method/index/effect-targets.ndjson");
+        fs::create_dir_all(&index_path).expect("create directory where metadata file should be");
+        let context = RuntimeOperationExecutionContext {
+            command_context: CommandExecutionContext::single_root(&temp_root),
+            evidence_log_relative_path: ".forge-method/evidence/command-execution.ndjson",
+            wal_relative_path: ".forge-method/wal/effects.ndjson",
+            lock_relative_path: ".forge-method/locks/effects.lock",
+            effect_metadata_index_relative_path: ".forge-method/index/effect-targets.ndjson",
+            recorded_at: "2026-06-25T00:00:00Z",
+            tx_id_prefix: "test-execute-operation",
+        };
+
+        let execution = execute_operation(
+            &document,
+            RuntimeReadSnapshot::new(&index),
+            &[],
+            &[effect_input],
+            &[artifact_payload, evidence_payload],
+            &context,
+        );
+
+        assert_eq!(
+            execution.status,
+            RuntimeOperationExecutionStatus::AppliedButMetadataMissing,
+            "{execution:#?}"
+        );
+        assert_eq!(
+            execution.reasons,
+            vec![
+                RuntimeOperationExecutionReason::EffectMetadataAppendFailed,
+                RuntimeOperationExecutionReason::RebuildEffectIndexSuggested,
+            ]
+        );
+        assert_eq!(execution.effect_applications.len(), 1);
+        assert_eq!(
+            execution.effect_applications[0].status,
+            EffectApplicationStatus::Applied
+        );
+        assert!(temp_root
+            .join(".forge-method/artifacts/story-current-result.yaml")
+            .exists());
+        assert!(temp_root.join(".forge-method/wal/effects.ndjson").exists());
+        assert!(index_path.is_dir());
+    }
 }
