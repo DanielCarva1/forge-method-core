@@ -234,10 +234,10 @@ call them.
 - **MCP server** — today host agents call `forge-core` over the shell; a native
   MCP surface is the next slice (v0.2). The CLI is the intended agent boundary
   by design.
-- **Append-only WAL + state derivation** — current state is reconstructed from
-  the claims bus on each invocation. A durability layer (CRC-checked WAL,
-  prefix recovery, `derive_state` as the sole constructor) is designed and
-  queued for v0.2.
+- **Full state derivation layer** — the effect WAL is implemented and
+  tested. Current coordination state is still
+  reconstructed from the claims bus on each invocation; the fuller
+  `derive_state`-as-sole-constructor layer remains queued for v0.2.
 - **License** — not yet chosen; set one before public release.
 
 ### Patch notes — v0.1.0
@@ -281,7 +281,7 @@ contracts/
   workflows/              the 110-workflow catalog (the method)
   spec/  plan/  stories/  discovery artifacts (typed YAML)
   claims/                 claim fixtures + schemas
-skills/                   host skill wiring
+skill/forge-method/        host skill wiring
 forensic-reference/       migrated legacy reference (NOT runtime authority)
 ```
 

@@ -40,11 +40,11 @@ Check whether the binary exists, and install it if not:
 forge-core.exe --version          # WSL/Windows  (forge-core on POSIX)
 ```
 
-If missing, install from the forge-method-rust repo:
+If missing, install from the Forge-method-core repo:
 
 ```bash
-git clone https://github.com/DanielCarva1/forge-method-rust.git
-cd forge-method-rust
+git clone https://github.com/DanielCarva1/Forge-method-core.git
+cd Forge-method-core
 cargo install --path crates/forge-core-cli     # → ~/.cargo/bin/forge-core
 ```
 
