@@ -156,6 +156,7 @@ impl<T> CliEnvelope<T> {
             "ok" => ExitReason::Ok.as_code(),
             "rejected_by_gate" => ExitReason::RejectedByGate.as_code(),
             "invalid_decision_shape" => ExitReason::InvalidDecisionShape.as_code(),
+            "conflict" => ExitReason::Conflict.as_code(),
             // Unknown/unexpected reason: default to env/config (5) — surfaces a contract bug loudly,
             // since a well-formed envelope always carries a known reason.
             _ => ExitReason::EnvConfig.as_code(),
@@ -200,6 +201,15 @@ mod tests {
         let err = env.error.as_ref().unwrap();
         assert_eq!(err.code.0, "rejected_by_gate");
         assert!(err.message.contains("system-design"));
+    }
+
+    #[test]
+    fn conflict_envelope_exits_with_conflict_code() {
+        let env: CliEnvelope<Payload> =
+            CliEnvelope::err("guide.write", ExitReason::Conflict, "wal conflict");
+
+        assert_eq!(env.exit_reason.0, "conflict");
+        assert_eq!(env.exit_code(), 4);
     }
 
     #[test]
