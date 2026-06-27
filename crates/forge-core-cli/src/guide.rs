@@ -8,7 +8,7 @@ use forge_core_contracts::{
     Catalog, CatalogEntry, CliEnvelope, ExitReason, Phase, ENVELOPE_SCHEMA_VERSION,
 };
 use forge_core_contracts::{GuideDecision, GuideDecisionDocument};
-use forge_core_engine::{load_catalog, CatalogLoadReport};
+use forge_core_engine::{load_catalog, load_embedded_catalog, CatalogLoadReport};
 use forge_core_engine::{
     validate_guide_decision, GateKind, GuideRejection, GuideValidation, ProvidedGateResult,
 };
@@ -108,8 +108,31 @@ fn gate_table() -> Vec<DescribeGate> {
 /// Returns an error envelope (exit 5) if the catalog directory cannot be read
 /// or any workflow file is malformed.
 #[must_use]
-pub fn run_describe(catalog_dir: &Path) -> CliEnvelope<DescribePayload> {
-    let report = load_catalog(catalog_dir);
+/// Resolve the catalog source:
+/// - `Some(dir)` → load that directory from disk (explicit `--catalog-dir`).
+/// - `None` → fall through: if a local `contracts/workflows/` exists in the
+///   current working directory, use it (brownfield/forge workspace); otherwise
+///   load the catalog embedded in the binary (greenfield, zero-config).
+///
+/// This is the fix for the greenfield blocker: a freshly installed
+/// `forge-core` binary now carries its 110 workflows inside it, so
+/// `guide status` works on any machine without `--catalog-dir`.
+fn resolve_catalog(catalog_dir: Option<&Path>) -> CatalogLoadReport {
+    match catalog_dir {
+        Some(dir) => load_catalog(dir),
+        None => {
+            let local = Path::new("contracts/workflows");
+            if local.is_dir() {
+                load_catalog(local)
+            } else {
+                load_embedded_catalog()
+            }
+        }
+    }
+}
+
+pub fn run_describe(catalog_dir: Option<&Path>) -> CliEnvelope<DescribePayload> {
+    let report = resolve_catalog(catalog_dir);
     if !report.is_clean() {
         return CliEnvelope::err(
             "guide.describe",
@@ -157,7 +180,7 @@ pub struct DecideRejected {
 #[must_use]
 pub fn run_decide(
     decision_file: &Path,
-    catalog_dir: &Path,
+    catalog_dir: Option<&Path>,
     gates: &[ProvidedGateResult],
 ) -> CliEnvelope<DecideAccepted> {
     // 1. Load the decision (typed). Shape error -> exit 3.
@@ -184,7 +207,7 @@ pub fn run_decide(
         };
 
     // 2. Load the catalog.
-    let report = load_catalog(catalog_dir);
+    let report = resolve_catalog(catalog_dir);
     if !report.is_clean() {
         return CliEnvelope::err(
             "guide.decide",
@@ -272,7 +295,7 @@ pub struct StatusGate {
 /// Returns `EnvConfig` (exit 5) if the catalog won't load;
 /// `InvalidDecisionShape` (exit 3) if `phase` does not categorize.
 #[must_use]
-pub fn run_status(catalog_dir: &Path, phase: &str) -> CliEnvelope<StatusPayload> {
+pub fn run_status(catalog_dir: Option<&Path>, phase: &str) -> CliEnvelope<StatusPayload> {
     // categorize phase
     let Some(current) = Phase::parse(phase) else {
         return CliEnvelope::err(
@@ -282,7 +305,7 @@ pub fn run_status(catalog_dir: &Path, phase: &str) -> CliEnvelope<StatusPayload>
         );
     };
 
-    let report = load_catalog(catalog_dir);
+    let report = resolve_catalog(catalog_dir);
     if !report.is_clean() {
         return CliEnvelope::err(
             "guide.status",
@@ -373,7 +396,7 @@ mod tests {
 
     #[test]
     fn describe_emits_all_110_workflows_compactly() {
-        let env = run_describe(&real_catalog_dir());
+        let env = run_describe(Some(&real_catalog_dir()));
         assert!(env.ok, "describe should succeed");
         assert_eq!(env.exit_code(), 0);
         let payload = env.data.as_ref().expect("payload");
@@ -388,7 +411,7 @@ mod tests {
 
     #[test]
     fn describe_includes_phases_gates_exit_reasons_and_schema_version() {
-        let env = run_describe(&real_catalog_dir());
+        let env = run_describe(Some(&real_catalog_dir()));
         let p = env.data.as_ref().expect("payload");
         assert_eq!(p.schema_version, ENVELOPE_SCHEMA_VERSION);
         assert!(p.phases.contains(&"1-discovery".to_string()));
@@ -399,7 +422,7 @@ mod tests {
 
     #[test]
     fn describe_returns_env_config_envelope_when_catalog_dir_missing() {
-        let env = run_describe(std::path::Path::new("/nonexistent/does/not/exist"));
+        let env = run_describe(Some(std::path::Path::new("/nonexistent/does/not/exist")));
         assert!(!env.ok);
         assert_eq!(env.exit_reason.0, StableId("env_config".into()).0);
         assert_eq!(env.exit_code(), 5);
@@ -421,7 +444,7 @@ mod tests {
 
     #[test]
     fn payload_serializes_to_json_cleanly() {
-        let env = run_describe(&real_catalog_dir());
+        let env = run_describe(Some(&real_catalog_dir()));
         let json = serde_json::to_string(&env).expect("serialize");
         assert!(json.contains("\"schema_version\""));
         assert!(json.contains("\"workflows\""));
@@ -446,7 +469,7 @@ mod tests {
     fn decide_accepts_valid_in_phase_decision() {
         let tmp = tempfile_dir();
         let df = write_decision(&tmp, "d.yaml", VALID_DISCOVERY);
-        let env = run_decide(&df, &real_catalog_dir(), &[]);
+        let env = run_decide(&df, Some(&real_catalog_dir()), &[]);
         assert!(env.ok, "should accept: {:?}", env.error);
         assert_eq!(env.exit_code(), 0);
         let p = env.data.as_ref().expect("payload");
@@ -457,7 +480,7 @@ mod tests {
     fn decide_rejects_ineligible_workflow_with_typed_code() {
         let tmp = tempfile_dir();
         let df = write_decision(&tmp, "d.yaml", PLAN_IN_DISCOVERY);
-        let env = run_decide(&df, &real_catalog_dir(), &[]);
+        let env = run_decide(&df, Some(&real_catalog_dir()), &[]);
         assert!(!env.ok);
         assert_eq!(env.exit_reason.0, "rejected_by_gate");
         assert_eq!(env.exit_code(), 2);
@@ -469,7 +492,7 @@ mod tests {
     fn decide_rejects_unknown_workflow() {
         let tmp = tempfile_dir();
         let df = write_decision(&tmp, "d.yaml", UNKNOWN_WF);
-        let env = run_decide(&df, &real_catalog_dir(), &[]);
+        let env = run_decide(&df, Some(&real_catalog_dir()), &[]);
         assert!(!env.ok);
         let code = env.error.as_ref().expect("error").code.0.clone();
         assert!(code.starts_with("unknown_workflow"), "got: {code}");
@@ -479,7 +502,7 @@ mod tests {
     fn decide_returns_invalid_decision_shape_on_bad_yaml() {
         let tmp = tempfile_dir();
         let df = write_decision(&tmp, "d.yaml", BAD_YAML);
-        let env = run_decide(&df, &real_catalog_dir(), &[]);
+        let env = run_decide(&df, Some(&real_catalog_dir()), &[]);
         assert!(!env.ok);
         assert_eq!(env.exit_reason.0, "invalid_decision_shape");
         assert_eq!(env.exit_code(), 3);
@@ -489,7 +512,7 @@ mod tests {
     fn decide_returns_env_config_when_decision_file_unreadable() {
         let env = run_decide(
             std::path::Path::new("/no/such/file.yaml"),
-            &real_catalog_dir(),
+            Some(&real_catalog_dir()),
             &[],
         );
         assert!(!env.ok);
@@ -501,7 +524,7 @@ mod tests {
 
     #[test]
     fn status_reports_eligible_workflows_and_pending_gate() {
-        let env = run_status(&real_catalog_dir(), "2-specification");
+        let env = run_status(Some(&real_catalog_dir()), "2-specification");
         assert!(env.ok, "{:?}", env.error);
         let p = env.data.as_ref().expect("payload");
         assert_eq!(p.current_phase, "2-specification");
@@ -520,7 +543,7 @@ mod tests {
 
     #[test]
     fn status_rejects_unknown_phase() {
-        let env = run_status(&real_catalog_dir(), "nonsense");
+        let env = run_status(Some(&real_catalog_dir()), "nonsense");
         assert!(!env.ok);
         assert_eq!(env.exit_reason.0, "invalid_decision_shape");
         assert_eq!(env.exit_code(), 3);
@@ -530,7 +553,7 @@ mod tests {
     fn status_accepts_phase_aliases() {
         // Phase::parse is permissive: "3", "plan", "3-plan" all categorize.
         for alias in ["3", "plan", "3-plan"] {
-            let env = run_status(&real_catalog_dir(), alias);
+            let env = run_status(Some(&real_catalog_dir()), alias);
             assert!(env.ok, "alias '{alias}' should parse: {:?}", env.error);
             assert_eq!(env.data.as_ref().unwrap().current_phase, "3-plan");
         }
@@ -539,7 +562,7 @@ mod tests {
     #[test]
     fn status_terminal_phase_has_no_pending_gate() {
         // evolve is the last phase; no forward gate.
-        let env = run_status(&real_catalog_dir(), "6-evolve");
+        let env = run_status(Some(&real_catalog_dir()), "6-evolve");
         assert!(env.ok);
         assert!(env.data.as_ref().unwrap().pending_gates.is_empty());
     }

@@ -59,14 +59,14 @@ fn decision_file(wf: &str, phase: &str, next: Option<&str>, reason: &str) -> std
 #[test]
 fn e2e_full_agent_loop_describe_status_decide() {
     // STEP 1: host calls `guide describe` once to learn the surface.
-    let describe = run_describe(&catalog_dir());
+    let describe = run_describe(Some(&catalog_dir()));
     assert!(describe.ok);
     let d = describe.data.as_ref().expect("describe payload");
     assert_eq!(d.workflows.len(), 110);
     // host now knows: phases, workflows, gates, exit_reasons, schema_version.
 
     // STEP 2: host calls `guide status --phase 1-discovery` to orient.
-    let status = run_status(&catalog_dir(), "1-discovery");
+    let status = run_status(Some(&catalog_dir()), "1-discovery");
     assert!(status.ok);
     let s = status.data.as_ref().expect("status payload");
     assert_eq!(s.current_phase, "1-discovery");
@@ -76,13 +76,13 @@ fn e2e_full_agent_loop_describe_status_decide() {
 
     // STEP 3a: host proposes a LEGAL decision (discover-intent in discovery).
     let legal = decision_file("discover-intent", "1-discovery", None, "begin");
-    let accepted = run_decide(&legal, &catalog_dir(), &[]);
+    let accepted = run_decide(&legal, Some(&catalog_dir()), &[]);
     assert!(accepted.ok);
     assert_eq!(accepted.exit_code(), 0);
 
     // STEP 3b: host proposes an ILLEGAL decision (plan-sprint in discovery).
     let illegal = decision_file("plan-sprint", "1-discovery", None, "skip ahead");
-    let rejected: CliEnvelope<_> = run_decide(&illegal, &catalog_dir(), &[]);
+    let rejected: CliEnvelope<_> = run_decide(&illegal, Some(&catalog_dir()), &[]);
     assert!(!rejected.ok);
     assert_eq!(rejected.exit_code(), 2);
     let code = rejected.error.as_ref().expect("error").code.0.clone();
@@ -101,7 +101,7 @@ fn e2e_legal_transition_when_gate_provided() {
     // Host in specification, proposes plan-sprint (a 3-plan workflow) with a
     // PROPOSED transition spec->plan. Without the system-design gate: blocked.
     let no_gate = decision_file("plan-sprint", "2-specification", Some("3-plan"), "promote");
-    let blocked = run_decide(&no_gate, &catalog_dir(), &[]);
+    let blocked = run_decide(&no_gate, Some(&catalog_dir()), &[]);
     assert!(!blocked.ok);
     assert_eq!(blocked.exit_code(), 2);
 
@@ -111,7 +111,7 @@ fn e2e_legal_transition_when_gate_provided() {
         gate_kind: GateKind::SystemDesign,
         status: GateStatus::Pass,
     }];
-    let cleared = run_decide(&no_gate, &catalog_dir(), &gates);
+    let cleared = run_decide(&no_gate, Some(&catalog_dir()), &gates);
     assert!(
         cleared.ok,
         "gate-cleared transition should accept: {:?}",
@@ -124,8 +124,8 @@ fn e2e_legal_transition_when_gate_provided() {
 fn e2e_every_envelope_carries_schema_version_and_exit_reason() {
     // R1/R6: every envelope, success or failure, carries schema_version +
     // command + ok + exit_reason. Deterministic shape. Check each command's output.
-    let describe_json = serde_json::to_string(&run_describe(&catalog_dir())).unwrap();
-    let status_json = serde_json::to_string(&run_status(&catalog_dir(), "1-discovery")).unwrap();
+    let describe_json = serde_json::to_string(&run_describe(Some(&catalog_dir()))).unwrap();
+    let status_json = serde_json::to_string(&run_status(Some(&catalog_dir()), "1-discovery")).unwrap();
     for json in [describe_json, status_json] {
         assert!(json.contains("\"schema_version\""));
         assert!(json.contains("\"command\""));
@@ -138,7 +138,7 @@ fn e2e_every_envelope_carries_schema_version_and_exit_reason() {
 fn e2e_agent_path_is_noninteractive_and_deterministic() {
     // R7: calling describe twice yields byte-identical output (no timestamps,
     // no ordering randomness). The agent can rely on the contract.
-    let a = serde_json::to_string(&run_describe(&catalog_dir())).unwrap();
-    let b = serde_json::to_string(&run_describe(&catalog_dir())).unwrap();
+    let a = serde_json::to_string(&run_describe(Some(&catalog_dir()))).unwrap();
+    let b = serde_json::to_string(&run_describe(Some(&catalog_dir()))).unwrap();
     assert_eq!(a, b, "describe must be deterministic");
 }
