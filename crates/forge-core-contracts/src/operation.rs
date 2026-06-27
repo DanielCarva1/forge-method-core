@@ -209,14 +209,14 @@ pub struct LoadSet {
 #[serde(deny_unknown_fields)]
 pub struct GatePolicy {
     pub required_before_mutation: Vec<RequiredGate>,
-    pub current_gate_status: GateStatus,
+    pub current_gate_status: OperationGateStatus,
     pub gate_contract_refs: Vec<RepoPath>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RequiredGate {
-    pub scope: GateScope,
+    pub scope: OperationGateScope,
     pub gate_contract_ref: RepoPath,
     #[serde(default)]
     pub reason: Option<String>,
@@ -358,7 +358,7 @@ pub enum PromptMode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum GateStatus {
+pub enum OperationGateStatus {
     Pass,
     Pending,
     Blocked,
@@ -368,9 +368,24 @@ pub enum GateStatus {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum GateScope {
+pub enum OperationGateScope {
     Lane,
     ProductArea,
     Integration,
     Release,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OperationGateStatus;
+
+    #[test]
+    fn operation_gate_status_wire_format_remains_snake_case() {
+        let pending = serde_yaml::to_string(&OperationGateStatus::Pending).unwrap();
+        assert_eq!(pending.trim(), "pending");
+        let blocked = serde_yaml::to_string(&OperationGateStatus::Blocked).unwrap();
+        assert_eq!(blocked.trim(), "blocked");
+        let round_trip: OperationGateStatus = serde_yaml::from_str("pending").unwrap();
+        assert_eq!(round_trip, OperationGateStatus::Pending);
+    }
 }
