@@ -18,6 +18,7 @@
 //! gate. Even before the full system-design workflow exists, the engine
 //! enforces the gate reference (content is filled in slice 3).
 
+pub mod autonomy_router;
 pub mod catalog;
 pub mod claim_engine;
 pub mod conflict_detection;
@@ -31,6 +32,7 @@ pub use catalog::{
     eligible_count, eligible_entries, find_entry, load_catalog, CatalogFileError, CatalogLoadReport,
 };
 
+pub use autonomy_router::{route_lane, LaneDecision, LaneKind, LaneRouteReason};
 pub use eval::{
     load_eval_corpus, score_router, CaseScore, EvalCase, EvalCorpusDocument, RouterScore,
 };
