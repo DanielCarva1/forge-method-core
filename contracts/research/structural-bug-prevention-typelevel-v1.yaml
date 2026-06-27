@@ -1,0 +1,385 @@
+# Research: Structural prevention of identity/representation coupling bugs (R8)
+#   + property-based / boundary testing for CLI surfaces in a small Rust crate.
+#
+# Brief produced for the "claim release --id <X>" class of bug, where the operator
+# types a scope id ("worker-coordination") but the engine stores a derived full id
+# ("claim.lane.worker-coordination.worker-coordination"), both typed as StableId.
+
+meta:
+  topic: "Structural prevention of id-coupling bugs (R8) + property/boundary testing for a Rust CLI/protocol runtime"
+  query: >
+    Is there an elegant, evidence-backed, principled fix that GUARANTEES the
+    "operator-typed identifier vs canonical derived identifier" coupling bug
+    class cannot recur? Cover: parse-don't-validate / make-illegal-states-
+    unrepresentable (newtype, typestate, phantom types); property-based testing
+    as the defense against circular example tests; the named name-vs-handle
+    design pattern; CLI boundary testing. Concrete fix shape for a small Rust crate.
+  date: 2026-06-26
+  researcher_model: "codex-researcher"
+  confidence: high
+  sources_consulted: 18
+
+key_findings:
+
+  - id: F1
+    finding: >
+      The "parse, don't validate" principle (Alexis King, 2019; rooted in Yaron
+      Minsky's "make illegal states unrepresentable") says: transform weakly-typed
+      boundary data ONCE, at the boundary, into a distinct type that preserves the
+      knowledge gained. The crux is the RETURN TYPE — validation returns unit
+      (forgets what it learned); parsing returns a more-refined type that the rest
+      of the program uses without re-checking.
+    evidence: >
+      King: "the difference between validation and parsing lies almost entirely
+      in how information is preserved ... validateNonEmpty always returns (), the
+      type that contains no information, but parseNonEmpty returns NonEmpty a, a
+      refinement of the input type that preserves the knowledge gained in the
+      type system." Minsky's "Effective OCaml" slide deck lists "Make illegal
+      states unrepresentable" as a headline rule.
+    sources:
+      - https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/
+      - https://slides.com/yaronminsky/effecti
+      - https://cacm.acm.org/practice/ocaml-for-the-masses/
+
+  - id: F2
+    finding: >
+      R8 is a textbook "parse, don't validate" failure. The CLI boundary accepted
+      an operator-typed scope id and an engine canonical id UNDER THE SAME TYPE
+      (StableId ≈ String). Because no type distinguishes "what the operator typed"
+      from "what the system derived", the compiler cannot catch the confusion, and
+      the natural comparison `c.id == claim_id` silently compares across the two
+      namespaces. The bug is unrepresentable ONLY if the two identifier spaces are
+      distinct types.
+    evidence: >
+      King's principle directly: weakly-typed input must be parsed at the boundary
+      into a refined type. Here the boundary (clap arg parse) never produced a
+      refined type — it handed a String newtype straight to the engine. Microsoft's
+      Rust patterns doc presents the newtype with private constructor + smart
+      constructor as the zero-cost mechanism to enforce this in Rust.
+    sources:
+      - https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/
+      - https://microsoft.github.io/RustTraining/rust-patterns-book/ch03-the-newtype-and-type-state-patterns.html
+
+  - id: F3
+    finding: >
+      Rust's established zero-cost mechanism for F1/F2 is the NEWTYPE WITH PRIVATE
+      CONSTRUCTOR (a.k.a. smart constructor): two distinct single-field structs
+      (e.g. `ScopeId(String)` and `ClaimId(String)`) whose inner field is private
+      and only constructible through a validation function. Comparing a `ScopeId`
+      to a `ClaimId` is then a compile error. This is the "make illegal states
+      unrepresentable" move applied to the identity-types problem.
+    evidence: >
+      Microsoft Rust training: "The newtype pattern for zero-cost compile-time
+      type safety ... making illegal state transitions unrepresentable." The
+      Embedded Rust Book and Will Crichton's typestate notes corroborate. The
+      pattern is canonical in mature Rust codebases (e.g. `Url`, `SocketAddr`,
+      typed ids in diesel/sqlx).
+    sources:
+      - https://microsoft.github.io/RustTraining/rust-patterns-book/ch03-the-newtype-and-type-state-patterns.html
+      - https://rust-embedded.github.io/book/static-guarantees/typestate-programming.html
+      - https://willcrichton.net/rust-api-type-patterns/typestate.html
+
+  - id: F4
+    finding: >
+      The named, principled pattern for "human-typed name vs system canonical id"
+      is the OPAQUE-HANDLE / NAME-RESOLVER split: keep human-meaningful NAMES for
+      UX and keep OPAQUE internal HANDLE/IDs for relations, resolving name→id in
+      ONE direction through a resolver layer and never comparing across the two.
+      This mirrors URL vs URN (locator vs persistent name), surrogate-key design
+      in databases (SQLite: `id INTEGER PRIMARY KEY` opaque, `name TEXT UNIQUE`
+      human, resolver does `SELECT id WHERE name=?`), and the Handle System's
+      stable-handle→current-location indirection.
+    evidence: >
+      RFC 3986/URN model: name identifies, locator addresses; Library of Congress
+      on URN resolving a persistent name to one or more locations. SQLite docs:
+      INTEGER PRIMARY KEY aliases the hidden rowid (the cheap opaque internal id);
+      human names belong in a separate UNIQUE column resolved by app/SQL. Handle
+      System / CNRI: indirection where the identifier encodes no mutable location.
+    sources:
+      - https://developer.mozilla.org/en-US/docs/Web/URI/Reference/Schemes/urn
+      - https://www.loc.gov/standards/uri/about.html
+      - https://www.sqlite.org/rowidtable.html
+      - https://www.cnri.net/cstr/handle-overview.html
+      - https://www.rfc-editor.org/rfc/rfc3986.html
+
+  - id: F5
+    finding: >
+      Property-based testing (PBT) is the evidence-backed defense against
+      "tests that feed their own inputs back". The R8 tests were example-based and
+      circular (extract full id from acquire, feed it back), so they never sampled
+      the operator-typed namespace. PBT generates inputs INDEPENDENTLY of the code
+      path under test, so a property like "for any operator-typed scope id s,
+      resolve(s) finds the claim that acquire(s) created" would have caught R8.
+      Hughes's "How to Specify It!" shows PBT finds bugs across multiple buggy
+      variants that example tests miss, and a 2025 TU Delft study confirms
+      widespread real-world Rust PBT use (proptest most common).
+    evidence: >
+      Hughes 2019/2020: tests against a specification rather than a set of
+      examples, demonstrating bug-finding power on eight buggy variants.
+      Juhosova et al. 2025 ("PBT Across Four Environments"): empirical study of
+      PBT in open-source Java/Python/Rust repos; proptest dominates Rust usage.
+      TU Delft report "Property-Based Testing in Open-Source Rust Projects"
+      documents generators, shrinking, and adoption patterns.
+    sources:
+      - https://research.chalmers.se/publication/517894/file/517894_Fulltext.pdf
+      - https://www.infoq.com/news/2020/02/property-based-testing-guide/
+      - https://sarajuhosova.com/assets/files/2025-pbt-in-the-wild.pdf
+      - https://repository.tudelft.nl/file/File_fe09760b-df95-4ac9-9dc6-aa15e55750c4
+
+  - id: F6
+    finding: >
+      In the Rust ecosystem, proptest is the dominant PBT crate (Hypothesis-
+      inspired, explicit Strategies for generation + shrinking, composable,
+      lower-friction than type-driven quickcheck). quickcheck (BurntSushi) is
+      lighter and faster to shrink but less flexible. cargo-fuzz (libFuzzer, via
+      rust-fuzz) is the de-facto coverage-guided FUZZER for Rust, best for parser
+      / deserializer / unsafe surfaces; it needs nightly + Unix + x86-64/aarch64
+      and is heavier-weight than proptest. For a CLI/protocol runtime the right
+      default is proptest (works on stable, Windows, no sanitizer).
+    evidence: >
+      proptest docs "Proptest vs Quickcheck": proptest uses explicit Strategy
+      objects (per-value generation/shrinking) vs quickcheck's per-type approach,
+      "more flexible and simplifies composition." cargo-fuzz README + Rust Fuzz
+      Book: "recommended tool for fuzz testing Rust code," libFuzzer backend,
+      x86-64/aarch64 Unix-only, nightly. Note libFuzzer itself is now deprecated
+      upstream, with LibAFL as the emerging successor.
+    sources:
+      - https://proptest-rs.github.io/proptest/proptest/vs-quickcheck.html
+      - https://github.com/proptest-rs/proptest
+      - https://github.com/BurntSushi/quickcheck
+      - https://rust-fuzz.github.io/book/cargo-fuzz.html
+      - https://github.com/rust-fuzz/cargo-fuzz
+
+  - id: F7
+    finding: >
+      The CLI-boundary testing gap (tests used the internal full-id instead of the
+      operator form) is closed by testing the REAL argv boundary with assert_cmd
+      and/or trycmd snapshot suites, which invoke the compiled binary with
+      operator-typed arguments exactly as a human would type them. This makes the
+      "internal representation leak" failure mode observable. clap's own parser
+      can be unit-tested directly for ambiguous shapes; the binary-level tests
+      catch representation-vs-operator-form mismatches that pure-logic unit tests
+      cannot see.
+    evidence: >
+      trycmd/assert_cmd docs: assert_cmd for focused integration tests of one
+      command invocation (exit code, stdout/stderr, arg combos); trycmd for
+      snapshot-style verification across many command forms from fixtures; insta /
+      insta-cmd for snapshot assertions of CLI output. Cargo itself ships CLI
+      tests in tests/testsuite that exercise the real binary via CARGO_BIN_EXE_*.
+    sources:
+      - https://docs.rs/trycmd/
+      - https://insta.rs/docs/cmd/
+      - https://doc.rust-lang.org/cargo/reference/cargo-targets.html
+
+  - id: F8
+    finding: >
+      Consumer-driven / boundary contract testing (Pact, ContractCase) is a named
+      principle that tests belong AT THE EXTERNALLY-VISIBLE PROTOCOL BOUNDARY,
+      not at internal module seams. Applied to a CLI, the "contract" is: given an
+      operator-typed id form, the command resolves and acts on the intended claim.
+      Testing this contract at the CLI edge (rather than by plumbing internal ids)
+      is precisely what R8's tests failed to do.
+    evidence: >
+      Martin Fowler: an integration contract test verifies "at the boundary of an
+      external service" what a consumer expects. Pact/ContractCase docs: contract
+      testing is for the communication/protocol boundary, not internal business
+      logic. The R8 suite tested internal plumbing, not the boundary contract.
+    sources:
+      - https://martinfowler.com/articles/microservice-testing/
+      - https://docs.pact.io/getting_started/testing-scope
+      - https://case.contract-testing.io/docs/defining-contracts
+
+recommendations:
+
+  - id: R1
+    recommendation: >
+      ADOPT (high priority, low cost) — Split the single StableId into two
+      distinct newtypes with private constructors:
+        pub struct ScopeId(String);      // human-typed at acquire time
+        pub struct ClaimId(String);      // canonical derived id stored on disk
+      Give each a private inner field and a `parse(&str) -> Result<Self, ...>`
+      smart constructor (and a `From<...>` for the derivation path). This alone
+      makes `claims.iter().find(|c| c.id == scope_id)` a COMPILE ERROR, because
+      ClaimId and ScopeId no longer share a type. This is the minimal "make the
+      illegal state unrepresentable" fix and the single highest-leverage change.
+    based_on: [F1, F2, F3]
+    priority: high
+
+  - id: R2
+    recommendation: >
+      ADOPT (high priority, low cost) — Introduce a `ClaimRef` type parsed ONCE at
+      the CLI/clap boundary, and make the engine API only accept a resolved
+      `ClaimId`. Shape:
+        pub enum ClaimRef { ByScopeId(ScopeId), ByClaimId(ClaimId) }
+        impl ClaimRef { pub fn parse(s: &str) -> Self { /* "claim." prefix => ByClaimId, else ByScopeId */ } }
+        impl ClaimStore {
+            pub fn resolve(&self, r: &ClaimRef) -> Option<ClaimId>;   // the ONLY name->id hop
+            pub fn find(&self, id: &ClaimId) -> Option<&Claim>;        // canonical-id only
+        }
+      The CLI handler calls `store.resolve(&ref).and_then(|id| store.find(&id))`.
+      Because `find` takes `&ClaimId` exclusively, NO future command can repeat
+      R8 — there is no longer any function that accepts a ScopeId and compares it
+      against a claim id. This is the one-directional name→id resolver pattern
+      (F4) enforced by the type system. The existing pragmatic `resolve_claim()`
+      helper becomes the body of `ClaimStore::resolve`, but typed.
+    based_on: [F1, F2, F3, F4]
+    priority: high
+
+  - id: R3
+    recommendation: >
+      ADOPT (high priority, low cost) — Add ONE property-based test that would
+      have caught R8, using proptest (stable, Windows-friendly, no nightly):
+        proptest!{
+          #[test]
+          fn release_by_operator_typed_scope_id_acquires_then_releases(
+            scope in "[a-z][a-z0-9-]{2,30}"   // operator-shaped, generated INDEPENDENTLY
+          ) {
+            let cid = store.acquire(&ScopeId::parse(&scope)?)?;   // canonical id
+            // operator only knows `scope`, NOT cid:
+            prop_assert!(store.release(&ClaimRef::parse(&scope)).is_ok());
+          }
+        }
+      This breaks the circularity (the release input is generated fresh, not
+      extracted from acquire) and is the canonical PBT value proposition per
+      Hughes and the TU Delft adoption data. Keep proptest as a dev-dependency
+      only; do NOT add cargo-fuzz for this class (overkill for a small runtime:
+      nightly-only, Unix-only, sanitizer-oriented).
+    based_on: [F5, F6]
+    priority: high
+
+  - id: R4
+    recommendation: >
+      ADOPT (medium priority, low cost) — Add boundary tests via assert_cmd (or
+      trycmd) that invoke the REAL compiled binary with operator-typed ids, i.e.
+      `claim release --id worker-coordination`, never the internal full id. This
+      closes the representation-vs-operator-form gap that pure logic unit tests
+      structurally cannot see. One or two such tests per command family is
+      sufficient for a small crate; a full trycmd snapshot suite is only worth it
+      if help/error text stability matters.
+    based_on: [F7, F8]
+    priority: medium
+
+  - id: R5
+    recommendation: >
+      DEFER (low priority) — Full typestate / sealed-trait / refinement-type
+      machinery (e.g. encoding claim lifecycle states like Acquired/Held/Released
+      in the type system) is architecturally elegant but OVERKILL for the R8
+      class and a small crate's cost budget. The two-newtypes + ClaimRef resolver
+      (R1+R2) already structurally guarantees R8 cannot recur; typestate adds
+      ongoing generic-parameter and PhantomData complexity for marginal benefit
+      here. Revisit only if lifecycle-state bugs become a recurring class.
+    based_on: [F3]
+    priority: low
+
+gaps:
+  - gap: >
+      No direct empirical study measures the specific "shared newtype for two
+      identifier namespaces" anti-pattern across Rust crates (it is folklore,
+      well-attested in blog/training material but not benchmarked).
+    why: >
+      The finding is supported by canonical design principles (parse-don't-
+      validate, surrogate-key design, Handle System) rather than a controlled
+      Rust-specific experiment.
+  - gap: >
+      Quantitative ROI of proptest vs example tests for a CLI/protocol runtime
+      of THIS size (~few kLOC) is not separately published; cost/benefit is
+      inferred from larger-codebase PBT adoption studies and the Hughes bug-finding
+      results.
+    why: >
+      Published PBT studies aggregate across heterogeneous projects; none isolate
+      small CLI runtimes.
+
+open_questions:
+  - "Should ClaimRef::parse disambiguate by a typed prefix/tag (e.g. force operators to use scope:worker-coordination vs id:claim.lane...) rather than a heuristic 'claim.' prefix check? Prefix-tagging is more robust but a CLI ergonomics decision."
+  - "Does the runtime need a reverse resolver (ClaimId -> ScopeId) for output/display, and if so should it live in ClaimStore (single source of truth) rather than string-splitting the canonical id?"
+  - "If the derived ClaimId format ever changes, is there a migration concern that the prefix-detection heuristic in ClaimRef::parse could silently misclassify? A tagged prefix avoids this."
+
+sources:
+  - url: https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/
+    title: "Parse, don't validate — Alexis King (2019)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://slides.com/yaronminsky/effecti
+    title: "Effective OCaml — Yaron Minsky / Jane Street (Make illegal states unrepresentable)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://cacm.acm.org/practice/ocaml-for-the-masses/
+    title: "OCaml for the Masses — Minsky, CACM"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://microsoft.github.io/RustTraining/rust-patterns-book/ch03-the-newtype-and-type-state-patterns.html
+    title: "The Newtype and Type-State Patterns — Microsoft Rust Training"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://rust-embedded.github.io/book/static-guarantees/typestate-programming.html
+    title: "Typestate Programming — The Embedded Rust Book"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://willcrichton.net/rust-api-type-patterns/typestate.html
+    title: "Typestate — Type-Driven API Design in Rust (Will Crichton)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://research.chalmers.se/publication/517894/file/517894_Fulltext.pdf
+    title: "How to Specify It! — John Hughes (TFP 2019/2020)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://www.infoq.com/news/2020/02/property-based-testing-guide/
+    title: "A Guide to Writing Properties of Pure Functions — Hughes at Lambda Days (InfoQ)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://sarajuhosova.com/assets/files/2025-pbt-in-the-wild.pdf
+    title: "Property-Based Testing Across Four Environments in Open-Source Repositories (2025)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://repository.tudelft.nl/file/File_fe09760b-df95-4ac9-9dc6-aa15e55750c4
+    title: "Property-Based Testing in Open-Source Rust Projects (TU Delft)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://proptest-rs.github.io/proptest/proptest/vs-quickcheck.html
+    title: "Proptest vs Quickcheck — proptest docs"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://github.com/proptest-rs/proptest
+    title: "proptest-rs/proptest (GitHub)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://github.com/BurntSushi/quickcheck
+    title: "BurntSushi/quickcheck (GitHub)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://rust-fuzz.github.io/book/cargo-fuzz.html
+    title: "Fuzzing with cargo-fuzz — Rust Fuzz Book"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://github.com/rust-fuzz/cargo-fuzz
+    title: "rust-fuzz/cargo-fuzz (GitHub)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://www.sqlite.org/rowidtable.html
+    title: "SQLite Rowid Tables (surrogate opaque key pattern)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://developer.mozilla.org/en-US/docs/Web/URI/Reference/Schemes/urn
+    title: "URN — name vs locator (MDN)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://www.cnri.net/cstr/handle-overview.html
+    title: "The Handle System — CNRI (opaque-handle indirection)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://docs.rs/trycmd/
+    title: "trycmd — Rust CLI snapshot/integration testing"
+    relevance: high
+    accessed: 2026-06-26
+  - url: https://insta.rs/docs/cmd/
+    title: "insta / insta-cmd — snapshot testing for CLI output"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://martinfowler.com/articles/microservice-testing/
+    title: "Microservice Testing — Martin Fowler (contract tests at the boundary)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: https://docs.pact.io/getting_started/testing-scope
+    title: "Pact — testing scope (contract at the communication boundary)"
+    relevance: medium
+    accessed: 2026-06-26
