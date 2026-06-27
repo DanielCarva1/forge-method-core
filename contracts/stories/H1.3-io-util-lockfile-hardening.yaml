@@ -1,0 +1,37 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "H1.3"
+status: "ready"
+slice: "hardening_batch_1"
+title: "Fix io_util DirLock stale-owner detection + orphan remediation"
+
+decision_sources:
+  - "contracts/backlog/v1.1-selfhealing-backlog.yaml#P3.1 (lockfile stale-owner detection)"
+  - "contracts/research/selfhealing-writepath-audit-v1.yaml (DirLock acquire lines 41-66, Drop line 73 — orphan lockfile blocks mutators without remediation)"
+  - "contracts/research/selfhealing-failpoint-audit-v1.yaml (lockfile tiered invariant recommendation)"
+
+intent: "Prevent orphan lockfiles (from a crashed process) from permanently blocking all mutating claim commands. Today a crash while holding the lock leaves .forge-claim.lock with no owner detection, and Drop removes by path without validating ownership."
+
+owned_files:
+  - "crates/forge-core-cli/src/io_util.rs"
+forbidden_files:
+  - "crates/forge-core-engine/src/claim_engine.rs"        # owned by H1.1
+  - "crates/forge-core-engine/src/conflict_detection.rs"  # owned by H1.2
+
+tasks:
+  - "DirLock::acquire (lines ~41-66): write pid + acquisition timestamp into the lockfile (not just pid). On encountering an existing lockfile, detect staleness: if the pid is not alive (or lock age exceeds a sane threshold), treat as orphan and reclaim with a typed diagnostic warning. Add an ownership token so Drop only removes a lockfile it actually owns (compare before unlink)."
+  - "Timeout/retry (lines ~58-73): on WouldBlock after exhausting retries, return an EnvConfig-style diagnostic with remediation guidance (which pid holds it, how to force-remove), NOT a silent hang."
+
+acceptance_criteria:
+  - "Lockfile records pid + timestamp"
+  - "An orphan lockfile (dead pid or stale age) is reclaimed with a warning diagnostic, not a permanent block"
+  - "Drop only removes the lockfile if it matches the ownership token it wrote"
+  - "No new panic in production paths"
+  - "All existing io_util / claim tests pass"
+  - "cargo check + clippy clean on the cli crate"
+
+checks:
+  - "cargo test -p forge-core-cli"
+  - "cargo clippy -p forge-core-cli -- -D warnings"
+blocks: []
+next_workflow: "merge with H1.1 + H1.2, then driver runs full green-loop"

@@ -1,0 +1,36 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "H1.2"
+status: "ready"
+slice: "hardening_batch_1"
+title: "Fix conflict_detection root-path false-negative + ASCII-only case fold"
+
+decision_sources:
+  - "contracts/backlog/v1.1-selfhealing-backlog.yaml#P1.4 (root paths become empty scope)"
+  - "contracts/backlog/v1.1-selfhealing-backlog.yaml#P3.2 (ASCII-only case fold breaks Unicode on WSL/Windows)"
+  - "contracts/research/parallel-review-conflict-detection-v1.yaml (F1 high, F3 medium)"
+
+intent: "Close two correctness holes in conflict detection so a claim on root/all paths actually blocks everything, and so case-insensitive matching works for non-ASCII paths (critical on WSL/Windows where repo paths may contain accented characters)."
+
+owned_files:
+  - "crates/forge-core-engine/src/conflict_detection.rs"
+forbidden_files:
+  - "crates/forge-core-engine/src/claim_engine.rs"        # owned by H1.1
+  - "crates/forge-core-cli/src/io_util.rs"                # owned by H1.3
+
+tasks:
+  - "P1.4 root paths: investigate normalize() around lines 242-243 and path_covers() around 264-268. Root paths '.', '/', '' currently normalize to empty segments, causing path_covers to return false (false negative — a root claim blocks nothing). Decide: either REJECT '.','/','' at acquisition with a typed error, OR represent root explicitly so it covers all children. Add tests: claim '.', '/', '' should block a child 'src/lib.rs'."
+  - "P3.2 ASCII-only case fold: around lines 276-285, case-insensitive matching uses ASCII-only folding. Unicode paths (accents, non-Latin) break matching. Replace with Unicode case folding (std Unicode facilities or char methods) OR canonical path identity at the IO boundary."
+
+acceptance_criteria:
+  - "A claim on '.' or '/' or '' blocks descendant paths (no false negative)"
+  - "Case-insensitive matching works for at least one non-ASCII example (e.g. accented letter)"
+  - "No new unwrap/expect/panic"
+  - "All existing conflict_detection tests pass"
+  - "cargo check + clippy clean on the engine crate"
+
+checks:
+  - "cargo test -p forge-core-engine"
+  - "cargo clippy -p forge-core-engine -- -D warnings"
+blocks: []
+next_workflow: "merge with H1.1 + H1.3, then driver runs full green-loop"

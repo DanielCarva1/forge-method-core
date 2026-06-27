@@ -1,0 +1,40 @@
+schema_version: "0.1"
+artifact_kind: "story"
+story_id: "H1.1"
+status: "ready"
+slice: "hardening_batch_1"
+title: "Fix claim_engine arithmetic + date validation + invalid-claim-on-acquire"
+
+decision_sources:
+  - "contracts/backlog/v1.1-selfhealing-backlog.yaml#P1.1 (TTL lease overflow)"
+  - "contracts/backlog/v1.1-selfhealing-backlog.yaml#P1.2 (rfc3339 accepts invalid dates)"
+  - "contracts/backlog/v1.1-selfhealing-backlog.yaml#P1.3 (acquire creates validator-invalid claim)"
+  - "contracts/research/selfhealing-failpoint-audit-v1.yaml (6 HIGH in claim_engine)"
+  - "contracts/research/parallel-review-claim-engine-v1.yaml (F1 high, F2 high, F3 medium)"
+
+intent: "Eliminate the 3 HIGH-severity fail-closed violations in claim_engine.rs so every claim the engine produces is arithmetically sound, time-valid, and validator-consistent. This is the core authority engine; correctness here is non-negotiable."
+
+owned_files:
+  - "crates/forge-core-engine/src/claim_engine.rs"
+forbidden_files:
+  - "crates/forge-core-engine/src/conflict_detection.rs"   # owned by H1.2
+  - "crates/forge-core-cli/src/io_util.rs"                 # owned by H1.3
+
+tasks:
+  - "P1.1 TTL overflow: in acquire() (~line 285) and heartbeat() (~line 356), replace `now_unix + ttl` unchecked arithmetic with checked_add. If overflow OR ttl not representable as i64, return a typed rejection (do NOT panic in debug / wrap in release). Reject ttl_seconds that would overflow now+ttl."
+  - "P1.2 rfc3339_to_unix: after parsing fields (~lines 53-57), validate day against month/leap-year AND hour in 0..=23, minute in 0..=59, second in 0..=59 BEFORE days_from_civil / epoch arithmetic. Invalid values (e.g. 2026-02-31, 99:99:99) return None (fail-closed), not a normalized instant."
+  - "P1.3 invalid-on-acquire: default_expiry_policy() sets handoff_required=true with handoff_request_ref=None, which the validator rejects. Fix so that acquire()-produced claims PASS validate_claim. First INVESTIGATE whether the validator runs at runtime or build-time (may only affect static validation). Confirm with a test that acquire() result passes validation."
+
+acceptance_criteria:
+  - "No new unwrap/expect/panic in production paths (AGENTS.md: hand-rolled enums, Diagnostic accumulator)"
+  - "TTL overflow returns typed error, not panic — test with ttl near i64::MAX"
+  - "rfc3339_to_unix returns None for 2026-02-31, 99:99:99, 2026-13-01 — test these"
+  - "acquire() result passes validate_claim (add test if validator is runtime-callable)"
+  - "All existing claim_engine tests still pass"
+  - "cargo check + clippy clean on the engine crate"
+
+checks:
+  - "cargo test -p forge-core-engine"
+  - "cargo clippy -p forge-core-engine -- -D warnings"
+blocks: []
+next_workflow: "merge with H1.2 + H1.3, then driver runs full green-loop"
