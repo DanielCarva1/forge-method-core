@@ -50,6 +50,7 @@ fn main() {
     let command = args.first().map(String::as_str).unwrap_or("validate");
     match command {
         "guide" => run_guide_command(&args),
+        "autonomy" => forge_core_cli::autonomy_cmd::run_autonomy_command(&args),
         "claim" => run_claim_command(&args),
         "isolation" => run_isolation_command(&args),
         "coordination" => run_coordination_command(&args),

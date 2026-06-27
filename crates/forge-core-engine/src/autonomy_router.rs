@@ -13,7 +13,8 @@ use forge_core_contracts::verification_goal::VerificationGoalContract;
 const HIGH_RISK_THRESHOLD: u8 = 70;
 
 /// The lane the engine selected for the proposed work.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LaneKind {
     /// Machine-checkable evidence exists and the policy allows low-friction work.
     Fast,
@@ -22,7 +23,8 @@ pub enum LaneKind {
 }
 
 /// Typed reason explaining why a lane was selected.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LaneRouteReason {
     /// The work has machine-checkable evidence and no fail-closed trigger fired.
     LowRiskVerified,
@@ -39,7 +41,7 @@ pub enum LaneRouteReason {
 }
 
 /// The router's lane verdict.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LaneDecision {
     pub lane: LaneKind,
     pub reason: LaneRouteReason,
