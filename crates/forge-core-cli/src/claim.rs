@@ -83,6 +83,24 @@ impl ClaimResult {
 ///
 /// # Errors
 /// `EnvConfig` (5) if the claims dir is corrupt; `RejectedByGate` (2) if the
+/// Resolve a claim reference that may be either the FULL claim id
+/// (`claim.lane.<scope>.<scope>`) OR just the scope id (`<scope>`).
+///
+/// R8 (slice-5 live demo): the CLI `--id` flag naturally carries the scope id
+/// the operator typed at acquire time, but the on-disk claim stores the full
+/// derived id. Match either form so real CLI usage works; the exact-id match
+/// wins to stay unambiguous when a scope has multiple records (e.g. one
+/// released + one active).
+fn resolve_claim<'a>(claims: &'a [ClaimContract], id: &StableId) -> Option<&'a ClaimContract> {
+    if let Some(exact) = claims.iter().find(|c| &c.id == id) {
+        return Some(exact);
+    }
+    claims.iter().find(|c| c.scope.id == *id)
+}
+
+/// Run `claim acquire` — declare authority over a scope.
+///
+/// `EnvConfig` (5) if the claims dir is corrupt; `RejectedByGate` (2) if the
 /// engine refuses with a typed [`ClaimRejection`].
 #[must_use]
 pub fn run_acquire(
@@ -148,7 +166,7 @@ pub fn run_heartbeat(
     if let Some(env) = env_config_if_errors(claims_dir, &errs) {
         return env;
     }
-    let Some(target) = existing.iter().find(|c| &c.id == claim_id) else {
+    let Some(target) = resolve_claim(&existing, claim_id) else {
         return CliEnvelope::err(
             "claim.heartbeat",
             ExitReason::InvalidDecisionShape,
@@ -197,7 +215,7 @@ pub fn run_release(
     if let Some(env) = env_config_if_errors(claims_dir, &errs) {
         return env;
     }
-    let Some(target) = existing.iter().find(|c| &c.id == claim_id) else {
+    let Some(target) = resolve_claim(&existing, claim_id) else {
         return CliEnvelope::err(
             "claim.release",
             ExitReason::InvalidDecisionShape,
@@ -687,6 +705,46 @@ mod tests {
         let env = run_release(&dir, &claim_id, &StableId("agentB".into()), T0);
         assert!(!env.ok);
         assert_eq!(env.exit_code(), 2);
+    }
+
+    #[test]
+    fn release_resolves_by_scope_id_r8() {
+        // R8 (slice-5 live demo): the CLI `--id` flag carries the SCOPE id the
+        // operator typed at acquire, not the full derived claim id. resolve_claim
+        // must accept both forms. Releasing by scope id must succeed and free the
+        // scope for re-acquisition.
+        let dir = tempfile_dir();
+        let acquired = run_acquire(&dir, &req("s1", "agentA"), T0);
+        // The full claim id is `claim.lane.s1.s1`; the operator only knows "s1".
+        let scope_id = StableId("s1".into());
+        assert_ne!(
+            acquired.data.as_ref().unwrap().claim_id,
+            scope_id.0,
+            "test setup: scope id must differ from full claim id to exercise R8"
+        );
+        let rel = run_release(&dir, &scope_id, &StableId("agentA".into()), T0);
+        assert!(rel.ok, "release by scope id must work: {:?}", rel.error);
+        assert_eq!(rel.data.as_ref().unwrap().status, "released");
+        // Full-id form STILL works (backwards compatible with e2e tests).
+        let dir2 = tempfile_dir();
+        let acquired2 = run_acquire(&dir2, &req("s1", "agentA"), T0);
+        let full_id = StableId(acquired2.data.as_ref().unwrap().claim_id.clone());
+        let rel2 = run_release(&dir2, &full_id, &StableId("agentA".into()), T0);
+        assert!(
+            rel2.ok,
+            "release by full id must still work: {:?}",
+            rel2.error
+        );
+    }
+
+    #[test]
+    fn heartbeat_resolves_by_scope_id_r8() {
+        // R8 echo for heartbeat (same resolve_claim path).
+        let dir = tempfile_dir();
+        let _ = run_acquire(&dir, &req("s1", "agentA"), T0);
+        let scope_id = StableId("s1".into());
+        let hb = run_heartbeat(&dir, &scope_id, &StableId("agentA".into()), T0);
+        assert!(hb.ok, "heartbeat by scope id must work: {:?}", hb.error);
     }
 
     // --- status (the coordination-bus view) ---
