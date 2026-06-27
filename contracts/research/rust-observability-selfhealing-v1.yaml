@@ -1,0 +1,291 @@
+meta:
+  topic: "Rust concrete layer for observability + self-healing on a file-backed multi-agent WAL runtime (no daemon)"
+  query: "tracing-as-WAL-store, OTel-rust no-daemon, structured events, reconcile loop, fail-loud invariants, miri, panic strategy"
+  date: 2026-06-26
+  researcher_model: "claude (researcher subagent)"
+  confidence: high
+  sources_consulted: 18
+
+key_findings:
+  - id: F1
+    finding: "tracing CAN be serialized into an append-only WAL, but NOT via tracing-appender::NonBlocking (it DROPS events when its bounded queue fills — fatal for a durability store). The correct path is a custom `Layer` (new_span/enter/exit/on_event) that writes a serde-serialized WAL record per span-lifecycle + event, bypassing the fmt/MakeWriter text path entirely."
+    evidence: "tracing-subscriber exposes `Layer::new_span/enter/exit/on_event`; tracing-serde provides `RecordFields`/`SerializeValue` adapters. tracing-appender NonBlocking docs: 'queue has a fixed capacity… logs written to it will be dropped until capacity is once again available'. Burgers.io custom-logging part 2 shows building JSON field objects in new_span extensions."
+    sources:
+      - "https://docs.rs/tracing-serde/latest/tracing_serde/"
+      - "https://docs.rs/tracing-appender/latest/tracing_appender/non_blocking/index.html"
+      - "https://burgers.io/custom-logging-in-rust-using-tracing-part-2"
+
+  - id: F2
+    finding: "tracing's span model does NOT cross process boundaries. There is no built-in trace-id/span-id propagation between separate processes; the parent/child tree lives in-process per subscriber. For 50 separate agent processes you MUST propagate (trace_id, parent_span_id) yourself — the WAL record is the natural carrier. This is exactly OTel's strength (SpanContext/propagators), not tracing's."
+    evidence: "tracing span docs model spans as in-process scoped diagnostics aggregated by a single subscriber. Cross-process requires external context injection; OTel defines W3C traceparent propagation as a first-class concept."
+    sources:
+      - "https://docs.rs/tracing/latest/tracing/span/index.html"
+      - "https://open-telemetry.github.io/opentelemetry-rust/"
+
+  - id: F3
+    finding: "Replay/analysis prior art exists: tracing-chrome (Perfetto timeline, used by Miri itself), tracing-flame (folded-stack flamegraph), tracing-tree (hierarchical text). All consume the same span-event stream — so a WAL that stores raw span open/close + events can be replayed into any of these formats post-hoc. This validates WAL-as-trace-store."
+    evidence: "Miri tracing docs: uses tracing-chrome to save spans viewable in Perfetto. tracing-flame = folded-stack Layer; tracing-tree = pretty-print hierarchy Layer."
+    sources:
+      - "https://docs.rs/tracing-chrome"
+      - "https://docs.rs/tracing-flame"
+      - "https://docs.rs/tracing-tree"
+
+  - id: F4
+    finding: "opentelemetry-rust is now production-stable for the no-daemon case. As of opentelemetry-0.32.0 (2026-05-09): Tracing API + SDK + Logs-Appender-Tracing = STABLE; Metrics API/SDK STABLE; only the OTLP exporters remain RC. A custom `SpanExporter` (impl `async fn export(&mut self, batch: Vec<SpanData>) -> OTelSdkResult`) writing SpanData to the WAL is the clean no-daemon path and gives W3C trace-id/span-id propagation for free."
+    evidence: "Project status table: Tracing-SDK Stable, Logs-Appender-Tracing Stable; SpanExporter trait is the documented custom-protocol extension point; opentelemetry-stdout demonstrates a no-collector exporter pattern. Latest release 0.32.0 2026-05-09."
+    sources:
+      - "https://open-telemetry.github.io/opentelemetry-rust/"
+      - "https://github.com/open-telemetry/opentelemetry-rust"
+      - "https://docs.rs/opentelemetry_sdk/latest/opentelemetry_sdk/trace/trait.SpanExporter.html"
+      - "https://docs.rs/opentelemetry-stdout/latest/opentelemetry_stdout/"
+
+  - id: F5
+    finding: "Bespoke tracing+custom-WAL-Layer is simpler/safer than OTel IF you only need causal chains within your own runtime; OTel pays off only if you want cross-language/ecosystem semantics, W3C propagation, or may later attach a collector. For a single-workspace Rust system whose only consumer is your own replay tool, the OTel SDK is heavier than needed. Verdict: start bespoke (tracing + WAL Layer), keep SpanData-shaped records so an OTel exporter is a future drop-in."
+    evidence: "OTel SDK pulls Resource/Sampler/Processor machinery; opentelemetry-stdout exporter ~trivial but the SDK surface is large. tracing-serde is ~1 small crate. Bespoke avoids RC-tagged OTLP deps entirely."
+    sources:
+      - "https://github.com/open-telemetry/opentelemetry-rust/issues/1678"
+      - "https://docs.rs/tracing-serde/latest/tracing_serde/"
+
+  - id: F6
+    finding: "Structured event logging idiom = tracing events with structured fields serialized via tracing-serde. `tracing::info!(agent_id, scope_id, claim_id, latency_ms, \"handoff\")` lands as a WAL record whose fields are exactly those keys. sval offers zero-copy alt but tracing-serde is the idiomatic, workspace-aligned (serde) answer. Do NOT bolt `log`+serde or quicklog — tracing events ARE the structured log."
+    evidence: "tracing field syntax produces machine-readable structured values; tracing-serde serializes `Value`/`Field` via serde. Project already uses serde.workspace → zero new dep surface."
+    sources:
+      - "https://docs.rs/tracing-serde/latest/tracing_serde/"
+      - "https://rust-exercises.com/telemetry/01_structured_logging/04_tracing"
+
+  - id: F7
+    finding: "Self-healing reconcile: there is NO production-grade generic non-k8s reconcile crate. task-supervisor / taskvisor / nocontrol / `reconcile` exist but are tiny/single-author. The idiomatic Rust shape for a no-daemon file-bus is a long-running tokio interval task that every N ms re-derives state from the WAL (existing derive_state(wal)) and re-asserts invariants (level-triggered). notify-based file-watch triggering is UNSOUND on WSL/NFS (documented missing events)."
+    evidence: "notify docs: 'Network mounted filesystems… may not emit any events… especially WSL programs watching windows paths (issue #254)'; PollWatcher is the fallback. redb/sled use background flusher threads (interval), not fs notify. task-supervisor/taskvisor are <v0.2."
+    sources:
+      - "https://docs.rs/notify/latest/notify/"
+      - "https://github.com/notify-rs/notify/issues/254"
+      - "https://docs.rs/task-supervisor/latest/task_supervisor/"
+
+  - id: F8
+    finding: "Fail-loud invariant pattern: TIERED. (1) WAL-append gate returns a typed Err → reject the bad append, emit a structured `Anomaly` event to the WAL itself, continue serving other agents (recoverable). (2) debug_assert! for cheap dev-only checks (compiles out in release). (3) panic=abort (or abort_unwind wrapper) reserved for the WAL COMMIT boundary where continuing would corrupt in-memory invariants. This fits the project's Diagnostic-accumulator pattern: invariant violation = accumulate anomaly + return Err, never silently swallow. (thiserror/anyhow banned → typed Err variants)."
+    evidence: "Rust book ch9: Result when recoverable, panic when unrecoverable. Tratt: two kinds of assert express two intents. abort_unwind (stable): abort if a panic would unwind — for must-not-continue boundaries."
+    sources:
+      - "https://doc.rust-lang.org/book/ch09-03-to-panic-or-not-to-panic.html"
+      - "https://tratt.net/laurie/blog/2023/rusts_two_kinds_of_assert_make_for_better_code.html"
+      - "https://doc.rust-lang.org/std/panic/fn.abort_unwind.html"
+
+  - id: F9
+    finding: "panic strategy for WAL integrity: `panic=abort` does NOT itself prevent partial WAL writes — durability comes from the append PROTOCOL (length-prefix + CRC + fsync + torn-tail detection on recovery), exactly as redb/sled/SQLite do. catch_unwind is useless under panic=abort and unreliable as an integrity mechanism. Correct design: make the commit critical section panic-free (no alloc/indexing/callbacks/formatting), rely on WAL replay after any crash, gate with abort_unwind only if a panic could leave shared in-memory state inconsistent."
+    evidence: "redb: 'Crash-safe by default'; savepoints/rollbacks; Durability::Immediate = fsync. sled ARCHITECTURE.md: no traditional WAL, metadata logged atomically, batches 100% or 0% visible after recovery. SQLite WAL: readers use consistent end mark, designed for partial-write recovery."
+    sources:
+      - "https://docs.rs/redb/latest/redb/"
+      - "https://github.com/spacejam/sled/blob/main/ARCHITECTURE.md"
+      - "https://www3.sqlite.org/wal.html"
+      - "https://doc.rust-lang.org/stable/reference/panic.html"
+
+  - id: F10
+    finding: "miri catches UB (aliasing, data races, invalid reads) in unsafe code and is the canonical tool, but it does NOT catch logic bugs, missing fsync, or filesystem-level corruption. For a runtime intended 100% safe Rust, miri is cheap insurance on the test suite in CI. If unsafe is introduced (e.g., memmap2 for mmap), discipline = cargo-geiger scan + SAFETY-comment per block + miri on tests + prefer safe wrappers. mmap specifically needs mmap + advisory locking, not raw pointer aliasing."
+    evidence: "miri README: detects UB in unsafe, does not catch every spec violation. Safeguard playbook: any dep with unsafe + <500 stars or stale = longer audit. 2026 POPL paper: miri is practical, distributed in nightly."
+    sources:
+      - "https://github.com/rust-lang/miri/blob/master/README.md"
+      - "https://safeguard.sh/resources/blog/rust-unsafe-code-audit-at-scale"
+      - "https://research.ralfj.de/papers/2026-popl-miri.pdf"
+
+recommendations:
+  - id: R1
+    recommendation: "Implement the WAL-as-trace-store as a custom `tracing_subscriber::Layer` (new_span/enter/exit/on_event) that emits one serde-serialized WAL record per span-lifecycle/event via tracing-serde. Do NOT use tracing-appender::NonBlocking for the durability path (drops on full queue); use a dedicated, blocking, fsync'd WAL writer thread instead."
+    based_on: [F1, F6]
+    priority: high
+  - id: R2
+    recommendation: "Carry (trace_id, parent_span_id) explicitly inside every WAL record to reconstruct cross-agent causal chains across the 50 processes. This is bespoke propagation (tracing won't do it). Shape records like OTel SpanData so an `opentelemetry_sdk::trace::SpanExporter`→WAL can be swapped in later if W3C/cross-language needs emerge."
+    based_on: [F2, F4, F5]
+    priority: high
+  - id: R3
+    recommendation: "Defer OTel adoption. Bespoke tracing+WAL is simpler and avoids RC-tagged OTLP deps. Revisit only if you need a real collector or cross-language spans. Keep records SpanData-shaped as a hedge."
+    based_on: [F4, F5]
+    priority: medium
+  - id: R4
+    recommendation: "Self-healing = tokio interval task (e.g. every 250ms–1s) calling `reconcile(derive_state(wal)) -> Vec<Action>` re-asserting invariants. Do NOT use notify/fs-watch as the primary trigger (WSL/NFS missing events, issue #254); use it only as an optional fast-path hint, interval is the source of truth."
+    based_on: [F7]
+    priority: high
+  - id: R5
+    recommendation: "Invariant gate = typed Err (Diagnostic accumulator) + structured Anomaly WAL event + continue; debug_assert for dev checks; abort_unwind only at the WAL-commit boundary. Make the commit critical section panic-free (no alloc/index/format/callback)."
+    based_on: [F8, F9]
+    priority: high
+  - id: R6
+    recommendation: "Durability = append protocol (len-prefix + CRC32C + fsync + torn-tail recovery), NOT panic=abort. Set panic=unwind for the binary and gate commit with abort_unwind; trust WAL replay over in-process catch_unwind. Borrow raft-wal's CRC-per-entry pattern."
+    based_on: [F9]
+    priority: high
+  - id: R7
+    recommendation: "Run miri on the test suite in CI (nightly job). Keep the runtime 100% safe Rust (#![forbid(unsafe_code)]). If mmap is needed, use memmap2 + SAFETY comments + cargo-geiger gate in CI."
+    based_on: [F10]
+    priority: medium
+
+review:
+  - crate: tracing
+    status: active
+    notes: "tokio-rs/tracing, 6.6k★, core of Rust ecosystem. Last release ongoing. Span/event model is the foundation."
+  - crate: tracing-subscriber
+    status: active
+    notes: "Layer trait is the extension point for a custom WAL Layer. Stable API."
+  - crate: tracing-serde
+    status: active
+    notes: "Small adapter crate; enables serde serialization of tracing field values. Idiomatic for structured WAL records."
+  - crate: tracing-appender
+    status: active
+    notes: "RollingFileAppender OK for logs; NonBlocking DROPS on full queue — DO NOT use for durability-critical WAL writes."
+  - crate: tracing-chrome
+    status: active
+    notes: "Perfetto timeline output; used by Miri. Good for replay visualization of a WAL-trace store."
+  - crate: tracing-flame
+    status: active
+    notes: "Folded-stack/flamegraph Layer. Maintenance light but functional."
+  - crate: tracing-tree
+    status: active
+    notes: "Hierarchical pretty-print; useful for dev, less for analysis."
+  - crate: opentelemetry (crate)
+    status: active
+    notes: "v0.32.0 (2026-05-09). Tracing API/SDK STABLE, Logs-Appender-Tracing STABLE, Metrics STABLE. OTLP exporters still RC. Custom SpanExporter→WAL is viable no-daemon path."
+  - crate: opentelemetry-sdk
+    status: active
+    notes: "SpanExporter trait now `async fn export`; stable. Heavier than bespoke tracing for a single-runtime system."
+  - crate: opentelemetry-stdout
+    status: active
+    notes: "Reference no-collector exporter. Confirms custom-exporter-to-file pattern."
+  - crate: notify
+    status: active
+    notes: "v8.2.0, MSRV 1.88. Cross-platform BUT unreliable on WSL/NFS (documented missing events, issue #254). Use PollWatcher fallback or interval polling for correctness-critical paths."
+  - crate: task-supervisor
+    status: legacy
+    notes: "Single-author, <v0.2. Erlang/OTP-inspired tokio supervisor. Not production-hardened; reference only."
+  - crate: taskvisor
+    status: legacy
+    notes: "v0.1.2, restart/backoff supervisor. Same caveat — small, young."
+  - crate: nocontrol
+    status: legacy
+    notes: "k8s-style reconcile lib, single-author, early. Not for production file-bus."
+  - crate: redb
+    status: active
+    notes: "Pure-Rust ACID KV, copy-on-write B-trees, crash-safe by default, fsync durability levels. Reference for append+commit+recovery discipline."
+  - crate: sled
+    status: active
+    notes: "ARCHITECTURE.md documents atomic metadata logging + batch all-or-nothing recovery. Beta-ish but widely studied. Reference model."
+  - crate: raft-wal
+    status: active
+    notes: "Minimal append-only WAL with CRC32C-per-entry + torn-write detection. Directly relevant pattern for our WAL."
+  - crate: miri
+    status: active
+    notes: "rust-lang/miri, nightly-only, official. Canonical UB detector. 2026 POPL paper confirms practicality."
+  - crate: memmap2
+    status: active
+    notes: "Safe-ish mmap wrapper (still unsafe core). If mmap needed, prefer over raw memmap. Audit with miri + SAFETY comments."
+
+gaps:
+  - gap: "Concrete benchmark of a custom tracing-Layer→WAL writer at 50-agent throughput (events/sec, fsync cost) — no off-the-shelf numbers exist for this exact pattern."
+    why: "No prior art combining tracing Layer with a durability-critical append-only WAL; performance must be measured in-situ."
+  - gap: "Whether abort_unwind (stable since ~1.81) behaves correctly under tokio's panic-catching runtime (tokio swallows task panics by default)."
+    why: "tokio::spawn isolates panics to the task; abort_unwind at a commit boundary inside a spawned task needs verification."
+  - gap: "No mature generic reconcile-loop crate for non-k8s Rust — confirmed gap, not a search miss."
+    why: "The ecosystem treats reconcile as k8s-specific (kube-rs) or ad-hoc interval loops."
+
+open_questions:
+  - "Should the WAL store BOTH business events (Claim/Handoff) AND span-lifecycle events, or a separate trace-WAL? One unified WAL simplifies causal joins but mixes durability criticality."
+  - "Is a 250ms reconcile interval fast enough to detect a degraded agent, or do we need notify as a sub-second hint layer (accepting its WSL unreliability)?"
+  - "For mmap of large WAL segments for replay — is the unsafe audit cost worth it vs plain buffered File read?"
+
+sources:
+  - url: "https://docs.rs/tracing-serde/latest/tracing_serde/"
+    title: "tracing-serde — serde adapter for tracing types"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://docs.rs/tracing-appender/latest/tracing_appender/non_blocking/index.html"
+    title: "tracing-appender non_blocking (documents drop-on-full-queue)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://burgers.io/custom-logging-in-rust-using-tracing-part-2"
+    title: "Custom Logging with tracing-subscriber (Layer + extensions JSON)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://docs.rs/tracing/latest/tracing/span/index.html"
+    title: "tracing span model (in-process scoped)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://open-telemetry.github.io/opentelemetry-rust/"
+    title: "OpenTelemetry Rust project status (Tracing SDK Stable, OTLP RC)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://github.com/open-telemetry/opentelemetry-rust"
+    title: "opentelemetry-rust repo (latest 0.32.0 2026-05-09)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://docs.rs/opentelemetry_sdk/latest/opentelemetry_sdk/trace/trait.SpanExporter.html"
+    title: "SpanExporter trait — custom exporter extension point"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://docs.rs/opentelemetry-stdout/latest/opentelemetry_stdout/"
+    title: "opentelemetry-stdout — no-collector exporter reference"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://docs.rs/tracing-chrome"
+    title: "tracing-chrome — Perfetto timeline (used by Miri)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://docs.rs/tracing-flame"
+    title: "tracing-flame — folded-stack flamegraph Layer"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://docs.rs/notify/latest/notify/"
+    title: "notify — cross-platform fs watch (WSL/NFS caveats)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://github.com/notify-rs/notify/issues/254"
+    title: "notify issue #254 — missing events on WSL"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://docs.rs/task-supervisor/latest/task_supervisor/"
+    title: "task-supervisor — tokio supervisor (young, single-author)"
+    relevance: low
+    accessed: 2026-06-26
+  - url: "https://docs.rs/redb/latest/redb/"
+    title: "redb — pure-Rust ACID KV, crash-safe, fsync durability"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://github.com/spacejam/sled/blob/main/ARCHITECTURE.md"
+    title: "sled architecture — atomic metadata logging, batch all-or-nothing"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://github.com/NyxStudio-Labs/raft-wal"
+    title: "raft-wal — minimal append-only WAL with CRC32C per entry + torn-write detection"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://doc.rust-lang.org/book/ch09-03-to-panic-or-not-to-panic.html"
+    title: "Rust Book — panic vs Result guidance"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://tratt.net/laurie/blog/2023/rusts_two_kinds_of_assert_make_for_better_code.html"
+    title: "Laurence Tratt — two kinds of assert (debug_assert vs assert)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://doc.rust-lang.org/std/panic/fn.abort_unwind.html"
+    title: "std::panic::abort_unwind — abort-if-unwind boundary guard"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://doc.rust-lang.org/stable/reference/panic.html"
+    title: "Rust Reference — panic strategy (abort vs unwind)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://www3.sqlite.org/wal.html"
+    title: "SQLite WAL — crash-recovery from partial writes"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://github.com/rust-lang/miri/blob/master/README.md"
+    title: "miri — UB detection for unsafe Rust"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://safeguard.sh/resources/blog/rust-unsafe-code-audit-at-scale"
+    title: "Auditing Rust unsafe at scale — cargo-geiger + miri playbook"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://research.ralfj.de/papers/2026-popl-miri.pdf"
+    title: "Miri: Practical UB Detection for Rust (2026 POPL)"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://rust-exercises.com/telemetry/01_structured_logging/04_tracing"
+    title: "Structured logging with tracing (field syntax)"
+    relevance: medium
+    accessed: 2026-06-26

@@ -1,0 +1,202 @@
+meta:
+  topic: "Rust testing defenses against the 'tests pass against WRONG code' bug class (R8: circular-oracle lookup)"
+  query: "Which Rust testing tools catch a bug where unit+integration tests pass because they feed their own (canonical) id back into a lookup that should match an operator-typed scope id, with cost/benefit for a small Rust crate"
+  date: 2026-06-26
+  researcher_model: "claude (research subagent)"
+  confidence: high
+  sources_consulted: 18
+
+key_findings:
+  - id: F1
+    finding: >
+      cargo-mutants mutates operators and function bodies, then runs the test suite per mutant;
+      a "surviving" mutant = a test gap. BUT it only mutates CODE reached by tests and only flags
+      WEAK ASSERTIONS, not NON-REPRESENTATIVE INPUTS. R8 is a circular-oracle bug (tests feed the
+      canonical id back), not a missing-assertion bug. Mutating `==`->`!=` in the `find` closure
+      WOULD be killed by the circular test (canonical id matches under `==`, fails under `!=`),
+      so that mutant survives = FALSE gap signal. cargo-mutants cannot detect that no test ever
+      passes the operator-shaped scope id.
+    evidence: >
+      Mutants.rs "Binary operators": `==` is replaced only by `!=` (not `<`/`>`). FnValue genre
+      replaces fn bodies with type-guessed values (None/Some). Excluded: #[cfg(test)], #[mutants::skip].
+      Autotomy blog: "Mutation testing does not find bugs in your code. It finds bugs in your tests";
+      does not mutate macro expansions nor understand semantic equivalence.
+    r8_verdict: "PARTIAL — catches weak assertions adjacent to R8, NOT the circular-oracle root cause"
+    sources: ["https://mutants.rs/mutants.html", "https://autotomy.dev/blog/rust-mutation-testing-cargo-mutants/"]
+
+  - id: F2
+    finding: >
+      cargo-mutants adoption/CI cost: dominant Rust mutation tool (v27, actively maintained by
+      sourcefrog). Cost scales with (compile_time × test_count); each viable mutant = one
+      incremental rebuild + test run. Rust type system pre-rejects many mutants (unviable) so a
+      Rust crate sees ~40 mutants vs ~200 in Python. Mitigations: `--in-place` (no tree copy),
+      `--file`/`--exclude` (scope to one module), `--in-diff` (PR-changed code only), `--shards`
+      (multi-machine). Recommended CI pattern is SCHEDULED (nightly/weekly), NOT a per-PR gate.
+    evidence: >
+      Real issue example: full run = ~25,800 mutants × ~2min = ~750h; diff-only mode is "practical".
+      Workspace support: copies whole workspace tree unless `--in-place`. Performance doc: "anything
+      making cargo build/test faster has a multiplicative effect".
+    ci_cost: "high for full workspace; LOW if scoped via `--file` on the lookup module (minutes)"
+    sources: ["https://mutants.rs/performance.html", "https://mutants.rs/ci.html", "https://github.com/CodingThrust/problem-reductions/issues/1053", "https://mutants.rs/workspaces.html"]
+
+  - id: F3
+    finding: >
+      proptest is the tool that DIRECTLY targets R8's bug class. Its Strategy objects generate
+      inputs INDEPENDENTLY from the system under test — the antidote to circular oracles. A Strategy
+      that emits operator-shaped scope ids (NOT extracted from `acquire`) and a property asserting
+      "lookup(scope_id) returns the same Claim as lookup(acquire(scope_id).canonical)" would have
+      FAILED on the R8 code, because the two ids differ in production but the test never built one.
+      proptest > quickcheck here because per-value (not per-type) generation lets you model the
+      operator/canonical distinction within one `StableId` newtype (quickcheck's type-only Arbitrary
+      cannot distinguish them — same String type).
+    evidence: >
+      Proptest docs (vs-quickcheck): "QuickCheck generates and shrinks based on type alone, Proptest
+      uses explicit Strategy objects. The QuickCheck approach has a lot of disadvantages." Strategy
+      trait: per-value generation + shrinking; `prop_flat_map` composes derived strategies.
+      kcore note: borrow checker "does not prove invariants hold under randomised workloads ... we
+      add proptest ... and Kani".
+    r8_verdict: "YES (if Strategy generates operator-scope ids independently of acquire output)"
+    sources: ["https://proptest-rs.github.io/proptest/proptest/vs-quickcheck.html", "https://docs.rs/proptest/latest/proptest/strategy/trait.Strategy.html", "https://coderlegion.com/16205/why-we-use-proptest-and-kani-in-kcore"]
+
+  - id: F4
+    finding: >
+      CLI boundary testing (assert_cmd / trycmd / insta-cmd) is the SECOND direct catch for R8.
+      These run the REAL compiled binary via CARGO_BIN_EXE_<name>, so argv must be in the
+      OPERATOR form a human/agent would type (the scope id), not an internal canonical id. A
+      trycmd `.toml` case invoking `cli lookup --id <scope-id>` against the buggy code returns a
+      "not found" / wrong exit code -> snapshot mismatch -> R8 caught. assert_cmd for fine-grained
+      exit-code/stdout assertions; trycmd for herd-of-snapshot cases (pulls test data into docs);
+      insta-cmd for insta-snapshot of a command. CARGO_BIN_EXE_ is compile-time only (env var
+      baked by cargo); assert_cmd::cargo_bin wraps it. Cargo's own testsuite uses this mechanism.
+    evidence: >
+      trycmd: "TestCases will enumerate all test case files and run the contained commands". assert_cmd
+      cargo module: "Only works within integration tests" — uses CARGO_BIN_EXE_. insta-cmd snapshots
+      stdout+stderr+exit. cargo PR #7697: "CARGO_BIN_EXE_ so integration tests can find binaries".
+      SO confirms env var is compile-time only.
+    r8_verdict: "YES (if the test case uses the operator/scope id as it appears in argv, not the canonical id)"
+    sources: ["https://docs.rs/trycmd/latest/trycmd/", "https://docs.rs/assert_cmd/latest/assert_cmd/cargo/index.html", "https://docs.rs/insta-cmd/latest/insta_cmd/index.html", "https://github.com/rust-lang/cargo/pull/7697"]
+
+  - id: F5
+    finding: >
+      loom and shuttle do NOT address R8 (not a concurrency bug) and CANNOT model R8's real-world
+      failure mode (cross-process filesystem races among 50 agents). Both intercept THREAD-level
+      operations (loads/stores/spawn/atomic) INSIDE ONE PROCESS under the C11 memory model.
+      loom = exhaustive interleaving + state reduction (sound but scales only to small lock-free
+      data structures; drops SeqCst to AcqRel). shuttle = randomized PCT scheduler (not sound,
+      scales larger; AWS-built). Neither touches the filesystem or crosses process boundaries, so
+      they cannot represent the YAML-bus acquire race that 50 agents would hit. They CAN check the
+      in-process atomicity of an acquire helper IF the claim logic were in-process atomics.
+    evidence: >
+      loom: "runs a test many times, permuting possible concurrent executions under C11 ... intercepts
+      all loads, stores, concurrency-sensitive operations". Unsupported: SeqCst. shuttle: "not sound
+      (a passing test does not prove correctness) ... scales to much larger test cases than Loom".
+    r8_verdict: "NO; also NO for the real multi-process file-bus race (out of scope for both tools)"
+    sources: ["https://github.com/tokio-rs/loom", "https://docs.rs/shuttle/latest/shuttle/", "https://docs.rs/loom/latest/loom/"]
+
+  - id: F6
+    finding: >
+      Kani (AWS, bit-precise bounded model checker) COULD prove the lookup correct for all inputs
+      up to a bound — but ONLY against a hand-written proof harness / contract encoding the INTENDED
+      mapping. If the harness asserts "lookup(scope_id) == lookup(canonical(scope_id)) for all
+      String inputs", Kani would find the counterexample (R8). The catch: the spec IS the thing
+      that was wrong; Kani verifies a spec, it does not invent the correct one. Practical for a
+      small crate: feasible on dependency-light, bounded functions, but needs unbounded loops
+      bounded manually, no filesystem/std in verified code, and slow (SMT solving). Deployed in CI
+      on Firecracker + rust stdlib, but those are AWS-scale. For a few-kLOC crate: a single
+      `#[kani::proof]` on the lookup fn is realistic; whole-crate verification is not.
+    evidence: >
+      Kani book: "bounded model checker ... useful for checking safety and correctness". Loop
+      unwinding: "not able to handle code with unbounded loops". Firecracker formal-verification.md:
+      used on "critical components", not whole VM. Bounded Arbitrary for otherwise-unbounded types.
+      function contracts (2024) enable modular verification.
+    r8_verdict: "YES IF the proof harness encodes the operator->canonical mapping invariant; PARTIAL otherwise"
+    ci_cost: "medium-high per harness; bounded, no I/O; realistic for 1-3 critical fns, not whole crate"
+    sources: ["https://model-checking.github.io/kani/", "https://model-checking.github.io/kani/tutorial-loop-unwinding.html", "https://github.com/firecracker-microvm/firecracker/blob/ab6841c4/docs/formal-verification.md", "https://model-checking.github.io/kani-verifier-blog/2024/01/29/function-contracts.html"]
+
+  - id: F7
+    finding: >
+      R8's bug class = "circular test oracle" / "non-representative input distribution". The
+      defense hierarchy by catch-probability: (1) CLI boundary test with operator argv [trycmd/
+      assert_cmd] — highest, exercises the real interface; (2) proptest with independent Strategies
+      — high, breaks the circularity; (3) Kani proof harness with mapping invariant — high but
+      requires you to already know the invariant; (4) cargo-mutants — LOW, catches adjacent weak
+      assertions but not the oracle gap; (5) loom/shuttle — N/A (wrong bug class). The cheapest
+      high-yield win for a small crate is a trycmd case using the operator id, plus one proptest.
+    evidence: synthesis of F1-F6; bug class taxonomy per Increment/Hypothesis PBT literature.
+    sources: ["https://increment.com/testing/in-praise-of-property-based-testing/"]
+
+recommendations:
+  - id: R1
+    recommendation: >
+      Adopt trycmd (or assert_cmd) and write at least one CLI case invoking `lookup` with the
+      OPERATOR-TYPED scope id exactly as a human/agent types it on argv. This is the single highest
+      ROI change: it tests the real binary boundary, forces operator-form inputs, and would have
+      caught R8 in seconds. Cheap (<1 dep, snapshot-based, lives in tests/cmd/*.toml).
+    based_on: [F4, F7]
+    priority: high
+  - id: R2
+    recommendation: >
+      Add ONE proptest with a Strategy that generates operator-scope ids independently of `acquire`
+      output, asserting lookup(scope) == lookup(canonical_of(scope)). This structurally forbids the
+      circular oracle. proptest > quickcheck because per-value Strategies can model the operator/
+      canonical split inside one StableId newtype. ~1 test, ~50 LOC of setup, no CI pain.
+    based_on: [F3, F7]
+    priority: high
+  - id: R3
+    recommendation: >
+      Add a `#[kani::proof]` harness on the lookup function asserting the operator->canonical
+      mapping for bounded String inputs, gated behind a `kani` feature/CI job. Optional, higher
+      effort, but gives a (bounded) PROOF rather than a sample. Skip if the lookup touches I/O.
+    based_on: [F6]
+    priority: medium
+  - id: R4
+    recommendation: >
+      Run cargo-mutants SCOPED to the lookup module (`cargo mutants --file src/lookup.rs --in-place`)
+      on a weekly CI schedule, NOT per-PR. Expect it to surface unrelated weak assertions (good
+      hygiene) but DO NOT rely on it to catch circular-oracle bugs — it won't (F1).
+    based_on: [F1, F2]
+    priority: medium
+  - id: R5
+    recommendation: >
+      Do NOT adopt loom/shuttle for R8-style or file-bus-cross-process bugs. If you later move
+      acquire logic to in-process atomics (single coordinator process), THEN evaluate shuttle
+      (randomized, scales) for the in-process atomicity check. Cross-process file races need a
+      different approach (integration test spinning up N real processes + a fsync barrier), which
+      neither loom nor shuttle provides.
+    based_on: [F5]
+    priority: low
+
+gaps:
+  - gap: "No published empirical study isolating mutation testing's catch-rate specifically for circular-oracle bugs in Rust (R8 class). Existing cargo-mutants evidence is anecdotal/blog-scale."
+    why: "Mutation-testing empirical literature (e.g., Juhosova/TU-Delft PBT study) covers PBT, not cargo-mutants efficacy on oracles."
+  - gap: "Exact CI wall-clock for cargo-mutants on a few-kLOC crate not benchmarked here — depends on the crate's compile time."
+    why: "No public benchmark matching this crate's profile; only a 25,800-mutant large-workspace data point (~750h full, minutes scoped)."
+  - gap: "Whether Kani can verify code that builds a StableId via filesystem/derive not confirmed; likely needs the pure mapping fn isolated."
+    why: "Kani rejects unbounded loops and I/O; the derive may pull in unsupported surface."
+
+open_questions:
+  - "Is the operator->canonical mapping a pure function (Kani-verifiable) or does it depend on filesystem state (Kani-incompatible)?"
+  - "Should the file-bus acquire race be defended by an N-process integration harness (real subprocesses) instead of loom/shuttle — and what fsync/barrier discipline is needed?"
+  - "Can proptest Strategies for StableId be shared as a workspace util to prevent future operator/canonical confusion crate-wide?"
+
+sources:
+  - {url: "https://mutants.rs/mutants.html", title: "cargo-mutants — Mutation patterns", relevance: high, accessed: 2026-06-26}
+  - {url: "https://mutants.rs/how-it-works.html", title: "cargo-mutants — How it works", relevance: high, accessed: 2026-06-26}
+  - {url: "https://mutants.rs/performance.html", title: "cargo-mutants — Improving performance", relevance: high, accessed: 2026-06-26}
+  - {url: "https://mutants.rs/ci.html", title: "cargo-mutants — Continuous integration", relevance: high, accessed: 2026-06-26}
+  - {url: "https://mutants.rs/workspaces.html", title: "cargo-mutants — Workspaces and packages", relevance: medium, accessed: 2026-06-26}
+  - {url: "https://autotomy.dev/blog/rust-mutation-testing-cargo-mutants/", title: "Mutation Testing in Rust Works, but Your Compile Times Will Hate You (Autotomy)", relevance: high, accessed: 2026-06-26}
+  - {url: "https://github.com/CodingThrust/problem-reductions/issues/1053", title: "Integrate cargo-mutants (diff-only mode) into CI — real CI-cost data point", relevance: medium, accessed: 2026-06-26}
+  - {url: "https://proptest-rs.github.io/proptest/proptest/vs-quickcheck.html", title: "Proptest vs Quickcheck", relevance: high, accessed: 2026-06-26}
+  - {url: "https://docs.rs/proptest/latest/proptest/strategy/trait.Strategy.html", title: "proptest::strategy::Strategy", relevance: high, accessed: 2026-06-26}
+  - {url: "https://coderlegion.com/16205/why-we-use-proptest-and-kani-in-kcore", title: "Why we use proptest and Kani in kcore", relevance: medium, accessed: 2026-06-26}
+  - {url: "https://docs.rs/trycmd/latest/trycmd/", title: "trycmd — snapshot testing for a herd of CLI tests", relevance: high, accessed: 2026-06-26}
+  - {url: "https://docs.rs/assert_cmd/latest/assert_cmd/cargo/index.html", title: "assert_cmd::cargo (CARGO_BIN_EXE_)", relevance: high, accessed: 2026-06-26}
+  - {url: "https://docs.rs/insta-cmd/latest/insta_cmd/index.html", title: "insta-cmd — snapshot a command", relevance: medium, accessed: 2026-06-26}
+  - {url: "https://github.com/rust-lang/cargo/pull/7697", title: "cargo PR #7697 — CARGO_BIN_EXE_ env var", relevance: medium, accessed: 2026-06-26}
+  - {url: "https://github.com/tokio-rs/loom", title: "tokio-rs/loom — concurrent Rust model checker", relevance: high, accessed: 2026-06-26}
+  - {url: "https://docs.rs/shuttle/latest/shuttle/", title: "shuttle — randomized concurrency testing (AWS)", relevance: high, accessed: 2026-06-26}
+  - {url: "https://model-checking.github.io/kani/", title: "Kani Rust Verifier — Getting started", relevance: high, accessed: 2026-06-26}
+  - {url: "https://model-checking.github.io/kani/tutorial-loop-unwinding.html", title: "Kani — Loop unwinding (bounded limitation)", relevance: high, accessed: 2026-06-26}
+  - {url: "https://github.com/firecracker-microvm/firecracker/blob/ab6841c4/docs/formal-verification.md", title: "Firecracker formal-verification.md (Kani in prod CI)", relevance: medium, accessed: 2026-06-26}
+  - {url: "https://increment.com/testing/in-praise-of-property-based-testing/", title: "In praise of property-based testing (Increment)", relevance: low, accessed: 2026-06-26}
