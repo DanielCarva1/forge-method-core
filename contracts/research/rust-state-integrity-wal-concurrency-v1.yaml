@@ -1,0 +1,184 @@
+# Research: Rust state integrity + durable WAL + cross-process concurrency for a file-backed multi-agent runtime
+meta:
+  topic: Rust-specific state integrity, durable WAL, cross-process file coordination (50+ separate-process agents, file-bus, Windows/WSL+Linux+macOS)
+  query: Compile-time derivation guarantees, durable WAL crates survey, cross-process (not cross-thread) coordination primitives, concurrency testing, panic=abort vs WAL integrity
+  date: 2026-06-26
+  researcher_model: glm-5.2 (researcher subagent)
+  confidence: medium
+  sources_consulted: 18
+
+key_findings:
+  - id: F1
+    finding: "Private fields + single smart constructor is the Rust idiom that makes 'State only buildable via derive_state(&wal)' a COMPILE error for any other path. A `pub struct State { wal: Wal, ..private }` blocks external struct literals; if derive_state is the only `pub fn -> State`, no code can construct State without replay."
+    evidence: "Rust API Guidelines + Reference: a pub struct with >=1 private field cannot be instantiated by a struct literal outside its defining module; the struct constructor is not publicly usable. `#[non_exhaustive]` also blocks literals but its stated purpose is future-proofing, not invariant sealing. Sealed traits gate trait IMPLS, not construction."
+    sources: ["https://rust-lang.github.io/api-guidelines/future-proofing.html", "https://doc.rust-lang.org/reference/types/struct.html", "https://doc.rust-lang.org/reference/attributes/type_system.html"]
+  - id: F2
+    finding: "No state-machine crate (statig/sfsm/sm) or typestate crate makes 'State can only come from WAL replay' a compile guarantee — that is an APPLICATION idiom, not a library feature. Typestate (PhantomData<S>) encodes transitions known at COMPILE time; WAL replay result is a RUNTIME value, so the compiler cannot infer a typestate from persisted bytes. The usable shape: private ctor + `fn derive_state(&wal)->Result<State>` returning either an enum of legal end-states or validated typestate wrappers."
+    evidence: "statig = event-driven hierarchical FSM (transitions via returning target states). sfsm = macro-declared static transition graph. sm = closest to typestate-style 'previous states inaccessible after transition'. typestate crates encode state in the type system at compile time; replay bytes are runtime-only. 'WAL replay is the only constructor is a good pattern; replay produces an enum/typed wrapper, not compile-time typestate from storage.'"
+    sources: ["https://docs.rs/statig/latest/statig", "https://docs.rs/sfsm/latest/sfsm/", "https://docs.rs/sm/latest/sm/", "https://cliffle.com/blog/rust-typestate/", "https://doc.rust-lang.org/beta/embedded-book/static-guarantees/typestate-programming.html"]
+  - id: F3
+    finding: "ministate is the closest off-the-shelf match to our need (append-only WAL, 'every change fsync'd before apply', 'state reconstructed by replaying the WAL from the beginning', monotonic seq numbers, recoverability from WAL alone). BUT it is async/tokio, uses RwLock (THREAD-level single-process), JSONL-via-ministore (human-readable, not binary-framed), and WAL compaction is unimplemented. It is a REFERENCE PATTERN, not a drop-in cross-process solution."
+    evidence: "docs.rs/ministate Guarantees: 'If apply().await returns Ok, the mutation is guaranteed to be on disk'; 'Atomicity: in-memory state updated only if WAL write succeeds'; Concurrency Model: 'Reads concurrent via snapshot() RwLock::read; Writes serialized via apply() RwLock::write; No hidden threads.' Snapshot/compaction: 'WAL compaction is not yet implemented.'"
+    sources: ["https://docs.rs/ministate/latest/ministate/", "https://docs.rs/ministore/0.1.5"]
+  - id: F4
+    finding: "redb (v3.1.0, actively maintained, 'Stable and maintained', pure-Rust ACID) handles torn writes via per-write xxhash CHECKSUMS + DUAL commit slots: on recovery it picks the newest of two slots whose checksum validates; a torn/partial write fails checksum and falls back to the prior valid slot. It is CoW B-tree, not append-only-log-first, and is a single-process exclusive DB — NOT designed for 50 cooperating external processes sharing one file without their own lock layer."
+    evidence: "redb WriteTransaction docs: 'all data is written with checksums'; 'the most recent of the two commit slots with a valid checksum is used'; checksum = xxhash; 1-phase commit = write inactive slot, flip primary 'god byte', fsync; full repair walks DB to verify checksums. Status: repo says 'Stable and maintained', stable file format."
+    sources: ["https://docs.rs/redb/latest/redb/struct.WriteTransaction.html", "https://github.com/cberner/redb", "https://docs.rs/redb/latest/redb/"]
+  - id: F5
+    finding: "sled is effectively STALLED/LEGACY — last release 0.34.7 on 2021-09-12, still self-described 'beta', roadmap cites major rewrites. Do NOT adopt for new work. fjall (v3.0, active, LSM/journal) is viable for write-heavy tunable durability but defaults to OS-buffer (must call persist(SyncAll) for disk durability). For our small append-only single-writer-per-file scope, a hand-rolled WAL on std::fs with length-prefix+CRC+fsync is DEFENSIBLE and likely simpler than redb/fjall, provided the torn-tail format is correct."
+    evidence: "sled GitHub + docs.rs: 'champagne of beta embedded databases', 0.34.7 = 2021-09-12. fjall: v3.0 active, journal/log-structured, default flush to OS buffers, explicit PersistMode::SyncAll. redb vs sled: redb explicitly 'Stable and maintained'."
+    sources: ["https://github.com/spacejam/sled", "https://docs.rs/sled/latest/sled/", "https://docs.rs/crate/fjall/latest", "https://github.com/cberner/redb"]
+  - id: F6
+    finding: "CRUX — left-right and ministate are cross-THREAD only, NOT cross-process. left-right docs: wait-free reads + SINGLE writer via atomic pointer swap between two in-memory copies — this is thread-level shared memory; it has no process-boundary mechanism and cannot coordinate 50 separate OS processes. memmap2 CAN give cross-process visibility (MAP_SHARED) but provides NO ordering/atomicity protocol, concurrent writers tear/race, truncation => SIGBUS, and deriving &T/&mut T over mmap'd bytes another process mutates is unsound. mmap needs a seqlock/atomics/lock layer on top to be safe."
+    evidence: "left-right docs: 'left-right only supports a single writer'; in-memory atomic pointer design. memmap2 MmapMut: constructors unsafe; flush() = msync durability not inter-process lock; 'MAP_SHARED does not imply ordering/atomicity'; file truncation while mapped => SIGBUS. mmap constructors unsafe because external mutation violates Rust aliasing assumptions."
+    sources: ["https://docs.rs/left-right/", "https://docs.rs/memmap2/latest/memmap2/struct.MmapMut.html", "https://man.archlinux.org/man/mmap.2.en"]
+  - id: F7
+    finding: "fs2 is UNMAINTAINED (0.4.3, published ~8.5y ago) — use fs4 (active fork, v1.1.0 ~2mo ago, async support, rustix). Both implement Unix flock(2) + Windows LockFile; locks are ADVISORY (cooperating processes must check). WSL note: Rust chose flock partly because WSL1 does not support fcntl advisory locks properly — flock is the more WSL-compatible path. Atomic-rename durability is NOT automatic: Linux requires write-temp + fsync(temp) + rename + fsync(parent dir); Windows = FlushFileBuffers(temp) + MoveFileEx(MOVEFILE_REPLACE_EXISTING) but docs give NO clean 'fsync dir after rename' equivalent — Windows rename durability is weaker/less explicit."
+    evidence: "fs4 fork of fs2-rs, supports async, rustix over libc. fs2 = flock unix / LockFile windows, advisory, cross-platform-hazard warning. fsync(2): may need fsync on dir fd for rename durability. ext4 journal protects metadata, not file data blocks without force. MoveFileEx MOVEFILE_REPLACE_EXISTING replaces; MOVEFILE_WRITE_THROUGH only flushes at end of copy, not rename-dir durability. Rust nightly rustc_data_structures flock: chose flock because WSL1 lacks fcntl."
+    sources: ["https://docs.rs/fs4/latest/fs4/", "https://docs.rs/fs2/latest/fs2/trait.FileExt.html", "https://man7.org/linux/man-pages/man2/fsync.2.html", "https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexa", "https://doc.rust-lang.org/stable/nightly-rustc/rustc_data_structures/flock/index.html"]
+  - id: F8
+    finding: "panic=abort vs unwind matters LITTLE for WAL integrity — design as if the process can die at ANY instruction (panic, kill, power loss). The real torn-write protection is record format: fixed header + LENGTH-PREFIX + payload + CRC over header+payload; recovery scans sequentially and TRUNCATES at the first record with incomplete length/header, truncated payload, or CRC mismatch (prefix recovery). CRC DETECTS torn writes, does not PREVENT them. redb uses xxhash+dual-slots; do NOT rely on Drop for durability (abort skips destructors; even unwind can be killed)."
+    evidence: "Rust Reference panic: unwind runs Drop, abort does not. Standard WAL recovery: keep last fully-validated prefix, discard bad tail. redb xxhash + dual commit slots for torn detection. 'Choose panic strategy for runtime behavior, but design WAL integrity as if the process can die at any instruction.'"
+    sources: ["https://doc.rust-lang.org/stable/reference/panic.html", "https://docs.rs/redb/latest/redb/struct.WriteTransaction.html"]
+
+recommendations:
+  - id: R1
+    recommendation: "Adopt private-fields + single smart-constructor idiom: `pub struct State { inner: StateInner, _seal: () }` with `pub fn derive_state(wal: &Wal) -> Result<State>` as the ONLY pub constructor, all fields private, NO `State::new()` taking field values, NO pub struct literal. Add #[non_exhaustive] for future-proofing. This makes hand-editing State a compile error. (Optional typestate wrappers for post-replay legal states.)"
+    based_on: [F1, F2]
+    priority: high
+  - id: R2
+    recommendation: "Roll a small custom append-only WAL on std::fs (not redb/fjall) for our scope — single-writer-per-file, append-only, cross-process via lock. Record format: [magic][len:u32][payload][crc32(header+payload)]. Append path: serialize record -> write_all -> fsync(file) (or write-temp+rename+fsync(dir) for whole-snapshot swaps). Recovery: scan, truncate at first invalid record. This is simpler and more auditable than redb for our narrow need; ministate is the reference pattern to crib from (fsync-before-apply + replay)."
+    based_on: [F3, F4, F5, F8]
+    priority: high
+  - id: R3
+    recommendation: "For cross-process write gating use fs4 (NOT fs2) advisory locks: lock_exclusive on a dedicated .lock sentinel file per scope/before each WAL append; release on drop. Treat as advisory (all cooperating agent processes must honor it). Validate flock behavior explicitly on WSL2 since guarantees are platform-specific. Pair lock with the claim-based scope check as defense-in-depth."
+    based_on: [F6, F7]
+    priority: high
+  - id: R4
+    recommendation: "Do NOT use left-right or memmap2 for cross-process coordination — left-right is thread-only/single-writer; mmap needs a hand-built seqlock/atomics+lock protocol and is unsafe across processes. For whole-state snapshots use atomic write-temp + fsync(temp) + rename + fsync(parent dir) (Linux/APFS) / FlushFileBuffers + MoveFileEx (Windows); accept Windows weaker rename-dir durability and document it."
+    based_on: [F6, F7]
+    priority: high
+  - id: R5
+    recommendation: "For durability-on-commit use write-temp+fsync+rename+fsync(dir) for WAL rotation/snapshot swaps; for incremental appends use write_all+fsync(file)+length-prefix+CRC and rely on prefix-recovery truncation. Set panic=abort for smaller binaries BUT do not treat it as a WAL-integrity mechanism — integrity comes from the record format and fsync discipline."
+    based_on: [F7, F8]
+    priority: medium
+
+review:
+  - crate: redb
+    status: active
+    notes: "v3.1.0, 'Stable and maintained', pure-Rust ACID, xxhash+dual-slots torn detection. Overkill for append-only single-writer; CoW B-tree, single-process exclusive — not built for 50 cooperating external processes. Use as inspiration for checksum/dual-slot recovery."
+  - crate: fjall
+    status: active
+    notes: "v3.0, LSM+journal, Rust-only. Default OS-buffer durability; explicit persist for disk. Write-heavy tunable. Not append-only-log-first for our case."
+  - crate: sled
+    status: legacy/stalled
+    notes: "0.34.7 (2021-09-12), still 'beta', rewrite roadmap. AVOID for new work."
+  - crate: ministate
+    status: active (small/niche)
+    notes: "Append-only WAL, fsync-before-apply, replay recovery, ministore JSONL. async/tokio, RwLock THREAD-level single-process, compaction unimplemented. REFERENCE pattern, not cross-process."
+  - crate: fs2
+    status: unmaintained
+    notes: "0.4.3 ~8.5y ago. Use fs4 instead."
+  - crate: fs4
+    status: active
+    notes: "v1.1.0 ~2mo ago, fork of fs2-rs, async, rustix. flock(unix)/LockFile(win), advisory. Recommended."
+  - crate: left-right
+    status: mature but WRONG scope
+    notes: "Cross-THREAD only, single writer. NOT cross-process. Reject for our 50-process design."
+  - crate: memmap2
+    status: active
+    notes: "Cross-process visibility possible but NO protocol; unsafe; truncation=SIGBUS; needs seqlock+locks on top. Reject for coordination; at most read-only mmap for readers."
+  - crate: loom
+    status: active (in-process only)
+    notes: "Deterministic thread-interleaving exploration; single process. Cannot model 50 OS processes / real FS."
+  - crate: shuttle
+    status: active (in-process only)
+    notes: "Deterministic concurrent scheduling (AWS), scales beyond loom. Still single-process, no multi-process FS model."
+
+gaps:
+  - gap: "No measured cross-process file-visibility latency data found for ext4 vs APFS vs NTFS-via-WSL under 50-process contention."
+    why: "Such benchmarks are workload/hardware-specific and not in crate docs; would need self-measurement on the target (WSL2 specifically)."
+  - gap: "No mature Rust framework for DETERMINISTIC multi-process filesystem race testing."
+    why: "loom/shuttle are in-process concurrency models; turmoil has only a partial single-host fs shim, not a 50-real-process FS model. Realistic answer = custom stress harness spawning N processes against a tempfs."
+  - gap: "ministate author/maintenance cadence and production track record unconfirmed."
+    why: "Small/niche crate; docs.rs metadata did not expose maintainer; treat as pattern reference, audit before depending."
+
+open_questions:
+  - "Does WSL2 flock behave identically to native Linux flock for 50 concurrent processes (no silent-drop, no fcntl-style breakage)? Needs empirical test on the exact WSL2 kernel."
+  - "Should WAL appends use a single lock-guarded append+fsync path, or per-segment files + a manifest (redb-style) to reduce lock contention at 50 writers?"
+  - "Is whole-state snapshot swap (temp+rename+fsync(dir)) preferable to incremental append for our write volume, given Windows' weaker rename-dir durability?"
+  - "Can a seqlock-in-mmap header give lock-free readers consistent snapshots across processes safely enough to be worth the unsound-aliasing risk?"
+
+sources:
+  - url: "https://rust-lang.github.io/api-guidelines/future-proofing.html"
+    title: "Rust API Guidelines — future proofing (private fields, non_exhaustive, sealed traits)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://doc.rust-lang.org/reference/types/struct.html"
+    title: "Rust Reference — struct types (private field blocks struct literal)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://cliffle.com/blog/rust-typestate/"
+    title: "Typestate pattern in Rust (compile-time vs runtime state)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://docs.rs/ministate/latest/ministate/"
+    title: "ministate — append-only WAL, fsync-before-apply, replay recovery"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://docs.rs/redb/latest/redb/struct.WriteTransaction.html"
+    title: "redb WriteTransaction — xxhash checksums, dual commit slots, torn-record recovery"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://github.com/cberner/redb"
+    title: "redb GitHub — 'Stable and maintained', ACID, pure Rust"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://github.com/spacejam/sled"
+    title: "sled GitHub — beta, 0.34.7 (2021), stalled"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://docs.rs/crate/fjall/latest"
+    title: "fjall — LSM/journal KV, Rust-only, active v3.0"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://docs.rs/fs4/latest/fs4/"
+    title: "fs4 — active fork of fs2, async, rustix, flock/LockFile"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://docs.rs/fs2/latest/fs2/trait.FileExt.html"
+    title: "fs2 FileExt — advisory locks, cross-platform hazard warning"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://docs.rs/left-right/"
+    title: "left-right — cross-THREAD wait-free reads, single writer"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://docs.rs/memmap2/latest/memmap2/struct.MmapMut.html"
+    title: "memmap2 MmapMut — unsafe, no protocol, truncation hazard"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://man7.org/linux/man-pages/man2/fsync.2.html"
+    title: "fsync(2) — fsync(dir fd) needed for rename durability"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexa"
+    title: "MoveFileEx — Windows rename/replace, weaker dir durability"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://doc.rust-lang.org/stable/nightly-rustc/rustc_data_structures/flock/index.html"
+    title: "rustc flock note — flock chosen because WSL1 lacks fcntl locks"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://doc.rust-lang.org/stable/reference/panic.html"
+    title: "Rust Reference — panic (unwind runs Drop, abort does not)"
+    relevance: high
+    accessed: 2026-06-26
+  - url: "https://docs.rs/loom/latest/loom/"
+    title: "loom — in-process deterministic concurrency testing"
+    relevance: medium
+    accessed: 2026-06-26
+  - url: "https://docs.rs/shuttle/latest/shuttle/index.html"
+    title: "shuttle — deterministic concurrent scheduling (AWS), in-process"
+    relevance: medium
+    accessed: 2026-06-26
