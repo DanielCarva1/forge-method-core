@@ -10,3 +10,4 @@ venv/
 target/
 .forge-method/*.local
 .forge-method/test-runs/
+.forge-method/claims-active/
