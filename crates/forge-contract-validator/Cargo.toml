@@ -1,8 +1,8 @@
 [package]
 name = "forge-contract-validator"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
 forge-core-cli = { path = "../forge-core-cli" }
-serde_yaml = "0.9"
+serde_yaml.workspace = true
