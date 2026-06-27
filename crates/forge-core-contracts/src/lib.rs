@@ -10,6 +10,7 @@ pub mod checkpoint;
 pub mod completion;
 pub mod coordination_eval;
 pub mod decision;
+pub mod eval_run;
 pub mod evidence;
 pub mod gate;
 pub mod guide_decision;
@@ -22,6 +23,7 @@ pub mod phase;
 pub mod recovery;
 pub mod request;
 pub mod runtime;
+pub mod telemetry;
 pub mod tool_effect;
 pub mod verification_goal;
 pub mod workflow;
@@ -41,6 +43,7 @@ pub use decision::{
     DecisionCloseContract, DecisionCloseContractDocument, DecisionEvidenceKind, DecisionKind,
     DecisionStatus,
 };
+pub use eval_run::{EvalRunContract, EvalRunContractDocument};
 pub use evidence::{EvidenceSource, FieldEvidenceRegistry};
 pub use gate::{GateContract, GateContractDocument};
 pub use inventory::{ContractFamily, ContractFamilyInventory, ContractFamilyInventoryDocument};
@@ -60,6 +63,7 @@ pub use runtime::{
     RuntimeHandoffContract, RuntimeHandoffContractDocument, RuntimeHandoffStatus, RuntimeKind,
     RuntimeRegistryEntryDocument,
 };
+pub use telemetry::{TelemetryContract, TelemetryContractDocument};
 pub use tool_effect::{ToolEffectContract, ToolEffectContractDocument};
 pub use verification_goal::{VerificationGoalContract, VerificationGoalContractDocument};
 
