@@ -56,11 +56,21 @@ pub fn load_catalog(dir: &Path) -> CatalogLoadReport {
         return report;
     };
 
-    let mut files: Vec<_> = entries
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|ext| ext == "yaml"))
-        .collect();
+    let mut files = Vec::new();
+    for entry in entries {
+        match entry {
+            Ok(entry) => {
+                let path = entry.path();
+                if path.extension().is_some_and(|ext| ext == "yaml") {
+                    files.push(path);
+                }
+            }
+            Err(error) => report.errors.push(CatalogFileError {
+                path: RepoPath(dir.to_string_lossy().into_owned()),
+                reason: format!("catalog directory entry read error: {error}"),
+            }),
+        }
+    }
     files.sort();
 
     for path in files {
