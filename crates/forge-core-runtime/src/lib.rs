@@ -3,8 +3,8 @@ use forge_core_contracts::command::{
     NetworkPolicy, Platform,
 };
 use forge_core_contracts::operation::{
-    AutonomyMode, CommandRef, ExecutionMode, ForgeOperation, GateStatus, HostAction,
-    HumanInputRequirement, HumanPrompt, MutationPolicy, NextActor, OperationSideEffectPolicy,
+    AutonomyMode, CommandRef, ExecutionMode, ForgeOperation, HostAction, HumanInputRequirement,
+    HumanPrompt, MutationPolicy, NextActor, OperationGateStatus, OperationSideEffectPolicy,
 };
 use forge_core_contracts::tool_effect::{AccessMode, ToolEffectContractDocument};
 use forge_core_contracts::{
@@ -53,7 +53,7 @@ pub struct RuntimePlan {
     pub mutation_policy: MutationPolicy,
     pub side_effect_policy: OperationSideEffectPolicy,
     pub execution_mode: ExecutionMode,
-    pub gate_status: GateStatus,
+    pub gate_status: OperationGateStatus,
     pub human_input_requirement: HumanInputRequirement,
     pub prompt: Option<HumanPrompt>,
     pub command_refs: Vec<CommandRef>,
@@ -666,7 +666,7 @@ fn plan_operation_inner(
     } else if !operation.diagnostics.errors.is_empty() {
         reasons.push(RuntimePlanReason::OperationDiagnosticsErrors);
         RuntimePlanStatus::Blocked
-    } else if operation.gates.current_gate_status == GateStatus::Blocked {
+    } else if operation.gates.current_gate_status == OperationGateStatus::Blocked {
         reasons.push(RuntimePlanReason::GateBlocked);
         RuntimePlanStatus::Blocked
     } else if operation.human.input_requirement == HumanInputRequirement::Required {
@@ -727,8 +727,11 @@ fn plan_operation_inner(
     }
 }
 
-fn gate_is_missing_or_pending(status: GateStatus) -> bool {
-    matches!(status, GateStatus::Missing | GateStatus::Pending)
+fn gate_is_missing_or_pending(status: OperationGateStatus) -> bool {
+    matches!(
+        status,
+        OperationGateStatus::Missing | OperationGateStatus::Pending
+    )
 }
 
 fn meaningful_prompt(prompt: &HumanPrompt) -> Option<HumanPrompt> {
