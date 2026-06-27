@@ -87,18 +87,22 @@ where
         });
     }
     let total = corpus.len();
-    // accuracy in basis points (0..=10000); checked_div handles total==0,
-    // u32::try_from avoids the usize->u32 truncation lint.
-    let accuracy_bps = (correct * 10000)
-        .checked_div(total)
-        .and_then(|v| u32::try_from(v).ok())
-        .unwrap_or(0);
+    let accuracy_bps = accuracy_bps(correct, total);
     RouterScore {
         total,
         correct,
         accuracy_bps,
         cases,
     }
+}
+
+fn accuracy_bps(correct: usize, total: usize) -> u32 {
+    if total == 0 {
+        return 0;
+    }
+
+    let scaled = ((correct as u128) * 10_000) / (total as u128);
+    u32::try_from(scaled).unwrap_or(0)
 }
 
 /// Validate that every `expected_workflow` in the corpus resolves in the catalog.
@@ -166,6 +170,17 @@ mod tests {
             gaps.is_empty(),
             "corpus references unknown workflows: {gaps:?}"
         );
+    }
+
+    #[test]
+    fn accuracy_bps_handles_large_corpora_without_overflow() {
+        let large_total = usize::MAX;
+
+        let even_large_total = large_total - 1;
+
+        assert_eq!(accuracy_bps(large_total, large_total), 10_000);
+        assert_eq!(accuracy_bps(even_large_total / 2, even_large_total), 5_000);
+        assert_eq!(accuracy_bps(1, 0), 0);
     }
 
     #[test]
