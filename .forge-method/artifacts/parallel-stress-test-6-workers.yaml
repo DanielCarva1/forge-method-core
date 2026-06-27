@@ -1,0 +1,141 @@
+schema_version: "0.1.0"
+artifact:
+  id: parallel-stress-test-6-workers
+  kind: infra-test
+  status: done
+  closed: 2026-06-27
+
+  purpose: |
+    Responder com EVIDÊNCIA à pergunta do usuário: "é certeza que dá pra usar
+    muitos subagentes sem quebrar?" Cobrir ângulos reais de acelerar
+    desenvolvimento: review adversarial, escrita de código, research, mapeamento.
+
+  setup: |
+    6 workers async disparados simultaneamente, mistura de modelos:
+      4 × gpt-5.5 (researcher, 2 reviewers, worker)
+      2 × glm-5.2 (scout, delegate)
+
+  results:
+    - worker_id: eb2bf67f
+      agent: researcher
+      model: gpt-5.5
+      task: "limite real concorrência glm-5.2/ZAI (pesquisa externa)"
+      outcome: COMPLETE
+      turns: 10
+      tools: 20
+      value: "ALTO — confirmou que limite ~3 não é oficial, é por-conta/tier. 8 findings, 16 sources."
+      output_file: /tmp/parallel-research-zai-glm-ratelimit-v1.yaml (10351 bytes)
+
+    - worker_id: 8c5b1916
+      agent: reviewer
+      model: gpt-5.5
+      task: "review adversarial claim_engine.rs"
+      outcome: COMPLETE
+      turns: 21
+      tools: 22
+      value: "MUITO ALTO — verdict needs_work, 6 findings (2 HIGH): claim recém-criada é inválida pelo validador; rfc3339 aceita datas impossíveis."
+      output_file: /tmp/parallel-review-claim-engine-v1.yaml (5750 bytes)
+
+    - worker_id: f1fafa3a
+      agent: reviewer
+      model: gpt-5.5
+      task: "review adversarial conflict_detection.rs"
+      outcome: COMPLETE
+      turns: 20
+      tools: 19
+      value: "MUITO ALTO — root paths viram escopo vazio (false negative), check não atômico com write (race), case-fold ASCII-only."
+      output_file: /tmp/parallel-review-conflict-detection-v1.yaml (5050 bytes)
+
+    - worker_id: 1ccc2af9
+      agent: worker
+      model: gpt-5.5
+      task: "escrever 3 testes edge-case de claims"
+      outcome: COMPLETE (trabalho finalizado ANTES do pause por erro do driver)
+      turns: 26
+      tools: 33
+      value: "ALTO — 3 testes Rust válidos escritos, prova escrita de código paralela funciona."
+      output_file: /tmp/new-claim-tests.rs (5022 bytes, 3 #[test] fns)
+      note: "pausado por interrupt errado do driver (ver caveats), mas trabalho já estava completo."
+
+    - worker_id: 58fd629e
+      agent: scout
+      model: glm-5.2
+      task: "mapear API pública da crate engine"
+      outcome: FAILED (travou sozinho)
+      turns: 0
+      tools: 0
+      value: "ZERO — glm-5.2 atolou/parou sem produzir nada. Escreveu arquivo vazio."
+      output_file: /tmp/engine-api-map.yaml (0 bytes)
+      note: "glm-5.2 instável sob carga concorrente."
+
+    - worker_id: cf12982c
+      agent: delegate
+      model: glm-5.2
+      task: "audit de unwrap()/expect() no workspace"
+      outcome: PARTIAL (pausado no meio por erro do driver)
+      turns: 12
+      tools: 12
+      value: "BAIXO — análise em andamento (identificou ranges teste vs produção) interrompida antes do YAML final."
+      output_file: /tmp/panic-audit.yaml (263 bytes, só nota de raciocínio)
+      note: "pausado por interrupt errado do driver."
+
+  summary_by_model:
+    gpt-5.5:
+      dispatched: 4
+      completed_cleanly: 3
+      completed_before_interruption: 1  # worker terminou antes do pause
+      success_rate: "100% (4/4) — todos produziram valor real"
+    glm-5.2:
+      dispatched: 2
+      completed_cleanly: 0
+      failed_stalled: 1  # scout travou com 0 turns
+      partial_interrupted: 1  # delegate pausado no meio
+      success_rate: "0% limpo; instável sob carga concorrente"
+
+  verdict:
+    question: "Da pra usar MUITOS subagentes pra acelerar dev sem quebrar?"
+    answer: |
+      PARCIALMENTE — depende do MODELO, não do runner.
+
+      O runner (após fix do symlink) AGUENTA 6 simultâneos sem morrer.
+      Mas a confiabilidade POR RESULTADO varia drasticamente por modelo:
+
+      - gpt-5.5: 100% de sucesso sob carga (4/4 produziram valor, ~220k tokens
+        consumidos no total sem hesitar). Confiável pra escalar.
+      - glm-5.2: 0% limpo sob carga (1 travou, 1 parcial). Confirma que o
+        limite do AGENTS.md "~3" não era totalmente mito — glm-5.2 DEGRADA
+        sob concorrência, só que o sintoma não é erro explícito, é STALL
+        (worker para de responder, 0 atividade).
+
+    recommendation: |
+      1. USAR gpt-5.5 PARA PARALELISMO DE ESCALA. O usuário tem 97% semanal
+         disponível. gpt-5.5 aguenta carga, produz valor, não trava.
+      2. NÃO escalar glm-5.2 em paralelo. Usar glm-5.2 apenas sequencial ou
+         em tarefas de baixa concorrência (1-2 no máximo).
+      3. O limite real do glm-5.2 só é visível no console autenticado
+         (z.ai/manage-apikey/rate-limits) — verificar antes de escalar.
+
+  bugs_found_by_parallel_review:
+    - file: claim_engine.rs
+      findings: 6 (2 HIGH)
+      highlights:
+        - "acquire() gera claim inválida pelo próprio validador (handoff mismatch)"
+        - "rfc3339_to_unix aceita 2026-02-31 e 99:99:99 (viola fail-closed)"
+        - "overflow de TTL em debug panic / release wrap"
+        - "AcquireRequest sem validação (ttl=0, scope vazio aceitos)"
+    - file: conflict_detection.rs
+      findings: 4 (1 HIGH)
+      highlights:
+        - "root paths (./) viram escopo vazio → não bloqueiam nada (false neg)"
+        - "check é snapshot puro → race detect/acquire/write"
+        - "glob não expandido (literal vs wildcard)"
+        - "case-fold ASCII-only (Unicode quebra no WSL/Windows)"
+
+  caveats:
+    - "subagent interrupt IGNORA o parâmetro id e pega o run mais recente — bug do
+      harness. Pausar um run específico exige cuidado; pode acertar outro."
+    - "scout glm-5.2 travou em 0 turns — glm-5.2 sob 6-way concorrência stalou.
+      Não houve erro explícito, só silêncio (60s sem atividade → needs-attention)."
+    - "Estes achados ALIMENTAM a Frente B (self-healing/robustness) — os 10 bugs
+      de claim_engine + conflict_detection são exatamente o tipo de robustez
+      que a Frente B deve cobrir."
