@@ -1,0 +1,156 @@
+meta:
+  topic: "Typed-contract protocols for LLM agents: amplifier vs tax, and style/verbosity delegation"
+  query: "Does a typed-contract protocol governing LLM agents amplify better models or become a tax on strong models, and should protocol defer style/verbosity judgment to the agent?"
+  date: 2026-06-27
+  researcher_model: "OpenAI API research subagent"
+  confidence: medium
+  sources_consulted: 18
+key_findings:
+  - id: F1
+    finding: "Strong models can make complex scaffolds partly redundant; overly complex scaffolding can become a tax when the model can solve the task with simpler context and direct prompting."
+    evidence: "A 2025 SWE-bench study found Gemini-1.5-Pro with no tools/scaffolding reached 38% on SWE-bench Verified, comparable to carefully tuned scaffolded approaches at 32%; the same unscaffolded method with Gemini-2.5-Pro reached 50.8%. This supports the inference that fixed orchestration can become ceiling/tax for stronger models if it adds work without adding information or safety."
+    sources:
+      - "https://arxiv.gg/abs/2505.08120"
+      - "https://www.swebench.com/verified.html"
+  - id: F2
+    finding: "Well-designed scaffolding still adds value for long-horizon, high-risk, or coordination-heavy tasks, but its value comes from context management, tools, memory, auditability, and gates rather than from step-by-step micromanagement."
+    evidence: "Anthropic states that smarter models require less prescriptive engineering and more autonomy, while long-horizon tasks still need compaction, structured notes, and sub-agent architectures. METR reports frontier agents' 50% autonomous task-completion horizon has doubled about every 7 months, implying governance must increasingly support longer autonomous runs rather than replace model judgment."
+    sources:
+      - "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents"
+      - "https://metr.org/blog/2025-03-19-measuring-ai-ability-to-complete-long-tasks/"
+  - id: F3
+    finding: "The best current guidance is 'hard gates plus freedom within gates': guardrails, approvals, scoped tools, and policy checks should constrain unsafe side effects while leaving the agent to choose plans, tone, and execution strategy inside allowed bounds."
+    evidence: "OpenAI's Agents guidance defines guardrails and human review as mechanisms deciding when a run continues, pauses, or stops, with approvals for sensitive tool calls; its orchestration guide says to start with one agent and add specialists only when they materially improve isolation, policy, prompt clarity, or trace legibility. GuardAgent shows dynamic guardrail checking can reach over 98% and 83% guardrail accuracy on healthcare access-control and web-agent safety benchmarks."
+    sources:
+      - "https://developers.openai.com/api/docs/guides/agents/guardrails-approvals"
+      - "https://developers.openai.com/api/docs/guides/agents/orchestration"
+      - "https://proceedings.mlr.press/v267/xiang25a.html"
+  - id: F4
+    finding: "Prescriptive persona and role-play instructions are not reliable performance boosters and can degrade or distort strong model behavior; task-specific instructions and evaluation workflows are safer than mandatory personas."
+    evidence: "Wharton/Prompting Science tested six leading models on GPQA Diamond and MMLU-Pro and found expert personas did not reliably improve accuracy; low-knowledge personas often harmed performance and mismatched personas caused Gemini 2.5 Flash refusals. 2025 persona-prompting papers describe personas as a double-edged sword with prompt sensitivity and potential degradation."
+    sources:
+      - "https://gail.wharton.upenn.edu/research-and-insights/playing-pretend-expert-personas/"
+      - "https://aclanthology.org/2025.findings-ijcnlp.51.pdf"
+      - "https://aclanthology.org/2025.emnlp-main.1364.pdf"
+  - id: F5
+    finding: "Style, verbosity, and tone should be governed by clear outcomes and examples, not mandated scripts; authoritative context-engineering guidance favors minimal high-signal context and 'right altitude' instructions."
+    evidence: "Anthropic recommends system prompts in the Goldilocks zone: specific enough to guide behavior but flexible enough to provide heuristics, avoiding brittle if/else prompt logic and avoiding laundry lists of edge cases. It also states formatting is likely less important as models become more capable and advises starting with a minimal prompt on the best model, then adding instructions only for observed failures."
+    sources:
+      - "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents"
+  - id: F6
+    finding: "Multi-agent governance is net-positive when task risk, autonomy, tool power, or coordination complexity is high; for trivial tasks, premature splitting and mandatory artifacts are likely pure overhead."
+    evidence: "OpenAI warns that splitting too early creates more prompts, traces, and approval surfaces without necessarily improving the workflow. TRiSM literature says agentic multi-agent systems introduce distinct risks including prompt injection, memory poisoning, data leakage, agent collusion, tool misuse, and emergent behavior, especially in high-stakes domains."
+    sources:
+      - "https://developers.openai.com/api/docs/guides/agents/orchestration"
+      - "https://arxiv.org/html/2506.04133v4"
+      - "https://reports.weforum.org/docs/WEF_AI_Agents_in_Action_Foundations_for_Evaluation_and_Governance_2025.pdf"
+  - id: F7
+    finding: "Eastern and Western agent frameworks converge on autonomy with bounded interfaces: tools, roles, handoffs, memory, tracing, and hierarchical monitoring, rather than monolithic mandatory scripts."
+    evidence: "Qwen-Agent provides an LLM app framework centered on agents, tools, function calling, MCP, RAG, and code interpreter integration. MegaAgent reports a large-scale autonomous multi-agent system without predefined SOPs, scaling to 590 agents with hierarchical monitoring. OpenAI similarly recommends adding specialists only for material improvements and keeping routing surfaces legible."
+    sources:
+      - "https://github.com/QwenLM/Qwen-Agent"
+      - "https://qwenlm.github.io/Qwen-Agent/en/guide/get_started/features/"
+      - "https://aclanthology.org/2025.findings-acl.259/"
+      - "https://developers.openai.com/api/docs/guides/agents/orchestration"
+  - id: F8
+    finding: "The strongest product interpretation is: a typed-contract protocol can scale with the model if it encodes outcomes, invariants, permissions, evidence, and review gates; it becomes a tax if it mandates verbosity, ritual artifacts, or step scripts regardless of task risk and user energy."
+    evidence: "This is an inference across sources: Anthropic's 'smallest high-signal context' and 'right altitude' guidance, OpenAI's 'start with one agent' and approval gates, SWE-bench unscaffolded strong-model results, and TRiSM's risk-proportional controls all point toward contracts as boundaries/evidence rather than behavior scripts."
+    sources:
+      - "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents"
+      - "https://developers.openai.com/api/docs/guides/agents/orchestration"
+      - "https://arxiv.gg/abs/2505.08120"
+      - "https://arxiv.org/html/2506.04133v4"
+recommendations:
+  - id: R1
+    recommendation: "Define Forge contracts as typed outcome boundaries: phase goals, required evidence, permissions, risk gates, concurrency claims, and handoff schemas; avoid mandatory internal step scripts except where empirically tied to failure prevention."
+    based_on: [F1, F2, F3, F8]
+    priority: high
+  - id: R2
+    recommendation: "Make style/verbosity adaptive by contract: specify user-facing acceptance criteria such as 'match user energy unless safety/compliance requires detail' and forbid blanket verbosity mandates."
+    based_on: [F4, F5, F8]
+    priority: high
+  - id: R3
+    recommendation: "Implement a risk-scaled autonomy funnel: heavier discovery/spec gates and human contact for ambiguous or high-impact work; lighter, near-silent build execution with tool/side-effect approvals and audit logs."
+    based_on: [F2, F3, F6]
+    priority: high
+  - id: R4
+    recommendation: "Add protocol-overhead metrics to Forge evaluations: tokens spent on ritual artifacts, approval latency, number of handoffs, user-visible verbosity mismatch, and task success delta versus a minimal-agent baseline."
+    based_on: [F1, F5, F6, F8]
+    priority: medium
+  - id: R5
+    recommendation: "Use personas sparingly and only as operational role labels with tools/permissions; do not rely on expert-role prose as a performance mechanism."
+    based_on: [F4, F7]
+    priority: medium
+gaps:
+  - gap: "No direct benchmark was found for Forge-like typed YAML contract protocols across weak versus frontier models."
+    why: "Available evidence covers agent scaffolds, SWE-bench systems, context engineering, guardrails, and multi-agent governance, but not this exact product architecture. The scale-with-the-model conclusion is therefore an evidence-backed inference, not a direct measurement."
+  - gap: "Limited quantitative evidence isolates style/verbosity mandates from other prompt-scaffold factors."
+    why: "Most studies evaluate personas, scaffolds, tool use, or context length; few directly measure user-energy matching or mandated artifact verbosity as independent variables."
+  - gap: "Eastern-source coverage is thinner than Western-source coverage."
+    why: "Qwen-Agent and MegaAgent provide relevant architecture evidence, but fewer accessible empirical benchmark details were available within the research pass."
+open_questions:
+  - question: "What is Forge's task success, cost, and user satisfaction delta versus a minimal single-agent baseline on the same model and task set?"
+  - question: "Which Forge contract fields are true invariants/evidence requirements, and which are legacy rituals that strong models can safely compress or omit?"
+  - question: "Can Forge dynamically set protocol weight from a risk score, user energy signal, and model capability tier?"
+  - question: "What thresholds should trigger human approval: irreversible side effects, security-sensitive tools, ambiguity, cost, or external publication?"
+sources:
+  - url: "https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents"
+    title: "Effective context engineering for AI agents"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://arxiv.gg/abs/2505.08120"
+    title: "Putting It All into Context: Simplifying Agents with LCLMs"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://www.swebench.com/verified.html"
+    title: "SWE-bench Verified"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://metr.org/blog/2025-03-19-measuring-ai-ability-to-complete-long-tasks/"
+    title: "Measuring AI Ability to Complete Long Tasks"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://developers.openai.com/api/docs/guides/agents/guardrails-approvals"
+    title: "Guardrails and human review | OpenAI API"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://developers.openai.com/api/docs/guides/agents/orchestration"
+    title: "Orchestration and handoffs | OpenAI API"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://proceedings.mlr.press/v267/xiang25a.html"
+    title: "GuardAgent: Safeguard LLM Agents via Knowledge-Enabled Reasoning"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://gail.wharton.upenn.edu/research-and-insights/playing-pretend-expert-personas/"
+    title: "Playing Pretend: Expert Personas Don't Improve Factual Accuracy"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://aclanthology.org/2025.findings-ijcnlp.51.pdf"
+    title: "Persona is a Double-Edged Sword: Rethinking the Impact of Role-play Prompts in Zero-shot Reasoning Tasks"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://aclanthology.org/2025.emnlp-main.1364.pdf"
+    title: "Principled Personas: Defining and Measuring the Intended Effects of Persona Prompting on Task Performance"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://arxiv.org/html/2506.04133v4"
+    title: "TRiSM for Agentic AI: A Review of Trust, Risk, and Security Management in LLM-based Agentic Multi-Agent Systems"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://reports.weforum.org/docs/WEF_AI_Agents_in_Action_Foundations_for_Evaluation_and_Governance_2025.pdf"
+    title: "AI Agents in Action: Foundations for Evaluation and Governance"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://github.com/QwenLM/Qwen-Agent"
+    title: "Qwen-Agent"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://qwenlm.github.io/Qwen-Agent/en/guide/get_started/features/"
+    title: "Qwen-Agent Features"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://aclanthology.org/2025.findings-acl.259/"
+    title: "MegaAgent: A Large-Scale Autonomous LLM-based Multi-Agent System Without Predefined SOPs"
+    relevance: medium
+    accessed: 2026-06-27

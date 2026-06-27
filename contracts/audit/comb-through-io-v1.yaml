@@ -1,0 +1,123 @@
+meta:
+  scope: "crates/forge-core-store/src/*.rs; crates/forge-core-cli/src/*.rs; crates/forge-core-runtime/src/*.rs"
+  files_audited: 9
+  date: 2026-06-27
+summary:
+  total_candidates: 12
+  critical: 0
+  high: 7
+candidates:
+  - id: IO-001
+    kind: durability
+    severity: high
+    file: "crates/forge-core-cli/src/io_util.rs"
+    line: "18-31"
+    problem: "atomic_write writes and renames YAML state without fsyncing the temp file or parent directory, so claims/isolation files can be lost or appear stale after crash/power loss."
+    suggested_fix: "Rewrite atomic_write to create_new a sibling temp file, write+sync_all it, rename, then fsync the parent directory and clean temp on error."
+    effort: S
+    value: high
+  - id: IO-002
+    kind: durability
+    severity: high
+    file: "crates/forge-core-store/src/lib.rs"
+    line: "2403-2439"
+    problem: "atomic_replace_file fsyncs temp content but does not fsync the parent directory after backup/rename/remove, leaving applied effects and WAL compaction vulnerable to rename loss after crash."
+    suggested_fix: "After each successful rename/remove sequence, open the parent directory and sync_all/sync_data it on supported platforms, with explicit fallback diagnostics."
+    effort: S
+    value: high
+  - id: IO-003
+    kind: recovery
+    severity: high
+    file: "crates/forge-core-store/src/lib.rs"
+    line: "875-880"
+    problem: "WAL WriteApplied append errors are ignored after mutating the target, so a committed transaction can lack write metadata and later index rebuilds/recovery under-report applied effects."
+    suggested_fix: "Treat WriteApplied append failure as WalAppendFailed, rollback using before-images, and append a rollback stage or return RollbackFailed when rollback cannot be recorded."
+    effort: S
+    value: high
+  - id: IO-004
+    kind: concurrency
+    severity: high
+    file: "crates/forge-core-store/src/lib.rs"
+    line: "104-126"
+    problem: "append_json_line serializes JSON and the newline as multiple writes under O_APPEND but without a lock, so concurrent callers can interleave/truncate NDJSON records."
+    suggested_fix: "Serialize each record plus newline into one buffer and either guard append_json_line with a repo-relative lock or use a single write_all on an O_APPEND file plus sync."
+    effort: S
+    value: high
+  - id: IO-005
+    kind: recovery
+    severity: high
+    file: "crates/forge-core-cli/src/claim.rs"
+    line: "9-14,501-505"
+    problem: "Claim lifecycle has only materialized YAML state and no claims WAL; inference: a crash or lost rename during acquire/heartbeat/release can erase authority history with no replay path."
+    suggested_fix: "Add an append-only claim lifecycle WAL under the same DirLock, record before/after state for acquire/heartbeat/release, and rebuild materialized claim YAML from WAL."
+    effort: M
+    value: high
+  - id: IO-006
+    kind: concurrency
+    severity: high
+    file: "crates/forge-core-cli/src/io_util.rs"
+    line: "80-96"
+    problem: "DirLock reclaims any lock older than 60s even if the owning process is alive, so long-running lifecycle operations can be unlocked and raced by another process."
+    suggested_fix: "Only reclaim live-pid locks via explicit heartbeat/lease renewal or a much longer configurable timeout; never age-reclaim a live owner by default."
+    effort: M
+    value: high
+  - id: IO-007
+    kind: path-safety
+    severity: high
+    file: "crates/forge-core-store/src/lib.rs"
+    line: "1890-1905"
+    problem: "resolve_safe_repo_relative rejects textual .. and absolute paths but does not canonicalize or prevent symlink traversal, so repo-relative writes can escape root through a symlinked directory."
+    suggested_fix: "Canonicalize the existing parent chain under root, reject symlink escapes, and verify the final parent remains within canonical root before writes/deletes/appends."
+    effort: M
+    value: high
+  - id: IO-008
+    kind: consistency
+    severity: medium
+    file: "crates/forge-core-runtime/src/lib.rs"
+    line: "551-579"
+    problem: "After an effect is applied, metadata index append failure makes execution fail but leaves the file mutation committed; operators must infer they can repair from WAL."
+    suggested_fix: "Return an explicit applied_but_metadata_missing status/reason and surface a suggested rebuild-effect-index repair path instead of a generic Failed execution."
+    effort: S
+    value: medium
+  - id: IO-009
+    kind: durability
+    severity: medium
+    file: "crates/forge-core-store/src/lib.rs"
+    line: "1368-1434"
+    problem: "compact_effect_wal rewrites the WAL via atomic_replace_file without recording compaction intent, so a crash can leave .forge-bak/.forge-tmp debris and ambiguous compaction state."
+    suggested_fix: "Add a compaction marker/manifest or make atomic_replace_file cleanup/recovery aware of forge-bak/forge-tmp siblings before WAL reads."
+    effort: M
+    value: medium
+  - id: IO-010
+    kind: race
+    severity: medium
+    file: "crates/forge-core-store/src/lib.rs"
+    line: "2215-2272,2352-2360"
+    problem: "prepare_file_writes validates existence/hash before capture_originals and apply, leaving a TOCTOU window where external writers can change a target after validation."
+    suggested_fix: "Re-read and re-validate expected hashes immediately before atomic_replace_file/remove while holding the effect lock, or use platform file locks on targets."
+    effort: M
+    value: medium
+  - id: IO-011
+    kind: cli-input
+    severity: medium
+    file: "crates/forge-core-cli/src/main.rs"
+    line: "1950-2046"
+    problem: "guide describe/decide/status silently ignore unknown flags and tolerate missing option values, unlike stricter claim/isolation parsing."
+    suggested_fix: "Use require_value-style parsing for guide flags and exit 3 on unknown flags or missing values."
+    effort: S
+    value: medium
+  - id: IO-012
+    kind: diagnostics
+    severity: low
+    file: "crates/forge-core-store/src/lib.rs"
+    line: "1839-1848"
+    problem: "collect_known_paths_recursive silently drops read_dir errors via return, hiding permission/race problems from known-path validation."
+    suggested_fix: "Return accumulating diagnostics from collect_known_repo_paths or add a sibling collection API that reports unreadable directories."
+    effort: M
+    value: low
+top_5_quick_wins:
+  - IO-001
+  - IO-002
+  - IO-003
+  - IO-004
+  - IO-011

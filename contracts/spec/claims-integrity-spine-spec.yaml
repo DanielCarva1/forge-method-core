@@ -1,0 +1,137 @@
+schema_version: "0.1.0"
+spec:
+  id: claims-integrity-spine
+  title: "Claims integrity spine — append-only WAL + derive_state (P2.1 + P2.2)"
+  status: ready
+  created: 2026-06-27
+  parent_roadmap: forge-rust-v1-specification
+  closes_discovery: contracts/discovery/claims-integrity-spine-discovery.yaml
+  threat_model_decision: contracts/grill/claims-integrity-spine-grill-001.yaml#F1 (human-locked F1c) — recorded durably in the grill artifact; no separate decision_close_contract instance (see schema_gap note)
+  backlog_source: contracts/backlog/v1.1-selfhealing-backlog.yaml (P2.1, P2.2)
+
+  purpose: |
+    Close the integrity gap the discovery proved by exploit (hand-editing a claim's
+    expires_at was silently honored). Make claim state derive from an append-only,
+    CRC-32C-chain-checked ledger instead of mutable YAML the runtime trusts blindly.
+    Governance becomes enforcement, not convention.
+
+    Threat model = F1c (human-locked): CRC-32C chain NOW + origin-bound ed25519
+    signatures as a DESIGNED additive v-next layer, gated behind the multi-owner
+    trust boundary. CRC-32C covers every realistic threat forge faces today
+    (torn writes, bit-rot, accidental/naive edits, concurrency corruption).
+    Forging-as-another-agent is out of scope for v1.1 — forge assumes cooperative
+    agents the user spawned within one repo.
+
+  authoritative_design:
+    rule: "This spec does NOT re-derive the WAL format. contracts/research/selfhealing-wal-crc-design-v1.yaml (W2, 18 sources) is the authoritative byte-level design. This spec binds that design to forge crates, files, and the derive_state authority path."
+    ref: contracts/research/selfhealing-wal-crc-design-v1.yaml
+    locked_from_w2:
+      - "FMW1 binary record format: magic(4)+version(1)+record_type(1)+flags(2)+seq(8)+payload_len(4)+header_crc32c(4)+payload+payload_crc32c(4). 24-byte fixed header."
+      - "CRC-32C/Castagnoli via the `crc32c` crate (NOT crc32fast)."
+      - "Dual CRC: header_crc32c over bytes[0..20); payload_crc32c over header[0..20)+payload."
+      - "Strict prefix-recovery: stop at first truncated/invalid record, truncate to last good offset under EXCLUSIVE lock, replay prefix."
+      - "Append atomicity: fs4 exclusive lock + append(true) + single write_all + sync_data before ack. (fs4 already a workspace dep via io_util H1.3.)"
+      - "Record types v1: 1 acquire, 2 release, 3 heartbeat, 4 checkpoint_ref, 5 tombstone, 6 rotate_marker."
+      - "Local-filesystem requirement documented (NFS/SMB/WSL-DrvFS caveats)."
+
+  resolved_in_spec:
+    - choice: "Payload encoding"
+      decision: "Canonical CBOR for deterministic bytes (W2 open_question). Justification: derive_state byte-stability + future signed-checkpoint anchors need canonical bytes; JSON kept as debug-only via flags bit."
+      crate: "cendol or ciborium (canonical CBOR); pick in plan."
+    - choice: "WAL file layout"
+      decision: "claims.wal.lock (coordination) + claims.wal.000001 (active segment) + claims.wal.manifest. Separate from effects.ndjson (different lifecycle/durability)."
+    - choice: "derive_state evaluation"
+      decision: "LAZY for v1.1: replay on each command invocation. Snapshot+rotation (P3.3) is a LATER perf layer, not a correctness one. Replay cost is bounded while WAL is small."
+    - choice: "Migration"
+      decision: "Clean break, no migration. claims-active/ ephemeral YAML is abandoned as an authority path. Existing ephemeral leases simply expire. load_claims is kept as debug/fallback but is no longer the authority path."
+
+  crate_and_file_plan:
+    forge_core_store:
+      principle: "Per engine-architecture.yaml, store owns 'append-only WAL authority + projections + integrity'. The claims WAL is another projection. It belongs here, next to effects WAL — NOT a new crate."
+      new_modules:
+        - path: "crates/forge-core-store/src/claims_wal.rs"
+          owns: "FMW1 encode/decode, dual CRC-32C, record-type serialization, append protocol (lock+append+sync). Thin wrapper over the W2 design."
+        - path: "crates/forge-core-store/src/claims_wal_recovery.rs"
+          owns: "Strict prefix-recovery: scan, validate magic/version/flags/header_crc, bound-check payload_len, verify payload_crc, seq monotonicity, classify tail (clean_eof/truncated_tail/checksum_failure), truncate-to-last-good under exclusive lock."
+        - path: "crates/forge-core-store/src/derive_state.rs"
+          owns: "WAL replay → ClaimState projection. acquire creates/renews lease; release removes on agent+claim match; heartbeat refreshes liveness; tombstone suppresses. THE ONLY authority constructor for claim state."
+      new_deps: ["crc32c", "ciborium (or cendol) — canonical CBOR"]
+      reuse: ["fs4 (already via io_util)", "DirLock primitive (H1.3)"]
+    forge_core_engine:
+      change: "claim_engine.rs switches its state source from load_claims to derive_state. claim_engine validation (TTL, rfc3339, expiry — already hardened in H1.1) runs on the DERIVED state, unchanged."
+    forge_core_cli:
+      change: "claim.rs: load_claims (line 451) becomes debug/fallback. Authority path: claim status / acquire / release all go through derive_state. A `--from-cache` debug flag preserves the legacy YAML read for diagnostics."
+    forge_core_contracts:
+      change: "ClaimContract gains NO new fields in v1.1 (no signature field — that is the additive F1b layer). The WAL record payloads are projected FROM ClaimContract, not stored as raw YAML."
+
+  acceptance_criteria:
+    ac1_exploit_closed:
+      rule: "The discovery exploit must fail under the new authority path."
+      test: "Acquire a claim, hand-edit the WAL record's lease payload, call `claim status`. derive_state recovery MUST stop at the tampered record (CRC mismatch → checksum_failure tail) and NOT honor the forged lease. Status reflects the pre-tamper prefix."
+    ac2_torn_write_recovers:
+      rule: "A crash mid-append must not corrupt the bus."
+      test: "Write a WAL, append a record truncated to <24 bytes (simulate torn write). derive_state recovers the prefix, truncates to last good offset under exclusive lock, returns truncated_tail diagnostic. No panic."
+    ac3_concurrency_safe:
+      rule: "50 concurrent writers must not interleave records."
+      test: "Spawn N processes (N>=8 practical; proptest scales the claim) each appending acquire records. All records validate; every seq is strictly monotonic; no record's bytes interleave another's."
+    ac4_bitflip_detected:
+      rule: "Single-bit corruption is caught."
+      test: "Flip one bit in any record's payload. derive_state stops at checksum_failure."
+    ac5_derive_is_authority:
+      rule: "No authority path reads mutable YAML directly."
+      test: "grep audit: claim status/acquire/release do not call load_claims except behind a debug flag. CI test asserts derive_state is invoked."
+    ac6_no_regression:
+      rule: "All 394 existing tests pass; load_claims fallback still works for debug."
+      test: "cargo test --workspace green."
+    ac7_naive_yaml_edit_ignored:
+      rule: "Editing the now-ephemeral claims-active YAML must NOT change authority."
+      test: "Acquire via WAL, hand-edit claims-active/*.yaml, call `claim status` (no --from-cache). Status reflects WAL state, ignores the YAML. Documented behavior change."
+
+  non_goals:
+    - "Per-record ed25519 signatures (F1b additive layer, deferred per decision)."
+    - "Key management / agent identity system."
+    - "Published external anchor / rollback resistance (needs infra outside repo)."
+    - "WAL snapshot+rotation (P3.3, later perf layer — correctness does not require it)."
+    - "fsync durability guarantees on WSL/DrvFS beyond best-effort (documented)."
+
+  schema_gap_observed:
+    finding: "decision_close_contract.grill_contract_ref strictly resolves as ReferenceKind::GateContract (contracts/gates/), but grills are WORKFLOWS producing artifacts in contracts/grill/ — there is no grill gate. With requires_grill_evidence=true + status=closed the field is forced non-null yet unsatisfiable against the repo's grill convention."
+    impact: "a closed route_change/spec_lock decision that was grill-gated cannot get a valid decision_close_contract instance without lying (pointing at an unrelated gate) or setting requires_grill_evidence=false."
+    scope: "second dogfood finding surfaced BY doing the protocol, not in scope for the claims spine. Registered for a later protocol/schema fix (v1.2 candidate): either register contracts/grill/ as a grill-contract reference kind, or rename/relax grill_contract_ref to accept grill artifacts."
+    workaround_used: "the grill artifact itself (contracts/grill/claims-integrity-spine-grill-001.yaml) is the durable, reopenable decision record; no decision_close_contract instance is minted for this decision."
+  designed_for_additive_signatures:
+    note: "F1b is designed, not built. The FMW1 header reserves flags bits and a sig is added as a trailing field BEFORE payload_crc32c when F1b lands — no format rewrite. This spec's record_type/flags/version design already accommodates it. See decision-claims-integrity-threat-model.yaml reopen_conditions."
+
+  dogfood_constraint:
+    rule: "This work rebuilds the authority engine USING the authority engine. Every story in the plan phase MUST acquire a claim on its disjoint spine file before editing. The WAL must be built under WAL-governed coordination. If a story cannot get a clean claim (file conflict), it blocks — that is the system proving itself."
+
+  story_breakdown_preview:
+    note: "Stories are split by DISJOINT FILES so they are parallel-buildable under claims (proven pattern from hardening batch 1). Full story files written in plan phase."
+    stories:
+      - id: "C1"
+        title: "claims WAL writer + FMW1/CRC-32C encode (forge-core-store)"
+        owns_disjoint: ["crates/forge-core-store/src/claims_wal.rs (new)"]
+      - id: "C2"
+        title: "claims WAL reader + strict prefix-recovery"
+        owns_disjoint: ["crates/forge-core-store/src/claims_wal_recovery.rs (new)"]
+      - id: "C3"
+        title: "derive_state projection (WAL -> ClaimState)"
+        owns_disjoint: ["crates/forge-core-store/src/derive_state.rs (new)"]
+      - id: "C4"
+        title: "wire derive_state as authority; demote load_claims"
+        owns_disjoint: ["crates/forge-core-cli/src/claim.rs", "crates/forge-core-engine/src/claim_engine.rs (state-source line only)"]
+      - id: "C5"
+        title: "exploit-closed + torn-write + concurrency tests; migration doc"
+        owns_disjoint: ["crates/forge-core-store/tests/claims_wal_recovery.rs (new)", "crates/forge-core-cli/tests/claims_authority_e2e.rs (new)"]
+    dependency_note: "C4 depends on C3 (needs derive_state). C5 depends on C4 (tests the authority path). C1/C2/C3 are independent (disjoint new files) -> parallel. C1+C2 may share the format constants — C1 declares them, C2 imports; sequence C1->C2 or merge if one worker."
+
+  evidence_basis:
+    discovery: contracts/discovery/claims-integrity-spine-discovery.yaml
+    grill: contracts/grill/claims-integrity-spine-grill-001.yaml
+    decision: contracts/grill/claims-integrity-spine-grill-001.yaml (grill closure IS the durable decision record; see schema_gap)
+    design: contracts/research/selfhealing-wal-crc-design-v1.yaml
+    writepath_audit: contracts/research/selfhealing-writepath-audit-v1.yaml
+    failpoint_audit: contracts/research/selfhealing-failpoint-audit-v1.yaml
+    prerequisites_shipped: "H1.1 (claim_engine hardening), H1.2 (conflict_detection), H1.3 (io_util DirLock)"
+
+  next_action: "Enter plan phase (gate: system-design). Break C1-C5 into story files with claims, then build under WAL-governed coordination."

@@ -1,0 +1,114 @@
+meta:
+  scope: "local quality audit limited to crates/*/tests/*.rs, Cargo manifests, build/config, README.md, skill/forge-method/SKILL.md, .github CI config, and scripts/*"
+  files_audited: 14
+  date: 2026-06-27
+summary:
+  total_candidates: 11
+  critical: 0
+  high: 5
+candidates:
+  - id: Q01
+    kind: ci_gap
+    severity: high
+    file: ".github/workflows/"
+    line: "area: missing directory/config"
+    problem: "No GitHub Actions CI config was found, so cargo check, clippy, fmt, tests, and validation are not enforced remotely."
+    suggested_fix: "Add a scoped CI workflow that runs cargo check --workspace, cargo clippy --workspace --all-targets -- -W clippy::pedantic, cargo test --workspace, cargo fmt --all -- --check, and forge-core validate."
+    effort: M
+    value: high
+  - id: Q02
+    kind: dependency_consistency
+    severity: high
+    file: "crates/forge-contract-validator/Cargo.toml"
+    line: "1-6"
+    problem: "This crate hard-pins package version/edition and serde_yaml instead of using workspace.package and workspace.dependencies like the other crates."
+    suggested_fix: "Change version and edition to workspace inheritance and change serde_yaml to serde_yaml.workspace = true."
+    effort: S
+    value: high
+  - id: Q03
+    kind: test_gap
+    severity: high
+    file: "crates/forge-core-engine/tests/"
+    line: "area: missing tests dir"
+    problem: "No engine integration tests dir was found for public gate-enforcement APIs re-exported by forge-core-engine."
+    suggested_fix: "Add forge-core-engine/tests/phase_transition.rs covering allowed, blocked, missing-gate, failed-gate, and waiver cases using public APIs only."
+    effort: M
+    value: high
+  - id: Q04
+    kind: test_gap
+    severity: high
+    file: "crates/forge-core-cli/tests/validate.rs"
+    line: "1-51"
+    problem: "The CLI integration test file imports validation, host-adapter, operation, and effect-index runners but shows no claim acquire/heartbeat/release/check-write coverage in its public runner surface (inference from imports)."
+    suggested_fix: "Add a crates/forge-core-cli/tests/claims.rs integration suite for claim acquire, conflicting acquire refusal, heartbeat TTL extension, release authorization, stale expiry, and check-write denial/allowance."
+    effort: M
+    value: high
+  - id: Q05
+    kind: test_gap
+    severity: high
+    file: "crates/forge-core-store/tests/reference_index.rs"
+    line: "828-1199"
+    problem: "WAL tests cover commit, incomplete rollback recovery, locking, and compaction, but not malformed/truncated WAL-prefix recovery or corrupted JSON-line handling (inference from audited WAL test areas)."
+    suggested_fix: "Add WAL recovery tests for truncated final records, malformed lines, mixed committed/incomplete tx groups, and idempotent second recovery without touching store source."
+    effort: M
+    value: high
+  - id: Q06
+    kind: documentation_stale
+    severity: medium
+    file: "README.md"
+    line: "236-239"
+    problem: "README says append-only WAL/state derivation is queued for v0.2, but scoped tests already exercise WAL commit, lock, recovery, and compaction behavior."
+    suggested_fix: "Update status wording to distinguish implemented effect WAL from any still-planned full state-derivation layer."
+    effort: S
+    value: high
+  - id: Q07
+    kind: documentation_stale
+    severity: medium
+    file: "README.md"
+    line: "280-283"
+    problem: "Repository layout documents skills/ while the audited skill file is under skill/forge-method/SKILL.md."
+    suggested_fix: "Correct the layout entry to skill/forge-method/ or add a note if both layouts are intentionally supported."
+    effort: S
+    value: high
+  - id: Q08
+    kind: documentation_stale
+    severity: medium
+    file: "skill/forge-method/SKILL.md"
+    line: "43-45"
+    problem: "Bootstrap instructions clone forge-method-rust, while the active repo root and user-facing path are Forge-method-core, creating install-path drift."
+    suggested_fix: "Update the clone URL/path to the canonical Forge Method Core repository or explicitly document the rename/alias."
+    effort: S
+    value: high
+  - id: Q09
+    kind: test_flakiness
+    severity: medium
+    file: "crates/forge-core-runtime/tests/operation_plan.rs"
+    line: "76-81"
+    problem: "fresh_temp_root uses only label plus process id for temp directories, which can collide across repeated or concurrent cargo test invocations in the same process namespace."
+    suggested_fix: "Include a timestamp/counter/random suffix and cleanup guard in the integration-test temp root helper."
+    effort: S
+    value: medium
+  - id: Q10
+    kind: dependency_cleanup
+    severity: low
+    file: "crates/forge-core-store/Cargo.toml"
+    line: "12"
+    problem: "Empty [dev-dependencies] section adds manifest noise and may mislead reviewers into expecting external integration-test dependencies."
+    suggested_fix: "Remove the empty section or populate it only when a dev dependency is actually needed."
+    effort: S
+    value: medium
+  - id: Q11
+    kind: config_gap
+    severity: low
+    file: "rust-toolchain.toml"
+    line: "area: missing file"
+    problem: "README requires Rust 1.85+ but the audited root has no pinned rust-toolchain.toml to make local and CI toolchains reproducible."
+    suggested_fix: "Add a rust-toolchain.toml with the supported channel/version and required components such as rustfmt and clippy."
+    effort: S
+    value: medium
+top_5_quick_wins:
+  - Q02
+  - Q06
+  - Q07
+  - Q08
+  - Q10

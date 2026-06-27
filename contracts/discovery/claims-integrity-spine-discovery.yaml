@@ -1,0 +1,69 @@
+schema_version: "0.1"
+contract: "discovery"
+id: "claims-integrity-spine"
+status: "draft"
+created_at: "2026-06-27T12:00:00Z"
+title: "The coordination bus is not integrity-protected — the core promise is currently false"
+triggered_by: "Dogfood question: 'what is the highest-value improvement to the forge-core codebase itself?'"
+
+observed_state:
+  # All claims below are VERIFIED against the live binary + source, not memory.
+  - finding: "load_claims reads the coordination bus directly from mutable YAML files"
+    evidence: "crates/forge-core-cli/src/claim.rs:451 load_claims() uses std::fs::read_dir + read_to_string over .forge-method/claims-active/*.yaml"
+    verified: true
+  - finding: "No WAL covers claims. The effects WAL (effects.ndjson) records file-effects only."
+    evidence: "forge-core-store append_effect_wal_record handles ToolEffect/EffectKind; no claim event kind exists"
+    verified: true
+  - finding: "No derive_state exists anywhere in the workspace"
+    evidence: "grep -rn 'derive_state|fn derive|replay_wal|reconstruct' crates/*/src/ → 0 hits"
+    verified: true
+  - finding: "No signature / CRC / MAC / provenance field on ClaimContract"
+    evidence: "grep on claim.rs for signature|crc|hash|mac|ed25519|verify → 0 hits on the contract fields"
+    verified: true
+  - finding: "PROVEN EXPLOIT — hand-editing a claim's expires_at is silently honored"
+    evidence: |
+      Acquired claim, hand-edited .forge-method/claims-active/*.yaml
+      'expires_at' to 2126-06-27. `claim status` returned 1 active claim,
+      accepted without challenge. The runtime trusts bus files blindly.
+    verified: true
+    severity: "critical"
+
+promise_gap:
+  stated_promise: "README: 'Integrity by construction' / 'state derived from append-only WAL, never hand-edited'"
+  actual_reality: "The coordination bus — the multi-agent governance core — is hand-editable YAML with no derivation, no chain, no checksum. A malicious or buggy agent (or human) can extend its own lease forever, steal another agent's lane, or erase a rival claim by deleting a file."
+  why_it_matters: "Governance is the product. If claims are trustworthy only by convention, multi-agent coordination is a polite suggestion, not enforcement. Every other feature (worktree isolation, conflict detection, coordination eval) is built on 'claims are authoritative' — which is currently a lie."
+
+candidate_improvements:
+  - id: "C1"
+    name: "Claims integrity spine: append-only claim WAL + derive_state + tamper-evidence"
+    value: "Turns the integrity promise from marketing into reality. Makes governance enforceable, not advisory. Unlocks self-heal, audit, and tamper-evidence."
+    complexity: "HIGH (append-only claim ledger; derive_state replay; CRC-32C per record + chain hash; prefix-recovery). Research + design already exist (v1.1 self-healing research)."
+    aligns_with: "Protocol's own authority engine. The most forge-native thing to dogfood."
+    ranked: 1
+  - id: "C2"
+    name: "Embed catalog in binary + forge init (zero-setup greenfield)"
+    value: "Fixes onboarding: a fresh empty folder works with /forge method, no catalog hunt."
+    complexity: "LOW-MEDIUM (include_dir! + a forge init that seeds .forge-method/)."
+    aligns_with: "Onboarding polish; real but secondary."
+    ranked: 2
+  - id: "C3"
+    name: "Observability layer (custom tracing Layer → WAL with trace_id)"
+    value: "Debuggability and an audit trail across agents."
+    complexity: "MEDIUM."
+    aligns_with: "Depends on C1's WAL story to be coherent."
+    ranked: 3
+
+recommendation:
+  pick: "C1"
+  rationale: |
+    C1 is the single largest gap between promise and reality, it is the foundation
+    every governance feature stands on, and it is explicitly what the user asked
+    for (highest-value codebase improvement, complex solutions welcome). C2/C3 are
+    real but are polish layered on top of a foundation that is currently unsound.
+  prior_decision_note: |
+    Self-healing was previously DEFERRED to v1.1 with 'usable product > state fix'.
+    That framing was correct for shipping v0.1.0. The question now is different:
+    post-ship, optimizing the codebase for excellence. Under that framing C1 is
+    the clear #1. Re-opening the decision for the user to confirm.
+
+next_action: "Present C1 to the user. If accepted, route through grill → spec → plan (stories under claims), dogfooding forge end-to-end."

@@ -1,0 +1,105 @@
+meta:
+  scope: "crates/forge-core-engine/src/*.rs and crates/forge-core-contracts/src/*.rs"
+  files_audited: 31
+  date: 2026-06-27
+summary:
+  total_candidates: 10
+  critical: 0
+  high: 2
+candidates:
+  - id: CAND-001
+    kind: bug
+    severity: high
+    file: "crates/forge-core-contracts/src/envelope.rs"
+    line: "173-181"
+    problem: "CliEnvelope::exit_code does not map exit_reason 'conflict', so conflict envelopes exit as env_config(5) instead of documented Conflict(4)."
+    suggested_fix: "Add a 'conflict' match arm returning ExitReason::Conflict.as_code() and a regression test constructing a conflict envelope."
+    effort: S
+    value: high
+  - id: CAND-002
+    kind: fail-open
+    severity: high
+    file: "crates/forge-core-engine/src/phase_transition.rs"
+    line: "154-164"
+    problem: "Inference: a valid forward-skip waiver returns Allowed before evaluating any required gates on the skipped transition path, potentially bypassing gate evidence entirely."
+    suggested_fix: "Clarify waiver semantics; if waivers only permit skipping phases, continue checking mandatory gates or require explicit gate-waiver coverage."
+    effort: M
+    value: high
+  - id: CAND-003
+    kind: fail-open
+    severity: medium
+    file: "crates/forge-core-engine/src/guide_validation.rs"
+    line: "84-101"
+    problem: "An unparseable proposed_next_phase is treated the same as absent because proposed_phase_category returns None, so a malformed proposed transition can be silently ignored."
+    suggested_fix: "Add an UnrecognizedProposedPhase rejection and reject Some(raw) values whose Phase::parse returns None."
+    effort: S
+    value: high
+  - id: CAND-004
+    kind: error-swallowing
+    severity: medium
+    file: "crates/forge-core-engine/src/catalog.rs"
+    line: "53-55"
+    problem: "load_catalog drops individual read_dir entry errors with filter_map(Result::ok), contradicting the accumulator error model and hiding partial directory read failures."
+    suggested_fix: "Collect read_dir entry errors into CatalogFileError instead of filtering them out silently."
+    effort: S
+    value: high
+  - id: CAND-005
+    kind: robustness
+    severity: medium
+    file: "crates/forge-core-engine/src/conflict_detection.rs"
+    line: "396-402"
+    problem: "normalize_segments absorbs leading/excess '..', so traversal-like targets can normalize into claimed repo paths and be classified as governed or blocked instead of invalid/ungoverned."
+    suggested_fix: "Preserve leading '..' as isolation.rs does, or return an invalid-path classification for over-pop traversal and add tests for '../../claimed'."
+    effort: M
+    value: medium
+  - id: CAND-006
+    kind: integer-overflow
+    severity: low
+    file: "crates/forge-core-engine/src/eval.rs"
+    line: "86-90"
+    problem: "score_router computes correct * 10000 before checked_div, which can overflow for extremely large corpora in debug or wrap in release."
+    suggested_fix: "Use correct.checked_mul(10000).and_then(|v| v.checked_div(total)) or compute in u128 before conversion."
+    effort: S
+    value: medium
+  - id: CAND-007
+    kind: type-safety
+    severity: medium
+    file: "crates/forge-core-contracts/src/operation.rs"
+    line: "359-375"
+    problem: "Operation defines its own GateStatus and GateScope enums that overlap with gate.rs but differ in variants, making cross-contract gate status/scope confusion easy."
+    suggested_fix: "Reuse gate::GateStatus/GateScope where wire compatibility allows, or rename operation-local enums to OperationGateStatus/OperationGateScope."
+    effort: M
+    value: medium
+  - id: CAND-008
+    kind: robustness
+    severity: low
+    file: "crates/forge-core-engine/src/isolation.rs"
+    line: "279-287"
+    problem: "validate_branch_name does not reject empty path components or trailing '/', so invalid git refs like 'alice/' can pass engine validation and fail later at execution."
+    suggested_fix: "Reject empty components, names ending in '/', and add tests for 'alice/' and 'alice//s5'."
+    effort: S
+    value: medium
+  - id: CAND-009
+    kind: robustness
+    severity: low
+    file: "crates/forge-core-engine/src/isolation.rs"
+    line: "189-201"
+    problem: "branch_name_for slugs only the scope, not agent.0, so an agent id containing whitespace or metacharacters produces an invalid branch suggestion."
+    suggested_fix: "Slug or validate the agent segment in branch_name_for, or return Result<String, IsolationError> for invalid agent ids."
+    effort: S
+    value: medium
+  - id: CAND-010
+    kind: schema-strictness
+    severity: low
+    file: "crates/forge-core-contracts/src/command.rs"
+    line: "5-19"
+    problem: "CommandContractDocument and CommandContract lack #[serde(deny_unknown_fields)], unlike most newer contract structs, allowing misspelled fields to deserialize silently."
+    suggested_fix: "Add #[serde(deny_unknown_fields)] to command contract structs and regression tests for unknown YAML keys."
+    effort: S
+    value: low
+top_5_quick_wins:
+  - CAND-001
+  - CAND-003
+  - CAND-004
+  - CAND-006
+  - CAND-008
