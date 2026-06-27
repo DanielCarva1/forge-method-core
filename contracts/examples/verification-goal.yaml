@@ -1,0 +1,44 @@
+schema_version: "0.1"
+verification_goal_contract:
+  id: verification.goal.wave5.contract-examples
+  scope:
+    phase: 6-evolve
+    story_ref: story.wave5.examples
+    changed_paths:
+      - contracts/examples/autonomy-policy.yaml
+      - contracts/examples/verification-goal.yaml
+      - contracts/examples/agent-run.yaml
+      - contracts/examples/memory.yaml
+      - contracts/examples/checkpoint.yaml
+      - contracts/examples/eval-run.yaml
+      - contracts/examples/telemetry.yaml
+  goals:
+    - kind: unit_tests_pass
+      target: cargo test --workspace
+      status: passed
+      adapter: cargo
+      detail: "460+ workspace tests passed before Wave 5 examples; examples add YAML fixture coverage."
+    - kind: lint_clean
+      target: cargo clippy --workspace --all-targets -- -W clippy::pedantic
+      status: passed
+      adapter: cargo
+      detail: "clippy completed with exit code 0 at the previous wave boundary."
+    - kind: typecheck_pass
+      target: cargo check --workspace
+      status: passed
+      adapter: cargo
+      detail: "workspace typecheck passed after Wave 4 scaffolding and CLI routing."
+    - kind: custom_command
+      target: python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" contracts/examples/*.yaml
+      status: passed
+      adapter: shell
+      detail: "All seven example fixtures parse as syntactically valid YAML."
+  overall:
+    value: all_satisfied
+    evaluated_at: "2026-06-27T18:20:00Z"
+    satisfied: 4
+    total: 4
+    notes: "Fast-lane evidence is machine-checkable: cargo checks plus YAML syntax validation."
+  evidence_refs:
+    - contracts/examples/autonomy-policy.yaml
+    - contracts/examples/eval-run.yaml

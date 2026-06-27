@@ -1,0 +1,59 @@
+schema_version: "0.1"
+agent_run_contract:
+  run_id: run.wave5.parallel-build
+  root_agent: driver.wave5
+  started_at: "2026-06-27T18:00:00Z"
+  agents:
+    - agent_id: driver.wave5
+      role: driver
+      state: running
+      current_task: "orchestrate Wave 5 contract examples and CLI follow-up"
+      last_message: "Workers assigned disjoint files and heavy verification reserved for wave boundary."
+      claim_ref: null
+      worktree_ref: /mnt/c/Forge-method-core
+      started_at: "2026-06-27T18:00:00Z"
+      last_heartbeat_at: "2026-06-27T18:18:00Z"
+      retries: 0
+      blocked_reason: null
+      handoff_to: null
+    - agent_id: worker.examples
+      role: builder
+      state: completed
+      current_task: "create seven example YAML fixtures"
+      last_message: "Fixtures created under contracts/examples and syntactically validated."
+      claim_ref: claim.contracts.examples.wave5
+      worktree_ref: /tmp/pi-worktree-e7fa77ed-3
+      started_at: "2026-06-27T18:02:00Z"
+      last_heartbeat_at: "2026-06-27T18:19:00Z"
+      retries: 0
+      blocked_reason: null
+      handoff_to: null
+    - agent_id: worker.contract-cli
+      role: builder
+      state: running
+      current_task: "build generic contract command module"
+      last_message: "Implementing validation surface in disjoint CLI module."
+      claim_ref: claim.cli.contract-command.wave5
+      worktree_ref: /tmp/pi-worktree-e7fa77ed-1
+      started_at: "2026-06-27T18:02:00Z"
+      last_heartbeat_at: "2026-06-27T18:17:00Z"
+      retries: 0
+      blocked_reason: null
+      handoff_to: null
+  edges:
+    - from_agent: driver.wave5
+      to_agent: worker.examples
+      kind: parallel_with
+    - from_agent: worker.examples
+      to_agent: worker.contract-cli
+      kind: parallel_with
+    - from_agent: worker.contract-cli
+      to_agent: driver.wave5
+      kind: hands_off_to
+  summary:
+    total: 3
+    running: 2
+    blocked: 0
+    completed: 1
+    failed: 0
+    healthy: true

@@ -1,0 +1,31 @@
+schema_version: "0.1"
+eval_run_contract:
+  run_id: eval.run.wave5.examples.gpt55.001
+  task_id: story.wave5.examples
+  model_ref: openai-codex/gpt-5.5
+  router_decision: "fast_lane:sandbox_auto:yaml-fixture-only"
+  outcome:
+    value: passed
+    evaluated_at: "2026-06-27T18:20:00Z"
+    failure_cluster: null
+    notes: "All seven contract example fixtures parsed as valid YAML; semantic shape derived directly from Rust contract structs."
+  cost:
+    prompt_tokens: 12400
+    completion_tokens: 3600
+    total_tokens: 16000
+    estimated_cost_usd_micros: 220000
+    wall_time_ms: 180000
+    num_tool_calls: 14
+    num_turns: 3
+  quality_signals:
+    correct_location: true
+    semantic_correct: true
+    overfit_suspected: false
+    confidence: 94
+  evidence_refs:
+    - contracts/examples/autonomy-policy.yaml
+    - contracts/examples/verification-goal.yaml
+    - contracts/examples/agent-run.yaml
+    - contracts/examples/memory.yaml
+    - contracts/examples/checkpoint.yaml
+    - contracts/examples/telemetry.yaml

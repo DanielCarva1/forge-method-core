@@ -1,0 +1,43 @@
+schema_version: "0.1"
+autonomy_policy_contract:
+  id: autonomy.policy.wave5.fast_quality
+  applies_to:
+    kind: run
+    ids:
+      - run.wave5.parallel-build
+  default_mode: sandbox_auto
+  tool_classes:
+    - class: file_edit
+      mode: sandbox_auto
+      risk_score: 25
+      requires_approval_above: 80
+    - class: terminal_command
+      mode: yolo
+      risk_score: 35
+      requires_approval_above: 90
+    - class: code_exec
+      mode: confidence_threshold
+      risk_score: 60
+      requires_approval_above: 75
+    - class: network_egress
+      mode: manual
+      risk_score: 85
+      requires_approval_above: 1
+    - class: secret_access
+      mode: manual
+      risk_score: 100
+      requires_approval_above: 1
+  escalation:
+    on_repeated_failure: 2
+    on_high_risk_path: true
+    on_semantic_uncertainty: true
+    max_retries_before_human: 3
+    cooldown_seconds: 300
+  evidence_basis:
+    direct_patterns:
+      - source_id: radar-meta-case-study
+        supports: "Risk-calibrated automation can reduce revert and incident rates while preserving fast lanes."
+      - source_id: community-trends-fe2
+        supports: "Users request autonomy knobs: approval modes, YOLO paths, and sandboxed automatic execution."
+    non_western_coverage_note: "Includes eastern agentic-coding product research from FE-1/FE-2."
+    inference_boundary: "This policy declares allowed autonomy for the run; the engine router enforces fast vs rigorous lane selection."
