@@ -32,3 +32,15 @@ x509-parser = { version = "0.18.1", features = ["verify"] }
 
 [workspace.dependencies.rcgen]
 version = "0.14.8"
+
+[workspace.dependencies.proptest]
+version = "1.5"
+
+[workspace.dependencies.trycmd]
+version = "0.5"
+
+[workspace.dependencies.assert_cmd]
+version = "2.0"
+
+[workspace.dependencies.tempfile]
+version = "3"

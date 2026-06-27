@@ -1,0 +1,123 @@
+schema_version: "0.1.0"
+spec:
+  id: slice-6-frente-a
+  title: "Frente A — R8 structural fix: make the bug class a compile error"
+  status: ready
+  created: 2026-06-26
+  parent_roadmap: forge-rust-v1-specification
+  closes_risk: R8 (RESOLVED via point-fix in 0b2efb4; this slice makes the CLASS impossible)
+
+  purpose: |
+    R8 was a circular-oracle bug: `claim.id` (canonical, derived: `claim.lane.s1.s1`)
+    and `claim.scope.id` (operator-typed: `s1`) shared the SAME Rust type (`StableId`),
+    so `claims.iter().find(|c| &c.id == id)` compiled and silently never matched the
+    operator's scope id. Every unit + integration test passed because tests extracted
+    the canonical id from acquire and fed it back. A 2h live demo exposed it.
+
+    The point-fix (`resolve_claim`, commit 0b2efb4) patched the symptom. Frente A
+    removes the bug CLASS by making the two ids DIFFERENT TYPES so `==` between them
+    is a compile error. This is the "make illegal states unrepresentable" (Minsky) +
+    "parse, don't validate" (King 2019) pattern, applied where the generic research
+    could only gesture and the Rust research (rust-testing-defenses-v1.yaml F1-F7)
+    made concrete.
+
+  research_basis:
+    primary: contracts/research/rust-testing-defenses-v1.yaml
+    key_findings:
+      - F3: "proptest with per-value Strategies is the antidote to circular oracles
+          (generates inputs INDEPENDENTLY of the system under test). proptest > quickcheck
+          here because per-value generation models the operator/canonical distinction
+          inside one newtype."
+      - F4: "CLI boundary testing (assert_cmd/trycmd) is the SECOND direct catch — runs
+          the REAL compiled binary via CARGO_BIN_EXE_ so argv must be in the OPERATOR form
+          a human/agent types (the scope id), not an internal canonical id."
+      - F7: "defense hierarchy by catch-probability: (1) CLI boundary test with operator
+          argv [trycmd/assert_cmd] — highest ROI; (2) proptest with independent Strategies
+          — high, breaks circularity; (4) cargo-mutants — LOW for this class."
+
+  scope:
+    in_scope:
+      - "newtypes ScopeId + ClaimId in common.rs (transparent serde, wire-format unchanged)"
+      - "ClaimContract.id: ClaimId ; ClaimScope.id: ScopeId (the KEY type split)"
+      - "ClaimRef enum + parse_claim_ref() at the CLI argv boundary"
+      - "resolve_claim() rewrite on ClaimRef (no more raw StableId comparison)"
+      - "trycmd boundary test with operator argv (the highest-ROI R8 catch)"
+      - "proptest with independent scope-id Strategy (breaks the circular oracle)"
+    out_of_scope:
+      - "Frente B (self-healing: WAL CRC + reconcile loop) — separate slice"
+      - "Frente C (observability: tracing-as-WAL) — separate slice"
+      - "cargo-mutants CI (low ROI for this class; weekly scheduled, future)"
+      - "kani proof harness (optional future; needs pure mapping fn)"
+
+  design_decisions:
+    - id: DD48
+      decision: "Keep StableId for agent_id, product_area, reason_code; introduce ScopeId + ClaimId ONLY for the two ids that were confused in R8."
+      rationale: "Full newtype-everything is scope creep. R8 was specifically scope_id-vs-claim_id confusion. Splitting just those two turns R8 into a compile error with minimal churn. agent_id etc. are never compared against claim ids in the buggy way."
+      tradeoff: "Slightly less type safety on agent_id; acceptable — no R8-class confusion exists there."
+
+    - id: DD49
+      decision: "ClaimRef is parsed ONCE at the CLI argv boundary via a heuristic: starts with `claim.` -> Full(ClaimId), else Scope(ScopeId). resolve_claim pattern-matches the enum."
+      rationale: "parse-don't-validate (King): once parsed into the enum, downstream code cannot accidentally compare a scope string to a claim id — the types forbid it. The heuristic is localised to one parser fn, fully tested."
+      tradeoff: "An operator could theoretically name a scope `claim.evil` — mitigated by scope-id validation (no dots in scope slugs) enforced in parse_claim_ref."
+
+    - id: DD50
+      decision: "ScopeId/ClaimId are #[serde(transparent)] over String — existing YAML fixtures (claim.lane.x.x / x) deserialize UNCHANGED."
+      rationale: "Zero migration cost. The wire format is identical; only the Rust API gains type discipline. This is the cheap-win half of the research's 'derive-as-sole-constructor' (the other half, sealing State construction, is Frente B)."
+
+    - id: DD51
+      decision: "ClaimResult + ActiveClaimSummary keep claim_id/scope_id as String ON THE WIRE (serialized output), constructed FROM the typed fields internally."
+      rationale: "The wire envelope is consumed by arbitrary LLMs (DC10 multi-LLM interop); plain strings on the boundary keep the contract model-agnostic. The type discipline is internal to Rust."
+
+parallelization_plan:
+  decision: "hybrid: driver does the cascade refactor; ONE worker does the trycmd boundary test in a worktree."
+  honest_assessment: |
+    The structural refactor is a CASCADE: common.rs -> claim.rs(contracts) ->
+    claim_engine.rs -> CLI claim.rs. Each depends on the prior type definition.
+    This is NOT safely parallelizable (workers in separate worktrees would each
+    lack the others' type changes -> merge hell). Forcing fake parallelism here
+    would burn more time on conflict resolution than it saves.
+
+    The trycmd boundary test is GENUINELY independent: it spawns the compiled
+    binary via CARGO_BIN_EXE_ with operator argv; it touches only NEW files
+    (tests/cmd/*.toml + tests/trycmd_r8.rs) that the refactor never edits. This
+    is the real parallel piece. Dispatching it in a worktree while the driver
+    does the refactor validates the multi-subagent pattern on honest work.
+
+  driver_does:
+    - "ScopeId + ClaimId newtypes (common.rs)"
+    - "ClaimContract/ClaimScope type split (claim.rs contracts)"
+    - "claim_engine.rs AcquireRequest + ClaimRejection typed"
+    - "ClaimRef enum + parse_claim_ref + resolve_claim rewrite (CLI claim.rs)"
+    - "proptest module (coupled to the new ClaimRef type — driver owns it)"
+  worker_does_parallel:
+    - "trycmd boundary test: tests/cmd/acquire.toml + tests/cmd/release.toml + tests/cmd/heartbeat.toml exercising operator-shaped scope-id argv against the real binary"
+    - "governed: worker acquires a scope, check-writes before editing, edits only its test files"
+
+acceptance:
+  green_loop:
+    - "cargo check --workspace exit 0"
+    - "cargo clippy --workspace --all-targets -- -D warnings exit 0"
+    - "cargo test --workspace exit 0 (existing 373 + new proptest + new trycmd)"
+    - "cargo fmt --all --check exit 0"
+  behavior_preserved:
+    - "ALL existing tests pass unchanged (refactor is behavior-preserving)"
+    - "existing R8 point-fix tests (release_resolves_by_scope_id_r8, heartbeat_resolves_by_scope_id_r8) still pass"
+  structural_guarantee:
+    - "grep for direct `c.id ==` / `c.scope.id ==` comparison between the two id types returns NOTHING (R8 class is now a compile error if attempted)"
+  r8_defense_added:
+    - "trycmd case invokes release/heartbeat with operator scope id via real binary -> succeeds"
+    - "proptest generates scope ids independently of acquire output -> lookup roundtrips"
+
+risks:
+  - id: R9
+    risk: "Refactor cascade breaks a call site I didn't map (e.g. coordination.rs, isolation.rs using claim.id as StableId)."
+    mitigation: "cargo check is the gate — the compiler lists EVERY site needing the new type. Treat compile errors as the map, not as surprises."
+    severity: low
+  - id: R10
+    risk: "ScopeId/ClaimId serde transparency breaks an existing fixture or e2e that hardcodes the string shape."
+    mitigation: "transparent serde = identical wire format. Run the full 373-test suite after the type split; any deserialization failure is caught immediately."
+    severity: low
+
+traceability:
+  research: [rust-testing-defenses-v1.yaml, structural-bug-prevention-typelevel-v1.yaml]
+  stories: [S6.1-newtype-split, S6.2-claimref-boundary, S6.3-trycmd-worker, S6.4-proptest]

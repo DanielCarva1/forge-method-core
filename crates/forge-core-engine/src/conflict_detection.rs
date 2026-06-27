@@ -56,7 +56,7 @@
 
 use forge_core_contracts::{
     claim::ClaimContract,
-    common::{RepoPath, StableId},
+    common::{ClaimId, RepoPath, StableId},
     tool_effect::ConflictCode,
 };
 
@@ -68,7 +68,7 @@ pub struct BlockDetail {
     /// The write target that collided with another agent's claim.
     pub blocked_path: RepoPath,
     /// The id of the claim that owns the scope (e.g. `claim.story.S4.5`).
-    pub blocking_claim_id: StableId,
+    pub blocking_claim_id: ClaimId,
     /// The agent that currently holds the blocking claim.
     pub claimant: StableId,
     /// Why the write was blocked (typed, DD10 self-correction surface).
@@ -295,13 +295,13 @@ mod tests {
         ActorRole, ClaimIdentity, ClaimKind, ClaimLease, ClaimScope, ClaimScopeKind, ClaimStatus,
         ClaimStatusRecord, ExpiryAction, ExpiryPolicy, ReclaimPolicy,
     };
-    use forge_core_contracts::common::{RepoPath, StableId};
+    use forge_core_contracts::common::{ClaimId, RepoPath, ScopeId, StableId};
 
     /// Build a live claim owned by `agent` over the given `paths`, expiring
     /// well after `now`. Keeps tests terse and readable.
     fn live_claim(id: &str, agent: &str, paths: &[&str]) -> ClaimContract {
         ClaimContract {
-            id: StableId(id.to_string()),
+            id: ClaimId(id.to_string()),
             contract_ref: RepoPath("contracts/claims/x.yaml".to_string()),
             claim: ClaimIdentity {
                 kind: ClaimKind::Story,
@@ -311,7 +311,7 @@ mod tests {
             },
             scope: ClaimScope {
                 kind: ClaimScopeKind::Story,
-                id: StableId("S4.5".to_string()),
+                id: ScopeId("S4.5".to_string()),
                 product_area: None,
                 paths: paths.iter().map(|p| RepoPath((*p).to_string())).collect(),
             },

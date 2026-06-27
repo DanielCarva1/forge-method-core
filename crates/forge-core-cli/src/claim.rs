@@ -23,7 +23,9 @@ use forge_core_contracts::claim::{
     ActorRole, ClaimContract, ClaimContractDocument, ClaimScopeKind,
 };
 use forge_core_contracts::tool_effect::ConflictCode;
-use forge_core_contracts::{CliEnvelope, ExitReason, StableId, ENVELOPE_SCHEMA_VERSION};
+use forge_core_contracts::{
+    ClaimId, CliEnvelope, ExitReason, ScopeId, StableId, ENVELOPE_SCHEMA_VERSION,
+};
 use forge_core_engine::{
     acquire, check_write_against_claims, heartbeat, project_active, release, AcquireRequest,
     ClaimLifecycleDecision, ClaimRejection,
@@ -83,19 +85,44 @@ impl ClaimResult {
 ///
 /// # Errors
 /// `EnvConfig` (5) if the claims dir is corrupt; `RejectedByGate` (2) if the
-/// Resolve a claim reference that may be either the FULL claim id
-/// (`claim.lane.<scope>.<scope>`) OR just the scope id (`<scope>`).
+/// A claim reference as typed by an operator on the CLI argv — parsed ONCE at
+/// the boundary so downstream lookups are type-safe (DD49; parse-don't-validate).
 ///
-/// R8 (slice-5 live demo): the CLI `--id` flag naturally carries the scope id
-/// the operator typed at acquire time, but the on-disk claim stores the full
-/// derived id. Match either form so real CLI usage works; the exact-id match
-/// wins to stay unambiguous when a scope has multiple records (e.g. one
-/// released + one active).
-fn resolve_claim<'a>(claims: &'a [ClaimContract], id: &StableId) -> Option<&'a ClaimContract> {
-    if let Some(exact) = claims.iter().find(|c| &c.id == id) {
-        return Some(exact);
+/// R8 (slice-5): `claim.id` (canonical `claim.lane.s1.s1`) and `scope.id`
+/// (operator-typed `s1`) shared one `StableId` type, so a `==` lookup silently
+/// never matched the operator's token. `ClaimRef` splits them: the operator's
+/// token parses into one of two variants and [`resolve_claim`] matches on the
+/// variant — it can never compare a [`ClaimId`] to a [`ScopeId`] (that would be
+/// a compile error, which is the whole point).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClaimRef {
+    /// The full derived canonical id (`claim.lane.s1.s1`).
+    Full(ClaimId),
+    /// The operator-typed scope id (`s1`).
+    Scope(ScopeId),
+}
+
+/// Parse an operator-typed claim token into a [`ClaimRef`].
+///
+/// Heuristic: a token beginning with `claim.` is the canonical full id; any
+/// other token is treated as a scope id.
+#[must_use]
+pub fn parse_claim_ref(token: &str) -> ClaimRef {
+    if token.starts_with("claim.") {
+        ClaimRef::Full(ClaimId(token.to_string()))
+    } else {
+        ClaimRef::Scope(ScopeId(token.to_string()))
     }
-    claims.iter().find(|c| c.scope.id == *id)
+}
+
+/// Resolve a parsed [`ClaimRef`] against the loaded claims. The exact full-id
+/// match wins over the scope match so a scope with both a released and an active
+/// record stays unambiguous.
+fn resolve_claim<'a>(claims: &'a [ClaimContract], r: &ClaimRef) -> Option<&'a ClaimContract> {
+    match r {
+        ClaimRef::Full(id) => claims.iter().find(|c| c.id == *id),
+        ClaimRef::Scope(id) => claims.iter().find(|c| c.scope.id == *id),
+    }
 }
 
 /// Run `claim acquire` — declare authority over a scope.
@@ -166,7 +193,8 @@ pub fn run_heartbeat(
     if let Some(env) = env_config_if_errors(claims_dir, &errs) {
         return env;
     }
-    let Some(target) = resolve_claim(&existing, claim_id) else {
+    let claim_ref = parse_claim_ref(&claim_id.0);
+    let Some(target) = resolve_claim(&existing, &claim_ref) else {
         return CliEnvelope::err(
             "claim.heartbeat",
             ExitReason::InvalidDecisionShape,
@@ -215,7 +243,8 @@ pub fn run_release(
     if let Some(env) = env_config_if_errors(claims_dir, &errs) {
         return env;
     }
-    let Some(target) = resolve_claim(&existing, claim_id) else {
+    let claim_ref = parse_claim_ref(&claim_id.0);
+    let Some(target) = resolve_claim(&existing, &claim_ref) else {
         return CliEnvelope::err(
             "claim.release",
             ExitReason::InvalidDecisionShape,
@@ -584,7 +613,7 @@ mod tests {
     fn req(scope_id: &str, agent: &str) -> AcquireRequest {
         AcquireRequest {
             scope_kind: ClaimScopeKind::Story,
-            scope_id: StableId(scope_id.into()),
+            scope_id: ScopeId(scope_id.into()),
             agent_id: StableId(agent.into()),
             role: ActorRole::Worker,
             ttl_seconds: 600,

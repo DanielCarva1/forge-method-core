@@ -23,7 +23,7 @@ pub mod workflow;
 
 pub use claim::{ClaimContract, ClaimContractDocument};
 pub use command::{CommandContract, CommandContractDocument};
-pub use common::{RepoPath, SourceId, StableId};
+pub use common::{ClaimId, RepoPath, ScopeId, SourceId, StableId};
 pub use completion::{CompletionContract, CompletionContractDocument};
 pub use coordination_eval::{
     CoordinationDimension, CoordinationEvalContract, CoordinationEvalContractDocument,
