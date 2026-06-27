@@ -153,6 +153,12 @@ pub fn check_write_against_claims(
     }
 }
 
+/// Internal per-target classification produced by [`classify_target`].
+///
+/// Each write target is independently sorted into one of three buckets.
+/// The caller ([`check_write_against_claims`]) aggregates these into a single
+/// [`WriteCheck`] using the fail-closed rule: any `BlockedBy` makes the whole
+/// write [`WriteCheck::Blocked`], regardless of how many targets were clear.
 #[derive(Debug)]
 enum TargetClass {
     Ungoverned,
@@ -160,6 +166,22 @@ enum TargetClass {
     BlockedBy(BlockDetail),
 }
 
+/// Classify a single write target against all live claims on the bus.
+///
+/// Walks every claim in sorted order. For each *live* claim whose scope covers
+/// the target path:
+/// - If the holder is `writer_agent_id`, mark `seen_live_self = true` but keep
+///   scanning — a *peer*'s live claim later in the iteration still wins (hard
+///   block). This makes peer-trumps-self exact even when both agents hold
+///   overlapping claims.
+/// - If the holder is anyone else, return `BlockedBy` immediately — the first
+///   peer collision is authoritative; we do not need to look further.
+///
+/// After all claims are scanned: `seen_live_self` → `GovernedBySelf`;
+/// otherwise → `Ungoverned` (no live claim covered it at all).
+///
+/// This is the heart of layer-2 prevention: it is what turns a semantic claim
+/// ("alice owns scope X") into a hard write gate ("bob may NOT touch X").
 fn classify_target(
     raw_target: &RepoPath,
     target_segments: &[String],

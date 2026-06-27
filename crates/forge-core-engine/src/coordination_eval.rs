@@ -83,14 +83,40 @@ pub enum CoordinationValidationError {
     NoMustPassDimension,
 }
 
-/// Structurally validate a coordination contract: all 9 dims present exactly
-/// once, metric_kind/required_level consistency, and at least one must_pass dim.
+/// Structurally validate a coordination contract before it is used as a gate.
 ///
-/// # Errors
+/// Performs four independent checks and accumulates ALL problems (does not
+/// short-circuit), so a single call surfaces every issue at once:
 ///
-/// Returns the full list of structural problems (empty == valid). Accumulating
-/// all problems (not short-circuiting) lets a single `validate` call report
-/// every issue at once.
+/// 1. **Duplicate dimensions** — each of the 9 canonical dimensions may appear
+///    at most once.
+/// 2. **Missing dimensions** — all 9 dimensions from [`CoordinationDimension::ALL`]
+///    must be present.
+/// 3. **`metric_kind` ↔ field consistency** — a `FixturePass` metric must have
+///    non-empty `fixture_refs` and must NOT carry a `threshold`; a `Threshold`
+///    or `LatencyBudget` metric must have a numeric `threshold`; `ManualReview`
+///    has no field requirement.
+/// 4. **At least one `must_pass` dimension** — a contract with no `must_pass`
+///    dimension gates nothing and is rejected (`NoMustPassDimension`).
+///
+/// # Inputs
+///
+/// - `contract`: the [`CoordinationEvalContract`] to inspect (the 9-dimension
+///   coordination suite authored by the host).
+///
+/// # Returns
+///
+/// A `Vec<CoordinationValidationError>`. An **empty** vector means the contract
+/// is structurally sound and may be used as a gate. A non-empty vector means
+/// the contract is broken — [`score_coordination`] will fail-closed on it (M1).
+///
+/// # Governance invariant
+///
+/// This is the first line of defense: a structurally invalid contract MUST NOT
+/// be scored, because the verdict-chain in [`score_coordination`] would fall
+/// through every guard and return a false `Passed` on an empty or broken
+/// contract. `score_coordination` therefore calls this function at its top
+/// (review S4.7 fix M1) and short-circuits to `Failed` on any error.
 #[must_use]
 pub fn validate_coordination_contract(
     contract: &CoordinationEvalContract,
@@ -162,9 +188,35 @@ pub fn validate_coordination_contract(
     errs
 }
 
-/// Return the list of `fixture_refs` / `evidence_refs` that do NOT resolve to a
-/// real file under `repo_root`. Empty == the suite is REAL (no dangling refs).
-/// Mirrors [`crate::eval::corpus_coverage_gaps`].
+/// Check that every `fixture_ref` and `evidence_ref` in the contract resolves
+/// to a real file under `repo_root`. Returns the list of refs that do NOT
+/// resolve (dangling or invalid). An empty return means the suite is REAL.
+///
+/// Mirrors [`crate::eval::corpus_coverage_gaps`] — the "lift from draft to real"
+/// proof that no coordination dimension references a phantom file.
+///
+/// # Inputs
+///
+/// - `contract`: the coordination suite whose refs to check.
+/// - `repo_root`: the repository root path against which repo-relative refs are
+///   joined and tested for existence.
+///
+/// # Returns
+///
+/// `Vec<String>` of human-readable gap descriptions. Each string identifies the
+/// ref, its kind (fixture/evidence), the dimension, and the reason (missing
+/// file, absolute path, or backslash separator).
+///
+/// # Governance invariants
+///
+/// - **M4 (review S4.7)**: an ABSOLUTE ref (`/etc/passwd`, `C:\...`) makes
+///   [`Path::join`] silently discard `repo_root` and test the host path instead,
+///   producing a false REAL signal. Absolute refs, leading-backslash refs, and
+///   any ref containing a backslash are flagged as gaps. Ref strings MUST be
+///   repo-relative with forward slashes.
+/// - **N1 (review S4.7 v2)**: the Windows drive-letter check requires byte[1]
+///   == `:` AND byte[2] in `{/, \}` — a legitimate 2-char relative ref like
+///   `a:b` is NOT a false gap.
 #[must_use]
 pub fn coordination_fixture_gaps(
     contract: &CoordinationEvalContract,
@@ -218,13 +270,48 @@ pub fn coordination_fixture_gaps(
     missing
 }
 
-/// Score a coordination contract against HOST-PROVIDED outcomes. `outcome_fn`
-/// maps each dimension to its [`CoordinationOutcome`] (the host gathered the
-/// evidence; the engine is the deterministic gate). Dimensions with no supplied
-/// outcome are treated as NOT YET EVIDENCED — a missing must_pass outcome
-/// FAILS (fail-closed), a missing manual-review outcome stays OPEN.
+/// Score a coordination contract against HOST-PROVIDED per-dimension outcomes,
+/// producing a typed [`CoordinationVerdict`].
 ///
-/// Applies the contract's [`CoordinationEvalPassPolicy`].
+/// The engine ships no model (DC9 / DD40): it cannot self-prove a coordination
+/// dimension. Instead, the host (an LLM, operator, or future MCP surface)
+/// supplies evidence via `outcome_fn`; the engine applies the contract's
+/// [`CoordinationEvalPassPolicy`] deterministically.
+///
+/// # Inputs
+///
+/// - `contract`: the [`CoordinationEvalContract`] defining the 9 dimensions,
+///   their required levels, and the pass policy.
+/// - `outcome_fn`: a closure mapping each [`CoordinationDimension`] to an
+///   optional [`CoordinationOutcome`]. Returning `None` means "no evidence
+///   supplied yet" for that dimension.
+///
+/// # Returns
+///
+/// A [`CoordinationScore`] carrying the verdict, per-dimension outcomes,
+/// warnings, and a human-readable summary.
+///
+/// # Verdict logic (DD42)
+///
+/// - **Passed**: no `must_pass` dimension failed, no blocking manual-review
+///   item is open, and (if `all_must_pass_dimensions_required`) no
+///   non-required dimension is missing evidence.
+/// - **Failed**: at least one `must_pass` dimension failed (including a MISSING
+///   outcome — fail-closed).
+/// - **ManualReviewRequired**: no hard failure, but an open manual-review item
+///   exists AND `manual_review_blocks_release` is true.
+///
+/// # Governance invariants
+///
+/// - **M1 (review S4.7)**: validates the contract structurally at the top. An
+///   empty or structurally broken contract short-circuits to `Failed` with the
+///   structural errors as warnings — the gate MUST be fail-closed.
+/// - **L5 (review S4.7)**: synthesized entries for missing outcomes use
+///   `passed = false` so the audit trail never claims unevidenced success.
+///   `should_pass` counting only increments `passed` when EVIDENCED.
+/// - **L2 (review S4.7)**: a `debug_assert!` catches host-closure wiring
+///   mistakes where `outcome_fn` returns an outcome for the wrong dimension.
+/// - A `should_pass` failure is a WARNING, never a hard fail (DD42).
 #[must_use]
 pub fn score_coordination<F>(
     contract: &CoordinationEvalContract,
