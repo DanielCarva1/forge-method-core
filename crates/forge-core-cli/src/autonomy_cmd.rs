@@ -23,9 +23,7 @@ pub fn run_autonomy_command(args: &[String]) {
             );
         }
         other => {
-            eprintln!(
-                "forge-core autonomy: unknown subcommand '{other}'. Try: route"
-            );
+            eprintln!("forge-core autonomy: unknown subcommand '{other}'. Try: route");
             std::process::exit(2);
         }
     }
@@ -44,13 +42,19 @@ pub fn run_route(args: &[String]) {
             "--policy-file" => {
                 idx += 1;
                 policy_file = Some(std::path::PathBuf::from(require_value(
-                    args, idx, "route", "policy-file",
+                    args,
+                    idx,
+                    "route",
+                    "policy-file",
                 )));
             }
             "--goal-file" => {
                 idx += 1;
                 goal_file = Some(std::path::PathBuf::from(require_value(
-                    args, idx, "route", "goal-file",
+                    args,
+                    idx,
+                    "route",
+                    "goal-file",
                 )));
             }
             "--failure-streak" => {
@@ -108,15 +112,15 @@ pub fn run_route(args: &[String]) {
                 Ok(t) => t,
                 Err(e) => emit_err("route", &format!("cannot read goal file: {e}"), want_json),
             };
-            let goal_doc: VerificationGoalContractDocument =
-                match serde_yaml::from_str(&goal_text) {
-                    Ok(d) => d,
-                    Err(e) => emit_err(
-                        "route",
-                        &format!("goal file is not a valid verification_goal contract: {e}"),
-                        want_json,
-                    ),
-                };
+            let goal_doc: VerificationGoalContractDocument = match serde_yaml::from_str(&goal_text)
+            {
+                Ok(d) => d,
+                Err(e) => emit_err(
+                    "route",
+                    &format!("goal file is not a valid verification_goal contract: {e}"),
+                    want_json,
+                ),
+            };
             Some(goal_doc.verification_goal_contract)
         }
         None => None,
@@ -143,8 +147,7 @@ fn require_value(args: &[String], idx: usize, subcommand: &str, flag: &str) -> S
 
 #[allow(clippy::needless_pass_by_value)]
 fn emit_err(command: &str, message: &str, want_json: bool) -> ! {
-    let env: CliEnvelope<()> =
-        CliEnvelope::err(command, ExitReason::InvalidDecisionShape, message);
+    let env: CliEnvelope<()> = CliEnvelope::err(command, ExitReason::InvalidDecisionShape, message);
     emit(env, want_json);
 }
 
@@ -159,10 +162,7 @@ fn emit<T: serde::Serialize>(env: CliEnvelope<T>, want_json: bool) -> ! {
     }
     // Text mode: surface the lane for the accepted case.
     if env.ok {
-        let data_value = env
-            .data
-            .as_ref()
-            .and_then(|d| serde_json::to_value(d).ok());
+        let data_value = env.data.as_ref().and_then(|d| serde_json::to_value(d).ok());
         let lane = data_value
             .as_ref()
             .and_then(|v| v.get("lane"))
@@ -186,11 +186,11 @@ fn emit<T: serde::Serialize>(env: CliEnvelope<T>, want_json: bool) -> ! {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use forge_core_engine::autonomy_router::LaneKind;
     use forge_core_contracts::autonomy_policy::{
         AutonomyMode, AutonomyPolicyContract, EscalationPolicy, PolicyScope, PolicyScopeKind,
     };
     use forge_core_contracts::common::StableId;
+    use forge_core_engine::autonomy_router::LaneKind;
 
     fn manual_policy() -> AutonomyPolicyContract {
         AutonomyPolicyContract {

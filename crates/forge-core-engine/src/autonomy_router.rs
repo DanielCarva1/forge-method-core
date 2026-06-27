@@ -53,7 +53,10 @@ pub struct LaneDecision {
 /// 1. manual policy always routes rigorous;
 /// 2. exhausted retries route rigorous;
 /// 3. missing verification goal routes rigorous;
-/// 4. failed verification plus a high-risk non-YOLO tool class routes rigorous;
+/// 4. non-satisfied verification (any pending/flaky/incomplete state, not only
+///    explicit failure) routes rigorous — the fast lane requires ALL evidence
+///    to be satisfied (fail-closed); a high-risk non-YOLO tool class surfaces a
+///    specific risk reason;
 /// 5. otherwise, the work can proceed on the fast lane.
 #[must_use]
 pub fn route_lane(
@@ -73,12 +76,19 @@ pub fn route_lane(
         return rigorous(LaneRouteReason::NoVerificationGoal);
     };
 
-    if !goal.is_satisfied() && goal.failed_goals().next().is_some() {
+    // Fail-closed: the fast lane REQUIRES machine-checkable evidence to be
+    // fully satisfied. A goal that is pending/running/flaky/skipped (not failed,
+    // not satisfied) must NOT unlock the fast lane — incomplete evidence is
+    // treated as no evidence (W4-001/W4-002).
+    if !goal.is_satisfied() {
+        // If a high-risk, non-YOLO tool class is in scope AND evidence is not
+        // fully satisfied, surface the specific risk so the host can act.
         if let Some(risk) =
             highest_risk_non_yolo_class(policy).filter(|risk| *risk >= HIGH_RISK_THRESHOLD)
         {
             return rigorous(LaneRouteReason::HighRiskToolClass(risk));
         }
+        return rigorous(LaneRouteReason::HighRiskNeedsHuman);
     }
 
     fast(LaneRouteReason::LowRiskVerified)
@@ -274,19 +284,21 @@ mod tests {
     }
 
     #[test]
-    fn failed_goal_with_low_risk_non_yolo_tool_stays_fast() {
+    // W4-001: fail-closed. A non-satisfied goal (failed/pending/flaky) must
+    // NEVER unlock the fast lane, regardless of tool-class risk. Previously a
+    // failed goal with a low-risk non-YOLO class incorrectly stayed Fast.
+    #[test]
+    fn failed_goal_routes_rigorous_even_with_low_risk_non_yolo_tool() {
         let policy = policy(
             AutonomyMode::SandboxAuto,
             vec![tool_class(AutonomyMode::ConfidenceThreshold, 69)],
         );
         let goal = goal(GoalStatus::Failed, OverallVerdictValue::NotSatisfied);
 
-        assert_eq!(
-            route_lane(&policy, Some(&goal), 0),
-            LaneDecision {
-                lane: LaneKind::Fast,
-                reason: LaneRouteReason::LowRiskVerified,
-            }
-        );
+        let decision = route_lane(&policy, Some(&goal), 0);
+        assert_eq!(decision.lane, LaneKind::Rigorous);
+        // High-risk-class reason only fires at risk >= HIGH_RISK_THRESHOLD (70);
+        // with risk 69 the generic human-review reason is used.
+        assert_eq!(decision.reason, LaneRouteReason::HighRiskNeedsHuman);
     }
 }

@@ -1,5 +1,6 @@
 pub mod autonomy_cmd;
 pub mod claim;
+pub mod contract_cmd;
 pub mod coordination;
 pub mod guide;
 pub mod io_util;
