@@ -1,0 +1,281 @@
+meta:
+  topic: "Community trends and requested features for agentic-coding products in 2025-2026"
+  query: "Forge Method Core roadmap research: requested/trending agentic coding capabilities across western and Chinese developer communities, issue trackers, changelogs, benchmarks"
+  date: 2026-06-27
+  researcher_model: "OpenAI API research subagent"
+  confidence: high
+  sources_consulted: 28
+key_findings:
+  - id: F1
+    finding: "The strongest current demand is not bare parallelism alone, but visible, governable multi-agent operations: dashboards, agent state, blockers, retry/recovery, reusable team templates, and dependency graphs."
+    evidence: "A Claude Code power user called running 4-6 agents blind the '#1 friction point' and requested '/team status', persistent agent mode, auto-recovery, task graph visualization, and team templates; Claude Code and Cursor 2026 changelogs now ship agent dashboards/background sessions/subagents."
+    sources:
+      - "https://github.com/anthropics/claude-code/issues/29930"
+      - "https://code.claude.com/docs/en/whats-new/2026-w20"
+      - "https://cursor.com/changelog/2-4"
+  - id: F2
+    finding: "Autonomy controls are a mature, high-volume request: developers want both YOLO/auto-accept for low-risk work and finer approval/classifier modes for dangerous tools."
+    evidence: "Continue issue #12500 asks for a true 'YOLO mode' covering file edits, terminal commands, and all tool invocations; Cursor and Copilot/VS Code users similarly request auto-run/auto-approve, while Cursor CLI ships Auto-review as a middle ground."
+    sources:
+      - "https://github.com/continuedev/continue/issues/12500"
+      - "https://github.com/microsoft/vscode/issues/252496"
+      - "https://cursor.com/docs/cli/changelog"
+      - "https://forum.cursor.com/t/auto-accept-run-in-composer-agent-mode/32142/5"
+  - id: F3
+    finding: "MCP has become default infrastructure for coding agents, but the pain has shifted to governance: per-agent tool filtering, permission wildcards, hot reload, remote servers, and private marketplaces."
+    evidence: "Claude Code users request MCP alwaysAllow and wildcard/prefix permissions; another issue asks for per-agent MCP filtering to improve focus and accuracy; Chinese sources describe MCP as cross-client infrastructure and InfoQ reports remote MCP support."
+    sources:
+      - "https://github.com/anthropics/claude-code/issues/47371"
+      - "https://github.com/anthropics/claude-code/issues/4380"
+      - "https://www.infoq.cn/article/az6CGm0GRRsjoIPVEZFs"
+      - "https://zhiqu.ac/post/mcp-protocol-ecosystem-guide"
+  - id: F4
+    finding: "Persistent memory and cross-session continuity are trending, but communities want provenance, freshness, versioning, review gates, and local privacy rather than uncontrolled auto-memory."
+    evidence: "Claude Code issue #29930 asks for resume mode, session handoff notes, and memory versioning; a V2EX memory tool emphasizes provenance, freshness, knowledge version chains, an approval area before AI-suggested facts become long-term memory, opt-in telemetry, encryption, and audit logs."
+    sources:
+      - "https://github.com/anthropics/claude-code/issues/29930"
+      - "https://www.v2ex.com/t/1213646"
+  - id: F5
+    finding: "Speed and cost are now product-level differentiators: communities discuss fast modes, 4x faster coding models, token efficiency variance, and expensive advanced-model workflows."
+    evidence: "Claude Code documents /fast at about 2.5x speed for higher per-token cost; InfoQ reports Cursor Composer as 4x faster at similar intelligence; GitHub benchmarks compare harnesses on resolution and dollar cost per task; Chinese InfoQ notes Reddit/HN complaints about weekly Cursor costs and token consumption differences."
+    sources:
+      - "https://code.claude.com/docs/en/whats-new/2026-w20"
+      - "https://www.infoq.cn/article/QlBwolS6TLQ36PaYGYf5"
+      - "https://github.blog/ai-and-ml/github-copilot/evaluating-performance-and-efficiency-of-the-github-copilot-agentic-harness-across-models-and-tasks/"
+      - "https://www.infoq.cn/article/G6hkU9pDHzwd6GCWQ0BH"
+  - id: F6
+    finding: "Trust is moving from subjective vibes to measurable harness quality: SWE-bench, Terminal-Bench, SkillsBench, run-to-run variance, cost/task, and token budgets are now part of competitive positioning."
+    evidence: "GitHub says harnesses should be fast, token-efficient, and predictable and reports same-model benchmark comparisons; SWE-bench remains the established coding-agent benchmark; Artificial Analysis tracks real-world coding-agent performance including cost, token usage, and execution time."
+    sources:
+      - "https://github.blog/ai-and-ml/github-copilot/evaluating-performance-and-efficiency-of-the-github-copilot-agentic-harness-across-models-and-tasks/"
+      - "https://github.com/SWE-bench/SWE-bench/"
+      - "https://artificialanalysis.ai/agents/coding-agents"
+  - id: F7
+    finding: "Agentic test-writing and self-debugging loops are high-value because long-horizon autonomy is only trusted when tied to verifiable completion conditions."
+    evidence: "Claude Code 2026 goals keep working until a condition such as tests/lint passing holds; power users request native test result parsing, test failure auto-triage, and CI pipeline awareness."
+    sources:
+      - "https://code.claude.com/docs/en/whats-new/2026-w20"
+      - "https://github.com/anthropics/claude-code/issues/29930"
+  - id: F8
+    finding: "The Chinese developer community mirrors western trends but emphasizes CLI-vs-IDE tradeoffs, MCP/Skills as the new stack, multi-agent orchestration, domestic-model cost routing, and concerns about legacy-code refactoring quality."
+    evidence: "V2EX threads praise agents+skills+MCP while warning that old-code refactors can become more coupled and harder to maintain; Juejin describes Claude Code checkpoints, subagents, and 30+ hour autonomy; InfoQ covers Cursor 3's agent-first interface and 8 parallel agents."
+    sources:
+      - "https://www.v2ex.com/t/1199424"
+      - "https://juejin.cn/post/7561691093528969258"
+      - "https://www.infoq.cn/article/G6hkU9pDHzwd6GCWQ0BH"
+      - "https://www.infoq.cn/article/QlBwolS6TLQ36PaYGYf5"
+feature_demand:
+  - id: DEM-01
+    feature: "Agent/team operations dashboard and resumable task graph"
+    what_community_wants: "A single view of all background/subagent sessions, alive/idle/blocked/done state, current task, last message, dependencies, retries, handoffs, and reusable team templates."
+    representative_quote: "'Running 4-6 agents blind is the #1 friction point' and wishes include '/team status', persistent agent mode, auto-recovery, task graph visualization, and team templates."
+    demand_strength: high
+    implementation_shape_for_forge: "Add a first-class run graph contract over existing phases/claims: agent_state records, task_dependency edges, heartbeat/blocked reasons, retry policy, handoff artifact pointer, and `forge status --agents --graph`; expose JSON for IDE/web dashboards. This is not a duplicate of existing claims/worktrees because it governs lifecycle visibility and recovery rather than file ownership."
+    effort: M
+    feasibility: high
+  - id: DEM-02
+    feature: "Policy-based autonomy knobs and approval modes"
+    what_community_wants: "Configurable spectrum from review-everything to auto-accept edits, allowlisted commands, sandbox-first auto-review, and dangerous YOLO for trusted/local/low-risk environments."
+    representative_quote: "Continue user: 'we want a true YOLO mode where the agent runs fully autonomously — file edits, terminal commands, and all other tool invocations — without stopping for approval at each step.'"
+    demand_strength: high
+    implementation_shape_for_forge: "Ship an autonomy_policy contract with modes (`manual`, `allowlist`, `sandbox_auto`, `confidence_threshold`, `yolo`), per-tool/path/command risk classes, required evidence before escalation, and auditable waivers. Integrate with phase gates and envelope exit codes."
+    effort: M
+    feasibility: high
+  - id: DEM-03
+    feature: "MCP governance layer: per-agent tool scopes, permission wildcards, hot reload, and audit"
+    what_community_wants: "MCP is expected, but users need agent-specific tools, wildcard/prefix permissions, alwaysAllow lists, remote server support, hot reload, and fewer irrelevant tools in each agent context."
+    representative_quote: "Claude Code issue: 'Every tool must be listed explicitly. With 14+ servers and dozens of tools, this is tedious and error-prone'; another asks for per-agent MCP tool filtering because showing all tools causes no specialization."
+    demand_strength: high
+    implementation_shape_for_forge: "Define `mcp_authority.yaml` binding agent roles to allowed servers/tools/resources, wildcard expansion, deny rules, auth requirements, prompt-injection risk level, hot-reload event logs, and reviewable MCP call traces. Forge can act as a policy compiler/gateway for host agents."
+    effort: M
+    feasibility: high
+  - id: DEM-04
+    feature: "Persistent memory/playbook with provenance, freshness, review, and versioning"
+    what_community_wants: "Cross-session memory for preferences, decisions, lessons learned, and project playbooks, but with confirmation before storage, source provenance, stale markers, diffs, privacy, and audit logs."
+    representative_quote: "V2EX memory tool: recalled knowledge carries '来源(provenance) + 新鲜度(freshness)' and AI-given experiences/decisions '先进审核区，你确认了才成为长期记忆'."
+    demand_strength: high
+    implementation_shape_for_forge: "Add `memory_entry` and `playbook_rule` typed contracts: source run id, evidence link, freshness TTL, confidence, owner approval status, supersedes chain, and invalidation triggers from failed validations. Provide `forge memory propose/review/apply`."
+    effort: M
+    feasibility: high
+  - id: DEM-05
+    feature: "Session resume, checkpoints, rewind, and handoff notes"
+    what_community_wants: "Resume where left off, preserve context across background/cloud/local moves, generate end-of-session notes, rewind bad edits, and checkpoint long tasks."
+    representative_quote: "Power user asks for 'Resume where I left off' mode, session handoff notes, and memory versioning; Claude Code docs show sessions/background agents and Rewind context summarization."
+    demand_strength: high
+    implementation_shape_for_forge: "Extend existing WAL/atomic write base with checkpoint manifests: contract state hash, claim set, worktree commit, agent transcript pointer, open decisions, failing checks, next action. Provide `forge checkpoint`, `forge resume`, and `forge rewind-plan` without owning host-agent UI."
+    effort: M
+    feasibility: high
+  - id: DEM-06
+    feature: "Evals, reproducibility, cost telemetry, and token budgets"
+    what_community_wants: "Benchmarks and local evals that prove whether an agent/harness is reliable, how much it costs, token use by model/agent/task, run-to-run variance, and deterministic/replayable traces where possible."
+    representative_quote: "GitHub: a harness should be 'fast, token-efficient, and predictable'; its TerminalBench analysis plots resolution rate vs dollar cost per task and run-to-run spread."
+    demand_strength: high
+    implementation_shape_for_forge: "Create an `eval_run` contract: task id, model/router decision, prompt hash, tool trace hash, token/cost budget, wall time, pass/fail diagnostics, flake/variance metadata. Add budget gates to phase transitions and export OpenTelemetry/JSONL."
+    effort: M
+    feasibility: high
+  - id: DEM-07
+    feature: "Test-driven agent loops and CI-aware self-debugging"
+    what_community_wants: "Agents should write tests, run them, parse failures into categories, keep iterating until explicit goals pass, understand CI/deploy status, and stop when evidence is sufficient."
+    representative_quote: "Claude Code goal example: '/goal all tests in test/auth pass and the lint step is clean'; power user requests native test result parsing, failure auto-triage, and CI pipeline awareness."
+    demand_strength: high
+    implementation_shape_for_forge: "Add `verification_goal` contracts with parser adapters for pytest/jest/cargo/CI, failure clusters, auto-triage notes, max-iteration/budget, and required evidence before completion. This complements existing phase gates by making the loop goal explicit."
+    effort: M
+    feasibility: high
+  - id: DEM-08
+    feature: "Model routing, draft-vs-polish lanes, and fast/cheap verification strategies"
+    what_community_wants: "Use cheap/fast models for drafts/search, strong models for plans/review, fast modes for live debugging, and cross-model critique or second opinions for quality/cost balance."
+    representative_quote: "GitHub says Copilot supports 20+ frontier models and auto model selection; Claude Code documents /fast at about 2.5x speed; Cursor Composer is marketed as 4x faster at similar intelligence."
+    demand_strength: high
+    implementation_shape_for_forge: "Finish dual-lane risk router and add policy outputs: draft_model, verifier_model, max_tokens, expected_cost, cache eligibility, confidence threshold, and required strong-model review for high-risk contract changes. Record actual vs planned cost."
+    effort: M
+    feasibility: high
+  - id: DEM-09
+    feature: "Context transparency and smart compaction"
+    what_community_wants: "Real-time context usage, explanation of compaction, selective compaction preserving rules/decisions/agent definitions while compressing file reads and tool output, and auto-compact between phases."
+    representative_quote: "Power user: 'Black box context meter causes anxiety' and asks for a clear real-time 'X% used' indicator plus selective compaction."
+    demand_strength: medium
+    implementation_shape_for_forge: "Emit context_budget_estimate and compaction_manifest artifacts that classify retained/summarized/dropped context, bind summaries to source hashes, and require waiver if critical contracts are excluded. Host agents can display the meter."
+    effort: M
+    feasibility: medium
+  - id: DEM-10
+    feature: "Agent/skill/plugin marketplace with private enterprise registry"
+    what_community_wants: "Reusable skills, hooks, MCP servers, subagents, commands, and team/workspace-level installation, with private registries and projected token costs."
+    representative_quote: "Cursor's Customize page manages plugins, skills, MCPs, subagents, rules, commands, and hooks; InfoQ reports Cursor 3 plugin marketplace and private team marketplaces."
+    demand_strength: medium
+    implementation_shape_for_forge: "Define signed package manifests for Forge-compatible skills/policies: declared tool authorities, files touched, required gates, expected tokens, version constraints, and revocation metadata. Start with registry schema, not a hosted marketplace."
+    effort: L
+    feasibility: medium
+  - id: DEM-11
+    feature: "AI attribution and review provenance"
+    what_community_wants: "Teams want to know which code lines/changes came from which agent/model/session and why, to audit and review generated code."
+    representative_quote: "Cursor Blame links each AI-generated line to a summary of the conversation and distinguishes Tab completions, agent runs by model, and human edits."
+    demand_strength: medium
+    implementation_shape_for_forge: "Add change_provenance records mapping file ranges or patch hunks to agent id, model, claim, contract evidence, transcript summary hash, and reviewer status. Integrate with git notes or sidecar provenance files."
+    effort: M
+    feasibility: medium
+  - id: DEM-12
+    feature: "Multi-repo and agentic Git workflow orchestration"
+    what_community_wants: "Background agents should operate across repos, branches, PRs, GitHub/Linear/Slack triggers, plan-branch linking, and async review/merge flows while humans inspect diffs later."
+    representative_quote: "InfoQ reports Cursor 3 showing local/cloud agents launched from mobile, web, desktop, Slack, GitHub, and Linear; Claude Code power user asks for plan-branch linking and multi-project dashboards."
+    demand_strength: medium
+    implementation_shape_for_forge: "Add repository_set and branch_plan contracts with per-repo claims, PR evidence, CI status, merge preconditions, cross-repo dependency edges, and async background-run audit trails."
+    effort: L
+    feasibility: medium
+top_8_by_demand_feasibility:
+  - DEM-01
+  - DEM-02
+  - DEM-03
+  - DEM-04
+  - DEM-05
+  - DEM-06
+  - DEM-07
+  - DEM-08
+gaps:
+  - gap: "Discord and X/Twitter evidence was not deeply sampled."
+    why: "Public search results surfaced stronger primary evidence from GitHub issues, official changelogs, HN/Reddit summaries, V2EX, Juejin, and InfoQ; many Discord/X discussions are inaccessible, rate-limited, or hard to verify."
+  - gap: "Exact demand volumes across communities are not statistically comparable."
+    why: "Issue reactions, forum replies, and translated news references use different visibility and moderation dynamics; rankings are demand-by-evidence plus feasibility, not a quantitative survey."
+  - gap: "Some 2026 changelog and blog claims may change rapidly."
+    why: "Agentic coding tools are shipping weekly; roadmap should re-run this research before committing large L-effort features."
+open_questions:
+  - question: "Should Forge position as a policy/governance layer under existing host agents, or ship its own minimal dashboard UI for agent/team visibility?"
+  - question: "Which autonomy policy defaults should be safe for enterprise users without making Forge feel slower than vibe coding?"
+  - question: "Should memory/playbook contracts be project-local only, user-global, or support both with explicit scope and trust boundaries?"
+  - question: "What evaluation corpus should Forge optimize for first: existing router evals, SWE-bench-style repo tasks, Terminal-Bench-like CLI tasks, or customer golden tasks?"
+sources:
+  - url: "https://github.com/anthropics/claude-code/issues/29930"
+    title: "Power user feedback: Agent teams, MCP permissions, context management, and more"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://github.com/anthropics/claude-code/issues/3013"
+    title: "Feature Request: Parallel Agent Execution Mode"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://github.com/continuedev/continue/issues/12500"
+    title: "Bring back full YOLO mode: auto-accept all agent actions"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://github.com/microsoft/vscode/issues/252496"
+    title: "Auto-approve terminal command execution in Copilot Agent Mode"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://github.com/anthropics/claude-code/issues/47371"
+    title: "alwaysAllow config per MCP server required for autonomous operation"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://github.com/anthropics/claude-code/issues/4380"
+    title: "Per-agent MCP tool filtering to improve agent focus and accuracy"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://cursor.com/changelog/2-4"
+    title: "Cursor: Subagents, Skills, and Image Generation"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://cursor.com/docs/cli/changelog"
+    title: "Cursor CLI Changelog"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://code.claude.com/docs/en/whats-new/2026-w20"
+    title: "Claude Code Week 20 2026: agent view, goals, fast mode"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://code.claude.com/docs/en/changelog?_rsc=1tg4o"
+    title: "Claude Code changelog"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://github.blog/ai-and-ml/github-copilot/evaluating-performance-and-efficiency-of-the-github-copilot-agentic-harness-across-models-and-tasks/"
+    title: "Evaluating performance and efficiency of the GitHub Copilot agentic harness across models and tasks"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://github.com/SWE-bench/SWE-bench/"
+    title: "SWE-bench repository"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://artificialanalysis.ai/agents/coding-agents"
+    title: "AI Coding Agent Benchmarks & Leaderboard"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://www.v2ex.com/t/1199424"
+    title: "没用过 opus4.6 + agents + skills + mcp 组合的人不足以谈 AI 编程"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://www.v2ex.com/t/1213646"
+    title: "做了个让 Claude Code、Codex、Cursor 共享记忆的小工具"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://www.v2ex.com/t/1187879"
+    title: "Claude Code 这种智能 CLI 相对于 Cursor 的优势在哪？"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://juejin.cn/post/7561691093528969258"
+    title: "Cursor 与 Claude Code：AI 编程工具的两种哲学"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://juejin.cn/post/7626366335777898559"
+    title: "从玩具到工具：AI Agent 的 MCP 协议革命与工程化实践"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://www.infoq.cn/article/G6hkU9pDHzwd6GCWQ0BH"
+    title: "Cursor 3 推出智能体优先界面，突破传统 IDE 模式"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://www.infoq.cn/article/QlBwolS6TLQ36PaYGYf5"
+    title: "Cursor 2.0发布：自研代码模型 Composer 上线，8 个代理并行，速度提升 4 倍"
+    relevance: high
+    accessed: 2026-06-27
+  - url: "https://www.infoq.cn/article/TQgjTJgGkVSE8bCXElDK"
+    title: "Claude Code 子代理使模块化 AI 工作流程能够在隔离的上下文中运行"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://zhiqu.ac/post/mcp-protocol-ecosystem-guide"
+    title: "MCP 协议与生态指南：Claude Code、Cursor 与开源工具链实战"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://news.ycombinator.com/item?id=45489884"
+    title: "Embracing the parallel coding agent lifestyle"
+    relevance: medium
+    accessed: 2026-06-27
+  - url: "https://blog.fsck.com/2025/10/05/how-im-using-coding-agents-in-september-2025/"
+    title: "How I'm using coding agents in September, 2025"
+    relevance: medium
+    accessed: 2026-06-27
