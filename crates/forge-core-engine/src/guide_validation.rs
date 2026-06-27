@@ -18,7 +18,8 @@
 //! 1. `current_phase` must categorize to a known [`Phase`].
 //! 2. `recommended_workflow` must exist in the catalog.
 //! 3. `recommended_workflow` must be eligible in `current_phase`.
-//! 4. If `proposed_next_phase` differs from `current_phase`, the S1.7
+//! 4. If `proposed_next_phase` is present, it must categorize to a known [`Phase`].
+//! 5. If `proposed_next_phase` differs from `current_phase`, the S1.7
 //!    [`evaluate_transition`] hard gates must clear.
 
 use crate::catalog::find_entry;
@@ -45,6 +46,8 @@ pub enum GuideRejection {
     UnknownWorkflow { id: StableId },
     /// The recommended workflow exists but is not eligible in the current phase.
     NotEligibleInPhase { workflow: StableId, phase: Phase },
+    /// `proposed_next_phase` was present but did not categorize to a known phase.
+    UnrecognizedProposedPhase { raw: StableId },
     /// A proposed phase transition is blocked by the S1.7 hard gates.
     IllegalTransition(crate::TransitionBlockReason),
 }
@@ -80,7 +83,12 @@ pub fn validate_guide_decision(
     //    proposed phase (recommending a next-phase workflow while proposing
     //    the move into it is coherent guidance).
     let mut proposed_seen = None;
-    if let Some(proposed) = decision.proposed_phase_category() {
+    if let Some(raw_proposed) = &decision.proposed_next_phase {
+        let Some(proposed) = Phase::parse(&raw_proposed.0) else {
+            return GuideValidation::Rejected(GuideRejection::UnrecognizedProposedPhase {
+                raw: raw_proposed.clone(),
+            });
+        };
         if proposed != current {
             let req = TransitionRequest {
                 from: current,
@@ -188,6 +196,18 @@ mod tests {
             validate_guide_decision(&d, &cat, &[]),
             GuideValidation::Rejected(GuideRejection::UnrecognizedCurrentPhase {
                 raw: StableId("nonsense".into())
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_unrecognized_proposed_phase() {
+        let cat = real_catalog();
+        let d = decision("discover-intent", "1-discovery", Some("not-a-phase"));
+        assert_eq!(
+            validate_guide_decision(&d, &cat, &[]),
+            GuideValidation::Rejected(GuideRejection::UnrecognizedProposedPhase {
+                raw: StableId("not-a-phase".into())
             })
         );
     }

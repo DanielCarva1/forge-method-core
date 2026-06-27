@@ -13,7 +13,8 @@
 //!    a project may regress to redo work or re-enter a phase).
 //! 3. **Required gates**: certain forward transitions mandate a passing gate.
 //!    `Specification -> Plan` mandates the [`GateKind::SystemDesign`] gate (DC6).
-//!    A required gate must be both PRESENT and `Pass`/`NotApplicable`.
+//!    A required gate must be both PRESENT and `Pass`/`NotApplicable`. A phase-skip
+//!    waiver permits skipping phases, not mandatory gates along the skipped path.
 
 use forge_core_contracts::gate::GateStatus;
 use forge_core_contracts::phase::Phase;
@@ -119,6 +120,20 @@ fn required_gate_for(from: Phase, to: Phase) -> Option<GateKind> {
     }
 }
 
+/// Returns every mandatory gate on a forward transition path.
+fn required_gates_for_forward_path(from: Phase, to: Phase) -> impl Iterator<Item = GateKind> {
+    let from_rank = from.rank();
+    let to_rank = to.rank();
+    Phase::ALL
+        .into_iter()
+        .zip(Phase::ALL.into_iter().skip(1))
+        .filter_map(move |(edge_from, edge_to)| {
+            (edge_from.rank() >= from_rank && edge_to.rank() <= to_rank)
+                .then(|| required_gate_for(edge_from, edge_to))
+                .flatten()
+        })
+}
+
 /// Whether a gate status counts as "passing" for transition purposes.
 /// `Pass` and `NotApplicable` clear a gate; `Fail`, `Concerns`, `Missing` do not.
 #[must_use]
@@ -136,20 +151,28 @@ pub fn evaluate_transition(req: &TransitionRequest<'_>) -> TransitionDecision {
     let rank_delta = req.to.rank().saturating_sub(req.from.rank());
 
     // 1. Forward skip: jumping forward over a phase needs a valid waiver.
+    //    The waiver covers skipping phase states only; mandatory gates on the
+    //    skipped transition path still have to be present and passing below.
     if rank_delta > 1 {
-        return match req.waiver {
-            None => TransitionDecision::Blocked(TransitionBlockReason::ForwardSkipWithoutWaiver {
-                from: req.from,
-                to: req.to,
-            }),
-            Some(w) if w.is_valid() => TransitionDecision::Allowed,
-            Some(_) => TransitionDecision::Blocked(TransitionBlockReason::InvalidWaiver),
-        };
+        match req.waiver {
+            None => {
+                return TransitionDecision::Blocked(
+                    TransitionBlockReason::ForwardSkipWithoutWaiver {
+                        from: req.from,
+                        to: req.to,
+                    },
+                );
+            }
+            Some(w) if !w.is_valid() => {
+                return TransitionDecision::Blocked(TransitionBlockReason::InvalidWaiver);
+            }
+            Some(_) => {}
+        }
     }
 
-    // 2. Required gate (forward adjacent transitions only; rank_delta == 1).
-    if rank_delta == 1 {
-        if let Some(required) = required_gate_for(req.from, req.to) {
+    // 2. Required gates for every forward edge in the transition path.
+    if rank_delta >= 1 {
+        for required in required_gates_for_forward_path(req.from, req.to) {
             let provided = req.gates.iter().find(|g| g.gate_kind == required);
             match provided {
                 None => {
@@ -171,7 +194,7 @@ pub fn evaluate_transition(req: &TransitionRequest<'_>) -> TransitionDecision {
     }
 
     // 3. Backward (delta 0 via saturating, or to.rank < from.rank) and
-    //    adjacent-forward-with-cleared-gate: allowed.
+    //    forward-with-cleared-gates: allowed.
     TransitionDecision::Allowed
 }
 
@@ -271,7 +294,24 @@ mod tests {
     }
 
     #[test]
-    fn forward_skip_with_valid_waiver_is_allowed() {
+    fn forward_skip_with_valid_waiver_and_passing_path_gates_is_allowed() {
+        let waiver = valid_waiver();
+        let gates = [
+            passing(GateKind::Grill),
+            passing(GateKind::SystemDesign),
+            passing(GateKind::StoryReady),
+        ];
+        let req = TransitionRequest {
+            from: Phase::Discovery,
+            to: Phase::BuildVerify,
+            gates: &gates,
+            waiver: Some(&waiver),
+        };
+        assert_eq!(evaluate_transition(&req), TransitionDecision::Allowed);
+    }
+
+    #[test]
+    fn forward_skip_with_valid_waiver_still_requires_path_gates() {
         let waiver = valid_waiver();
         let req = TransitionRequest {
             from: Phase::Discovery,
@@ -279,7 +319,12 @@ mod tests {
             gates: &[],
             waiver: Some(&waiver),
         };
-        assert_eq!(evaluate_transition(&req), TransitionDecision::Allowed);
+        assert_eq!(
+            evaluate_transition(&req),
+            TransitionDecision::Blocked(TransitionBlockReason::RequiredGateMissing {
+                required: GateKind::Grill
+            })
+        );
     }
 
     #[test]
