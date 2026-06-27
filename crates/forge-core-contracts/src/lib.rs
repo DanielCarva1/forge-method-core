@@ -20,6 +20,11 @@ pub mod request;
 pub mod runtime;
 pub mod tool_effect;
 pub mod workflow;
+pub mod agent_run;
+pub mod autonomy_policy;
+pub mod checkpoint;
+pub mod memory;
+pub mod verification_goal;
 
 pub use claim::{ClaimContract, ClaimContractDocument};
 pub use command::{CommandContract, CommandContractDocument};
@@ -52,6 +57,11 @@ pub use runtime::{
     RuntimeRegistryEntryDocument,
 };
 pub use tool_effect::{ToolEffectContract, ToolEffectContractDocument};
+pub use agent_run::{AgentRunContract, AgentRunContractDocument};
+pub use autonomy_policy::{AutonomyPolicyContract, AutonomyPolicyContractDocument};
+pub use checkpoint::{CheckpointContract, CheckpointContractDocument};
+pub use memory::{MemoryContract, MemoryContractDocument};
+pub use verification_goal::{VerificationGoalContract, VerificationGoalContractDocument};
 
 pub use catalog::{Catalog, CatalogDocument, CatalogEntry};
 pub use envelope::{CliEnvelope, CliError, ExitReason, ENVELOPE_SCHEMA_VERSION};

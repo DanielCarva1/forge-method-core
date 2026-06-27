@@ -1,0 +1,87 @@
+schema_version: "0.1"
+artifact_kind: "backlog"
+id: "evolve-backlog-v2"
+status: "active"
+created_at: "2026-06-27"
+supersedes: "evolve-backlog-v1"
+phase: "6-evolve"
+goal: "Make forge excellent, fast, robust, reliable, and prove it scales with the model. Synthesis of FE-1 (papers/cases, 24 src) + FE-2 (community/demand, 28 src) + comb-through audit (33 candidates)."
+
+research_basis:
+  fe1: "contracts/research/best-features-from-papers-and-cases-v1.yaml"
+  fe2: "contracts/research/community-trends-and-requested-features-v1.yaml"
+  audit:
+    - "contracts/audit/comb-through-logic-v1.yaml"
+    - "contracts/audit/comb-through-io-v1.yaml"
+    - "contracts/audit/comb-through-quality-v1.yaml"
+
+synthesis: |
+  Two research streams CONVERGE on one thesis: forge wins by being the
+  governance layer that makes autonomy SAFE and VISIBLE, not by being heavy.
+  The flagship (E1, dual-lane risk router) is the convergence point of
+  FEAT-01 risk scoring + DEM-02 autonomy knobs + DEM-08 model routing.
+  The demand pattern (FE-2) is overwhelmingly about VISIBLE, GOVERNABLE
+  multi-agent ops + adaptive autonomy + provenance + evidence — exactly
+  forge's typed-contract sweet spot. Every top demand item maps to a
+  typed contract forge can ship additively.
+
+clusters:
+  - id: C1
+    name: "Adaptive autonomy (scale-with-the-model flagship)"
+    merges:
+      - "E1 dual-lane risk router (from v1)"
+      - "FEAT-01 calibrated risk scoring"
+      - "DEM-02 autonomy knobs / YOLO / approval modes"
+      - "DEM-08 model routing (draft-vs-polish, fast/verify)"
+    contract: "autonomy_policy.yaml (scaffolded)"
+    why: "THE answer to vibe coding: forge routes by risk into a fast lane (machine-checkable evidence, near-silent, yolo-ish) or rigorous lane (gates + human). RADAR proved this wins on outcome (revert 1/3, incident 1/50)."
+    status: "scaffolded"
+
+  - id: C2
+    name: "Multi-agent ops visibility (governance made visible)"
+    merges: ["DEM-01 agent/team ops dashboard", "DEM-05 checkpoint/resume/rewind"]
+    contract: "agent_run.yaml + checkpoint.yaml (scaffolded)"
+    why: "FE-2 F1: 'running 4-6 agents blind is the #1 friction point'. Forge's claim/worktree system already governs parallel agents — surfacing it as a typed run-graph is high-value, low-risk, pure additive."
+    status: "scaffolded"
+
+  - id: C3
+    name: "Fast-lane evidence (the 'quality' in fast+quality)"
+    merges:
+      - "E4 fast-lane evidence contract (from v1)"
+      - "DEM-07 test-driven loops / verification_goal"
+      - "FEAT-05 execution-guided validation"
+      - "FEAT-06 overfitting audit (tests-pass vs semantic-fix)"
+    contract: "verification_goal.yaml (scaffolded)"
+    why: "Fast lane needs machine-checkable evidence (cargo/pytest/jest/CI pass) to be 'quality'. typed verification_goal makes the loop goal explicit + auditable. Separates 'tests passed' from 'credible fix'."
+    status: "scaffolded"
+
+  - id: C4
+    name: "Self-evolve memory with provenance"
+    merges: ["DEM-04 persistent memory/playbook", "FEAT-08 governed live tool creation (adjacent)"]
+    contract: "memory.yaml (scaffolded)"
+    why: "Self-evolve = forge's differentiator vs stateless vibe coding. DEM-04: communities want cross-session memory BUT with provenance + freshness + review-before-promote. Perfect typed-contract fit: memory_entry with source, TTL, supersedes chain, approval status."
+    status: "scaffolded"
+
+  - id: C5
+    name: "Outcome observability + eval bank"
+    merges: ["E5 observability (from v1)", "DEM-06 eval/cost telemetry", "FEAT-16 team analytics", "FEAT-07 eval bank"]
+    why: "R2-R3/F6: measure OUTCOME (lead time, cost, rework, defect escape) not volume. The metric that PROVES forge beats vibe. eval_run contract with token/cost/pass metadata + OTel export."
+    status: "to_build"
+
+  - id: C6
+    name: "Trust/security deepening"
+    merges: ["FEAT-13 runtime sandbox policy", "FEAT-14 signed provenance", "FEAT-15 prompt-injection telemetry"]
+    why: "E3 claims spine (CRC-32C) is the substrate; FEAT-14 signatures add the multi-owner trust boundary. CSA/SLSA: agent provenance is the 2026 frontier. Lower priority — build after autonomy+evidence land."
+    status: "to_spec"
+
+execution_plan:
+  wave_3_now: "Flesh out 5 scaffolded contracts (disjoint files, parallel workers): autonomy_policy, verification_goal, agent_run, memory, checkpoint."
+  wave_4_next: "Engine integration — wire autonomy_policy into guide decide (lane selection), wire verification_goal into phase-transition evidence, wire agent_run into guide status."
+  wave_5: "Outcome observability (C5) — eval_run + telemetry export."
+  deferred: "C6 trust/security signatures (after spine + autonomy land). L-effort FEAT-04 semantic impact map, FEAT-10 CRDT (foundational, defer)."
+
+autonomous_mode_note: |
+  Built under light evolve gates: claims on disjoint files + heavy verify at
+  wave boundaries. Driver orchestrates + wires; workers flesh out disjoint
+  contract modules. No human needed until a real fork (sandbox enforcement
+  boundary, signature key model).
