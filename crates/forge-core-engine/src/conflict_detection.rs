@@ -48,11 +48,13 @@
 //!   logic); the filesystem / integrity spine resolves them when the write
 //!   actually lands.
 //! - **DD29 — lexical path normalization.** `.` segments are dropped and `..`
-//!   is collapsed lexically before matching, so a write to
-//!   `contracts/claims/../secret` is NOT treated as inside a claim on
-//!   `contracts/claims`. This is pure-string normalization (no IO / no symlink
-//!   resolution); it defends against the obvious escape, and the spine is the
-//!   final authority on the real on-disk path.
+//!   is collapsed lexically before matching, but leading/excess `..` segments
+//!   are preserved so repo-root escapes cannot normalize into governed paths.
+//!   Thus a write to `contracts/claims/../secret` is NOT treated as inside a
+//!   claim on `contracts/claims`, and `../../claimed` is NOT treated as
+//!   `claimed`. This is pure-string normalization (no IO / no symlink
+//!   resolution); it defends against obvious lexical escapes, and the spine is
+//!   the final authority on the real on-disk path.
 
 use forge_core_contracts::{
     claim::ClaimContract,
@@ -177,8 +179,10 @@ enum TargetClass {
 /// - If the holder is anyone else, return `BlockedBy` immediately — the first
 ///   peer collision is authoritative; we do not need to look further.
 ///
-/// After all claims are scanned: `seen_live_self` → `GovernedBySelf`;
-/// otherwise → `Ungoverned` (no live claim covered it at all).
+/// Targets that lexically climb above the repo root are classified as
+/// `Ungoverned` before claim matching; otherwise, after all claims are scanned:
+/// `seen_live_self` → `GovernedBySelf`; otherwise → `Ungoverned` (no live
+/// claim covered it at all).
 ///
 /// This is the heart of layer-2 prevention: it is what turns a semantic claim
 /// ("alice owns scope X") into a hard write gate ("bob may NOT touch X").
@@ -189,6 +193,10 @@ fn classify_target(
     writer_agent_id: &StableId,
     now_unix: i64,
 ) -> TargetClass {
+    if escapes_repo_root(target_segments) {
+        return TargetClass::Ungoverned;
+    }
+
     let mut seen_live_self = false;
 
     for claim in claims {
@@ -261,6 +269,11 @@ fn is_explicit_repo_root_path(raw: &str) -> bool {
         .all(|part| part.is_empty() || part == ".")
 }
 
+/// Does the normalized path lexically climb above the repository root?
+fn escapes_repo_root(segments: &[String]) -> bool {
+    segments.first().is_some_and(|segment| segment == "..")
+}
+
 /// True iff `claim_segments` contains `target_segments`.
 ///
 /// Containment = exact match, OR `claim_segments` is a strict directory prefix
@@ -285,21 +298,26 @@ fn path_covers(claim_segments: &[String], target_segments: &[String]) -> bool {
 
 /// Lexically normalize a posix-ish path into clean segments (DD29).
 ///
-/// Drops `.` and collapses `..` lexically (no IO / no symlink resolution). Both
-/// `/` and `\` are treated as separators so Windows-style repo paths match.
-/// A leading separator is ignored (all paths are repo-relative). An empty or
-/// root-only path yields `[]`, which covers nothing and is covered by nothing.
+/// Drops `.` and collapses `..` lexically against preceding non-`..` segments
+/// (no IO / no symlink resolution). Leading/excess `..` segments are preserved
+/// so repo-root escapes do not normalize into governed paths. Both `/` and `\`
+/// are treated as separators so Windows-style repo paths match. A leading
+/// separator is ignored (all paths are repo-relative). An empty or root-only
+/// path yields `[]`, which covers nothing and is covered by nothing.
 fn normalize_segments(raw: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for part in raw.split(['/', '\\']) {
         match part {
             "" | "." => continue,
             ".." => {
-                // Over-pop (leading or excess `..`) is intentionally absorbed:
-                // pop on an empty Vec is a no-op, so `../../etc` -> ["etc"].
-                // Repo-root escape is NOT this engine's job (DD29 lexical
-                // only); the integrity spine resolves real on-disk paths.
-                out.pop();
+                // Collapse only if there is a non-`..` segment to pop; a
+                // leading `..` (or excess `..`) is preserved as a segment so
+                // `../../claimed` cannot become `["claimed"]`.
+                if out.last().is_some_and(|s| s != "..") {
+                    out.pop();
+                } else {
+                    out.push("..".to_string());
+                }
             }
             // DD30: Unicode-lowercase so matching is case-INsensitive. This is
             // fail-closed for security: on a case-insensitive filesystem
@@ -486,8 +504,9 @@ mod tests {
     #[test]
     fn path_traversal_does_not_escape_claim() {
         let claims = vec![live_claim("c1", "alice", &["contracts/claims/"])];
-        // `contracts/claims/../secret` normalizes to `secret`, which is OUTSIDE
-        // the claim — must NOT be blocked (it is not actually inside the dir).
+        // `contracts/claims/../secret` normalizes to `contracts/secret`, which
+        // is OUTSIDE the claim — must NOT be blocked (it is not actually inside
+        // the dir).
         let check = check_write_against_claims(
             &[RepoPath("contracts/claims/../secret".to_string())],
             &StableId("bob".to_string()),
@@ -498,6 +517,50 @@ mod tests {
             !check.is_blocked(),
             "lexical normalization must prevent traversal-based false block"
         );
+    }
+
+    #[test]
+    fn leading_parent_segments_do_not_normalize_into_governed_path() {
+        let claims = vec![live_claim("c1", "alice", &["claimed"])];
+        let raw = "../../claimed";
+
+        assert_eq!(
+            normalize_segments(raw),
+            vec!["..".to_string(), "..".to_string(), "claimed".to_string()]
+        );
+
+        let check = check_write_against_claims(
+            &[RepoPath(raw.to_string())],
+            &StableId("bob".to_string()),
+            &claims,
+            NOW,
+        );
+
+        assert_ungoverned_escape(check, raw);
+
+        let root_claims = vec![live_claim("c-root", "alice", &["."])];
+        let root_check = check_write_against_claims(
+            &[RepoPath(raw.to_string())],
+            &StableId("bob".to_string()),
+            &root_claims,
+            NOW,
+        );
+        assert_ungoverned_escape(root_check, raw);
+    }
+
+    fn assert_ungoverned_escape(check: WriteCheck, raw: &str) {
+        match check {
+            WriteCheck::Ok {
+                governed_by_self,
+                ungoverned,
+            } => {
+                assert!(governed_by_self.is_empty());
+                assert_eq!(ungoverned, vec![RepoPath(raw.to_string())]);
+            }
+            WriteCheck::Blocked { blocks } => {
+                panic!("escaping target must not be blocked as governed: {blocks:?}");
+            }
+        }
     }
 
     #[test]
