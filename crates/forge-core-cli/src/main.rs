@@ -1942,6 +1942,27 @@ fn run_guide_command(args: &[String]) {
     }
 }
 
+fn guide_value(args: &[String], idx: usize) -> Option<&str> {
+    args.get(idx)
+        .filter(|value| !value.is_empty() && !value.starts_with("--"))
+        .map(String::as_str)
+}
+
+fn require_guide_value(args: &[String], idx: usize, subcommand: &str, flag: &str) -> String {
+    match guide_value(args, idx) {
+        Some(value) => value.to_owned(),
+        None => {
+            eprintln!("guide {subcommand}: --{flag} requires a value");
+            std::process::exit(3);
+        }
+    }
+}
+
+fn reject_unknown_guide_arg(subcommand: &str, arg: &str) -> ! {
+    eprintln!("guide {subcommand}: unrecognized argument '{arg}'");
+    std::process::exit(3);
+}
+
 fn run_guide_describe(args: &[String]) {
     use forge_core_cli::guide::{run_describe, DescribePayload};
     use forge_core_contracts::CliEnvelope;
@@ -1953,16 +1974,19 @@ fn run_guide_describe(args: &[String]) {
         match args[idx].as_str() {
             "--catalog-dir" => {
                 idx += 1;
-                if idx < args.len() {
-                    catalog_dir = std::path::PathBuf::from(&args[idx]);
-                }
+                catalog_dir = std::path::PathBuf::from(require_guide_value(
+                    args,
+                    idx,
+                    "describe",
+                    "catalog-dir",
+                ));
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
                 println!("forge-core guide describe [--catalog-dir <path>] [--no-json]");
                 return;
             }
-            _ => {}
+            other => reject_unknown_guide_arg("describe", other),
         }
         idx += 1;
     }
@@ -1984,28 +2008,37 @@ fn run_guide_decide(args: &[String]) {
         match args[idx].as_str() {
             "--decision-file" => {
                 idx += 1;
-                if idx < args.len() {
-                    decision_file = Some(std::path::PathBuf::from(&args[idx]));
-                }
+                decision_file = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    idx,
+                    "decide",
+                    "decision-file",
+                )));
             }
             "--catalog-dir" => {
                 idx += 1;
-                if idx < args.len() {
-                    catalog_dir = std::path::PathBuf::from(&args[idx]);
-                }
+                catalog_dir = std::path::PathBuf::from(require_guide_value(
+                    args,
+                    idx,
+                    "decide",
+                    "catalog-dir",
+                ));
             }
             "--gates-file" => {
                 idx += 1;
-                if idx < args.len() {
-                    gates_file = Some(std::path::PathBuf::from(&args[idx]));
-                }
+                gates_file = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    idx,
+                    "decide",
+                    "gates-file",
+                )));
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
                 println!("forge-core guide decide --decision-file <path> [--catalog-dir <path>] [--gates-file <path>] [--no-json]");
                 return;
             }
-            _ => {}
+            other => reject_unknown_guide_arg("decide", other),
         }
         idx += 1;
     }
@@ -2035,15 +2068,16 @@ fn run_guide_status(args: &[String]) {
         match args[idx].as_str() {
             "--phase" => {
                 idx += 1;
-                if idx < args.len() {
-                    phase = Some(args[idx].clone());
-                }
+                phase = Some(require_guide_value(args, idx, "status", "phase"));
             }
             "--catalog-dir" => {
                 idx += 1;
-                if idx < args.len() {
-                    catalog_dir = std::path::PathBuf::from(&args[idx]);
-                }
+                catalog_dir = std::path::PathBuf::from(require_guide_value(
+                    args,
+                    idx,
+                    "status",
+                    "catalog-dir",
+                ));
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
@@ -2052,7 +2086,7 @@ fn run_guide_status(args: &[String]) {
                 );
                 return;
             }
-            _ => {}
+            other => reject_unknown_guide_arg("status", other),
         }
         idx += 1;
     }
@@ -2755,4 +2789,25 @@ fn run_isolation_transition(args: &[String]) {
         resolve_now_unix(now_unix),
     );
     emit_envelope("isolation", env, want_json);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::guide_value;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(ToString::to_string).collect()
+    }
+
+    #[test]
+    fn guide_value_requires_present_non_flag_value() {
+        let parsed = args(&["--catalog-dir", "contracts/workflows"]);
+        assert_eq!(guide_value(&parsed, 1), Some("contracts/workflows"));
+
+        let missing = args(&["--catalog-dir"]);
+        assert_eq!(guide_value(&missing, 1), None);
+
+        let next_flag = args(&["--catalog-dir", "--no-json"]);
+        assert_eq!(guide_value(&next_flag, 1), None);
+    }
 }
