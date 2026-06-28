@@ -2,12 +2,12 @@
 //!
 //! Exercises the layer-2 prevention promise (C5) as host agents would: agent A
 //! acquires a scope declaring its write paths, then:
-//! - agent A's write into its own path is ALLOWED (governed_by_self),
-//! - agent B's write into A's path is BLOCKED (WriteTargetClaimed, exit 2),
-//! - a write into an unclaimed path is ALLOWED but ungoverned.
+//! - agent A's write into its own path is ALLOWED (`governed_by_self`),
+//! - agent B's write into A's path is BLOCKED (`WriteTargetClaimed`, exit 2),
+//! - a write into an unclaimed path is BLOCKED until the writer owns a claim.
 //!
-//! This drives the REAL engine through the REAL CLI functions (run_acquire /
-//! run_check_write) against on-disk claim files — no mocks. The acquisition is
+//! This drives the REAL engine through the REAL CLI functions (`run_acquire` /
+//! `run_check_write`) against on-disk claim files — no mocks. The acquisition is
 //! serialized by the S4.4 lifecycle lock.
 
 use forge_core_cli::claim::{run_acquire, run_check_write, run_release};
@@ -100,7 +100,7 @@ fn peer_write_into_claimed_path_is_blocked() {
 }
 
 #[test]
-fn write_into_unclaimed_path_is_ungoverned_not_blocked() {
+fn write_into_unclaimed_path_is_blocked_until_claimed() {
     let dir = tmp_claims_dir("ungov");
     let req = acquire_req("alice", &["contracts/stories/S5.0.yaml"]);
     let _ = run_acquire(&dir, &req, NOW);
@@ -112,10 +112,13 @@ fn write_into_unclaimed_path_is_ungoverned_not_blocked() {
         &["docs/unrelated.md".to_string()],
         NOW,
     );
-    assert!(check.ok);
+    assert!(!check.ok);
+    assert_eq!(check.exit_code(), 2);
     let payload = check.data.unwrap();
+    assert!(!payload.allowed);
     assert_eq!(payload.ungoverned.len(), 1);
     assert!(payload.governed_by_self.is_empty());
+    assert!(payload.blocks.is_empty());
 }
 
 #[test]
@@ -163,8 +166,9 @@ fn two_agents_non_overlapping_claims_both_write_freely() {
 }
 
 #[test]
-fn released_claim_no_longer_blocks_peer() {
-    // After alice releases, her path becomes ungoverned and bob may write it.
+fn released_claim_no_longer_blocks_peer_but_write_still_requires_claim() {
+    // After alice releases, her path becomes ungoverned: bob is no longer
+    // blocked by alice, but still must acquire his own claim before writing.
     let dir = tmp_claims_dir("released");
     let req = acquire_req("alice", &["contracts/stories/S5.0.yaml"]);
     let acquired = run_acquire(&dir, &req, NOW);
@@ -185,5 +189,36 @@ fn released_claim_no_longer_blocks_peer() {
         &["contracts/stories/S5.0.yaml".to_string()],
         NOW,
     );
-    assert!(check.ok, "released claim must not block: {:?}", check.error);
+    assert!(
+        !check.ok,
+        "released claim should be ungoverned until bob claims it"
+    );
+    let payload = check.data.expect("ungoverned rejection carries payload");
+    assert!(payload.blocks.is_empty(), "alice no longer blocks bob");
+    assert_eq!(
+        payload.ungoverned,
+        vec!["contracts/stories/S5.0.yaml".to_string()]
+    );
+
+    let bob_req = AcquireRequest {
+        scope_id: ScopeId("S5.1".to_string()),
+        ..acquire_req("bob", &["contracts/stories/S5.0.yaml"])
+    };
+    let bob_claim = run_acquire(&dir, &bob_req, NOW + 1);
+    assert!(
+        bob_claim.ok,
+        "bob should be able to claim released path: {:?}",
+        bob_claim.error
+    );
+    let after_bob_claim = run_check_write(
+        &dir,
+        &StableId("bob".to_string()),
+        &["contracts/stories/S5.0.yaml".to_string()],
+        NOW + 1,
+    );
+    assert!(
+        after_bob_claim.ok,
+        "bob can write after acquiring his own claim: {:?}",
+        after_bob_claim.error
+    );
 }

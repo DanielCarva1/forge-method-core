@@ -20,10 +20,11 @@
 //! - [`WriteCheck::Ok`] with `governed_by_self` — the target is inside a live
 //!   claim held by the *same* writer. Authorized: the agent is writing within
 //!   its own reserved scope.
-//! - [`WriteCheck::Ok`] with `ungoverned` — no live claim covers the target.
+//! - [`WriteCheck::Ok`] with `ungoverned` ? no live claim covers the target.
 //!   Whether an *ungoverned* write is allowed is a **policy** decision
-//!   (require-claim vs allow-it), not an engine decision (DD8/DD19). The engine
-//!   reports the fact; the policy layer decides.
+//!   (require-claim vs allow-it), not this classifier's decision (DD8/DD19).
+//!   The engine reports the fact; the policy layer decides. The Forge CLI's
+//!   default policy is strict: ungoverned writes are rejected.
 //!
 //! ## Hard rules the engine enforces (non-delegable)
 //!
@@ -239,6 +240,39 @@ fn scope_covers_any(claim: &ClaimContract, target_segments: &[String]) -> bool {
         .paths
         .iter()
         .any(|p| claim_path_covers(&p.0, target_segments))
+}
+
+/// True iff two repo paths overlap under the same segment-aware containment
+/// rules used by write conflict detection.
+///
+/// This is deliberately about claim path vs claim path overlap, not about a
+/// write target. Either path may be an exact file, a directory prefix, or an
+/// explicit repo-root claim (`.`, `/`, `""`). A path that lexically escapes the
+/// repo root (`..`) is treated as governing nothing.
+#[must_use]
+pub fn repo_paths_overlap(left: &RepoPath, right: &RepoPath) -> bool {
+    let left_is_root = is_explicit_repo_root_path(&left.0);
+    let right_is_root = is_explicit_repo_root_path(&right.0);
+
+    if left_is_root && right_is_root {
+        return true;
+    }
+
+    let left_segments = normalize_segments(&left.0);
+    let right_segments = normalize_segments(&right.0);
+
+    if escapes_repo_root(&left_segments) || escapes_repo_root(&right_segments) {
+        return false;
+    }
+
+    if left_is_root {
+        return !right_segments.is_empty();
+    }
+    if right_is_root {
+        return !left_segments.is_empty();
+    }
+
+    path_covers(&left_segments, &right_segments) || path_covers(&right_segments, &left_segments)
 }
 
 /// True iff a raw claim path covers normalized target segments.
@@ -739,5 +773,29 @@ mod tests {
             }
             _ => panic!("expected block"),
         }
+    }
+
+    #[test]
+    fn repo_paths_overlap_uses_same_segment_containment_rules_as_write_checks() {
+        assert!(repo_paths_overlap(
+            &RepoPath("contracts/claims".to_string()),
+            &RepoPath("contracts/claims/x.yaml".to_string())
+        ));
+        assert!(repo_paths_overlap(
+            &RepoPath("Contracts/Stories/S5.0.yaml".to_string()),
+            &RepoPath("contracts/stories/s5.0.yaml".to_string())
+        ));
+        assert!(repo_paths_overlap(
+            &RepoPath(".".to_string()),
+            &RepoPath("src/lib.rs".to_string())
+        ));
+        assert!(!repo_paths_overlap(
+            &RepoPath("src/ev".to_string()),
+            &RepoPath("src/evil.rs".to_string())
+        ));
+        assert!(!repo_paths_overlap(
+            &RepoPath("../../claimed".to_string()),
+            &RepoPath("claimed".to_string())
+        ));
     }
 }
