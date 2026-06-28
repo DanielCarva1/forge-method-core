@@ -25,6 +25,8 @@ use forge_core_contracts::claim::{
 };
 use forge_core_contracts::{ClaimId, RepoPath, ScopeId, StableId};
 
+use crate::conflict_detection::repo_paths_overlap;
+
 // ---------------------------------------------------------------------------
 // timestamp helpers — minimal RFC3339 (UTC "Z") <-> unix epoch, no deps.
 // Correct for civil dates 1970-03..2100. Format: "YYYY-MM-DDTHH:MM:SSZ".
@@ -174,6 +176,13 @@ pub enum ClaimRejection {
         holder: StableId,
         expires_at: String,
     },
+    /// A requested path is already covered by a live claim.
+    PathAlreadyClaimed {
+        path: RepoPath,
+        blocking_claim_id: ClaimId,
+        holder: StableId,
+        expires_at: String,
+    },
     /// The caller is not the claimant of this claim.
     NotClaimant {
         claim_id: ClaimId,
@@ -266,6 +275,8 @@ pub fn claim_holds_scope(
 /// Rejection rules (closing the lifecycle soundness gaps):
 /// - A **live** claim by *any* agent (including the same agent) blocks acquire —
 ///   the claimant must heartbeat/renew, not open a second authority.
+/// - A **live** claim whose paths overlap the requested paths also blocks
+///   acquire, even when the scope id differs. A repo path has one live owner.
 /// - An **expired but still-open** claim (status Active/Stale past its lease) whose
 ///   policy requires handoff is NOT silently re-acquirable — it returns
 ///   [`ClaimRejection::ExpiredRequiresHandoff`] (design rule 2: expired claims
@@ -296,6 +307,28 @@ pub fn acquire(
         }
         // Not live. If it is still *open* (Active/Stale) yet past its lease, and
         // the policy mandates handoff, the scope is NOT free — it needs recovery.
+        if matches!(c.status.value, ClaimStatus::Active | ClaimStatus::Stale)
+            && is_expired(c, now_unix)
+            && c.expiry_policy.handoff_required
+        {
+            return ClaimLifecycleDecision::Rejected(ClaimRejection::ExpiredRequiresHandoff {
+                claim_id: c.id.clone(),
+            });
+        }
+    }
+
+    for c in active {
+        let Some(path) = first_overlapping_path(&req.paths, &c.scope.paths) else {
+            continue;
+        };
+        if is_live(c, now_unix) {
+            return ClaimLifecycleDecision::Rejected(ClaimRejection::PathAlreadyClaimed {
+                path,
+                blocking_claim_id: c.id.clone(),
+                holder: c.claim.claimant_agent_id.clone(),
+                expires_at: c.lease.expires_at.clone(),
+            });
+        }
         if matches!(c.status.value, ClaimStatus::Active | ClaimStatus::Stale)
             && is_expired(c, now_unix)
             && c.expiry_policy.handoff_required
@@ -498,6 +531,17 @@ fn default_expiry_policy() -> ExpiryPolicy {
     }
 }
 
+fn first_overlapping_path(requested: &[RepoPath], existing: &[RepoPath]) -> Option<RepoPath> {
+    requested
+        .iter()
+        .find(|requested_path| {
+            existing
+                .iter()
+                .any(|existing_path| repo_paths_overlap(requested_path, existing_path))
+        })
+        .cloned()
+}
+
 fn checked_lease_expiry(
     now_unix: i64,
     ttl_seconds: u64,
@@ -697,6 +741,37 @@ mod tests {
         // must NOT be silently re-acquired — design rule 2 (review bug #1).
         let expired = manual_claim("s1", "agentA", T0 - 1, ClaimStatus::Active);
         let d = acquire(&[expired], &req("s1", "agentB"), T0);
+        assert!(matches!(
+            d,
+            ClaimLifecycleDecision::Rejected(ClaimRejection::ExpiredRequiresHandoff { .. })
+        ));
+    }
+
+    #[test]
+    fn acquire_rejects_live_path_overlap_across_scopes() {
+        let holder = manual_claim("s1", "agentA", T0 + 600, ClaimStatus::Active);
+        let mut request = req("s2", "agentB");
+        request.paths = vec![RepoPath("crates/x-s1/src/lib.rs".into())];
+        let d = acquire(&[holder], &request, T0);
+        match d {
+            ClaimLifecycleDecision::Rejected(ClaimRejection::PathAlreadyClaimed {
+                path,
+                holder,
+                ..
+            }) => {
+                assert_eq!(path.0, "crates/x-s1/src/lib.rs");
+                assert_eq!(holder.0, "agentA");
+            }
+            other => panic!("expected PathAlreadyClaimed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn acquire_rejects_expired_path_overlap_requiring_handoff() {
+        let expired = manual_claim("s1", "agentA", T0 - 1, ClaimStatus::Active);
+        let mut request = req("s2", "agentB");
+        request.paths = vec![RepoPath("crates/x-s1/src/lib.rs".into())];
+        let d = acquire(&[expired], &request, T0);
         assert!(matches!(
             d,
             ClaimLifecycleDecision::Rejected(ClaimRejection::ExpiredRequiresHandoff { .. })

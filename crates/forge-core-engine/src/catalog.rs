@@ -93,9 +93,10 @@ pub fn load_catalog(dir: &Path) -> CatalogLoadReport {
 fn load_one(path: &Path, dir: &Path) -> Result<CatalogEntry, String> {
     let text = fs::read_to_string(path).map_err(|e| format!("read error: {e}"))?;
     // Resolve a stable repo-relative reference (`contracts/workflows/<name>`).
-    let workflow_ref = path
-        .strip_prefix(dir)
-        .map_or_else(|_| path.to_string_lossy().into_owned(), |rel| rel.to_string_lossy().into_owned());
+    let workflow_ref = path.strip_prefix(dir).map_or_else(
+        |_| path.to_string_lossy().into_owned(),
+        |rel| rel.to_string_lossy().into_owned(),
+    );
     parse_workflow_yaml(&workflow_ref, &text)
 }
 

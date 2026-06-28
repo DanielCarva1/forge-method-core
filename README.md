@@ -22,7 +22,8 @@ contract?".
 Forge replaces that chaos with **one source of truth enforced at the boundary**:
 
 - Every agent **claims** the file or story it is about to work on, before it
-  writes. Two agents cannot hold conflicting claims.
+  writes. Two live claims cannot cover the same repo path, even if their story
+  ids differ.
 - Every artifact is a **typed YAML contract** — discoverable, validatable, and
   machine-readable. No prose that two agents read differently.
 - The whole build — from a one-sentence idea to shipped software — runs through
@@ -82,8 +83,9 @@ This is what removes the merge-conflict tax:
 
 - **Claim acquisition** — an agent declares intent on a scope (a story, a lane, a
   path) and gets a lease with a TTL.
-- **Conflict detection** — before any write, the agent checks whether another
-  active claim covers the target path. Conflicting writes are refused.
+- **Conflict detection** — before any write, the agent checks whether its own
+  active claim covers every target path. Peer-claimed and unclaimed writes are
+  refused.
 - **Worktree isolation** — parallel workers operate in isolated git worktrees so
   their builds never contend.
 - **Coordination eval** — a gate that scores whether a session left the repo
@@ -248,7 +250,7 @@ forge-core claim acquire \
   --agent codex-worker-1 \
   --path src/auth.rs
 
-# before writing, check no one else holds it
+# before writing, prove this agent owns every target
 forge-core claim check-write --agent codex-worker-1 --target src/auth.rs
 
 # ... do the work ...
@@ -273,13 +275,16 @@ call them.
 
 **Proven / working today**
 
-- 462 tests green across the workspace; `cargo check`, `cargo clippy`,
-  `cargo fmt`, and `cargo test` all clean.
+- The workspace verification suite is green locally: `cargo check`,
+  `cargo clippy`, `cargo fmt`, and `cargo test`.
 - The full 7-phase method and 110-workflow catalog.
 - Claim engine, conflict detection, worktree isolation, coordination eval —
   validated end to end with parallel workers.
 - Multi-agent governance on the happy path: multiple agents, disjoint files,
   coordinated by claims.
+- Strict write ownership: acquire rejects overlapping live path claims, and
+  `claim check-write` rejects unclaimed targets instead of treating them as
+  writable by default.
 - Self-hardening batch landed: TTL-overflow safety, RFC-3339 calendar
   validation, lockfile stale-owner reclaim, WAL fsync hardening, path-safety,
   symlink escape checks, and TOCTOU revalidation.

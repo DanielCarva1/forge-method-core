@@ -2054,7 +2054,8 @@ fn run_guide_decide(args: &[String]) {
     // YAML file: [{gate_kind: system-design, status: pass}, ...].
     let gates = load_gates(gates_file.as_deref());
 
-    let env: CliEnvelope<DecideAccepted> = run_decide(&decision_file, catalog_dir.as_deref(), &gates);
+    let env: CliEnvelope<DecideAccepted> =
+        run_decide(&decision_file, catalog_dir.as_deref(), &gates);
     emit_guide(env, want_json);
 }
 

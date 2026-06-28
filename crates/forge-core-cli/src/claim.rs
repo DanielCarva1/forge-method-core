@@ -55,8 +55,9 @@ pub struct ClaimResult {
 /// (R2 parity with `guide decide`).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct ClaimRejected {
-    /// One of: `already_claimed_by_other` | `not_claimant` |
-    /// `expired_requires_handoff` | `illegal_transition` | `claim_not_found`.
+    /// One of: `already_claimed_by_other` | `path_already_claimed` |
+    /// `not_claimant` | `expired_requires_handoff` | `illegal_transition` |
+    /// `claim_not_found`.
     pub reject_code: String,
     pub detail: String,
 }
@@ -338,11 +339,11 @@ pub struct WriteCheckPayload {
 /// Run `forge-core check-write`. An agent calls this BEFORE editing a file to
 /// learn whether its write set collides with another agent's live claim.
 ///
-/// - allowed + no blocks  -> write is clear (either inside the writer's own
-///   claim, or ungoverned).
+/// - allowed + no blocks  -> every target is inside the writer's own live
+///   claim.
 /// - blocked              -> exit 2 (RejectedByGate); the writer must acquire
-///   its own scope or wait for a handoff. The `blocks` array tells it exactly
-///   which paths collide and who owns them.
+///   its own scope or wait for a handoff. The `blocks` / `ungoverned` arrays
+///   tell it exactly which paths need correction.
 ///
 /// # Time-of-check vs time-of-use
 ///
@@ -375,16 +376,39 @@ pub fn run_check_write(
         forge_core_engine::WriteCheck::Ok {
             governed_by_self,
             ungoverned,
-        } => CliEnvelope::ok(
-            "check-write",
-            WriteCheckPayload {
-                writer: writer_agent_id.0.clone(),
-                allowed: true,
-                governed_by_self: governed_by_self.into_iter().map(|p| p.0).collect(),
-                ungoverned: ungoverned.into_iter().map(|p| p.0).collect(),
-                blocks: Vec::new(),
-            },
-        ),
+        } => {
+            let governed_by_self: Vec<String> = governed_by_self.into_iter().map(|p| p.0).collect();
+            let ungoverned: Vec<String> = ungoverned.into_iter().map(|p| p.0).collect();
+            if ungoverned.is_empty() {
+                CliEnvelope::ok(
+                    "check-write",
+                    WriteCheckPayload {
+                        writer: writer_agent_id.0.clone(),
+                        allowed: true,
+                        governed_by_self,
+                        ungoverned,
+                        blocks: Vec::new(),
+                    },
+                )
+            } else {
+                let payload = WriteCheckPayload {
+                    writer: writer_agent_id.0.clone(),
+                    allowed: false,
+                    governed_by_self,
+                    ungoverned: ungoverned.clone(),
+                    blocks: Vec::new(),
+                };
+                let mut msg = format!(
+                    "write blocked: {} target(s) are not covered by the writer's live claim:\n",
+                    ungoverned.len()
+                );
+                for path in &ungoverned {
+                    msg.push_str(&format!("  - {path}\n"));
+                }
+                msg.push_str("acquire a claim covering every target before writing.");
+                CliEnvelope::reject("check-write", ExitReason::RejectedByGate, msg, payload)
+            }
+        }
         forge_core_engine::WriteCheck::Blocked { blocks } => {
             // M1 fix: emit the STRUCTURED payload alongside the rejection so
             // the writer can self-correct programmatically (DD17), not just by
@@ -559,6 +583,7 @@ fn rejected_envelope(op: &str, reason: &ClaimRejection) -> CliEnvelope<ClaimResu
 fn reject_code(r: &ClaimRejection) -> String {
     match r {
         ClaimRejection::AlreadyClaimedByOther { .. } => "already_claimed_by_other",
+        ClaimRejection::PathAlreadyClaimed { .. } => "path_already_claimed",
         ClaimRejection::NotClaimant { .. } => "not_claimant",
         ClaimRejection::ExpiredRequiresHandoff { .. } => "expired_requires_handoff",
         ClaimRejection::IllegalTransition { .. } => "illegal_transition",
@@ -699,6 +724,22 @@ mod tests {
         let a = run_acquire(&dir, &req("s1", "agentA"), T0);
         let b = run_acquire(&dir, &req("s2", "agentB"), T0);
         assert!(a.ok && b.ok);
+    }
+
+    #[test]
+    fn acquire_rejects_different_scope_with_overlapping_path() {
+        let dir = tempfile_dir();
+        let first = run_acquire(&dir, &req("s1", "agentA"), T0);
+        assert!(first.ok, "{:?}", first.error);
+
+        let mut overlapping = req("s2", "agentB");
+        overlapping.paths = vec![RepoPath("contracts/stories/s1.yaml".into())];
+        let env = run_acquire(&dir, &overlapping, T0 + 1);
+
+        assert!(!env.ok, "overlapping path must be rejected");
+        assert_eq!(env.exit_code(), 2);
+        let code = env.error.as_ref().unwrap().code.0.clone();
+        assert!(code.starts_with("path_already_claimed"), "got: {code}");
     }
 
     // --- heartbeat ---
@@ -903,5 +944,23 @@ mod tests {
         assert_eq!(env.exit_code(), 3, "must be InvalidDecisionShape (3)");
         // and the bus must stay empty (no claim written)
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn check_write_rejects_unclaimed_targets_by_default() {
+        let dir = tempfile_dir();
+        let env = run_check_write(
+            &dir,
+            &StableId("agentA".into()),
+            &["README.md".to_string()],
+            T0,
+        );
+
+        assert!(!env.ok, "unclaimed write must be rejected");
+        assert_eq!(env.exit_code(), 2);
+        let payload = env.data.expect("rejection should carry payload");
+        assert!(!payload.allowed);
+        assert_eq!(payload.ungoverned, vec!["README.md"]);
+        assert!(payload.blocks.is_empty());
     }
 }

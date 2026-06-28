@@ -29,8 +29,8 @@ pub mod isolation;
 pub mod phase_transition;
 
 pub use catalog::{
-    eligible_count, eligible_entries, find_entry, load_catalog, load_embedded_catalog, CatalogFileError,
-    CatalogLoadReport,
+    eligible_count, eligible_entries, find_entry, load_catalog, load_embedded_catalog,
+    CatalogFileError, CatalogLoadReport,
 };
 
 pub use autonomy_router::{route_lane, LaneDecision, LaneKind, LaneRouteReason};
@@ -50,7 +50,9 @@ pub use claim_engine::{
     ActiveClaimsView, ClaimExpiry, ClaimLifecycleDecision, ClaimRejection,
 };
 
-pub use conflict_detection::{check_write_against_claims, BlockDetail, WriteCheck};
+pub use conflict_detection::{
+    check_write_against_claims, repo_paths_overlap, BlockDetail, WriteCheck,
+};
 pub use isolation::{
     branch_name_for, detect_isolation_conflict, is_live as isolation_is_live, propose_merge,
     transition_status, validate_isolation_contract,

@@ -125,7 +125,8 @@ fn e2e_every_envelope_carries_schema_version_and_exit_reason() {
     // R1/R6: every envelope, success or failure, carries schema_version +
     // command + ok + exit_reason. Deterministic shape. Check each command's output.
     let describe_json = serde_json::to_string(&run_describe(Some(&catalog_dir()))).unwrap();
-    let status_json = serde_json::to_string(&run_status(Some(&catalog_dir()), "1-discovery")).unwrap();
+    let status_json =
+        serde_json::to_string(&run_status(Some(&catalog_dir()), "1-discovery")).unwrap();
     for json in [describe_json, status_json] {
         assert!(json.contains("\"schema_version\""));
         assert!(json.contains("\"command\""));
