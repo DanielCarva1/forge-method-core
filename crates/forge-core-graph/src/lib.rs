@@ -1,0 +1,647 @@
+use forge_core_contracts::{RepoPath, StableId};
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::fmt;
+
+pub const WORKFLOW_GRAPH_SCHEMA_VERSION: &str = "0.1";
+pub const WORKFLOW_GRAPH_KIND: &str = "workflow_graph";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowGraph {
+    pub schema_version: String,
+    #[serde(default = "default_workflow_graph_kind")]
+    pub kind: String,
+    pub graph_id: StableId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<String>,
+    pub nodes: Vec<GraphNode>,
+    pub edges: Vec<GraphEdge>,
+    #[serde(default, deserialize_with = "deserialize_graph_budgets")]
+    pub budgets: Vec<GraphBudget>,
+    pub stop_conditions: Vec<GraphStopCondition>,
+    pub authority_boundary: GraphAuthorityBoundary,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphNode {
+    pub node_id: StableId,
+    pub node_kind: GraphNodeKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation_ref: Option<RepoPath>,
+    #[serde(default)]
+    pub mutation_capable: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub verifies: Vec<StableId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pass_condition: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verifier_result: Option<GraphVerifierResult>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget: Option<GraphBudget>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub human_prompt: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphNodeKind {
+    Operation,
+    Verifier,
+    HumanGate,
+    MemoryRead,
+    MemoryWriteCandidate,
+    ProtocolCall,
+    EvalProbe,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphVerifierResult {
+    Passed,
+    Failed,
+    Blocked,
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphEdge {
+    pub from: StableId,
+    pub to: StableId,
+    pub edge_kind: GraphEdgeKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphEdgeKind {
+    RequiresSuccess,
+    RequiresCompletion,
+    BlocksUntilPassed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphBudget {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget_id: Option<StableId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node_id: Option<StableId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_steps: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tool_calls: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_model_calls: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_duration_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphStopCondition {
+    ValidationErrors,
+    BudgetExceeded,
+    HumanRequired,
+    VerifierFailed,
+    AuthorityMissing,
+    GateBlocked,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphAuthorityBoundary {
+    pub source_of_truth: String,
+    pub adapters_may_suggest: bool,
+    pub adapters_may_mutate: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_authority_refs: Vec<RepoPath>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphValidationReport {
+    pub graph_id: StableId,
+    pub diagnostics: Vec<GraphDiagnostic>,
+}
+
+impl GraphValidationReport {
+    #[must_use]
+    pub fn new(graph_id: StableId) -> Self {
+        Self {
+            graph_id,
+            diagnostics: Vec::new(),
+        }
+    }
+
+    pub fn push(&mut self, diagnostic: GraphDiagnostic) {
+        self.diagnostics.push(diagnostic);
+    }
+
+    pub fn extend(&mut self, other: Self) {
+        self.diagnostics.extend(other.diagnostics);
+    }
+
+    #[must_use]
+    pub fn diagnostics(&self) -> &[GraphDiagnostic] {
+        &self.diagnostics
+    }
+
+    #[must_use]
+    pub fn into_diagnostics(self) -> Vec<GraphDiagnostic> {
+        self.diagnostics
+    }
+
+    #[must_use]
+    pub fn has_errors(&self) -> bool {
+        self.diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.severity == GraphDiagnosticSeverity::Error)
+    }
+
+    #[must_use]
+    pub fn error_count(&self) -> usize {
+        self.diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.severity == GraphDiagnosticSeverity::Error)
+            .count()
+    }
+
+    #[must_use]
+    pub fn warning_count(&self) -> usize {
+        self.diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.severity == GraphDiagnosticSeverity::Warning)
+            .count()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphDiagnostic {
+    pub severity: GraphDiagnosticSeverity,
+    pub code: GraphDiagnosticCode,
+    pub path: String,
+    pub message: String,
+}
+
+impl GraphDiagnostic {
+    #[must_use]
+    pub fn error(
+        code: GraphDiagnosticCode,
+        path: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            severity: GraphDiagnosticSeverity::Error,
+            code,
+            path: path.into(),
+            message: message.into(),
+        }
+    }
+
+    #[must_use]
+    pub fn warning(
+        code: GraphDiagnosticCode,
+        path: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            severity: GraphDiagnosticSeverity::Warning,
+            code,
+            path: path.into(),
+            message: message.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphDiagnosticSeverity {
+    Error,
+    Warning,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphDiagnosticCode {
+    EmptyGraphId,
+    UnsupportedSchemaVersion,
+    InvalidGraphKind,
+    EmptyGraph,
+    EmptyNodeId,
+    DuplicateNodeId,
+    EmptyEdgeEndpoint,
+    MissingEdgeEndpoint,
+    CycleDetected,
+    EmptyOperationRef,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphDryRunReport {
+    pub graph_id: StableId,
+    pub status: GraphDryRunStatus,
+    pub steps: Vec<GraphDryRunStep>,
+    pub diagnostics: Vec<GraphDiagnostic>,
+    pub blocked_node_count: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphDryRunStatus {
+    Planned,
+    Blocked,
+    Invalid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphDryRunStep {
+    pub step_index: usize,
+    pub node_id: StableId,
+    pub node_kind: GraphNodeKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_ref: Option<RepoPath>,
+    pub mutation_capable: bool,
+    pub status: GraphDryRunStepStatus,
+    pub reasons: Vec<GraphDryRunReason>,
+    pub blocked_by: Vec<StableId>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphDryRunStepStatus {
+    Planned,
+    Blocked,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphDryRunReason {
+    TopologicalOrder,
+    BlockedByVerifier,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParseWorkflowGraphError {
+    YamlParseFailed { message: String },
+}
+
+impl fmt::Display for ParseWorkflowGraphError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::YamlParseFailed { message } => {
+                write!(formatter, "failed to parse workflow graph YAML: {message}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ParseWorkflowGraphError {}
+
+impl From<serde_yaml::Error> for ParseWorkflowGraphError {
+    fn from(error: serde_yaml::Error) -> Self {
+        Self::YamlParseFailed {
+            message: error.to_string(),
+        }
+    }
+}
+
+/// Parse a workflow graph document from YAML.
+///
+/// # Errors
+///
+/// Returns [`ParseWorkflowGraphError::YamlParseFailed`] when the document is not
+/// valid YAML or does not match the strict graph contract shape.
+pub fn parse_workflow_graph_yaml(input: &str) -> Result<WorkflowGraph, ParseWorkflowGraphError> {
+    serde_yaml::from_str(input).map_err(ParseWorkflowGraphError::from)
+}
+
+#[must_use]
+pub fn validate_graph(graph: &WorkflowGraph) -> GraphValidationReport {
+    let mut report = GraphValidationReport::new(graph.graph_id.clone());
+    validate_graph_identity(&mut report, graph);
+    validate_nodes(&mut report, graph);
+    validate_edges(&mut report, graph);
+    validate_cycles(&mut report, graph);
+    report
+}
+
+#[must_use]
+pub fn dry_run_graph(graph: &WorkflowGraph) -> GraphDryRunReport {
+    let validation = validate_graph(graph);
+    if validation.has_errors() {
+        return GraphDryRunReport {
+            graph_id: graph.graph_id.clone(),
+            status: GraphDryRunStatus::Invalid,
+            steps: Vec::new(),
+            diagnostics: validation.into_diagnostics(),
+            blocked_node_count: 0,
+        };
+    }
+
+    let nodes_by_id = nodes_by_id(graph);
+    let mut steps = Vec::with_capacity(graph.nodes.len());
+    let mut blocked_node_count = 0usize;
+
+    for (step_index, node_id) in topological_order(graph).into_iter().enumerate() {
+        let Some(node) = nodes_by_id.get(node_id.0.as_str()) else {
+            continue;
+        };
+        let blocked_by = if node.node_kind == GraphNodeKind::Operation && node.mutation_capable {
+            unpassed_upstream_verifiers(graph, node_id.0.as_str())
+        } else {
+            Vec::new()
+        };
+        let blocked = !blocked_by.is_empty();
+        if blocked {
+            blocked_node_count += 1;
+        }
+        steps.push(GraphDryRunStep {
+            step_index,
+            node_id,
+            node_kind: node.node_kind,
+            operation_ref: node.operation_ref.clone(),
+            mutation_capable: node.mutation_capable,
+            status: if blocked {
+                GraphDryRunStepStatus::Blocked
+            } else {
+                GraphDryRunStepStatus::Planned
+            },
+            reasons: if blocked {
+                vec![GraphDryRunReason::BlockedByVerifier]
+            } else {
+                vec![GraphDryRunReason::TopologicalOrder]
+            },
+            blocked_by,
+        });
+    }
+
+    GraphDryRunReport {
+        graph_id: graph.graph_id.clone(),
+        status: if blocked_node_count == 0 {
+            GraphDryRunStatus::Planned
+        } else {
+            GraphDryRunStatus::Blocked
+        },
+        steps,
+        diagnostics: Vec::new(),
+        blocked_node_count,
+    }
+}
+
+fn validate_graph_identity(report: &mut GraphValidationReport, graph: &WorkflowGraph) {
+    if graph.graph_id.0.trim().is_empty() {
+        report.push(GraphDiagnostic::error(
+            GraphDiagnosticCode::EmptyGraphId,
+            "graph_id",
+            "graph_id must not be empty",
+        ));
+    }
+    if graph.schema_version != WORKFLOW_GRAPH_SCHEMA_VERSION {
+        report.push(GraphDiagnostic::error(
+            GraphDiagnosticCode::UnsupportedSchemaVersion,
+            "schema_version",
+            format!("workflow graph schema_version must be {WORKFLOW_GRAPH_SCHEMA_VERSION}"),
+        ));
+    }
+    if graph.kind != WORKFLOW_GRAPH_KIND {
+        report.push(GraphDiagnostic::error(
+            GraphDiagnosticCode::InvalidGraphKind,
+            "kind",
+            format!("workflow graph kind must be {WORKFLOW_GRAPH_KIND}"),
+        ));
+    }
+}
+
+fn validate_nodes(report: &mut GraphValidationReport, graph: &WorkflowGraph) {
+    if graph.nodes.is_empty() {
+        report.push(GraphDiagnostic::error(
+            GraphDiagnosticCode::EmptyGraph,
+            "nodes",
+            "workflow graph must contain at least one node",
+        ));
+    }
+
+    let mut seen = HashSet::new();
+    for (index, node) in graph.nodes.iter().enumerate() {
+        let node_path = format!("nodes.{index}.node_id");
+        if node.node_id.0.trim().is_empty() {
+            report.push(GraphDiagnostic::error(
+                GraphDiagnosticCode::EmptyNodeId,
+                node_path.clone(),
+                "node_id must not be empty",
+            ));
+        }
+        if !seen.insert(node.node_id.0.as_str()) {
+            report.push(GraphDiagnostic::error(
+                GraphDiagnosticCode::DuplicateNodeId,
+                node_path,
+                format!("node_id {} must be unique", node.node_id.0),
+            ));
+        }
+        if node.node_kind == GraphNodeKind::Operation
+            && node
+                .operation_ref
+                .as_ref()
+                .is_none_or(|reference| reference.0.trim().is_empty())
+        {
+            report.push(GraphDiagnostic::error(
+                GraphDiagnosticCode::EmptyOperationRef,
+                format!("nodes.{index}.operation_ref"),
+                "operation nodes require non-empty operation_ref",
+            ));
+        }
+    }
+}
+
+fn validate_edges(report: &mut GraphValidationReport, graph: &WorkflowGraph) {
+    let node_ids: HashSet<&str> = graph
+        .nodes
+        .iter()
+        .map(|node| node.node_id.0.as_str())
+        .collect();
+
+    for (index, edge) in graph.edges.iter().enumerate() {
+        if edge.from.0.trim().is_empty() {
+            report.push(GraphDiagnostic::error(
+                GraphDiagnosticCode::EmptyEdgeEndpoint,
+                format!("edges.{index}.from"),
+                "edge from endpoint must not be empty",
+            ));
+        } else if !node_ids.contains(edge.from.0.as_str()) {
+            report.push(GraphDiagnostic::error(
+                GraphDiagnosticCode::MissingEdgeEndpoint,
+                format!("edges.{index}.from"),
+                format!(
+                    "edge from endpoint {} does not reference a node",
+                    edge.from.0
+                ),
+            ));
+        }
+
+        if edge.to.0.trim().is_empty() {
+            report.push(GraphDiagnostic::error(
+                GraphDiagnosticCode::EmptyEdgeEndpoint,
+                format!("edges.{index}.to"),
+                "edge to endpoint must not be empty",
+            ));
+        } else if !node_ids.contains(edge.to.0.as_str()) {
+            report.push(GraphDiagnostic::error(
+                GraphDiagnosticCode::MissingEdgeEndpoint,
+                format!("edges.{index}.to"),
+                format!("edge to endpoint {} does not reference a node", edge.to.0),
+            ));
+        }
+    }
+}
+
+fn validate_cycles(report: &mut GraphValidationReport, graph: &WorkflowGraph) {
+    if graph.nodes.is_empty() {
+        return;
+    }
+    if topological_order_if_acyclic(graph).is_none() {
+        report.push(GraphDiagnostic::error(
+            GraphDiagnosticCode::CycleDetected,
+            "edges",
+            "workflow graph edges must be acyclic",
+        ));
+    }
+}
+
+fn topological_order(graph: &WorkflowGraph) -> Vec<StableId> {
+    topological_order_if_acyclic(graph).unwrap_or_default()
+}
+
+fn topological_order_if_acyclic(graph: &WorkflowGraph) -> Option<Vec<StableId>> {
+    let node_ids: BTreeSet<String> = graph
+        .nodes
+        .iter()
+        .map(|node| node.node_id.0.clone())
+        .collect();
+    let mut indegree: BTreeMap<String, usize> = node_ids
+        .iter()
+        .map(|node_id| (node_id.clone(), 0))
+        .collect();
+    let mut outgoing: BTreeMap<String, BTreeSet<String>> = node_ids
+        .iter()
+        .map(|node_id| (node_id.clone(), BTreeSet::new()))
+        .collect();
+
+    for edge in &graph.edges {
+        if !node_ids.contains(edge.from.0.as_str()) || !node_ids.contains(edge.to.0.as_str()) {
+            continue;
+        }
+        if outgoing
+            .get_mut(edge.from.0.as_str())
+            .expect("outgoing map initialized from node ids")
+            .insert(edge.to.0.clone())
+        {
+            *indegree
+                .get_mut(edge.to.0.as_str())
+                .expect("indegree map initialized from node ids") += 1;
+        }
+    }
+
+    let mut ready: BTreeSet<String> = indegree
+        .iter()
+        .filter_map(|(node_id, count)| (*count == 0).then_some(node_id.clone()))
+        .collect();
+    let mut order = Vec::with_capacity(node_ids.len());
+
+    while let Some(node_id) = ready.pop_first() {
+        order.push(StableId(node_id.clone()));
+        let children = outgoing
+            .get(node_id.as_str())
+            .expect("outgoing map initialized from node ids");
+        for child in children {
+            let count = indegree
+                .get_mut(child.as_str())
+                .expect("indegree map initialized from node ids");
+            *count -= 1;
+            if *count == 0 {
+                ready.insert(child.clone());
+            }
+        }
+    }
+
+    (order.len() == node_ids.len()).then_some(order)
+}
+
+fn nodes_by_id(graph: &WorkflowGraph) -> BTreeMap<&str, &GraphNode> {
+    graph
+        .nodes
+        .iter()
+        .map(|node| (node.node_id.0.as_str(), node))
+        .collect()
+}
+
+fn incoming_edges_by_target(graph: &WorkflowGraph) -> BTreeMap<&str, Vec<&str>> {
+    let mut incoming: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for edge in &graph.edges {
+        incoming
+            .entry(edge.to.0.as_str())
+            .or_default()
+            .push(edge.from.0.as_str());
+    }
+    for sources in incoming.values_mut() {
+        sources.sort_unstable();
+        sources.dedup();
+    }
+    incoming
+}
+
+fn unpassed_upstream_verifiers(graph: &WorkflowGraph, target_id: &str) -> Vec<StableId> {
+    let nodes = nodes_by_id(graph);
+    let incoming = incoming_edges_by_target(graph);
+    let mut blockers = BTreeSet::new();
+    let mut visited = BTreeSet::new();
+    let mut stack = incoming.get(target_id).cloned().unwrap_or_default();
+    stack.sort_unstable_by(|left, right| right.cmp(left));
+
+    while let Some(node_id) = stack.pop() {
+        if !visited.insert(node_id) {
+            continue;
+        }
+        if let Some(node) = nodes.get(node_id) {
+            if node.node_kind == GraphNodeKind::Verifier
+                && node.verifier_result != Some(GraphVerifierResult::Passed)
+            {
+                blockers.insert(node.node_id.0.clone());
+            }
+        }
+        if let Some(parents) = incoming.get(node_id) {
+            for parent in parents.iter().rev() {
+                stack.push(parent);
+            }
+        }
+    }
+
+    blockers.into_iter().map(StableId).collect()
+}
+
+fn default_workflow_graph_kind() -> String {
+    WORKFLOW_GRAPH_KIND.to_string()
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum GraphBudgetsInput {
+    One(GraphBudget),
+    Many(Vec<GraphBudget>),
+}
+
+fn deserialize_graph_budgets<'de, D>(deserializer: D) -> Result<Vec<GraphBudget>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let Some(input) = Option::<GraphBudgetsInput>::deserialize(deserializer)? else {
+        return Ok(Vec::new());
+    };
+    Ok(match input {
+        GraphBudgetsInput::One(budget) => vec![budget],
+        GraphBudgetsInput::Many(budgets) => budgets,
+    })
+}

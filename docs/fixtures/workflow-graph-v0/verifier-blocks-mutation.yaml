@@ -1,0 +1,38 @@
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.fixture.verifier-blocks-mutation"
+created_at: "2026-06-29T00:00:00Z"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+nodes:
+  - node_id: "read_current_state"
+    node_kind: "operation"
+    operation_ref: "docs/fixtures/operation-contract-v0/observe-project-status.yaml"
+    budget:
+      max_steps: 1
+      max_tool_calls: 0
+  - node_id: "verify_write_authority"
+    node_kind: "verifier"
+    verifies:
+      - "read_current_state"
+    pass_condition: "missing_required_evidence"
+  - node_id: "write_artifact"
+    node_kind: "operation"
+    operation_ref: "docs/fixtures/operation-contract-v0/execute-trivial-write.yaml"
+    mutation_capable: true
+    budget:
+      max_steps: 1
+      max_tool_calls: 0
+edges:
+  - from: "read_current_state"
+    to: "verify_write_authority"
+    edge_kind: "requires_success"
+  - from: "verify_write_authority"
+    to: "write_artifact"
+    edge_kind: "requires_success"
+stop_conditions:
+  - "validation_errors"
+  - "verifier_failed"
+  - "authority_missing"

@@ -1,3 +1,4 @@
+use forge_core_cli::graph_cmd::{GraphCommandInput, GraphCommandKind, GraphCommandStatus};
 use forge_core_cli::m1_cmd::{M1CommandInput, M1CommandKind};
 use forge_core_cli::{
     run_execute_operation, run_host_adapter_artifact_verification,
@@ -57,6 +58,7 @@ fn main() {
         "isolation" => run_isolation_command(&args),
         "coordination" => run_coordination_command(&args),
         "project" => run_project_command(&args),
+        "graph" => run_graph_command(&args),
         "preview" => run_m1_command(&args, M1CommandKind::Preview),
         "ready" => run_m1_command(&args, M1CommandKind::Ready),
         "explain" => run_m1_command(&args, M1CommandKind::Explain),
@@ -1494,6 +1496,130 @@ fn run_m1_command(args: &[String], kind: M1CommandKind) {
     }
 }
 
+fn run_graph_command(args: &[String]) {
+    let subcommand = args.get(1).map_or("--help", String::as_str);
+    match subcommand {
+        "validate" => {
+            let (input, json, _dry_run) =
+                parse_graph_command_args(args, GraphCommandKind::Validate);
+            run_graph_validate(&input, json);
+        }
+        "run" => {
+            let (input, json, dry_run) =
+                parse_graph_command_args(args, GraphCommandKind::RunDryRun);
+            if !dry_run {
+                eprintln!("graph run requires --dry-run");
+                std::process::exit(2);
+            }
+            run_graph_dry_run(&input, json);
+        }
+        "--help" | "-h" | "help" => {
+            println!("{}", graph_usage());
+        }
+        _ => {
+            eprintln!("{}", graph_usage());
+            std::process::exit(2);
+        }
+    }
+}
+
+fn parse_graph_command_args(
+    args: &[String],
+    kind: GraphCommandKind,
+) -> (GraphCommandInput, bool, bool) {
+    let mut root = PathBuf::from(".");
+    let mut graph_path: Option<PathBuf> = None;
+    let mut allow_bootstrap_core = false;
+    let mut json = false;
+    let mut dry_run = false;
+    let mut index = 2usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--root" => {
+                index += 1;
+                root = next_path(args, index);
+            }
+            "--graph" => {
+                index += 1;
+                graph_path = Some(next_path(args, index));
+            }
+            "--dry-run" if kind == GraphCommandKind::RunDryRun => dry_run = true,
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
+            "--json" => json = true,
+            "--help" | "-h" => {
+                println!("{}", graph_usage());
+                std::process::exit(0);
+            }
+            _ => {
+                eprintln!("{}", graph_usage());
+                std::process::exit(2);
+            }
+        }
+        index += 1;
+    }
+
+    (
+        GraphCommandInput {
+            root,
+            graph_path,
+            allow_bootstrap_core,
+        },
+        json,
+        dry_run,
+    )
+}
+
+fn run_graph_validate(input: &GraphCommandInput, json: bool) {
+    match forge_core_cli::graph_cmd::run_validate(input) {
+        Ok(output) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output)
+                        .expect("serialize graph validation output")
+                );
+            } else {
+                println!(
+                    "forge_core_graph_validate status={:?} graph={}",
+                    output.status, output.graph_path
+                );
+            }
+            if output.status == GraphCommandStatus::Blocked {
+                std::process::exit(1);
+            }
+        }
+        Err(error) => {
+            eprintln!("graph validate failed: {error}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn run_graph_dry_run(input: &GraphCommandInput, json: bool) {
+    match forge_core_cli::graph_cmd::run_dry_run(input) {
+        Ok(output) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output).expect("serialize graph dry-run output")
+                );
+            } else {
+                println!(
+                    "forge_core_graph_run status={:?} graph={} dry_run_executed={}",
+                    output.status, output.graph_path, output.dry_run_executed
+                );
+            }
+            if output.status == GraphCommandStatus::Blocked {
+                std::process::exit(1);
+            }
+        }
+        Err(error) => {
+            eprintln!("graph run failed: {error}");
+            std::process::exit(1);
+        }
+    }
+}
+
 fn parse_m1_command_args(args: &[String], kind: M1CommandKind) -> (M1CommandInput, bool) {
     let mut root = PathBuf::from(".");
     let mut operation_path: Option<PathBuf> = None;
@@ -2662,6 +2788,8 @@ fn usage() -> &'static str {
     concat!(
         "usage: forge-core validate [--root <path>] [--json]\n",
         "       forge-core project resolve [--root <path>] [--allow-bootstrap-core] [--json|--no-json]\n",
+        "       forge-core graph validate --root <project> --graph <path> [--allow-bootstrap-core] [--json]\n",
+        "       forge-core graph run --root <project> --graph <path> --dry-run [--allow-bootstrap-core] [--json]\n",
         "       forge-core preview [--root <path>] --operation <path> [--allow-bootstrap-core] [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json]\n",
         "       forge-core ready [--root <path>] --operation <path> [--allow-bootstrap-core] [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json]\n",
         "       forge-core explain [--root <path>] --last-run [--allow-bootstrap-core] [--json]\n",
@@ -2686,6 +2814,13 @@ fn usage() -> &'static str {
         "       forge-core host-adapter-verify-certificate-revocation-policy --trust-policy-path <path> --certificate-path <path> --trusted-signing-time-unix <seconds> [--json]\n",
         "       forge-core host-adapter-verify-tuf-trusted-root-freshness --trust-policy-path <path> --root-metadata-path <path> [--timestamp-metadata-path <path>] [--snapshot-metadata-path <path>] [--targets-metadata-path <path>] --update-start-time-unix <seconds> [--min-root-version <n>] [--min-timestamp-version <n>] [--min-snapshot-version <n>] [--min-targets-version <n>] [--json]",
         "\n       forge-core host-adapter-verify-certificate-crl-status --trust-policy-path <path> --certificate-path <path> --issuer-certificate-path <path> --crl-path <path> --verification-time-unix <seconds> [--json]",
+    )
+}
+
+fn graph_usage() -> &'static str {
+    concat!(
+        "usage: forge-core graph validate --root <project> --graph <path> [--allow-bootstrap-core] [--json]\n",
+        "       forge-core graph run --root <project> --graph <path> --dry-run [--allow-bootstrap-core] [--json]"
     )
 }
 
