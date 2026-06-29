@@ -1,4 +1,5 @@
 use crate::claim::{conflict_code_str, load_claims};
+use crate::cli_util::{graph_usage, next_arg, next_path, parse_i64, usage};
 use crate::project_cmd::{resolve_project, ProjectResolveError};
 use forge_core_contracts::{
     claim::ClaimContract,
@@ -927,4 +928,173 @@ fn display_path(path: &Path) -> String {
     let raw = path.display().to_string();
     raw.strip_prefix(r"\\?\")
         .map_or(raw.clone(), std::string::ToString::to_string)
+}
+pub fn run_graph_command(args: &[String]) {
+    let subcommand = args.get(1).map_or("--help", String::as_str);
+    match subcommand {
+        "validate" => {
+            let (input, json, _dry_run) =
+                parse_graph_command_args(args, GraphCommandKind::Validate);
+            run_graph_validate(&input, json);
+        }
+        "run" => {
+            let (input, json, dry_run) =
+                parse_graph_command_args(args, GraphCommandKind::RunDryRun);
+            if !dry_run {
+                eprintln!("graph run requires --dry-run");
+                std::process::exit(2);
+            }
+            run_graph_dry_run(&input, json);
+        }
+        "--help" | "-h" | "help" => {
+            println!("{}", graph_usage());
+        }
+        _ => {
+            eprintln!("{}", graph_usage());
+            std::process::exit(2);
+        }
+    }
+}
+
+pub fn parse_graph_command_args(
+    args: &[String],
+    kind: GraphCommandKind,
+) -> (GraphCommandInput, bool, bool) {
+    let mut root = PathBuf::from(".");
+    let mut graph_path: Option<PathBuf> = None;
+    let mut allow_bootstrap_core = false;
+    let mut agent_id: Option<String> = None;
+    let mut claims_dir: Option<PathBuf> = None;
+    let mut now_unix: Option<i64> = None;
+    let mut json = false;
+    let mut dry_run = false;
+    let mut index = 2usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--root" => {
+                index += 1;
+                root = next_graph_path(args, index, "root");
+            }
+            "--graph" => {
+                index += 1;
+                graph_path = Some(next_graph_path(args, index, "graph"));
+            }
+            "--agent" | "--agent-id" if kind == GraphCommandKind::RunDryRun => {
+                index += 1;
+                agent_id = Some(next_graph_value(args, index, "agent").to_string());
+            }
+            "--claims-dir" if kind == GraphCommandKind::RunDryRun => {
+                index += 1;
+                claims_dir = Some(next_graph_path(args, index, "claims-dir"));
+            }
+            "--now-unix" if kind == GraphCommandKind::RunDryRun => {
+                index += 1;
+                now_unix = Some(parse_graph_i64(next_graph_value(args, index, "now-unix")));
+            }
+            "--dry-run" if kind == GraphCommandKind::RunDryRun => dry_run = true,
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
+            "--json" => json = true,
+            "--help" | "-h" => {
+                println!("{}", graph_usage());
+                std::process::exit(0);
+            }
+            _ => {
+                eprintln!("{}", graph_usage());
+                std::process::exit(2);
+            }
+        }
+        index += 1;
+    }
+
+    (
+        GraphCommandInput {
+            root,
+            graph_path,
+            allow_bootstrap_core,
+            agent_id,
+            claims_dir,
+            now_unix,
+        },
+        json,
+        dry_run,
+    )
+}
+
+pub fn next_graph_value<'a>(args: &'a [String], index: usize, flag: &str) -> &'a str {
+    let value = args.get(index).map_or_else(
+        || {
+            eprintln!("graph: missing value for --{flag}");
+            std::process::exit(3);
+        },
+        String::as_str,
+    );
+    if value.starts_with('-') {
+        eprintln!("graph: missing value for --{flag}");
+        std::process::exit(3);
+    }
+    value
+}
+
+pub fn next_graph_path(args: &[String], index: usize, flag: &str) -> PathBuf {
+    PathBuf::from(next_graph_value(args, index, flag))
+}
+
+pub fn parse_graph_i64(value: &str) -> i64 {
+    if let Ok(parsed) = value.parse::<i64>() {
+        parsed
+    } else {
+        eprintln!("graph: invalid value for --now-unix: '{value}'");
+        std::process::exit(3);
+    }
+}
+
+pub fn run_graph_validate(input: &GraphCommandInput, json: bool) {
+    match run_validate(input) {
+        Ok(output) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output)
+                        .expect("serialize graph validation output")
+                );
+            } else {
+                println!(
+                    "forge_core_graph_validate status={:?} graph={}",
+                    output.status, output.graph_path
+                );
+            }
+            if output.status == GraphCommandStatus::Blocked {
+                std::process::exit(1);
+            }
+        }
+        Err(error) => {
+            eprintln!("graph validate failed: {error}");
+            std::process::exit(1);
+        }
+    }
+}
+
+pub fn run_graph_dry_run(input: &GraphCommandInput, json: bool) {
+    match run_dry_run(input) {
+        Ok(output) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output).expect("serialize graph dry-run output")
+                );
+            } else {
+                println!(
+                    "forge_core_graph_run status={:?} graph={} dry_run_executed={}",
+                    output.status, output.graph_path, output.dry_run_executed
+                );
+            }
+            if output.status == GraphCommandStatus::Blocked {
+                std::process::exit(1);
+            }
+        }
+        Err(error) => {
+            eprintln!("graph run failed: {error}");
+            std::process::exit(1);
+        }
+    }
 }
