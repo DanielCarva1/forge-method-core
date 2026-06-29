@@ -343,6 +343,80 @@ Total: 7472 linhas, 141 funções, ~243 itens públicos.
     `cargo fmt --check` verde.
   - Âncora de regressão: `validate --root . --json` emitiu
     `"diagnostics": []` — zero mudança observável.
+- [x] R1.CryptoSigstore — Extrair `crypto_sigstore.rs` (2026-06-29)
+  - Movidos: 39 helpers `pub(crate)` + 12 structs `pub(crate)` (com 50 fields
+    `pub(crate)`) cobrindo todo o domínio sigstore (L2183-3362 + L3388-3414
+    pré-extração) — TSA selectors (`select_rekor_integrated_time_for_timestamp_authority`,
+    `select_rfc3161_tsa_for_timestamp_authority`), trust policy loader + 8
+    structs de sub-política (Fulcio/Rekor/CT/TSA/revocation/identity),
+    helpers de certificado X.509/Fulcio (`read_certificate_der`,
+    `parse_certificate`, `verify_fulcio_chain`, `verify_issuer_ca_usage`,
+    `verify_leaf_code_signing_usage`, `extract_fulcio_certificate_identity`,
+    `verify_fulcio_identity_selectors`, `github_repository_matches` + struct
+    `FulcioCertificateIdentity`), helpers de bundle/DSSE
+    (`parse_sigstore_message_signature_bundle`, `parse_sigstore_dsse_bundle`,
+    `verify_bundle_signature_with_certificate`,
+    `verify_dsse_signature_with_certificate`,
+    `verify_rekor_body_binds_bundle`, `verify_rekor_body_binds_dsse`,
+    `dsse_pae`, `decode_base64_flexible`, `decode_ct_log_id`) e structs
+    `ParsedSigstoreMessageSignatureBundle` / `ParsedSigstoreDsseBundle` /
+    `CertificateTransparencyLogMaterial`.
+  - `decode_ct_log_id` (originalmente em L3388-3414, no meio do file I/O entre
+    `read_public_key_file` e `decode_base64_or_raw`) foi movido junto — é
+    chamado por `load_certificate_transparency_log_material` (bloco sigstore)
+    e chama `decode_base64_flexible` (também bloco sigstore). Manter no file
+    I/O criaria dependência circular indesejada.
+  - `decode_base64_or_raw` **não movido** — fica em `lib.rs` porque é usado por
+    `read_signature_file` e `read_public_key_file` (file I/O que permanece
+    aguardando R1.FileIo).
+  - Imports do novo módulo: `base64` (4 variantes STANDARD/STANDARD_NO_PAD/
+    URL_SAFE/URL_SAFE_NO_PAD), `p256::ecdsa::{P256Signature, P256VerifyingKey}`
+    + `p256::ecdsa::signature::Verifier` (trait necessário para
+    `VerifyingKey::verify` — re-export do `signature::Verifier`, mesmo trait
+    que `ed25519_dalek::Verifier`), `rustls_pki_types::CertificateDer`,
+    `serde::Deserialize`, `serde_json::Value`, `x509_parser` (6 itens:
+    `X509Certificate`, `GeneralName`, `ParsedExtension`, `parse_x509_pem`,
+    `parse_x509_certificate`), `crate::crypto_hashing::{hex_bytes,
+    normalize_sha256_display}`, `crate::crypto_rekor` (via path
+    `crate::crypto_rekor::ParsedRekorEntry` em assinaturas de função, sem
+    import top-level para evitar unused warnings), e 5 itens `crate::{...}`
+    (`read_required_file`, `run_host_adapter_rekor_verification`,
+    `HostAdapterRekorVerificationInput`, `HostAdapterRekorVerificationStatus`,
+    `HostAdapterSigstoreTimestampAuthorityVerificationInput`).
+  - Em `lib.rs`: imports reduzidos (de 21 linhas para 9 linhas) removendo
+    13 símbolos órfãos (confirmado via grep: 0 usos fora do bloco extraído
+    após excluir a própria linha de import):
+    `STANDARD_NO_PAD`, `URL_SAFE`, `URL_SAFE_NO_PAD` (3 das 4 variantes
+    base64), `Ed25519Verifier` (trait), `P256Signature`, `DecodePublicKey`,
+    `CertificateDer`, `Deserialize`, `X509Certificate`, `GeneralName`,
+    `ParsedExtension`, `parse_x509_pem`, `parse_x509_certificate`. Imports
+    que ficaram: `BASE64` (usado por `decode_base64_or_raw`),
+    `Ed25519Signature`/`Ed25519VerifyingKey`/`Ed25519Verifier` (trait — usado
+    por `verify_ed25519_signature`), `P256VerifyingKey` + `DecodePublicKey`
+    (usados por `run_host_adapter_rekor_verification`), `OcspResponseStatus`
+    (usado por OCSP verification), `parse_x509_crl` (usado por CRL
+    verification), `Value`/`fs`/`Path` (amplo uso).
+  - Note: `PathBuf` também foi removido de `lib.rs` (órfão após extração —
+    todos os 3 usos em structs sigstore movidos).
+  - Módulo `pub(crate)`, re-exportado via
+    `#[allow(clippy::wildcard_imports)] pub(crate) use crypto_sigstore::*;`
+    no crate root (wildcard, mesmo padrão de `host_adapter_types`, porque o
+    módulo é grande e muitos itens são consumidos por múltiplos
+    `run_host_adapter_*_verification`; `#[allow]` mantém paridade com a
+    baseline clippy de 320 warnings).
+  - `lib.rs`: 3644 → 2433 linhas (-1211, -33.2%); `crypto_sigstore.rs`:
+    1261 linhas. Redução acumulada desde o início de R1: 7472 → 2433
+    (-5039, -67.4%).
+  - Gates: `cargo check --workspace` (zero warnings), `cargo test -p
+    forge-core-cli --lib` (103/103 verdes), sigstore-focused tests `--test
+    validate sigstore|fulcio|bundle|dsse|timestamp_authority` (44 testes
+    verdes), `cargo test --workspace` (97 passando, 1 falha pré-existente
+    `validate_binary_outputs_json_summary` — case mismatch `Passed` vs
+    `passed`, confirmada pré-existente via stash, NÃO regressão), `cargo
+    clippy --pedantic` (320 warnings — paridade perfeita com baseline),
+    `cargo fmt --check` verde.
+  - Âncora de regressão: `validate --root . --json` emitiu
+    `"diagnostics": []` — zero mudança observável.
 - [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
 - [ ] R1.4 — Mover verificação X.509/CRL/OCSP
 - [ ] R1.6 — Mover project link resolve/init
