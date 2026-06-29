@@ -24,6 +24,7 @@ pub mod graph_cmd;
 pub mod guide;
 pub(crate) mod host_adapter_manifest;
 pub(crate) mod host_adapter_projection;
+pub mod host_adapter_verify_cmd;
 // `host_command` here (the CLI's manifest/projection-side helpers) shadows
 // the same-named module re-exported from `forge_core_crypto` (which contains
 // only the two admission predicates `source_ref_is_immutable` and
