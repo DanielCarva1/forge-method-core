@@ -1,0 +1,6 @@
+{
+    "schema_version":  "0.1",
+    "evidence_id":  "graph-task-b",
+    "summary":  "WorkflowGraph ready truthfulness evidence",
+    "fixture_only":  true
+}

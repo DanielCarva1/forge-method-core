@@ -1,0 +1,6 @@
+{
+    "schema_version":  "0.1",
+    "evidence_id":  "single-agent-task-a",
+    "summary":  "Single-agent anchor preview safety evidence",
+    "fixture_only":  true
+}

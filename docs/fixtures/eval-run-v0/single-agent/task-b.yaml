@@ -1,0 +1,27 @@
+schema_version: "0.1"
+eval_run_contract:
+  run_id: "eval.run.single_agent.task_b"
+  task_id: "eval.task.ready_truthfulness"
+  model_ref: "fixture/single-agent-anchor"
+  router_decision: "single_agent_anchor"
+  outcome:
+    value: "passed"
+    evaluated_at: "2026-06-29T00:01:00Z"
+    failure_cluster: null
+    notes: "Single-agent anchor failed closed on missing readiness evidence."
+  cost:
+    prompt_tokens: 7600
+    completion_tokens: 1900
+    total_tokens: 9500
+    estimated_cost_usd_micros: 115000
+    wall_time_ms: 88000
+    num_tool_calls: 7
+    num_turns: 4
+  quality_signals:
+    correct_location: true
+    semantic_correct: true
+    overfit_suspected: false
+    confidence: 86
+  evidence_refs:
+    - "docs/fixtures/eval-run-v0/evidence/single-agent-task-b.json"
+    - "docs/fixtures/eval-run-v0/traces/eval/single-agent-task-b.ndjson"
