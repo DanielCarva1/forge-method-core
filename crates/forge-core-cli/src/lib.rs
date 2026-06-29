@@ -11,6 +11,7 @@ pub(crate) mod crypto_tuf;
 pub(crate) mod effect_index;
 pub mod eval_cmd;
 pub(crate) mod execute_operation;
+pub(crate) mod file_io;
 pub mod graph_cmd;
 pub mod guide;
 pub(crate) mod host_adapter_manifest;
@@ -87,6 +88,13 @@ pub(crate) use crypto_sigstore::*;
 // refinement.
 #[allow(clippy::wildcard_imports)]
 pub(crate) use crypto_slsa_transparency::*;
+// Re-export the shared file I/O helpers at the crate root so existing
+// call sites (`crate::read_required_file`, `crate::read_signature_file`,
+// `crate::read_public_key_file`) inside `lib.rs` and the crypto
+// submodules (`crypto_sigstore`, `crypto_tuf`) keep resolving unchanged
+// after the helpers moved into `file_io`. `decode_base64_or_raw` is
+// consumed only inside `file_io` and stays private to that module.
+pub(crate) use file_io::{read_public_key_file, read_required_file, read_signature_file};
 // Re-export the admission safety predicates at the crate root so existing
 // call sites inside `lib.rs` keep resolving after the helpers moved into
 // `host_command`. The `host_command` builder, `HostCommandMetadata`,
@@ -127,13 +135,11 @@ pub use host_adapter_projection::{
     run_host_adapter_projection,
 };
 
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use p256::ecdsa::VerifyingKey as P256VerifyingKey;
 use p256::pkcs8::DecodePublicKey;
 use rasn_ocsp::OcspResponseStatus;
 use serde_json::Value;
 use std::fs;
-use std::path::Path;
 use x509_parser::parse_x509_crl;
 
 pub fn run_host_adapter_artifact_verification(
@@ -2187,53 +2193,5 @@ pub fn run_host_adapter_certificate_ocsp_status_verification(
         reasons,
         verified_evidence,
         inference_boundary: "Verifies explicit offline OCSP revocation status from a supplied RFC6960 DER OCSP response by checking successful OCSPResponse, BasicOCSPResponse, direct issuer responder authority, OCSP signature, CertID serial and issuer hashes, thisUpdate/nextUpdate freshness, and optional nonce equality. It does not fetch OCSP over the network, infer OCSP from CRL, CT, Rekor, TUF, or short-lived policy, refresh TUF trusted roots, mutate installations, or decide release update authority.".to_string(),
-    }
-}
-
-pub(crate) fn read_required_file(
-    path: &Path,
-    label: &str,
-    reasons: &mut Vec<String>,
-) -> Option<Vec<u8>> {
-    match fs::read(path) {
-        Ok(bytes) => Some(bytes),
-        Err(err) => {
-            reasons.push(format!("{label}_read_failed:{:?}", err.kind()));
-            None
-        }
-    }
-}
-
-fn read_signature_file(path: &Path, reasons: &mut Vec<String>) -> Option<Vec<u8>> {
-    read_required_file(path, "signature", reasons)
-        .and_then(|bytes| decode_base64_or_raw(bytes, 64, "signature", reasons))
-}
-
-fn read_public_key_file(path: &Path, reasons: &mut Vec<String>) -> Option<Vec<u8>> {
-    read_required_file(path, "public_key", reasons)
-        .and_then(|bytes| decode_base64_or_raw(bytes, 32, "public_key", reasons))
-}
-
-fn decode_base64_or_raw(
-    bytes: Vec<u8>,
-    raw_len: usize,
-    label: &str,
-    reasons: &mut Vec<String>,
-) -> Option<Vec<u8>> {
-    if bytes.len() == raw_len {
-        return Some(bytes);
-    }
-    let text = String::from_utf8_lossy(&bytes);
-    let compact = text.split_whitespace().collect::<String>();
-    match BASE64.decode(compact.as_bytes()) {
-        Ok(decoded) if decoded.len() == raw_len => Some(decoded),
-        Ok(decoded) => {
-            reasons.push(format!("{label}_length_invalid:{}", decoded.len()));
-            None
-        }
-        Err(_) => {
-            reasons.push(format!("{label}_base64_invalid"));
-            None
-        }
     }
 }

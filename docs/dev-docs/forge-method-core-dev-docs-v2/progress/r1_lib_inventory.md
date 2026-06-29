@@ -469,6 +469,38 @@ Total: 7472 linhas, 141 funções, ~243 itens públicos.
     `cargo fmt --check` verde.
   - Âncora de regressão: `validate --root . --json` emitiu
     `"diagnostics": []` — zero mudança observável.
+- [x] R1.FileIo — Extrair `file_io.rs` (2026-06-29)
+  - Movidos: 4 helpers de I/O (L2193-2239 pré-extração) — 3 `pub(crate)`
+    (`read_required_file` cross-module usado por lib.rs + crypto_sigstore +
+    crypto_tuf; `read_signature_file` e `read_public_key_file` usados por
+    `run_host_adapter_provenance_verification`) + 1 privado
+    (`decode_base64_or_raw`, usado apenas internamente pelas duas acima).
+  - `read_required_file` já era `pub(crate)` desde R1.CryptoTUF (foi
+    promovido naquele commit para habilitar import de crypto_tuf). Agora
+    vive em seu módulo próprio, com seus dois siblings
+    (`read_signature_file` e `read_public_key_file`) promovidos de `fn`
+    para `pub(crate) fn` para serem alcançáveis a partir de `lib.rs`.
+  - Imports do novo módulo: `base64::{STANDARD as BASE64, Engine as _}`
+    (para decode base64), `std::fs` (para `fs::read`), `std::path::Path`.
+  - Em `lib.rs`: removidos imports órfãos `base64::{STANDARD as BASE64,
+    Engine as _}` (decode_base64_or_raw era o único usuário) e
+    `std::path::Path` (todos os parâmetros `&Path` das funções movidas
+    foram junto). `std::fs` foi mantido — ainda usado por 5 call sites em
+    `run_host_adapter_*` (`fs::read`, `fs::read_to_string` para artifact,
+    log_entry, policy, rekor_log_entry paths).
+  - Módulo `pub(crate)`, re-exportado via `pub(crate) use file_io::{read_required_file,
+    read_signature_file, read_public_key_file};` no crate root (import
+    explícito, não wildcard — módulo pequeno, mantém clippy feliz sem
+    `#[allow]`). `decode_base64_or_raw` fica privado.
+  - `lib.rs`: 2239 → 2199 linhas (-40, -1.8%); `file_io.rs`: 71 linhas.
+    Redução acumulada desde o início de R1: 7472 → 2199 (-5273, -70.6%).
+  - Gates: `cargo check --workspace` (zero warnings), `cargo test -p
+    forge-core-cli --lib` (103/103 verdes), `cargo test --workspace` (360
+    passed, 1 falha pré-existente `validate_binary_outputs_json_summary`
+    — case mismatch, NÃO regressão), `cargo clippy --pedantic` (320
+    warnings — paridade perfeita com baseline), `cargo fmt --check` verde.
+  - Âncora de regressão: `validate --root . --json` emitiu
+    `"diagnostics": []` — zero mudança observável.
 - [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
 - [ ] R1.4 — Mover verificação X.509/CRL/OCSP
 - [ ] R1.6 — Mover project link resolve/init
