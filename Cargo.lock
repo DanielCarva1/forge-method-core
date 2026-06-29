@@ -564,6 +564,7 @@ dependencies = [
  "ed25519-dalek",
  "forge-core-contracts",
  "forge-core-engine",
+ "forge-core-graph",
  "forge-core-runtime",
  "forge-core-store",
  "forge-core-trace",
@@ -600,6 +601,15 @@ dependencies = [
  "include_dir",
  "serde",
  "serde_json",
+ "serde_yaml",
+]
+
+[[package]]
+name = "forge-core-graph"
+version = "0.1.0"
+dependencies = [
+ "forge-core-contracts",
+ "serde",
  "serde_yaml",
 ]
 

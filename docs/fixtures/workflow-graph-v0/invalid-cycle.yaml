@@ -1,0 +1,30 @@
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.fixture.invalid-cycle"
+created_at: "2026-06-29T00:00:00Z"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+nodes:
+  - node_id: "read_plan_context"
+    node_kind: "operation"
+    operation_ref: "docs/fixtures/operation-contract-v0/plan-sprint-slice.yaml"
+    budget:
+      max_steps: 1
+      max_tool_calls: 0
+  - node_id: "read_spec_checkpoint"
+    node_kind: "operation"
+    operation_ref: "docs/fixtures/operation-contract-v0/checkpoint-spec-review.yaml"
+    budget:
+      max_steps: 1
+      max_tool_calls: 0
+edges:
+  - from: "read_plan_context"
+    to: "read_spec_checkpoint"
+    edge_kind: "requires_success"
+  - from: "read_spec_checkpoint"
+    to: "read_plan_context"
+    edge_kind: "requires_success"
+stop_conditions:
+  - "validation_errors"

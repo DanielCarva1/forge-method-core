@@ -1,0 +1,48 @@
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.fixture.parallel-readonly"
+created_at: "2026-06-29T00:00:00Z"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+nodes:
+  - node_id: "read_project_status"
+    node_kind: "operation"
+    operation_ref: "docs/fixtures/operation-contract-v0/observe-project-status.yaml"
+    budget:
+      max_steps: 1
+      max_tool_calls: 0
+  - node_id: "read_plan_context"
+    node_kind: "operation"
+    operation_ref: "docs/fixtures/operation-contract-v0/plan-sprint-slice.yaml"
+    budget:
+      max_steps: 1
+      max_tool_calls: 0
+  - node_id: "read_spec_checkpoint"
+    node_kind: "operation"
+    operation_ref: "docs/fixtures/operation-contract-v0/checkpoint-spec-review.yaml"
+    budget:
+      max_steps: 1
+      max_tool_calls: 0
+  - node_id: "verify_readiness"
+    node_kind: "verifier"
+    verifies:
+      - "read_project_status"
+      - "read_plan_context"
+      - "read_spec_checkpoint"
+    pass_condition: "all_required_evidence_present"
+edges:
+  - from: "read_project_status"
+    to: "verify_readiness"
+    edge_kind: "requires_success"
+  - from: "read_plan_context"
+    to: "verify_readiness"
+    edge_kind: "requires_success"
+  - from: "read_spec_checkpoint"
+    to: "verify_readiness"
+    edge_kind: "requires_success"
+stop_conditions:
+  - "validation_errors"
+  - "budget_exceeded"
+  - "human_required"

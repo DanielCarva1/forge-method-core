@@ -1,0 +1,29 @@
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.fixture.invalid-missing-edge-endpoint"
+created_at: "2026-06-29T00:00:00Z"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+nodes:
+  - node_id: "read_status"
+    node_kind: "operation"
+    operation_ref: "docs/fixtures/operation-contract-v0/observe-project-status.yaml"
+    budget:
+      max_steps: 1
+      max_tool_calls: 0
+  - node_id: "verify_readiness"
+    node_kind: "verifier"
+    verifies:
+      - "missing_context"
+    pass_condition: "all_required_evidence_present"
+edges:
+  - from: "read_status"
+    to: "verify_readiness"
+    edge_kind: "requires_success"
+  - from: "missing_context"
+    to: "verify_readiness"
+    edge_kind: "requires_success"
+stop_conditions:
+  - "validation_errors"
