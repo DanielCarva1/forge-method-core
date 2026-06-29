@@ -55,6 +55,7 @@ fn main() {
         "contract" => forge_core_cli::contract_cmd::run_contract_command(&args),
         "isolation" => run_isolation_command(&args),
         "coordination" => run_coordination_command(&args),
+        "project" => run_project_command(&args),
         "validate" => run_validate_command(&args),
         "execute-operation" => run_execute_operation_command(&args),
         "rebuild-effect-index" => run_rebuild_effect_index_command(&args),
@@ -2508,6 +2509,7 @@ fn parse_strict<T: std::str::FromStr>(s: &str, flag: &str) -> T {
 fn usage() -> &'static str {
     concat!(
         "usage: forge-core validate [--root <path>] [--json]\n",
+        "       forge-core project resolve [--root <path>] [--allow-bootstrap-core] [--json|--no-json]\n",
         "       forge-core execute-operation --root <path> --operation <path> [--command <path>] [--effect <path>] [--payload <target_ref>=<path>] [--max-payload-bytes <bytes>] [--allow-payload-outside-root] [--recorded-at <value>] [--tx-id-prefix <value>] [--json]\n",
         "       forge-core rebuild-effect-index [--root <path>] [--wal <path>] [--index <path>] [--lock <path>] [--recorded-at <value>] [--json]\n",
         "       forge-core query-effect-index [--root <path>] [--index <path>] [--logical-ref <ref>] [--effect-id <id>] [--operation-id <id>] [--target-kind <kind>] [--consumer-use <discovery|diagnostics|handoff_context>] [--context] [--max-context-groups <n>] [--adapter-kind <codex|cursor|claude|opencode|vscode|pidev|forge_standalone|custom>] [--adapter-trigger <evidence_discovery|diagnostics|handoff_preparation|manual_inspection>] [--latest] [--json]\n",
@@ -2555,6 +2557,14 @@ fn run_isolation_command(args: &[String]) {
             std::process::exit(2);
         }
     }
+}
+
+fn run_project_command(args: &[String]) {
+    let (output, exit) = forge_core_cli::project_cmd::dispatch(args);
+    if !output.is_empty() {
+        println!("{output}");
+    }
+    std::process::exit(exit);
 }
 
 fn run_coordination_command(args: &[String]) {
