@@ -12,6 +12,7 @@ forge-core-contracts = { path = "../forge-core-contracts" }
 forge-core-engine = { path = "../forge-core-engine" }
 forge-core-runtime = { path = "../forge-core-runtime" }
 forge-core-store = { path = "../forge-core-store" }
+forge-core-trace = { path = "../forge-core-trace" }
 forge-core-validate = { path = "../forge-core-validate" }
 base64.workspace = true
 ed25519-dalek.workspace = true

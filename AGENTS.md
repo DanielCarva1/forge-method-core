@@ -1,6 +1,6 @@
 # forge-method-rust — Project Conventions
 
-This is a Rust workspace (8 crates under `crates/`, edition 2021, resolver 2)
+This is a Rust workspace (9 crates under `crates/`, edition 2021, resolver 2)
 for the forge-method core. It uses heavy crypto (ed25519-dalek, p256,
 sigstore-tsa, rcgen, x509-parser) and canonical serde.
 

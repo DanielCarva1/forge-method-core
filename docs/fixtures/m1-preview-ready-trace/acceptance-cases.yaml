@@ -1,0 +1,178 @@
+﻿schema_version: "m1_acceptance_examples_v0"
+purpose: "Docs-only acceptance examples for M1 preview, ready, trace, and explain."
+state_resolution:
+  command:
+    - "forge-core"
+    - "project"
+    - "resolve"
+    - "--root"
+    - "."
+    - "--allow-bootstrap-core"
+    - "--json"
+  trace_storage_rule: "Persist trace and explain state only below data.state_root returned by project resolve."
+  consumer_repo_rule: "Consumer repos must use .forge-method.yaml sidecar resolution; do not fall back to project_root/.forge-method."
+  trace_path_pattern: "<resolved state_root>/traces/events.ndjson"
+cases:
+  - id: "preview_mutating_operation_with_command"
+    operation_fixture: "docs/fixtures/operation-contract-v0/mechanical-story-execute.yaml"
+    operation_contract_id: "op_fixture_mechanical_story_execute"
+    command:
+      - "forge-core"
+      - "preview"
+      - "--root"
+      - "."
+      - "--operation"
+      - "docs/fixtures/operation-contract-v0/mechanical-story-execute.yaml"
+      - "--json"
+    expected:
+      exit: "zero"
+      envelope_ok: true
+      mutation: "none"
+      operation_status: "ready"
+      gate_status: "pass"
+      command_refs:
+        - "cmd.validate.story_fast"
+      effect_contract_refs:
+        - "contracts/effects/story-artifact-write-effect.yaml"
+      blockers: []
+      trace_events:
+        - "run_started"
+        - "operation_planned"
+        - "preview_completed"
+        - "run_completed"
+      trace_persistence: "under resolved state_root"
+
+  - id: "preview_destructive_effect_blocked_without_inverse"
+    operation_fixture: "docs/fixtures/operation-contract-v0/destructive-effect-missing-inverse-blocked.yaml"
+    operation_contract_id: "op_fixture_destructive_missing_inverse_blocked"
+    command:
+      - "forge-core"
+      - "preview"
+      - "--root"
+      - "."
+      - "--operation"
+      - "docs/fixtures/operation-contract-v0/destructive-effect-missing-inverse-blocked.yaml"
+      - "--json"
+    expected:
+      exit: "zero"
+      envelope_ok: true
+      mutation: "none"
+      operation_status: "blocked"
+      gate_status: "blocked"
+      blockers:
+        - "gate_blocked"
+      effect_contract_refs:
+        - "contracts/effects/destructive-file-delete-missing-inverse-effect.yaml"
+      risk_summary:
+        destructive_effects: 1
+        inverse_available: false
+      trace_events:
+        - "run_started"
+        - "operation_planned"
+        - "preview_completed"
+        - "run_completed"
+      trace_persistence: "under resolved state_root"
+
+  - id: "ready_lane_gate_passes_with_evidence"
+    operation_fixture: "docs/fixtures/operation-contract-v0/gate-review-story-ready.yaml"
+    operation_contract_id: "op_fixture_gate_review_story_ready"
+    command:
+      - "forge-core"
+      - "ready"
+      - "--root"
+      - "."
+      - "--operation"
+      - "docs/fixtures/operation-contract-v0/gate-review-story-ready.yaml"
+      - "--json"
+    expected:
+      exit: "zero"
+      envelope_ok: true
+      readiness: "ready"
+      gate_status: "pass"
+      required_gate_refs:
+        - "contracts/gates/story-ready-lane-gate.yaml"
+      evidence_required: true
+      trace_events:
+        - "run_started"
+        - "ready_completed"
+        - "gate_passed"
+        - "run_completed"
+      trace_persistence: "under resolved state_root"
+
+  - id: "ready_integration_gate_missing_fails_closed"
+    operation_fixture: "docs/fixtures/operation-contract-v0/integration-gate-required.yaml"
+    operation_contract_id: "op_fixture_integration_gate_required"
+    command:
+      - "forge-core"
+      - "ready"
+      - "--root"
+      - "."
+      - "--operation"
+      - "docs/fixtures/operation-contract-v0/integration-gate-required.yaml"
+      - "--json"
+    expected:
+      exit: "non_zero"
+      envelope_ok: false
+      readiness: "not_ready"
+      gate_status: "missing"
+      required_gate_refs:
+        - "contracts/gates/integration-missing-gate.yaml"
+      blockers:
+        - "gate_missing_or_pending"
+        - "gate_missing"
+        - "runtime_plan_not_ready"
+      trace_events:
+        - "run_started"
+        - "ready_completed"
+        - "gate_blocked"
+        - "run_completed"
+      trace_persistence: "under resolved state_root"
+
+  - id: "ready_release_gate_pending_fails_closed"
+    operation_fixture: "docs/fixtures/operation-contract-v0/release-gate-required.yaml"
+    operation_contract_id: "op_fixture_release_gate_required"
+    command:
+      - "forge-core"
+      - "ready"
+      - "--root"
+      - "."
+      - "--operation"
+      - "docs/fixtures/operation-contract-v0/release-gate-required.yaml"
+      - "--json"
+    expected:
+      exit: "non_zero"
+      envelope_ok: false
+      readiness: "not_ready"
+      gate_status: "pending"
+      required_gate_refs:
+        - "contracts/gates/release-missing-gate.yaml"
+      blockers:
+        - "gate_missing_or_pending"
+        - "gate_pending"
+        - "runtime_plan_not_ready"
+      trace_events:
+        - "run_started"
+        - "ready_completed"
+        - "gate_blocked"
+        - "run_completed"
+      trace_persistence: "under resolved state_root"
+
+  - id: "explain_last_run_after_preview"
+    prerequisite_case: "preview_mutating_operation_with_command"
+    command:
+      - "forge-core"
+      - "explain"
+      - "--root"
+      - "."
+      - "--last-run"
+      - "--json"
+    expected:
+      exit: "zero_when_trace_exists"
+      reads: "latest trace NDJSON under resolved state_root"
+      mentions:
+        - "op_fixture_mechanical_story_execute"
+        - "cmd.validate.story_fast"
+        - "contracts/effects/story-artifact-write-effect.yaml"
+      must_not_invent_missing_facts: true
+      incomplete_trace_behavior: "say trace is incomplete and return only supported facts"
+

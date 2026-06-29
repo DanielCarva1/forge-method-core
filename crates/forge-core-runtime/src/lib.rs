@@ -5,6 +5,7 @@ use forge_core_contracts::command::{
 use forge_core_contracts::operation::{
     AutonomyMode, CommandRef, ExecutionMode, ForgeOperation, HostAction, HumanInputRequirement,
     HumanPrompt, MutationPolicy, NextActor, OperationGateStatus, OperationSideEffectPolicy,
+    RequiredGate,
 };
 use forge_core_contracts::tool_effect::{AccessMode, ToolEffectContractDocument};
 use forge_core_contracts::{
@@ -65,6 +66,126 @@ pub struct RuntimePlan {
     pub reference_warning_count: usize,
     pub used_read_snapshot: bool,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimePreviewReport {
+    pub status: RuntimePreviewStatus,
+    pub operation_id: StableId,
+    pub preview_mutates_state: bool,
+    pub operation_mutates_state: bool,
+    pub touched_refs: Vec<RepoPath>,
+    pub command_refs: Vec<CommandRef>,
+    pub effect_contract_refs: Vec<RepoPath>,
+    pub required_gate_refs: Vec<RepoPath>,
+    pub gate_contract_refs: Vec<RepoPath>,
+    pub authority_sources: Vec<StableId>,
+    pub missing_authority: Vec<StableId>,
+    pub blockers: Vec<RuntimeReadyBlocker>,
+    pub destructive: bool,
+    pub risk_level: RuntimeRiskLevel,
+    pub rollback_available: bool,
+    pub next_human_action: Option<String>,
+    pub plan: RuntimePlan,
+    pub staging: RuntimeEffectStagingPlan,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimePreviewStatus {
+    Blocked,
+    AwaitingHuman,
+    GateRequired,
+    ReviewRequired,
+    ReadOnly,
+    Ready,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeReadyReport {
+    pub status: RuntimeReadyStatus,
+    pub ready: bool,
+    pub operation_id: StableId,
+    pub plan_status: RuntimePlanStatus,
+    pub staging_status: RuntimeEffectStagingStatus,
+    pub gate_status: OperationGateStatus,
+    pub reasons: Vec<RuntimePlanReason>,
+    pub staging_reasons: Vec<RuntimeEffectStagingReason>,
+    pub blocking_reasons: Vec<RuntimeReadyBlocker>,
+    pub required_gate_refs: Vec<RepoPath>,
+    pub evidence: Vec<RuntimeReadyEvidence>,
+    pub validation_error_count: usize,
+    pub validation_warning_count: usize,
+    pub reference_error_count: usize,
+    pub reference_warning_count: usize,
+    pub used_read_snapshot: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeReadyStatus {
+    Ready,
+    NotReady,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeReadyBlocker {
+    ValidationErrors,
+    ReferenceErrors,
+    OperationDiagnosticsErrors,
+    GateBlocked,
+    GateMissing,
+    GatePending,
+    HumanInputRequired,
+    GateMissingOrPending,
+    RequiredGateStatusUnknown,
+    MutationRequiresReview,
+    HumanCheckpointRequired,
+    HostRequestedConfirmation,
+    ShowStatusOnly,
+    MutationForbidden,
+    ObserveOnly,
+    RuntimePlanBlocked,
+    RuntimePlanNotReady,
+    MissingEffectContractsForMutatingPlan,
+    MissingHostCallEvidence,
+    NonReadyPlanReason,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuntimeReadyEvidence {
+    pub kind: RuntimeReadyEvidenceKind,
+    pub subject: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeReadyEvidenceKind {
+    PlanStatus,
+    PlanReason,
+    GateStatus,
+    RequiredGate,
+    GateContract,
+    ValidationDiagnostics,
+    ReferenceDiagnostics,
+    StagingStatus,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeRiskLevel {
+    Low,
+    Medium,
+    High,
+    Blocked,
+}
+
+pub type PreviewReport = RuntimePreviewReport;
+pub type ReadyReport = RuntimeReadyReport;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -615,6 +736,167 @@ pub fn plan_operation_with_snapshot(
     plan_operation_inner(document, Some(snapshot))
 }
 
+pub fn preview_operation(document: &OperationContractDocument) -> RuntimePreviewReport {
+    preview_operation_inner(document, None)
+}
+
+pub fn preview_operation_with_snapshot(
+    document: &OperationContractDocument,
+    snapshot: RuntimeReadSnapshot<'_>,
+) -> RuntimePreviewReport {
+    preview_operation_inner(document, Some(snapshot))
+}
+
+#[must_use]
+pub fn preview_operation_from_plan(
+    document: &OperationContractDocument,
+    plan: &RuntimePlan,
+) -> RuntimePreviewReport {
+    let staging = stage_operation_effects(plan);
+    let operation = &document.operation_contract;
+    let operation_mutates_state = mutating_side_effect(plan.side_effect_policy);
+    let required_gate_refs = required_gate_refs(&operation.gates.required_before_mutation);
+    let blockers =
+        runtime_ready_blockers(plan, &staging, &operation.gates.required_before_mutation);
+
+    RuntimePreviewReport {
+        status: preview_status(plan.status),
+        operation_id: plan.contract_id.clone(),
+        preview_mutates_state: false,
+        operation_mutates_state,
+        touched_refs: operation.coordination_scope.target.paths.clone(),
+        command_refs: plan.command_refs.clone(),
+        effect_contract_refs: plan.effect_contract_refs.clone(),
+        required_gate_refs,
+        gate_contract_refs: operation.gates.gate_contract_refs.clone(),
+        authority_sources: operation.authority.authority_sources.clone(),
+        missing_authority: operation.authority.missing_authority.clone(),
+        blockers: blockers.clone(),
+        destructive: operation_mutates_state,
+        risk_level: runtime_risk_level(plan.status, plan.side_effect_policy, &blockers),
+        rollback_available: false,
+        next_human_action: next_human_action(plan),
+        plan: plan.clone(),
+        staging,
+    }
+}
+
+#[must_use]
+pub fn preview_runtime_plan(plan: &RuntimePlan) -> RuntimePreviewReport {
+    let staging = stage_operation_effects(plan);
+    let operation_mutates_state = mutating_side_effect(plan.side_effect_policy);
+    let blockers = runtime_ready_blockers(plan, &staging, &[]);
+
+    RuntimePreviewReport {
+        status: preview_status(plan.status),
+        operation_id: plan.contract_id.clone(),
+        preview_mutates_state: false,
+        operation_mutates_state,
+        touched_refs: Vec::new(),
+        command_refs: plan.command_refs.clone(),
+        effect_contract_refs: plan.effect_contract_refs.clone(),
+        required_gate_refs: Vec::new(),
+        gate_contract_refs: Vec::new(),
+        authority_sources: Vec::new(),
+        missing_authority: Vec::new(),
+        blockers: blockers.clone(),
+        destructive: operation_mutates_state,
+        risk_level: runtime_risk_level(plan.status, plan.side_effect_policy, &blockers),
+        rollback_available: false,
+        next_human_action: next_human_action(plan),
+        plan: plan.clone(),
+        staging,
+    }
+}
+
+fn preview_operation_inner(
+    document: &OperationContractDocument,
+    snapshot: Option<RuntimeReadSnapshot<'_>>,
+) -> RuntimePreviewReport {
+    let plan = plan_operation_inner(document, snapshot);
+    preview_operation_from_plan(document, &plan)
+}
+
+pub fn ready_operation(document: &OperationContractDocument) -> RuntimeReadyReport {
+    ready_operation_inner(document, None)
+}
+
+pub fn ready_operation_with_snapshot(
+    document: &OperationContractDocument,
+    snapshot: RuntimeReadSnapshot<'_>,
+) -> RuntimeReadyReport {
+    ready_operation_inner(document, Some(snapshot))
+}
+
+#[must_use]
+pub fn ready_operation_from_plan(
+    document: &OperationContractDocument,
+    plan: &RuntimePlan,
+) -> RuntimeReadyReport {
+    let staging = stage_operation_effects(plan);
+    let operation = &document.operation_contract;
+    runtime_ready_report(
+        plan,
+        &staging,
+        &operation.gates.required_before_mutation,
+        &operation.gates.gate_contract_refs,
+    )
+}
+
+#[must_use]
+pub fn ready_runtime_plan(plan: &RuntimePlan) -> RuntimeReadyReport {
+    let staging = stage_operation_effects(plan);
+    runtime_ready_report(plan, &staging, &[], &[])
+}
+
+fn ready_operation_inner(
+    document: &OperationContractDocument,
+    snapshot: Option<RuntimeReadSnapshot<'_>>,
+) -> RuntimeReadyReport {
+    let plan = plan_operation_inner(document, snapshot);
+    ready_operation_from_plan(document, &plan)
+}
+
+fn runtime_ready_report(
+    plan: &RuntimePlan,
+    staging: &RuntimeEffectStagingPlan,
+    required_gates: &[RequiredGate],
+    gate_contract_refs: &[RepoPath],
+) -> RuntimeReadyReport {
+    let required_gate_refs = required_gate_refs(required_gates);
+    let blocking_reasons = runtime_ready_blockers(plan, staging, required_gates);
+    let evidence = runtime_ready_evidence(plan, staging, required_gates, gate_contract_refs);
+    let ready = blocking_reasons.is_empty()
+        && plan.status == RuntimePlanStatus::ReadyToCallOperation
+        && matches!(
+            staging.status,
+            RuntimeEffectStagingStatus::Staged | RuntimeEffectStagingStatus::NoEffects
+        );
+
+    RuntimeReadyReport {
+        status: if ready {
+            RuntimeReadyStatus::Ready
+        } else {
+            RuntimeReadyStatus::NotReady
+        },
+        ready,
+        operation_id: plan.contract_id.clone(),
+        plan_status: plan.status,
+        staging_status: staging.status,
+        gate_status: plan.gate_status,
+        reasons: plan.reasons.clone(),
+        staging_reasons: staging.reasons.clone(),
+        blocking_reasons,
+        required_gate_refs,
+        evidence,
+        validation_error_count: plan.validation_error_count,
+        validation_warning_count: plan.validation_warning_count,
+        reference_error_count: plan.reference_error_count,
+        reference_warning_count: plan.reference_warning_count,
+        used_read_snapshot: plan.used_read_snapshot,
+    }
+}
+
 fn plan_operation_inner(
     document: &OperationContractDocument,
     snapshot: Option<RuntimeReadSnapshot<'_>>,
@@ -787,6 +1069,282 @@ fn mutating_side_effect(policy: OperationSideEffectPolicy) -> bool {
             | OperationSideEffectPolicy::RunCommands
             | OperationSideEffectPolicy::Publish
     )
+}
+
+fn preview_status(status: RuntimePlanStatus) -> RuntimePreviewStatus {
+    match status {
+        RuntimePlanStatus::Blocked => RuntimePreviewStatus::Blocked,
+        RuntimePlanStatus::AwaitingHuman => RuntimePreviewStatus::AwaitingHuman,
+        RuntimePlanStatus::GateRequired => RuntimePreviewStatus::GateRequired,
+        RuntimePlanStatus::ReviewRequired => RuntimePreviewStatus::ReviewRequired,
+        RuntimePlanStatus::ReadOnlyStatus => RuntimePreviewStatus::ReadOnly,
+        RuntimePlanStatus::ReadyToCallOperation => RuntimePreviewStatus::Ready,
+    }
+}
+
+fn runtime_risk_level(
+    status: RuntimePlanStatus,
+    side_effect_policy: OperationSideEffectPolicy,
+    blockers: &[RuntimeReadyBlocker],
+) -> RuntimeRiskLevel {
+    if status == RuntimePlanStatus::Blocked || !blockers.is_empty() {
+        return RuntimeRiskLevel::Blocked;
+    }
+    match side_effect_policy {
+        OperationSideEffectPolicy::ReadOnly => RuntimeRiskLevel::Low,
+        OperationSideEffectPolicy::WriteProjectFiles | OperationSideEffectPolicy::RunCommands => {
+            RuntimeRiskLevel::Medium
+        }
+        OperationSideEffectPolicy::Publish => RuntimeRiskLevel::High,
+    }
+}
+
+fn next_human_action(plan: &RuntimePlan) -> Option<String> {
+    let action = match plan.status {
+        RuntimePlanStatus::Blocked => "inspect blockers before retrying",
+        RuntimePlanStatus::AwaitingHuman => {
+            if let Some(prompt) = &plan.prompt {
+                if !prompt.text.trim().is_empty() {
+                    return Some(prompt.text.clone());
+                }
+            }
+            "provide required human input"
+        }
+        RuntimePlanStatus::GateRequired => "provide required gate evidence",
+        RuntimePlanStatus::ReviewRequired => "review and approve the operation boundary",
+        RuntimePlanStatus::ReadOnlyStatus => "show read-only status; no mutation is authorized",
+        RuntimePlanStatus::ReadyToCallOperation => return None,
+    };
+    Some(action.to_string())
+}
+
+fn runtime_ready_blockers(
+    plan: &RuntimePlan,
+    staging: &RuntimeEffectStagingPlan,
+    required_gates: &[RequiredGate],
+) -> Vec<RuntimeReadyBlocker> {
+    let mut blockers = ready_plan_blockers(plan);
+    for blocker in ready_gate_blockers(plan.gate_status, required_gates) {
+        push_ready_blocker(&mut blockers, blocker);
+    }
+    for blocker in ready_staging_blockers(staging) {
+        push_ready_blocker(&mut blockers, blocker);
+    }
+    blockers
+}
+
+fn required_gate_refs(required_gates: &[RequiredGate]) -> Vec<RepoPath> {
+    required_gates
+        .iter()
+        .map(|gate| gate.gate_contract_ref.clone())
+        .collect()
+}
+
+fn ready_plan_blockers(plan: &RuntimePlan) -> Vec<RuntimeReadyBlocker> {
+    let mut blockers = Vec::new();
+    for reason in &plan.reasons {
+        match reason {
+            RuntimePlanReason::ValidationErrors => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::ValidationErrors);
+            }
+            RuntimePlanReason::ReferenceErrors => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::ReferenceErrors);
+            }
+            RuntimePlanReason::OperationDiagnosticsErrors => {
+                push_ready_blocker(
+                    &mut blockers,
+                    RuntimeReadyBlocker::OperationDiagnosticsErrors,
+                );
+            }
+            RuntimePlanReason::GateBlocked => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::GateBlocked);
+            }
+            RuntimePlanReason::HumanInputRequired => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::HumanInputRequired);
+            }
+            RuntimePlanReason::GateMissingOrPending => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::GateMissingOrPending);
+            }
+            RuntimePlanReason::MutationRequiresReview => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::MutationRequiresReview);
+            }
+            RuntimePlanReason::HumanCheckpointRequired => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::HumanCheckpointRequired);
+            }
+            RuntimePlanReason::HostRequestedConfirmation => {
+                push_ready_blocker(
+                    &mut blockers,
+                    RuntimeReadyBlocker::HostRequestedConfirmation,
+                );
+            }
+            RuntimePlanReason::ShowStatusOnly => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::ShowStatusOnly);
+            }
+            RuntimePlanReason::MutationForbidden => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::MutationForbidden);
+            }
+            RuntimePlanReason::ObserveOnly => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::ObserveOnly);
+            }
+            RuntimePlanReason::HostCallAllowed => {}
+        }
+    }
+    if plan.status == RuntimePlanStatus::ReadyToCallOperation {
+        if !plan
+            .reasons
+            .iter()
+            .any(|reason| reason == &RuntimePlanReason::HostCallAllowed)
+        {
+            push_ready_blocker(&mut blockers, RuntimeReadyBlocker::MissingHostCallEvidence);
+        }
+        if plan
+            .reasons
+            .iter()
+            .any(|reason| reason != &RuntimePlanReason::HostCallAllowed)
+        {
+            push_ready_blocker(&mut blockers, RuntimeReadyBlocker::NonReadyPlanReason);
+        }
+    }
+    blockers
+}
+
+fn ready_gate_blockers(
+    gate_status: OperationGateStatus,
+    _required_gates: &[RequiredGate],
+) -> Vec<RuntimeReadyBlocker> {
+    let mut blockers = Vec::new();
+    match gate_status {
+        OperationGateStatus::Pass => {}
+        OperationGateStatus::Missing => {
+            push_ready_blocker(&mut blockers, RuntimeReadyBlocker::GateMissing);
+            push_ready_blocker(&mut blockers, RuntimeReadyBlocker::GateMissingOrPending);
+        }
+        OperationGateStatus::Pending => {
+            push_ready_blocker(&mut blockers, RuntimeReadyBlocker::GatePending);
+            push_ready_blocker(&mut blockers, RuntimeReadyBlocker::GateMissingOrPending);
+        }
+        OperationGateStatus::Blocked => {
+            push_ready_blocker(&mut blockers, RuntimeReadyBlocker::GateBlocked);
+        }
+        OperationGateStatus::NotApplicable => {
+            push_ready_blocker(
+                &mut blockers,
+                RuntimeReadyBlocker::RequiredGateStatusUnknown,
+            );
+        }
+    }
+    blockers
+}
+
+fn ready_staging_blockers(staging: &RuntimeEffectStagingPlan) -> Vec<RuntimeReadyBlocker> {
+    let mut blockers = Vec::new();
+    for reason in &staging.reasons {
+        match reason {
+            RuntimeEffectStagingReason::RuntimePlanBlocked => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::RuntimePlanBlocked);
+            }
+            RuntimeEffectStagingReason::RuntimePlanNotReady => {
+                push_ready_blocker(&mut blockers, RuntimeReadyBlocker::RuntimePlanNotReady);
+            }
+            RuntimeEffectStagingReason::MissingEffectContractsForMutatingPlan => {
+                push_ready_blocker(
+                    &mut blockers,
+                    RuntimeReadyBlocker::MissingEffectContractsForMutatingPlan,
+                );
+            }
+            RuntimeEffectStagingReason::NoCommandsOrEffects
+            | RuntimeEffectStagingReason::StagedCommands
+            | RuntimeEffectStagingReason::StagedEffects
+            | RuntimeEffectStagingReason::CommitRequiresLaterBoundary => {}
+        }
+    }
+    blockers
+}
+
+fn push_ready_blocker(blockers: &mut Vec<RuntimeReadyBlocker>, blocker: RuntimeReadyBlocker) {
+    if !blockers.contains(&blocker) {
+        blockers.push(blocker);
+    }
+}
+
+fn runtime_ready_evidence(
+    plan: &RuntimePlan,
+    staging: &RuntimeEffectStagingPlan,
+    required_gates: &[RequiredGate],
+    gate_contract_refs: &[RepoPath],
+) -> Vec<RuntimeReadyEvidence> {
+    let mut evidence = vec![
+        RuntimeReadyEvidence {
+            kind: RuntimeReadyEvidenceKind::PlanStatus,
+            subject: plan.contract_id.0.clone(),
+            detail: format!("{:?}", plan.status),
+        },
+        RuntimeReadyEvidence {
+            kind: RuntimeReadyEvidenceKind::GateStatus,
+            subject: plan.contract_id.0.clone(),
+            detail: format!("{:?}", plan.gate_status),
+        },
+        RuntimeReadyEvidence {
+            kind: RuntimeReadyEvidenceKind::StagingStatus,
+            subject: plan.contract_id.0.clone(),
+            detail: format!("{:?}", staging.status),
+        },
+    ];
+
+    if plan.reasons.is_empty() {
+        evidence.push(RuntimeReadyEvidence {
+            kind: RuntimeReadyEvidenceKind::PlanReason,
+            subject: plan.contract_id.0.clone(),
+            detail: "none".to_string(),
+        });
+    } else {
+        for reason in &plan.reasons {
+            evidence.push(RuntimeReadyEvidence {
+                kind: RuntimeReadyEvidenceKind::PlanReason,
+                subject: plan.contract_id.0.clone(),
+                detail: format!("{reason:?}"),
+            });
+        }
+    }
+
+    if plan.validation_error_count > 0 || plan.validation_warning_count > 0 {
+        evidence.push(RuntimeReadyEvidence {
+            kind: RuntimeReadyEvidenceKind::ValidationDiagnostics,
+            subject: plan.contract_id.0.clone(),
+            detail: format!(
+                "errors={}, warnings={}",
+                plan.validation_error_count, plan.validation_warning_count
+            ),
+        });
+    }
+    if plan.reference_error_count > 0 || plan.reference_warning_count > 0 {
+        evidence.push(RuntimeReadyEvidence {
+            kind: RuntimeReadyEvidenceKind::ReferenceDiagnostics,
+            subject: plan.contract_id.0.clone(),
+            detail: format!(
+                "errors={}, warnings={}",
+                plan.reference_error_count, plan.reference_warning_count
+            ),
+        });
+    }
+    for gate in required_gates {
+        evidence.push(RuntimeReadyEvidence {
+            kind: RuntimeReadyEvidenceKind::RequiredGate,
+            subject: gate.gate_contract_ref.0.clone(),
+            detail: gate
+                .reason
+                .clone()
+                .unwrap_or_else(|| "required before mutation".to_string()),
+        });
+    }
+    for gate_ref in gate_contract_refs {
+        evidence.push(RuntimeReadyEvidence {
+            kind: RuntimeReadyEvidenceKind::GateContract,
+            subject: gate_ref.0.clone(),
+            detail: "declared gate contract".to_string(),
+        });
+    }
+    evidence
 }
 
 pub fn run_staged_read_only_command(

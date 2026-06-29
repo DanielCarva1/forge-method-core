@@ -2,7 +2,7 @@ use forge_core_contracts::command::{
     CommandExecutor, CommandKind, CommandSafety, CommandSideEffectPolicy, CwdPolicy,
     EnvInheritPolicy, EnvPolicy, NetworkPolicy, OutputCapture, OutputPolicy, Platform,
 };
-use forge_core_contracts::operation::ForgeOperation;
+use forge_core_contracts::operation::{ForgeOperation, OperationGateStatus};
 use forge_core_contracts::tool_effect::EffectTargetKind;
 use forge_core_contracts::{
     CommandContract, CommandContractDocument, OperationContractDocument, RepoPath, StableId,
@@ -10,14 +10,16 @@ use forge_core_contracts::{
 };
 use forge_core_runtime::{
     command_execution_evidence_record, plan_operation, plan_operation_with_snapshot,
-    prepare_effect_transaction, run_staged_read_only_command, stage_operation_effects,
+    prepare_effect_transaction, preview_operation_with_snapshot, ready_operation_with_snapshot,
+    ready_runtime_plan, run_staged_read_only_command, stage_operation_effects,
     CommandExecutionContext, RuntimeCommandExecutionReason, RuntimeCommandExecutionStatus,
     RuntimeEffectPayload, RuntimeEffectPayloadKind, RuntimeEffectStagingReason,
     RuntimeEffectStagingStatus, RuntimeEffectTransactionReason, RuntimeEffectTransactionStatus,
     RuntimeEvidenceKind, RuntimeOperationCommandInput, RuntimeOperationEffectInput,
     RuntimeOperationEffectPayload, RuntimeOperationExecutionContext,
     RuntimeOperationExecutionReason, RuntimeOperationExecutionStatus, RuntimePlanReason,
-    RuntimePlanStatus, RuntimeReadSnapshot,
+    RuntimePlanStatus, RuntimePreviewStatus, RuntimeReadSnapshot, RuntimeReadyBlocker,
+    RuntimeReadyEvidenceKind, RuntimeReadyStatus, RuntimeRiskLevel,
 };
 use forge_core_store::build_reference_index;
 use forge_core_validate::ReferenceIndex;
@@ -258,6 +260,159 @@ fn mechanical_story_plan_stages_commands_and_effects_without_commit() {
     assert!(!staging.command_refs.is_empty());
     assert!(!staging.effect_contract_refs.is_empty());
     assert!(!staging.commit_allowed);
+}
+
+#[test]
+fn preview_report_is_deterministic_and_does_not_mutate() {
+    let document = fixture("mechanical-story-execute.yaml");
+    let index = build_reference_index(repo_root()).expect("reference index");
+
+    let preview = preview_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert_eq!(preview.status, RuntimePreviewStatus::Ready);
+    assert_eq!(
+        preview.operation_id.0,
+        "op_fixture_mechanical_story_execute"
+    );
+    assert!(!preview.preview_mutates_state);
+    assert!(preview.operation_mutates_state);
+    assert_eq!(preview.risk_level, RuntimeRiskLevel::Medium);
+    assert!(!preview.rollback_available);
+    assert!(!preview.command_refs.is_empty());
+    assert!(!preview.effect_contract_refs.is_empty());
+    assert!(preview.required_gate_refs.is_empty());
+    assert!(preview.blockers.is_empty());
+    assert!(preview.next_human_action.is_none());
+    assert_eq!(preview.plan.status, RuntimePlanStatus::ReadyToCallOperation);
+    assert_eq!(preview.staging.status, RuntimeEffectStagingStatus::Staged);
+    let serialized = serde_yaml::to_string(&preview).expect("serialize preview report");
+    assert!(serialized.contains("operation_id: op_fixture_mechanical_story_execute"));
+}
+
+#[test]
+fn ready_report_passes_only_for_ready_operation() {
+    let document = fixture("mechanical-story-execute.yaml");
+    let index = build_reference_index(repo_root()).expect("reference index");
+
+    let ready = ready_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert_eq!(ready.status, RuntimeReadyStatus::Ready);
+    assert!(ready.ready);
+    assert!(ready.blocking_reasons.is_empty());
+    assert_eq!(ready.plan_status, RuntimePlanStatus::ReadyToCallOperation);
+    assert_eq!(ready.staging_status, RuntimeEffectStagingStatus::Staged);
+    assert!(ready
+        .evidence
+        .iter()
+        .any(|item| item.kind == RuntimeReadyEvidenceKind::PlanStatus));
+}
+
+#[test]
+fn ready_report_fails_closed_for_missing_gate() {
+    let document = fixture("release-gate-required.yaml");
+    let index = build_reference_index(repo_root()).expect("reference index");
+
+    let ready = ready_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert_eq!(ready.status, RuntimeReadyStatus::NotReady);
+    assert!(!ready.ready);
+    assert!(ready
+        .blocking_reasons
+        .contains(&RuntimeReadyBlocker::GateMissingOrPending));
+    assert!(ready
+        .blocking_reasons
+        .contains(&RuntimeReadyBlocker::GatePending));
+    assert!(ready
+        .evidence
+        .iter()
+        .any(|item| item.kind == RuntimeReadyEvidenceKind::RequiredGate));
+    assert_eq!(ready.plan_status, RuntimePlanStatus::GateRequired);
+}
+
+#[test]
+fn ready_report_fails_closed_for_pending_gate_even_without_required_gate() {
+    let mut document = fixture("mechanical-story-execute.yaml");
+    document.operation_contract.gates.current_gate_status = OperationGateStatus::Pending;
+    document
+        .operation_contract
+        .gates
+        .required_before_mutation
+        .clear();
+    document.operation_contract.gates.gate_contract_refs.clear();
+    let index = build_reference_index(repo_root()).expect("reference index");
+
+    let ready = ready_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+    let preview = preview_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert_eq!(ready.plan_status, RuntimePlanStatus::ReadyToCallOperation);
+    assert_eq!(ready.status, RuntimeReadyStatus::NotReady);
+    assert!(!ready.ready);
+    assert!(ready
+        .blocking_reasons
+        .contains(&RuntimeReadyBlocker::GatePending));
+    assert!(preview.blockers.contains(&RuntimeReadyBlocker::GatePending));
+    assert_eq!(preview.risk_level, RuntimeRiskLevel::Blocked);
+}
+
+#[test]
+fn ready_report_fails_closed_for_unknown_required_gate_status() {
+    let mut document = fixture("release-gate-required.yaml");
+    document.operation_contract.gates.current_gate_status = OperationGateStatus::NotApplicable;
+    let index = build_reference_index(repo_root()).expect("reference index");
+
+    let ready = ready_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert_eq!(ready.status, RuntimeReadyStatus::NotReady);
+    assert!(ready
+        .blocking_reasons
+        .contains(&RuntimeReadyBlocker::RequiredGateStatusUnknown));
+    assert_eq!(ready.required_gate_refs.len(), 1);
+}
+
+#[test]
+fn ready_report_fails_closed_for_unknown_gate_status_even_without_required_gate() {
+    let mut document = fixture("mechanical-story-execute.yaml");
+    document.operation_contract.gates.current_gate_status = OperationGateStatus::NotApplicable;
+    document
+        .operation_contract
+        .gates
+        .required_before_mutation
+        .clear();
+    document.operation_contract.gates.gate_contract_refs.clear();
+    let index = build_reference_index(repo_root()).expect("reference index");
+
+    let ready = ready_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+    let preview = preview_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert_eq!(ready.plan_status, RuntimePlanStatus::ReadyToCallOperation);
+    assert_eq!(ready.status, RuntimeReadyStatus::NotReady);
+    assert!(!ready.ready);
+    assert!(ready
+        .blocking_reasons
+        .contains(&RuntimeReadyBlocker::RequiredGateStatusUnknown));
+    assert!(preview
+        .blockers
+        .contains(&RuntimeReadyBlocker::RequiredGateStatusUnknown));
+    assert_eq!(preview.risk_level, RuntimeRiskLevel::Blocked);
+}
+
+#[test]
+fn ready_runtime_plan_fails_closed_without_host_call_evidence() {
+    let document = fixture("mechanical-story-execute.yaml");
+    let mut plan = plan_operation(&document);
+    plan.reasons.clear();
+
+    let ready = ready_runtime_plan(&plan);
+
+    assert_eq!(ready.status, RuntimeReadyStatus::NotReady);
+    assert!(!ready.ready);
+    assert!(ready
+        .blocking_reasons
+        .contains(&RuntimeReadyBlocker::MissingHostCallEvidence));
+    assert!(ready
+        .evidence
+        .iter()
+        .any(|item| item.kind == RuntimeReadyEvidenceKind::PlanReason && item.detail == "none"));
 }
 
 #[test]
