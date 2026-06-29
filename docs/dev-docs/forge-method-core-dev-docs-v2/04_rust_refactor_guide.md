@@ -1,5 +1,7 @@
 # Forge Method Core v2 - guia de refatoracao Rust
 
+> Aligned with AGENTS.md on 2026-06-29 (R13.1). Forge rolls error enums by hand — no thiserror, no clap derive, no anyhow.
+
 ## Problema atual
 
 O repo ja tem boa separacao conceitual em crates, mas algumas areas concentram muitas responsabilidades e aumentam a chance de agentes escreverem Rust ruim. O principal objetivo aqui e reduzir o contexto necessario para cada alteracao.
@@ -7,7 +9,7 @@ O repo ja tem boa separacao conceitual em crates, mas algumas areas concentram m
 ## Regras de ouro
 
 1. Rust protege invariantes, nao experimenta semantica viva.
-2. Todo comando novo deve entrar por `clap` derive.
+2. Todo comando novo deve entrar pelo argv handling manual de `main.rs` (sem `clap`, sem derive).
 3. Todo erro publico deve ser enum tipado.
 4. Todo caminho critico deve emitir `tracing` span ou event.
 5. Todo contrato grande precisa de builder de fixture.
@@ -17,66 +19,80 @@ O repo ja tem boa separacao conceitual em crates, mas algumas areas concentram m
 9. Preferir `BTreeMap` para outputs deterministicos.
 10. Evitar `expect` em paths de runtime, exceto invariantes internas provadas por preflight.
 
-## CLI com clap
+## CLI com argv manual (sem `clap`)
 
-Antes: parsing manual por `env::args`, loop de indice e `process::exit`.
+Forge NAO usa `clap` nem derive macros. O argv handling e manual e vive em `main.rs`, conforme `crates/forge-core-cli/src/main.rs`. O padrao estabelecido e:
 
-Depois:
+- `main()` coleta `env::args().skip(1).collect::<Vec<String>>()`.
+- Faz match no primeiro argumento (subcomando) e despacha para uma funcao `run_<command>(&args)`.
+- Cada `run_<command>` faz parsing manual de flags (`--foo`, `--bar valor`) sobre `&[String]`.
+- Erros de uso imprimem `usage()` em stderr e chamam `std::process::exit(2)`.
+- Erros de runtime propagam um enum tipado (ver secao seguinte), nao `String`.
+
+Esqueleto:
 
 ```rust
-use clap::{Args, Parser, Subcommand};
-
-#[derive(Debug, Parser)]
-#[command(name = "forge-core")]
-#[command(version, about = "Forge Method Core runtime")]
-pub struct Cli {
-    #[command(subcommand)]
-    pub command: Command,
-}
-
-#[derive(Debug, Subcommand)]
-pub enum Command {
-    Validate(ValidateArgs),
-    Preview(PreviewArgs),
-    Ready(ReadyArgs),
-    Explain(ExplainArgs),
-    Graph(GraphCommand),
-    Memory(MemoryCommand),
-    Protocol(ProtocolCommand),
-}
-
-#[derive(Debug, Args)]
-pub struct PreviewArgs {
-    #[arg(long, default_value = ".")]
-    pub root: std::path::PathBuf,
-
-    #[arg(long)]
-    pub operation: std::path::PathBuf,
-
-    #[arg(long)]
-    pub json: bool,
+fn main() {
+    let args: Vec<String> = env::args().skip(1).collect();
+    let command = args.first().map(String::as_str).unwrap_or("validate");
+    match command {
+        "preview" => run_preview_command(&args),
+        "ready" => run_ready_command(&args),
+        // ...
+        _ => {
+            eprintln!("{}", usage());
+            std::process::exit(2);
+        }
+    }
 }
 ```
 
-## Erros com thiserror
+Novos subcomandos entram adicionando um braco no `match` de `main.rs` e uma funcao `run_<command>(&[String])`. NAO introduzir `clap`, `clap_derive`, `structopt` ou qualquer derive macro de CLI.
+
+## Erros com enum tipado feito a mao (sem `thiserror`)
+
+Forge NAO usa `thiserror` nem `anyhow`. Cada operacao falhavel define um enum de erro nominal ao lado da operacao, derivando `Debug, Clone, PartialEq, Eq`. Conversoes em fronteiras de modulo usam `.map_err(NamedError::from)` ou um `impl From` explicito. Como enums derivam `Clone`, guarde a fonte como `String` (lossy) quando precisar — nunca como `Box<dyn Error>`.
+
+Exemplo espelhando `ExecuteOperationError` (`crates/forge-core-cli/src/execute_operation.rs`) e `ReferenceIndexBuildError` (`crates/forge-core-store/src/lib.rs`):
 
 ```rust
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PreviewError {
-    #[error("read operation failed at {path}: {source}")]
     ReadOperation {
         path: std::path::PathBuf,
-        #[source]
-        source: std::io::Error,
+        source: String,
     },
-
-    #[error("operation validation failed with {error_count} errors")]
     Validation { error_count: usize },
+    ReferenceIndexBuild(forge_core_store::ReferenceIndexBuildError),
+}
 
-    #[error("reference index build failed: {0}")]
-    ReferenceIndex(#[from] forge_core_store::ReferenceIndexBuildError),
+impl std::fmt::Display for PreviewError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PreviewError::ReadOperation { path, source } => {
+                write!(f, "read operation failed at {}: {source}", path.display())
+            }
+            PreviewError::Validation { error_count } => {
+                write!(f, "operation validation failed with {error_count} errors")
+            }
+            PreviewError::ReferenceIndexBuild(err) => write!(f, "reference index build failed: {err}"),
+        }
+    }
+}
+
+impl From<forge_core_store::ReferenceIndexBuildError> for PreviewError {
+    fn from(err: forge_core_store::ReferenceIndexBuildError) -> Self {
+        PreviewError::ReferenceIndexBuild(err)
+    }
 }
 ```
+
+Regras:
+
+- Derivar `Debug, Clone, PartialEq, Eq` no enum de erro.
+- Implementar `Display` a mao (sem `#[error(...)]`).
+- NUNCA `Result<_, String>` em assinaturas novas. Use `Result<T, NamedError>`.
+- NUNCA `Box<dyn std::error::Error>` em assinaturas publicas.
 
 ## Tracing
 
