@@ -8,6 +8,7 @@
 //! `forge-contract-validator`. The shape of the JSON output MUST stay
 //! stable; refactors here are behavior-preserving.
 
+use crate::cli_util::usage;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -618,4 +619,51 @@ fn repo_relative(root: &Path, path: &Path) -> String {
         .unwrap_or(path)
         .to_string_lossy()
         .replace('\\', "/")
+}
+pub fn run_validate_command(args: &[String]) {
+    let mut root = PathBuf::from(".");
+    let mut json = false;
+    let mut index = 1usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--root" => {
+                index += 1;
+                let Some(value) = args.get(index) else {
+                    eprintln!("{}", usage());
+                    std::process::exit(2);
+                };
+                root = PathBuf::from(value);
+            }
+            "--json" => json = true,
+            "--help" | "-h" => {
+                println!("{}", usage());
+                return;
+            }
+            _ => {
+                eprintln!("{}", usage());
+                std::process::exit(2);
+            }
+        }
+        index += 1;
+    }
+
+    let summary = run_validate(&root);
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&summary).expect("serialize validation summary")
+        );
+    } else {
+        println!("{}", summary.human_summary());
+        for diagnostic in &summary.diagnostics {
+            eprintln!(
+                "{} {} {}: {}",
+                diagnostic.severity, diagnostic.code, diagnostic.path, diagnostic.message
+            );
+        }
+    }
+
+    if !summary.passed() {
+        std::process::exit(1);
+    }
 }

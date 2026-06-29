@@ -17,9 +17,9 @@ pub mod claim;
 pub mod cli_util;
 pub mod contract_cmd;
 pub mod coordination;
-pub(crate) mod effect_index;
+pub mod effect_index;
 pub mod eval_cmd;
-pub(crate) mod execute_operation;
+pub mod execute_operation;
 pub mod graph_cmd;
 pub mod guide;
 pub(crate) mod host_adapter_manifest;
@@ -39,7 +39,7 @@ pub mod isolation;
 pub mod m1_cmd;
 pub mod project_cmd;
 pub mod telemetry_cmd;
-pub(crate) mod validate;
+pub mod validate;
 
 // Re-export the execute-operation API at the crate root so that the binary
 // entrypoint (`main.rs`) and integration tests (`tests/validate.rs`) keep
