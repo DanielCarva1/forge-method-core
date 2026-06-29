@@ -242,8 +242,36 @@ priority_2_medium:
     summary: "Resultado do W3: 7 Result/Diagnostic, 5 debug_assert, 1 abort_at_commit. Converter panics do store commit-path em tiered failures."
     source: [W3 tiered_invariant_recommendations]
     effort: M
-    status: pending
+    status: verified_current_core
     depends_on: [P2.1]
+    scope_note: "Engine invariants were already present in current core (checked lease arithmetic and semantic RFC3339 validation). This slice completed the remaining store/CLI fail-loud tier: prepared-write panics became debug_assert + blocked InternalInvariant diagnostics, PreparedAccessMode type-excludes Read from commit, repo_relative strip_prefix is a ReferenceIndexBuildError/Diagnostic, latest metadata indexing uses debug_assert + safe get, effect-store blocking locks use bounded try_lock retries, and atomic temp/backup cleanup failures are surfaced in returned errors."
+    verified_by:
+      files:
+        - crates/forge-core-engine/src/claim_engine.rs
+        - crates/forge-core-store/src/lib.rs
+        - crates/forge-core-store/tests/reference_index.rs
+        - crates/forge-core-cli/src/io_util.rs
+      tests:
+        - cargo test -p forge-core-engine claim_engine
+        - cargo test -p forge-core-store --lib
+        - cargo test -p forge-core-store --test reference_index
+        - cargo test -p forge-core-runtime effect_transaction
+        - cargo test -p forge-core-cli --test validate query_effect_index
+        - cargo test -p forge-core-cli io_util
+        - cargo check --workspace
+        - cargo test --workspace
+        - cargo clippy --workspace --all-targets -- -W clippy::pedantic
+        - cargo fmt --all -- --check
+      evidence:
+        - Lease ttl/expires arithmetic is checked and overflow returns ClaimRejection::InvalidRequest.
+        - RFC3339 parser rejects invalid calendar/time values instead of normalizing them.
+        - AccessMode::Read is excluded from PreparedWrite by PreparedAccessMode before commit.
+        - Missing prepared writes return Blocked/InternalInvariant in release builds while debug builds assert.
+        - repo_relative outside root returns PathOutsideRoot and validation accumulates diagnostics.
+        - latest metadata index has debug_assert plus safe get instead of unchecked indexing.
+        - effect store lock acquisition no longer waits indefinitely on blocking mode.
+        - atomic temp/backup cleanup failures are not silently ignored.
+      full_gate_log_dir: <repo-root>\target\codex-gates\20260629-0734-p2-tiered-invariants
 
 priority_3_low:
   - id: P3.1
@@ -300,7 +328,7 @@ verification_status_at_handoff:
   previous_snapshot_was_stale: true
   current_status:
     p1_high: "P1.1, P1.2, P1.3, P1.4, and P1.5 verified in current core."
-    p2_medium: "P2.1 WAL append/recovery, P2.2 WAL-derived claim state authority, and P2.3 reconcile loop verified; P2.4 tiered invariants remain pending."
+    p2_medium: "P2.1 WAL append/recovery, P2.2 WAL-derived claim state authority, P2.3 reconcile loop, and P2.4 tiered invariants verified."
     p3_low: "P3.1 verified in current core; P3.2-P3.4 remain pending."
   targeted_verification:
     - cargo test -p forge-core-engine claim_engine
@@ -313,13 +341,17 @@ verification_status_at_handoff:
     - cargo test -p forge-core-cli --test claim_reconcile_e2e
     - cargo test -p forge-core-cli --test claim_cli_sidecar_e2e
     - cargo test -p forge-core-cli --test graph_cli_e2e
+    - cargo test -p forge-core-store --lib
+    - cargo test -p forge-core-store --test reference_index
+    - cargo test -p forge-core-runtime effect_transaction
+    - cargo test -p forge-core-cli --test validate query_effect_index
   full_gate: passed_2026-06-29
   full_gate_commands:
     - cargo check --workspace
     - cargo test --workspace
     - cargo clippy --workspace --all-targets -- -W clippy::pedantic
     - cargo fmt --all -- --check
-  full_gate_log_dir: <repo-root>\target\codex-gates\20260629-070726-p2-reconcile-loop
+  full_gate_log_dir: <repo-root>\target\codex-gates\20260629-0734-p2-tiered-invariants
   installed_binary_smoke:
     binary: C:\Users\User\.cargo\bin\forge-core.exe
     result: "expired release reports forge-core claim handoff recovery hint; claim handoff records artifact; reacquire succeeds with fresh agent; acquire -> heartbeat -> release creates wal/claims.fmw1 with FMW1 magic; missing/stale YAML cache does not override WAL-derived authority; P2.3 acquire -> reconcile stale -> idempotent no-op -> reconcile handoff_required -> status handoff blocker -> heartbeat recovery error -> bounded loop no-op with WAL magic FMW1."
