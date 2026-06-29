@@ -74,8 +74,29 @@ Total: 7472 linhas, 141 funções, ~243 itens públicos.
   - `lib.rs`: 7472 → 7205 linhas (-267).
   - Gates: `cargo check`, `cargo test --workspace`, `cargo clippy --pedantic`,
     `cargo fmt --check` todos verdes.
+- [x] R1.5 — Extrair `execute_operation.rs` (2026-06-29)
+  - Movido: `ExecuteOperationInput`, `PayloadFileSpec`, `PayloadLoadPolicy`,
+    `ExecuteOperationContractPathKind` (+ `label()`), `ExecuteOperationError`
+    (+ `Display` + `std::error::Error`), `run_execute_operation`, e helpers
+    privados `read_yaml_result`, `runtime_payload_from_file`,
+    `canonicalize_existing_path`, `resolve_contract_input_path`,
+    `validate_payload_scope`, `resolve_input_path`, `repo_relative_checked`.
+  - `read_yaml` (com `ValidateSummary`) fica em `lib.rs` — pertence ao
+    validate flow, não ao execute_operation.
+  - API pública re-exportada via `pub use execute_operation::{...}` no crate
+    root — `main.rs` e `tests/validate.rs` continuam importando de
+    `forge_core_cli` sem mudanças.
+  - `lib.rs`: 7205 → 6891 (-314); `execute_operation.rs`: 386 linhas.
+  - Removidos imports não usados em `lib.rs`: `execute_operation`,
+    `RuntimeEffectPayloadKind`, `RuntimeOperationCommandInput`,
+    `RuntimeOperationEffectInput`, `RuntimeOperationEffectPayload`,
+    `RuntimeOperationExecution`, `RuntimeOperationExecutionContext`,
+    `CommandExecutionContext`, `std::fmt`, `std::io`.
+  - Gates: `cargo check` (zero warnings), `cargo test --workspace`
+    (440+ testes, todos verdes), `cargo clippy --pedantic` (só warnings
+    pré-existentes), `cargo fmt --check` verde.
 - [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
 - [ ] R1.4 — Mover verificação X.509/CRL/OCSP
-- [ ] R1.5 — Mover `execute_operation` flow
+- [x] R1.5 — Mover `execute_operation` flow (2026-06-29)
 - [ ] R1.6 — Mover project link resolve/init
 - [ ] R1.7 — Validar (lib.rs ≤ 1500 linhas)
