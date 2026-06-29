@@ -1,44 +1,41 @@
----
+﻿---
 name: forge-method
-description: Use when the user wants to use Forge Method, start or resume a method project, build something with the protocol, or asks "use the forge / use the method". Activates the forge-core runtime — a typed-contract protocol that governs multi-agent product/software/creative work. The runtime is self-describing, so this skill only bootstraps it and then defers; it does not re-document the protocol.
+description: Use when the user wants to use Forge Method, start or resume a method project, build something with the protocol, or asks to use Forge/the method. Activates the forge-core runtime and defers to the binary as authority.
 ---
 
 # Forge Method
 
-Forge Method is a **typed-contract protocol runtime**, shipped as a single
-binary `forge-core`. The binary is the authority: it knows its workflow catalog,
-its 7 phases, and its governance rules, and it will tell you any of them on
-request. **This skill's only job is to locate the binary and then defer to it.**
+Forge Method is a typed-contract protocol runtime shipped as `forge-core`. The
+binary is the authority for workflow catalog, phases, gates, and governance. The
+skill bootstraps the runtime and then defers to the binary; do not re-document
+protocol rules here.
 
-Do not re-document the protocol here. Re-documenting it would create a second
-source of truth that drifts from the binary — exactly what this protocol rejects.
+## Step 0 - Resolve the workspace first
 
-## Step 0 — Route the workspace first
+When Forge is invoked, inspect the folder once before acting:
 
-When `/forge method` is invoked, do **one** glance at the folder before anything
-else. The goal: tell greenfield, brownfield, and already-forge apart.
+1. Consumer project repo: `.forge-method.yaml` exists. Run
+   `forge-core project resolve --root . --json` and use its `state_root` for
+   claims, state, artifacts, evidence, and ledger. Do not create local runtime
+   state in the consumer repo.
+2. Forge Runtime Sidecar: `.forge-method/` exists and the directory is named
+   like `forge-<project>`. This folder owns runtime state for its sibling
+   consumer repo. Inspect `.forge-method/state.yaml` and related files there.
+3. Bootstrap Core Exception: this is `<repo-root>` with the Rust
+   workspace and local `.forge-method/`. Run
+   `forge-core project resolve --root . --allow-bootstrap-core --json`.
+4. Brownfield/greenfield without link: do not silently create `.forge-method/`.
+   Create a Forge Project Link plus sibling sidecar first, or ask for the
+   intended project id/root if it cannot be inferred.
 
-1. **Already forge?** A `.forge-method/` directory or a `contracts/workflows/`
-   catalog is present → this workspace already uses Forge. **Skip the rest of
-   this step** — run `guide status --phase 0-route` and act on what it returns.
-2. **Brownfield (not Forge)?** The folder has existing work (code, docs, a repo)
-   but no Forge artifacts → ask one thing: *what do you want to continue doing
-   here?* Forge sets up `.forge-method/` automatically when work starts.
-3. **Greenfield (empty)?** The folder is essentially empty → ask one thing:
-   *what do you intend to build?* Then start at `0-route` and let the guide
-   drive.
+One question max. Do not explain phases unprompted.
 
-One question max. Do not narrate the method, do not explain phases unprompted.
+## Step 1 - Locate the binary
 
-## Step 1 — Locate the binary (once per machine)
-
-The binary may be named **`forge-core`** (Linux/macOS, pure-WSL installs) **or**
-**`forge-core.exe`** (Windows, or WSL using the Windows toolchain via interop).
-**Do not assume one name.** Resolve the binary with this exact fallback chain,
-in order — the first hit wins:
+Resolve `forge-core` from PATH or Cargo bin. It may be `forge-core` or
+`forge-core.exe` depending on host/toolchain.
 
 ```bash
-# 1. Anything already on PATH (works on every platform):
 forge-core --version 2>/dev/null \
   || forge-core.exe --version 2>/dev/null \
   || ~/.cargo/bin/forge-core --version 2>/dev/null \
@@ -46,82 +43,48 @@ forge-core --version 2>/dev/null \
   || echo "NOT_FOUND"
 ```
 
-If that prints `NOT_FOUND`, install it (pick the line that matches the host —
-`cargo install` builds a **native** binary for the OS it runs on, so under WSL
-it produces a Linux `forge-core`, under Windows it produces `forge-core.exe`):
+If missing, install from the core repo:
 
 ```bash
 git clone https://github.com/DanielCarva1/Forge-method-core.git
 cd Forge-method-core
-cargo install --path crates/forge-core-cli   # → ~/.cargo/bin/forge-core (POSIX) | forge-core.exe (Windows)
+cargo install --path crates/forge-core-cli
 ```
 
-After installing, **re-run the Step 1 probe** to capture the resolved binary
-path/name into a shell variable and reuse it for the rest of the session:
+## Step 2 - Resolve state, then govern writes
 
-```bash
-FORGE="$(command -v forge-core || command -v forge-core.exe)"
-[ -z "$FORGE" ] && FORGE="$HOME/.cargo/bin/forge-core"
-[ ! -x "$FORGE" ] && FORGE="$HOME/.cargo/bin/forge-core.exe"
-# sanity:
-"$FORGE" --version
-```
+Before edits:
 
-From here on, every command below uses **`"$FORGE"`** — never hardcode the
-`.exe`. Verify with: `"$FORGE" validate` prints `forge_core_validation_passed`.
+1. Resolve the state root:
+   - consumer repo: `forge-core project resolve --root . --json`
+   - core repo only: `forge-core project resolve --root . --allow-bootstrap-core --json`
+2. Use `<state_root>/claims-active` as the claims directory.
+3. Acquire a claim covering every planned target path.
+4. Run `claim check-write` for every target before editing.
+5. If check-write fails, do not edit. Acquire a covering claim, narrow scope, or
+   report the blocker.
+6. Heartbeat during long work and release the claim when done.
 
-## Step 2 — Enter the protocol, then DEFER
+Current strict policy: unclaimed writes are rejected; overlapping live path
+claims are rejected.
 
-Run the entry point and **follow what forge-core returns**:
+## Defer to forge-core
 
-```bash
-"$FORGE" guide status --phase 0-route
-```
+Ask the binary instead of inventing state from memory:
 
-It returns `eligible_workflows`, `pending_gates`, and `next_phases`. Act on
-those. From here on, **forge-core is the guide, not this skill.** Ask it:
+- `forge-core guide describe`
+- `forge-core guide status --phase <phase>`
+- `forge-core guide decide --decision-file <repo-relative.yaml>`
+- `forge-core validate --root . --json`
 
-- `"$FORGE" guide describe` — see the full workflow catalog
-- `"$FORGE" guide status --phase <phase>` — what the current phase needs
-- `"$FORGE" guide decide --decision-file <repo-relative.yaml>` — validate a routing decision
+## Path caveat
 
-The workflow catalog (the 110 workflow documents) is **embedded in the binary**,
-so `guide describe` / `status` / `decide` work with **no `--catalog-dir` flag**
-on any machine — including a brand-new greenfield folder. Only pass
-`--catalog-dir <path>` if a project ships its own custom workflows and you want
-to override the embedded set.
+A Windows `.exe` cannot reliably read POSIX-only paths such as `/tmp/...`; prefer
+repo-relative paths or Windows absolute paths. For claims, use the resolved
+`state_root` and its `claims-active` directory.
 
-Never invent a workflow, phase, or gate from memory. If forge-core can answer
-it, ask it.
+## Done means
 
-## Relationship rules (host behavior only)
-
-The rules below are about how **you**, the host agent, relate to forge-core.
-The protocol's own rules live in the binary — do not duplicate them.
-
-1. **Defer.** If `guide describe` / `status` / `decide` can answer a question,
-   ask the binary. Don't re-derive phases, workflows, or gates from memory.
-2. **Disk over chat.** The `contracts/` tree and the claims bus are truth. Do
-   not infer phase, story, or readiness from conversation history.
-3. **Govern before write.** Before editing any file, `claim acquire` then
-   `check-write`. If the claim is refused, do not overwrite.
-4. **Validate before trust.** After creating or changing any contract, run
-   `"$FORGE" validate`. Fail-closed means fix it, not paper over it.
-
-## Path caveat (multi-platform)
-
-The resolved binary may be a Windows `.exe` (callable from WSL via interop) or a
-native POSIX binary. A Windows `.exe` **cannot read `/tmp/...` or `~`**; use
-**repo-relative paths** (run commands from the repo root) or absolute **Windows
-paths** (`C:\...`). A native POSIX binary has no such limit. Since you do not
-know which you got until Step 1 resolved it, **prefer repo-relative paths and
-run from the repo root** — that works for both. A `--claims-dir /tmp/x` will
-silently fail under a Windows `.exe`; use `.forge-method/claims-active` instead.
-
-## When a workflow is done
-
-Not when the agent "feels" done. When:
-
-- its typed outputs exist under `contracts/` or `.forge-method/artifacts/`,
-- `"$FORGE" validate` passes with zero diagnostics, and
-- any claim held is released.
+- Typed outputs exist in the expected contract/runtime state location.
+- Validation passes with zero diagnostics where applicable.
+- Held claims are released.
