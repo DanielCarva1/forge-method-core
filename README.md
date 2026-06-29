@@ -217,6 +217,20 @@ sidecar_root: ../forge-my-project
 state_root: ../forge-my-project/.forge-method
 ```
 
+Acceptance rules for consumer project links:
+
+- `state_root` must resolve under `sidecar_root`; the normal value is
+  `<sidecar_root>/.forge-method`.
+- `state_root` must not be local product-repo state like
+  `<consumer>/.forge-method`. Local state is reserved for the explicit Forge
+  core bootstrap exception only.
+- Runtime and claim commands fail closed when the resolved state root does not
+  already exist. They must not silently create consumer-local Forge state.
+- `--claims-dir` remains an explicit advanced override for tests, migrations,
+  and emergency repair.
+- These rules keep projects, users, and agents from contaminating one another's
+  Forge data.
+
 Resolve it before work:
 
 ```bash
@@ -227,7 +241,9 @@ Raw `forge-core claim ...` commands use the same resolver by default: they
 resolve the project state root from `--root .` and read or write the resolved
 `claims-active/` bus and sidecar state. For ordinary consumer projects, that
 means claims and handoff records land in the sidecar state directory rather than
-a product-repo-local state folder.
+a product-repo-local state folder. If the resolved sidecar state root is
+missing, the command fails closed instead of creating `<consumer>/.forge-method`
+as a fallback.
 
 The Forge core repository is a temporary bootstrap exception and may resolve its
 local `.forge-method/` explicitly:
