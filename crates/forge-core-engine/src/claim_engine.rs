@@ -142,6 +142,14 @@ pub struct AcquireRequest {
     pub expected_state_version: Option<u64>,
 }
 
+/// A request to record the required handoff for an expired claim.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecordHandoffRequest {
+    pub recorder_agent_id: StableId,
+    pub summary: String,
+    pub evidence_refs: Vec<String>,
+}
+
 impl AcquireRequest {
     fn default_kind(&self) -> ClaimKind {
         match self.scope_kind {
@@ -281,6 +289,8 @@ pub fn claim_holds_scope(
 ///   policy requires handoff is NOT silently re-acquirable — it returns
 ///   [`ClaimRejection::ExpiredRequiresHandoff`] (design rule 2: expired claims
 ///   route to recovery, never silent release).
+/// - A materialized `HandoffRequired` claim blocks acquire until a handoff is
+///   recorded.
 /// - A scope whose only prior claims are Released / Expired (no handoff) /
 ///   `HandoffRecorded` is free to acquire.
 ///
@@ -315,6 +325,11 @@ pub fn acquire(
                 claim_id: c.id.clone(),
             });
         }
+        if c.status.value == ClaimStatus::HandoffRequired {
+            return ClaimLifecycleDecision::Rejected(ClaimRejection::ExpiredRequiresHandoff {
+                claim_id: c.id.clone(),
+            });
+        }
     }
 
     for c in active {
@@ -333,6 +348,11 @@ pub fn acquire(
             && is_expired(c, now_unix)
             && c.expiry_policy.handoff_required
         {
+            return ClaimLifecycleDecision::Rejected(ClaimRejection::ExpiredRequiresHandoff {
+                claim_id: c.id.clone(),
+            });
+        }
+        if c.status.value == ClaimStatus::HandoffRequired {
             return ClaimLifecycleDecision::Rejected(ClaimRejection::ExpiredRequiresHandoff {
                 claim_id: c.id.clone(),
             });
@@ -470,6 +490,70 @@ pub fn release(
         evaluated_at: now,
         reason_code: Some(StableId("released_by_claimant".into())),
     };
+    ClaimLifecycleDecision::Accepted(next)
+}
+
+/// Record the required handoff for an expired claim.
+///
+/// This is the official recovery edge for claims that intentionally block
+/// `heartbeat`, `release`, and overlapping `acquire` after lease expiry. The
+/// operation does not resurrect or silently release the old authority; it marks
+/// the old claim `HandoffRecorded` and lets a later acquire create fresh
+/// authority for the scope.
+#[must_use]
+pub fn record_handoff(
+    claim: &ClaimContract,
+    req: &RecordHandoffRequest,
+    now_unix: i64,
+) -> ClaimLifecycleDecision {
+    if req.summary.trim().is_empty() {
+        return ClaimLifecycleDecision::Rejected(ClaimRejection::InvalidRequest {
+            field: "summary",
+            message: "handoff summary is required".into(),
+        });
+    }
+    if !claim.expiry_policy.handoff_required {
+        return ClaimLifecycleDecision::Rejected(ClaimRejection::IllegalTransition {
+            claim_id: claim.id.clone(),
+            from: claim.status.value,
+            to: ClaimStatus::HandoffRecorded,
+        });
+    }
+
+    match claim.status.value {
+        ClaimStatus::Active | ClaimStatus::Stale => {
+            if !is_expired(claim, now_unix) {
+                return ClaimLifecycleDecision::Rejected(ClaimRejection::IllegalTransition {
+                    claim_id: claim.id.clone(),
+                    from: claim.status.value,
+                    to: ClaimStatus::HandoffRecorded,
+                });
+            }
+        }
+        ClaimStatus::HandoffRequired => {}
+        _ => {
+            return ClaimLifecycleDecision::Rejected(ClaimRejection::IllegalTransition {
+                claim_id: claim.id.clone(),
+                from: claim.status.value,
+                to: ClaimStatus::HandoffRecorded,
+            });
+        }
+    }
+
+    let mut next = claim.clone();
+    next.status = ClaimStatusRecord {
+        value: ClaimStatus::HandoffRecorded,
+        evaluated_at: unix_to_rfc3339(now_unix),
+        reason_code: Some(StableId(format!(
+            "handoff_recorded_by_{}",
+            req.recorder_agent_id.0
+        ))),
+    };
+    for evidence_ref in &req.evidence_refs {
+        if !next.evidence_refs.contains(evidence_ref) {
+            next.evidence_refs.push(evidence_ref.clone());
+        }
+    }
     ClaimLifecycleDecision::Accepted(next)
 }
 
@@ -959,6 +1043,78 @@ mod tests {
         c.expiry_policy.release_without_handoff_allowed = true;
         let d = release(&c, &StableId("agentA".into()), T0);
         assert!(matches!(d, ClaimLifecycleDecision::Accepted(_)));
+    }
+
+    #[test]
+    fn record_handoff_marks_expired_claim_recorded_and_frees_scope() {
+        let expired = manual_claim("s1", "agentA", T0 - 1, ClaimStatus::Active);
+        let request = RecordHandoffRequest {
+            recorder_agent_id: StableId("agentB".into()),
+            summary: "agentA lease expired; compact handoff recorded".into(),
+            evidence_refs: vec!["handoffs/expired-claims/s1.yaml".into()],
+        };
+        let d = record_handoff(&expired, &request, T0);
+        let ClaimLifecycleDecision::Accepted(recorded) = d else {
+            panic!("handoff should record: {d:?}");
+        };
+        assert_eq!(recorded.status.value, ClaimStatus::HandoffRecorded);
+        assert_eq!(
+            recorded.status.reason_code.as_ref().unwrap().0,
+            "handoff_recorded_by_agentB"
+        );
+        assert!(recorded
+            .evidence_refs
+            .contains(&"handoffs/expired-claims/s1.yaml".to_string()));
+
+        let reacquire = acquire(&[recorded], &req("s1", "agentB"), T0);
+        assert!(matches!(reacquire, ClaimLifecycleDecision::Accepted(_)));
+    }
+
+    #[test]
+    fn materialized_handoff_required_blocks_until_handoff_recorded() {
+        let mut pending = manual_claim("s1", "agentA", T0 - 1, ClaimStatus::HandoffRequired);
+        pending.status.reason_code = Some(StableId("lease_expired".into()));
+
+        let blocked = acquire(&[pending.clone()], &req("s1", "agentB"), T0);
+        assert!(matches!(
+            blocked,
+            ClaimLifecycleDecision::Rejected(ClaimRejection::ExpiredRequiresHandoff { .. })
+        ));
+
+        let request = RecordHandoffRequest {
+            recorder_agent_id: StableId("agentB".into()),
+            summary: "materialized handoff_required claim resolved".into(),
+            evidence_refs: Vec::new(),
+        };
+        let ClaimLifecycleDecision::Accepted(recorded) = record_handoff(&pending, &request, T0)
+        else {
+            panic!("handoff_required claim should be recordable");
+        };
+        assert_eq!(recorded.status.value, ClaimStatus::HandoffRecorded);
+    }
+
+    #[test]
+    fn record_handoff_rejects_live_or_empty_summary() {
+        let live = manual_claim("s1", "agentA", T0 + 600, ClaimStatus::Active);
+        let empty = RecordHandoffRequest {
+            recorder_agent_id: StableId("agentB".into()),
+            summary: "  ".into(),
+            evidence_refs: Vec::new(),
+        };
+        assert!(matches!(
+            record_handoff(&live, &empty, T0),
+            ClaimLifecycleDecision::Rejected(ClaimRejection::InvalidRequest { field, .. }) if field == "summary"
+        ));
+
+        let request = RecordHandoffRequest {
+            recorder_agent_id: StableId("agentB".into()),
+            summary: "not expired".into(),
+            evidence_refs: Vec::new(),
+        };
+        assert!(matches!(
+            record_handoff(&live, &request, T0),
+            ClaimLifecycleDecision::Rejected(ClaimRejection::IllegalTransition { to, .. }) if to == ClaimStatus::HandoffRecorded
+        ));
     }
 
     #[test]

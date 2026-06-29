@@ -46,8 +46,8 @@ pub use phase_transition::{
 
 pub use claim_engine::{
     acquire, claim_holds_scope, expire_stale, heartbeat, is_expired, is_live, project_active,
-    release, rfc3339_to_unix, unix_to_rfc3339, AcquireRequest, ActiveClaimSummary,
-    ActiveClaimsView, ClaimExpiry, ClaimLifecycleDecision, ClaimRejection,
+    record_handoff, release, rfc3339_to_unix, unix_to_rfc3339, AcquireRequest, ActiveClaimSummary,
+    ActiveClaimsView, ClaimExpiry, ClaimLifecycleDecision, ClaimRejection, RecordHandoffRequest,
 };
 
 pub use conflict_detection::{
