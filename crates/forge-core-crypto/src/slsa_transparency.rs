@@ -25,7 +25,7 @@ use ed25519_dalek::{
 };
 use serde_json::Value;
 
-use crate::crypto_hashing::{hex_sha256, normalize_sha256_digest, normalize_sha256_display};
+use crate::hashing::{hex_sha256, normalize_sha256_digest, normalize_sha256_display};
 
 pub(crate) fn verify_ed25519_signature(
     public_key: &[u8],
@@ -217,9 +217,8 @@ pub(crate) fn verify_transparency_log_proof(
         return;
     };
 
-    if crate::crypto_rekor::verify_merkle_inclusion(
-        &leaf_hash, &hashes, log_index, tree_size, &root_hash,
-    ) {
+    if crate::rekor::verify_merkle_inclusion(&leaf_hash, &hashes, log_index, tree_size, &root_hash)
+    {
         verified_evidence.push("transparency_inclusion_proof_valid".to_string());
     } else {
         reasons.push("transparency_inclusion_proof_invalid".to_string());

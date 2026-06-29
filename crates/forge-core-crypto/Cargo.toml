@@ -1,22 +1,10 @@
 [package]
-name = "forge-core-cli"
+name = "forge-core-crypto"
 version.workspace = true
 edition.workspace = true
 
-[[bin]]
-name = "forge-core"
-path = "src/main.rs"
-
 [dependencies]
 forge-core-contracts = { path = "../forge-core-contracts" }
-forge-core-crypto = { path = "../forge-core-crypto" }
-forge-core-eval = { path = "../forge-core-eval" }
-forge-core-engine = { path = "../forge-core-engine" }
-forge-core-graph = { path = "../forge-core-graph" }
-forge-core-runtime = { path = "../forge-core-runtime" }
-forge-core-store = { path = "../forge-core-store" }
-forge-core-trace = { path = "../forge-core-trace" }
-forge-core-validate = { path = "../forge-core-validate" }
 asn1-rs.workspace = true
 base64.workspace = true
 ed25519-dalek.workspace = true
@@ -33,9 +21,7 @@ sct.workspace = true
 sigstore-tsa.workspace = true
 rustls-pki-types.workspace = true
 x509-parser.workspace = true
-tokio.workspace = true
 
 [dev-dependencies]
 rcgen.workspace = true
 proptest.workspace = true
-assert_cmd.workspace = true

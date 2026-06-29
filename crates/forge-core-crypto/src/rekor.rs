@@ -9,7 +9,7 @@ use ed25519_dalek::Verifier as _;
 use p256::ecdsa::{Signature as P256Signature, VerifyingKey as P256VerifyingKey};
 use serde_json::Value;
 
-use crate::{hex_bytes, hex_sha256, normalize_sha256_display};
+use crate::hashing::{hex_bytes, hex_sha256, normalize_sha256_display};
 
 pub(crate) struct ParsedRekorEntry {
     pub(crate) body: Value,

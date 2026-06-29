@@ -37,11 +37,13 @@ use x509_parser::extensions::{GeneralName, ParsedExtension};
 use x509_parser::parse_x509_certificate;
 use x509_parser::pem::parse_x509_pem;
 
-use crate::crypto_hashing::{hex_bytes, normalize_sha256_display};
-use crate::{
-    read_required_file, run_host_adapter_rekor_verification, HostAdapterRekorVerificationInput,
-    HostAdapterRekorVerificationStatus, HostAdapterSigstoreTimestampAuthorityVerificationInput,
+use crate::file_io::read_required_file;
+use crate::hashing::{hex_bytes, normalize_sha256_display};
+use crate::host_adapter_types::{
+    HostAdapterRekorVerificationInput, HostAdapterRekorVerificationStatus,
+    HostAdapterSigstoreTimestampAuthorityVerificationInput,
 };
+use crate::host_adapter_verification::run_host_adapter_rekor_verification;
 
 pub(crate) fn select_rekor_integrated_time_for_timestamp_authority(
     input: &HostAdapterSigstoreTimestampAuthorityVerificationInput,
@@ -77,7 +79,7 @@ pub(crate) fn select_rekor_integrated_time_for_timestamp_authority(
                 return;
             }
         };
-        match crate::crypto_rekor::parse_rekor_log_entry(&text) {
+        match crate::rekor::parse_rekor_log_entry(&text) {
             Ok(entry) => {
                 *selected_timestamp_source = Some("rekor_integrated_time".to_string());
                 *observed_timestamp_unix = Some(entry.integrated_time);
@@ -1132,7 +1134,7 @@ pub(crate) fn verify_dsse_signature_with_certificate(
 }
 
 pub(crate) fn verify_rekor_body_binds_bundle(
-    entry: &crate::crypto_rekor::ParsedRekorEntry,
+    entry: &crate::rekor::ParsedRekorEntry,
     message_digest: &[u8],
     signature: &[u8],
     verified_evidence: &mut Vec<String>,
@@ -1163,7 +1165,7 @@ pub(crate) fn verify_rekor_body_binds_bundle(
 }
 
 pub(crate) fn verify_rekor_body_binds_dsse(
-    entry: &crate::crypto_rekor::ParsedRekorEntry,
+    entry: &crate::rekor::ParsedRekorEntry,
     expected_payload_hash: &str,
     expected_envelope_hash: &str,
     signature: &[u8],

@@ -24,7 +24,7 @@ use sha2::{Digest, Sha256, Sha384, Sha512};
 use x509_parser::certificate::X509Certificate;
 use x509_parser::x509::AlgorithmIdentifier as X509AlgorithmIdentifier;
 
-use crate::crypto_hashing::hex_bytes;
+use crate::hashing::hex_bytes;
 
 /// Decode a DER-encoded OCSP response.
 pub(crate) fn decode_ocsp_response(
