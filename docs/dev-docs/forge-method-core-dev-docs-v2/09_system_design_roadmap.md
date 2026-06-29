@@ -59,6 +59,7 @@ Este roadmap completa R1-R9 com 4 novas faixas (R10-R13) e reordena a execução
 | `main.rs` monolítico + exits | F15; "Testing in Production" (Torres) | F12 (Guided Start) | **R11** |
 | Testes acoplados à CLI | AutoCodeRover (test isolation) | F11 | **R12** |
 | Doc divergence (`04_rust_refactor_guide`) | — (housekeeping) | — | **R13** |
+| Protocolo cego para dívida Rust | F15; dogfood CLI (2026-06-29) | — | **R14** |
 | `Result<_, String>` legacy | F15 | — | R2 |
 | Sem `tracing` | F03 (TraceEvent canônico); DEM-06 | FEAT-07 eval bank | R3 |
 | Sem fuzz | AutoCodeRover (fault localization) | F11 | R4 |
@@ -341,7 +342,7 @@ cripto sem `Zeroizing<>`.
 
 ---
 
-### Fase 6 — Documentação e rastreabilidade (R13 + R9)
+### Fase 6 — Documentação e rastreabilidade (R13 + R14 + R9)
 
 **Meta**: docs alinhadas com `AGENTS.md`, papers rastreáveis, Bootstrap Exception
 removido.
@@ -368,6 +369,34 @@ removido.
       claim. Adicionar seção "Evidence" linkando para
       `paper_implementation_status.md`.
 
+#### R14 — Auditoria de dívida técnica Rust (auto-dogfood)
+
+**Contexto**: o dogfood via CLI (`forge-core-cli validate --root .` no próprio
+repo) revelou um gap estrutural: o Forge só valida **contratos YAML**, não audita
+**qualidade estrutural do código Rust**. Hoje `lib.rs` com 6782 linhas,
+`Result<_, String>` legado, `serde_yaml` em maintenance, funções de 493 linhas —
+tudo passa no `validate` com zero diagnósticos. O protocolo é cego para o que mais
+dói.
+
+- [ ] **R14.1** — Inventariar categorias de dívida que o Forge deveria flaggear:
+      god-files (>1500 linhas), god-functions (>200 linhas), `Result<_, String>`,
+      `process::exit` em lib code, deps em maintenance mode, ausência de
+      `tracing`/`zeroize` em caminhos sensíveis.
+- [ ] **R14.2** — Projetar um validator `rust_structural_health` em
+      `forge-core-validate` que emita `Diagnostic::warning`/`error` para cada
+      categoria. Usar `syn` para parsing (já é dep transitiva via `serde_derive`).
+- [ ] **R14.3** — Adicionar o validator ao pipeline de `run_validate` como
+      *opt-in* (gate `--include-rust-health` ou policy YAML), para não quebrar
+      consumers que só querem validar contratos YAML.
+- [ ] **R14.4** — Dogfood: rodar o novo validator no próprio repo. O objetivo é
+      que ele emita diagnósticos sobre o próprio Forge — vira prova viva do
+      protocolo.
+- [ ] **R14.5** — Documentar em `README.md` (seção Evidence) que o Forge audita a
+      própria saúde estrutural, com screenshot do output.
+
+**DoD R14**: existe validator `rust_structural_health` em `forge-core-validate`,
+rodando no próprio repo, emitindo pelo menos 1 warning por categoria conhecida.
+
 #### R9 — Fechar Bootstrap Core Exception
 
 - [ ] **R9.1** — Inventariar uso de `--allow-bootstrap-core` em testes e scripts.
@@ -379,7 +408,8 @@ removido.
 - [ ] **R9.5** — Atualizar `CONTEXT.md` "Bootstrap Gaps" → mark as resolved.
 
 **DoD Fase 6**: dev-docs 100% alinhadas com `AGENTS.md`, every paper has status,
-`--allow-bootstrap-core` removido de production paths.
+`--allow-bootstrap-core` removido de production paths, validator de saúde
+estrutural (`R14`) rodando no próprio repo.
 
 ---
 
@@ -432,8 +462,8 @@ Fase 6  ── R13 + R9               (docs + bootstrap)
 | 3 | R3 | 5-8 | 2-4 |
 | 4 | R6 + R4 | 4-6 | 2-3 |
 | 5 | R7 + R5 | 4-6 | 2-3 |
-| 6 | R13 + R9 | 3-5 | 1-2 |
-| **Total** | R1-R13 | **38-59** | **18-29** |
+| 6 | R13 + R14 + R9 | 5-8 | 2-3 |
+| **Total** | R1-R14 | **40-64** | **19-31** |
 
 **Trade-off**: dá pra paralelizar Fase 4 (bench/fuzz) e Fase 5 (deps/zeroize)
 com Fase 2-3, mas **não** dá pra paralelizar nada com Fase 0 ou Fase 1.
