@@ -5,6 +5,7 @@ pub mod coordination;
 pub(crate) mod crypto_hashing;
 pub(crate) mod crypto_ocsp;
 pub(crate) mod crypto_rekor;
+pub(crate) mod crypto_tuf;
 pub(crate) mod effect_index;
 pub mod eval_cmd;
 pub(crate) mod execute_operation;
@@ -58,6 +59,13 @@ pub(crate) use crypto_ocsp::{
     verify_basic_ocsp_signature_with_issuer, verify_ocsp_nonce,
     verify_ocsp_single_response_freshness,
 };
+// Re-export the TUF metadata freshness verifier at the crate root so
+// the host-adapter TUF trusted root freshness verification function in
+// `lib.rs` keeps resolving after the helper moved into `crypto_tuf`.
+// The datetime helpers (`parse_tuf_datetime_utc_to_unix`,
+// `parse_fixed_i32`, `days_in_month`, `is_leap_year`, `days_from_civil`)
+// are consumed only inside `crypto_tuf` and stay private to that module.
+pub(crate) use crypto_tuf::verify_tuf_metadata_freshness_role;
 // Re-export the admission safety predicates at the crate root so existing
 // call sites inside `lib.rs` keep resolving after the helpers moved into
 // `host_command`. The `host_command` builder, `HostCommandMetadata`,
@@ -2172,165 +2180,6 @@ pub fn run_host_adapter_certificate_ocsp_status_verification(
     }
 }
 
-fn verify_tuf_metadata_freshness_role(
-    expected_role: &str,
-    metadata_path: &Path,
-    min_version: Option<i64>,
-    update_start_time_unix: i64,
-    verified_roles: &mut Vec<HostAdapterTufMetadataFreshnessRole>,
-    verified_evidence: &mut Vec<String>,
-    reasons: &mut Vec<String>,
-) {
-    let metadata_path_string = metadata_path.to_string_lossy().to_string();
-    let Some(bytes) = read_required_file(metadata_path, "tuf_metadata", reasons) else {
-        verified_roles.push(HostAdapterTufMetadataFreshnessRole {
-            role: expected_role.to_string(),
-            metadata_path: metadata_path_string,
-            version: None,
-            min_version,
-            expires: None,
-            expires_unix: None,
-        });
-        return;
-    };
-    verified_evidence.push(format!("tuf_{expected_role}_metadata_loaded"));
-
-    let value = match serde_json::from_slice::<Value>(&bytes) {
-        Ok(value) => value,
-        Err(err) => {
-            reasons.push(format!("tuf_{expected_role}_metadata_json_invalid:{err}"));
-            verified_roles.push(HostAdapterTufMetadataFreshnessRole {
-                role: expected_role.to_string(),
-                metadata_path: metadata_path_string,
-                version: None,
-                min_version,
-                expires: None,
-                expires_unix: None,
-            });
-            return;
-        }
-    };
-
-    let signed = value.get("signed").and_then(Value::as_object);
-    let observed_role = signed
-        .and_then(|signed| signed.get("_type"))
-        .and_then(Value::as_str);
-    let version = signed
-        .and_then(|signed| signed.get("version"))
-        .and_then(Value::as_i64);
-    let expires = signed
-        .and_then(|signed| signed.get("expires"))
-        .and_then(Value::as_str)
-        .map(str::to_string);
-    let expires_unix = expires
-        .as_deref()
-        .and_then(|value| parse_tuf_datetime_utc_to_unix(value, expected_role, reasons));
-
-    if observed_role == Some(expected_role) {
-        verified_evidence.push(format!("tuf_{expected_role}_role_type_matches"));
-    } else {
-        reasons.push(format!("tuf_{expected_role}_role_type_mismatch"));
-    }
-
-    match (version, min_version) {
-        (Some(observed), Some(minimum)) if observed >= minimum => {
-            verified_evidence.push(format!("tuf_{expected_role}_version_at_or_above_floor"));
-        }
-        (Some(_), Some(_)) => reasons.push(format!("tuf_{expected_role}_version_below_floor")),
-        (Some(_), None) => verified_evidence.push(format!("tuf_{expected_role}_version_present")),
-        (None, _) => reasons.push(format!("tuf_{expected_role}_version_missing")),
-    }
-
-    if let Some(expires_unix) = expires_unix {
-        if expires_unix > update_start_time_unix {
-            verified_evidence.push(format!("tuf_{expected_role}_expires_after_update_start"));
-        } else {
-            reasons.push(format!("tuf_{expected_role}_metadata_expired"));
-        }
-    } else if expires.is_none() {
-        reasons.push(format!("tuf_{expected_role}_expires_missing"));
-    }
-
-    verified_roles.push(HostAdapterTufMetadataFreshnessRole {
-        role: expected_role.to_string(),
-        metadata_path: metadata_path_string,
-        version,
-        min_version,
-        expires,
-        expires_unix,
-    });
-}
-
-fn parse_tuf_datetime_utc_to_unix(
-    value: &str,
-    role: &str,
-    reasons: &mut Vec<String>,
-) -> Option<i64> {
-    if value.len() != 20 || !value.ends_with('Z') {
-        reasons.push(format!("tuf_{role}_expires_format_invalid"));
-        return None;
-    }
-    if value.as_bytes().get(4) != Some(&b'-')
-        || value.as_bytes().get(7) != Some(&b'-')
-        || value.as_bytes().get(10) != Some(&b'T')
-        || value.as_bytes().get(13) != Some(&b':')
-        || value.as_bytes().get(16) != Some(&b':')
-    {
-        reasons.push(format!("tuf_{role}_expires_format_invalid"));
-        return None;
-    }
-    let (Some(year), Some(month), Some(day), Some(hour), Some(minute), Some(second)) = (
-        parse_fixed_i32(value, 0, 4),
-        parse_fixed_i32(value, 5, 7),
-        parse_fixed_i32(value, 8, 10),
-        parse_fixed_i32(value, 11, 13),
-        parse_fixed_i32(value, 14, 16),
-        parse_fixed_i32(value, 17, 19),
-    ) else {
-        reasons.push(format!("tuf_{role}_expires_format_invalid"));
-        return None;
-    };
-    if !(1..=12).contains(&month)
-        || !(1..=days_in_month(year, month)).contains(&day)
-        || !(0..=23).contains(&hour)
-        || !(0..=59).contains(&minute)
-        || !(0..=59).contains(&second)
-    {
-        reasons.push(format!("tuf_{role}_expires_format_invalid"));
-        return None;
-    }
-    let days = days_from_civil(year, month, day);
-    Some(days * 86_400 + i64::from(hour * 3_600 + minute * 60 + second))
-}
-
-fn parse_fixed_i32(value: &str, start: usize, end: usize) -> Option<i32> {
-    value.get(start..end)?.parse::<i32>().ok()
-}
-
-fn days_in_month(year: i32, month: i32) -> i32 {
-    match month {
-        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-        4 | 6 | 9 | 11 => 30,
-        2 if is_leap_year(year) => 29,
-        2 => 28,
-        _ => 0,
-    }
-}
-
-fn is_leap_year(year: i32) -> bool {
-    (year % 4 == 0 && year % 100 != 0) || year % 400 == 0
-}
-
-fn days_from_civil(year: i32, month: i32, day: i32) -> i64 {
-    let year = year - if month <= 2 { 1 } else { 0 };
-    let era = if year >= 0 { year } else { year - 399 } / 400;
-    let year_of_era = year - era * 400;
-    let month = month + if month > 2 { -3 } else { 9 };
-    let day_of_year = (153 * month + 2) / 5 + day - 1;
-    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
-    i64::from(era * 146_097 + day_of_era - 719_468)
-}
-
 fn select_rekor_integrated_time_for_timestamp_authority(
     input: &HostAdapterSigstoreTimestampAuthorityVerificationInput,
     selected_timestamp_source: &mut Option<String>,
@@ -3512,7 +3361,11 @@ fn first_dsse_rekor_signature(value: &Value) -> Option<String> {
         })
 }
 
-fn read_required_file(path: &Path, label: &str, reasons: &mut Vec<String>) -> Option<Vec<u8>> {
+pub(crate) fn read_required_file(
+    path: &Path,
+    label: &str,
+    reasons: &mut Vec<String>,
+) -> Option<Vec<u8>> {
     match fs::read(path) {
         Ok(bytes) => Some(bytes),
         Err(err) => {

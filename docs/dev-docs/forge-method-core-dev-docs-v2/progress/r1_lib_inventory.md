@@ -313,6 +313,36 @@ Total: 7472 linhas, 141 funções, ~243 itens públicos.
     `cargo fmt --check` verde.
   - Âncora de regressão: `validate --root . --json` emitiu
     `"diagnostics": []` — zero mudança observável.
+- [x] R1.CryptoTUF — Extrair `crypto_tuf.rs` (2026-06-29)
+  - Movidos: 6 helpers TUF/datetime (L2183-2340 pré-remoção) — 1 `pub(crate)`
+    (`verify_tuf_metadata_freshness_role`, chamado 4× por
+    `run_host_adapter_tuf_trusted_root_freshness_verification` para os papéis
+    root/timestamp/snapshot/targets) + 5 privados (`parse_tuf_datetime_utc_to_unix`,
+    `parse_fixed_i32`, `days_in_month`, `is_leap_year`, `days_from_civil` —
+    parser UTC RFC 3339 dependency-free baseado no algoritmo `days_from_civil`
+    de Howard Hinnant).
+  - `read_required_file` (helper de I/O compartilhado por ~14 call sites em
+    múltiplos domínios: provenance, rekor, bundle, dsse, CT, TUF, TSA,
+    sigstore) **não movido** — promovido de `fn` para `pub(crate) fn` em
+    `lib.rs` para que `crypto_tuf` (e futuros módulos crypto) possa importá-lo
+    via `crate::read_required_file`. Migração completa para um módulo
+    `file_io` fica para uma fase futura (R1.FileIo).
+  - Imports do novo módulo: `std::path::Path`, `serde_json::Value`,
+    `HostAdapterTufMetadataFreshnessRole` de `crate::host_adapter_types`,
+    `read_required_file` de `crate`.
+  - Em `lib.rs`: zero imports órfãos removidos (Path/Value são amplamente
+    usados por outros domínios em `lib.rs`).
+  - Módulo `pub(crate)`, re-exportado via
+    `pub(crate) use crypto_tuf::verify_tuf_metadata_freshness_role;` no
+    crate root — preserva os 4 call sites em
+    `run_host_adapter_tuf_trusted_root_freshness_verification`.
+  - `lib.rs`: 3791 → 3644 linhas (-147, líquido); `crypto_tuf.rs`: 256 linhas.
+  - Gates: `cargo check` (zero warnings), `cargo test -p forge-core-cli --lib`
+    (103/103 verdes), TUF-focused tests `--test validate tuf` (6/6 verdes),
+    `cargo clippy --pedantic` (320 warnings — paridade perfeita com baseline),
+    `cargo fmt --check` verde.
+  - Âncora de regressão: `validate --root . --json` emitiu
+    `"diagnostics": []` — zero mudança observável.
 - [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
 - [ ] R1.4 — Mover verificação X.509/CRL/OCSP
 - [ ] R1.6 — Mover project link resolve/init
