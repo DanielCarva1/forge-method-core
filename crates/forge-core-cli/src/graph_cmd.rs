@@ -1,5 +1,5 @@
 use crate::claim::{conflict_code_str, load_claims};
-use crate::cli_util::{graph_usage, next_arg, next_path, parse_i64, usage};
+use crate::cli_util::graph_usage;
 use crate::project_cmd::{resolve_project, ProjectResolveError};
 use forge_core_contracts::{
     claim::ClaimContract,

@@ -566,6 +566,24 @@ mod tests {
         assert!(env.ok);
         assert!(env.data.as_ref().unwrap().pending_gates.is_empty());
     }
+
+    #[test]
+    fn guide_value_requires_present_non_flag_value() {
+        let parsed: Vec<String> = ["--catalog-dir", "contracts/workflows"]
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(guide_value(&parsed, 1), Some("contracts/workflows"));
+
+        let missing: Vec<String> = ["--catalog-dir"].iter().map(ToString::to_string).collect();
+        assert_eq!(guide_value(&missing, 1), None);
+
+        let next_flag: Vec<String> = ["--catalog-dir", "--no-json"]
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(guide_value(&next_flag, 1), None);
+    }
 }
 pub fn run_guide_command(args: &[String]) {
     // Subcommand: `forge-core guide <subcommand> [...]`.

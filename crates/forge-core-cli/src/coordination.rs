@@ -218,6 +218,13 @@ fn print_validate_human(env: &CliEnvelope<CoordinationValidatePayload>) {
     }
 }
 
+pub fn run_coordination_command(args: &[String]) {
+    let (json, exit) = dispatch(args);
+    if !json.is_empty() {
+        println!("{json}");
+    }
+    std::process::exit(exit);
+}
 #[cfg(test)]
 mod tests {
     use super::*;

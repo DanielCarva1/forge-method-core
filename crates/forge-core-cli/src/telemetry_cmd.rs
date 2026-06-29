@@ -1,4 +1,4 @@
-use crate::cli_util::{next_arg, telemetry_usage, usage};
+use crate::cli_util::telemetry_usage;
 use crate::project_cmd::{resolve_project, ProjectResolveError, ProjectResolvePayload};
 use forge_core_contracts::telemetry::{
     PrivacyPolicy, TelemetryContract, TelemetryContractDocument, TelemetryEventKind,
