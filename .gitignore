@@ -14,3 +14,4 @@ target/
 .forge-method/locks/
 .forge-method/traces/
 .forge-method/handoffs/
+.forge-method/wal/
