@@ -417,6 +417,58 @@ Total: 7472 linhas, 141 funções, ~243 itens públicos.
     `cargo fmt --check` verde.
   - Âncora de regressão: `validate --root . --json` emitiu
     `"diagnostics": []` — zero mudança observável.
+- [x] R1.CryptoSlsaTransparency — Extrair `crypto_slsa_transparency.rs` (2026-06-29)
+  - Movidos: 6 helpers `pub(crate)` + 1 struct `pub(crate)` com 4 fields
+    `pub(crate)` cobrindo o domínio SLSA/transparency (L2233-2437
+    pré-extração) — `verify_ed25519_signature` (assinatura Ed25519 sobre
+    provenance bruto), `ExpectedProvenance<'a>` struct (sha256/builder_id/
+    source_uri/source_ref), `verify_slsa_statement` (valida statement
+    in-toto/SLSA v1 contra subject digest, builder, source URI/ref),
+    `statement_subject_has_sha256` (subject matcher, cross-domain),
+    `json_contains_string` (recursive JSON string matcher),
+    `verify_transparency_log_proof` (inclusion proof verifier, delega
+    Merkle math para `crypto_rekor::verify_merkle_inclusion`),
+    `transparency_leaf_hash` (RFC 6962 leaf hash 0x00 || payload).
+  - `statement_subject_has_sha256` é cross-domain: além de
+    `verify_slsa_statement`, é chamado por
+    `run_host_adapter_sigstore_bundle_subject_verification` e pela verificação
+    DSSE in-toto subject em `lib.rs`. Por isso `pub(crate)` + wildcard
+    re-export no crate root.
+  - Imports do novo módulo: `ed25519_dalek::{Ed25519Signature,
+    Ed25519Verifier, Ed25519VerifyingKey}` (Verificador trait re-exportado
+    do `signature` crate, necessário para `VerifyingKey::verify`),
+    `serde_json::Value`, `crate::crypto_hashing::{hex_sha256,
+    normalize_sha256_digest, normalize_sha256_display}`, e
+    `crate::crypto_rekor::verify_merkle_inclusion` via path completo inline.
+  - Em `lib.rs`: removido integralmente o import `ed25519_dalek::{...}` (3
+    símbolos órfãos: Ed25519Signature, Ed25519VerifyingKey, Ed25519Verifier —
+    confirmado via grep: 0 usos fora do bloco extraído, 0 calls `.verify()`
+    remanescentes em `lib.rs`). Outros imports mantidos: P256VerifyingKey
+    + DecodePublicKey (run_host_adapter_rekor_verification),
+    OcspResponseStatus (OCSP verification), parse_x509_crl (CRL
+    verification), BASE64 (decode_base64_or_raw), Value/fs/Path.
+  - Bug caught: regex awk inicial `[a-zA-Z_]+:` não pegava field `sha256`
+    (dígito após letra sem underscore). Corrigido para
+    `[a-zA-Z_][a-zA-Z0-9_]*:`. Verificado retroativamente que
+    `crypto_sigstore.rs` não foi afetado (todos os fields lá tinham letras/
+    underscore antes de qualquer dígito).
+  - Módulo `pub(crate)`, re-exportado via
+    `#[allow(clippy::wildcard_imports)] pub(crate) use
+    crypto_slsa_transparency::*;` no crate root (mesmo padrão de
+    `crypto_sigstore` / `host_adapter_types`).
+  - `lib.rs`: 2437 → 2239 linhas (-198, -8.1%); `crypto_slsa_transparency.rs`:
+    232 linhas. Redução acumulada desde o início de R1: 7472 → 2239
+    (-5233, -70.0%).
+  - Gates: `cargo check --workspace` (zero warnings), `cargo test -p
+    forge-core-cli --lib` (103/103 verdes), provenance-focused tests
+    `--test validate provenance` (4/4 verdes), sigstore-bundle tests (4/4
+    verdes, cobrem `statement_subject_has_sha256` cross-domain), DSSE tests
+    (6/6 verdes), `cargo test --workspace` (360 passed, 1 falha pré-existente
+    `validate_binary_outputs_json_summary` — case mismatch, NÃO regressão),
+    `cargo clippy --pedantic` (320 warnings — paridade perfeita com baseline),
+    `cargo fmt --check` verde.
+  - Âncora de regressão: `validate --root . --json` emitiu
+    `"diagnostics": []` — zero mudança observável.
 - [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
 - [ ] R1.4 — Mover verificação X.509/CRL/OCSP
 - [ ] R1.6 — Mover project link resolve/init
