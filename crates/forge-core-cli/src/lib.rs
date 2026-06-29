@@ -3,6 +3,7 @@ pub mod claim;
 pub mod contract_cmd;
 pub mod coordination;
 pub(crate) mod crypto_rekor;
+pub(crate) mod effect_index;
 pub mod eval_cmd;
 pub(crate) mod execute_operation;
 pub mod graph_cmd;
@@ -21,6 +22,13 @@ pub use execute_operation::{
     run_execute_operation, ExecuteOperationContractPathKind, ExecuteOperationError,
     ExecuteOperationInput, PayloadFileSpec, PayloadLoadPolicy,
 };
+// Re-export the effect-index API at the crate root so `main.rs` and
+// `tests/validate.rs` keep importing the input structs and entrypoints
+// directly from `forge_core_cli`.
+pub use effect_index::{
+    run_query_effect_index, run_query_effect_index_context, run_rebuild_effect_index,
+    QueryEffectIndexInput, RebuildEffectIndexInput,
+};
 
 use asn1_rs::{BitString as Asn1BitString, FromDer as _};
 use base64::{
@@ -31,20 +39,15 @@ use ed25519_dalek::{
     Signature as Ed25519Signature, Verifier as Ed25519Verifier, VerifyingKey as Ed25519VerifyingKey,
 };
 use forge_core_contracts::{
-    tool_effect::EffectTargetKind, ClaimContractDocument, CommandContractDocument,
-    CompletionContractDocument, ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
+    ClaimContractDocument, CommandContractDocument, CompletionContractDocument,
+    ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
     DecisionCloseContractDocument, FieldEvidenceRegistry, GateContractDocument,
     HealthRecoveryContractDocument, OperationContractDocument, RequestContractDocument,
     RuntimeCapabilityDocument, RuntimeHandoffContractDocument, RuntimeKind,
-    RuntimeRegistryEntryDocument, StableId, ToolEffectContractDocument,
+    RuntimeRegistryEntryDocument, ToolEffectContractDocument,
 };
 use forge_core_store::{
-    build_effect_metadata_context, build_reference_index, collect_known_repo_paths,
-    collect_validation_yaml_documents, query_effect_target_metadata_index,
-    rebuild_effect_target_metadata_index_with_lock, EffectMetadataConsumerUse,
-    EffectMetadataContextBuildOptions, EffectMetadataContextBuildResult,
-    EffectTargetMetadataIndexQuery, EffectTargetMetadataIndexQueryResult,
-    EffectTargetMetadataIndexRebuildResult,
+    build_reference_index, collect_known_repo_paths, collect_validation_yaml_documents,
 };
 use forge_core_validate::{
     validate_claim, validate_claim_cross_references, validate_command, validate_completion,
@@ -6271,93 +6274,6 @@ pub struct ValidateDiagnostic {
     pub code: String,
     pub path: String,
     pub message: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct RebuildEffectIndexInput {
-    pub root: PathBuf,
-    pub wal_relative_path: String,
-    pub index_relative_path: String,
-    pub lock_relative_path: String,
-    pub recorded_at: Option<String>,
-}
-
-impl Default for RebuildEffectIndexInput {
-    fn default() -> Self {
-        Self {
-            root: PathBuf::from("."),
-            wal_relative_path: ".forge-method/wal/effects.ndjson".to_string(),
-            index_relative_path: ".forge-method/index/effect-targets.ndjson".to_string(),
-            lock_relative_path: ".forge-method/locks/effects.lock".to_string(),
-            recorded_at: None,
-        }
-    }
-}
-
-pub fn run_rebuild_effect_index(
-    input: RebuildEffectIndexInput,
-) -> EffectTargetMetadataIndexRebuildResult {
-    rebuild_effect_target_metadata_index_with_lock(
-        &input.root,
-        &input.wal_relative_path,
-        &input.index_relative_path,
-        &input.lock_relative_path,
-        input.recorded_at.as_deref(),
-    )
-}
-
-#[derive(Debug, Clone)]
-pub struct QueryEffectIndexInput {
-    pub root: PathBuf,
-    pub index_relative_path: String,
-    pub logical_ref: Option<String>,
-    pub effect_id: Option<String>,
-    pub operation_id: Option<String>,
-    pub target_kind: Option<EffectTargetKind>,
-    pub latest_per_target: bool,
-    pub consumer_use: EffectMetadataConsumerUse,
-    pub context_options: EffectMetadataContextBuildOptions,
-}
-
-impl Default for QueryEffectIndexInput {
-    fn default() -> Self {
-        Self {
-            root: PathBuf::from("."),
-            index_relative_path: ".forge-method/index/effect-targets.ndjson".to_string(),
-            logical_ref: None,
-            effect_id: None,
-            operation_id: None,
-            target_kind: None,
-            latest_per_target: false,
-            consumer_use: EffectMetadataConsumerUse::Discovery,
-            context_options: EffectMetadataContextBuildOptions::default(),
-        }
-    }
-}
-
-pub fn run_query_effect_index(
-    input: QueryEffectIndexInput,
-) -> EffectTargetMetadataIndexQueryResult {
-    query_effect_target_metadata_index(
-        &input.root,
-        &input.index_relative_path,
-        &EffectTargetMetadataIndexQuery {
-            logical_ref: input.logical_ref,
-            effect_id: input.effect_id.map(StableId),
-            operation_id: input.operation_id.map(StableId),
-            target_kind: input.target_kind,
-            latest_per_target: input.latest_per_target,
-            consumer_use: input.consumer_use,
-        },
-    )
-}
-
-pub fn run_query_effect_index_context(
-    input: QueryEffectIndexInput,
-) -> EffectMetadataContextBuildResult {
-    let context_options = input.context_options.clone();
-    let query_result = run_query_effect_index(input);
-    build_effect_metadata_context(&query_result, &context_options)
 }
 
 pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
