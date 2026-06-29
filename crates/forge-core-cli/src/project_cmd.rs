@@ -35,13 +35,42 @@ pub struct ProjectResolvePayload {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectResolveError {
-    RootNotFound { root: String },
-    RootCanonicalize { root: String, source: String },
-    LinkRead { path: String, source: String },
-    LinkParse { path: String, source: String },
-    UnsupportedSchemaVersion { path: String, found: String },
-    EmptyField { path: String, field: &'static str },
-    MissingProjectLink { root: String },
+    RootNotFound {
+        root: String,
+    },
+    RootCanonicalize {
+        root: String,
+        source: String,
+    },
+    LinkRead {
+        path: String,
+        source: String,
+    },
+    LinkParse {
+        path: String,
+        source: String,
+    },
+    UnsupportedSchemaVersion {
+        path: String,
+        found: String,
+    },
+    EmptyField {
+        path: String,
+        field: &'static str,
+    },
+    StateRootOutsideSidecar {
+        path: String,
+        state_root: String,
+        sidecar_root: String,
+    },
+    ConsumerLocalStateRoot {
+        path: String,
+        state_root: String,
+        project_root: String,
+    },
+    MissingProjectLink {
+        root: String,
+    },
 }
 
 impl ProjectResolveError {
@@ -50,7 +79,9 @@ impl ProjectResolveError {
         match self {
             Self::LinkParse { .. }
             | Self::UnsupportedSchemaVersion { .. }
-            | Self::EmptyField { .. } => ExitReason::InvalidDecisionShape,
+            | Self::EmptyField { .. }
+            | Self::StateRootOutsideSidecar { .. }
+            | Self::ConsumerLocalStateRoot { .. } => ExitReason::InvalidDecisionShape,
             Self::RootNotFound { .. }
             | Self::RootCanonicalize { .. }
             | Self::LinkRead { .. }
@@ -79,6 +110,22 @@ impl fmt::Display for ProjectResolveError {
             Self::EmptyField { path, field } => {
                 write!(f, "Forge Project Link '{path}' has empty required field '{field}'")
             }
+            Self::StateRootOutsideSidecar {
+                path,
+                state_root,
+                sidecar_root,
+            } => write!(
+                f,
+                "Forge Project Link '{path}' is invalid: state_root '{state_root}' must be inside sidecar_root '{sidecar_root}'"
+            ),
+            Self::ConsumerLocalStateRoot {
+                path,
+                state_root,
+                project_root,
+            } => write!(
+                f,
+                "Forge Project Link '{path}' is invalid: consumer project state_root '{state_root}' must not live inside project_root '{project_root}'; use a Forge Runtime Sidecar instead"
+            ),
             Self::MissingProjectLink { root } => write!(
                 f,
                 "missing Forge Project Link at '{root}\\{PROJECT_LINK_FILE_NAME}'; consumer projects must point at a Forge Runtime Sidecar"
@@ -154,6 +201,7 @@ fn resolve_from_link(
     validate_link(&link, link_path)?;
     let sidecar_root = resolve_repo_path(project_root, &link.sidecar_root.0);
     let state_root = resolve_repo_path(project_root, &link.state_root.0);
+    validate_resolved_sidecar_paths(project_root, link_path, &sidecar_root, &state_root)?;
     Ok(ProjectResolvePayload {
         project_id: link.project_id.0,
         project_root: display_path(project_root),
@@ -164,6 +212,29 @@ fn resolve_from_link(
         layout: ProjectLayoutKind::Sidecar,
         bootstrap_core_exception: false,
     })
+}
+
+fn validate_resolved_sidecar_paths(
+    project_root: &Path,
+    link_path: &Path,
+    sidecar_root: &Path,
+    state_root: &Path,
+) -> Result<(), ProjectResolveError> {
+    if !state_root.starts_with(sidecar_root) {
+        return Err(ProjectResolveError::StateRootOutsideSidecar {
+            path: display_path(link_path),
+            state_root: display_path(state_root),
+            sidecar_root: display_path(sidecar_root),
+        });
+    }
+    if state_root.starts_with(project_root) {
+        return Err(ProjectResolveError::ConsumerLocalStateRoot {
+            path: display_path(link_path),
+            state_root: display_path(state_root),
+            project_root: display_path(project_root),
+        });
+    }
+    Ok(())
 }
 
 fn validate_link(link: &ProjectLinkDocument, link_path: &Path) -> Result<(), ProjectResolveError> {
@@ -344,5 +415,41 @@ mod tests {
         let err = resolve_project(&root, false).unwrap_err();
         assert_eq!(err.exit_reason(), ExitReason::EnvConfig);
         assert!(err.to_string().contains(PROJECT_LINK_FILE_NAME));
+    }
+
+    #[test]
+    fn rejects_state_root_outside_sidecar_root() {
+        let parent = temp_root("outside-sidecar");
+        let app = parent.join("app");
+        fs::create_dir_all(&app).unwrap();
+        fs::write(
+            app.join(PROJECT_LINK_FILE_NAME),
+            "schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: ../forge-app\nstate_root: ../forge-other/.forge-method\n",
+        )
+        .unwrap();
+
+        let err = resolve_project(&app, false).unwrap_err();
+
+        assert_eq!(err.exit_reason(), ExitReason::InvalidDecisionShape);
+        assert!(err.to_string().contains("state_root"));
+        assert!(err.to_string().contains("sidecar_root"));
+    }
+
+    #[test]
+    fn rejects_consumer_local_state_root() {
+        let parent = temp_root("consumer-local");
+        let app = parent.join("app");
+        fs::create_dir_all(&app).unwrap();
+        fs::write(
+            app.join(PROJECT_LINK_FILE_NAME),
+            "schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: .\nstate_root: ./.forge-method\n",
+        )
+        .unwrap();
+
+        let err = resolve_project(&app, false).unwrap_err();
+
+        assert_eq!(err.exit_reason(), ExitReason::InvalidDecisionShape);
+        assert!(err.to_string().contains("project_root"));
+        assert!(err.to_string().contains("Sidecar"));
     }
 }

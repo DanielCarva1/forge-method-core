@@ -1,13 +1,14 @@
 # Forge Core M2.1 claim bus resolver plan
 
 Date: 2026-06-29
-Branch: `codex/forge-claim-bus-resolver`
+Branch: `codex/forge-project-link-hardening`
 
 ## Status
 
-CB-S3 docs lane updated. The expired-claim handoff protocol gap exposed by the
-Hostfully sidecar is closed by this handoff slice once the implementation lane
-lands; it is not a future TODO.
+CB-S3 docs lane updated. ProjectLink/sidecar hardening acceptance is now
+documented for the follow-up slice. The expired-claim handoff protocol gap
+exposed by the Hostfully sidecar is closed by this handoff slice once the
+implementation lane lands; it is not a future TODO.
 
 ## Why this comes before graph M2.1
 
@@ -46,7 +47,6 @@ forge-core claim handoff --id <claim-id-or-scope-id> --agent <id> --summary <tex
 ## Non-goals
 
 - No change to the pure claim engine.
-- No project-link hardening in this slice.
 - No graph operation preflight in this slice.
 - No `anyhow`, `thiserror`, or CLI parser framework migration.
 
@@ -123,6 +123,26 @@ Acceptance:
 - The Hostfully sidecar incident is the motivating case and is closed by this
   handoff protocol fix once the implementation lands.
 
+### PL-H1 - ProjectLink sidecar hardening rules
+
+Ownership:
+
+- `README.md`
+- `CONTEXT.md`
+- `docs/planning/forge-core-m2-claim-bus-resolver-plan.md`
+
+Acceptance:
+
+- Consumer `.forge-method.yaml` must point `state_root` under `sidecar_root`.
+- Consumer `state_root` must not be local `<consumer>/.forge-method`; local
+  state is allowed only for the Forge core bootstrap exception.
+- Runtime and claim commands fail closed when the resolved state root does not
+  exist instead of silently creating consumer-local state.
+- `--claims-dir` remains an explicit advanced override for tests, migrations,
+  and emergency repair.
+- The isolation invariant is explicit: multiple projects, users, and agents
+  must not contaminate each other's Forge data.
+
 ## Parallel split
 
 | Lane | Agent | Write scope | Output |
@@ -131,6 +151,7 @@ Acceptance:
 | L2 E2E | worker | `crates/forge-core-cli/tests/claim_cli_sidecar_e2e.rs` | Sidecar/override/missing-link CLI tests |
 | L3 Docs | worker | `README.md`, this plan | User-facing examples and status |
 | L4 Handoff | worker | claim engine/CLI files | Expired-claim handoff recovery command |
+| L5 Docs | worker | `README.md`, `CONTEXT.md`, this plan | ProjectLink/sidecar hardening acceptance rules |
 | R1 Review | validator | read-mostly | Fail-closed semantics and sidecar isolation |
 
 ## Verification
@@ -165,7 +186,7 @@ context in `handoffs/expired-claims/`, transitions the old claim to
 
 ## Next slices after this
 
-1. Project link hardening.
+1. Project link hardening implementation for the PL-H1 rules above.
 2. OperationContract-aware graph dry-run.
 3. Graph claim preflight.
 4. Eval compare baseline.

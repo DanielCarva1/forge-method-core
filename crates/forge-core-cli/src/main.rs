@@ -2491,7 +2491,22 @@ fn resolve_claims_dir_or_exit(
     }
 
     match forge_core_cli::project_cmd::resolve_project(root, allow_bootstrap_core) {
-        Ok(project) => PathBuf::from(project.state_root).join("claims-active"),
+        Ok(project) if project.state_exists => {
+            PathBuf::from(project.state_root).join("claims-active")
+        }
+        Ok(project) => {
+            let env = forge_core_contracts::CliEnvelope::<serde_json::Value>::err(
+                command,
+                forge_core_contracts::ExitReason::EnvConfig,
+                format!(
+                    "resolved Forge state_root does not exist for claim command: {}; create the sidecar .forge-method directory or fix {}",
+                    project.state_root,
+                    forge_core_contracts::PROJECT_LINK_FILE_NAME
+                ),
+            );
+            emit_envelope("claim", env, want_json);
+            unreachable!("emit_envelope exits the process");
+        }
         Err(err) => {
             let env = forge_core_contracts::CliEnvelope::<serde_json::Value>::err(
                 command,
