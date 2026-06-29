@@ -4,6 +4,7 @@ pub mod contract_cmd;
 pub mod coordination;
 pub(crate) mod crypto_rekor;
 pub mod eval_cmd;
+pub(crate) mod execute_operation;
 pub mod graph_cmd;
 pub mod guide;
 pub mod io_util;
@@ -11,6 +12,15 @@ pub mod isolation;
 pub mod m1_cmd;
 pub mod project_cmd;
 pub mod telemetry_cmd;
+
+// Re-export the execute-operation API at the crate root so that the binary
+// entrypoint (`main.rs`) and integration tests (`tests/validate.rs`) keep
+// importing `ExecuteOperationInput`, `PayloadFileSpec`, `PayloadLoadPolicy`,
+// `run_execute_operation` directly from `forge_core_cli`.
+pub use execute_operation::{
+    run_execute_operation, ExecuteOperationContractPathKind, ExecuteOperationError,
+    ExecuteOperationInput, PayloadFileSpec, PayloadLoadPolicy,
+};
 
 use asn1_rs::{BitString as Asn1BitString, FromDer as _};
 use base64::{
@@ -27,11 +37,6 @@ use forge_core_contracts::{
     HealthRecoveryContractDocument, OperationContractDocument, RequestContractDocument,
     RuntimeCapabilityDocument, RuntimeHandoffContractDocument, RuntimeKind,
     RuntimeRegistryEntryDocument, StableId, ToolEffectContractDocument,
-};
-use forge_core_runtime::{
-    execute_operation, RuntimeEffectPayloadKind, RuntimeOperationCommandInput,
-    RuntimeOperationEffectInput, RuntimeOperationEffectPayload, RuntimeOperationExecution,
-    RuntimeOperationExecutionContext,
 };
 use forge_core_store::{
     build_effect_metadata_context, build_reference_index, collect_known_repo_paths,
@@ -67,9 +72,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha1::Sha1;
 use sha2::{Digest, Sha256, Sha384, Sha512};
-use std::fmt;
 use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
 use x509_parser::certificate::X509Certificate;
 use x509_parser::extensions::{GeneralName, ParsedExtension};
@@ -6424,218 +6427,6 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
     summary
 }
 
-#[derive(Debug, Clone)]
-pub struct ExecuteOperationInput {
-    pub root: PathBuf,
-    pub effect_store_root: Option<PathBuf>,
-    pub operation_path: PathBuf,
-    pub command_paths: Vec<PathBuf>,
-    pub effect_paths: Vec<PathBuf>,
-    pub payloads: Vec<PayloadFileSpec>,
-    pub payload_policy: PayloadLoadPolicy,
-    pub recorded_at: String,
-    pub tx_id_prefix: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct PayloadFileSpec {
-    pub target_ref: String,
-    pub path: PathBuf,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PayloadLoadPolicy {
-    pub max_payload_bytes: u64,
-    pub allow_outside_root: bool,
-}
-
-impl Default for PayloadLoadPolicy {
-    fn default() -> Self {
-        Self {
-            max_payload_bytes: 1_048_576,
-            allow_outside_root: false,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExecuteOperationContractPathKind {
-    Operation,
-    Command,
-    Effect,
-}
-
-impl ExecuteOperationContractPathKind {
-    const fn label(self) -> &'static str {
-        match self {
-            ExecuteOperationContractPathKind::Operation => "operation contract path",
-            ExecuteOperationContractPathKind::Command => "command contract path",
-            ExecuteOperationContractPathKind::Effect => "effect contract path",
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum ExecuteOperationError {
-    ReferenceIndexBuild(String),
-    ReadFile {
-        path: PathBuf,
-        source: io::Error,
-    },
-    ParseYaml {
-        path: PathBuf,
-        source: serde_yaml::Error,
-    },
-    InvalidEffectPath {
-        root: PathBuf,
-        path: PathBuf,
-    },
-    ContractPathOutsideRoot {
-        kind: ExecuteOperationContractPathKind,
-        root: PathBuf,
-        path: PathBuf,
-    },
-    PayloadPathOutsideRoot {
-        root: PathBuf,
-        path: PathBuf,
-    },
-    PayloadTooLarge {
-        path: PathBuf,
-        byte_len: u64,
-        max_payload_bytes: u64,
-    },
-}
-
-impl fmt::Display for ExecuteOperationError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ExecuteOperationError::ReferenceIndexBuild(message) => {
-                write!(formatter, "reference index build failed: {message}")
-            }
-            ExecuteOperationError::ReadFile { path, source } => {
-                write!(formatter, "read {} failed: {source}", path.display())
-            }
-            ExecuteOperationError::ParseYaml { path, source } => {
-                write!(formatter, "parse {} failed: {source}", path.display())
-            }
-            ExecuteOperationError::InvalidEffectPath { root, path } => write!(
-                formatter,
-                "effect path {} is not under root {}",
-                path.display(),
-                root.display()
-            ),
-            ExecuteOperationError::ContractPathOutsideRoot { kind, root, path } => write!(
-                formatter,
-                "{} {} is outside project root {}; pass a path under --root so operation provenance stays within one project",
-                kind.label(),
-                path.display(),
-                root.display()
-            ),
-            ExecuteOperationError::PayloadPathOutsideRoot { root, path } => write!(
-                formatter,
-                "payload path {} is outside root {}",
-                path.display(),
-                root.display()
-            ),
-            ExecuteOperationError::PayloadTooLarge {
-                path,
-                byte_len,
-                max_payload_bytes,
-            } => write!(
-                formatter,
-                "payload {} is too large: {byte_len} bytes > {max_payload_bytes} bytes",
-                path.display()
-            ),
-        }
-    }
-}
-
-impl std::error::Error for ExecuteOperationError {}
-
-pub fn run_execute_operation(
-    input: ExecuteOperationInput,
-) -> Result<RuntimeOperationExecution, ExecuteOperationError> {
-    let root = input.root;
-    let effect_store_root = input.effect_store_root.unwrap_or_else(|| root.clone());
-    let canonical_root = canonicalize_existing_path(&root)?;
-    let operation_path = resolve_contract_input_path(
-        &root,
-        &canonical_root,
-        &input.operation_path,
-        ExecuteOperationContractPathKind::Operation,
-    )?;
-    let command_paths = input
-        .command_paths
-        .iter()
-        .map(|path| {
-            resolve_contract_input_path(
-                &root,
-                &canonical_root,
-                path,
-                ExecuteOperationContractPathKind::Command,
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let effect_paths = input
-        .effect_paths
-        .iter()
-        .map(|path| {
-            resolve_contract_input_path(
-                &root,
-                &canonical_root,
-                path,
-                ExecuteOperationContractPathKind::Effect,
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let index = build_reference_index(&root)
-        .map_err(|error| ExecuteOperationError::ReferenceIndexBuild(error.to_string()))?;
-    let operation = read_yaml_result::<OperationContractDocument>(&operation_path)?;
-    let commands = command_paths
-        .iter()
-        .map(|path| {
-            read_yaml_result::<CommandContractDocument>(path)
-                .map(|document| RuntimeOperationCommandInput { document })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let effects = effect_paths
-        .iter()
-        .map(|path| {
-            let document = read_yaml_result::<ToolEffectContractDocument>(path)?;
-            let effect_ref =
-                forge_core_contracts::RepoPath(repo_relative_checked(&canonical_root, path)?);
-            Ok(RuntimeOperationEffectInput {
-                effect_ref,
-                document,
-            })
-        })
-        .collect::<Result<Vec<_>, ExecuteOperationError>>()?;
-    let payloads = input
-        .payloads
-        .iter()
-        .map(|payload| runtime_payload_from_file(&root, payload, input.payload_policy))
-        .collect::<Result<Vec<_>, _>>()?;
-    let context = RuntimeOperationExecutionContext {
-        command_context: forge_core_runtime::CommandExecutionContext::single_root(&root),
-        effect_store_root: &effect_store_root,
-        evidence_log_relative_path: ".forge-method/evidence/command-execution.ndjson",
-        wal_relative_path: ".forge-method/wal/effects.ndjson",
-        lock_relative_path: ".forge-method/locks/effects.lock",
-        effect_metadata_index_relative_path: ".forge-method/index/effect-targets.ndjson",
-        recorded_at: &input.recorded_at,
-        tx_id_prefix: &input.tx_id_prefix,
-    };
-
-    Ok(execute_operation(
-        &operation,
-        forge_core_runtime::RuntimeReadSnapshot::new(&index),
-        &commands,
-        &effects,
-        &payloads,
-        &context,
-    ))
-}
-
 fn validate_operation_fixtures(root: &Path, index: &ReferenceIndex, summary: &mut ValidateSummary) {
     let dir = root.join("docs/fixtures/operation-contract-v0");
     for path in yaml_files(&dir, summary) {
@@ -6962,115 +6753,6 @@ fn read_yaml<T: serde::de::DeserializeOwned>(
             None
         }
     }
-}
-
-fn read_yaml_result<T: serde::de::DeserializeOwned>(
-    path: &Path,
-) -> Result<T, ExecuteOperationError> {
-    let text = fs::read_to_string(path).map_err(|source| ExecuteOperationError::ReadFile {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    serde_yaml::from_str(&text).map_err(|source| ExecuteOperationError::ParseYaml {
-        path: path.to_path_buf(),
-        source,
-    })
-}
-
-fn runtime_payload_from_file(
-    root: &Path,
-    payload: &PayloadFileSpec,
-    policy: PayloadLoadPolicy,
-) -> Result<RuntimeOperationEffectPayload, ExecuteOperationError> {
-    let path = resolve_input_path(root, &payload.path);
-    validate_payload_scope(root, &path, policy.allow_outside_root)?;
-    let metadata = fs::metadata(&path).map_err(|source| ExecuteOperationError::ReadFile {
-        path: path.clone(),
-        source,
-    })?;
-    let byte_len = metadata.len();
-    if byte_len > policy.max_payload_bytes {
-        return Err(ExecuteOperationError::PayloadTooLarge {
-            path,
-            byte_len,
-            max_payload_bytes: policy.max_payload_bytes,
-        });
-    }
-    let content = fs::read(&path).map_err(|source| ExecuteOperationError::ReadFile {
-        path: path.clone(),
-        source,
-    })?;
-    Ok(RuntimeOperationEffectPayload {
-        target_ref: payload.target_ref.clone(),
-        payload_kind: RuntimeEffectPayloadKind::RuntimeGenerated,
-        content_hash: format!("sha256:{}", hex_sha256(&content)),
-        content,
-    })
-}
-
-fn canonicalize_existing_path(path: &Path) -> Result<PathBuf, ExecuteOperationError> {
-    fs::canonicalize(path).map_err(|source| ExecuteOperationError::ReadFile {
-        path: path.to_path_buf(),
-        source,
-    })
-}
-
-fn resolve_contract_input_path(
-    root: &Path,
-    canonical_root: &Path,
-    path: &Path,
-    kind: ExecuteOperationContractPathKind,
-) -> Result<PathBuf, ExecuteOperationError> {
-    let path = canonicalize_existing_path(&resolve_input_path(root, path))?;
-    if path.starts_with(canonical_root) {
-        Ok(path)
-    } else {
-        Err(ExecuteOperationError::ContractPathOutsideRoot {
-            kind,
-            root: canonical_root.to_path_buf(),
-            path,
-        })
-    }
-}
-
-fn validate_payload_scope(
-    root: &Path,
-    path: &Path,
-    allow_outside_root: bool,
-) -> Result<(), ExecuteOperationError> {
-    if allow_outside_root {
-        return Ok(());
-    }
-    let root = fs::canonicalize(root).map_err(|source| ExecuteOperationError::ReadFile {
-        path: root.to_path_buf(),
-        source,
-    })?;
-    let path = fs::canonicalize(path).map_err(|source| ExecuteOperationError::ReadFile {
-        path: path.to_path_buf(),
-        source,
-    })?;
-    if path.starts_with(&root) {
-        Ok(())
-    } else {
-        Err(ExecuteOperationError::PayloadPathOutsideRoot { root, path })
-    }
-}
-
-fn resolve_input_path(root: &Path, path: &Path) -> PathBuf {
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        root.join(path)
-    }
-}
-
-fn repo_relative_checked(root: &Path, path: &Path) -> Result<String, ExecuteOperationError> {
-    path.strip_prefix(root)
-        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
-        .map_err(|_| ExecuteOperationError::InvalidEffectPath {
-            root: root.to_path_buf(),
-            path: path.to_path_buf(),
-        })
 }
 
 pub(crate) fn hex_sha256(content: &[u8]) -> String {
