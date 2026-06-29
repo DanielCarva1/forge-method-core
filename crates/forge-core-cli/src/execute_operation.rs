@@ -34,6 +34,9 @@ use forge_core_runtime::{
 };
 use forge_core_store::build_reference_index;
 
+use crate::cli_util::{
+    next_arg, next_path, parse_payload_arg, parse_u64, resolve_stateful_roots_or_exit, usage,
+};
 use crate::hex_sha256;
 
 /// All inputs required to drive one operation execution.
@@ -384,4 +387,107 @@ fn repo_relative_checked(root: &Path, path: &Path) -> Result<String, ExecuteOper
             root: root.to_path_buf(),
             path: path.to_path_buf(),
         })
+}
+pub fn run_execute_operation_command(args: &[String]) {
+    let mut root = PathBuf::from(".");
+    let mut operation_path: Option<PathBuf> = None;
+    let mut command_paths = Vec::new();
+    let mut effect_paths = Vec::new();
+    let mut payloads = Vec::new();
+    let mut payload_policy = PayloadLoadPolicy::default();
+    let mut allow_bootstrap_core = false;
+    let mut recorded_at = "unknown".to_string();
+    let mut tx_id_prefix = "cli-execute-operation".to_string();
+    let mut json = false;
+    let mut index = 1usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--root" => {
+                index += 1;
+                root = next_path(args, index);
+            }
+            "--operation" => {
+                index += 1;
+                operation_path = Some(next_path(args, index));
+            }
+            "--command" => {
+                index += 1;
+                command_paths.push(next_path(args, index));
+            }
+            "--effect" => {
+                index += 1;
+                effect_paths.push(next_path(args, index));
+            }
+            "--payload" => {
+                index += 1;
+                payloads.push(parse_payload_arg(next_arg(args, index)));
+            }
+            "--max-payload-bytes" => {
+                index += 1;
+                payload_policy.max_payload_bytes = parse_u64(next_arg(args, index));
+            }
+            "--allow-payload-outside-root" => {
+                payload_policy.allow_outside_root = true;
+            }
+            "--allow-bootstrap-core" => {
+                allow_bootstrap_core = true;
+            }
+            "--recorded-at" => {
+                index += 1;
+                recorded_at = next_arg(args, index).to_string();
+            }
+            "--tx-id-prefix" => {
+                index += 1;
+                tx_id_prefix = next_arg(args, index).to_string();
+            }
+            "--json" => json = true,
+            "--help" | "-h" => {
+                println!("{}", usage());
+                return;
+            }
+            _ => {
+                eprintln!("{}", usage());
+                std::process::exit(2);
+            }
+        }
+        index += 1;
+    }
+
+    let Some(operation_path) = operation_path else {
+        eprintln!("{}", usage());
+        std::process::exit(2);
+    };
+    let roots = resolve_stateful_roots_or_exit("execute-operation", &root, allow_bootstrap_core);
+    let input = ExecuteOperationInput {
+        root: roots.project_root,
+        effect_store_root: Some(roots.effect_store_root),
+        operation_path,
+        command_paths,
+        effect_paths,
+        payloads,
+        payload_policy,
+        recorded_at,
+        tx_id_prefix,
+    };
+    let execution = match run_execute_operation(input) {
+        Ok(execution) => execution,
+        Err(error) => {
+            eprintln!("execute-operation failed: {error}");
+            std::process::exit(1);
+        }
+    };
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&execution).expect("serialize execution")
+        );
+    } else {
+        println!(
+            "forge_core_operation_execution status={:?} reasons={:?}",
+            execution.status, execution.reasons
+        );
+    }
+    if execution.status != forge_core_runtime::RuntimeOperationExecutionStatus::Completed {
+        std::process::exit(1);
+    }
 }
