@@ -450,21 +450,59 @@ pub fn policy_str(p: MergePolicy) -> &'static str {
     }
 }
 
+/// Hand-rolled error enum for [`parse_merge_policy`] (no `thiserror`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MergePolicyParseError {
+    /// The input did not match any of the known merge-policy values.
+    Unknown { raw: String },
+}
+
+impl std::fmt::Display for MergePolicyParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unknown { raw } => {
+                write!(
+                    f,
+                    "unknown merge-policy '{raw}' (expected: rebase | merge | squash)"
+                )
+            }
+        }
+    }
+}
+
+/// Hand-rolled error enum for [`parse_status`] (no `thiserror`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IsolationStatusParseError {
+    /// The input did not match any of the known isolation-status values.
+    Unknown { raw: String },
+}
+
+impl std::fmt::Display for IsolationStatusParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unknown { raw } => write!(
+                f,
+                "unknown status '{raw}' (expected: proposed|active|merging|merged|abandoned)"
+            ),
+        }
+    }
+}
+
 /// Parse a CLI string into a [`MergePolicy`]. Exits 3 on unknown value
 /// (consistent with DD10 — invalid input shape, not env error).
-pub fn parse_merge_policy(raw: &str) -> Result<MergePolicy, String> {
+pub fn parse_merge_policy(raw: &str) -> Result<MergePolicy, MergePolicyParseError> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "rebase" => Ok(MergePolicy::Rebase),
         "merge" => Ok(MergePolicy::Merge),
         "squash" => Ok(MergePolicy::Squash),
-        other => Err(format!(
-            "unknown merge-policy '{other}' (expected: rebase | merge | squash)"
-        )),
+        other => Err(MergePolicyParseError::Unknown {
+            raw: other.to_string(),
+        }),
     }
 }
 
 /// Parse a CLI string into an [`IsolationStatus`].
-pub fn parse_status(raw: &str) -> Result<IsolationStatus, String> {
+pub fn parse_status(raw: &str) -> Result<IsolationStatus, IsolationStatusParseError> {
     use IsolationStatus::*;
     match raw.trim().to_ascii_lowercase().as_str() {
         "proposed" => Ok(Proposed),
@@ -472,9 +510,9 @@ pub fn parse_status(raw: &str) -> Result<IsolationStatus, String> {
         "merging" => Ok(Merging),
         "merged" => Ok(Merged),
         "abandoned" => Ok(Abandoned),
-        other => Err(format!(
-            "unknown status '{other}' (expected: proposed|active|merging|merged|abandoned)"
-        )),
+        other => Err(IsolationStatusParseError::Unknown {
+            raw: other.to_string(),
+        }),
     }
 }
 

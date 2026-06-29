@@ -28,6 +28,34 @@ pub struct ContractValidationResult {
     pub schema_version: String,
 }
 
+/// Hand-rolled error enum for [`validate_kind`] / [`parse_document`] (no `thiserror`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ContractValidateError {
+    /// The `kind` string did not match any of the supported contract kinds.
+    UnsupportedKind {
+        kind: String,
+        supported: Vec<String>,
+    },
+    /// The YAML payload could not be deserialized as the typed document for `kind`.
+    YamlInvalid { kind: String, source: String },
+}
+
+impl std::fmt::Display for ContractValidateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedKind { kind, supported } => write!(
+                f,
+                "unsupported contract kind '{kind}'. Supported kinds: {}",
+                supported.join(", ")
+            ),
+            Self::YamlInvalid { kind, source } => write!(
+                f,
+                "{kind} file is not valid YAML for that contract type: {source}"
+            ),
+        }
+    }
+}
+
 /// Parse and run `forge-core contract <subcommand>`.
 pub fn run_contract_command(args: &[String]) {
     let sub = args.get(1).map(String::as_str).unwrap_or("--help");
@@ -96,7 +124,7 @@ pub fn run_validate(args: &[String]) {
 
     match validate_kind(&kind, &text) {
         Ok(payload) => emit(CliEnvelope::ok("contract validate", payload), want_json),
-        Err(message) => emit_err("contract validate", &message, want_json),
+        Err(message) => emit_err("contract validate", &message.to_string(), want_json),
     }
 }
 
@@ -104,7 +132,10 @@ pub fn run_validate(args: &[String]) {
 ///
 /// This deliberately matches on the explicit kind string because the document
 /// wrappers are concrete Rust types rather than a shared trait object.
-pub fn validate_kind(kind: &str, text: &str) -> Result<ContractValidationResult, String> {
+pub fn validate_kind(
+    kind: &str,
+    text: &str,
+) -> Result<ContractValidationResult, ContractValidateError> {
     match kind {
         "autonomy_policy" => parse_document::<AutonomyPolicyContractDocument>(kind, text),
         "verification_goal" => parse_document::<VerificationGoalContractDocument>(kind, text),
@@ -113,19 +144,24 @@ pub fn validate_kind(kind: &str, text: &str) -> Result<ContractValidationResult,
         "checkpoint" => parse_document::<CheckpointContractDocument>(kind, text),
         "eval_run" => parse_document::<EvalRunContractDocument>(kind, text),
         "telemetry" => parse_document::<TelemetryContractDocument>(kind, text),
-        other => Err(format!(
-            "unsupported contract kind '{other}'. Supported kinds: {}",
-            SUPPORTED_KINDS.join(", ")
-        )),
+        other => Err(ContractValidateError::UnsupportedKind {
+            kind: other.to_string(),
+            supported: SUPPORTED_KINDS.iter().map(|s| (*s).to_string()).collect(),
+        }),
     }
 }
 
-fn parse_document<T>(kind: &str, text: &str) -> Result<ContractValidationResult, String>
+fn parse_document<T>(
+    kind: &str,
+    text: &str,
+) -> Result<ContractValidationResult, ContractValidateError>
 where
     T: serde::de::DeserializeOwned + HasSchemaVersion,
 {
-    let doc: T = serde_yaml::from_str(text)
-        .map_err(|e| format!("{kind} file is not valid YAML for that contract type: {e}"))?;
+    let doc: T = serde_yaml::from_str(text).map_err(|e| ContractValidateError::YamlInvalid {
+        kind: kind.to_string(),
+        source: e.to_string(),
+    })?;
     Ok(ContractValidationResult {
         kind: kind.to_owned(),
         valid: true,
@@ -262,7 +298,10 @@ autonomy_policy_contract:
         let err = validate_kind("not_a_contract", valid_autonomy_policy_yaml())
             .expect_err("unknown kind must fail");
 
-        assert!(err.contains("unsupported contract kind"));
+        assert!(
+            err.to_string().contains("unsupported contract kind"),
+            "got: {err}"
+        );
     }
 
     #[test]
@@ -270,6 +309,10 @@ autonomy_policy_contract:
         let err = validate_kind("autonomy_policy", "schema_version: [")
             .expect_err("malformed yaml must fail");
 
-        assert!(err.contains("autonomy_policy file is not valid YAML"));
+        assert!(
+            err.to_string()
+                .contains("autonomy_policy file is not valid YAML"),
+            "got: {err}"
+        );
     }
 }
