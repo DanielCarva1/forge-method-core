@@ -3241,6 +3241,7 @@ fn parse_strict<T: std::str::FromStr>(s: &str, flag: &str) -> T {
 fn usage() -> &'static str {
     concat!(
         "usage: forge-core validate [--root <path>] [--json]\n",
+        "       forge-core project init [--root <path>] [--project-id <id>] [--sidecar-root <path>] [--state-root <path>] [--json|--no-json]\n",
         "       forge-core project resolve [--root <path>] [--allow-bootstrap-core] [--json|--no-json]\n",
         "       forge-core claim acquire [--root <path>] [--allow-bootstrap-core] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--claims-dir <path>] [--no-json]\n",
         "       forge-core claim heartbeat [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--no-json]\n",
