@@ -1,7 +1,7 @@
 schema_version: "0.1"
 artifact_kind: "story"
 story_id: "H1.2"
-status: "ready"
+status: "verified_current_core"
 slice: "hardening_batch_1"
 title: "Fix conflict_detection root-path false-negative + ASCII-only case fold"
 
@@ -33,4 +33,15 @@ checks:
   - "cargo test -p forge-core-engine"
   - "cargo clippy -p forge-core-engine -- -D warnings"
 blocks: []
-next_workflow: "merge with H1.1 + H1.3, then driver runs full green-loop"
+verified_by:
+  files:
+    - "crates/forge-core-engine/src/conflict_detection.rs"
+  tests:
+    - "cargo test -p forge-core-engine conflict_detection"
+  evidence:
+    - "explicit_repo_root_claim_blocks_descendant_paths proves '.', '/', and '' root claims block descendants."
+    - "unicode_case_insensitive_matching_blocks_case_folded_peer proves non-ASCII accented path matching is not ASCII-only."
+    - "normalize_segments uses Rust str::to_lowercase Unicode case mapping; Context7/Rust std docs confirm this is Unicode lowercase, not ASCII-only."
+    - "No non-test unwrap/expect/panic was added in conflict_detection.rs."
+completed_on: 2026-06-29
+next_workflow: "closed; H1.2 is reconciled into v1.1 backlog as P1.4 and P3.2 verified_current_core"

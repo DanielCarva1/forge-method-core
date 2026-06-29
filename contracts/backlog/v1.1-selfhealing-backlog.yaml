@@ -300,7 +300,20 @@ priority_3_low:
     fix: "Unicode case folding ou canonical path identity no IO boundary."
     source: [review-conflict-detection F3]
     effort: S
-    status: pending
+    status: verified_current_core
+    verified_by:
+      files:
+        - crates/forge-core-engine/src/conflict_detection.rs
+        - contracts/stories/H1.2-conflict-detection-hardening.yaml
+      tests:
+        - cargo test -p forge-core-engine conflict_detection
+      evidence:
+        - normalize_segments uses Rust Unicode to_lowercase rather than ASCII-only folding.
+        - unicode_case_insensitive_matching_blocks_case_folded_peer covers accented non-ASCII path segments.
+        - repo_paths_overlap_uses_same_segment_containment_rules_as_write_checks covers differently cased claim paths.
+        - README already documents root-path and Unicode-aware conflict handling.
+      docs_checked:
+        - "Rust std primitive str::to_lowercase: Unicode case mapping rules; conversion may expand characters."
 
   - id: P3.3
     title: "feat: WAL rotation (snapshot + checkpoint_ref)"
@@ -329,7 +342,7 @@ verification_status_at_handoff:
   current_status:
     p1_high: "P1.1, P1.2, P1.3, P1.4, and P1.5 verified in current core."
     p2_medium: "P2.1 WAL append/recovery, P2.2 WAL-derived claim state authority, P2.3 reconcile loop, and P2.4 tiered invariants verified."
-    p3_low: "P3.1 verified in current core; P3.2-P3.4 remain pending."
+    p3_low: "P3.1 and P3.2 verified in current core; P3.3-P3.4 remain pending."
   targeted_verification:
     - cargo test -p forge-core-engine claim_engine
     - cargo test -p forge-core-engine conflict_detection
