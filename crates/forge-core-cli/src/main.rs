@@ -1,6 +1,7 @@
 use forge_core_cli::eval_cmd::EvalCompareCommandInput;
 use forge_core_cli::graph_cmd::{GraphCommandInput, GraphCommandKind, GraphCommandStatus};
 use forge_core_cli::m1_cmd::{M1CommandInput, M1CommandKind};
+use forge_core_cli::telemetry_cmd::{TelemetryExportCommandInput, TelemetryExportFormat};
 use forge_core_cli::{
     run_execute_operation, run_host_adapter_artifact_verification,
     run_host_adapter_certificate_crl_status_verification,
@@ -62,6 +63,7 @@ fn main() {
         "project" => run_project_command(&args),
         "graph" => run_graph_command(&args),
         "eval" => run_eval_command(&args),
+        "telemetry" => run_telemetry_command(&args),
         "preview" => run_m1_command(&args, M1CommandKind::Preview),
         "ready" => run_m1_command(&args, M1CommandKind::Ready),
         "explain" => run_m1_command(&args, M1CommandKind::Explain),
@@ -1810,6 +1812,154 @@ fn run_eval_compare(input: &EvalCompareCommandInput, json: bool) {
     }
 }
 
+fn run_telemetry_command(args: &[String]) {
+    let subcommand = args.get(1).map_or("--help", String::as_str);
+    match subcommand {
+        "export" => {
+            let (input, json) = parse_telemetry_export_args(args);
+            run_telemetry_export(&input, json);
+        }
+        "--help" | "-h" | "help" => {
+            println!("{}", telemetry_usage());
+        }
+        _ => {
+            eprintln!("{}", telemetry_usage());
+            std::process::exit(2);
+        }
+    }
+}
+
+fn parse_telemetry_export_args(args: &[String]) -> (TelemetryExportCommandInput, bool) {
+    let mut root = PathBuf::from(".");
+    let mut contract_path: Option<PathBuf> = None;
+    let mut output_path: Option<PathBuf> = None;
+    let mut format = TelemetryExportFormat::Jsonl;
+    let mut trace_id: Option<String> = None;
+    let mut run_id: Option<String> = None;
+    let mut latest_run = false;
+    let mut allow_bootstrap_core = false;
+    let mut json = false;
+    let mut index = 2usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--root" => {
+                index += 1;
+                root = PathBuf::from(next_telemetry_value(args, index, "root"));
+            }
+            "--contract" => {
+                index += 1;
+                contract_path = Some(PathBuf::from(next_telemetry_value(args, index, "contract")));
+            }
+            "--output" => {
+                index += 1;
+                output_path = Some(PathBuf::from(next_telemetry_value(args, index, "output")));
+            }
+            "--format" => {
+                index += 1;
+                format = parse_telemetry_format(next_telemetry_value(args, index, "format"));
+            }
+            "--trace-id" => {
+                index += 1;
+                trace_id = Some(next_telemetry_value(args, index, "trace-id").to_string());
+            }
+            "--run-id" => {
+                index += 1;
+                run_id = Some(next_telemetry_value(args, index, "run-id").to_string());
+            }
+            "--latest-run" => latest_run = true,
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
+            "--json" => json = true,
+            "--no-json" => json = false,
+            "--help" | "-h" => {
+                println!("{}", telemetry_usage());
+                std::process::exit(0);
+            }
+            _ => {
+                eprintln!("{}", telemetry_usage());
+                std::process::exit(2);
+            }
+        }
+        index += 1;
+    }
+
+    let selected_filters =
+        usize::from(trace_id.is_some()) + usize::from(run_id.is_some()) + usize::from(latest_run);
+    if selected_filters > 1 {
+        eprintln!("telemetry export accepts only one of --trace-id, --run-id, or --latest-run");
+        std::process::exit(3);
+    }
+
+    (
+        TelemetryExportCommandInput {
+            root,
+            contract_path,
+            output_path,
+            format,
+            trace_id,
+            run_id,
+            latest_run,
+            allow_bootstrap_core,
+        },
+        json,
+    )
+}
+
+fn next_telemetry_value<'a>(args: &'a [String], index: usize, flag: &str) -> &'a str {
+    let value = args.get(index).map_or_else(
+        || {
+            eprintln!("telemetry export: missing value for --{flag}");
+            std::process::exit(3);
+        },
+        String::as_str,
+    );
+    if value.starts_with('-') {
+        eprintln!("telemetry export: missing value for --{flag}");
+        std::process::exit(3);
+    }
+    value
+}
+
+fn parse_telemetry_format(value: &str) -> TelemetryExportFormat {
+    match value {
+        "jsonl" | "forge-jsonl" => TelemetryExportFormat::Jsonl,
+        "otel-json" | "otel-jsonl" | "opentelemetry-json" => TelemetryExportFormat::OtelJson,
+        other => {
+            eprintln!("telemetry export: invalid value for --format '{other}'; expected jsonl or otel-json");
+            std::process::exit(3);
+        }
+    }
+}
+
+fn run_telemetry_export(input: &TelemetryExportCommandInput, json: bool) {
+    match forge_core_cli::telemetry_cmd::run_export(input) {
+        Ok(output) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output)
+                        .expect("serialize telemetry export output")
+                );
+            } else {
+                println!(
+                    "forge_core_telemetry_export status={:?} format={:?} exported={} skipped={} output={}",
+                    output.status,
+                    output.format,
+                    output.exported_event_count,
+                    output.skipped_event_count,
+                    output.output_path.as_deref().unwrap_or("<memory>")
+                );
+                for diagnostic in &output.diagnostics {
+                    println!("diagnostic={diagnostic}");
+                }
+            }
+        }
+        Err(error) => {
+            eprintln!("telemetry export failed: {error}");
+            std::process::exit(5);
+        }
+    }
+}
+
 fn parse_m1_command_args(args: &[String], kind: M1CommandKind) -> (M1CommandInput, bool) {
     let mut root = PathBuf::from(".");
     let mut operation_path: Option<PathBuf> = None;
@@ -3397,6 +3547,7 @@ fn usage() -> &'static str {
         "       forge-core graph validate --root <project> --graph <path> [--allow-bootstrap-core] [--json]\n",
         "       forge-core graph run --root <project> --graph <path> --dry-run [--agent <id>] [--claims-dir <path>] [--now-unix <epoch>] [--allow-bootstrap-core] [--json]\n",
         "       forge-core eval compare [--root <project>] [--suite <path>] --baseline <single-agent|graph|mas|manual> --candidate <single-agent|graph|mas|manual> [--allow-bootstrap-core] [--json|--no-json]\n",
+        "       forge-core telemetry export [--root <project>] [--contract <path>] [--output <path>] [--format jsonl|otel-json] [--trace-id <id>|--run-id <id>|--latest-run] [--allow-bootstrap-core] [--json|--no-json]\n",
         "       forge-core preview [--root <path>] --operation <path> [--allow-bootstrap-core] [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json]\n",
         "       forge-core ready [--root <path>] --operation <path> [--allow-bootstrap-core] [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json]\n",
         "       forge-core explain [--root <path>] --last-run [--allow-bootstrap-core] [--json]\n",
@@ -3439,6 +3590,17 @@ fn eval_usage() -> &'static str {
         "[--allow-bootstrap-core] [--json|--no-json]\n",
         "default suite: ",
         "docs/fixtures/eval-run-v0/eval-compare-smoke-suite.yaml"
+    )
+}
+
+fn telemetry_usage() -> &'static str {
+    concat!(
+        "usage: forge-core telemetry export [--root <project>] ",
+        "[--contract <path>] [--output <path>] [--format jsonl|otel-json] ",
+        "[--trace-id <id>|--run-id <id>|--latest-run] ",
+        "[--allow-bootstrap-core] [--json|--no-json]\n",
+        "default contract: contracts/examples/telemetry.yaml\n",
+        "default trace source: resolved <state_root>/traces/events.ndjson"
     )
 }
 
