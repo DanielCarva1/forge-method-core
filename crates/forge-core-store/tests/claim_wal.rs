@@ -5,7 +5,9 @@ use forge_core_contracts::claim::{
 use forge_core_contracts::{ClaimId, RepoPath, ScopeId, StableId};
 use forge_core_store::claim_wal::{
     append_claim_wal_record, claim_wal_path, recover_claim_wal, replay_claim_wal,
-    ClaimWalOperation, ClaimWalStopReason,
+    rotate_claim_wal_if_needed, ClaimWalManifestPayload, ClaimWalOperation, ClaimWalProjection,
+    ClaimWalRecovery, ClaimWalRotationOptions, ClaimWalRotationReason, ClaimWalRotationResult,
+    ClaimWalStopReason,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -456,4 +458,305 @@ fn claim_wal_skips_unknown_skippable_records_and_stops_on_unskippable() {
         ClaimWalStopReason::UnsupportedRecordType
     );
     assert_eq!(recovery.records.len(), 1);
+}
+
+fn rotation_options_by_record_count(max_records: usize) -> ClaimWalRotationOptions {
+    ClaimWalRotationOptions {
+        max_wal_bytes: u64::MAX,
+        max_records,
+        max_replay_millis: u64::MAX,
+    }
+}
+
+fn assert_record_count_rotation_result(rotation: &ClaimWalRotationResult) {
+    assert!(rotation.rotated);
+    assert_eq!(rotation.reason, Some(ClaimWalRotationReason::RecordCount));
+    assert_eq!(rotation.last_seq_in_snapshot, 3);
+    assert_eq!(rotation.checkpoint_seq, Some(4));
+    assert_eq!(rotation.compacted_records, 3);
+    assert!(rotation
+        .snapshot_path
+        .as_ref()
+        .expect("snapshot path")
+        .exists());
+    assert!(rotation
+        .archived_wal_path
+        .as_ref()
+        .expect("archive path")
+        .exists());
+    assert!(rotation
+        .manifest_path
+        .as_ref()
+        .expect("manifest path")
+        .exists());
+}
+
+fn assert_raw_checkpoint_and_archive_headers(root: &Path, rotation: &ClaimWalRotationResult) {
+    let active_wal_bytes = fs::read(claim_wal_path(root)).expect("read rotated active WAL");
+    assert_eq!(
+        active_wal_bytes[5], 4,
+        "rotated active WAL must start with checkpoint_ref record type 4"
+    );
+    assert_eq!(
+        u64::from_le_bytes(
+            active_wal_bytes[8..16]
+                .try_into()
+                .expect("checkpoint seq bytes")
+        ),
+        4
+    );
+    let archived_wal_bytes = fs::read(rotation.archived_wal_path.as_ref().expect("archive path"))
+        .expect("read archived WAL");
+    assert_eq!(
+        archived_wal_bytes[5], 1,
+        "archived WAL should preserve original first acquire record"
+    );
+    assert_eq!(
+        u64::from_le_bytes(
+            archived_wal_bytes[8..16]
+                .try_into()
+                .expect("archived first seq bytes")
+        ),
+        1
+    );
+    let manifest_bytes = fs::read(rotation.manifest_path.as_ref().expect("manifest path"))
+        .expect("read rotation manifest");
+    let manifest: ClaimWalManifestPayload =
+        serde_json::from_slice(&manifest_bytes).expect("decode rotation manifest");
+    assert_eq!(manifest.schema_version, "0.1");
+    assert_eq!(manifest.active_wal_path, "wal/claims.fmw1");
+    assert_eq!(manifest.checkpoint_seq, 4);
+    assert_eq!(manifest.last_seq_in_snapshot, 3);
+}
+
+fn assert_rotated_recovery(recovery: &ClaimWalRecovery) {
+    assert_eq!(recovery.stop_reason, ClaimWalStopReason::CleanEof);
+    assert_eq!(recovery.records.len(), 0);
+    assert_eq!(recovery.last_observed_seq, 4);
+    assert_eq!(recovery.valid_record_count, 1);
+    assert_eq!(
+        recovery
+            .checkpoint
+            .as_ref()
+            .expect("checkpoint record")
+            .payload
+            .last_seq_in_snapshot,
+        3
+    );
+}
+
+fn assert_rotated_projection(projection: &ClaimWalProjection) {
+    assert_eq!(projection.claims.len(), 2);
+    assert!(projection
+        .active_by_claim_id
+        .contains_key("claim.story.S1.S1"));
+    assert!(projection
+        .released_by_claim_id
+        .contains_key("claim.story.S2.S2"));
+    assert_eq!(
+        projection
+            .latest_by_claim_id
+            .get("claim.story.S2.S2")
+            .expect("latest S2")
+            .claim_contract
+            .status
+            .value,
+        ClaimStatus::Released
+    );
+}
+
+#[test]
+fn claim_wal_rotation_writes_snapshot_checkpoint_and_replays_from_snapshot() {
+    let root = temp_state("rotation-record-count");
+    let s1_active = claim("S1", "alice", "src/lib.rs", ClaimStatus::Active);
+    let s2_active = claim("S2", "bob", "src/other.rs", ClaimStatus::Active);
+    let s2_released = claim("S2", "bob", "src/other.rs", ClaimStatus::Released);
+
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &s1_active,
+        "2027-01-15T08:00:00Z",
+    )
+    .expect("append S1 acquire");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &s2_active,
+        "2027-01-15T08:01:00Z",
+    )
+    .expect("append S2 acquire");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Release,
+        &s2_released,
+        "2027-01-15T08:02:00Z",
+    )
+    .expect("append S2 release");
+
+    let rotation = rotate_claim_wal_if_needed(
+        &root,
+        "2027-01-15T08:03:00Z",
+        &rotation_options_by_record_count(2),
+    )
+    .expect("rotate WAL by record count");
+
+    assert_record_count_rotation_result(&rotation);
+
+    let recovery = recover_claim_wal(&root, false).expect("recover rotated WAL");
+    assert_raw_checkpoint_and_archive_headers(&root, &rotation);
+    assert_rotated_recovery(&recovery);
+
+    let projection = replay_claim_wal(&root, false).expect("replay rotated WAL");
+    assert_rotated_projection(&projection);
+
+    let heartbeat = append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Heartbeat,
+        &s1_active,
+        "2027-01-15T08:04:00Z",
+    )
+    .expect("append heartbeat after rotation");
+    assert_eq!(heartbeat.seq, 5);
+
+    let projection = replay_claim_wal(&root, false).expect("replay after post-rotation append");
+    assert_eq!(projection.recovery.records.len(), 1);
+    assert_eq!(projection.recovery.last_observed_seq, 5);
+    assert!(projection
+        .active_by_claim_id
+        .contains_key("claim.story.S1.S1"));
+    assert!(projection
+        .released_by_claim_id
+        .contains_key("claim.story.S2.S2"));
+}
+
+#[test]
+fn claim_wal_rotation_triggers_by_size_threshold() {
+    let root = temp_state("rotation-size");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &claim("S1", "alice", "src/lib.rs", ClaimStatus::Active),
+        "2027-01-15T08:00:00Z",
+    )
+    .expect("append acquire");
+    let wal_len = fs::metadata(claim_wal_path(&root))
+        .expect("WAL metadata")
+        .len();
+
+    let rotation = rotate_claim_wal_if_needed(
+        &root,
+        "2027-01-15T08:01:00Z",
+        &ClaimWalRotationOptions {
+            max_wal_bytes: wal_len.saturating_sub(1),
+            max_records: usize::MAX,
+            max_replay_millis: u64::MAX,
+        },
+    )
+    .expect("rotate by size threshold");
+
+    assert!(rotation.rotated);
+    assert_eq!(rotation.reason, Some(ClaimWalRotationReason::WalSizeBytes));
+}
+
+#[test]
+fn claim_wal_rotation_is_noop_below_thresholds() {
+    let root = temp_state("rotation-noop");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &claim("S1", "alice", "src/lib.rs", ClaimStatus::Active),
+        "2027-01-15T08:00:00Z",
+    )
+    .expect("append acquire");
+
+    let rotation = rotate_claim_wal_if_needed(
+        &root,
+        "2027-01-15T08:01:00Z",
+        &rotation_options_by_record_count(10),
+    )
+    .expect("check rotation threshold");
+
+    assert!(!rotation.rotated);
+    assert_eq!(rotation.reason, None);
+    assert_eq!(rotation.snapshot_path, None);
+    assert_eq!(rotation.archived_wal_path, None);
+    assert_eq!(rotation.manifest_path, None);
+    let recovery = recover_claim_wal(&root, false).expect("recover unrotated WAL");
+    assert_eq!(recovery.records.len(), 1);
+    assert_eq!(recovery.checkpoint, None);
+}
+
+#[test]
+fn claim_wal_checkpoint_missing_snapshot_fails_closed_and_blocks_append() {
+    let root = temp_state("rotation-missing-snapshot");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &claim("S1", "alice", "src/lib.rs", ClaimStatus::Active),
+        "2027-01-15T08:00:00Z",
+    )
+    .expect("append acquire");
+    let rotation = rotate_claim_wal_if_needed(
+        &root,
+        "2027-01-15T08:01:00Z",
+        &rotation_options_by_record_count(0),
+    )
+    .expect("force rotation");
+    fs::remove_file(rotation.snapshot_path.expect("snapshot path")).expect("delete snapshot");
+
+    let recovery = recover_claim_wal(&root, false).expect("recover checkpoint without snapshot");
+    assert_eq!(
+        recovery.stop_reason,
+        ClaimWalStopReason::CheckpointSnapshotInvalid
+    );
+    assert_eq!(recovery.records.len(), 0);
+    assert_eq!(recovery.last_good_offset, 0);
+
+    let append = append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Heartbeat,
+        &claim("S1", "alice", "src/lib.rs", ClaimStatus::Active),
+        "2027-01-15T08:02:00Z",
+    );
+    assert!(
+        append.is_err(),
+        "append must fail closed after snapshot loss"
+    );
+}
+
+#[test]
+fn claim_wal_checkpoint_snapshot_crc_mismatch_fails_closed() {
+    let root = temp_state("rotation-bad-snapshot-crc");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &claim("S1", "alice", "src/lib.rs", ClaimStatus::Active),
+        "2027-01-15T08:00:00Z",
+    )
+    .expect("append acquire");
+    let rotation = rotate_claim_wal_if_needed(
+        &root,
+        "2027-01-15T08:01:00Z",
+        &rotation_options_by_record_count(0),
+    )
+    .expect("force rotation");
+    let snapshot_path = rotation.snapshot_path.expect("snapshot path");
+    let mut snapshot = fs::read(&snapshot_path).expect("read snapshot");
+    let last = snapshot.last_mut().expect("non-empty snapshot");
+    *last ^= 0b0000_0001;
+    fs::write(&snapshot_path, snapshot).expect("write corrupted snapshot");
+
+    let recovery = recover_claim_wal(&root, false).expect("recover checkpoint with bad snapshot");
+    assert_eq!(
+        recovery.stop_reason,
+        ClaimWalStopReason::CheckpointSnapshotInvalid
+    );
+
+    let projection = replay_claim_wal(&root, false).expect("replay corrupted snapshot prefix");
+    assert_eq!(
+        projection.recovery.stop_reason,
+        ClaimWalStopReason::CheckpointSnapshotInvalid
+    );
+    assert!(projection.claims.is_empty());
 }
