@@ -23,6 +23,7 @@ pub(crate) mod execute_operation;
 pub mod graph_cmd;
 pub mod guide;
 pub(crate) mod host_adapter_manifest;
+pub mod host_adapter_policy_cmd;
 pub(crate) mod host_adapter_projection;
 pub mod host_adapter_verify_cmd;
 // `host_command` here (the CLI's manifest/projection-side helpers) shadows
