@@ -1530,6 +1530,9 @@ fn parse_graph_command_args(
     let mut root = PathBuf::from(".");
     let mut graph_path: Option<PathBuf> = None;
     let mut allow_bootstrap_core = false;
+    let mut agent_id: Option<String> = None;
+    let mut claims_dir: Option<PathBuf> = None;
+    let mut now_unix: Option<i64> = None;
     let mut json = false;
     let mut dry_run = false;
     let mut index = 2usize;
@@ -1537,11 +1540,23 @@ fn parse_graph_command_args(
         match args[index].as_str() {
             "--root" => {
                 index += 1;
-                root = next_path(args, index);
+                root = next_graph_path(args, index, "root");
             }
             "--graph" => {
                 index += 1;
-                graph_path = Some(next_path(args, index));
+                graph_path = Some(next_graph_path(args, index, "graph"));
+            }
+            "--agent" | "--agent-id" if kind == GraphCommandKind::RunDryRun => {
+                index += 1;
+                agent_id = Some(next_graph_value(args, index, "agent").to_string());
+            }
+            "--claims-dir" if kind == GraphCommandKind::RunDryRun => {
+                index += 1;
+                claims_dir = Some(next_graph_path(args, index, "claims-dir"));
+            }
+            "--now-unix" if kind == GraphCommandKind::RunDryRun => {
+                index += 1;
+                now_unix = Some(parse_graph_i64(next_graph_value(args, index, "now-unix")));
             }
             "--dry-run" if kind == GraphCommandKind::RunDryRun => dry_run = true,
             "--allow-bootstrap-core" => allow_bootstrap_core = true,
@@ -1563,10 +1578,41 @@ fn parse_graph_command_args(
             root,
             graph_path,
             allow_bootstrap_core,
+            agent_id,
+            claims_dir,
+            now_unix,
         },
         json,
         dry_run,
     )
+}
+
+fn next_graph_value<'a>(args: &'a [String], index: usize, flag: &str) -> &'a str {
+    let value = args.get(index).map_or_else(
+        || {
+            eprintln!("graph: missing value for --{flag}");
+            std::process::exit(3);
+        },
+        String::as_str,
+    );
+    if value.starts_with('-') {
+        eprintln!("graph: missing value for --{flag}");
+        std::process::exit(3);
+    }
+    value
+}
+
+fn next_graph_path(args: &[String], index: usize, flag: &str) -> PathBuf {
+    PathBuf::from(next_graph_value(args, index, flag))
+}
+
+fn parse_graph_i64(value: &str) -> i64 {
+    if let Ok(parsed) = value.parse::<i64>() {
+        parsed
+    } else {
+        eprintln!("graph: invalid value for --now-unix: '{value}'");
+        std::process::exit(3);
+    }
 }
 
 fn run_graph_validate(input: &GraphCommandInput, json: bool) {
@@ -2980,7 +3026,7 @@ fn usage() -> &'static str {
         "       forge-core claim status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--no-json]\n",
         "       forge-core claim check-write [--root <path>] [--allow-bootstrap-core] --agent <id> --target <path> [--claims-dir <path>] [--no-json]\n",
         "       forge-core graph validate --root <project> --graph <path> [--allow-bootstrap-core] [--json]\n",
-        "       forge-core graph run --root <project> --graph <path> --dry-run [--allow-bootstrap-core] [--json]\n",
+        "       forge-core graph run --root <project> --graph <path> --dry-run [--agent <id>] [--claims-dir <path>] [--now-unix <epoch>] [--allow-bootstrap-core] [--json]\n",
         "       forge-core preview [--root <path>] --operation <path> [--allow-bootstrap-core] [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json]\n",
         "       forge-core ready [--root <path>] --operation <path> [--allow-bootstrap-core] [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json]\n",
         "       forge-core explain [--root <path>] --last-run [--allow-bootstrap-core] [--json]\n",
@@ -3011,7 +3057,7 @@ fn usage() -> &'static str {
 fn graph_usage() -> &'static str {
     concat!(
         "usage: forge-core graph validate --root <project> --graph <path> [--allow-bootstrap-core] [--json]\n",
-        "       forge-core graph run --root <project> --graph <path> --dry-run [--allow-bootstrap-core] [--json]"
+        "       forge-core graph run --root <project> --graph <path> --dry-run [--agent <id>] [--claims-dir <path>] [--now-unix <epoch>] [--allow-bootstrap-core] [--json]"
     )
 }
 

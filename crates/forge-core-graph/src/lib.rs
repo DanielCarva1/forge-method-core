@@ -241,6 +241,7 @@ pub enum GraphDiagnosticCode {
     DuplicateOperationEvaluation,
     OperationNotReady,
     OperationMutationDeclarationMismatch,
+    ClaimPreflightBlocked,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -286,6 +287,8 @@ pub struct GraphDryRunStep {
     pub operation_plan_allowed: Option<bool>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub operation_blocking_reasons: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub claim_preflight: Option<GraphClaimPreflightEvaluation>,
     pub status: GraphDryRunStepStatus,
     pub reasons: Vec<GraphDryRunReason>,
     pub blocked_by: Vec<StableId>,
@@ -306,6 +309,7 @@ pub enum GraphDryRunReason {
     OperationContractMissing,
     OperationContractInvalid,
     OperationNotReady,
+    ClaimPreflightBlocked,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -336,6 +340,41 @@ pub struct GraphOperationEvaluation {
     pub preview_status: Option<String>,
     pub ready_status: Option<String>,
     pub blocking_reasons: Vec<String>,
+    pub claim_preflight: Option<GraphClaimPreflightEvaluation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphClaimPreflightEvaluation {
+    pub status: GraphClaimPreflightStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<StableId>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub targets: Vec<RepoPath>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub governed_by_self: Vec<RepoPath>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ungoverned: Vec<RepoPath>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub blocks: Vec<GraphClaimPreflightBlock>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphClaimPreflightStatus {
+    Passed,
+    Blocked,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct GraphClaimPreflightBlock {
+    pub blocked_path: RepoPath,
+    pub blocking_claim_id: String,
+    pub claimant: StableId,
+    pub conflict_code: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -445,6 +484,7 @@ pub fn dry_run_graph_with_context(
             .as_ref()
             .and_then(|reference| operation_evaluations.get(reference.0.as_str()).copied());
         append_mutation_declaration_diagnostic(&mut diagnostics, node, operation_evaluation);
+        append_claim_preflight_diagnostic(&mut diagnostics, node, operation_evaluation);
         append_missing_operation_diagnostic(
             &mut diagnostics,
             node,
@@ -506,13 +546,18 @@ fn dry_run_step(
     };
     let operation_block_reason =
         operation_block_reason(node, operation_evaluation, require_operation_contracts);
+    let claim_preflight_blocked = operation_evaluation
+        .and_then(|evaluation| evaluation.claim_preflight.as_ref())
+        .is_some_and(|preflight| preflight.status == GraphClaimPreflightStatus::Blocked);
     let blocked_by = if node.node_kind == GraphNodeKind::Operation && effective_mutation_capable {
         unpassed_upstream_verifiers(graph, node_id.0.as_str())
     } else {
         Vec::new()
     };
-    let blocked = operation_block_reason.is_some() || !blocked_by.is_empty();
-    let reasons = dry_run_step_reasons(operation_block_reason, &blocked_by);
+    let blocked =
+        operation_block_reason.is_some() || claim_preflight_blocked || !blocked_by.is_empty();
+    let reasons =
+        dry_run_step_reasons(operation_block_reason, claim_preflight_blocked, &blocked_by);
 
     StepComputation {
         blocked,
@@ -536,6 +581,8 @@ fn dry_run_step(
             operation_plan_allowed: operation_evaluation.map(|evaluation| evaluation.plan_allowed),
             operation_blocking_reasons: operation_evaluation
                 .map_or_else(Vec::new, |evaluation| evaluation.blocking_reasons.clone()),
+            claim_preflight: operation_evaluation
+                .and_then(|evaluation| evaluation.claim_preflight.clone()),
             status: if blocked {
                 GraphDryRunStepStatus::Blocked
             } else {
@@ -549,11 +596,15 @@ fn dry_run_step(
 
 fn dry_run_step_reasons(
     operation_block_reason: Option<GraphDryRunReason>,
+    claim_preflight_blocked: bool,
     blocked_by: &[StableId],
 ) -> Vec<GraphDryRunReason> {
     let mut reasons = Vec::new();
     if let Some(reason) = operation_block_reason {
         reasons.push(reason);
+    }
+    if claim_preflight_blocked {
+        reasons.push(GraphDryRunReason::ClaimPreflightBlocked);
     }
     if !blocked_by.is_empty() {
         reasons.push(GraphDryRunReason::BlockedByVerifier);
@@ -659,6 +710,32 @@ fn append_mutation_declaration_diagnostic(
             node.mutation_capable,
             evaluation.operation_ref.0,
             evaluation.mutation_capable
+        ),
+    ));
+}
+
+fn append_claim_preflight_diagnostic(
+    diagnostics: &mut Vec<GraphDiagnostic>,
+    node: &GraphNode,
+    operation_evaluation: Option<&GraphOperationEvaluation>,
+) {
+    let Some(preflight) =
+        operation_evaluation.and_then(|evaluation| evaluation.claim_preflight.as_ref())
+    else {
+        return;
+    };
+    if node.node_kind != GraphNodeKind::Operation
+        || preflight.status != GraphClaimPreflightStatus::Blocked
+    {
+        return;
+    }
+    diagnostics.push(GraphDiagnostic::error(
+        GraphDiagnosticCode::ClaimPreflightBlocked,
+        format!("nodes.{}.claim_preflight", node.node_id.0),
+        format!(
+            "operation node {} failed claim preflight for {} target(s)",
+            node.node_id.0,
+            preflight.targets.len()
         ),
     ));
 }

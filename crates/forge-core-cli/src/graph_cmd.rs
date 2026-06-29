@@ -1,14 +1,23 @@
+use crate::claim::{conflict_code_str, load_claims};
 use crate::project_cmd::{resolve_project, ProjectResolveError};
-use forge_core_contracts::{OperationContractDocument, RepoPath};
+use forge_core_contracts::{
+    claim::ClaimContract,
+    tool_effect::{AccessMode, EffectTargetKind},
+    OperationContractDocument, RepoPath, StableId, ToolEffectContractDocument,
+};
+use forge_core_engine::{check_write_against_claims, WriteCheck};
 use forge_core_graph::{
-    dry_run_graph_with_context, validate_graph, GraphDryRunContext, GraphOperationEvaluation,
-    GraphOperationStatus, WorkflowGraph,
+    dry_run_graph_with_context, validate_graph, GraphClaimPreflightBlock,
+    GraphClaimPreflightEvaluation, GraphClaimPreflightStatus, GraphDryRunContext,
+    GraphOperationEvaluation, GraphOperationStatus, WorkflowGraph,
 };
 use forge_core_runtime::{
     preview_operation_with_snapshot, ready_operation_with_snapshot, RuntimePreviewReport,
     RuntimePreviewStatus, RuntimeReadyReport,
 };
-use forge_core_store::{build_reference_index, ReferenceIndexBuildError};
+use forge_core_store::{
+    build_reference_index, resolve_effect_physical_ref, ReferenceIndexBuildError,
+};
 use forge_core_validate::ReferenceIndex;
 use serde::Serialize;
 use serde_json::Value;
@@ -16,6 +25,7 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraphCommandKind {
@@ -28,6 +38,9 @@ pub struct GraphCommandInput {
     pub root: PathBuf,
     pub graph_path: Option<PathBuf>,
     pub allow_bootstrap_core: bool,
+    pub agent_id: Option<String>,
+    pub claims_dir: Option<PathBuf>,
+    pub now_unix: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -57,6 +70,12 @@ pub struct GraphRunCommandOutput {
     pub graph_path: String,
     pub status: GraphCommandStatus,
     pub dry_run_executed: bool,
+    pub claim_preflight_required: bool,
+    pub claim_preflight_executed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub claims_dir: Option<String>,
     pub validation_report: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub report: Option<Value>,
@@ -158,6 +177,10 @@ pub fn run_dry_run(input: &GraphCommandInput) -> Result<GraphRunCommandOutput, G
             graph_path: display_path(&graph_path),
             status: GraphCommandStatus::Blocked,
             dry_run_executed: false,
+            claim_preflight_required: false,
+            claim_preflight_executed: false,
+            agent_id: input.agent_id.clone(),
+            claims_dir: None,
             validation_report,
             report: None,
         });
@@ -165,7 +188,25 @@ pub fn run_dry_run(input: &GraphCommandInput) -> Result<GraphRunCommandOutput, G
 
     let index =
         build_reference_index(&project_root).map_err(|error| reference_index_error(&error))?;
-    let operation_evaluations = evaluate_graph_operations(&project_root, &graph, &index);
+    let state_root = PathBuf::from(&resolved.state_root);
+    let claims_dir = input
+        .claims_dir
+        .clone()
+        .unwrap_or_else(|| state_root.join("claims-active"));
+    let operation_evaluations = evaluate_graph_operations(
+        &project_root,
+        &claims_dir,
+        &graph,
+        &index,
+        input.agent_id.as_deref(),
+        input.now_unix,
+    );
+    let claim_preflight_required = operation_evaluations
+        .iter()
+        .any(|evaluation| evaluation.mutation_capable);
+    let claim_preflight_executed = operation_evaluations
+        .iter()
+        .any(|evaluation| evaluation.claim_preflight.is_some());
     let dry_run_report = report_value(
         "dry-run",
         dry_run_graph_with_context(
@@ -186,6 +227,10 @@ pub fn run_dry_run(input: &GraphCommandInput) -> Result<GraphRunCommandOutput, G
         graph_path: display_path(&graph_path),
         status,
         dry_run_executed: true,
+        claim_preflight_required,
+        claim_preflight_executed,
+        agent_id: input.agent_id.clone(),
+        claims_dir: claim_preflight_required.then(|| display_path(&claims_dir)),
         validation_report,
         report: Some(dry_run_report),
     })
@@ -193,12 +238,18 @@ pub fn run_dry_run(input: &GraphCommandInput) -> Result<GraphRunCommandOutput, G
 
 fn evaluate_graph_operations(
     project_root: &Path,
+    claims_dir: &Path,
     graph: &WorkflowGraph,
     index: &ReferenceIndex,
+    agent_id: Option<&str>,
+    now_unix: Option<i64>,
 ) -> Vec<GraphOperationEvaluation> {
+    let claim_context = GraphClaimPreflightCliContext::new(claims_dir, agent_id, now_unix);
     operation_refs(graph)
         .into_iter()
-        .map(|operation_ref| evaluate_graph_operation(project_root, index, operation_ref))
+        .map(|operation_ref| {
+            evaluate_graph_operation(project_root, index, operation_ref, &claim_context)
+        })
         .collect()
 }
 
@@ -218,6 +269,7 @@ fn evaluate_graph_operation(
     project_root: &Path,
     index: &ReferenceIndex,
     operation_ref: RepoPath,
+    claim_context: &GraphClaimPreflightCliContext,
 ) -> GraphOperationEvaluation {
     let operation_path = match resolve_operation_path(project_root, &operation_ref) {
         Ok(path) => path,
@@ -232,6 +284,7 @@ fn evaluate_graph_operation(
                 preview_status: None,
                 ready_status: None,
                 blocking_reasons: vec![error.to_string()],
+                claim_preflight: None,
             };
         }
     };
@@ -248,13 +301,15 @@ fn evaluate_graph_operation(
                     ReadGraphOperationError::Read { .. } => GraphOperationStatus::Missing,
                     ReadGraphOperationError::Parse { .. }
                     | ReadGraphOperationError::Canonicalize { .. }
-                    | ReadGraphOperationError::UnsafeReference { .. } => {
+                    | ReadGraphOperationError::UnsafeReference { .. }
+                    | ReadGraphOperationError::UnsupportedClaimTarget { .. } => {
                         GraphOperationStatus::Invalid
                     }
                 },
                 preview_status: None,
                 ready_status: None,
                 blocking_reasons: vec![error.to_string()],
+                claim_preflight: None,
             };
         }
     };
@@ -278,10 +333,14 @@ fn evaluate_graph_operation(
         GraphOperationStatus::NotReady
     };
 
+    let mutation_capable = preview.operation_mutates_state;
+    let claim_preflight =
+        claim_preflight_for_operation(project_root, claim_context, &operation, mutation_capable);
+
     GraphOperationEvaluation {
         operation_ref,
         contract_id: Some(preview.operation_id.clone()),
-        mutation_capable: preview.operation_mutates_state,
+        mutation_capable,
         runtime_ready: ready.ready,
         plan_allowed,
         status,
@@ -296,6 +355,7 @@ fn evaluate_graph_operation(
                 .map(serialized_value)
                 .collect()
         },
+        claim_preflight,
     }
 }
 
@@ -310,6 +370,219 @@ fn graph_operation_plan_allowed(
         preview.status,
         RuntimePreviewStatus::ReadOnly | RuntimePreviewStatus::Ready
     )
+}
+
+#[derive(Debug)]
+struct GraphClaimPreflightCliContext {
+    agent_id: Option<StableId>,
+    claims: Vec<ClaimContract>,
+    load_errors: Vec<String>,
+    now_unix: i64,
+}
+
+impl GraphClaimPreflightCliContext {
+    fn new(claims_dir: &Path, agent_id: Option<&str>, now_unix: Option<i64>) -> Self {
+        let agent_id = agent_id.map(|value| StableId(value.to_string()));
+        let (claims, load_errors) = if agent_id.is_some() {
+            load_claims(claims_dir)
+        } else {
+            (Vec::new(), Vec::new())
+        };
+        Self {
+            agent_id,
+            claims,
+            load_errors,
+            now_unix: now_unix.unwrap_or_else(current_unix_seconds),
+        }
+    }
+}
+
+fn claim_preflight_for_operation(
+    project_root: &Path,
+    context: &GraphClaimPreflightCliContext,
+    operation: &OperationContractDocument,
+    mutation_capable: bool,
+) -> Option<GraphClaimPreflightEvaluation> {
+    if !mutation_capable {
+        return None;
+    }
+
+    let targets = match claim_preflight_targets(project_root, operation) {
+        Ok(targets) => targets,
+        Err(error) => {
+            return Some(blocked_claim_preflight(
+                context.agent_id.clone(),
+                Vec::new(),
+                vec![error.to_string()],
+            ));
+        }
+    };
+
+    if context.agent_id.is_none() {
+        return Some(blocked_claim_preflight(
+            None,
+            targets,
+            vec![
+                "graph run claim preflight requires --agent <id> for ready mutating operations"
+                    .to_string(),
+            ],
+        ));
+    }
+
+    if targets.is_empty() {
+        return Some(blocked_claim_preflight(
+            context.agent_id.clone(),
+            targets,
+            vec!["ready mutating operation has no claim-preflight write targets".to_string()],
+        ));
+    }
+
+    if !context.load_errors.is_empty() {
+        return Some(blocked_claim_preflight(
+            context.agent_id.clone(),
+            targets,
+            context.load_errors.clone(),
+        ));
+    }
+
+    let agent_id = context.agent_id.as_ref().expect("agent checked above");
+    match check_write_against_claims(&targets, agent_id, &context.claims, context.now_unix) {
+        WriteCheck::Ok {
+            governed_by_self,
+            ungoverned,
+        } if ungoverned.is_empty() => Some(GraphClaimPreflightEvaluation {
+            status: GraphClaimPreflightStatus::Passed,
+            agent_id: Some(agent_id.clone()),
+            targets,
+            governed_by_self,
+            ungoverned,
+            blocks: Vec::new(),
+            reasons: Vec::new(),
+        }),
+        WriteCheck::Ok {
+            governed_by_self,
+            ungoverned,
+        } => Some(GraphClaimPreflightEvaluation {
+            status: GraphClaimPreflightStatus::Blocked,
+            agent_id: Some(agent_id.clone()),
+            targets,
+            governed_by_self,
+            reasons: ungoverned
+                .iter()
+                .map(|target| {
+                    format!(
+                        "target {} is not covered by the agent's live claim",
+                        target.0
+                    )
+                })
+                .collect(),
+            ungoverned,
+            blocks: Vec::new(),
+        }),
+        WriteCheck::Blocked { blocks } => Some(GraphClaimPreflightEvaluation {
+            status: GraphClaimPreflightStatus::Blocked,
+            agent_id: Some(agent_id.clone()),
+            targets,
+            governed_by_self: Vec::new(),
+            ungoverned: Vec::new(),
+            reasons: blocks
+                .iter()
+                .map(|block| {
+                    format!(
+                        "target {} is claimed by {} via {}",
+                        block.blocked_path.0, block.claimant.0, block.blocking_claim_id.0
+                    )
+                })
+                .collect(),
+            blocks: blocks
+                .into_iter()
+                .map(|block| GraphClaimPreflightBlock {
+                    blocked_path: block.blocked_path,
+                    blocking_claim_id: block.blocking_claim_id.0,
+                    claimant: block.claimant,
+                    conflict_code: conflict_code_str(block.conflict_code).to_string(),
+                })
+                .collect(),
+        }),
+    }
+}
+
+fn blocked_claim_preflight(
+    agent_id: Option<StableId>,
+    targets: Vec<RepoPath>,
+    reasons: Vec<String>,
+) -> GraphClaimPreflightEvaluation {
+    GraphClaimPreflightEvaluation {
+        status: GraphClaimPreflightStatus::Blocked,
+        agent_id,
+        targets,
+        governed_by_self: Vec::new(),
+        ungoverned: Vec::new(),
+        blocks: Vec::new(),
+        reasons,
+    }
+}
+
+fn claim_preflight_targets(
+    project_root: &Path,
+    operation: &OperationContractDocument,
+) -> Result<Vec<RepoPath>, ReadGraphOperationError> {
+    let mut targets = BTreeSet::new();
+    for effect_ref in &operation.operation_contract.effect_contract_refs {
+        let effect_path = resolve_repo_path_inside_project_root(project_root, effect_ref)?;
+        let effect = read_tool_effect(&effect_path)?;
+        for write in &effect.tool_effect_contract.write_set {
+            if write.access_mode == AccessMode::Read {
+                continue;
+            }
+            if write.target_kind == EffectTargetKind::Glob {
+                return Err(ReadGraphOperationError::UnsupportedClaimTarget {
+                    reference: write.reference.clone(),
+                    reason: "glob write targets cannot be claim-preflighted without expansion"
+                        .to_string(),
+                });
+            }
+            match resolve_effect_physical_ref(project_root, write.target_kind, &write.reference) {
+                Ok(physical_ref) => {
+                    if !physical_ref.0.trim().is_empty() {
+                        targets.insert(physical_ref.0);
+                    }
+                }
+                Err(error) => {
+                    return Err(ReadGraphOperationError::UnsupportedClaimTarget {
+                        reference: write.reference.clone(),
+                        reason: error.to_string(),
+                    });
+                }
+            }
+        }
+    }
+    if targets.is_empty() {
+        for path in &operation.operation_contract.coordination_scope.target.paths {
+            if !path.0.trim().is_empty() {
+                targets.insert(path.0.clone());
+            }
+        }
+    }
+    Ok(targets.into_iter().map(RepoPath).collect())
+}
+
+fn read_tool_effect(path: &Path) -> Result<ToolEffectContractDocument, ReadGraphOperationError> {
+    let text = fs::read_to_string(path).map_err(|source| ReadGraphOperationError::Read {
+        path: path.to_path_buf(),
+        source: source.to_string(),
+    })?;
+    serde_yaml::from_str(&text).map_err(|source| ReadGraphOperationError::Parse {
+        path: path.to_path_buf(),
+        source: source.to_string(),
+    })
+}
+
+fn current_unix_seconds() -> i64 {
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => i64::try_from(duration.as_secs()).unwrap_or(i64::MAX),
+        Err(_) => 0,
+    }
 }
 
 fn read_operation(path: &Path) -> Result<OperationContractDocument, ReadGraphOperationError> {
@@ -327,15 +600,22 @@ fn resolve_operation_path(
     project_root: &Path,
     operation_ref: &RepoPath,
 ) -> Result<PathBuf, ReadGraphOperationError> {
-    let path = Path::new(operation_ref.0.as_str());
+    resolve_repo_path_inside_project_root(project_root, operation_ref)
+}
+
+fn resolve_repo_path_inside_project_root(
+    project_root: &Path,
+    reference: &RepoPath,
+) -> Result<PathBuf, ReadGraphOperationError> {
+    let path = Path::new(reference.0.as_str());
     if path.as_os_str().is_empty() || path.components().any(operation_ref_component_escapes_root) {
         return Err(ReadGraphOperationError::UnsafeReference {
-            reference: operation_ref.0.clone(),
-            reason: "operation_ref must be a project-root-relative path without absolute or parent components".to_string(),
+            reference: reference.0.clone(),
+            reason: "repo ref must be a project-root-relative path without absolute or parent components".to_string(),
         });
     }
     let candidate = project_root.join(path);
-    ensure_operation_path_inside_project_root(project_root, &candidate, operation_ref)?;
+    ensure_operation_path_inside_project_root(project_root, &candidate, reference)?;
     Ok(candidate)
 }
 
@@ -419,6 +699,7 @@ enum ReadGraphOperationError {
     Parse { path: PathBuf, source: String },
     Canonicalize { path: PathBuf, source: String },
     UnsafeReference { reference: String, reason: String },
+    UnsupportedClaimTarget { reference: String, reason: String },
 }
 
 impl fmt::Display for ReadGraphOperationError {
@@ -447,6 +728,12 @@ impl fmt::Display for ReadGraphOperationError {
             }
             Self::UnsafeReference { reference, reason } => {
                 write!(formatter, "unsafe operation_ref {reference}: {reason}")
+            }
+            Self::UnsupportedClaimTarget { reference, reason } => {
+                write!(
+                    formatter,
+                    "unsupported claim preflight target {reference}: {reason}"
+                )
             }
         }
     }

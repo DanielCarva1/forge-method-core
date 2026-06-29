@@ -26,6 +26,25 @@ OperationContract, reports per-node runtime preview/readiness metadata, and
 fails closed when a referenced operation is missing, invalid, or not safe to
 plan.
 
+Claim preflight is part of graph dry-run for effective mutations. Read-only
+graphs can pass without an agent id. Any mutating OperationContract requires a
+live claim check before the dry-run can be green:
+
+- pass `--agent <id>` to identify the writer;
+- by default the claim bus is `<resolved_state_root>/claims-active`;
+- `--claims-dir <path>` is an advanced override for tests/migrations;
+- `--now-unix <epoch>` makes claim-expiry checks deterministic in tests;
+- missing agent, missing coverage, expired coverage, peer-owned coverage, or
+  unexpandable glob write targets all block the dry-run.
+
+Claim targets come from referenced ToolEffect contracts using the same
+file-backed physical-target mapping as the effect store: `file_path`,
+`artifact_id`, `evidence_id`, `ledger_stream`, and `request_stream` writes are
+resolved into repo-relative claim targets before checking the live claim bus. If
+no file-backed write target exists, dry-run falls back to the OperationContract
+coordination target paths. Unsupported or unexpandable write targets block
+fail-closed.
+
 ## CLI examples
 
 These examples run from the Forge core checkout, which is still using the
@@ -57,6 +76,14 @@ Confirm OperationContract-aware dry-run behavior:
 ```powershell
 forge-core graph run --root . --graph docs/fixtures/workflow-graph-v0/operation-aware-blocked.yaml --dry-run --allow-bootstrap-core --json
 forge-core graph run --root . --graph docs/fixtures/workflow-graph-v0/operation-aware-valid.yaml --dry-run --allow-bootstrap-core --json
+```
+
+Run a mutating graph as a concrete agent after acquiring the needed claim
+(the published fixture still blocks on its failed verifier):
+
+```powershell
+forge-core claim acquire --root . --allow-bootstrap-core --scope story --id graph-demo --agent codex-main --path .forge-method/artifacts/ --path .forge-method/evidence/
+forge-core graph run --root . --graph docs/fixtures/workflow-graph-v0/operation-aware-valid.yaml --dry-run --agent codex-main --allow-bootstrap-core --json
 ```
 
 Validate the invalid graph fixtures:

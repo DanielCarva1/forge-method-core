@@ -1,7 +1,7 @@
 use forge_core_contracts::claim::ActorRole;
 use forge_core_contracts::runtime::RuntimeKind;
 use forge_core_contracts::tool_effect::{AccessMode, EffectTargetKind, ToolEffectContractDocument};
-use forge_core_contracts::StableId;
+use forge_core_contracts::{RepoPath, StableId};
 use forge_core_trace::TraceEvent;
 use forge_core_validate::{
     validate_tool_effect, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedYamlDocument,
@@ -230,6 +230,55 @@ pub fn append_effect_target_metadata_records(
         paths.push(append_json_line(root, index_relative_path, record)?);
     }
     Ok(paths)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EffectTargetResolveError {
+    InvalidTargetPath {
+        target_kind: EffectTargetKind,
+        reference: String,
+        source: String,
+    },
+}
+
+impl fmt::Display for EffectTargetResolveError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidTargetPath {
+                target_kind,
+                reference,
+                source,
+            } => write!(
+                formatter,
+                "resolve effect target {:?} {} failed: {source}",
+                target_kind, reference
+            ),
+        }
+    }
+}
+
+impl std::error::Error for EffectTargetResolveError {}
+
+/// Resolve a ToolEffect target to the repo-relative physical path used by the
+/// effect store when applying file-backed writes.
+///
+/// # Errors
+///
+/// Returns [`EffectTargetResolveError::InvalidTargetPath`] when the target kind
+/// is unsupported for file-backed effect application or when the resolved path
+/// escapes the supplied root.
+pub fn resolve_effect_physical_ref(
+    root: impl AsRef<Path>,
+    target_kind: EffectTargetKind,
+    reference: &str,
+) -> Result<RepoPath, EffectTargetResolveError> {
+    resolve_effect_target(root.as_ref(), target_kind, reference)
+        .map(|(_path, physical_ref)| RepoPath(physical_ref))
+        .map_err(|source| EffectTargetResolveError::InvalidTargetPath {
+            target_kind,
+            reference: reference.to_string(),
+            source: source.to_string(),
+        })
 }
 
 pub const DEFAULT_TRACE_LOG_RELATIVE_PATH: &str = "traces/events.ndjson";
@@ -3511,4 +3560,101 @@ fn repo_relative(root: &Path, path: &Path) -> String {
         .expect("path under root")
         .to_string_lossy()
         .replace('\\', "/")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_root(test_name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock after unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "forge-core-store-{test_name}-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("create temp root");
+        root
+    }
+
+    #[test]
+    fn resolve_effect_physical_ref_maps_logical_ids_and_streams() {
+        let root = temp_root("resolve-logical-ids");
+        let cases = [
+            (
+                EffectTargetKind::ArtifactId,
+                "story-current",
+                ".forge-method/artifacts/story-current.yaml",
+            ),
+            (
+                EffectTargetKind::ArtifactId,
+                ".forge-method/artifacts/story-current.yaml",
+                ".forge-method/artifacts/story-current.yaml",
+            ),
+            (
+                EffectTargetKind::EvidenceId,
+                "browser snapshot",
+                ".forge-method/evidence/browser_snapshot.json",
+            ),
+            (
+                EffectTargetKind::EvidenceId,
+                ".forge-method/snapshots/browser.json",
+                ".forge-method/snapshots/browser.json",
+            ),
+            (
+                EffectTargetKind::LedgerStream,
+                "agent-main",
+                ".forge-method/ledger/agent-main.ndjson",
+            ),
+            (
+                EffectTargetKind::LedgerStream,
+                ".forge-method/ledger.ndjson",
+                ".forge-method/ledger.ndjson",
+            ),
+            (
+                EffectTargetKind::RequestStream,
+                "handoff",
+                ".forge-method/requests/handoff.ndjson",
+            ),
+            (
+                EffectTargetKind::RequestStream,
+                ".forge-method/requests.ndjson",
+                ".forge-method/requests.ndjson",
+            ),
+        ];
+
+        for (target_kind, reference, expected) in cases {
+            let resolved = resolve_effect_physical_ref(&root, target_kind, reference)
+                .expect("resolve file-backed target");
+            assert_eq!(resolved.0, expected);
+        }
+
+        fs::remove_dir_all(root).expect("cleanup temp root");
+    }
+
+    #[test]
+    fn resolve_effect_physical_ref_rejects_unsupported_and_escaping_refs() {
+        let root = temp_root("resolve-invalid");
+
+        let unsupported =
+            resolve_effect_physical_ref(&root, EffectTargetKind::StateKey, "runtime.ready")
+                .expect_err("state keys are not file-backed effect targets");
+        assert!(matches!(
+            unsupported,
+            EffectTargetResolveError::InvalidTargetPath { .. }
+        ));
+
+        let escaping =
+            resolve_effect_physical_ref(&root, EffectTargetKind::ArtifactId, "../outside")
+                .expect_err("path-like artifact refs must stay under allowed forge dirs");
+        assert!(matches!(
+            escaping,
+            EffectTargetResolveError::InvalidTargetPath { .. }
+        ));
+
+        fs::remove_dir_all(root).expect("cleanup temp root");
+    }
 }

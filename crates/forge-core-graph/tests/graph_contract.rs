@@ -1,9 +1,9 @@
 use forge_core_contracts::{RepoPath, StableId};
 use forge_core_graph::{
     dry_run_graph, dry_run_graph_with_context, parse_workflow_graph_yaml, validate_graph,
-    GraphDiagnosticCode, GraphDryRunContext, GraphDryRunReason, GraphDryRunStatus,
-    GraphDryRunStepStatus, GraphMutationSource, GraphOperationEvaluation, GraphOperationStatus,
-    ParseWorkflowGraphError,
+    GraphClaimPreflightEvaluation, GraphClaimPreflightStatus, GraphDiagnosticCode,
+    GraphDryRunContext, GraphDryRunReason, GraphDryRunStatus, GraphDryRunStepStatus,
+    GraphMutationSource, GraphOperationEvaluation, GraphOperationStatus, ParseWorkflowGraphError,
 };
 
 const VALID_GRAPH: &str = r#"
@@ -374,6 +374,70 @@ authority_boundary:
     assert_eq!(write_step.operation_plan_allowed, Some(true));
 }
 
+#[test]
+fn claim_preflight_block_blocks_ready_mutation_step() {
+    let graph = parse_workflow_graph_yaml(
+        r#"
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.claim-preflight"
+nodes:
+  - node_id: "write_artifact"
+    node_kind: "operation"
+    operation_ref: "contracts/operations/write-artifact.yaml"
+    mutation_capable: false
+edges: []
+stop_conditions:
+  - "validation_errors"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+"#,
+    )
+    .expect("graph parses");
+    let mut evaluation = operation_evaluation(
+        "contracts/operations/write-artifact.yaml",
+        "op.write-artifact",
+        true,
+        true,
+        GraphOperationStatus::Ready,
+    );
+    evaluation.claim_preflight = Some(GraphClaimPreflightEvaluation {
+        status: GraphClaimPreflightStatus::Blocked,
+        agent_id: Some(StableId("codex-main".to_string())),
+        targets: vec![RepoPath(".forge-method/artifacts/story.yaml".to_string())],
+        governed_by_self: Vec::new(),
+        ungoverned: vec![RepoPath(".forge-method/artifacts/story.yaml".to_string())],
+        blocks: Vec::new(),
+        reasons: vec!["target is ungoverned".to_string()],
+    });
+    let dry_run = dry_run_graph_with_context(
+        &graph,
+        GraphDryRunContext::requiring_operation_contracts(&[evaluation]),
+    );
+
+    assert_eq!(dry_run.status, GraphDryRunStatus::Blocked);
+    assert_eq!(dry_run.blocked_node_count, 1);
+    assert!(dry_run
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == GraphDiagnosticCode::ClaimPreflightBlocked));
+    let write_step = dry_run.steps.first().expect("write step exists");
+    assert_eq!(write_step.status, GraphDryRunStepStatus::Blocked);
+    assert!(write_step
+        .reasons
+        .contains(&GraphDryRunReason::ClaimPreflightBlocked));
+    assert_eq!(
+        write_step
+            .claim_preflight
+            .as_ref()
+            .expect("claim preflight included")
+            .status,
+        GraphClaimPreflightStatus::Blocked
+    );
+}
+
 fn operation_evaluation(
     operation_ref: &str,
     contract_id: &str,
@@ -391,5 +455,6 @@ fn operation_evaluation(
         preview_status: Some("ready".to_string()),
         ready_status: Some("ready".to_string()),
         blocking_reasons: Vec::new(),
+        claim_preflight: None,
     }
 }
