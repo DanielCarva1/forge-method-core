@@ -21,5 +21,6 @@ The temporary exception that allows `<repo-root>` to keep local `.forge-method/`
 - Consumer `state_root` must be inside the configured `sidecar_root`.
 - Consumer `state_root` must not be `<consumer>/.forge-method`; only the Forge core bootstrap exception may use local runtime state.
 - Runtime and claim commands fail closed when the resolved `state_root` does not exist; they must not silently create consumer-local state.
+- State-bearing operation/effect commands (`execute-operation`, `rebuild-effect-index`, `query-effect-index`) resolve the same Project Link: product contracts and payload files are read from the Consumer Project Repo, but Forge WAL, metadata index, evidence, and `.forge-method/artifacts/*` writes land under the Forge Runtime Sidecar.
 - `--claims-dir` remains an explicit advanced override for tests, migrations, and emergency repair.
 - The goal is isolation: projects, users, and agents must not contaminate each other's Forge data.

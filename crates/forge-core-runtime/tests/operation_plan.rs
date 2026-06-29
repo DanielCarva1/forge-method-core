@@ -717,6 +717,7 @@ fn execute_operation_records_command_evidence_and_applies_effect_with_wal_lock()
     let temp_root = fresh_temp_root("execute-success");
     let context = RuntimeOperationExecutionContext {
         command_context: CommandExecutionContext::single_root(&temp_root),
+        effect_store_root: &temp_root,
         evidence_log_relative_path: ".forge-method/evidence/command-execution.ndjson",
         wal_relative_path: ".forge-method/wal/effects.ndjson",
         lock_relative_path: ".forge-method/locks/effects.lock",

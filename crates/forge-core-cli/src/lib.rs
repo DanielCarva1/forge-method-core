@@ -5954,6 +5954,7 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
 #[derive(Debug, Clone)]
 pub struct ExecuteOperationInput {
     pub root: PathBuf,
+    pub effect_store_root: Option<PathBuf>,
     pub operation_path: PathBuf,
     pub command_paths: Vec<PathBuf>,
     pub effect_paths: Vec<PathBuf>,
@@ -6053,6 +6054,7 @@ pub fn run_execute_operation(
     input: ExecuteOperationInput,
 ) -> Result<RuntimeOperationExecution, ExecuteOperationError> {
     let root = input.root;
+    let effect_store_root = input.effect_store_root.unwrap_or_else(|| root.clone());
     let index = build_reference_index(&root)
         .map_err(|error| ExecuteOperationError::ReferenceIndexBuild(error.to_string()))?;
     let operation_path = resolve_input_path(&root, &input.operation_path);
@@ -6086,6 +6088,7 @@ pub fn run_execute_operation(
         .collect::<Result<Vec<_>, _>>()?;
     let context = RuntimeOperationExecutionContext {
         command_context: forge_core_runtime::CommandExecutionContext::single_root(&root),
+        effect_store_root: &effect_store_root,
         evidence_log_relative_path: ".forge-method/evidence/command-execution.ndjson",
         wal_relative_path: ".forge-method/wal/effects.ndjson",
         lock_relative_path: ".forge-method/locks/effects.lock",

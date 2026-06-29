@@ -113,6 +113,31 @@ fn temp_repo_root(label: &str) -> PathBuf {
     path
 }
 
+struct SidecarCliFixture {
+    app: PathBuf,
+    sidecar: PathBuf,
+    state: PathBuf,
+}
+
+fn temp_sidecar_cli_fixture(label: &str) -> SidecarCliFixture {
+    let parent = temp_repo_root(label);
+    let app = parent.join("app");
+    let sidecar = parent.join("forge-app");
+    let state = sidecar.join(".forge-method");
+    fs::create_dir_all(&app).expect("create app root");
+    fs::create_dir_all(&state).expect("create sidecar state root");
+    fs::write(
+        app.join(".forge-method.yaml"),
+        "schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: ../forge-app\nstate_root: ../forge-app/.forge-method\n",
+    )
+    .expect("write project link");
+    SidecarCliFixture {
+        app,
+        sidecar,
+        state,
+    }
+}
+
 struct SignedProvenanceFixture {
     artifact_path: PathBuf,
     provenance_path: PathBuf,
@@ -3834,6 +3859,7 @@ fn execute_operation_binary_outputs_json_even_when_awaiting_human() {
         .args([
             "--operation",
             "docs/fixtures/operation-contract-v0/facilitate-first-product-idea.yaml",
+            "--allow-bootstrap-core",
             "--json",
         ])
         .output()
@@ -3869,6 +3895,7 @@ fn execute_operation_rejects_payload_outside_root_by_default() {
     let outside_payload = temp_payload_file("outside-root", b"secret-ish");
     let error = run_execute_operation(ExecuteOperationInput {
         root: repo_root(),
+        effect_store_root: None,
         operation_path: PathBuf::from(
             "docs/fixtures/operation-contract-v0/facilitate-first-product-idea.yaml",
         ),
@@ -3892,6 +3919,7 @@ fn execute_operation_rejects_payload_larger_than_policy() {
     let outside_payload = temp_payload_file("too-large", b"1234");
     let error = run_execute_operation(ExecuteOperationInput {
         root: repo_root(),
+        effect_store_root: None,
         operation_path: PathBuf::from(
             "docs/fixtures/operation-contract-v0/facilitate-first-product-idea.yaml",
         ),
@@ -3941,12 +3969,12 @@ fn rebuild_effect_index_library_rebuilds_from_committed_wal() {
 
 #[test]
 fn rebuild_effect_index_binary_outputs_json() {
-    let root = temp_repo_root("rebuild-binary");
-    write_committed_metadata_wal(&root, "payload-secret");
+    let fixture = temp_sidecar_cli_fixture("rebuild-binary");
+    write_committed_metadata_wal(&fixture.sidecar, "payload-secret");
 
     let output = Command::new(env!("CARGO_BIN_EXE_forge-core"))
         .args(["rebuild-effect-index", "--root"])
-        .arg(&root)
+        .arg(&fixture.app)
         .args(["--recorded-at", "2026-06-25T00:00:00Z", "--json"])
         .output()
         .expect("run forge-core rebuild-effect-index");
@@ -3968,7 +3996,24 @@ fn rebuild_effect_index_binary_outputs_json() {
         ".forge-method/artifacts/story.result.yaml"
     );
     assert_eq!(json["records"][0]["recorded_at"], "2026-06-25T00:00:00Z");
-    let _ = fs::remove_dir_all(root);
+    assert!(
+        !fixture.app.join(".forge-method").exists(),
+        "rebuild-effect-index must not create consumer-local .forge-method"
+    );
+    assert!(
+        fixture
+            .state
+            .join("index")
+            .join("effect-targets.ndjson")
+            .exists(),
+        "rebuild-effect-index should write the resolved sidecar index"
+    );
+    let _ = fs::remove_dir_all(
+        fixture
+            .app
+            .parent()
+            .expect("fixture app has parent directory"),
+    );
 }
 
 #[test]
@@ -4012,9 +4057,9 @@ fn query_effect_index_library_filters_metadata_records() {
 
 #[test]
 fn query_effect_index_binary_outputs_json() {
-    let root = temp_repo_root("query-binary");
+    let fixture = temp_sidecar_cli_fixture("query-binary");
     write_effect_index_record(
-        &root,
+        &fixture.sidecar,
         "story.result",
         "effect.story.first",
         "op.story.first",
@@ -4023,7 +4068,7 @@ fn query_effect_index_binary_outputs_json() {
 
     let output = Command::new(env!("CARGO_BIN_EXE_forge-core"))
         .args(["query-effect-index", "--root"])
-        .arg(&root)
+        .arg(&fixture.app)
         .args([
             "--logical-ref",
             "story.result",
@@ -4059,21 +4104,30 @@ fn query_effect_index_binary_outputs_json() {
         json["records"][0]["physical_ref"],
         ".forge-method/artifacts/story.result.yaml"
     );
-    let _ = fs::remove_dir_all(root);
+    assert!(
+        !fixture.app.join(".forge-method").exists(),
+        "query-effect-index must not create consumer-local .forge-method"
+    );
+    let _ = fs::remove_dir_all(
+        fixture
+            .app
+            .parent()
+            .expect("fixture app has parent directory"),
+    );
 }
 
 #[test]
 fn query_effect_index_context_outputs_bounded_json() {
-    let root = temp_repo_root("query-context-binary");
+    let fixture = temp_sidecar_cli_fixture("query-context-binary");
     write_effect_index_record(
-        &root,
+        &fixture.sidecar,
         "story.result",
         "effect.story.first",
         "op.story.first",
         "payload-secret",
     );
     write_effect_index_record(
-        &root,
+        &fixture.sidecar,
         "story.other",
         "effect.story.other",
         "op.story.other",
@@ -4082,7 +4136,7 @@ fn query_effect_index_context_outputs_bounded_json() {
 
     let output = Command::new(env!("CARGO_BIN_EXE_forge-core"))
         .args(["query-effect-index", "--root"])
-        .arg(&root)
+        .arg(&fixture.app)
         .args([
             "--consumer-use",
             "diagnostics",
@@ -4128,7 +4182,16 @@ fn query_effect_index_context_outputs_bounded_json() {
         false
     );
     assert_eq!(json["groups"][0]["record_count"], 1);
-    let _ = fs::remove_dir_all(root);
+    assert!(
+        !fixture.app.join(".forge-method").exists(),
+        "query-effect-index --context must not create consumer-local .forge-method"
+    );
+    let _ = fs::remove_dir_all(
+        fixture
+            .app
+            .parent()
+            .expect("fixture app has parent directory"),
+    );
 }
 
 #[test]
