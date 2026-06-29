@@ -66,7 +66,7 @@ clusters:
     name: "Outcome observability + eval bank"
     merges: ["E5 observability (from v1)", "DEM-06 eval/cost telemetry", "FEAT-16 team analytics", "FEAT-07 eval bank"]
     why: "R2-R3/F6: measure OUTCOME (lead time, cost, rework, defect escape) not volume. The metric that PROVES forge beats vibe. eval_run contract with token/cost/pass metadata + OTel export."
-    status: "to_build"
+    status: "implemented_partial"
 
   - id: C6
     name: "Trust/security deepening"
@@ -112,3 +112,33 @@ implementation_updates:
       - "Does not claim every Forge product surface is release-ready."
       - "Does not complete all C2/C5/C6 roadmap work."
       - "Does not install/update the global binary until the branch lands and release/install is intentionally run."
+  - date: "2026-06-29"
+    branch: "codex/forge-wave5-telemetry-export"
+    status: "wave5_c5_telemetry_export_implemented_full_gate_installed_smoke_passed"
+    source_research:
+      - "contracts/research/rust-observability-selfhealing-v1.yaml"
+      - "contracts/research/robustness-observability-multiagent-v1.yaml"
+      - "contracts/backlog/evolve-backlog-v2.yaml#C5"
+    clusters_advanced:
+      - cluster: "C5"
+        status_delta: "added `forge-core telemetry export` as a sidecar-resolved, contract-governed export path from existing M1 trace events to local JSONL or OTel-shaped JSONL records"
+    product_meaning: |
+      This turns Forge observability from typed contract examples into a usable
+      CLI surface: agents can export the resolved project's sidecar trace log,
+      filter by trace/run/latest-run, enforce telemetry enablement/sampling
+      choices, preserve missing-field gaps, and apply deterministic privacy
+      hashing/redaction. It directly supports outcome auditing instead of chat
+      claims about what happened.
+    verification:
+      - "cargo test -p forge-core-cli --test telemetry_cli_e2e"
+      - "cargo test -p forge-core-cli telemetry_cmd"
+      - "target/codex-gates/20260629-1300-wave5-telemetry-export/SUMMARY.txt: cargo check/test/clippy/fmt workspace, forge-core validate, and git diff --check passed"
+      - "cargo install --path crates/forge-core-cli --force replaced C:\\Users\\User\\.cargo\\bin\\forge-core.exe"
+      - "installed binary smoke: forge-core telemetry export --root . --allow-bootstrap-core --contract contracts/examples/telemetry.yaml --output target\\forge-telemetry-installed-smoke\\events.ndjson --format jsonl --latest-run --json exported 4 records"
+      - "installed binary safety smoke: --output ..\\forge-telemetry-escape.ndjson failed and did not write outside the project root"
+    qa_findings_closed:
+      - "Reviewer found a real blocker where uncontained --output could write outside project root; implementation now rejects escaping output paths and has E2E regression coverage."
+    explicit_non_claims:
+      - "Does not implement a real OpenTelemetry collector/exporter dependency; `otel-json` is a local OTel-shaped JSONL interchange."
+      - "Does not implement dashboards, anomaly detection, or statistical risk calibration."
+      - "Does not complete every C5 eval-bank/analytics roadmap item."

@@ -9,6 +9,7 @@ pub mod io_util;
 pub mod isolation;
 pub mod m1_cmd;
 pub mod project_cmd;
+pub mod telemetry_cmd;
 
 use base64::{
     engine::general_purpose::{STANDARD as BASE64, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD},
