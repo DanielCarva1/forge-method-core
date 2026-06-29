@@ -3310,10 +3310,11 @@ fn run_isolation_command(args: &[String]) {
         "transition" => run_isolation_transition(&args[2..]),
         "--help" | "-h" | "help" => {
             println!("forge-core isolation <subcommand> [options]");
-            println!("  propose --agent <id> --branch <name> --worktree-path <path> --base-ref <ref> [--id <isolation-id>] [--merge-policy rebase|merge|squash] [--claim <claim-id>] [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
-            println!("  status [--agent <id>] [--isolation-dir <path>] [--no-json]");
-            println!("  merge-plan --id <isolation-id> [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
-            println!("  transition --id <isolation-id> --to proposed|active|merging|merged|abandoned [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  propose [--root <path>] [--allow-bootstrap-core] --agent <id> --branch <name> --worktree-path <path> --base-ref <ref> [--id <isolation-id>] [--merge-policy rebase|merge|squash] [--claim <claim-id>] [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  status [--root <path>] [--allow-bootstrap-core] [--agent <id>] [--isolation-dir <path>] [--no-json]");
+            println!("  merge-plan [--root <path>] [--allow-bootstrap-core] --id <isolation-id> [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  transition [--root <path>] [--allow-bootstrap-core] --id <isolation-id> --to proposed|active|merging|merged|abandoned [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  Defaults: without --isolation-dir, resolves --root as a Forge project and uses <state_root>/contracts/isolations; --isolation-dir is an explicit override.");
         }
         other => {
             eprintln!("forge-core isolation: unknown subcommand '{other}'. Try: propose | status | merge-plan | transition");
@@ -3339,13 +3340,71 @@ fn run_coordination_command(args: &[String]) {
     std::process::exit(exit);
 }
 
+#[must_use]
+fn resolve_isolation_dir_or_exit(
+    command: &str,
+    isolation_dir: Option<PathBuf>,
+    root: &std::path::Path,
+    allow_bootstrap_core: bool,
+    want_json: bool,
+) -> PathBuf {
+    if let Some(isolation_dir) = isolation_dir {
+        return isolation_dir;
+    }
+
+    match forge_core_cli::project_cmd::resolve_project(root, allow_bootstrap_core) {
+        Ok(project) if project.state_exists => {
+            let state_root = PathBuf::from(project.state_root);
+            if state_root.is_dir() {
+                state_root.join("contracts").join("isolations")
+            } else {
+                let env = forge_core_contracts::CliEnvelope::<serde_json::Value>::err(
+                    command,
+                    forge_core_contracts::ExitReason::EnvConfig,
+                    format!(
+                        "resolved Forge state_root is not a directory for isolation command: {}; fix {} or recreate the sidecar .forge-method directory",
+                        state_root.display(),
+                        forge_core_contracts::PROJECT_LINK_FILE_NAME
+                    ),
+                );
+                emit_envelope("isolation", env, want_json);
+                unreachable!("emit_envelope exits the process");
+            }
+        }
+        Ok(project) => {
+            let env = forge_core_contracts::CliEnvelope::<serde_json::Value>::err(
+                command,
+                forge_core_contracts::ExitReason::EnvConfig,
+                format!(
+                    "resolved Forge state_root does not exist for isolation command: {}; create the sidecar .forge-method directory or fix {}",
+                    project.state_root,
+                    forge_core_contracts::PROJECT_LINK_FILE_NAME
+                ),
+            );
+            emit_envelope("isolation", env, want_json);
+            unreachable!("emit_envelope exits the process");
+        }
+        Err(err) => {
+            let env = forge_core_contracts::CliEnvelope::<serde_json::Value>::err(
+                command,
+                err.exit_reason(),
+                format!("project resolve failed for isolation command: {err}"),
+            );
+            emit_envelope("isolation", env, want_json);
+            unreachable!("emit_envelope exits the process");
+        }
+    }
+}
+
 fn run_isolation_propose(args: &[String]) {
     use forge_core_cli::claim::slug_for_file;
     use forge_core_cli::isolation::{parse_merge_policy, run_propose};
     use forge_core_contracts::isolation::MergePolicy;
     use forge_core_contracts::StableId;
 
-    let mut isolation_dir = std::path::PathBuf::from("contracts/isolations");
+    let mut isolation_dir: Option<PathBuf> = None;
+    let mut root = PathBuf::from(".");
+    let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
     let mut want_json = true;
     let mut agent = String::new();
@@ -3359,6 +3418,11 @@ fn run_isolation_propose(args: &[String]) {
     let mut idx = 0usize;
     while idx < args.len() {
         match args[idx].as_str() {
+            "--root" => {
+                idx += 1;
+                root = PathBuf::from(require_value(args, idx, "root"));
+            }
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--agent" => {
                 idx += 1;
                 agent = require_value(args, idx, "agent");
@@ -3395,7 +3459,7 @@ fn run_isolation_propose(args: &[String]) {
             }
             "--isolation-dir" => {
                 idx += 1;
-                isolation_dir = std::path::PathBuf::from(require_value(args, idx, "isolation-dir"));
+                isolation_dir = Some(PathBuf::from(require_value(args, idx, "isolation-dir")));
             }
             "--now-unix" => {
                 idx += 1;
@@ -3406,7 +3470,8 @@ fn run_isolation_propose(args: &[String]) {
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core isolation propose --agent <id> --branch <name> --worktree-path <path> --base-ref <ref> [--id <id>] [--merge-policy rebase|merge|squash] [--claim <claim-id>] [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("forge-core isolation propose [--root <path>] [--allow-bootstrap-core] --agent <id> --branch <name> --worktree-path <path> --base-ref <ref> [--id <id>] [--merge-policy rebase|merge|squash] [--claim <claim-id>] [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("  Without --isolation-dir, resolves --root and uses <state_root>/contracts/isolations; --isolation-dir preserves the explicit override.");
                 return;
             }
             _ => {}
@@ -3419,6 +3484,13 @@ fn run_isolation_propose(args: &[String]) {
     }
     let now = resolve_now_unix(now_unix);
     let id = isolation_id.unwrap_or_else(|| format!("iso-{}-{}", slug_for_file(&branch), now));
+    let isolation_dir = resolve_isolation_dir_or_exit(
+        "isolation.propose",
+        isolation_dir,
+        &root,
+        allow_bootstrap_core,
+        want_json,
+    );
     let env = run_propose(
         &isolation_dir,
         &StableId(agent),
@@ -3436,29 +3508,44 @@ fn run_isolation_propose(args: &[String]) {
 fn run_isolation_status(args: &[String]) {
     use forge_core_cli::isolation::run_status;
     use forge_core_contracts::StableId;
-    let mut isolation_dir = std::path::PathBuf::from("contracts/isolations");
+    let mut isolation_dir: Option<PathBuf> = None;
+    let mut root = PathBuf::from(".");
+    let mut allow_bootstrap_core = false;
     let mut want_json = true;
     let mut agent: Option<String> = None;
     let mut idx = 0usize;
     while idx < args.len() {
         match args[idx].as_str() {
+            "--root" => {
+                idx += 1;
+                root = PathBuf::from(require_value(args, idx, "root"));
+            }
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--agent" => {
                 idx += 1;
                 agent = Some(require_value(args, idx, "agent"));
             }
             "--isolation-dir" => {
                 idx += 1;
-                isolation_dir = std::path::PathBuf::from(require_value(args, idx, "isolation-dir"));
+                isolation_dir = Some(PathBuf::from(require_value(args, idx, "isolation-dir")));
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core isolation status [--agent <id>] [--isolation-dir <path>] [--no-json]");
+                println!("forge-core isolation status [--root <path>] [--allow-bootstrap-core] [--agent <id>] [--isolation-dir <path>] [--no-json]");
+                println!("  Without --isolation-dir, resolves --root and uses <state_root>/contracts/isolations; --isolation-dir preserves the explicit override.");
                 return;
             }
             _ => {}
         }
         idx += 1;
     }
+    let isolation_dir = resolve_isolation_dir_or_exit(
+        "isolation.status",
+        isolation_dir,
+        &root,
+        allow_bootstrap_core,
+        want_json,
+    );
     let env = run_status(
         &isolation_dir,
         agent.as_ref().map(|a| StableId(a.clone())).as_ref(),
@@ -3469,20 +3556,27 @@ fn run_isolation_status(args: &[String]) {
 fn run_isolation_merge_plan(args: &[String]) {
     use forge_core_cli::isolation::run_merge_plan;
     use forge_core_contracts::StableId;
-    let mut isolation_dir = std::path::PathBuf::from("contracts/isolations");
+    let mut isolation_dir: Option<PathBuf> = None;
+    let mut root = PathBuf::from(".");
+    let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
     let mut want_json = true;
     let mut id = String::new();
     let mut idx = 0usize;
     while idx < args.len() {
         match args[idx].as_str() {
+            "--root" => {
+                idx += 1;
+                root = PathBuf::from(require_value(args, idx, "root"));
+            }
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--id" => {
                 idx += 1;
                 id = require_value(args, idx, "id");
             }
             "--isolation-dir" => {
                 idx += 1;
-                isolation_dir = std::path::PathBuf::from(require_value(args, idx, "isolation-dir"));
+                isolation_dir = Some(PathBuf::from(require_value(args, idx, "isolation-dir")));
             }
             "--now-unix" => {
                 idx += 1;
@@ -3493,7 +3587,8 @@ fn run_isolation_merge_plan(args: &[String]) {
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core isolation merge-plan --id <isolation-id> [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("forge-core isolation merge-plan [--root <path>] [--allow-bootstrap-core] --id <isolation-id> [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("  Without --isolation-dir, resolves --root and uses <state_root>/contracts/isolations; --isolation-dir preserves the explicit override.");
                 return;
             }
             _ => {}
@@ -3504,6 +3599,13 @@ fn run_isolation_merge_plan(args: &[String]) {
         eprintln!("isolation merge-plan: --id <isolation-id> is required");
         std::process::exit(3);
     }
+    let isolation_dir = resolve_isolation_dir_or_exit(
+        "isolation.merge-plan",
+        isolation_dir,
+        &root,
+        allow_bootstrap_core,
+        want_json,
+    );
     let env = run_merge_plan(&isolation_dir, &StableId(id), resolve_now_unix(now_unix));
     emit_envelope("isolation", env, want_json);
 }
@@ -3511,7 +3613,9 @@ fn run_isolation_merge_plan(args: &[String]) {
 fn run_isolation_transition(args: &[String]) {
     use forge_core_cli::isolation::{parse_status, run_transition};
     use forge_core_contracts::StableId;
-    let mut isolation_dir = std::path::PathBuf::from("contracts/isolations");
+    let mut isolation_dir: Option<PathBuf> = None;
+    let mut root = PathBuf::from(".");
+    let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
     let mut want_json = true;
     let mut id = String::new();
@@ -3519,6 +3623,11 @@ fn run_isolation_transition(args: &[String]) {
     let mut idx = 0usize;
     while idx < args.len() {
         match args[idx].as_str() {
+            "--root" => {
+                idx += 1;
+                root = PathBuf::from(require_value(args, idx, "root"));
+            }
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--id" => {
                 idx += 1;
                 id = require_value(args, idx, "id");
@@ -3529,7 +3638,7 @@ fn run_isolation_transition(args: &[String]) {
             }
             "--isolation-dir" => {
                 idx += 1;
-                isolation_dir = std::path::PathBuf::from(require_value(args, idx, "isolation-dir"));
+                isolation_dir = Some(PathBuf::from(require_value(args, idx, "isolation-dir")));
             }
             "--now-unix" => {
                 idx += 1;
@@ -3540,7 +3649,8 @@ fn run_isolation_transition(args: &[String]) {
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core isolation transition --id <isolation-id> --to proposed|active|merging|merged|abandoned [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("forge-core isolation transition [--root <path>] [--allow-bootstrap-core] --id <isolation-id> --to proposed|active|merging|merged|abandoned [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("  Without --isolation-dir, resolves --root and uses <state_root>/contracts/isolations; --isolation-dir preserves the explicit override.");
                 return;
             }
             _ => {}
@@ -3558,6 +3668,13 @@ fn run_isolation_transition(args: &[String]) {
             std::process::exit(3);
         }
     };
+    let isolation_dir = resolve_isolation_dir_or_exit(
+        "isolation.transition",
+        isolation_dir,
+        &root,
+        allow_bootstrap_core,
+        want_json,
+    );
     let env = run_transition(
         &isolation_dir,
         &StableId(id),

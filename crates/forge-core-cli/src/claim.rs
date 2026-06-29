@@ -20,15 +20,16 @@
 //! Heartbeat is agent-driven (DC9): the engine never babysits a claim.
 
 use forge_core_contracts::claim::{
-    ActorRole, ClaimContract, ClaimContractDocument, ClaimScopeKind,
+    ActorRole, ClaimContract, ClaimContractDocument, ClaimScopeKind, ClaimStatus,
 };
 use forge_core_contracts::tool_effect::ConflictCode;
 use forge_core_contracts::{
     ClaimId, CliEnvelope, ExitReason, ScopeId, StableId, ENVELOPE_SCHEMA_VERSION,
 };
 use forge_core_engine::{
-    acquire, check_write_against_claims, heartbeat, project_active, record_handoff, release,
-    unix_to_rfc3339, AcquireRequest, ClaimLifecycleDecision, ClaimRejection, RecordHandoffRequest,
+    acquire, check_write_against_claims, heartbeat, is_expired, project_active, record_handoff,
+    release, unix_to_rfc3339, AcquireRequest, ActiveClaimSummary, ClaimLifecycleDecision,
+    ClaimRejection, RecordHandoffRequest,
 };
 use std::path::{Path, PathBuf};
 
@@ -79,6 +80,36 @@ pub struct ClaimHandoffArtifact {
     pub summary: String,
     pub evidence_refs: Vec<String>,
     pub claim_contract: ClaimContract,
+}
+
+/// Status payload for `claim status`.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct ClaimStatusView {
+    /// Existing compatibility field: claims that are live at `now_unix`.
+    pub active: Vec<ActiveClaimSummary>,
+    /// Expired/open or materialized handoff blockers that are not live, but
+    /// still prevent reacquire until a handoff is recorded.
+    #[serde(default)]
+    pub expired_handoff_required: Vec<ExpiredHandoffRequiredClaimSummary>,
+}
+
+/// A compact summary of a non-live claim that still blocks reacquire because
+/// its expiry policy requires handoff evidence.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct ExpiredHandoffRequiredClaimSummary {
+    pub claim_id: String,
+    pub scope_kind: String,
+    pub scope_id: String,
+    pub agent_id: String,
+    pub role: String,
+    pub acquired_at: String,
+    pub expires_at: String,
+    pub status: String,
+    pub blocker_reason: String,
+    pub paths: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub handoff_request_ref: Option<String>,
+    pub handoff_hint: String,
 }
 
 /// Failure payload for `claim acquire|heartbeat|release` when the engine
@@ -428,18 +459,69 @@ pub fn run_handoff(
 }
 
 /// Run `claim status` — the coordination-bus view: every claim that is live
-/// right now (who holds what, since when, expires when).
+/// right now, plus non-live handoff-required blockers that still prevent
+/// reacquire until their recovery evidence is recorded.
 #[must_use]
-pub fn run_status(
-    claims_dir: &Path,
-    now_unix: i64,
-) -> CliEnvelope<forge_core_engine::ActiveClaimsView> {
+pub fn run_status(claims_dir: &Path, now_unix: i64) -> CliEnvelope<ClaimStatusView> {
     let (existing, errs) = load_claims(claims_dir);
     if let Some(env) = env_config_if_errors(claims_dir, &errs) {
         return env;
     }
-    let view = project_active(&existing, now_unix);
+    let active_view = project_active(&existing, now_unix);
+    let expired_handoff_required = existing
+        .iter()
+        .filter_map(|claim| expired_handoff_required_summary(claim, now_unix))
+        .collect();
+    let view = ClaimStatusView {
+        active: active_view.active,
+        expired_handoff_required,
+    };
     CliEnvelope::ok("claim.status", view)
+}
+
+fn expired_handoff_required_summary(
+    claim: &ClaimContract,
+    now_unix: i64,
+) -> Option<ExpiredHandoffRequiredClaimSummary> {
+    let blocker_reason = handoff_blocker_reason(claim, now_unix)?;
+    Some(ExpiredHandoffRequiredClaimSummary {
+        claim_id: claim.id.0.clone(),
+        scope_kind: scope_kind_slug(claim.scope.kind),
+        scope_id: claim.scope.id.0.clone(),
+        agent_id: claim.claim.claimant_agent_id.0.clone(),
+        role: actor_role_slug(claim.claim.claimant_role),
+        acquired_at: claim.lease.acquired_at.clone(),
+        expires_at: claim.lease.expires_at.clone(),
+        status: status_slug(claim.status.value),
+        blocker_reason: blocker_reason.to_string(),
+        paths: claim.scope.paths.iter().map(|p| p.0.clone()).collect(),
+        evidence_refs: claim.evidence_refs.clone(),
+        handoff_request_ref: claim
+            .expiry_policy
+            .handoff_request_ref
+            .as_ref()
+            .map(|p| p.0.clone()),
+        handoff_hint: handoff_hint(claim),
+    })
+}
+
+fn handoff_blocker_reason(claim: &ClaimContract, now_unix: i64) -> Option<&'static str> {
+    match claim.status.value {
+        ClaimStatus::HandoffRequired => Some("handoff_required"),
+        ClaimStatus::Active | ClaimStatus::Stale
+            if claim.expiry_policy.handoff_required && is_expired(claim, now_unix) =>
+        {
+            Some("expired_requires_handoff")
+        }
+        _ => None,
+    }
+}
+
+fn handoff_hint(claim: &ClaimContract) -> String {
+    format!(
+        "Record recovery evidence with `forge-core claim handoff --id {} --agent <recorder-agent> --summary <summary> [--evidence <path>]`; do not delete the claim file.",
+        claim.id.0
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -810,6 +892,17 @@ fn scope_kind_slug(k: ClaimScopeKind) -> String {
     .into()
 }
 
+fn actor_role_slug(r: ActorRole) -> String {
+    match r {
+        ActorRole::Driver => "driver",
+        ActorRole::Worker => "worker",
+        ActorRole::Human => "human",
+        ActorRole::Runtime => "runtime",
+        ActorRole::Unknown => "unknown",
+    }
+    .into()
+}
+
 fn status_slug(s: forge_core_contracts::claim::ClaimStatus) -> String {
     use forge_core_contracts::claim::ClaimStatus;
     match s {
@@ -1032,19 +1125,25 @@ mod tests {
         assert!(env.ok, "{:?}", env.error);
         let view = env.data.as_ref().unwrap();
         assert_eq!(view.active.len(), 2);
+        assert!(view.expired_handoff_required.is_empty());
         let ids: Vec<&str> = view.active.iter().map(|c| c.scope_id.as_str()).collect();
         assert!(ids.contains(&"s1"));
         assert!(ids.contains(&"s2"));
     }
 
     #[test]
-    fn status_excludes_expired_and_released() {
+    fn status_excludes_expired_from_active_and_reports_handoff_blockers() {
         let dir = tempfile_dir();
         let _ = run_acquire(&dir, &req("s1", "agentA"), T0); // will be expired at T0 + 9999
         let _ = run_acquire(&dir, &req("s2", "agentB"), T0);
         let env = run_status(&dir, T0 + 9_999); // s1 lease (ttl 600) is long past
         let view = env.data.as_ref().unwrap();
         assert_eq!(view.active.len(), 0, "both past ttl at T0+9999");
+        assert_eq!(view.expired_handoff_required.len(), 2);
+        assert!(view
+            .expired_handoff_required
+            .iter()
+            .all(|claim| claim.blocker_reason == "expired_requires_handoff"));
     }
 
     #[test]
@@ -1054,6 +1153,7 @@ mod tests {
         let env = run_status(&dir, T0);
         let json = serde_json::to_string(&env).unwrap();
         assert!(json.contains("\"active\""));
+        assert!(json.contains("\"expired_handoff_required\""));
         assert!(json.contains("\"scope_id\":\"s1\""));
     }
 
@@ -1064,6 +1164,12 @@ mod tests {
         let env = run_status(std::path::Path::new("/nonexistent/forge/nope"), T0);
         assert!(env.ok, "{:?}", env.error);
         assert!(env.data.as_ref().unwrap().active.is_empty());
+        assert!(env
+            .data
+            .as_ref()
+            .unwrap()
+            .expired_handoff_required
+            .is_empty());
     }
 
     #[test]

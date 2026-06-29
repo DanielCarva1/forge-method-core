@@ -5,6 +5,7 @@
 //! multi-agent isolation promise: two agents get disjoint worktrees/branches;
 //! a duplicate is blocked; merge-back produces a deterministic git step list.
 
+use assert_cmd::Command;
 use forge_core_cli::isolation::{run_merge_plan, run_propose, run_status, run_transition};
 use forge_core_contracts::common::StableId;
 use forge_core_contracts::isolation::{IsolationStatus, MergePolicy};
@@ -23,6 +24,108 @@ fn dir(label: &str) -> PathBuf {
 
 const NOW: i64 = 1_800_000_000;
 
+fn bin() -> Command {
+    Command::cargo_bin("forge-core").expect("forge-core binary must exist")
+}
+
+fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("repo root")
+        .to_path_buf()
+}
+
+fn fresh_parent(label: &str) -> PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+    let n = SEQ.fetch_add(1, Ordering::SeqCst);
+    let d = repo_root().join("target").join(format!(
+        "isolation-cli-e2e-{label}-{}-{n}",
+        std::process::id()
+    ));
+    let _ = fs::remove_dir_all(&d);
+    fs::create_dir_all(&d).unwrap();
+    d
+}
+
+struct ConsumerApp {
+    app: PathBuf,
+    state_root: PathBuf,
+}
+
+fn consumer_app(label: &str) -> ConsumerApp {
+    let parent = fresh_parent(label);
+    let app = parent.join("app");
+    let sidecar = parent.join("forge-app");
+    let state_root = sidecar.join(".forge-method");
+
+    fs::create_dir_all(&app).expect("create app root");
+    fs::create_dir_all(&state_root).expect("create sidecar state root");
+    fs::write(
+        app.join(".forge-method.yaml"),
+        "schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: ../forge-app\nstate_root: ../forge-app/.forge-method\n",
+    )
+    .expect("write project link");
+
+    ConsumerApp { app, state_root }
+}
+
+fn output_json(output: &std::process::Output) -> serde_json::Value {
+    serde_json::from_slice(&output.stdout).unwrap_or_else(|err| {
+        panic!(
+            "stdout should be json: {err}\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    })
+}
+
+fn assert_cli_success(output: &std::process::Output, label: &str) -> serde_json::Value {
+    assert!(
+        output.status.success(),
+        "{label} should pass\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json = output_json(output);
+    assert_eq!(json["ok"], true, "{label} should report ok: {json:#}");
+    json
+}
+
+fn assert_cli_failure(output: &std::process::Output, label: &str) -> serde_json::Value {
+    assert!(
+        !output.status.success(),
+        "{label} should fail closed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json = output_json(output);
+    assert_eq!(json["ok"], false, "{label} should report not ok: {json:#}");
+    json
+}
+
+fn assert_env_config_failure(output: &std::process::Output, label: &str) -> serde_json::Value {
+    let json = assert_cli_failure(output, label);
+    assert_eq!(
+        json["exit_reason"], "env_config",
+        "{label} should fail with env_config exit_reason: {json:#}"
+    );
+    assert_eq!(
+        json["error"]["code"], "env_config",
+        "{label} should fail with env_config error code: {json:#}"
+    );
+    json
+}
+
+fn yaml_file_count(dir: &Path) -> usize {
+    fs::read_dir(dir)
+        .expect("read isolation dir")
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "yaml"))
+        .count()
+}
+
 fn propose(
     d: &Path,
     agent: &str,
@@ -40,6 +143,233 @@ fn propose(
         &format!("iso-{agent}-{}", branch.replace('/', "-")),
         NOW,
     )
+}
+
+#[test]
+fn isolation_propose_defaults_to_resolved_sidecar_isolations_dir() {
+    let fixture = consumer_app("default-sidecar");
+    let app_arg = fixture.app.display().to_string();
+
+    let output = bin()
+        .args([
+            "isolation",
+            "propose",
+            "--root",
+            &app_arg,
+            "--agent",
+            "sidecar-agent",
+            "--branch",
+            "sidecar/feature",
+            "--worktree-path",
+            "../wt/sidecar",
+            "--base-ref",
+            "main",
+            "--id",
+            "iso-sidecar-feature",
+            "--now-unix",
+            &NOW.to_string(),
+        ])
+        .output()
+        .expect("run isolation propose");
+
+    let json = assert_cli_success(&output, "isolation propose with default sidecar dir");
+    assert_eq!(json["command"], "isolation propose");
+    let expected_dir = fixture.state_root.join("contracts").join("isolations");
+    let contract_path = PathBuf::from(
+        json["data"]["contract_path"]
+            .as_str()
+            .expect("contract path"),
+    );
+    assert!(
+        contract_path.starts_with(&expected_dir),
+        "contract should be written under sidecar isolation dir\nexpected: {}\nactual: {}",
+        expected_dir.display(),
+        contract_path.display()
+    );
+    assert_eq!(yaml_file_count(&expected_dir), 1);
+    assert!(
+        !fixture.app.join("contracts").join("isolations").exists(),
+        "default isolation propose must not create consumer-local contracts/isolations"
+    );
+    assert!(
+        !fixture.app.join(".forge-method").exists(),
+        "default isolation propose must not create consumer-local .forge-method"
+    );
+}
+
+#[test]
+fn isolation_status_requires_project_link_without_explicit_isolation_dir() {
+    let parent = fresh_parent("missing-link-status");
+    let app = parent.join("app");
+    fs::create_dir_all(&app).expect("create unlinked app");
+
+    let output = bin()
+        .args(["isolation", "status", "--root"])
+        .arg(&app)
+        .output()
+        .expect("run isolation status without project link");
+
+    let json = assert_env_config_failure(&output, "isolation status without project link");
+    let message = json["error"]["message"].as_str().expect("error message");
+    assert!(
+        message.contains(".forge-method.yaml"),
+        "error should explain missing Project Link: {message}"
+    );
+    assert!(
+        !app.join(".forge-method").exists(),
+        "failed isolation status must not create consumer-local .forge-method"
+    );
+    assert!(
+        !app.join("contracts").join("isolations").exists(),
+        "failed isolation status must not create consumer-local contracts/isolations"
+    );
+}
+
+#[test]
+fn isolation_status_rejects_project_link_missing_state_root() {
+    let parent = fresh_parent("missing-state-root");
+    let app = parent.join("app");
+    let sidecar = parent.join("forge-app");
+    let state_root = sidecar.join(".forge-method");
+    fs::create_dir_all(&app).expect("create app root");
+    fs::create_dir_all(&sidecar).expect("create sidecar root parent");
+    fs::write(
+        app.join(".forge-method.yaml"),
+        "schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: ../forge-app\nstate_root: ../forge-app/.forge-method\n",
+    )
+    .expect("write project link");
+
+    let output = bin()
+        .args(["isolation", "status", "--root"])
+        .arg(&app)
+        .output()
+        .expect("run isolation status with missing state_root");
+
+    let json = assert_env_config_failure(&output, "isolation status with missing state_root");
+    let message = json["error"]["message"].as_str().expect("error message");
+    assert!(
+        message.contains("state_root"),
+        "error should mention state_root: {message}"
+    );
+    assert!(
+        message.contains("does not exist"),
+        "error should distinguish missing state_root: {message}"
+    );
+    assert!(
+        !app.join(".forge-method").exists(),
+        "failed isolation status must not create consumer-local .forge-method"
+    );
+    assert!(
+        !app.join("contracts").join("isolations").exists(),
+        "failed isolation status must not create consumer-local contracts/isolations"
+    );
+    assert!(
+        !state_root.exists(),
+        "isolation status must not create the missing sidecar state root"
+    );
+}
+
+#[test]
+fn isolation_status_rejects_project_link_state_root_file() {
+    let parent = fresh_parent("state-root-file");
+    let app = parent.join("app");
+    let sidecar = parent.join("forge-app");
+    let state_root = sidecar.join(".forge-method");
+    fs::create_dir_all(&app).expect("create app root");
+    fs::create_dir_all(&sidecar).expect("create sidecar root parent");
+    fs::write(&state_root, "not a directory").expect("write corrupt state root file");
+    fs::write(
+        app.join(".forge-method.yaml"),
+        "schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: ../forge-app\nstate_root: ../forge-app/.forge-method\n",
+    )
+    .expect("write project link");
+
+    let output = bin()
+        .args(["isolation", "status", "--root"])
+        .arg(&app)
+        .output()
+        .expect("run isolation status with state_root file");
+
+    let json = assert_env_config_failure(&output, "isolation status with state_root file");
+    let message = json["error"]["message"].as_str().expect("error message");
+    assert!(
+        message.contains("state_root"),
+        "error should mention state_root: {message}"
+    );
+    assert!(
+        message.contains("not a directory"),
+        "error should fail closed on file state_root: {message}"
+    );
+    assert!(
+        !app.join(".forge-method").exists(),
+        "failed isolation status must not create consumer-local .forge-method"
+    );
+    assert!(
+        !app.join("contracts").join("isolations").exists(),
+        "failed isolation status must not create consumer-local contracts/isolations"
+    );
+    assert!(
+        state_root.is_file(),
+        "isolation status must not replace corrupt state_root file"
+    );
+}
+
+#[test]
+fn explicit_isolation_dir_preserves_existing_behavior() {
+    let parent = fresh_parent("explicit-dir");
+    let app = parent.join("app");
+    let isolation_dir = parent.join("explicit-isolations");
+    let app_arg = app.display().to_string();
+    let isolation_dir_arg = isolation_dir.display().to_string();
+    fs::create_dir_all(&app).expect("create unlinked app");
+
+    let propose = bin()
+        .args([
+            "isolation",
+            "propose",
+            "--root",
+            &app_arg,
+            "--isolation-dir",
+            &isolation_dir_arg,
+            "--agent",
+            "explicit-agent",
+            "--branch",
+            "explicit/feature",
+            "--worktree-path",
+            "../wt/explicit",
+            "--base-ref",
+            "main",
+            "--id",
+            "iso-explicit-feature",
+            "--now-unix",
+            &NOW.to_string(),
+        ])
+        .output()
+        .expect("run isolation propose with explicit dir");
+    assert_cli_success(&propose, "isolation propose with explicit dir");
+    assert_eq!(yaml_file_count(&isolation_dir), 1);
+
+    let status = bin()
+        .args([
+            "isolation",
+            "status",
+            "--root",
+            &app_arg,
+            "--isolation-dir",
+            &isolation_dir_arg,
+        ])
+        .output()
+        .expect("run isolation status with explicit dir");
+    let status_json = assert_cli_success(&status, "isolation status with explicit dir");
+    assert_eq!(status_json["data"]["total"], 1);
+    assert!(
+        !app.join(".forge-method").exists(),
+        "explicit --isolation-dir must not create consumer-local .forge-method"
+    );
+    assert!(
+        !app.join("contracts").join("isolations").exists(),
+        "explicit --isolation-dir should not use the old implicit consumer-local default"
+    );
 }
 
 #[test]
