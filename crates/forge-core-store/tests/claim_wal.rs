@@ -4,8 +4,8 @@ use forge_core_contracts::claim::{
 };
 use forge_core_contracts::{ClaimId, RepoPath, ScopeId, StableId};
 use forge_core_store::claim_wal::{
-    append_claim_wal_record, claim_wal_path, recover_claim_wal, ClaimWalOperation,
-    ClaimWalStopReason,
+    append_claim_wal_record, claim_wal_path, recover_claim_wal, replay_claim_wal,
+    ClaimWalOperation, ClaimWalStopReason,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -129,6 +129,62 @@ fn claim_wal_appends_fmw1_records_with_monotonic_sequences() {
     assert_eq!(recovery.records[0].operation, ClaimWalOperation::Acquire);
     assert_eq!(recovery.records[1].operation, ClaimWalOperation::Release);
     assert!(!recovery.repaired);
+}
+
+#[test]
+fn claim_wal_replay_projects_last_record_per_claim_id() {
+    let root = temp_state("projection-last-wins");
+    let first_active = claim("S1", "alice", "src/lib.rs", ClaimStatus::Active);
+    let released = claim("S1", "alice", "src/lib.rs", ClaimStatus::Released);
+    let reacquired = claim("S1", "bob", "src/lib.rs", ClaimStatus::Active);
+    let independent = claim("S2", "cara", "src/other.rs", ClaimStatus::Active);
+
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &first_active,
+        "2027-01-15T08:00:00Z",
+    )
+    .expect("append first active");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Release,
+        &released,
+        "2027-01-15T08:01:00Z",
+    )
+    .expect("append release");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &reacquired,
+        "2027-01-15T08:02:00Z",
+    )
+    .expect("append reacquire");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &independent,
+        "2027-01-15T08:03:00Z",
+    )
+    .expect("append independent claim");
+
+    let projection = replay_claim_wal(&root, true).expect("replay WAL projection");
+
+    assert_eq!(projection.recovery.records.len(), 4);
+    assert_eq!(projection.claims.len(), 2);
+    let s1 = projection
+        .claims
+        .iter()
+        .find(|claim| claim.scope.id.0 == "S1")
+        .expect("S1 projected claim");
+    assert_eq!(s1.status.value, ClaimStatus::Active);
+    assert_eq!(s1.claim.claimant_agent_id.0, "bob");
+    let s2 = projection
+        .claims
+        .iter()
+        .find(|claim| claim.scope.id.0 == "S2")
+        .expect("S2 projected claim");
+    assert_eq!(s2.claim.claimant_agent_id.0, "cara");
 }
 
 #[test]

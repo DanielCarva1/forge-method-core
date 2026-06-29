@@ -165,8 +165,31 @@ priority_2_medium:
     summary: "Hoje cada comando re-read todos YAMLs. Mudar: derive_state(WAL replay) vira a única fonte. load_claims legado vira fallback/debug."
     source: [W1 q2]
     effort: M
-    status: pending
+    status: verified_current_core
     depends_on: [P2.1]
+    scope_note: "Default claim authority is now WAL replay. YAML claims-active files remain a materialized compatibility/debug cache; cache-only non-empty state without WAL fails closed instead of being trusted. Graph mutation preflight consumes the same load_claims authority path."
+    verified_by:
+      files:
+        - crates/forge-core-store/src/claim_wal.rs
+        - crates/forge-core-store/tests/claim_wal.rs
+        - crates/forge-core-cli/src/claim.rs
+        - crates/forge-core-cli/tests/claims.rs
+        - crates/forge-core-cli/tests/graph_cli_e2e.rs
+      tests:
+        - cargo test -p forge-core-store --test claim_wal
+        - cargo test -p forge-core-cli claim::tests
+        - cargo test -p forge-core-cli --test claims
+        - cargo test -p forge-core-cli --test claim_e2e
+        - cargo test -p forge-core-cli --test claim_wal_e2e
+        - cargo test -p forge-core-cli --test claim_handoff_e2e
+        - cargo test -p forge-core-cli --test claim_cli_sidecar_e2e
+        - cargo test -p forge-core-cli --test graph_cli_e2e
+      acceptance:
+        - load_claims replays wal/claims.fmw1 when present and refuses YAML fallback on non-clean/corrupt WAL recovery.
+        - Missing YAML cache after acquire does not change status/check-write authority.
+        - Stale active YAML cache after release does not resurrect blockers; reacquire follows WAL state.
+        - Non-empty cache-only state without WAL fails closed with EnvConfig guidance.
+        - Graph dry-run claim preflight uses the same WAL-derived claim state.
 
   - id: P2.3
     title: "feat: reconcile loop via tokio interval (NÃO notify — UNSOUND no WSL)"
@@ -234,11 +257,11 @@ explicit_non_goals_for_v1:
 verification_status_at_handoff:
   repo: reconciled_with_current_core
   reconciled_on: 2026-06-29
-  reconciled_branch: codex/forge-p2-claim-wal
+  reconciled_branch: codex/forge-p2-derive-state
   previous_snapshot_was_stale: true
   current_status:
     p1_high: "P1.1, P1.2, P1.3, P1.4, and P1.5 verified in current core."
-    p2_medium: "P2.1 WAL append/recovery verified; P2.2 derive_state, P2.3 reconcile loop, and P2.4 tiered invariants remain pending."
+    p2_medium: "P2.1 WAL append/recovery and P2.2 WAL-derived claim state authority verified; P2.3 reconcile loop and P2.4 tiered invariants remain pending."
     p3_low: "P3.1 verified in current core; P3.2-P3.4 remain pending."
   targeted_verification:
     - cargo test -p forge-core-engine claim_engine
@@ -247,13 +270,15 @@ verification_status_at_handoff:
     - cargo test -p forge-core-cli --test claim_handoff_e2e
     - cargo test -p forge-core-store --test claim_wal
     - cargo test -p forge-core-cli --test claim_wal_e2e
+    - cargo test -p forge-core-cli --test claims
+    - cargo test -p forge-core-cli --test graph_cli_e2e
   full_gate: passed_2026-06-29
   full_gate_commands:
     - cargo check --workspace
     - cargo test --workspace
     - cargo clippy --workspace --all-targets -- -W clippy::pedantic
     - cargo fmt --all -- --check
-  full_gate_log_dir: D:\Forge-method-core\target\codex-gates\20260629-061915-p2-claim-wal
+  full_gate_log_dir: D:\Forge-method-core\target\codex-gates\20260629-064235-p2-derive-state
   installed_binary_smoke:
     binary: C:\Users\User\.cargo\bin\forge-core.exe
-    result: "expired release reports forge-core claim handoff recovery hint; claim handoff records artifact; reacquire succeeds with fresh agent; acquire -> heartbeat -> release creates wal/claims.fmw1 with FMW1 magic."
+    result: "expired release reports forge-core claim handoff recovery hint; claim handoff records artifact; reacquire succeeds with fresh agent; acquire -> heartbeat -> release creates wal/claims.fmw1 with FMW1 magic; missing/stale YAML cache does not override WAL-derived authority."
