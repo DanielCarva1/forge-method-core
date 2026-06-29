@@ -242,6 +242,44 @@ Total: 7472 linhas, 141 funções, ~243 itens públicos.
     verde.
   - Âncora de regressão: `validate --root . --json` emitiu
     `"diagnostics": []` — zero mudança observável.
+- [x] R1.HostAdapterProjection — Extrair `host_adapter_projection.rs` (2026-06-29)
+  - Movidos: 5 funções públicas (`run_host_adapter_projection`,
+    `run_host_adapter_process_security_policy`,
+    `run_host_adapter_invocation_admission`,
+    `run_host_adapter_distribution_policy`,
+    `run_host_adapter_distribution_admission`) + 9 helpers privados
+    (`command_process_admission`, `project_host_command`,
+    `projection_target_id`, `process_target_id`, `mcp_tool_name`,
+    `command_title`, `command_description`, `mcp_annotations`,
+    `command_input_schema`).
+  - Todos os 9 helpers eram chamados APENAS pelas 5 funções movidas —
+    verificado com grep exaustivo. Zero dependências externas.
+  - Imports do novo módulo: `RuntimeKind` de `forge_core_contracts`,
+    `json!`/`Value` de `serde_json`, 28 tipos `HostAdapter*` de
+    `crate::host_adapter_types::{...}` (import explícito, não wildcard),
+    `valid_sha256_digest` de `crate::crypto_hashing`,
+    `argv_has_shell_control`/`env_key_is_forbidden`/
+    `source_ref_is_immutable`/`version_like` de `crate::host_command`,
+    `run_host_adapter_manifest` de `crate::host_adapter_manifest`.
+  - Em `lib.rs`: removidos do re-export `pub(crate) use host_command::{...}`
+    os predicados `argv_has_shell_control` e `env_key_is_forbidden`
+    (não mais usados em `lib.rs`). `source_ref_is_immutable` e
+    `version_like` continuam re-exportados (ainda usados por helpers de
+       verificação em `lib.rs`).
+  - Em `lib.rs`: removidos imports não usados: `RuntimeKind` (só usado pelas
+       funções movidas), `json!` (só usado por `command_input_schema`),
+    `valid_sha256_digest` (só usado por `run_host_adapter_distribution_admission`).
+  - `serde_json::{json, Value}` reduziu para `serde_json::Value`.
+  - Módulo `pub(crate)`, re-exportado via `pub use host_adapter_projection::{...}`
+    com as 5 funções públicas — preserva todos os callers externos.
+  - `lib.rs`: 4844 → 4146 linhas (-698); `host_adapter_projection.rs`:
+    783 linhas.
+  - Gates: `cargo check` (zero warnings), `cargo test --workspace` (1
+    falha pré-existente `validate_binary_outputs_json_summary` — case
+    mismatch `Passed` vs `passed`, não é regressão), `cargo clippy --pedantic`
+    (320 warnings — paridade), `cargo fmt --check` verde.
+  - Âncora de regressão: `validate --root . --json` emitiu
+    `"diagnostics": []` — zero mudança observável.
 - [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
 - [ ] R1.4 — Mover verificação X.509/CRL/OCSP
 - [ ] R1.6 — Mover project link resolve/init
