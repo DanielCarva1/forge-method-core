@@ -329,3 +329,13 @@ pub fn telemetry_usage() -> &'static str {
         "default trace source: resolved <state_root>/traces/events.ndjson"
     )
 }
+
+#[must_use]
+pub fn resolve_now_unix(flag: Option<i64>) -> i64 {
+    flag.unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| i64::try_from(d.as_secs()).unwrap_or(0))
+            .unwrap_or(0)
+    })
+}

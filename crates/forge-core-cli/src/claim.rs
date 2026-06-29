@@ -19,6 +19,7 @@
 //! `--now-unix <epoch>` (for replay/tests); the default is real system time.
 //! Heartbeat is agent-driven (DC9): the engine never babysits a claim.
 
+use crate::cli_util::{emit_envelope, parse_strict, require_value, resolve_now_unix};
 use forge_core_contracts::claim::{
     ActorRole, ClaimContract, ClaimContractDocument, ClaimScopeKind, ClaimStatus,
 };
@@ -1522,4 +1523,619 @@ mod tests {
         assert_eq!(payload.ungoverned, vec!["README.md"]);
         assert!(payload.blocks.is_empty());
     }
+}
+pub fn run_claim_command(args: &[String]) {
+    let sub = args.get(1).map(String::as_str).unwrap_or("--help");
+    match sub {
+        "acquire" => run_claim_acquire(&args[2..]),
+        "heartbeat" => run_claim_heartbeat(&args[2..]),
+        "release" => run_claim_release(&args[2..]),
+        "handoff" => run_claim_handoff(&args[2..]),
+        "status" => run_claim_status(&args[2..]),
+        "reconcile" => run_claim_reconcile(&args[2..]),
+        "check-write" => run_claim_check_write(&args[2..]),
+        "--help" | "-h" | "help" => {
+            println!("forge-core claim <subcommand> [options]");
+            println!("  acquire [--root <path>] [--allow-bootstrap-core] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  heartbeat [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  release [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  handoff [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> --summary <text> [--evidence <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  reconcile [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--loop] [--interval-ms 30000] [--max-ticks <n>] [--no-json]");
+            println!("  check-write [--root <path>] [--allow-bootstrap-core] --agent <id> --target <path> [--target <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  Defaults: without --claims-dir, resolves --root as a Forge project and uses <state_root>/claims-active; --claims-dir is an explicit override.");
+        }
+        other => {
+            eprintln!("forge-core claim: unknown subcommand '{other}'. Try: acquire | heartbeat | release | handoff | status | reconcile | check-write");
+            std::process::exit(2);
+        }
+    }
+}
+
+/// Resolve --now-unix to epoch seconds, defaulting to real system time (DD23).
+
+#[must_use]
+pub fn resolve_claims_dir_or_exit(
+    command: &str,
+    claims_dir: Option<PathBuf>,
+    root: &std::path::Path,
+    allow_bootstrap_core: bool,
+    want_json: bool,
+) -> PathBuf {
+    if let Some(claims_dir) = claims_dir {
+        return claims_dir;
+    }
+
+    match crate::project_cmd::resolve_project(root, allow_bootstrap_core) {
+        Ok(project) if project.state_exists => {
+            PathBuf::from(project.state_root).join("claims-active")
+        }
+        Ok(project) => {
+            let env = forge_core_contracts::CliEnvelope::<serde_json::Value>::err(
+                command,
+                forge_core_contracts::ExitReason::EnvConfig,
+                format!(
+                    "resolved Forge state_root does not exist for claim command: {}; create the sidecar .forge-method directory or fix {}",
+                    project.state_root,
+                    forge_core_contracts::PROJECT_LINK_FILE_NAME
+                ),
+            );
+            emit_envelope("claim", env, want_json);
+            unreachable!("emit_envelope exits the process");
+        }
+        Err(err) => {
+            let env = forge_core_contracts::CliEnvelope::<serde_json::Value>::err(
+                command,
+                err.exit_reason(),
+                format!("project resolve failed for claim command: {err}"),
+            );
+            emit_envelope("claim", env, want_json);
+            unreachable!("emit_envelope exits the process");
+        }
+    }
+}
+
+pub fn run_claim_acquire(args: &[String]) {
+    use crate::claim::{parse_role, parse_scope_kind, run_acquire};
+    use forge_core_contracts::{RepoPath, ScopeId, StableId};
+    use forge_core_engine::AcquireRequest;
+
+    let mut scope_kind: Option<String> = None;
+    let mut scope_id: Option<String> = None;
+    let mut agent_id: Option<String> = None;
+    let mut role = "worker".to_string();
+    let mut ttl: u64 = 600;
+    let mut heartbeat_interval: u64 = 120;
+    let mut paths: Vec<String> = Vec::new();
+    let mut claims_dir: Option<PathBuf> = None;
+    let mut root = PathBuf::from(".");
+    let mut allow_bootstrap_core = false;
+    let mut now_unix: Option<i64> = None;
+    let mut want_json = true;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--root" => {
+                idx += 1;
+                root = PathBuf::from(require_value(args, idx, "root"));
+            }
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
+            "--scope" => {
+                idx += 1;
+                scope_kind = Some(require_value(args, idx, "scope"));
+            }
+            "--id" => {
+                idx += 1;
+                scope_id = Some(require_value(args, idx, "id"));
+            }
+            "--agent" => {
+                idx += 1;
+                agent_id = Some(require_value(args, idx, "agent"));
+            }
+            "--role" => {
+                idx += 1;
+                role = require_value(args, idx, "role");
+            }
+            "--ttl" => {
+                idx += 1;
+                ttl = parse_strict(&require_value(args, idx, "ttl"), "ttl");
+            }
+            "--heartbeat-interval" => {
+                idx += 1;
+                heartbeat_interval = parse_strict(
+                    &require_value(args, idx, "heartbeat-interval"),
+                    "heartbeat-interval",
+                );
+            }
+            "--path" => {
+                idx += 1;
+                paths.push(require_value(args, idx, "path"));
+            }
+            "--claims-dir" => {
+                idx += 1;
+                claims_dir = Some(PathBuf::from(require_value(args, idx, "claims-dir")));
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict(
+                    &require_value(args, idx, "now-unix"),
+                    "now-unix",
+                ));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core claim acquire [--root <path>] [--allow-bootstrap-core] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+
+    let (Some(scope_kind_str), Some(scope_id), Some(agent_id)) = (scope_kind, scope_id, agent_id)
+    else {
+        eprintln!("claim acquire: --scope, --id, --agent are all required");
+        std::process::exit(3);
+    };
+    let Some(sk) = parse_scope_kind(&scope_kind_str) else {
+        eprintln!("claim acquire: unknown --scope '{scope_kind_str}'");
+        std::process::exit(3);
+    };
+    let Some(role_kind) = parse_role(&role) else {
+        eprintln!("claim acquire: unknown --role '{role}'");
+        std::process::exit(3);
+    };
+
+    let req = AcquireRequest {
+        scope_kind: sk,
+        scope_id: ScopeId(scope_id),
+        agent_id: StableId(agent_id),
+        role: role_kind,
+        ttl_seconds: ttl,
+        heartbeat_interval_seconds: heartbeat_interval,
+        paths: paths.iter().map(|p| RepoPath(p.clone())).collect(),
+        product_area: None,
+        expected_state_version: None,
+    };
+    let claims_dir = resolve_claims_dir_or_exit(
+        "claim.acquire",
+        claims_dir,
+        &root,
+        allow_bootstrap_core,
+        want_json,
+    );
+    let env = run_acquire(&claims_dir, &req, resolve_now_unix(now_unix));
+    emit_envelope("claim", env, want_json);
+}
+
+pub fn run_claim_heartbeat(args: &[String]) {
+    use crate::claim::run_heartbeat;
+    run_claim_single_target(args, "heartbeat", |claims_dir, claim_id, agent_id, now| {
+        run_heartbeat(claims_dir, claim_id, agent_id, now)
+    });
+}
+
+pub fn run_claim_release(args: &[String]) {
+    use crate::claim::run_release;
+    run_claim_single_target(args, "release", |claims_dir, claim_id, agent_id, now| {
+        run_release(claims_dir, claim_id, agent_id, now)
+    });
+}
+
+/// Shared arg parsing for heartbeat/release (both take --id + --agent + optional dirs/time).
+pub fn run_claim_single_target(
+    args: &[String],
+    sub: &str,
+    op: impl Fn(
+        &std::path::Path,
+        &forge_core_contracts::StableId,
+        &forge_core_contracts::StableId,
+        i64,
+    ) -> forge_core_contracts::CliEnvelope<ClaimResult>,
+) {
+    use forge_core_contracts::StableId;
+    let mut claim_id: Option<String> = None;
+    let mut agent_id: Option<String> = None;
+    let mut claims_dir: Option<PathBuf> = None;
+    let mut root = PathBuf::from(".");
+    let mut allow_bootstrap_core = false;
+    let mut now_unix: Option<i64> = None;
+    let mut want_json = true;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--root" => {
+                idx += 1;
+                root = PathBuf::from(require_value(args, idx, "root"));
+            }
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
+            "--id" => {
+                idx += 1;
+                claim_id = Some(require_value(args, idx, "id"));
+            }
+            "--agent" => {
+                idx += 1;
+                agent_id = Some(require_value(args, idx, "agent"));
+            }
+            "--claims-dir" => {
+                idx += 1;
+                claims_dir = Some(PathBuf::from(require_value(args, idx, "claims-dir")));
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict(
+                    &require_value(args, idx, "now-unix"),
+                    "now-unix",
+                ));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core claim {sub} [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    let (Some(claim_id), Some(agent_id)) = (claim_id, agent_id) else {
+        eprintln!("claim {sub}: --id and --agent are required");
+        std::process::exit(3);
+    };
+    let claims_dir = resolve_claims_dir_or_exit(
+        &format!("claim.{sub}"),
+        claims_dir,
+        &root,
+        allow_bootstrap_core,
+        want_json,
+    );
+    let env = op(
+        &claims_dir,
+        &StableId(claim_id),
+        &StableId(agent_id),
+        resolve_now_unix(now_unix),
+    );
+    emit_envelope("claim", env, want_json);
+}
+
+pub fn run_claim_handoff(args: &[String]) {
+    use crate::claim::run_handoff;
+    use forge_core_contracts::StableId;
+
+    let mut claim_id: Option<String> = None;
+    let mut agent_id: Option<String> = None;
+    let mut summary: Option<String> = None;
+    let mut evidence_refs: Vec<String> = Vec::new();
+    let mut claims_dir: Option<PathBuf> = None;
+    let mut root = PathBuf::from(".");
+    let mut allow_bootstrap_core = false;
+    let mut now_unix: Option<i64> = None;
+    let mut want_json = true;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--root" => {
+                idx += 1;
+                root = PathBuf::from(require_value(args, idx, "root"));
+            }
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
+            "--id" => {
+                idx += 1;
+                claim_id = Some(require_value(args, idx, "id"));
+            }
+            "--agent" => {
+                idx += 1;
+                agent_id = Some(require_value(args, idx, "agent"));
+            }
+            "--summary" => {
+                idx += 1;
+                summary = Some(require_value(args, idx, "summary"));
+            }
+            "--evidence" => {
+                idx += 1;
+                evidence_refs.push(require_value(args, idx, "evidence"));
+            }
+            "--claims-dir" => {
+                idx += 1;
+                claims_dir = Some(PathBuf::from(require_value(args, idx, "claims-dir")));
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict(
+                    &require_value(args, idx, "now-unix"),
+                    "now-unix",
+                ));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core claim handoff [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> --summary <text> [--evidence <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("  Records official context for an expired handoff-required claim, writes <state_root>/handoffs/expired-claims, marks the old claim handoff_recorded, and reopens the scope.");
+                println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    let (Some(claim_id), Some(agent_id), Some(summary)) = (claim_id, agent_id, summary) else {
+        eprintln!("claim handoff: --id, --agent, and --summary are required");
+        std::process::exit(3);
+    };
+    let claims_dir = resolve_claims_dir_or_exit(
+        "claim.handoff",
+        claims_dir,
+        &root,
+        allow_bootstrap_core,
+        want_json,
+    );
+    let env = run_handoff(
+        &claims_dir,
+        &StableId(claim_id),
+        &StableId(agent_id),
+        &summary,
+        &evidence_refs,
+        resolve_now_unix(now_unix),
+    );
+    emit_envelope("claim", env, want_json);
+}
+
+pub fn run_claim_status(args: &[String]) {
+    use crate::claim::run_status;
+    let mut claims_dir: Option<PathBuf> = None;
+    let mut root = PathBuf::from(".");
+    let mut allow_bootstrap_core = false;
+    let mut now_unix: Option<i64> = None;
+    let mut want_json = true;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--root" => {
+                idx += 1;
+                root = PathBuf::from(require_value(args, idx, "root"));
+            }
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
+            "--claims-dir" => {
+                idx += 1;
+                claims_dir = Some(PathBuf::from(require_value(args, idx, "claims-dir")));
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict(
+                    &require_value(args, idx, "now-unix"),
+                    "now-unix",
+                ));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core claim status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    let claims_dir = resolve_claims_dir_or_exit(
+        "claim.status",
+        claims_dir,
+        &root,
+        allow_bootstrap_core,
+        want_json,
+    );
+    let env = run_status(&claims_dir, resolve_now_unix(now_unix));
+    emit_envelope("claim", env, want_json);
+}
+
+pub fn run_claim_reconcile(args: &[String]) {
+    use crate::claim::run_reconcile_once;
+
+    let mut claims_dir: Option<PathBuf> = None;
+    let mut root = PathBuf::from(".");
+    let mut allow_bootstrap_core = false;
+    let mut now_unix: Option<i64> = None;
+    let mut want_json = true;
+    let mut run_loop = false;
+    let mut interval_ms: u64 = 30_000;
+    let mut max_ticks: Option<u64> = None;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--root" => {
+                idx += 1;
+                root = PathBuf::from(require_value(args, idx, "root"));
+            }
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
+            "--claims-dir" => {
+                idx += 1;
+                claims_dir = Some(PathBuf::from(require_value(args, idx, "claims-dir")));
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict(
+                    &require_value(args, idx, "now-unix"),
+                    "now-unix",
+                ));
+            }
+            "--loop" => run_loop = true,
+            "--interval-ms" => {
+                idx += 1;
+                interval_ms = parse_strict(&require_value(args, idx, "interval-ms"), "interval-ms");
+            }
+            "--max-ticks" => {
+                idx += 1;
+                max_ticks = Some(parse_strict(
+                    &require_value(args, idx, "max-ticks"),
+                    "max-ticks",
+                ));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core claim reconcile [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--loop] [--interval-ms 30000] [--max-ticks <n>] [--no-json]");
+                println!("  One-shot mode is deterministic and materializes stale/expired claim statuses once.");
+                println!("  --loop runs a foreground Tokio interval reconciler; missed ticks use Skip and no filesystem watcher/notify is used.");
+                println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    if interval_ms == 0 {
+        eprintln!("claim reconcile: --interval-ms must be greater than zero");
+        std::process::exit(3);
+    }
+
+    let claims_dir = resolve_claims_dir_or_exit(
+        "claim.reconcile",
+        claims_dir,
+        &root,
+        allow_bootstrap_core,
+        want_json,
+    );
+    if !run_loop {
+        let env = run_reconcile_once(&claims_dir, resolve_now_unix(now_unix));
+        emit_envelope("claim", env, want_json);
+    }
+
+    run_claim_reconcile_loop_or_exit(ClaimReconcileLoopConfig {
+        claims_dir,
+        now_unix,
+        interval_ms,
+        max_ticks,
+        want_json,
+    });
+}
+
+#[derive(Debug, Clone)]
+struct ClaimReconcileLoopConfig {
+    claims_dir: PathBuf,
+    now_unix: Option<i64>,
+    interval_ms: u64,
+    max_ticks: Option<u64>,
+    want_json: bool,
+}
+
+pub fn run_claim_reconcile_loop_or_exit(config: ClaimReconcileLoopConfig) -> ! {
+    use crate::claim::run_reconcile_once;
+    use std::time::Duration;
+    use tokio::time::{interval_at, Instant, MissedTickBehavior};
+
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("claim reconcile: cannot build Tokio runtime: {error}");
+            std::process::exit(5);
+        }
+    };
+    let ClaimReconcileLoopConfig {
+        claims_dir,
+        now_unix,
+        interval_ms,
+        max_ticks,
+        want_json,
+    } = config;
+    let exit_code = runtime.block_on(async move {
+        let period = Duration::from_millis(interval_ms);
+        let mut ticker = interval_at(Instant::now(), period);
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        let mut ticks = 0_u64;
+        loop {
+            ticker.tick().await;
+            ticks = ticks.saturating_add(1);
+            let env = run_reconcile_once(&claims_dir, resolve_now_unix(now_unix));
+            let code = env.exit_code();
+            if want_json {
+                println!("{}", serde_json::to_string(&env).unwrap());
+            } else if let Some(data) = env.data.as_ref() {
+                eprintln!(
+                    "claim.reconcile tick={ticks} scanned={} changed={}",
+                    data.scanned, data.changed
+                );
+            } else if let Some(error) = env.error.as_ref() {
+                eprintln!("claim.reconcile tick={ticks} failed: {}", error.message);
+            }
+            if code != 0 {
+                return code;
+            }
+            if max_ticks.is_some_and(|limit| ticks >= limit) {
+                return 0;
+            }
+        }
+    });
+    std::process::exit(exit_code);
+}
+
+pub fn run_claim_check_write(args: &[String]) {
+    use crate::claim::run_check_write;
+    use forge_core_contracts::StableId;
+    let mut claims_dir: Option<PathBuf> = None;
+    let mut root = PathBuf::from(".");
+    let mut allow_bootstrap_core = false;
+    let mut now_unix: Option<i64> = None;
+    let mut want_json = true;
+    let mut agent_id = String::new();
+    let mut targets: Vec<String> = Vec::new();
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--root" => {
+                idx += 1;
+                root = PathBuf::from(require_value(args, idx, "root"));
+            }
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
+            "--agent" => {
+                idx += 1;
+                agent_id = require_value(args, idx, "agent");
+            }
+            "--target" => {
+                idx += 1;
+                targets.push(require_value(args, idx, "target"));
+            }
+            "--claims-dir" => {
+                idx += 1;
+                claims_dir = Some(PathBuf::from(require_value(args, idx, "claims-dir")));
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict(
+                    &require_value(args, idx, "now-unix"),
+                    "now-unix",
+                ));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core claim check-write [--root <path>] [--allow-bootstrap-core] --agent <id> --target <path> [--target <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    if agent_id.is_empty() {
+        eprintln!("claim check-write: --agent <id> is required");
+        std::process::exit(3);
+    }
+    if targets.is_empty() {
+        eprintln!("claim check-write: at least one --target <path> is required");
+        std::process::exit(3);
+    }
+    let claims_dir = resolve_claims_dir_or_exit(
+        "check-write",
+        claims_dir,
+        &root,
+        allow_bootstrap_core,
+        want_json,
+    );
+    let env = run_check_write(
+        &claims_dir,
+        &StableId(agent_id),
+        &targets,
+        resolve_now_unix(now_unix),
+    );
+    emit_envelope("claim", env, want_json);
 }
