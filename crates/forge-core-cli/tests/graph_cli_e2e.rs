@@ -215,6 +215,109 @@ stop_conditions:
 "#
 }
 
+fn ready_mutation_graph() -> &'static str {
+    r#"
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.e2e.ready-mutation"
+created_at: "2026-06-29T00:00:00Z"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+nodes:
+  - node_id: "write_artifact"
+    node_kind: "operation"
+    operation_ref: "contracts/operations/write-artifact.yaml"
+    mutation_capable: false
+edges: []
+stop_conditions:
+  - "validation_errors"
+"#
+}
+
+fn write_effect_with_single_write(
+    app: &Path,
+    target_kind: &str,
+    target_ref: &str,
+    access_mode: &str,
+) {
+    fs::write(
+        app.join("contracts")
+            .join("effects")
+            .join("story-artifact-write-effect.yaml"),
+        format!(
+            r#"schema_version: "0.1"
+tool_effect_contract:
+  id: "effect.fixture.story_artifact_write"
+  contract_ref: "contracts/effects/tool-effect-contract-v0.yaml"
+  effect_kind: "file_edit"
+  operation_ref: "op_fixture_execute_trivial_write"
+  actor:
+    agent_id: "codex-main"
+    role: "driver"
+  read_set: []
+  write_set:
+    - target_kind: "{target_kind}"
+      ref: "{target_ref}"
+      access_mode: "{access_mode}"
+      expected_hash: null
+      expected_version: null
+      destructive: false
+  conflict_detection:
+    check_against: "latest_projection"
+    granularity: "path"
+    conflict_codes:
+      - "write_target_claimed"
+      - "path_outside_scope"
+    policy: "block"
+  notification:
+    required: false
+    recipients: []
+    request_contract_ref: null
+  repair:
+    strategy: "none"
+    automatic_repair_allowed: false
+    inverse_operation_ref: null
+    stop_if_inverse_missing: false
+    inverse:
+      kind: "none"
+      source: "unavailable"
+      ref: null
+      input_mapping_refs: []
+      validation_gate_refs: []
+      review_required: false
+"#
+        ),
+    )
+    .expect("write custom effect");
+}
+
+fn acquire_claim(app: &Path, agent: &str, claim_paths: &[&str]) {
+    let mut command = bin();
+    command.args([
+        "claim",
+        "acquire",
+        "--root",
+        &app.display().to_string(),
+        "--scope",
+        "story",
+        "--id",
+        "graph-claim-preflight",
+        "--agent",
+        agent,
+    ]);
+    for path in claim_paths {
+        command.args(["--path", *path]);
+    }
+    let output = command.unwrap();
+    assert!(
+        output.status.success(),
+        "claim acquire should pass: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[test]
 fn graph_validate_resolves_project_before_relative_graph_path() {
     let (app, sidecar) = fresh_project("validate");
@@ -277,6 +380,55 @@ fn graph_run_dry_run_uses_sidecar_resolution_without_creating_local_state() {
     assert!(json["report"].is_object());
     assert_eq!(json["state_root"], sidecar.display().to_string());
     assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_rejects_flag_looking_agent_value() {
+    let (app, _sidecar) = fresh_project("flag-agent");
+    write_graph(&app, "valid.yaml", valid_graph());
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/valid.yaml",
+            "--dry-run",
+            "--agent",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(3));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("graph: missing value for --agent"));
+}
+
+#[test]
+fn graph_run_invalid_now_unix_reports_graph_prefix() {
+    let (app, _sidecar) = fresh_project("bad-now-unix");
+    write_graph(&app, "valid.yaml", valid_graph());
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/valid.yaml",
+            "--dry-run",
+            "--now-unix",
+            "not-a-number",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(3));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("graph: invalid value for --now-unix"));
 }
 
 #[test]
@@ -784,6 +936,365 @@ fn graph_run_dry_run_exits_nonzero_when_verifier_blocks_mutation() {
     assert_eq!(json["dry_run_executed"], true);
     assert_eq!(json["report"]["status"], "blocked");
     assert_eq!(json["report"]["blocked_node_count"], 1);
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_blocks_ready_mutation_without_agent_for_claim_preflight() {
+    let (app, _sidecar) = fresh_project("claim-preflight-no-agent");
+    install_write_operation(&app, "contracts/operations/write-artifact.yaml");
+    write_graph(&app, "ready-mutation.yaml", ready_mutation_graph());
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/ready-mutation.yaml",
+            "--dry-run",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "write_artifact");
+    assert_eq!(json["status"], "blocked");
+    assert_eq!(step["status"], "blocked");
+    assert!(step["reasons"]
+        .as_array()
+        .expect("reasons")
+        .iter()
+        .any(|reason| reason == "claim_preflight_blocked"));
+    assert_eq!(step["claim_preflight"]["status"], "blocked");
+    assert!(step["claim_preflight"]["reasons"][0]
+        .as_str()
+        .expect("claim preflight reason")
+        .contains("--agent"));
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_blocks_ready_mutation_without_covering_claim() {
+    let (app, _sidecar) = fresh_project("claim-preflight-ungoverned");
+    install_write_operation(&app, "contracts/operations/write-artifact.yaml");
+    write_graph(&app, "ready-mutation.yaml", ready_mutation_graph());
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/ready-mutation.yaml",
+            "--dry-run",
+            "--agent",
+            "codex-main",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "write_artifact");
+    assert_eq!(json["status"], "blocked");
+    assert_eq!(step["claim_preflight"]["status"], "blocked");
+    assert_eq!(step["claim_preflight"]["agent_id"], "codex-main");
+    assert_eq!(
+        step["claim_preflight"]["ungoverned"]
+            .as_array()
+            .expect("ungoverned")
+            .len(),
+        2
+    );
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_preflights_file_path_effect_targets() {
+    let (app, _sidecar) = fresh_project("claim-preflight-file-path");
+    install_write_operation(&app, "contracts/operations/write-artifact.yaml");
+    write_effect_with_single_write(&app, "file_path", "src/generated.txt", "write");
+    write_graph(&app, "ready-mutation.yaml", ready_mutation_graph());
+    acquire_claim(&app, "codex-main", &["src/"]);
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/ready-mutation.yaml",
+            "--dry-run",
+            "--agent",
+            "codex-main",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert!(
+        output.status.success(),
+        "graph dry-run should pass: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "write_artifact");
+    assert_eq!(step["claim_preflight"]["status"], "passed");
+    assert_eq!(step["claim_preflight"]["targets"][0], "src/generated.txt");
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_blocks_glob_effect_targets_fail_closed() {
+    let (app, _sidecar) = fresh_project("claim-preflight-glob");
+    install_write_operation(&app, "contracts/operations/write-artifact.yaml");
+    write_effect_with_single_write(&app, "glob", "src/**/*.rs", "write");
+    write_graph(&app, "ready-mutation.yaml", ready_mutation_graph());
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/ready-mutation.yaml",
+            "--dry-run",
+            "--agent",
+            "codex-main",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "write_artifact");
+    assert_eq!(step["claim_preflight"]["status"], "blocked");
+    assert!(step["claim_preflight"]["reasons"][0]
+        .as_str()
+        .expect("claim preflight reason")
+        .contains("glob write targets"));
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_blocks_state_key_effect_targets_fail_closed() {
+    let (app, _sidecar) = fresh_project("claim-preflight-state-key");
+    install_write_operation(&app, "contracts/operations/write-artifact.yaml");
+    write_effect_with_single_write(&app, "state_key", ".forge-method/state.yaml#phase", "write");
+    write_graph(&app, "ready-mutation.yaml", ready_mutation_graph());
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/ready-mutation.yaml",
+            "--dry-run",
+            "--agent",
+            "codex-main",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "write_artifact");
+    assert_eq!(step["claim_preflight"]["status"], "blocked");
+    assert!(step["claim_preflight"]["reasons"][0]
+        .as_str()
+        .expect("claim preflight reason")
+        .contains("resolve effect target"));
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_passes_ready_mutation_with_covering_sidecar_claim() {
+    let (app, sidecar) = fresh_project("claim-preflight-owned");
+    install_write_operation(&app, "contracts/operations/write-artifact.yaml");
+    write_graph(&app, "ready-mutation.yaml", ready_mutation_graph());
+    acquire_claim(
+        &app,
+        "codex-main",
+        &[".forge-method/artifacts/", ".forge-method/evidence/"],
+    );
+    let trace = sidecar.join("traces").join("events.ndjson");
+    fs::create_dir_all(trace.parent().expect("trace parent")).expect("create trace parent");
+    fs::write(&trace, "preexisting-trace\n").expect("write trace sentinel");
+    let ledger = sidecar.join("ledger.ndjson");
+    fs::write(&ledger, "preexisting-ledger\n").expect("write ledger sentinel");
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/ready-mutation.yaml",
+            "--dry-run",
+            "--agent",
+            "codex-main",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert!(
+        output.status.success(),
+        "graph dry-run should pass: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "write_artifact");
+    assert_eq!(json["status"], "passed");
+    assert_eq!(step["claim_preflight"]["status"], "passed");
+    assert_eq!(
+        step["claim_preflight"]["governed_by_self"]
+            .as_array()
+            .expect("governed")
+            .len(),
+        2
+    );
+    assert_eq!(fs::read_to_string(&trace).unwrap(), "preexisting-trace\n");
+    assert_eq!(fs::read_to_string(&ledger).unwrap(), "preexisting-ledger\n");
+    assert!(!sidecar.join("effects").exists());
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_blocks_ready_mutation_with_expired_self_claim() {
+    let (app, _sidecar) = fresh_project("claim-preflight-expired");
+    install_write_operation(&app, "contracts/operations/write-artifact.yaml");
+    write_graph(&app, "ready-mutation.yaml", ready_mutation_graph());
+    acquire_claim(
+        &app,
+        "codex-main",
+        &[".forge-method/artifacts/", ".forge-method/evidence/"],
+    );
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/ready-mutation.yaml",
+            "--dry-run",
+            "--agent",
+            "codex-main",
+            "--now-unix",
+            "4102444800",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "write_artifact");
+    assert_eq!(json["status"], "blocked");
+    assert_eq!(step["claim_preflight"]["status"], "blocked");
+    assert_eq!(
+        step["claim_preflight"]["ungoverned"][0],
+        ".forge-method/artifacts/story-current-result.yaml"
+    );
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_honors_claims_dir_override() {
+    let (app, sidecar) = fresh_project("claim-preflight-override");
+    install_write_operation(&app, "contracts/operations/write-artifact.yaml");
+    write_graph(&app, "ready-mutation.yaml", ready_mutation_graph());
+    acquire_claim(&app, "codex-main", &[".forge-method/artifacts/"]);
+    let override_claims = app
+        .parent()
+        .expect("fresh project parent")
+        .join("override-claims");
+    fs::create_dir_all(&override_claims).expect("create override claims dir");
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/ready-mutation.yaml",
+            "--dry-run",
+            "--agent",
+            "codex-main",
+            "--claims-dir",
+            &override_claims.display().to_string(),
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "write_artifact");
+    assert_eq!(json["status"], "blocked");
+    assert_eq!(json["claims_dir"], override_claims.display().to_string());
+    assert_eq!(step["claim_preflight"]["status"], "blocked");
+    assert!(step["claim_preflight"]["ungoverned"].is_array());
+    assert!(sidecar.join("claims-active").exists());
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_blocks_ready_mutation_claimed_by_peer_agent() {
+    let (app, _sidecar) = fresh_project("claim-preflight-peer");
+    install_write_operation(&app, "contracts/operations/write-artifact.yaml");
+    write_graph(&app, "ready-mutation.yaml", ready_mutation_graph());
+    acquire_claim(
+        &app,
+        "peer-agent",
+        &[".forge-method/artifacts/", ".forge-method/evidence/"],
+    );
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/ready-mutation.yaml",
+            "--dry-run",
+            "--agent",
+            "codex-main",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "write_artifact");
+    assert_eq!(json["status"], "blocked");
+    assert_eq!(step["claim_preflight"]["status"], "blocked");
+    assert_eq!(
+        step["claim_preflight"]["blocks"][0]["claimant"],
+        "peer-agent"
+    );
+    assert_eq!(
+        step["claim_preflight"]["blocks"][0]["conflict_code"],
+        "write_target_claimed"
+    );
     assert!(!app.join(".forge-method").exists());
 }
 

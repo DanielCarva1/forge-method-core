@@ -207,3 +207,24 @@ follow-up acceptance criteria are:
 2. OperationContract-aware graph dry-run.
 3. Graph claim preflight.
 4. Eval compare baseline.
+
+## Graph claim preflight follow-up
+
+OperationContract-aware dry-run closes the "graph YAML lied about mutation"
+gap, but a green mutating graph also needs live writer authority. The graph
+claim preflight slice adds that gate:
+
+- read-only graphs can pass without `--agent`;
+- effective mutating nodes require claim preflight;
+- missing `--agent`, no covering self claim, expired self claim, peer-owned
+  claim, unreadable claim bus, or unsupported glob write targets block dry-run;
+- default claim bus is `<resolved_state_root>/claims-active`;
+- `--claims-dir` remains an advanced override and `--now-unix` makes expiry
+  deterministic in tests;
+- ToolEffect file-backed writes are claim targets using the same physical-ref
+  mapping as the effect store (`file_path`, `artifact_id`, `evidence_id`,
+  `ledger_stream`, and `request_stream`);
+- when no file-backed writes exist, dry-run falls back to OperationContract
+  coordination target paths;
+- dry-run remains non-mutating: no claim writes, no local `.forge-method` in
+  consumer repos, no handoff, trace, ledger, or effect append.
