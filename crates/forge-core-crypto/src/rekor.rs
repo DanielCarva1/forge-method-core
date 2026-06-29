@@ -11,6 +11,83 @@ use serde_json::Value;
 
 use crate::hashing::{hex_bytes, hex_sha256, normalize_sha256_display};
 
+/// Error raised while parsing rekor log entries or verifying inclusion proofs.
+///
+/// Mirrors the diagnostic strings previously embedded in `Result<_, String>`
+/// signatures. Use [`RekorParseError::display`] to recover the exact message
+/// emitted by the legacy implementation at the diagnostic-push boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum RekorParseError {
+    /// Top-level JSON of the rekor log entry failed to parse.
+    LogEntryJsonInvalid { source: String },
+    /// A required field was missing or had the wrong type.
+    MissingField { field: &'static str },
+    /// The base64-encoded body payload failed to decode.
+    BodyBase64Invalid { source: String },
+    /// The decoded body JSON failed to parse.
+    BodyJsonInvalid { source: String },
+    /// The `verification` object is missing.
+    VerificationMissing,
+    /// The `inclusionProof` object is missing.
+    InclusionProofMissing,
+    /// The `hashes` array of the inclusion proof is missing or not an array.
+    InclusionHashesMissing,
+    /// An entry of the inclusion proof hashes array was not a string.
+    InclusionHashInvalid,
+    /// The signed checkpoint format is invalid (no `\n\n` separator).
+    CheckpointFormatInvalid,
+    /// The checkpoint note header does not expose the expected 3+ lines.
+    CheckpointNoteInvalid,
+    /// The checkpoint origin line is empty.
+    CheckpointOriginMissing,
+    /// The checkpoint `treeSize` line failed to parse as u64.
+    CheckpointTreeSizeInvalid { source: String },
+    /// The checkpoint root hash base64 payload failed to decode.
+    CheckpointRootHashBase64Invalid { source: String },
+    /// The checkpoint tree size does not match the inclusion proof tree size.
+    CheckpointTreeSizeMismatch,
+    /// The checkpoint root hash does not match the inclusion proof root hash.
+    CheckpointRootHashMismatch,
+    /// The checkpoint has no attached signatures.
+    CheckpointSignatureMissing,
+    /// None of the checkpoint signatures verified against the rekor key.
+    CheckpointSignatureInvalid,
+}
+
+impl RekorParseError {
+    /// Render the error back into the diagnostic string the legacy
+    /// `Result<_, String>` API used to emit.
+    pub(crate) fn display(&self) -> String {
+        match self {
+            Self::LogEntryJsonInvalid { source } => {
+                format!("rekor_log_entry_json_invalid:{source}")
+            }
+            Self::MissingField { field } => format!("rekor_{field}_missing"),
+            Self::BodyBase64Invalid { source } => {
+                format!("rekor_body_base64_invalid:{source}")
+            }
+            Self::BodyJsonInvalid { source } => format!("rekor_body_json_invalid:{source}"),
+            Self::VerificationMissing => "rekor_verification_missing".to_string(),
+            Self::InclusionProofMissing => "rekor_inclusion_proof_missing".to_string(),
+            Self::InclusionHashesMissing => "rekor_inclusion_hashes_missing".to_string(),
+            Self::InclusionHashInvalid => "rekor_inclusion_hash_invalid".to_string(),
+            Self::CheckpointFormatInvalid => "checkpoint_format_invalid".to_string(),
+            Self::CheckpointNoteInvalid => "checkpoint_note_invalid".to_string(),
+            Self::CheckpointOriginMissing => "checkpoint_origin_missing".to_string(),
+            Self::CheckpointTreeSizeInvalid { source } => {
+                format!("checkpoint_tree_size_invalid:{source}")
+            }
+            Self::CheckpointRootHashBase64Invalid { source } => {
+                format!("checkpoint_root_hash_base64_invalid:{source}")
+            }
+            Self::CheckpointTreeSizeMismatch => "checkpoint_tree_size_mismatch".to_string(),
+            Self::CheckpointRootHashMismatch => "checkpoint_root_hash_mismatch".to_string(),
+            Self::CheckpointSignatureMissing => "checkpoint_signature_missing".to_string(),
+            Self::CheckpointSignatureInvalid => "checkpoint_signature_invalid".to_string(),
+        }
+    }
+}
+
 pub(crate) struct ParsedRekorEntry {
     pub(crate) body: Value,
     pub(crate) log_id: String,
@@ -34,30 +111,39 @@ pub(crate) struct ParsedCheckpoint {
     pub(crate) signatures: Vec<Vec<u8>>,
 }
 
-pub(crate) fn parse_rekor_log_entry(text: &str) -> Result<ParsedRekorEntry, String> {
-    let value = serde_json::from_str::<Value>(text)
-        .map_err(|err| format!("rekor_log_entry_json_invalid:{err}"))?;
+pub(crate) fn parse_rekor_log_entry(text: &str) -> Result<ParsedRekorEntry, RekorParseError> {
+    let value = serde_json::from_str::<Value>(text).map_err(|err| {
+        RekorParseError::LogEntryJsonInvalid {
+            source: err.to_string(),
+        }
+    })?;
     let body_b64 = required_string(&value, "body")?;
-    let body_bytes = BASE64
-        .decode(body_b64.as_bytes())
-        .map_err(|err| format!("rekor_body_base64_invalid:{err}"))?;
-    let body = serde_json::from_slice::<Value>(&body_bytes)
-        .map_err(|err| format!("rekor_body_json_invalid:{err}"))?;
+    let body_bytes =
+        BASE64
+            .decode(body_b64.as_bytes())
+            .map_err(|err| RekorParseError::BodyBase64Invalid {
+                source: err.to_string(),
+            })?;
+    let body = serde_json::from_slice::<Value>(&body_bytes).map_err(|err| {
+        RekorParseError::BodyJsonInvalid {
+            source: err.to_string(),
+        }
+    })?;
     let verification = value
         .get("verification")
-        .ok_or_else(|| "rekor_verification_missing".to_string())?;
+        .ok_or(RekorParseError::VerificationMissing)?;
     let inclusion = verification
         .get("inclusionProof")
-        .ok_or_else(|| "rekor_inclusion_proof_missing".to_string())?;
+        .ok_or(RekorParseError::InclusionProofMissing)?;
     let hashes = inclusion
         .get("hashes")
         .and_then(Value::as_array)
-        .ok_or_else(|| "rekor_inclusion_hashes_missing".to_string())?
+        .ok_or(RekorParseError::InclusionHashesMissing)?
         .iter()
         .map(|item| {
             item.as_str()
                 .map(str::to_string)
-                .ok_or_else(|| "rekor_inclusion_hash_invalid".to_string())
+                .ok_or(RekorParseError::InclusionHashInvalid)
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -76,25 +162,25 @@ pub(crate) fn parse_rekor_log_entry(text: &str) -> Result<ParsedRekorEntry, Stri
     })
 }
 
-fn required_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
+fn required_string<'a>(value: &'a Value, key: &'static str) -> Result<&'a str, RekorParseError> {
     value
         .get(key)
         .and_then(Value::as_str)
-        .ok_or_else(|| format!("rekor_{key}_missing"))
+        .ok_or(RekorParseError::MissingField { field: key })
 }
 
-fn required_i64(value: &Value, key: &str) -> Result<i64, String> {
+fn required_i64(value: &Value, key: &'static str) -> Result<i64, RekorParseError> {
     value
         .get(key)
         .and_then(Value::as_i64)
-        .ok_or_else(|| format!("rekor_{key}_missing"))
+        .ok_or(RekorParseError::MissingField { field: key })
 }
 
-fn required_u64(value: &Value, key: &str) -> Result<u64, String> {
+fn required_u64(value: &Value, key: &'static str) -> Result<u64, RekorParseError> {
     value
         .get(key)
         .and_then(Value::as_u64)
-        .ok_or_else(|| format!("rekor_{key}_missing"))
+        .ok_or(RekorParseError::MissingField { field: key })
 }
 
 pub(crate) fn verify_rekor_entry_inclusion(
@@ -119,7 +205,10 @@ pub(crate) fn verify_rekor_entry_inclusion(
     match verify_rekor_checkpoint(&entry.proof, rekor_key) {
         Ok(()) => verified_evidence.push("rekor_signed_checkpoint_valid".to_string()),
         Err(reason) => {
-            reasons.push(format!("rekor_inclusion_verification_failed:{reason}"));
+            reasons.push(format!(
+                "rekor_inclusion_verification_failed:{}",
+                reason.display()
+            ));
             return;
         }
     }
@@ -144,16 +233,16 @@ pub(crate) fn verify_rekor_entry_inclusion(
 pub(crate) fn verify_rekor_checkpoint(
     proof: &ParsedRekorInclusionProof,
     rekor_key: &P256VerifyingKey,
-) -> Result<(), String> {
+) -> Result<(), RekorParseError> {
     let checkpoint = parse_signed_checkpoint(&proof.checkpoint)?;
     if checkpoint.tree_size != proof.tree_size {
-        return Err("checkpoint_tree_size_mismatch".to_string());
+        return Err(RekorParseError::CheckpointTreeSizeMismatch);
     }
     if checkpoint.root_hash != normalize_sha256_display(&proof.root_hash) {
-        return Err("checkpoint_root_hash_mismatch".to_string());
+        return Err(RekorParseError::CheckpointRootHashMismatch);
     }
     if checkpoint.signatures.is_empty() {
-        return Err("checkpoint_signature_missing".to_string());
+        return Err(RekorParseError::CheckpointSignatureMissing);
     }
     for signature in checkpoint.signatures {
         let Ok(signature) = P256Signature::from_der(&signature) else {
@@ -166,27 +255,34 @@ pub(crate) fn verify_rekor_checkpoint(
             return Ok(());
         }
     }
-    Err("checkpoint_signature_invalid".to_string())
+    Err(RekorParseError::CheckpointSignatureInvalid)
 }
 
-pub(crate) fn parse_signed_checkpoint(checkpoint: &str) -> Result<ParsedCheckpoint, String> {
+pub(crate) fn parse_signed_checkpoint(
+    checkpoint: &str,
+) -> Result<ParsedCheckpoint, RekorParseError> {
     let checkpoint = checkpoint.trim_matches('"');
     let (note, signatures) = checkpoint
         .split_once("\n\n")
-        .ok_or_else(|| "checkpoint_format_invalid".to_string())?;
+        .ok_or(RekorParseError::CheckpointFormatInvalid)?;
     let lines = note.split('\n').collect::<Vec<_>>();
     let [origin, tree_size, root_hash_b64, other @ ..] = lines.as_slice() else {
-        return Err("checkpoint_note_invalid".to_string());
+        return Err(RekorParseError::CheckpointNoteInvalid);
     };
     if origin.trim().is_empty() {
-        return Err("checkpoint_origin_missing".to_string());
+        return Err(RekorParseError::CheckpointOriginMissing);
     }
-    let tree_size = tree_size
-        .parse::<u64>()
-        .map_err(|_| "checkpoint_tree_size_invalid".to_string())?;
+    let tree_size =
+        tree_size
+            .parse::<u64>()
+            .map_err(|err| RekorParseError::CheckpointTreeSizeInvalid {
+                source: err.to_string(),
+            })?;
     let root_hash = BASE64
         .decode(root_hash_b64.as_bytes())
-        .map_err(|err| format!("checkpoint_root_hash_base64_invalid:{err}"))
+        .map_err(|err| RekorParseError::CheckpointRootHashBase64Invalid {
+            source: err.to_string(),
+        })
         .map(|bytes| hex_bytes(&bytes))?;
     let mut signed_body = format!("{origin}\n{tree_size}\n{root_hash_b64}\n");
     for item in other.iter().filter(|item| !item.is_empty()) {
