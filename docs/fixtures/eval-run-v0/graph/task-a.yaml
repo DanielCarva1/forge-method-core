@@ -1,0 +1,27 @@
+schema_version: "0.1"
+eval_run_contract:
+  run_id: "eval.run.graph.task_a"
+  task_id: "eval.task.preview_safety"
+  model_ref: "fixture/workflow-graph"
+  router_decision: "workflow_graph_with_verifier"
+  outcome:
+    value: "passed"
+    evaluated_at: "2026-06-29T00:02:00Z"
+    failure_cluster: null
+    notes: "WorkflowGraph dry-run plus verifier detected mutation and gate status."
+  cost:
+    prompt_tokens: 7000
+    completion_tokens: 1700
+    total_tokens: 8700
+    estimated_cost_usd_micros: 98000
+    wall_time_ms: 76000
+    num_tool_calls: 6
+    num_turns: 3
+  quality_signals:
+    correct_location: true
+    semantic_correct: true
+    overfit_suspected: false
+    confidence: 89
+  evidence_refs:
+    - "docs/fixtures/eval-run-v0/evidence/graph-task-a.json"
+    - "docs/fixtures/eval-run-v0/traces/eval/graph-task-a.ndjson"

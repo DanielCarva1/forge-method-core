@@ -58,6 +58,34 @@ fn project_resolve_finds_sidecar_via_project_link() {
 }
 
 #[test]
+fn project_resolve_accepts_utf8_bom_project_link() {
+    let parent = fresh_root("sidecar-bom");
+    let app = parent.join("app");
+    let state = parent.join("forge-app").join(".forge-method");
+    std::fs::create_dir_all(&app).unwrap();
+    std::fs::create_dir_all(&state).unwrap();
+    let mut link = b"\xEF\xBB\xBF".to_vec();
+    link.extend_from_slice(
+        b"schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: ../forge-app\nstate_root: ../forge-app/.forge-method\n",
+    );
+    std::fs::write(app.join(".forge-method.yaml"), link).unwrap();
+
+    let output = bin()
+        .args(["project", "resolve", "--root", &app.display().to_string()])
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "project resolve should accept UTF-8 BOM link: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["ok"], true);
+    assert_eq!(json["data"]["project_id"], "app");
+    assert_eq!(json["data"]["layout"], "sidecar");
+}
+
+#[test]
 fn project_resolve_without_link_fails_closed_for_consumer_repo() {
     let app = fresh_root("missing-link");
 

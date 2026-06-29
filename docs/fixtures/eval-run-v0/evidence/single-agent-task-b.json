@@ -1,0 +1,6 @@
+{
+    "schema_version":  "0.1",
+    "evidence_id":  "single-agent-task-b",
+    "summary":  "Single-agent anchor ready truthfulness evidence",
+    "fixture_only":  true
+}

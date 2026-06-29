@@ -1,0 +1,27 @@
+schema_version: "0.1"
+eval_run_contract:
+  run_id: "eval.run.single_agent.task_a"
+  task_id: "eval.task.preview_safety"
+  model_ref: "fixture/single-agent-anchor"
+  router_decision: "single_agent_anchor"
+  outcome:
+    value: "passed"
+    evaluated_at: "2026-06-29T00:00:00Z"
+    failure_cluster: null
+    notes: "Single-agent anchor detected mutation and gate status."
+  cost:
+    prompt_tokens: 8000
+    completion_tokens: 2000
+    total_tokens: 10000
+    estimated_cost_usd_micros: 120000
+    wall_time_ms: 90000
+    num_tool_calls: 8
+    num_turns: 4
+  quality_signals:
+    correct_location: true
+    semantic_correct: true
+    overfit_suspected: false
+    confidence: 88
+  evidence_refs:
+    - "docs/fixtures/eval-run-v0/evidence/single-agent-task-a.json"
+    - "docs/fixtures/eval-run-v0/traces/eval/single-agent-task-a.ndjson"

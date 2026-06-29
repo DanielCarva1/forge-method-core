@@ -194,9 +194,11 @@ fn resolve_from_link(
         source: source.to_string(),
     })?;
     let link: ProjectLinkDocument =
-        serde_yaml::from_str(&raw).map_err(|source| ProjectResolveError::LinkParse {
-            path: display_path(link_path),
-            source: source.to_string(),
+        serde_yaml::from_str(strip_utf8_bom(&raw)).map_err(|source| {
+            ProjectResolveError::LinkParse {
+                path: display_path(link_path),
+                source: source.to_string(),
+            }
         })?;
     validate_link(&link, link_path)?;
     let sidecar_root = resolve_repo_path(project_root, &link.sidecar_root.0);
@@ -289,6 +291,10 @@ fn normalize_path(path: PathBuf) -> PathBuf {
         }
     }
     normalized
+}
+
+fn strip_utf8_bom(raw: &str) -> &str {
+    raw.strip_prefix('\u{feff}').unwrap_or(raw)
 }
 
 fn is_bootstrap_core_root(root: &Path) -> bool {

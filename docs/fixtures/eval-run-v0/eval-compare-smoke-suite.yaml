@@ -1,0 +1,19 @@
+schema_version: "0.1"
+eval_compare_suite:
+  id: "eval.suite.graph_vs_single_agent_smoke"
+  comparison_id: "eval.compare.graph_vs_single_agent.smoke"
+  baseline:
+    label: "single-agent"
+    run_refs:
+      - "docs/fixtures/eval-run-v0/single-agent/task-a.yaml"
+      - "docs/fixtures/eval-run-v0/single-agent/task-b.yaml"
+  candidate:
+    label: "graph"
+    run_refs:
+      - "docs/fixtures/eval-run-v0/graph/task-a.yaml"
+      - "docs/fixtures/eval-run-v0/graph/task-b.yaml"
+  policy:
+    require_matching_tasks: true
+    require_evidence_refs: true
+    require_trace_refs: true
+    minimum_task_count: 2

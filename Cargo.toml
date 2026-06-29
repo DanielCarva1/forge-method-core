@@ -9,6 +9,7 @@ members = [
   "crates/forge-core-runtime",
   "crates/forge-core-trace",
   "crates/forge-core-graph",
+  "crates/forge-core-eval",
   "crates/forge-core-engine",
 ]
 resolver = "2"
