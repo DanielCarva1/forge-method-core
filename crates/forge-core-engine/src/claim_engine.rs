@@ -240,6 +240,23 @@ pub struct ClaimExpiry {
     pub transitioned_to: ClaimStatus,
 }
 
+/// Deterministic report for one reconcile pass over the claim bus.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaimReconcileReport {
+    pub scanned: usize,
+    pub transitions: Vec<ClaimReconcileTransition>,
+}
+
+/// One materializable lifecycle transition selected by reconciliation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaimReconcileTransition {
+    pub claim_id: ClaimId,
+    pub from: ClaimStatus,
+    pub to: ClaimStatus,
+    pub reason_code: StableId,
+    pub updated: ClaimContract,
+}
+
 // ---------------------------------------------------------------------------
 // predicates
 // ---------------------------------------------------------------------------
@@ -418,6 +435,11 @@ pub fn heartbeat(
             requested_by: agent_id.clone(),
         });
     }
+    if claim.status.value == ClaimStatus::HandoffRequired {
+        return ClaimLifecycleDecision::Rejected(ClaimRejection::ExpiredRequiresHandoff {
+            claim_id: claim.id.clone(),
+        });
+    }
     // Only Active/Stale claims may be heartbeated. Released/Expired/
     // Handoff* claims cannot be resurrected (lifecycle authority is append-only).
     if !matches!(claim.status.value, ClaimStatus::Active | ClaimStatus::Stale) {
@@ -465,6 +487,11 @@ pub fn release(
             claim_id: claim.id.clone(),
             claimant: claim.claim.claimant_agent_id.clone(),
             requested_by: agent_id.clone(),
+        });
+    }
+    if claim.status.value == ClaimStatus::HandoffRequired {
+        return ClaimLifecycleDecision::Rejected(ClaimRejection::ExpiredRequiresHandoff {
+            claim_id: claim.id.clone(),
         });
     }
     if !matches!(claim.status.value, ClaimStatus::Active | ClaimStatus::Stale) {
@@ -576,6 +603,92 @@ pub fn expire_stale(claims: &[ClaimContract], now_unix: i64) -> Vec<ClaimExpiry>
             },
         })
         .collect()
+}
+
+/// Reconcile open claim lifecycle state at `now_unix`.
+///
+/// This is pure and deterministic: it never reads a clock and never writes the
+/// filesystem. Hosts persist the returned transitions (normally to the claim
+/// WAL, then the YAML compatibility cache).
+///
+/// Rules:
+/// - `Active|Stale` claims whose lease has expired become
+///   `HandoffRequired` when policy mandates handoff, otherwise `Expired`.
+/// - `Active` claims whose heartbeat is overdue but whose lease has not expired
+///   become `Stale`.
+/// - Terminal/recovery states are left unchanged.
+/// - An unparseable `last_heartbeat_at` is fail-closed to `Stale` while the
+///   lease is still representably unexpired; an unparseable `expires_at`
+///   remains fail-closed through [`is_expired`].
+#[must_use]
+pub fn reconcile_claims(claims: &[ClaimContract], now_unix: i64) -> ClaimReconcileReport {
+    let transitions = claims
+        .iter()
+        .filter_map(|claim| reconcile_claim(claim, now_unix))
+        .collect();
+    ClaimReconcileReport {
+        scanned: claims.len(),
+        transitions,
+    }
+}
+
+fn reconcile_claim(claim: &ClaimContract, now_unix: i64) -> Option<ClaimReconcileTransition> {
+    match claim.status.value {
+        ClaimStatus::Active | ClaimStatus::Stale if is_expired(claim, now_unix) => {
+            let to = if claim.expiry_policy.handoff_required {
+                ClaimStatus::HandoffRequired
+            } else {
+                ClaimStatus::Expired
+            };
+            Some(reconciled_transition(
+                claim,
+                now_unix,
+                to,
+                StableId("lease_expired".into()),
+            ))
+        }
+        ClaimStatus::Active => heartbeat_stale_reason(claim, now_unix)
+            .map(|reason| reconciled_transition(claim, now_unix, ClaimStatus::Stale, reason)),
+        ClaimStatus::Stale
+        | ClaimStatus::Expired
+        | ClaimStatus::HandoffRequired
+        | ClaimStatus::HandoffRecorded
+        | ClaimStatus::Released => None,
+    }
+}
+
+fn heartbeat_stale_reason(claim: &ClaimContract, now_unix: i64) -> Option<StableId> {
+    let Some(last_heartbeat_unix) = rfc3339_to_unix(&claim.lease.last_heartbeat_at) else {
+        return Some(StableId("last_heartbeat_unparseable".into()));
+    };
+    let Ok(interval) = i64::try_from(claim.lease.heartbeat_interval_seconds) else {
+        return Some(StableId("heartbeat_interval_unrepresentable".into()));
+    };
+    let Some(stale_at) = last_heartbeat_unix.checked_add(interval) else {
+        return Some(StableId("heartbeat_stale_at_overflow".into()));
+    };
+    (now_unix >= stale_at).then(|| StableId("heartbeat_overdue".into()))
+}
+
+fn reconciled_transition(
+    claim: &ClaimContract,
+    now_unix: i64,
+    to: ClaimStatus,
+    reason_code: StableId,
+) -> ClaimReconcileTransition {
+    let mut updated = claim.clone();
+    updated.status = ClaimStatusRecord {
+        value: to,
+        evaluated_at: unix_to_rfc3339(now_unix),
+        reason_code: Some(reason_code.clone()),
+    };
+    ClaimReconcileTransition {
+        claim_id: claim.id.clone(),
+        from: claim.status.value,
+        to,
+        reason_code,
+        updated,
+    }
 }
 
 /// Project the coordination-bus view: every claim that is live right now.
@@ -918,6 +1031,16 @@ mod tests {
     }
 
     #[test]
+    fn heartbeat_handoff_required_keeps_recovery_hint_rejection() {
+        let handoff_required = manual_claim("s1", "agentA", T0 - 1, ClaimStatus::HandoffRequired);
+        let d = heartbeat(&handoff_required, &StableId("agentA".into()), T0);
+        assert!(matches!(
+            d,
+            ClaimLifecycleDecision::Rejected(ClaimRejection::ExpiredRequiresHandoff { .. })
+        ));
+    }
+
+    #[test]
     fn release_only_by_claimant() {
         let c = manual_claim("s1", "agentA", T0 + 600, ClaimStatus::Active);
         assert!(matches!(
@@ -941,6 +1064,84 @@ mod tests {
         assert_eq!(expiries[0].claim_id.0, "claim.story.s2.s2");
         // default policy mandates handoff
         assert_eq!(expiries[0].transitioned_to, ClaimStatus::HandoffRequired);
+    }
+
+    #[test]
+    fn reconcile_marks_active_claim_stale_when_heartbeat_is_overdue() {
+        let mut claim = manual_claim("s1", "agentA", T0 + 600, ClaimStatus::Active);
+        claim.lease.last_heartbeat_at = unix_to_rfc3339(T0);
+        claim.lease.heartbeat_interval_seconds = 120;
+
+        let report = reconcile_claims(&[claim], T0 + 120);
+
+        assert_eq!(report.scanned, 1);
+        assert_eq!(report.transitions.len(), 1);
+        let transition = &report.transitions[0];
+        assert_eq!(transition.from, ClaimStatus::Active);
+        assert_eq!(transition.to, ClaimStatus::Stale);
+        assert_eq!(transition.reason_code.0, "heartbeat_overdue");
+        assert_eq!(transition.updated.status.value, ClaimStatus::Stale);
+        assert_eq!(
+            transition.updated.status.evaluated_at,
+            unix_to_rfc3339(T0 + 120)
+        );
+    }
+
+    #[test]
+    fn reconcile_materializes_expired_handoff_required_claim() {
+        let claim = manual_claim("s1", "agentA", T0 - 1, ClaimStatus::Active);
+
+        let report = reconcile_claims(&[claim], T0);
+
+        assert_eq!(report.transitions.len(), 1);
+        let transition = &report.transitions[0];
+        assert_eq!(transition.from, ClaimStatus::Active);
+        assert_eq!(transition.to, ClaimStatus::HandoffRequired);
+        assert_eq!(transition.reason_code.0, "lease_expired");
+        assert_eq!(
+            transition.updated.status.value,
+            ClaimStatus::HandoffRequired
+        );
+    }
+
+    #[test]
+    fn reconcile_materializes_expired_when_no_handoff_required() {
+        let mut claim = manual_claim("s1", "agentA", T0 - 1, ClaimStatus::Stale);
+        claim.expiry_policy.handoff_required = false;
+        claim.expiry_policy.release_without_handoff_allowed = true;
+
+        let report = reconcile_claims(&[claim], T0);
+
+        assert_eq!(report.transitions.len(), 1);
+        assert_eq!(report.transitions[0].from, ClaimStatus::Stale);
+        assert_eq!(report.transitions[0].to, ClaimStatus::Expired);
+    }
+
+    #[test]
+    fn reconcile_is_idempotent_for_terminal_and_already_stale_claims() {
+        let stale = manual_claim("s1", "agentA", T0 + 600, ClaimStatus::Stale);
+        let handoff_required = manual_claim("s2", "agentB", T0 - 1, ClaimStatus::HandoffRequired);
+        let released = manual_claim("s3", "agentC", T0 + 600, ClaimStatus::Released);
+
+        let report = reconcile_claims(&[stale, handoff_required, released], T0);
+
+        assert_eq!(report.scanned, 3);
+        assert!(report.transitions.is_empty());
+    }
+
+    #[test]
+    fn reconcile_treats_unparseable_heartbeat_as_stale_not_live_ok() {
+        let mut claim = manual_claim("s1", "agentA", T0 + 600, ClaimStatus::Active);
+        claim.lease.last_heartbeat_at = "not-a-timestamp".into();
+
+        let report = reconcile_claims(&[claim], T0);
+
+        assert_eq!(report.transitions.len(), 1);
+        assert_eq!(report.transitions[0].to, ClaimStatus::Stale);
+        assert_eq!(
+            report.transitions[0].reason_code.0,
+            "last_heartbeat_unparseable"
+        );
     }
 
     #[test]
@@ -987,6 +1188,16 @@ mod tests {
         // review bug #4: cannot silently release an expired claim that mandates handoff.
         let expired = manual_claim("s1", "agentA", T0 - 1, ClaimStatus::Active);
         let d = release(&expired, &StableId("agentA".into()), T0);
+        assert!(matches!(
+            d,
+            ClaimLifecycleDecision::Rejected(ClaimRejection::ExpiredRequiresHandoff { .. })
+        ));
+    }
+
+    #[test]
+    fn release_handoff_required_keeps_recovery_hint_rejection() {
+        let handoff_required = manual_claim("s1", "agentA", T0 - 1, ClaimStatus::HandoffRequired);
+        let d = release(&handoff_required, &StableId("agentA".into()), T0);
         assert!(matches!(
             d,
             ClaimLifecycleDecision::Rejected(ClaimRejection::ExpiredRequiresHandoff { .. })

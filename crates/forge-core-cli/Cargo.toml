@@ -28,6 +28,7 @@ sct.workspace = true
 sigstore-tsa.workspace = true
 rustls-pki-types.workspace = true
 x509-parser.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 rcgen.workspace = true

@@ -5,8 +5,8 @@
 //! pure write-conflict checks over the persisted claims bus.
 
 use forge_core_cli::claim::{
-    load_claims, run_acquire, run_check_write, run_handoff, run_heartbeat, run_release, run_status,
-    save_claim,
+    load_claims, run_acquire, run_check_write, run_handoff, run_heartbeat, run_reconcile_once,
+    run_release, run_status, save_claim,
 };
 use forge_core_contracts::{
     claim::{ActorRole, ClaimScopeKind, ClaimStatus},
@@ -16,7 +16,7 @@ use forge_core_engine::{
     check_write_against_claims, expire_stale, is_expired, is_live, project_active, unix_to_rfc3339,
     AcquireRequest, WriteCheck,
 };
-use forge_core_store::claim_wal::claim_wal_path;
+use forge_core_store::claim_wal::{claim_wal_path, recover_claim_wal, ClaimWalOperation};
 use std::fs;
 use std::path::PathBuf;
 
@@ -374,6 +374,244 @@ fn claim_status_reports_only_unresolved_handoff_blocker_statuses() {
     assert!(
         !blocker_ids.contains(&handoff_recorded_id.0.as_str()),
         "handoff_recorded claims must not remain handoff blockers: {blocker_ids:?}"
+    );
+}
+
+#[test]
+fn reconcile_once_noops_before_heartbeat_deadline() {
+    let dir = tmp_claims_dir("reconcile-before-deadline");
+    let path = "contracts/stories/P2.3-before-deadline.yaml";
+    let req = AcquireRequest {
+        ttl_seconds: 10,
+        heartbeat_interval_seconds: 5,
+        ..acquire_req("alice", "P2.3-before-deadline", &[path])
+    };
+    let acquired = run_acquire(&dir, &req, NOW);
+    assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
+
+    let reconciled = run_reconcile_once(&dir, NOW + 4);
+
+    assert!(
+        reconciled.ok,
+        "reconcile should succeed: {:?}",
+        reconciled.error
+    );
+    let data = reconciled.data.expect("reconcile data");
+    assert_eq!(data.scanned, 1);
+    assert_eq!(data.changed, 0);
+    assert!(data.transitions.is_empty());
+    let recovery = recover_claim_wal(&dir, false).expect("recover WAL");
+    assert_eq!(recovery.records.len(), 1);
+    assert_eq!(recovery.records[0].operation, ClaimWalOperation::Acquire);
+}
+
+#[test]
+fn reconcile_once_materializes_stale_and_stale_remains_write_authority() {
+    let dir = tmp_claims_dir("reconcile-stale");
+    let path = "contracts/stories/P2.3-stale.yaml";
+    let req = AcquireRequest {
+        ttl_seconds: 10,
+        heartbeat_interval_seconds: 5,
+        ..acquire_req("alice", "P2.3-stale", &[path])
+    };
+    let acquired = run_acquire(&dir, &req, NOW);
+    assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
+
+    let reconciled = run_reconcile_once(&dir, NOW + 5);
+
+    assert!(
+        reconciled.ok,
+        "reconcile should succeed: {:?}",
+        reconciled.error
+    );
+    let data = reconciled.data.expect("reconcile data");
+    assert_eq!(data.changed, 1);
+    assert_eq!(data.transitions[0].from, "active");
+    assert_eq!(data.transitions[0].to, "stale");
+    assert_eq!(data.transitions[0].reason_code, "heartbeat_overdue");
+
+    let status = run_status(&dir, NOW + 6);
+    assert!(status.ok, "status should succeed: {:?}", status.error);
+    let view = status.data.expect("status data");
+    assert_eq!(view.active.len(), 1);
+    assert_eq!(view.active[0].scope_id, "P2.3-stale");
+    assert_eq!(view.active[0].status, "stale");
+    assert!(
+        view.expired_handoff_required.is_empty(),
+        "stale but unexpired claim is not a handoff blocker yet"
+    );
+
+    let peer_write = run_check_write(
+        &dir,
+        &StableId("bob".to_string()),
+        &[path.to_string()],
+        NOW + 6,
+    );
+    assert!(!peer_write.ok, "stale claims must still block peer writes");
+    assert_eq!(peer_write.exit_code(), ExitReason::RejectedByGate.as_code());
+
+    let self_write = run_check_write(
+        &dir,
+        &StableId("alice".to_string()),
+        &[path.to_string()],
+        NOW + 6,
+    );
+    assert!(
+        self_write.ok,
+        "stale claims must still authorize the claimant until expiry: {:?}",
+        self_write.error
+    );
+
+    let second = run_reconcile_once(&dir, NOW + 6);
+    assert!(
+        second.ok,
+        "second reconcile should succeed: {:?}",
+        second.error
+    );
+    assert_eq!(
+        second.data.expect("second reconcile data").changed,
+        0,
+        "stale materialization must be idempotent"
+    );
+
+    let recovery = recover_claim_wal(&dir, false).expect("recover WAL");
+    let operations: Vec<_> = recovery
+        .records
+        .iter()
+        .map(|record| record.operation)
+        .collect();
+    assert_eq!(
+        operations,
+        vec![
+            ClaimWalOperation::Acquire,
+            ClaimWalOperation::ReconcileStatus,
+        ]
+    );
+}
+
+#[test]
+fn reconcile_once_materializes_handoff_required_and_preserves_recovery_path() {
+    let dir = tmp_claims_dir("reconcile-handoff-required");
+    let path = "contracts/stories/P2.3-handoff.yaml";
+    let req = AcquireRequest {
+        ttl_seconds: 10,
+        heartbeat_interval_seconds: 5,
+        ..acquire_req("alice", "P2.3-handoff", &[path])
+    };
+    let acquired = run_acquire(&dir, &req, NOW);
+    assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
+    let claim_id = acquired.data.expect("acquire data").claim_id;
+
+    let stale = run_reconcile_once(&dir, NOW + 5);
+    assert!(
+        stale.ok,
+        "stale reconcile should succeed: {:?}",
+        stale.error
+    );
+    let expired = run_reconcile_once(&dir, NOW + 10);
+
+    assert!(
+        expired.ok,
+        "expired reconcile should succeed: {:?}",
+        expired.error
+    );
+    let data = expired.data.expect("expired reconcile data");
+    assert_eq!(data.changed, 1);
+    assert_eq!(data.transitions[0].from, "stale");
+    assert_eq!(data.transitions[0].to, "handoff_required");
+    assert_eq!(data.transitions[0].reason_code, "lease_expired");
+
+    let status = run_status(&dir, NOW + 10);
+    assert!(status.ok, "status should succeed: {:?}", status.error);
+    let view = status.data.expect("status data");
+    assert!(view.active.is_empty());
+    assert_eq!(view.expired_handoff_required.len(), 1);
+    assert_eq!(view.expired_handoff_required[0].claim_id, claim_id);
+    assert_eq!(
+        view.expired_handoff_required[0].blocker_reason,
+        "handoff_required"
+    );
+    assert_eq!(view.expired_handoff_required[0].status, "handoff_required");
+
+    let heartbeat = run_heartbeat(
+        &dir,
+        &StableId(claim_id.clone()),
+        &StableId("alice".to_string()),
+        NOW + 10,
+    );
+    assert!(!heartbeat.ok, "handoff_required heartbeat must fail closed");
+    assert!(heartbeat
+        .error
+        .as_ref()
+        .expect("heartbeat error")
+        .code
+        .0
+        .starts_with("expired_requires_handoff"));
+    assert!(heartbeat
+        .error
+        .as_ref()
+        .expect("heartbeat error")
+        .message
+        .contains("forge-core claim handoff"));
+
+    let handoff = run_handoff(
+        &dir,
+        &StableId(claim_id.clone()),
+        &StableId("driver".to_string()),
+        "expired claim reconciled; handoff evidence recorded",
+        &[],
+        NOW + 11,
+    );
+    assert!(handoff.ok, "handoff should recover: {:?}", handoff.error);
+    let reacquire = run_acquire(&dir, &acquire_req("bob", "P2.3-handoff", &[path]), NOW + 12);
+    assert!(
+        reacquire.ok,
+        "handoff_recorded claim must not block reacquire: {:?}",
+        reacquire.error
+    );
+
+    let recovery = recover_claim_wal(&dir, false).expect("recover WAL");
+    let operations: Vec<_> = recovery
+        .records
+        .iter()
+        .map(|record| record.operation)
+        .collect();
+    assert_eq!(
+        operations,
+        vec![
+            ClaimWalOperation::Acquire,
+            ClaimWalOperation::ReconcileStatus,
+            ClaimWalOperation::ReconcileStatus,
+            ClaimWalOperation::HandoffRecorded,
+            ClaimWalOperation::Acquire,
+        ]
+    );
+}
+
+#[test]
+fn reconcile_once_cache_only_without_wal_fails_closed() {
+    let dir = tmp_claims_dir("reconcile-cache-only-no-wal");
+    let acquired = run_acquire(
+        &dir,
+        &acquire_req(
+            "alice",
+            "P2.3-cache-only",
+            &["contracts/stories/P2.3-cache-only.yaml"],
+        ),
+        NOW,
+    );
+    assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
+    fs::remove_file(claim_wal_path(&dir)).expect("remove authoritative WAL");
+
+    let reconciled = run_reconcile_once(&dir, NOW + 1);
+
+    assert!(!reconciled.ok, "cache-only state must fail closed");
+    assert_eq!(reconciled.exit_code(), ExitReason::EnvConfig.as_code());
+    let error = reconciled.error.expect("env config error");
+    assert!(
+        error.message.contains("authoritative WAL") && error.message.contains("missing"),
+        "error should explain missing WAL authority: {}",
+        error.message
     );
 }
 

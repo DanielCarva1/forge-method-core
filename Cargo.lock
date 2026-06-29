@@ -590,6 +590,7 @@ dependencies = [
  "serde_yaml",
  "sha2",
  "sigstore-tsa",
+ "tokio",
  "x509-parser",
 ]
 

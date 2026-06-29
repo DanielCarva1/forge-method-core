@@ -188,6 +188,116 @@ fn claim_wal_replay_projects_last_record_per_claim_id() {
 }
 
 #[test]
+fn claim_wal_replay_projects_reconcile_status_records() {
+    let root = temp_state("projection-reconcile-status");
+    let active = claim("S1", "alice", "src/lib.rs", ClaimStatus::Active);
+    let stale = claim("S1", "alice", "src/lib.rs", ClaimStatus::Stale);
+    let handoff_required = claim("S1", "alice", "src/lib.rs", ClaimStatus::HandoffRequired);
+
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &active,
+        "2027-01-15T08:00:00Z",
+    )
+    .expect("append acquire");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::ReconcileStatus,
+        &stale,
+        "2027-01-15T08:02:00Z",
+    )
+    .expect("append stale reconcile");
+
+    let projection = replay_claim_wal(&root, true).expect("replay stale projection");
+    let projected = projection
+        .latest_by_claim_id
+        .get("claim.story.S1.S1")
+        .expect("latest claim");
+    assert_eq!(projected.claim_contract.status.value, ClaimStatus::Stale);
+    assert!(
+        projection
+            .active_by_claim_id
+            .contains_key("claim.story.S1.S1"),
+        "stale claims remain open/live for conflict purposes"
+    );
+
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::ReconcileStatus,
+        &handoff_required,
+        "2027-01-15T08:10:00Z",
+    )
+    .expect("append handoff-required reconcile");
+    let projection = replay_claim_wal(&root, true).expect("replay handoff projection");
+    let projected = projection
+        .latest_by_claim_id
+        .get("claim.story.S1.S1")
+        .expect("latest claim");
+    assert_eq!(
+        projected.claim_contract.status.value,
+        ClaimStatus::HandoffRequired
+    );
+    assert!(
+        !projection
+            .active_by_claim_id
+            .contains_key("claim.story.S1.S1"),
+        "handoff-required claims leave active indexes but remain latest authority"
+    );
+}
+
+#[test]
+fn claim_wal_replay_allows_handoff_recorded_after_materialized_handoff_required() {
+    let root = temp_state("projection-handoff-after-reconcile");
+    let active = claim("S1", "alice", "src/lib.rs", ClaimStatus::Active);
+    let handoff_required = claim("S1", "alice", "src/lib.rs", ClaimStatus::HandoffRequired);
+    let handoff_recorded = claim("S1", "alice", "src/lib.rs", ClaimStatus::HandoffRecorded);
+
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &active,
+        "2027-01-15T08:00:00Z",
+    )
+    .expect("append acquire");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::ReconcileStatus,
+        &handoff_required,
+        "2027-01-15T08:10:00Z",
+    )
+    .expect("append handoff-required reconcile");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::HandoffRecorded,
+        &handoff_recorded,
+        "2027-01-15T08:11:00Z",
+    )
+    .expect("append handoff recorded");
+
+    let projection = replay_claim_wal(&root, true).expect("replay handoff recorded projection");
+
+    assert!(
+        projection.diagnostics.is_empty(),
+        "{:?}",
+        projection.diagnostics
+    );
+    assert_eq!(
+        projection
+            .latest_by_claim_id
+            .get("claim.story.S1.S1")
+            .expect("latest claim")
+            .claim_contract
+            .status
+            .value,
+        ClaimStatus::HandoffRecorded
+    );
+    assert!(projection
+        .handoff_recorded_by_claim_id
+        .contains_key("claim.story.S1.S1"));
+}
+
+#[test]
 fn claim_wal_repair_truncates_torn_tail_to_valid_prefix() {
     let root = temp_state("torn-tail");
     let active = claim("S1", "alice", "src/lib.rs", ClaimStatus::Active);
