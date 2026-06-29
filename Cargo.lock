@@ -664,6 +664,7 @@ dependencies = [
  "forge-core-trace",
  "forge-core-validate",
  "fs4",
+ "proptest",
  "serde",
  "serde_json",
  "serde_yaml",
