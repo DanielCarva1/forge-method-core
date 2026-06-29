@@ -18,6 +18,8 @@ use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+pub mod claim_wal;
+
 const CONTRACT_DEFINITIONS: &[&str] = &[
     "contracts/commands/command-contract-v0.yaml",
     "contracts/claims/claim-contract-v0.yaml",

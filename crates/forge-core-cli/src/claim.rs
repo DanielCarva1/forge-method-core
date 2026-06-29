@@ -7,11 +7,12 @@
 //!
 //! # Coordination bus = filesystem (DD15, DD22)
 //!
-//! Claims live as `ClaimContractDocument` YAML files in a claims directory
-//! (default `contracts/claims`). Each lifecycle transition rewrites the claim's
-//! file with its new state; the append-only, tamper-evident integrity spine
-//! (layer 3, proven in S0.4) audits every write — we do NOT duplicate layer 3
-//! with a parallel claim event-log. The claim file IS the materialized state.
+//! Claims are materialized as `ClaimContractDocument` YAML files in a claims
+//! directory (default `contracts/claims`) and every mutating lifecycle
+//! transition is also appended to the claim WAL under the resolved state root.
+//! P2.1 provides the append-only recovery spine; P2.2 makes WAL replay the sole
+//! authority for the live bus. Until then, the YAML files remain the materialized
+//! compatibility cache used by status/check-write.
 //!
 //! # Time is injected (DD23)
 //!
@@ -31,6 +32,7 @@ use forge_core_engine::{
     release, unix_to_rfc3339, AcquireRequest, ActiveClaimSummary, ClaimLifecycleDecision,
     ClaimRejection, RecordHandoffRequest,
 };
+use forge_core_store::claim_wal::{append_claim_wal_record, ClaimWalOperation};
 use std::path::{Path, PathBuf};
 
 // ============================================================================
@@ -122,6 +124,21 @@ pub struct ClaimRejected {
     /// `claim_not_found`.
     pub reject_code: String,
     pub detail: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PersistClaimMutationError {
+    WalAppend { source: String },
+    SaveClaim { source: String },
+}
+
+impl std::fmt::Display for PersistClaimMutationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::WalAppend { source } => write!(formatter, "cannot append claim WAL: {source}"),
+            Self::SaveClaim { source } => write!(formatter, "cannot persist claim: {source}"),
+        }
+    }
 }
 
 impl ClaimResult {
@@ -246,12 +263,13 @@ pub fn run_acquire(
     }
     match acquire(&existing, req, now_unix) {
         ClaimLifecycleDecision::Accepted(claim) => {
-            if let Err(e) = save_claim(claims_dir, &claim) {
-                return CliEnvelope::err(
-                    "claim.acquire",
-                    ExitReason::EnvConfig,
-                    format!("cannot persist claim: {e}"),
-                );
+            if let Err(e) = persist_claim_mutation(
+                claims_dir,
+                ClaimWalOperation::Acquire,
+                &claim,
+                &claim.lease.acquired_at,
+            ) {
+                return CliEnvelope::err("claim.acquire", ExitReason::EnvConfig, e.to_string());
             }
             let result = ClaimResult::from_contract(&claim);
             CliEnvelope::ok("claim.acquire", result)
@@ -296,12 +314,13 @@ pub fn run_heartbeat(
     };
     match heartbeat(target, agent_id, now_unix) {
         ClaimLifecycleDecision::Accepted(updated) => {
-            if let Err(e) = save_claim(claims_dir, &updated) {
-                return CliEnvelope::err(
-                    "claim.heartbeat",
-                    ExitReason::EnvConfig,
-                    format!("cannot persist claim: {e}"),
-                );
+            if let Err(e) = persist_claim_mutation(
+                claims_dir,
+                ClaimWalOperation::Heartbeat,
+                &updated,
+                &updated.lease.last_heartbeat_at,
+            ) {
+                return CliEnvelope::err("claim.heartbeat", ExitReason::EnvConfig, e.to_string());
             }
             CliEnvelope::ok("claim.heartbeat", ClaimResult::from_contract(&updated))
         }
@@ -346,12 +365,13 @@ pub fn run_release(
     };
     match release(target, agent_id, now_unix) {
         ClaimLifecycleDecision::Accepted(updated) => {
-            if let Err(e) = save_claim(claims_dir, &updated) {
-                return CliEnvelope::err(
-                    "claim.release",
-                    ExitReason::EnvConfig,
-                    format!("cannot persist claim: {e}"),
-                );
+            if let Err(e) = persist_claim_mutation(
+                claims_dir,
+                ClaimWalOperation::Release,
+                &updated,
+                updated.status.evaluated_at.as_str(),
+            ) {
+                return CliEnvelope::err("claim.release", ExitReason::EnvConfig, e.to_string());
             }
             CliEnvelope::ok("claim.release", ClaimResult::from_contract(&updated))
         }
@@ -432,12 +452,13 @@ pub fn run_handoff(
                     format!("cannot persist handoff artifact: {e}"),
                 );
             }
-            if let Err(e) = save_claim(claims_dir, &updated) {
-                return CliEnvelope::err(
-                    "claim.handoff",
-                    ExitReason::EnvConfig,
-                    format!("cannot persist handoff claim state: {e}"),
-                );
+            if let Err(e) = persist_claim_mutation(
+                claims_dir,
+                ClaimWalOperation::HandoffRecorded,
+                &updated,
+                updated.status.evaluated_at.as_str(),
+            ) {
+                return CliEnvelope::err("claim.handoff", ExitReason::EnvConfig, e.to_string());
             }
             CliEnvelope::ok(
                 "claim.handoff",
@@ -742,6 +763,23 @@ pub fn save_claim(dir: &Path, claim: &ClaimContract) -> std::io::Result<PathBuf>
     Ok(path)
 }
 
+fn persist_claim_mutation(
+    claims_dir: &Path,
+    operation: ClaimWalOperation,
+    claim: &ClaimContract,
+    recorded_at: &str,
+) -> Result<PathBuf, PersistClaimMutationError> {
+    let state_root = state_root_from_claims_dir(claims_dir);
+    append_claim_wal_record(&state_root, operation, claim, recorded_at).map_err(|source| {
+        PersistClaimMutationError::WalAppend {
+            source: source.to_string(),
+        }
+    })?;
+    save_claim(claims_dir, claim).map_err(|source| PersistClaimMutationError::SaveClaim {
+        source: source.to_string(),
+    })
+}
+
 fn state_root_from_claims_dir(claims_dir: &Path) -> PathBuf {
     match claims_dir.file_name().and_then(|name| name.to_str()) {
         Some("claims-active") => claims_dir
@@ -970,8 +1008,21 @@ mod tests {
         assert_eq!(p.scope_id, "s1");
         assert_eq!(p.agent_id, "agentA");
         assert_eq!(p.status, "active");
-        // file was written
-        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        let yaml_files = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter(|entry| {
+                entry
+                    .as_ref()
+                    .ok()
+                    .and_then(|entry| entry.path().extension().map(|ext| ext == "yaml"))
+                    .unwrap_or(false)
+            })
+            .count();
+        assert_eq!(yaml_files, 1);
+        let wal =
+            forge_core_store::claim_wal::recover_claim_wal(&dir, false).expect("recover claim WAL");
+        assert_eq!(wal.records.len(), 1);
+        assert_eq!(wal.records[0].operation, ClaimWalOperation::Acquire);
     }
 
     #[test]

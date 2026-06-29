@@ -113,7 +113,7 @@ priority_1_high:
     fix: "Keep claim handoff as the official recovery edge, persist handoff artifact, mark old claim handoff_recorded, unblock reacquire, and include the exact recovery command in rejected claim errors."
     source: [real_project_feedback_2026_06_29]
     effort: S
-    status: implemented_pending_full_gate
+    status: verified_current_core
     verified_by:
       files:
         - crates/forge-core-cli/src/claim.rs
@@ -136,8 +136,29 @@ priority_2_medium:
     summary: "Formato FMW1 + header(24B) + payload + CRC-32C duplo. 6 record types. Prefix recovery estrito (para no 1º inválido, trunca sob lock exclusivo). Append durável via fs4 lock + O_APPEND + write_all + sync_data."
     crates_new: ["fs4", "crc32c"]
     effort: L
-    status: pending
+    status: verified_current_core
     depends_on: [P1.1, P1.2]  # não buildar WAL sobre aritmética buggy
+    scope_note: "This slice implements the append/recovery spine and appends acquire/heartbeat/release/handoff lifecycle events. P2.2 remains required before WAL replay is the sole authoritative claim-state constructor."
+    verified_by:
+      files:
+        - Cargo.toml
+        - Cargo.lock
+        - crates/forge-core-store/Cargo.toml
+        - crates/forge-core-store/src/lib.rs
+        - crates/forge-core-store/src/claim_wal.rs
+        - crates/forge-core-store/tests/claim_wal.rs
+        - crates/forge-core-cli/src/claim.rs
+        - crates/forge-core-cli/tests/claim_wal_e2e.rs
+      tests:
+        - cargo test -p forge-core-store --test claim_wal
+        - cargo test -p forge-core-cli --test claim_wal_e2e
+        - cargo test -p forge-core-cli claim::tests::acquire_writes_claim_and_returns_ok
+      acceptance:
+        - FMW1 records use a 24-byte header, JSON payload flag, monotonic seq, header CRC32C, and payload CRC32C.
+        - Recovery stops at the first invalid/truncated/corrupt record and optional repair truncates only to the verified prefix under WAL lock.
+        - Unknown skippable records are skipped while unskippable unknown record types stop recovery.
+        - Acquire, heartbeat, release, and expired-claim handoff append lifecycle WAL records.
+        - Installed forge-core.exe smoke creates wal/claims.fmw1 with FMW1 magic for acquire -> heartbeat -> release.
 
   - id: P2.2
     title: "feat: derive_state como ÚNICO construtor do estado de claims"
@@ -213,24 +234,26 @@ explicit_non_goals_for_v1:
 verification_status_at_handoff:
   repo: reconciled_with_current_core
   reconciled_on: 2026-06-29
-  reconciled_branch: codex/forge-selfhealing-p1-claims
+  reconciled_branch: codex/forge-p2-claim-wal
   previous_snapshot_was_stale: true
   current_status:
-    p1_high: "P1.1, P1.2, P1.3, and P1.4 verified in current core; P1.5 implemented in this slice."
-    p2_medium: "WAL, derive_state, reconcile loop, and tiered invariants remain pending."
+    p1_high: "P1.1, P1.2, P1.3, P1.4, and P1.5 verified in current core."
+    p2_medium: "P2.1 WAL append/recovery verified; P2.2 derive_state, P2.3 reconcile loop, and P2.4 tiered invariants remain pending."
     p3_low: "P3.1 verified in current core; P3.2-P3.4 remain pending."
   targeted_verification:
     - cargo test -p forge-core-engine claim_engine
     - cargo test -p forge-core-engine conflict_detection
     - cargo test -p forge-core-cli io_util
     - cargo test -p forge-core-cli --test claim_handoff_e2e
+    - cargo test -p forge-core-store --test claim_wal
+    - cargo test -p forge-core-cli --test claim_wal_e2e
   full_gate: passed_2026-06-29
   full_gate_commands:
     - cargo check --workspace
     - cargo test --workspace
     - cargo clippy --workspace --all-targets -- -W clippy::pedantic
     - cargo fmt --all -- --check
-  full_gate_log_dir: D:\Forge-method-core\target\codex-gates\20260629-055304
+  full_gate_log_dir: D:\Forge-method-core\target\codex-gates\20260629-061915-p2-claim-wal
   installed_binary_smoke:
     binary: C:\Users\User\.cargo\bin\forge-core.exe
-    result: "expired release reports forge-core claim handoff recovery hint; claim handoff records artifact; reacquire succeeds with fresh agent."
+    result: "expired release reports forge-core claim handoff recovery hint; claim handoff records artifact; reacquire succeeds with fresh agent; acquire -> heartbeat -> release creates wal/claims.fmw1 with FMW1 magic."
