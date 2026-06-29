@@ -4,7 +4,9 @@
 //! complete lifecycle surface: acquire, conflict, heartbeat, release, expiry, and
 //! pure write-conflict checks over the persisted claims bus.
 
-use forge_core_cli::claim::{load_claims, run_acquire, run_heartbeat, run_release};
+use forge_core_cli::claim::{
+    load_claims, run_acquire, run_heartbeat, run_release, run_status, save_claim,
+};
 use forge_core_contracts::{
     claim::{ActorRole, ClaimScopeKind, ClaimStatus},
     ClaimId, ExitReason, RepoPath, ScopeId, StableId,
@@ -67,6 +69,37 @@ fn claim_id_from_acquire(
         .expect("successful acquire must carry a claim result")
         .claim_id;
     StableId(claim_id)
+}
+
+fn short_ttl_claim_id_from_acquire(
+    agent: &str,
+    dir: &std::path::Path,
+    scope_id: &str,
+    path: &str,
+) -> StableId {
+    let req = AcquireRequest {
+        ttl_seconds: 10,
+        heartbeat_interval_seconds: 5,
+        ..acquire_req(agent, scope_id, &[path])
+    };
+    let acquired = run_acquire(dir, &req, NOW);
+    assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
+    StableId(acquired.data.expect("successful acquire data").claim_id)
+}
+
+fn set_persisted_claim_status(dir: &std::path::Path, claim_id: &StableId, status: ClaimStatus) {
+    let (claims, errors) = load_claims(dir);
+    assert!(
+        errors.is_empty(),
+        "claims dir must load cleanly before status mutation: {errors:?}"
+    );
+    let mut claim = claims
+        .into_iter()
+        .find(|claim| claim.id.0 == claim_id.0)
+        .unwrap_or_else(|| panic!("claim {} should exist", claim_id.0));
+    claim.status.value = status;
+    claim.status.evaluated_at = unix_to_rfc3339(NOW + 1);
+    save_claim(dir, &claim).expect("persist mutated claim status");
 }
 
 #[test]
@@ -190,6 +223,163 @@ fn expired_claim_is_not_live_and_expiry_sweep_reports_handoff_required() {
     assert_eq!(expired.len(), 1);
     assert_eq!(expired[0].claim_id, claim.id);
     assert_eq!(expired[0].transitioned_to, ClaimStatus::HandoffRequired);
+}
+
+#[test]
+fn claim_status_reports_expired_handoff_required_claims() {
+    let dir = tmp_claims_dir("status-expired-handoff");
+    let path = "contracts/stories/S6.5-status.yaml";
+    let req = AcquireRequest {
+        ttl_seconds: 10,
+        heartbeat_interval_seconds: 5,
+        ..acquire_req("alice", "S6.5-status", &[path])
+    };
+    let acquired = run_acquire(&dir, &req, NOW);
+    assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
+    let claim_id = acquired.data.expect("acquire data").claim_id;
+
+    let status = run_status(&dir, NOW + 10);
+
+    assert!(status.ok, "status should succeed: {:?}", status.error);
+    let view = status.data.expect("status data");
+    assert!(
+        view.active.is_empty(),
+        "expired claim must not be reported as active"
+    );
+    assert_eq!(view.expired_handoff_required.len(), 1);
+    let blocker = &view.expired_handoff_required[0];
+    assert_eq!(blocker.claim_id, claim_id);
+    assert_eq!(blocker.scope_kind, "story");
+    assert_eq!(blocker.scope_id, "S6.5-status");
+    assert_eq!(blocker.agent_id, "alice");
+    assert_eq!(blocker.paths, vec![path.to_string()]);
+    assert_eq!(blocker.blocker_reason, "expired_requires_handoff");
+    assert_eq!(blocker.status, "active");
+    assert!(
+        blocker
+            .handoff_request_ref
+            .as_deref()
+            .is_some_and(|hint| hint.contains("claim-expiry-handoff-request")),
+        "status should expose the configured handoff request ref: {blocker:?}"
+    );
+    assert!(
+        blocker.handoff_hint.contains("forge-core claim handoff"),
+        "status should include an actionable handoff hint: {blocker:?}"
+    );
+}
+
+#[test]
+fn claim_status_preserves_active_claims_while_reporting_handoff_blockers() {
+    let dir = tmp_claims_dir("status-active-plus-blocker");
+    let expired_path = "contracts/stories/S6.5-expired-status.yaml";
+    let active_path = "contracts/stories/S6.5-active-status.yaml";
+    let expired_req = AcquireRequest {
+        ttl_seconds: 10,
+        heartbeat_interval_seconds: 5,
+        ..acquire_req("alice", "S6.5-expired-status", &[expired_path])
+    };
+    let expired = run_acquire(&dir, &expired_req, NOW);
+    assert!(
+        expired.ok,
+        "expired acquire should succeed: {:?}",
+        expired.error
+    );
+    let active = run_acquire(
+        &dir,
+        &acquire_req("bob", "S6.5-active-status", &[active_path]),
+        NOW,
+    );
+    assert!(
+        active.ok,
+        "active acquire should succeed: {:?}",
+        active.error
+    );
+
+    let status = run_status(&dir, NOW + 10);
+
+    assert!(status.ok, "status should succeed: {:?}", status.error);
+    let view = status.data.expect("status data");
+    assert_eq!(view.active.len(), 1);
+    assert_eq!(view.active[0].scope_id, "S6.5-active-status");
+    assert_eq!(view.active[0].paths, vec![active_path.to_string()]);
+    assert_eq!(view.expired_handoff_required.len(), 1);
+    assert_eq!(
+        view.expired_handoff_required[0].scope_id,
+        "S6.5-expired-status"
+    );
+    assert_eq!(
+        view.expired_handoff_required[0].blocker_reason,
+        "expired_requires_handoff"
+    );
+}
+
+#[test]
+fn claim_status_reports_only_unresolved_handoff_blocker_statuses() {
+    let dir = tmp_claims_dir("status-handoff-statuses");
+    let stale_id = short_ttl_claim_id_from_acquire(
+        "alice",
+        &dir,
+        "S6.5-stale",
+        "contracts/stories/S6.5-stale.yaml",
+    );
+    let handoff_required_id = short_ttl_claim_id_from_acquire(
+        "bob",
+        &dir,
+        "S6.5-handoff-required",
+        "contracts/stories/S6.5-handoff-required.yaml",
+    );
+    let released_id = short_ttl_claim_id_from_acquire(
+        "cara",
+        &dir,
+        "S6.5-released",
+        "contracts/stories/S6.5-released.yaml",
+    );
+    let handoff_recorded_id = short_ttl_claim_id_from_acquire(
+        "drew",
+        &dir,
+        "S6.5-handoff-recorded",
+        "contracts/stories/S6.5-handoff-recorded.yaml",
+    );
+    set_persisted_claim_status(&dir, &stale_id, ClaimStatus::Stale);
+    set_persisted_claim_status(&dir, &handoff_required_id, ClaimStatus::HandoffRequired);
+    set_persisted_claim_status(&dir, &released_id, ClaimStatus::Released);
+    set_persisted_claim_status(&dir, &handoff_recorded_id, ClaimStatus::HandoffRecorded);
+
+    let status = run_status(&dir, NOW + 10);
+
+    assert!(status.ok, "status should succeed: {:?}", status.error);
+    let view = status.data.expect("status data");
+    assert!(
+        view.active.is_empty(),
+        "expired/materialized handoff claims must not be reported active"
+    );
+    assert_eq!(view.expired_handoff_required.len(), 2);
+    let blockers: Vec<(&str, &str)> = view
+        .expired_handoff_required
+        .iter()
+        .map(|claim| (claim.scope_id.as_str(), claim.blocker_reason.as_str()))
+        .collect();
+    assert!(
+        blockers.contains(&("S6.5-stale", "expired_requires_handoff")),
+        "expired stale claim should require handoff: {blockers:?}"
+    );
+    assert!(
+        blockers.contains(&("S6.5-handoff-required", "handoff_required")),
+        "materialized handoff_required claim should remain visible: {blockers:?}"
+    );
+    let blocker_ids: Vec<&str> = view
+        .expired_handoff_required
+        .iter()
+        .map(|claim| claim.claim_id.as_str())
+        .collect();
+    assert!(
+        !blocker_ids.contains(&released_id.0.as_str()),
+        "released claims must not remain handoff blockers: {blocker_ids:?}"
+    );
+    assert!(
+        !blocker_ids.contains(&handoff_recorded_id.0.as_str()),
+        "handoff_recorded claims must not remain handoff blockers: {blocker_ids:?}"
+    );
 }
 
 #[test]

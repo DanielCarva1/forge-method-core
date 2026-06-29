@@ -22,6 +22,7 @@ use forge_core_validate::ReferenceIndex;
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
+use std::ffi::OsString;
 use std::fmt;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
@@ -85,6 +86,18 @@ pub struct GraphRunCommandOutput {
 pub enum GraphCommandError {
     MissingGraphPath,
     ProjectResolve(ProjectResolveError),
+    GraphPathCanonicalize {
+        path: PathBuf,
+        source: String,
+    },
+    GraphPathOutsideProjectRoot {
+        graph_path: PathBuf,
+        resolved_graph_path: PathBuf,
+        project_root: PathBuf,
+    },
+    StateRootUnavailable {
+        path: PathBuf,
+    },
     ReadGraph {
         path: PathBuf,
         source: String,
@@ -105,6 +118,29 @@ impl fmt::Display for GraphCommandError {
         match self {
             Self::MissingGraphPath => write!(formatter, "--graph is required"),
             Self::ProjectResolve(error) => write!(formatter, "project resolve failed: {error}"),
+            Self::GraphPathCanonicalize { path, source } => {
+                write!(
+                    formatter,
+                    "canonicalize graph boundary path {} failed: {source}",
+                    path.display()
+                )
+            }
+            Self::GraphPathOutsideProjectRoot {
+                graph_path,
+                resolved_graph_path,
+                project_root,
+            } => write!(
+                formatter,
+                "graph file path {} resolves to {} which escapes project root {}",
+                graph_path.display(),
+                resolved_graph_path.display(),
+                project_root.display()
+            ),
+            Self::StateRootUnavailable { path } => write!(
+                formatter,
+                "env_config: resolved Forge state_root {} is missing or is not a directory",
+                path.display()
+            ),
             Self::ReadGraph { path, source } => {
                 write!(formatter, "read graph {} failed: {source}", path.display())
             }
@@ -166,6 +202,8 @@ pub fn run_dry_run(input: &GraphCommandInput) -> Result<GraphRunCommandOutput, G
         .map_err(GraphCommandError::ProjectResolve)?;
     let project_root = PathBuf::from(&resolved.project_root);
     let graph_path = resolve_graph_path(&project_root, input.graph_path.as_deref())?;
+    let state_root = PathBuf::from(&resolved.state_root);
+    ensure_state_root_available(&state_root)?;
     let graph = read_graph(&graph_path)?;
 
     let validation_report = report_value("validation", validate_graph(&graph))?;
@@ -188,7 +226,6 @@ pub fn run_dry_run(input: &GraphCommandInput) -> Result<GraphRunCommandOutput, G
 
     let index =
         build_reference_index(&project_root).map_err(|error| reference_index_error(&error))?;
-    let state_root = PathBuf::from(&resolved.state_root);
     let claims_dir = input
         .claims_dir
         .clone()
@@ -686,10 +723,88 @@ fn resolve_graph_path(
     graph_path: Option<&Path>,
 ) -> Result<PathBuf, GraphCommandError> {
     let graph_path = graph_path.ok_or(GraphCommandError::MissingGraphPath)?;
-    if graph_path.is_absolute() {
-        Ok(graph_path.to_path_buf())
+    let candidate = if graph_path.is_absolute() {
+        graph_path.to_path_buf()
     } else {
-        Ok(project_root.join(graph_path))
+        project_root.join(graph_path)
+    };
+    ensure_graph_path_inside_project_root(project_root, &candidate)?;
+    Ok(candidate)
+}
+
+fn ensure_graph_path_inside_project_root(
+    project_root: &Path,
+    graph_path: &Path,
+) -> Result<(), GraphCommandError> {
+    let canonical_root = canonicalize_graph_boundary_path(project_root)?;
+    let resolved_graph_path = resolve_graph_boundary_path(graph_path)?;
+    if resolved_graph_path.starts_with(&canonical_root) {
+        Ok(())
+    } else {
+        Err(GraphCommandError::GraphPathOutsideProjectRoot {
+            graph_path: graph_path.to_path_buf(),
+            resolved_graph_path,
+            project_root: canonical_root,
+        })
+    }
+}
+
+fn resolve_graph_boundary_path(path: &Path) -> Result<PathBuf, GraphCommandError> {
+    let normalized = normalize_path_lexically(path);
+    if normalized.exists() {
+        return canonicalize_graph_boundary_path(&normalized);
+    }
+
+    let mut existing = normalized.as_path();
+    let mut missing_suffix: Vec<OsString> = Vec::new();
+    while !existing.exists() {
+        let Some(file_name) = existing.file_name() else {
+            return canonicalize_graph_boundary_path(existing);
+        };
+        missing_suffix.push(file_name.to_os_string());
+        let Some(parent) = existing.parent() else {
+            return canonicalize_graph_boundary_path(existing);
+        };
+        existing = parent;
+    }
+
+    let mut resolved = canonicalize_graph_boundary_path(existing)?;
+    for component in missing_suffix.iter().rev() {
+        resolved.push(component);
+    }
+    Ok(resolved)
+}
+
+fn canonicalize_graph_boundary_path(path: &Path) -> Result<PathBuf, GraphCommandError> {
+    fs::canonicalize(path).map_err(|source| GraphCommandError::GraphPathCanonicalize {
+        path: path.to_path_buf(),
+        source: source.to_string(),
+    })
+}
+
+fn normalize_path_lexically(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::Prefix(prefix) => normalized.push(prefix.as_os_str()),
+            Component::RootDir => normalized.push(component.as_os_str()),
+            Component::Normal(part) => normalized.push(part),
+        }
+    }
+    normalized
+}
+
+fn ensure_state_root_available(state_root: &Path) -> Result<(), GraphCommandError> {
+    if state_root.is_dir() {
+        Ok(())
+    } else {
+        Err(GraphCommandError::StateRootUnavailable {
+            path: state_root.to_path_buf(),
+        })
     }
 }
 

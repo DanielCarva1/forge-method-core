@@ -383,6 +383,262 @@ fn graph_run_dry_run_uses_sidecar_resolution_without_creating_local_state() {
 }
 
 #[test]
+fn graph_validate_rejects_graph_file_outside_project_root() {
+    let (app, _sidecar) = fresh_project("validate-graph-outside-root");
+    let outside_graph = app
+        .parent()
+        .expect("fresh project parent")
+        .join("outside-graphs")
+        .join("valid.yaml");
+    fs::create_dir_all(outside_graph.parent().expect("outside graph parent"))
+        .expect("create outside graph parent");
+    fs::write(&outside_graph, valid_graph()).expect("write outside graph");
+
+    let output = bin()
+        .args([
+            "graph",
+            "validate",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            &outside_graph.display().to_string(),
+            "--json",
+        ])
+        .output()
+        .expect("run graph validate");
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("graph file path"));
+    assert!(stderr.contains("escapes project root"));
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_rejects_graph_file_outside_project_root() {
+    let (app, _sidecar) = fresh_project("run-graph-outside-root");
+    install_read_operation(&app, "contracts/operations/read-a.yaml");
+    install_read_operation(&app, "contracts/operations/read-b.yaml");
+    let outside_graph = app
+        .parent()
+        .expect("fresh project parent")
+        .join("outside-graphs")
+        .join("valid.yaml");
+    fs::create_dir_all(outside_graph.parent().expect("outside graph parent"))
+        .expect("create outside graph parent");
+    fs::write(&outside_graph, valid_graph()).expect("write outside graph");
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            &outside_graph.display().to_string(),
+            "--dry-run",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("graph file path"));
+    assert!(stderr.contains("escapes project root"));
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_validate_rejects_graph_file_symlink_escape() {
+    let (app, _sidecar) = fresh_project("validate-graph-symlink-escape");
+    let outside_dir = app
+        .parent()
+        .expect("fresh project parent")
+        .join("outside-graphs");
+    fs::create_dir_all(&outside_dir).expect("create outside graph dir");
+    fs::write(outside_dir.join("valid.yaml"), valid_graph()).expect("write outside graph");
+    create_directory_link(&app.join("graphs").join("linked"), &outside_dir);
+
+    let output = bin()
+        .args([
+            "graph",
+            "validate",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/linked/valid.yaml",
+            "--json",
+        ])
+        .output()
+        .expect("run graph validate");
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("graph file path"));
+    assert!(stderr.contains("escapes project root"));
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_validate_rejects_nonexistent_graph_file_under_symlink_escape() {
+    let (app, _sidecar) = fresh_project("validate-graph-symlink-missing");
+    let outside_dir = app
+        .parent()
+        .expect("fresh project parent")
+        .join("outside-graphs");
+    fs::create_dir_all(&outside_dir).expect("create outside graph dir");
+    create_directory_link(&app.join("graphs").join("linked"), &outside_dir);
+
+    let output = bin()
+        .args([
+            "graph",
+            "validate",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/linked/missing.yaml",
+            "--json",
+        ])
+        .output()
+        .expect("run graph validate");
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("graph file path"));
+    assert!(stderr.contains("escapes project root"));
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_validate_allows_nonexistent_graph_file_inside_project_until_read() {
+    let (app, _sidecar) = fresh_project("validate-graph-missing-inside");
+
+    let output = bin()
+        .args([
+            "graph",
+            "validate",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/missing.yaml",
+            "--json",
+        ])
+        .output()
+        .expect("run graph validate");
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("read graph"),
+        "inside missing graph should reach read failure, got: {stderr}"
+    );
+    assert!(
+        !stderr.contains("escapes project root"),
+        "inside missing graph must not be misclassified as a boundary escape: {stderr}"
+    );
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_rejects_nonexistent_graph_file_under_symlink_escape() {
+    let (app, _sidecar) = fresh_project("run-graph-symlink-missing");
+    let outside_dir = app
+        .parent()
+        .expect("fresh project parent")
+        .join("outside-graphs");
+    fs::create_dir_all(&outside_dir).expect("create outside graph dir");
+    create_directory_link(&app.join("graphs").join("linked"), &outside_dir);
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/linked/missing.yaml",
+            "--dry-run",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("graph file path"));
+    assert!(stderr.contains("escapes project root"));
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_allows_nonexistent_graph_file_inside_project_until_read() {
+    let (app, _sidecar) = fresh_project("run-graph-missing-inside");
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/missing.yaml",
+            "--dry-run",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("read graph"),
+        "inside missing graph should reach read failure, got: {stderr}"
+    );
+    assert!(
+        !stderr.contains("escapes project root"),
+        "inside missing graph must not be misclassified as a boundary escape: {stderr}"
+    );
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_with_missing_state_root_reports_env_config() {
+    let (app, sidecar) = fresh_project("missing-state-root");
+    install_read_operation(&app, "contracts/operations/read-a.yaml");
+    install_read_operation(&app, "contracts/operations/read-b.yaml");
+    write_graph(&app, "valid.yaml", valid_graph());
+    let sidecar_root = sidecar
+        .parent()
+        .expect("sidecar state root has sidecar parent")
+        .to_path_buf();
+    fs::remove_dir_all(&sidecar_root).expect("remove sidecar root");
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/valid.yaml",
+            "--dry-run",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("env_config"));
+    assert!(stderr.contains("state_root"));
+    assert!(stderr.contains(&sidecar.display().to_string()));
+    assert!(!app.join(".forge-method").exists());
+    assert!(!sidecar.exists());
+    assert!(!sidecar_root.exists());
+}
+
+#[test]
 fn graph_run_rejects_flag_looking_agent_value() {
     let (app, _sidecar) = fresh_project("flag-agent");
     write_graph(&app, "valid.yaml", valid_graph());
