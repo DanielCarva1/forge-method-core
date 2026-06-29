@@ -202,6 +202,8 @@ state lives in a sibling sidecar:
     .forge-method/
       state.yaml
       claims-active/
+      handoffs/
+        expired-claims/
       artifacts/
       evidence/
 ```
@@ -220,6 +222,12 @@ Resolve it before work:
 ```bash
 forge-core project resolve --root . --json
 ```
+
+Raw `forge-core claim ...` commands use the same resolver by default: they
+resolve the project state root from `--root .` and read or write the resolved
+`claims-active/` bus and sidecar state. For ordinary consumer projects, that
+means claims and handoff records land in the sidecar state directory rather than
+a product-repo-local state folder.
 
 The Forge core repository is a temporary bootstrap exception and may resolve its
 local `.forge-method/` explicitly:
@@ -277,18 +285,40 @@ forge-core autonomy route --policy-file policy-manual.yaml --no-json
 ```bash
 # an agent claims the file it is about to edit
 forge-core claim acquire \
+  --root . \
   --scope story --id my-feature \
   --agent codex-worker-1 \
   --path src/auth.rs
 
 # before writing, prove this agent owns every target
-forge-core claim check-write --agent codex-worker-1 --target src/auth.rs
+forge-core claim check-write --root . --agent codex-worker-1 --target src/auth.rs
 
 # ... do the work ...
 
 # release when done
-forge-core claim release --id claim.story.my-feature.my-feature --agent codex-worker-1
+forge-core claim release --root . --id claim.story.my-feature.my-feature --agent codex-worker-1
 ```
+
+`--claims-dir` is an advanced override for tests, migrations, and emergency
+repair. Omit it for normal repo work so the CLI uses the resolved Forge project
+state root and its sidecar `claims-active/` directory.
+
+### Recover an expired handoff-required claim
+
+Expired `handoff_required` claims intentionally block heartbeat, release, and
+new acquire attempts for the affected scope until the abandoned context is
+recorded. Do not recover by manually moving claim files. Use the official
+handoff command:
+
+```bash
+forge-core claim handoff --id <claim-id-or-scope-id> --agent <id> --summary <text> [--evidence <path>...] [--root <path>] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]
+```
+
+The command records the recovery context under sidecar state
+`handoffs/expired-claims/`, marks the old claim `handoff_recorded`, and reopens
+the scope so a new claim can be acquired. As with other claim commands, prefer
+`--root .` for normal work so Forge resolves the sidecar state; `--claims-dir`
+is only the advanced override for tests, migrations, and emergency repair.
 
 ### Validate the project
 

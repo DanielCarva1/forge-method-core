@@ -13,3 +13,4 @@ target/
 .forge-method/claims-active/
 .forge-method/locks/
 .forge-method/traces/
+.forge-method/handoffs/

@@ -27,8 +27,8 @@ use forge_core_contracts::{
     ClaimId, CliEnvelope, ExitReason, ScopeId, StableId, ENVELOPE_SCHEMA_VERSION,
 };
 use forge_core_engine::{
-    acquire, check_write_against_claims, heartbeat, project_active, release, AcquireRequest,
-    ClaimLifecycleDecision, ClaimRejection,
+    acquire, check_write_against_claims, heartbeat, project_active, record_handoff, release,
+    unix_to_rfc3339, AcquireRequest, ClaimLifecycleDecision, ClaimRejection, RecordHandoffRequest,
 };
 use std::path::{Path, PathBuf};
 
@@ -48,6 +48,37 @@ pub struct ClaimResult {
     pub status: String,
     pub acquired_at: String,
     pub expires_at: String,
+}
+
+/// Success payload for `claim handoff`.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct ClaimHandoffResult {
+    pub schema_version: String,
+    pub claim_id: String,
+    pub scope_kind: String,
+    pub scope_id: String,
+    pub agent_id: String,
+    pub status: String,
+    pub recorded_at: String,
+    pub handoff_ref: String,
+    pub handoff_path: String,
+}
+
+/// Durable artifact written when an expired handoff-required claim is resolved.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct ClaimHandoffArtifact {
+    pub schema_version: String,
+    pub claim_id: String,
+    pub scope_kind: String,
+    pub scope_id: String,
+    pub recorded_by_agent_id: String,
+    pub original_claimant_agent_id: String,
+    pub previous_status: String,
+    pub recorded_status: String,
+    pub recorded_at: String,
+    pub summary: String,
+    pub evidence_refs: Vec<String>,
+    pub claim_contract: ClaimContract,
 }
 
 /// Failure payload for `claim acquire|heartbeat|release` when the engine
@@ -297,6 +328,105 @@ pub fn run_release(
     }
 }
 
+/// Run `claim handoff`. This is the official recovery command for an expired
+/// claim whose policy requires handoff before the scope can be reused.
+///
+/// # Errors
+/// `InvalidDecisionShape` (3) if the claim id does not exist;
+/// `RejectedByGate` (2) on a typed [`ClaimRejection`]; `EnvConfig` (5) if the
+/// handoff artifact or updated claim cannot be persisted.
+#[must_use]
+pub fn run_handoff(
+    claims_dir: &Path,
+    claim_id: &StableId,
+    agent_id: &StableId,
+    summary: &str,
+    evidence_refs: &[String],
+    now_unix: i64,
+) -> CliEnvelope<ClaimHandoffResult> {
+    let _lock = match crate::io_util::DirLock::acquire(claims_dir, ".forge-claim.lock") {
+        Ok(l) => l,
+        Err(e) => {
+            return CliEnvelope::err(
+                "claim.handoff",
+                ExitReason::EnvConfig,
+                format!("cannot acquire claims lock: {e}"),
+            );
+        }
+    };
+    let (existing, errs) = load_claims(claims_dir);
+    if let Some(env) = env_config_if_errors(claims_dir, &errs) {
+        return env;
+    }
+    let claim_ref = parse_claim_ref(&claim_id.0);
+    let Some(target) = resolve_claim(&existing, &claim_ref) else {
+        return CliEnvelope::err(
+            "claim.handoff",
+            ExitReason::InvalidDecisionShape,
+            format!("claim '{}' not found", claim_id.0),
+        );
+    };
+
+    let artifact_ref = handoff_artifact_ref(target, now_unix);
+    let mut claim_evidence_refs = Vec::with_capacity(evidence_refs.len() + 1);
+    claim_evidence_refs.push(artifact_ref.clone());
+    claim_evidence_refs.extend(evidence_refs.iter().cloned());
+    let request = RecordHandoffRequest {
+        recorder_agent_id: agent_id.clone(),
+        summary: summary.to_string(),
+        evidence_refs: claim_evidence_refs,
+    };
+
+    match record_handoff(target, &request, now_unix) {
+        ClaimLifecycleDecision::Accepted(updated) => {
+            let artifact_path = state_root_from_claims_dir(claims_dir).join(&artifact_ref);
+            let artifact = ClaimHandoffArtifact {
+                schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
+                claim_id: updated.id.0.clone(),
+                scope_kind: scope_kind_slug(updated.scope.kind),
+                scope_id: updated.scope.id.0.clone(),
+                recorded_by_agent_id: agent_id.0.clone(),
+                original_claimant_agent_id: target.claim.claimant_agent_id.0.clone(),
+                previous_status: status_slug(target.status.value),
+                recorded_status: status_slug(updated.status.value),
+                recorded_at: unix_to_rfc3339(now_unix),
+                summary: summary.trim().to_string(),
+                evidence_refs: evidence_refs.to_vec(),
+                claim_contract: target.clone(),
+            };
+            if let Err(e) = save_handoff_artifact(&artifact_path, &artifact) {
+                return CliEnvelope::err(
+                    "claim.handoff",
+                    ExitReason::EnvConfig,
+                    format!("cannot persist handoff artifact: {e}"),
+                );
+            }
+            if let Err(e) = save_claim(claims_dir, &updated) {
+                return CliEnvelope::err(
+                    "claim.handoff",
+                    ExitReason::EnvConfig,
+                    format!("cannot persist handoff claim state: {e}"),
+                );
+            }
+            CliEnvelope::ok(
+                "claim.handoff",
+                ClaimHandoffResult {
+                    schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
+                    claim_id: updated.id.0,
+                    scope_kind: scope_kind_slug(updated.scope.kind),
+                    scope_id: updated.scope.id.0,
+                    agent_id: agent_id.0.clone(),
+                    status: status_slug(updated.status.value),
+                    recorded_at: unix_to_rfc3339(now_unix),
+                    handoff_ref: artifact_ref,
+                    handoff_path: artifact_path.display().to_string(),
+                },
+            )
+        }
+        ClaimLifecycleDecision::Rejected(reason) => rejected_handoff_envelope(&reason),
+    }
+}
+
 /// Run `claim status` — the coordination-bus view: every claim that is live
 /// right now (who holds what, since when, expires when).
 #[must_use]
@@ -528,6 +658,49 @@ pub fn save_claim(dir: &Path, claim: &ClaimContract) -> std::io::Result<PathBuf>
     // the whole claims dir on the next load (review S4.4 bug #3).
     crate::io_util::atomic_write(&path, &yaml)?;
     Ok(path)
+}
+
+fn state_root_from_claims_dir(claims_dir: &Path) -> PathBuf {
+    match claims_dir.file_name().and_then(|name| name.to_str()) {
+        Some("claims-active") => claims_dir
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| claims_dir.to_path_buf()),
+        _ => claims_dir.to_path_buf(),
+    }
+}
+
+fn handoff_artifact_ref(claim: &ClaimContract, now_unix: i64) -> String {
+    format!(
+        "handoffs/expired-claims/expired-claim-{}-{}.yaml",
+        slug_for_file(&claim.scope.id.0),
+        slug_for_file(&unix_to_rfc3339(now_unix))
+    )
+}
+
+fn save_handoff_artifact(path: &Path, artifact: &ClaimHandoffArtifact) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let yaml = serde_yaml::to_string(artifact)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    crate::io_util::atomic_write(path, &yaml)
+}
+
+fn rejected_handoff_envelope(reason: &ClaimRejection) -> CliEnvelope<ClaimHandoffResult> {
+    let rejected = ClaimRejected {
+        reject_code: reject_code(reason),
+        detail: format!("{reason:?}"),
+    };
+    let mut env: CliEnvelope<ClaimHandoffResult> = CliEnvelope::err(
+        "claim.handoff",
+        ExitReason::RejectedByGate,
+        &rejected.detail,
+    );
+    if let Some(err) = env.error.as_mut() {
+        err.code.0 = format!("{}:{}", rejected.reject_code, rejected.detail);
+    }
+    env
 }
 
 // ============================================================================
