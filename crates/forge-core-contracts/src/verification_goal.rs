@@ -22,10 +22,19 @@ pub struct VerificationGoalContract {
 }
 
 impl VerificationGoalContract {
-    /// Returns true when the aggregate verdict says every goal is satisfied.
+    /// Returns true when the aggregate verdict and every goal agree that all
+    /// declared verification goals passed.
     #[must_use]
-    pub const fn is_satisfied(&self) -> bool {
+    pub fn is_satisfied(&self) -> bool {
         matches!(self.overall.value, OverallVerdictValue::AllSatisfied)
+            && !self.goals.is_empty()
+            && self.overall.satisfied <= self.overall.total
+            && self.overall.satisfied == self.goals.len()
+            && self.overall.total == self.goals.len()
+            && self
+                .goals
+                .iter()
+                .all(|goal| matches!(goal.status, GoalStatus::Passed))
     }
 
     /// Returns the subset of verification goals that failed.
@@ -205,8 +214,73 @@ verification_goal_contract:
         let mut document = populated_contract();
         document.verification_goal_contract.overall.value = OverallVerdictValue::AllSatisfied;
         document.verification_goal_contract.overall.satisfied = 3;
+        document
+            .verification_goal_contract
+            .goals
+            .iter_mut()
+            .for_each(|goal| goal.status = GoalStatus::Passed);
 
         assert!(document.verification_goal_contract.is_satisfied());
+    }
+
+    #[test]
+    fn is_satisfied_false_when_all_satisfied_has_no_goals() {
+        let mut document = populated_contract();
+        document.verification_goal_contract.goals.clear();
+        document.verification_goal_contract.overall.value = OverallVerdictValue::AllSatisfied;
+        document.verification_goal_contract.overall.satisfied = 0;
+        document.verification_goal_contract.overall.total = 0;
+
+        assert!(!document.verification_goal_contract.is_satisfied());
+    }
+
+    #[test]
+    fn is_satisfied_false_when_all_satisfied_contains_failed_pending_or_flaky_goal() {
+        for status in [
+            GoalStatus::Failed,
+            GoalStatus::Pending,
+            GoalStatus::Running,
+            GoalStatus::Flaky,
+            GoalStatus::Skipped,
+        ] {
+            let mut document = populated_contract();
+            document.verification_goal_contract.overall.value = OverallVerdictValue::AllSatisfied;
+            document.verification_goal_contract.overall.satisfied = 3;
+            document.verification_goal_contract.overall.total = 3;
+            document
+                .verification_goal_contract
+                .goals
+                .iter_mut()
+                .for_each(|goal| goal.status = GoalStatus::Passed);
+            document.verification_goal_contract.goals[1].status = status;
+
+            assert!(
+                !document.verification_goal_contract.is_satisfied(),
+                "status {status:?} must not satisfy strict verification"
+            );
+        }
+    }
+
+    #[test]
+    fn is_satisfied_false_when_all_satisfied_counts_are_inconsistent() {
+        let inconsistent_counts = [(2, 3), (4, 3), (3, 4), (4, 4)];
+
+        for (satisfied, total) in inconsistent_counts {
+            let mut document = populated_contract();
+            document.verification_goal_contract.overall.value = OverallVerdictValue::AllSatisfied;
+            document.verification_goal_contract.overall.satisfied = satisfied;
+            document.verification_goal_contract.overall.total = total;
+            document
+                .verification_goal_contract
+                .goals
+                .iter_mut()
+                .for_each(|goal| goal.status = GoalStatus::Passed);
+
+            assert!(
+                !document.verification_goal_contract.is_satisfied(),
+                "counts satisfied={satisfied} total={total} must not satisfy strict verification"
+            );
+        }
     }
 
     #[test]
