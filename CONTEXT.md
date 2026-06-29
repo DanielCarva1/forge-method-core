@@ -10,17 +10,30 @@ A sibling directory or repository that owns the Forge Method runtime state for o
 
 ## Forge Project Link
 
-The small `.forge-method.yaml` file stored at a Consumer Project Repo root. It points to the Forge Runtime Sidecar and its `.forge-method/` state root. Its `state_root` must resolve under `sidecar_root`, normally as `<sidecar_root>/.forge-method`.
+The small `.forge-method.yaml` file stored at a Consumer Project Repo root. It points to the Forge Runtime Sidecar and its `.forge-method/` state root. Its `state_root` must resolve under `sidecar_root` and must end in `.forge-method`, normally as `<sidecar_root>/.forge-method`.
+
+## Project Init Bootstrap
+
+Consumer repos should be bootstrapped with `forge-core project init --root <repo>`. The intended result is a `.forge-method.yaml` pointer in the Consumer Project Repo plus sibling sidecar state at `../forge-<project>/.forge-method`. The Consumer Project Repo should not receive a local `.forge-method/` directory.
+
+The init command is expected to be idempotent for the same resolved link and to fail closed on a conflicting existing link or unsafe consumer-local state root.
 
 ## Bootstrap Core Exception
 
-The temporary exception that allows `<repo-root>` to keep local `.forge-method/` state while the Forge core is still being developed by Forge itself. This exception is explicit and must not be copied to consumer projects.
+The temporary exception that allows `<repo-root>` to keep local `.forge-method/` state while the Forge core is still being developed by Forge itself. Commands that resolve this local state must opt in with `--allow-bootstrap-core`. This exception is explicit and must not be copied to consumer projects.
 
 ## Project Link Hardening Rules
 
-- Consumer `state_root` must be inside the configured `sidecar_root`.
+- `forge-core project init --root <repo>` is the normal first-use path for Consumer Project Repos.
+- Init should be idempotent for the same resolved link and fail closed on a conflicting existing link or unsafe consumer-local state root.
+- Consumer `state_root` must be inside the configured `sidecar_root` and end in `.forge-method`.
 - Consumer `state_root` must not be `<consumer>/.forge-method`; only the Forge core bootstrap exception may use local runtime state.
 - Runtime and claim commands fail closed when the resolved `state_root` does not exist; they must not silently create consumer-local state.
 - State-bearing operation/effect commands (`execute-operation`, `rebuild-effect-index`, `query-effect-index`) resolve the same Project Link: product contracts and payload files are read from the Consumer Project Repo, but Forge WAL, metadata index, evidence, and `.forge-method/artifacts/*` writes land under the Forge Runtime Sidecar.
 - `--claims-dir` remains an explicit advanced override for tests, migrations, and emergency repair.
 - The goal is isolation: projects, users, and agents must not contaminate each other's Forge data.
+
+## Remaining Bootstrap Gaps
+
+- The global Forge skill/start script now calls `forge-core project init --root <repo>` when a first-use consumer repo lacks a Project Link, unless `-NoInit` is passed.
+- Product readiness still depends on verified clean install, init, project resolution, and state-bearing command flow from a consumer repo.

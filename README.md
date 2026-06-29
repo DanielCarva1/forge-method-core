@@ -188,6 +188,44 @@ network.
 
 ## Quick start
 
+### Initialize a consumer project
+
+From the repo that should be governed by Forge, run:
+
+```bash
+forge-core project init --root <repo>
+```
+
+The command creates the consumer pointer and sibling sidecar state root:
+
+```txt
+<parent>/
+  <project>/
+    .forge-method.yaml
+  forge-<project>/
+    .forge-method/
+```
+
+It must not create `<project>/.forge-method/` inside the consumer repo. The
+expected pointer has the same shape as the resolved project link:
+
+```yaml
+schema_version: forge_project_link_v1
+project_id: <project>
+sidecar_root: ../forge-<project>
+state_root: ../forge-<project>/.forge-method
+```
+
+`project init` is safe to rerun when the existing link already resolves to the
+same sidecar/state root. It fails closed instead of rewriting or guessing when
+`.forge-method.yaml` points somewhere else, or when the requested consumer repo
+already has unsafe consumer-local state at `<project>/.forge-method`. Do not use
+`--allow-bootstrap-core` for consumer projects.
+
+Forge core itself is the temporary bootstrap exception. When bootstrapping
+`<repo-root>` against its local state, commands that resolve local
+`.forge-method/` state must pass `--allow-bootstrap-core`.
+
 ### Resolve the Forge runtime state
 
 Consumer projects keep product code and Forge runtime state separate. The
@@ -219,8 +257,14 @@ state_root: ../forge-my-project/.forge-method
 
 Acceptance rules for consumer project links:
 
-- `state_root` must resolve under `sidecar_root`; the normal value is
-  `<sidecar_root>/.forge-method`.
+- Prefer `forge-core project init --root <repo>` for first use; hand-written
+  links are for review, fixtures, and migrations.
+- `project init` is idempotent for an existing link that resolves to the same
+  sidecar/state root.
+- `project init` fails closed on a conflicting existing link or an unsafe
+  consumer-local state root such as `<consumer>/.forge-method`.
+- `state_root` must resolve under `sidecar_root` and end in `.forge-method`;
+  the normal value is `<sidecar_root>/.forge-method`.
 - `state_root` must not be local product-repo state like
   `<consumer>/.forge-method`. Local state is reserved for the explicit Forge
   core bootstrap exception only.
@@ -393,6 +437,13 @@ call them.
   tested. Current coordination state is still
   reconstructed from the claims bus on each invocation; the fuller
   `derive_state`-as-sole-constructor layer remains queued for v0.2.
+- **First-use skill wiring** — the global Forge skill/start script still needs
+  to call or guide `forge-core project init --root <repo>` for repos that do not
+  yet have a Forge Project Link.
+- **Product-ready bootstrap proof** — release readiness still depends on a
+  verified clean install -> init -> resolve -> claim/operation flow from a
+  consumer repo. Until that evidence exists, do not describe Forge as fully
+  done.
 - **License** — not yet chosen; set one before public release.
 
 ### Patch notes — evolve phase
