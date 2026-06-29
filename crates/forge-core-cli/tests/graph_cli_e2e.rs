@@ -1,6 +1,8 @@
 use assert_cmd::Command;
 use std::fs;
 use std::path::{Path, PathBuf};
+#[cfg(windows)]
+use std::process::Command as ProcessCommand;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn bin() -> Command {
@@ -36,6 +38,90 @@ fn fresh_project(label: &str) -> (PathBuf, PathBuf) {
 
 fn write_graph(app: &Path, name: &str, contents: &str) {
     fs::write(app.join("graphs").join(name), contents).expect("write graph fixture");
+}
+
+fn copy_repo_file(app: &Path, source_relative: &str, target_relative: &str) {
+    let target = app.join(target_relative);
+    fs::create_dir_all(target.parent().expect("target file has parent"))
+        .expect("create target parent");
+    fs::copy(repo_root().join(source_relative), target).expect("copy repo fixture");
+}
+
+fn install_read_operation(app: &Path, target_relative: &str) {
+    copy_repo_file(
+        app,
+        "docs/fixtures/operation-contract-v0/observe-project-status.yaml",
+        target_relative,
+    );
+}
+
+fn install_write_operation(app: &Path, target_relative: &str) {
+    copy_repo_file(
+        app,
+        "docs/fixtures/operation-contract-v0/execute-trivial-write.yaml",
+        target_relative,
+    );
+    copy_repo_file(
+        app,
+        "contracts/effects/story-artifact-write-effect.yaml",
+        "contracts/effects/story-artifact-write-effect.yaml",
+    );
+    copy_repo_file(
+        app,
+        "contracts/claims/story-v2-010-active-claim.yaml",
+        "contracts/claims/story-v2-010-active-claim.yaml",
+    );
+}
+
+fn install_review_operation(app: &Path, target_relative: &str) {
+    copy_repo_file(
+        app,
+        "docs/fixtures/operation-contract-v0/plan-sprint-slice.yaml",
+        target_relative,
+    );
+}
+
+fn create_directory_link(link: &Path, target: &Path) {
+    fs::create_dir_all(link.parent().expect("link parent")).expect("create link parent");
+    create_directory_link_platform(link, target).unwrap_or_else(|message| panic!("{message}"));
+}
+
+#[cfg(windows)]
+fn create_directory_link_platform(link: &Path, target: &Path) -> Result<(), String> {
+    let output = ProcessCommand::new("cmd")
+        .args([
+            "/C",
+            "mklink",
+            "/J",
+            &link.display().to_string(),
+            &target.display().to_string(),
+        ])
+        .output()
+        .map_err(|source| format!("create junction failed to start: {source}"))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "create junction failed: stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ))
+    }
+}
+
+#[cfg(not(windows))]
+fn create_directory_link_platform(link: &Path, target: &Path) -> Result<(), String> {
+    std::os::unix::fs::symlink(target, link)
+        .map_err(|source| format!("create symlink failed: {source}"))
+}
+
+fn step_by_id<'a>(json: &'a serde_json::Value, node_id: &str) -> &'a serde_json::Value {
+    json["report"]["steps"]
+        .as_array()
+        .expect("steps array")
+        .iter()
+        .find(|step| step["node_id"] == node_id)
+        .expect("step exists")
 }
 
 fn valid_graph() -> &'static str {
@@ -162,6 +248,8 @@ fn graph_validate_resolves_project_before_relative_graph_path() {
 #[test]
 fn graph_run_dry_run_uses_sidecar_resolution_without_creating_local_state() {
     let (app, sidecar) = fresh_project("run");
+    install_read_operation(&app, "contracts/operations/read-a.yaml");
+    install_read_operation(&app, "contracts/operations/read-b.yaml");
     write_graph(&app, "valid.yaml", valid_graph());
 
     let output = bin()
@@ -188,6 +276,458 @@ fn graph_run_dry_run_uses_sidecar_resolution_without_creating_local_state() {
     assert_eq!(json["dry_run_executed"], true);
     assert!(json["report"].is_object());
     assert_eq!(json["state_root"], sidecar.display().to_string());
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_resolves_operation_refs_from_project_root() {
+    let (app, _sidecar) = fresh_project("operation-ref");
+    install_read_operation(&app, "contracts/operations/observe.yaml");
+    write_graph(
+        &app,
+        "operation-resolution.yaml",
+        r#"
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.e2e.operation-resolution"
+created_at: "2026-06-29T00:00:00Z"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+nodes:
+  - node_id: "read_status"
+    node_kind: "operation"
+    operation_ref: "contracts/operations/observe.yaml"
+    mutation_capable: false
+edges: []
+stop_conditions:
+  - "validation_errors"
+"#,
+    );
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/operation-resolution.yaml",
+            "--dry-run",
+            "--json",
+        ])
+        .unwrap();
+
+    assert!(
+        output.status.success(),
+        "graph dry-run should pass: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "read_status");
+    assert_eq!(json["status"], "passed");
+    assert_eq!(json["report"]["status"], "planned");
+    assert_eq!(
+        step["operation_contract_id"],
+        "op_fixture_observe_project_status"
+    );
+    assert_eq!(step["operation_status"], "safe_read_only");
+    assert_eq!(step["operation_plan_allowed"], true);
+    assert_eq!(step["mutation_source"], "operation_contract");
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_blocks_when_operation_ref_file_is_missing() {
+    let (app, _sidecar) = fresh_project("missing-operation");
+    write_graph(
+        &app,
+        "missing-operation.yaml",
+        r#"
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.e2e.missing-operation"
+created_at: "2026-06-29T00:00:00Z"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+nodes:
+  - node_id: "missing_operation"
+    node_kind: "operation"
+    operation_ref: "contracts/operations/does-not-exist.yaml"
+edges: []
+stop_conditions:
+  - "validation_errors"
+"#,
+    );
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/missing-operation.yaml",
+            "--dry-run",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "missing_operation");
+    assert_eq!(json["status"], "blocked");
+    assert_eq!(json["dry_run_executed"], true);
+    assert_eq!(json["report"]["status"], "blocked");
+    assert_eq!(step["status"], "blocked");
+    assert_eq!(step["operation_status"], "missing");
+    assert_eq!(step["reasons"][0], "operation_contract_missing");
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_rejects_operation_ref_parent_escape() {
+    let (app, _sidecar) = fresh_project("operation-ref-escape");
+    write_graph(
+        &app,
+        "operation-ref-escape.yaml",
+        r#"
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.e2e.operation-ref-escape"
+created_at: "2026-06-29T00:00:00Z"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+nodes:
+  - node_id: "escaped_operation"
+    node_kind: "operation"
+    operation_ref: "../outside-operation.yaml"
+edges: []
+stop_conditions:
+  - "validation_errors"
+"#,
+    );
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/operation-ref-escape.yaml",
+            "--dry-run",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "escaped_operation");
+    assert_eq!(json["status"], "blocked");
+    assert_eq!(step["operation_status"], "invalid");
+    assert_eq!(step["reasons"][0], "operation_contract_invalid");
+    assert!(step["operation_blocking_reasons"][0]
+        .as_str()
+        .expect("blocking reason")
+        .contains("unsafe operation_ref"));
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_rejects_absolute_operation_ref() {
+    let (app, _sidecar) = fresh_project("operation-ref-absolute");
+    let absolute_ref = repo_root()
+        .join("docs")
+        .join("fixtures")
+        .join("operation-contract-v0")
+        .join("observe-project-status.yaml");
+    write_graph(
+        &app,
+        "operation-ref-absolute.yaml",
+        &format!(
+            r#"
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.e2e.operation-ref-absolute"
+created_at: "2026-06-29T00:00:00Z"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+nodes:
+  - node_id: "absolute_operation"
+    node_kind: "operation"
+    operation_ref: '{}'
+edges: []
+stop_conditions:
+  - "validation_errors"
+"#,
+            absolute_ref.display()
+        ),
+    );
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/operation-ref-absolute.yaml",
+            "--dry-run",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "absolute_operation");
+    assert_eq!(json["status"], "blocked");
+    assert_eq!(step["operation_status"], "invalid");
+    assert_eq!(step["reasons"][0], "operation_contract_invalid");
+    assert!(step["operation_blocking_reasons"][0]
+        .as_str()
+        .expect("blocking reason")
+        .contains("unsafe operation_ref"));
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_rejects_operation_ref_symlink_escape() {
+    let (app, _sidecar) = fresh_project("operation-ref-symlink");
+    let outside_dir = app
+        .parent()
+        .expect("fresh project parent")
+        .join("outside-ops");
+    fs::create_dir_all(&outside_dir).expect("create outside operation dir");
+    fs::copy(
+        repo_root()
+            .join("docs")
+            .join("fixtures")
+            .join("operation-contract-v0")
+            .join("observe-project-status.yaml"),
+        outside_dir.join("observe.yaml"),
+    )
+    .expect("copy outside operation");
+    create_directory_link(
+        &app.join("contracts").join("operations").join("linked"),
+        &outside_dir,
+    );
+    write_graph(
+        &app,
+        "operation-ref-symlink.yaml",
+        r#"
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.e2e.operation-ref-symlink"
+created_at: "2026-06-29T00:00:00Z"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+nodes:
+  - node_id: "linked_operation"
+    node_kind: "operation"
+    operation_ref: "contracts/operations/linked/observe.yaml"
+edges: []
+stop_conditions:
+  - "validation_errors"
+"#,
+    );
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/operation-ref-symlink.yaml",
+            "--dry-run",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "linked_operation");
+    assert_eq!(json["status"], "blocked");
+    assert_eq!(step["operation_status"], "invalid");
+    assert_eq!(step["reasons"][0], "operation_contract_invalid");
+    assert!(step["operation_blocking_reasons"][0]
+        .as_str()
+        .expect("blocking reason")
+        .contains("escapes project root"));
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_blocks_invalid_operation_contract_yaml() {
+    let (app, _sidecar) = fresh_project("invalid-operation");
+    let operation_path = app
+        .join("contracts")
+        .join("operations")
+        .join("invalid.yaml");
+    fs::create_dir_all(operation_path.parent().expect("operation parent"))
+        .expect("create operation parent");
+    fs::write(&operation_path, "operation_contract: [").expect("write invalid operation");
+    write_graph(
+        &app,
+        "invalid-operation.yaml",
+        r#"
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.e2e.invalid-operation"
+created_at: "2026-06-29T00:00:00Z"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+nodes:
+  - node_id: "invalid_operation"
+    node_kind: "operation"
+    operation_ref: "contracts/operations/invalid.yaml"
+edges: []
+stop_conditions:
+  - "validation_errors"
+"#,
+    );
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/invalid-operation.yaml",
+            "--dry-run",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "invalid_operation");
+    assert_eq!(json["status"], "blocked");
+    assert_eq!(step["operation_status"], "invalid");
+    assert_eq!(step["reasons"][0], "operation_contract_invalid");
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_blocks_review_required_operation_contract() {
+    let (app, _sidecar) = fresh_project("review-required-operation");
+    install_review_operation(&app, "contracts/operations/plan-sprint.yaml");
+    write_graph(
+        &app,
+        "review-required-operation.yaml",
+        r#"
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.e2e.review-required-operation"
+created_at: "2026-06-29T00:00:00Z"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+nodes:
+  - node_id: "plan_sprint"
+    node_kind: "operation"
+    operation_ref: "contracts/operations/plan-sprint.yaml"
+edges: []
+stop_conditions:
+  - "validation_errors"
+"#,
+    );
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/review-required-operation.yaml",
+            "--dry-run",
+            "--json",
+        ])
+        .output()
+        .expect("run graph dry-run");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "plan_sprint");
+    assert_eq!(json["status"], "blocked");
+    assert_eq!(step["operation_status"], "not_ready");
+    assert_eq!(step["operation_preview_status"], "review_required");
+    assert!(step["operation_blocking_reasons"]
+        .as_array()
+        .expect("blocking reasons")
+        .iter()
+        .any(|reason| reason == "mutation_requires_review"));
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_does_not_append_sidecar_trace_or_ledger() {
+    let (app, sidecar) = fresh_project("no-trace-mutation");
+    install_read_operation(&app, "contracts/operations/observe.yaml");
+    let trace = sidecar.join("traces").join("events.ndjson");
+    fs::create_dir_all(trace.parent().expect("trace parent")).expect("create trace parent");
+    fs::write(&trace, "preexisting-trace\n").expect("write trace sentinel");
+    let ledger = sidecar.join("ledger.ndjson");
+    fs::write(&ledger, "preexisting-ledger\n").expect("write ledger sentinel");
+    write_graph(
+        &app,
+        "no-trace-mutation.yaml",
+        r#"
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.e2e.no-trace-mutation"
+created_at: "2026-06-29T00:00:00Z"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+nodes:
+  - node_id: "read_status"
+    node_kind: "operation"
+    operation_ref: "contracts/operations/observe.yaml"
+edges: []
+stop_conditions:
+  - "validation_errors"
+"#,
+    );
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &app.display().to_string(),
+            "--graph",
+            "graphs/no-trace-mutation.yaml",
+            "--dry-run",
+            "--json",
+        ])
+        .unwrap();
+
+    assert!(output.status.success());
+    assert_eq!(fs::read_to_string(&trace).unwrap(), "preexisting-trace\n");
+    assert_eq!(fs::read_to_string(&ledger).unwrap(), "preexisting-ledger\n");
+    assert!(!sidecar.join("effects").exists());
     assert!(!app.join(".forge-method").exists());
 }
 
@@ -219,6 +759,8 @@ fn graph_validate_exits_nonzero_when_validation_blocks() {
 #[test]
 fn graph_run_dry_run_exits_nonzero_when_verifier_blocks_mutation() {
     let (app, _sidecar) = fresh_project("blocked");
+    install_read_operation(&app, "contracts/operations/read-current-state.yaml");
+    install_write_operation(&app, "contracts/operations/write-artifact.yaml");
     write_graph(&app, "blocked.yaml", verifier_blocks_mutation_graph());
 
     let output = bin()
@@ -243,6 +785,82 @@ fn graph_run_dry_run_exits_nonzero_when_verifier_blocks_mutation() {
     assert_eq!(json["report"]["status"], "blocked");
     assert_eq!(json["report"]["blocked_node_count"], 1);
     assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn graph_run_dry_run_blocks_operation_contract_that_is_not_ready() {
+    let root = repo_root();
+    let graph = root
+        .join("docs")
+        .join("fixtures")
+        .join("workflow-graph-v0")
+        .join("operation-aware-blocked.yaml");
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &root.display().to_string(),
+            "--graph",
+            &graph.display().to_string(),
+            "--dry-run",
+            "--allow-bootstrap-core",
+            "--json",
+        ])
+        .output()
+        .expect("run operation-aware blocked graph");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "release_gate");
+    assert_eq!(json["status"], "blocked");
+    assert_eq!(json["report"]["status"], "blocked");
+    assert_eq!(step["status"], "blocked");
+    assert_eq!(step["operation_status"], "not_ready");
+    assert_eq!(step["operation_preview_status"], "gate_required");
+    assert_eq!(step["operation_runtime_ready"], false);
+    assert!(step["operation_blocking_reasons"]
+        .as_array()
+        .expect("blocking reasons")
+        .iter()
+        .any(|reason| reason == "gate_missing_or_pending" || reason == "gate_pending"));
+}
+
+#[test]
+fn graph_run_dry_run_derives_mutation_from_operation_contract_over_graph_false() {
+    let root = repo_root();
+    let graph = root
+        .join("docs")
+        .join("fixtures")
+        .join("workflow-graph-v0")
+        .join("operation-aware-valid.yaml");
+
+    let output = bin()
+        .args([
+            "graph",
+            "run",
+            "--root",
+            &root.display().to_string(),
+            "--graph",
+            &graph.display().to_string(),
+            "--dry-run",
+            "--allow-bootstrap-core",
+            "--json",
+        ])
+        .output()
+        .expect("run operation-aware mutation graph");
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let step = step_by_id(&json, "write_artifact");
+    assert_eq!(json["status"], "blocked");
+    assert_eq!(json["report"]["blocked_node_count"], 1);
+    assert_eq!(step["status"], "blocked");
+    assert_eq!(step["declared_mutation_capable"], false);
+    assert_eq!(step["mutation_capable"], true);
+    assert_eq!(step["mutation_source"], "operation_contract");
+    assert_eq!(step["blocked_by"][0], "verify_write_authority");
 }
 
 #[test]

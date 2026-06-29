@@ -1,6 +1,9 @@
+use forge_core_contracts::{RepoPath, StableId};
 use forge_core_graph::{
-    dry_run_graph, parse_workflow_graph_yaml, validate_graph, GraphDiagnosticCode,
-    GraphDryRunReason, GraphDryRunStatus, GraphDryRunStepStatus, ParseWorkflowGraphError,
+    dry_run_graph, dry_run_graph_with_context, parse_workflow_graph_yaml, validate_graph,
+    GraphDiagnosticCode, GraphDryRunContext, GraphDryRunReason, GraphDryRunStatus,
+    GraphDryRunStepStatus, GraphMutationSource, GraphOperationEvaluation, GraphOperationStatus,
+    ParseWorkflowGraphError,
 };
 
 const VALID_GRAPH: &str = r#"
@@ -249,4 +252,144 @@ authority_boundary:
         apply_step.reasons,
         vec![GraphDryRunReason::BlockedByVerifier]
     );
+}
+
+#[test]
+fn operation_context_missing_contract_blocks_when_required() {
+    let graph = parse_workflow_graph_yaml(
+        r#"
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.operation-context-missing"
+nodes:
+  - node_id: "read_status"
+    node_kind: "operation"
+    operation_ref: "contracts/operations/read-status.yaml"
+edges: []
+stop_conditions:
+  - "validation_errors"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+"#,
+    )
+    .expect("graph parses");
+
+    let dry_run = dry_run_graph_with_context(
+        &graph,
+        GraphDryRunContext::requiring_operation_contracts(&[]),
+    );
+
+    assert_eq!(dry_run.status, GraphDryRunStatus::Blocked);
+    assert_eq!(dry_run.blocked_node_count, 1);
+    assert!(dry_run
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == GraphDiagnosticCode::MissingOperationContract));
+    let step = dry_run.steps.first().expect("one step");
+    assert_eq!(step.status, GraphDryRunStepStatus::Blocked);
+    assert_eq!(
+        step.reasons,
+        vec![GraphDryRunReason::OperationContractMissing]
+    );
+}
+
+#[test]
+fn operation_contract_mutation_overrides_graph_declaration_for_verifier_blocking() {
+    let graph = parse_workflow_graph_yaml(
+        r#"
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.operation-context-mutation"
+nodes:
+  - node_id: "read_status"
+    node_kind: "operation"
+    operation_ref: "contracts/operations/read-status.yaml"
+    mutation_capable: false
+  - node_id: "verify"
+    node_kind: "verifier"
+    verifier_result: "failed"
+  - node_id: "write_artifact"
+    node_kind: "operation"
+    operation_ref: "contracts/operations/write-artifact.yaml"
+    mutation_capable: false
+edges:
+  - from: "read_status"
+    to: "verify"
+    edge_kind: "requires_success"
+  - from: "verify"
+    to: "write_artifact"
+    edge_kind: "requires_success"
+stop_conditions:
+  - "validation_errors"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+"#,
+    )
+    .expect("graph parses");
+    let evaluations = vec![
+        operation_evaluation(
+            "contracts/operations/read-status.yaml",
+            "op.read-status",
+            false,
+            true,
+            GraphOperationStatus::Ready,
+        ),
+        operation_evaluation(
+            "contracts/operations/write-artifact.yaml",
+            "op.write-artifact",
+            true,
+            true,
+            GraphOperationStatus::Ready,
+        ),
+    ];
+
+    let dry_run = dry_run_graph_with_context(
+        &graph,
+        GraphDryRunContext::requiring_operation_contracts(&evaluations),
+    );
+
+    assert_eq!(dry_run.status, GraphDryRunStatus::Blocked);
+    assert_eq!(dry_run.blocked_node_count, 1);
+    assert!(dry_run.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == GraphDiagnosticCode::OperationMutationDeclarationMismatch
+    }));
+    let write_step = dry_run
+        .steps
+        .iter()
+        .find(|step| step.node_id.0 == "write_artifact")
+        .expect("write step exists");
+    assert!(!write_step.declared_mutation_capable);
+    assert!(write_step.mutation_capable);
+    assert_eq!(
+        write_step.mutation_source,
+        GraphMutationSource::OperationContract
+    );
+    assert_eq!(write_step.status, GraphDryRunStepStatus::Blocked);
+    assert_eq!(write_step.blocked_by[0].0, "verify");
+    assert_eq!(write_step.operation_runtime_ready, Some(true));
+    assert_eq!(write_step.operation_plan_allowed, Some(true));
+}
+
+fn operation_evaluation(
+    operation_ref: &str,
+    contract_id: &str,
+    mutation_capable: bool,
+    plan_allowed: bool,
+    status: GraphOperationStatus,
+) -> GraphOperationEvaluation {
+    GraphOperationEvaluation {
+        operation_ref: RepoPath(operation_ref.to_string()),
+        contract_id: Some(StableId(contract_id.to_string())),
+        mutation_capable,
+        runtime_ready: plan_allowed,
+        plan_allowed,
+        status,
+        preview_status: Some("ready".to_string()),
+        ready_status: Some("ready".to_string()),
+        blocking_reasons: Vec::new(),
+    }
 }

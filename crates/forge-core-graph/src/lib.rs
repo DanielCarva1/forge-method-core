@@ -236,6 +236,11 @@ pub enum GraphDiagnosticCode {
     MissingEdgeEndpoint,
     CycleDetected,
     EmptyOperationRef,
+    MissingOperationContract,
+    InvalidOperationContract,
+    DuplicateOperationEvaluation,
+    OperationNotReady,
+    OperationMutationDeclarationMismatch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -264,7 +269,23 @@ pub struct GraphDryRunStep {
     pub node_kind: GraphNodeKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub operation_ref: Option<RepoPath>,
+    pub declared_mutation_capable: bool,
     pub mutation_capable: bool,
+    pub mutation_source: GraphMutationSource,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_contract_id: Option<StableId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_status: Option<GraphOperationStatus>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_preview_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_ready_status: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_runtime_ready: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub operation_plan_allowed: Option<bool>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub operation_blocking_reasons: Vec<String>,
     pub status: GraphDryRunStepStatus,
     pub reasons: Vec<GraphDryRunReason>,
     pub blocked_by: Vec<StableId>,
@@ -282,6 +303,65 @@ pub enum GraphDryRunStepStatus {
 pub enum GraphDryRunReason {
     TopologicalOrder,
     BlockedByVerifier,
+    OperationContractMissing,
+    OperationContractInvalid,
+    OperationNotReady,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphMutationSource {
+    GraphDeclaration,
+    OperationContract,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraphOperationStatus {
+    Ready,
+    SafeReadOnly,
+    NotReady,
+    Missing,
+    Invalid,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GraphOperationEvaluation {
+    pub operation_ref: RepoPath,
+    pub contract_id: Option<StableId>,
+    pub mutation_capable: bool,
+    pub runtime_ready: bool,
+    pub plan_allowed: bool,
+    pub status: GraphOperationStatus,
+    pub preview_status: Option<String>,
+    pub ready_status: Option<String>,
+    pub blocking_reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GraphDryRunContext<'a> {
+    pub operation_evaluations: &'a [GraphOperationEvaluation],
+    pub require_operation_contracts: bool,
+}
+
+impl<'a> GraphDryRunContext<'a> {
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self {
+            operation_evaluations: &[],
+            require_operation_contracts: false,
+        }
+    }
+
+    #[must_use]
+    pub const fn requiring_operation_contracts(
+        operation_evaluations: &'a [GraphOperationEvaluation],
+    ) -> Self {
+        Self {
+            operation_evaluations,
+            require_operation_contracts: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -331,6 +411,14 @@ pub fn validate_graph(graph: &WorkflowGraph) -> GraphValidationReport {
 
 #[must_use]
 pub fn dry_run_graph(graph: &WorkflowGraph) -> GraphDryRunReport {
+    dry_run_graph_with_context(graph, GraphDryRunContext::empty())
+}
+
+#[must_use]
+pub fn dry_run_graph_with_context(
+    graph: &WorkflowGraph,
+    context: GraphDryRunContext<'_>,
+) -> GraphDryRunReport {
     let validation = validate_graph(graph);
     if validation.has_errors() {
         return GraphDryRunReport {
@@ -345,50 +433,252 @@ pub fn dry_run_graph(graph: &WorkflowGraph) -> GraphDryRunReport {
     let nodes_by_id = nodes_by_id(graph);
     let mut steps = Vec::with_capacity(graph.nodes.len());
     let mut blocked_node_count = 0usize;
+    let mut diagnostics = operation_evaluation_diagnostics(context.operation_evaluations);
+    let operation_evaluations = operation_evaluations_by_ref(context.operation_evaluations);
 
     for (step_index, node_id) in topological_order(graph).into_iter().enumerate() {
         let Some(node) = nodes_by_id.get(node_id.0.as_str()) else {
             continue;
         };
-        let blocked_by = if node.node_kind == GraphNodeKind::Operation && node.mutation_capable {
-            unpassed_upstream_verifiers(graph, node_id.0.as_str())
-        } else {
-            Vec::new()
-        };
-        let blocked = !blocked_by.is_empty();
-        if blocked {
+        let operation_evaluation = node
+            .operation_ref
+            .as_ref()
+            .and_then(|reference| operation_evaluations.get(reference.0.as_str()).copied());
+        append_mutation_declaration_diagnostic(&mut diagnostics, node, operation_evaluation);
+        append_missing_operation_diagnostic(
+            &mut diagnostics,
+            node,
+            operation_evaluation,
+            context.require_operation_contracts,
+        );
+        let computation = dry_run_step(
+            graph,
+            node,
+            node_id,
+            step_index,
+            operation_evaluation,
+            context.require_operation_contracts,
+        );
+        if computation.blocked {
             blocked_node_count += 1;
         }
-        steps.push(GraphDryRunStep {
-            step_index,
-            node_id,
-            node_kind: node.node_kind,
-            operation_ref: node.operation_ref.clone(),
-            mutation_capable: node.mutation_capable,
-            status: if blocked {
-                GraphDryRunStepStatus::Blocked
-            } else {
-                GraphDryRunStepStatus::Planned
-            },
-            reasons: if blocked {
-                vec![GraphDryRunReason::BlockedByVerifier]
-            } else {
-                vec![GraphDryRunReason::TopologicalOrder]
-            },
-            blocked_by,
-        });
+        steps.push(computation.step);
     }
+
+    let has_diagnostic_errors = diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.severity == GraphDiagnosticSeverity::Error);
 
     GraphDryRunReport {
         graph_id: graph.graph_id.clone(),
-        status: if blocked_node_count == 0 {
+        status: if blocked_node_count == 0 && !has_diagnostic_errors {
             GraphDryRunStatus::Planned
         } else {
             GraphDryRunStatus::Blocked
         },
         steps,
-        diagnostics: Vec::new(),
+        diagnostics,
         blocked_node_count,
+    }
+}
+
+struct StepComputation {
+    blocked: bool,
+    step: GraphDryRunStep,
+}
+
+fn dry_run_step(
+    graph: &WorkflowGraph,
+    node: &GraphNode,
+    node_id: StableId,
+    step_index: usize,
+    operation_evaluation: Option<&GraphOperationEvaluation>,
+    require_operation_contracts: bool,
+) -> StepComputation {
+    let effective_mutation_capable = operation_evaluation
+        .map_or(node.mutation_capable, |evaluation| {
+            evaluation.mutation_capable
+        });
+    let mutation_source = if operation_evaluation.is_some() {
+        GraphMutationSource::OperationContract
+    } else {
+        GraphMutationSource::GraphDeclaration
+    };
+    let operation_block_reason =
+        operation_block_reason(node, operation_evaluation, require_operation_contracts);
+    let blocked_by = if node.node_kind == GraphNodeKind::Operation && effective_mutation_capable {
+        unpassed_upstream_verifiers(graph, node_id.0.as_str())
+    } else {
+        Vec::new()
+    };
+    let blocked = operation_block_reason.is_some() || !blocked_by.is_empty();
+    let reasons = dry_run_step_reasons(operation_block_reason, &blocked_by);
+
+    StepComputation {
+        blocked,
+        step: GraphDryRunStep {
+            step_index,
+            node_id,
+            node_kind: node.node_kind,
+            operation_ref: node.operation_ref.clone(),
+            declared_mutation_capable: node.mutation_capable,
+            mutation_capable: effective_mutation_capable,
+            mutation_source,
+            operation_contract_id: operation_evaluation
+                .and_then(|evaluation| evaluation.contract_id.clone()),
+            operation_status: operation_evaluation.map(|evaluation| evaluation.status),
+            operation_preview_status: operation_evaluation
+                .and_then(|evaluation| evaluation.preview_status.clone()),
+            operation_ready_status: operation_evaluation
+                .and_then(|evaluation| evaluation.ready_status.clone()),
+            operation_runtime_ready: operation_evaluation
+                .map(|evaluation| evaluation.runtime_ready),
+            operation_plan_allowed: operation_evaluation.map(|evaluation| evaluation.plan_allowed),
+            operation_blocking_reasons: operation_evaluation
+                .map_or_else(Vec::new, |evaluation| evaluation.blocking_reasons.clone()),
+            status: if blocked {
+                GraphDryRunStepStatus::Blocked
+            } else {
+                GraphDryRunStepStatus::Planned
+            },
+            reasons,
+            blocked_by,
+        },
+    }
+}
+
+fn dry_run_step_reasons(
+    operation_block_reason: Option<GraphDryRunReason>,
+    blocked_by: &[StableId],
+) -> Vec<GraphDryRunReason> {
+    let mut reasons = Vec::new();
+    if let Some(reason) = operation_block_reason {
+        reasons.push(reason);
+    }
+    if !blocked_by.is_empty() {
+        reasons.push(GraphDryRunReason::BlockedByVerifier);
+    }
+    if reasons.is_empty() {
+        reasons.push(GraphDryRunReason::TopologicalOrder);
+    }
+    reasons
+}
+
+fn operation_evaluations_by_ref(
+    operation_evaluations: &[GraphOperationEvaluation],
+) -> BTreeMap<&str, &GraphOperationEvaluation> {
+    let mut by_ref = BTreeMap::new();
+    for evaluation in operation_evaluations {
+        by_ref
+            .entry(evaluation.operation_ref.0.as_str())
+            .or_insert(evaluation);
+    }
+    by_ref
+}
+
+fn operation_evaluation_diagnostics(
+    operation_evaluations: &[GraphOperationEvaluation],
+) -> Vec<GraphDiagnostic> {
+    let mut diagnostics = Vec::new();
+    let mut seen = BTreeSet::new();
+    for evaluation in operation_evaluations {
+        let reference = evaluation.operation_ref.0.as_str();
+        if !seen.insert(reference) {
+            diagnostics.push(GraphDiagnostic::error(
+                GraphDiagnosticCode::DuplicateOperationEvaluation,
+                format!("operation_ref.{reference}"),
+                format!("operation_ref {reference} was evaluated more than once"),
+            ));
+        }
+        match evaluation.status {
+            GraphOperationStatus::Missing => diagnostics.push(GraphDiagnostic::error(
+                GraphDiagnosticCode::MissingOperationContract,
+                format!("operation_ref.{reference}"),
+                format!("operation_ref {reference} could not be read"),
+            )),
+            GraphOperationStatus::Invalid => diagnostics.push(GraphDiagnostic::error(
+                GraphDiagnosticCode::InvalidOperationContract,
+                format!("operation_ref.{reference}"),
+                format!("operation_ref {reference} could not be parsed or evaluated"),
+            )),
+            GraphOperationStatus::NotReady => diagnostics.push(GraphDiagnostic::error(
+                GraphDiagnosticCode::OperationNotReady,
+                format!("operation_ref.{reference}"),
+                format!("operation_ref {reference} is not ready for graph planning"),
+            )),
+            GraphOperationStatus::Ready | GraphOperationStatus::SafeReadOnly => {}
+        }
+    }
+    diagnostics
+}
+
+fn append_missing_operation_diagnostic(
+    diagnostics: &mut Vec<GraphDiagnostic>,
+    node: &GraphNode,
+    operation_evaluation: Option<&GraphOperationEvaluation>,
+    require_operation_contracts: bool,
+) {
+    if !require_operation_contracts
+        || node.node_kind != GraphNodeKind::Operation
+        || operation_evaluation.is_some()
+    {
+        return;
+    }
+    let Some(reference) = &node.operation_ref else {
+        return;
+    };
+    diagnostics.push(GraphDiagnostic::error(
+        GraphDiagnosticCode::MissingOperationContract,
+        format!("nodes.{}.operation_ref", node.node_id.0),
+        format!(
+            "operation node {} requires operation_ref {} to be loaded before dry-run",
+            node.node_id.0, reference.0
+        ),
+    ));
+}
+
+fn append_mutation_declaration_diagnostic(
+    diagnostics: &mut Vec<GraphDiagnostic>,
+    node: &GraphNode,
+    operation_evaluation: Option<&GraphOperationEvaluation>,
+) {
+    let Some(evaluation) = operation_evaluation else {
+        return;
+    };
+    if node.node_kind != GraphNodeKind::Operation
+        || node.mutation_capable == evaluation.mutation_capable
+    {
+        return;
+    }
+    diagnostics.push(GraphDiagnostic::warning(
+        GraphDiagnosticCode::OperationMutationDeclarationMismatch,
+        format!("nodes.{}.mutation_capable", node.node_id.0),
+        format!(
+            "operation node {} declared mutation_capable={}, but OperationContract {} derives mutation_capable={}",
+            node.node_id.0,
+            node.mutation_capable,
+            evaluation.operation_ref.0,
+            evaluation.mutation_capable
+        ),
+    ));
+}
+
+fn operation_block_reason(
+    node: &GraphNode,
+    operation_evaluation: Option<&GraphOperationEvaluation>,
+    require_operation_contracts: bool,
+) -> Option<GraphDryRunReason> {
+    if node.node_kind != GraphNodeKind::Operation {
+        return None;
+    }
+    let Some(evaluation) = operation_evaluation else {
+        return require_operation_contracts.then_some(GraphDryRunReason::OperationContractMissing);
+    };
+    match evaluation.status {
+        GraphOperationStatus::Missing => Some(GraphDryRunReason::OperationContractMissing),
+        GraphOperationStatus::Invalid => Some(GraphDryRunReason::OperationContractInvalid),
+        GraphOperationStatus::NotReady => Some(GraphDryRunReason::OperationNotReady),
+        GraphOperationStatus::Ready | GraphOperationStatus::SafeReadOnly => None,
     }
 }
 

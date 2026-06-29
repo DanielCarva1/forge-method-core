@@ -2108,6 +2108,9 @@ fn add_yaml_files_in_dir(
 }
 
 fn yaml_files(dir: &Path) -> Result<Vec<PathBuf>, ReferenceIndexBuildError> {
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
     let entries = fs::read_dir(dir).map_err(|source| ReferenceIndexBuildError::ReadDir {
         path: dir.to_path_buf(),
         source,

@@ -1,10 +1,21 @@
 use crate::project_cmd::{resolve_project, ProjectResolveError};
-use forge_core_graph::{dry_run_graph, validate_graph, WorkflowGraph};
+use forge_core_contracts::{OperationContractDocument, RepoPath};
+use forge_core_graph::{
+    dry_run_graph_with_context, validate_graph, GraphDryRunContext, GraphOperationEvaluation,
+    GraphOperationStatus, WorkflowGraph,
+};
+use forge_core_runtime::{
+    preview_operation_with_snapshot, ready_operation_with_snapshot, RuntimePreviewReport,
+    RuntimePreviewStatus, RuntimeReadyReport,
+};
+use forge_core_store::{build_reference_index, ReferenceIndexBuildError};
+use forge_core_validate::ReferenceIndex;
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraphCommandKind {
@@ -63,6 +74,7 @@ pub enum GraphCommandError {
         path: PathBuf,
         source: String,
     },
+    ReferenceIndexBuild(String),
     SerializeReport {
         report: &'static str,
         source: String,
@@ -79,6 +91,9 @@ impl fmt::Display for GraphCommandError {
             }
             Self::ParseGraph { path, source } => {
                 write!(formatter, "parse graph {} failed: {source}", path.display())
+            }
+            Self::ReferenceIndexBuild(message) => {
+                write!(formatter, "reference index build failed: {message}")
             }
             Self::SerializeReport { report, source } => {
                 write!(formatter, "serialize {report} report failed: {source}")
@@ -148,7 +163,16 @@ pub fn run_dry_run(input: &GraphCommandInput) -> Result<GraphRunCommandOutput, G
         });
     }
 
-    let dry_run_report = report_value("dry-run", dry_run_graph(&graph))?;
+    let index =
+        build_reference_index(&project_root).map_err(|error| reference_index_error(&error))?;
+    let operation_evaluations = evaluate_graph_operations(&project_root, &graph, &index);
+    let dry_run_report = report_value(
+        "dry-run",
+        dry_run_graph_with_context(
+            &graph,
+            GraphDryRunContext::requiring_operation_contracts(&operation_evaluations),
+        ),
+    )?;
     let status = if dry_run_report_is_blocked(&dry_run_report) {
         GraphCommandStatus::Blocked
     } else {
@@ -165,6 +189,205 @@ pub fn run_dry_run(input: &GraphCommandInput) -> Result<GraphRunCommandOutput, G
         validation_report,
         report: Some(dry_run_report),
     })
+}
+
+fn evaluate_graph_operations(
+    project_root: &Path,
+    graph: &WorkflowGraph,
+    index: &ReferenceIndex,
+) -> Vec<GraphOperationEvaluation> {
+    operation_refs(graph)
+        .into_iter()
+        .map(|operation_ref| evaluate_graph_operation(project_root, index, operation_ref))
+        .collect()
+}
+
+fn operation_refs(graph: &WorkflowGraph) -> Vec<RepoPath> {
+    let references: BTreeSet<String> = graph
+        .nodes
+        .iter()
+        .filter(|node| node.node_kind == forge_core_graph::GraphNodeKind::Operation)
+        .filter_map(|node| node.operation_ref.as_ref())
+        .filter(|reference| !reference.0.trim().is_empty())
+        .map(|reference| reference.0.clone())
+        .collect();
+    references.into_iter().map(RepoPath).collect()
+}
+
+fn evaluate_graph_operation(
+    project_root: &Path,
+    index: &ReferenceIndex,
+    operation_ref: RepoPath,
+) -> GraphOperationEvaluation {
+    let operation_path = match resolve_operation_path(project_root, &operation_ref) {
+        Ok(path) => path,
+        Err(error) => {
+            return GraphOperationEvaluation {
+                operation_ref,
+                contract_id: None,
+                mutation_capable: false,
+                runtime_ready: false,
+                plan_allowed: false,
+                status: GraphOperationStatus::Invalid,
+                preview_status: None,
+                ready_status: None,
+                blocking_reasons: vec![error.to_string()],
+            };
+        }
+    };
+    let operation = match read_operation(&operation_path) {
+        Ok(operation) => operation,
+        Err(error) => {
+            return GraphOperationEvaluation {
+                operation_ref,
+                contract_id: None,
+                mutation_capable: false,
+                runtime_ready: false,
+                plan_allowed: false,
+                status: match error {
+                    ReadGraphOperationError::Read { .. } => GraphOperationStatus::Missing,
+                    ReadGraphOperationError::Parse { .. }
+                    | ReadGraphOperationError::Canonicalize { .. }
+                    | ReadGraphOperationError::UnsafeReference { .. } => {
+                        GraphOperationStatus::Invalid
+                    }
+                },
+                preview_status: None,
+                ready_status: None,
+                blocking_reasons: vec![error.to_string()],
+            };
+        }
+    };
+
+    let preview = preview_operation_with_snapshot(
+        &operation,
+        forge_core_runtime::RuntimeReadSnapshot::new(index),
+    );
+    let ready = ready_operation_with_snapshot(
+        &operation,
+        forge_core_runtime::RuntimeReadSnapshot::new(index),
+    );
+    let plan_allowed = graph_operation_plan_allowed(&preview, &ready);
+    let status = if plan_allowed {
+        if ready.ready {
+            GraphOperationStatus::Ready
+        } else {
+            GraphOperationStatus::SafeReadOnly
+        }
+    } else {
+        GraphOperationStatus::NotReady
+    };
+
+    GraphOperationEvaluation {
+        operation_ref,
+        contract_id: Some(preview.operation_id.clone()),
+        mutation_capable: preview.operation_mutates_state,
+        runtime_ready: ready.ready,
+        plan_allowed,
+        status,
+        preview_status: Some(serialized_value(&preview.status)),
+        ready_status: Some(serialized_value(&ready.status)),
+        blocking_reasons: if plan_allowed {
+            Vec::new()
+        } else {
+            ready
+                .blocking_reasons
+                .iter()
+                .map(serialized_value)
+                .collect()
+        },
+    }
+}
+
+fn graph_operation_plan_allowed(
+    preview: &RuntimePreviewReport,
+    ready: &RuntimeReadyReport,
+) -> bool {
+    if preview.operation_mutates_state {
+        return ready.ready;
+    }
+    matches!(
+        preview.status,
+        RuntimePreviewStatus::ReadOnly | RuntimePreviewStatus::Ready
+    )
+}
+
+fn read_operation(path: &Path) -> Result<OperationContractDocument, ReadGraphOperationError> {
+    let text = fs::read_to_string(path).map_err(|source| ReadGraphOperationError::Read {
+        path: path.to_path_buf(),
+        source: source.to_string(),
+    })?;
+    serde_yaml::from_str(&text).map_err(|source| ReadGraphOperationError::Parse {
+        path: path.to_path_buf(),
+        source: source.to_string(),
+    })
+}
+
+fn resolve_operation_path(
+    project_root: &Path,
+    operation_ref: &RepoPath,
+) -> Result<PathBuf, ReadGraphOperationError> {
+    let path = Path::new(operation_ref.0.as_str());
+    if path.as_os_str().is_empty() || path.components().any(operation_ref_component_escapes_root) {
+        return Err(ReadGraphOperationError::UnsafeReference {
+            reference: operation_ref.0.clone(),
+            reason: "operation_ref must be a project-root-relative path without absolute or parent components".to_string(),
+        });
+    }
+    let candidate = project_root.join(path);
+    ensure_operation_path_inside_project_root(project_root, &candidate, operation_ref)?;
+    Ok(candidate)
+}
+
+fn operation_ref_component_escapes_root(component: Component<'_>) -> bool {
+    matches!(
+        component,
+        Component::Prefix(_) | Component::RootDir | Component::ParentDir
+    )
+}
+
+fn ensure_operation_path_inside_project_root(
+    project_root: &Path,
+    candidate: &Path,
+    operation_ref: &RepoPath,
+) -> Result<(), ReadGraphOperationError> {
+    if !candidate.exists() {
+        return Ok(());
+    }
+    let canonical_root =
+        fs::canonicalize(project_root).map_err(|source| ReadGraphOperationError::Canonicalize {
+            path: project_root.to_path_buf(),
+            source: source.to_string(),
+        })?;
+    let canonical_candidate =
+        fs::canonicalize(candidate).map_err(|source| ReadGraphOperationError::Canonicalize {
+            path: candidate.to_path_buf(),
+            source: source.to_string(),
+        })?;
+    if canonical_candidate.starts_with(&canonical_root) {
+        Ok(())
+    } else {
+        Err(ReadGraphOperationError::UnsafeReference {
+            reference: operation_ref.0.clone(),
+            reason: format!(
+                "resolved operation path {} escapes project root {}",
+                canonical_candidate.display(),
+                canonical_root.display()
+            ),
+        })
+    }
+}
+
+fn reference_index_error(error: &ReferenceIndexBuildError) -> GraphCommandError {
+    GraphCommandError::ReferenceIndexBuild(error.to_string())
+}
+
+fn serialized_value<T: Serialize>(value: &T) -> String {
+    match serde_json::to_value(value) {
+        Ok(Value::String(value)) => value,
+        Ok(value) => value.to_string(),
+        Err(error) => format!("serialization_failed:{error}"),
+    }
 }
 
 fn read_graph(path: &Path) -> Result<WorkflowGraph, GraphCommandError> {
@@ -187,6 +410,45 @@ fn resolve_graph_path(
         Ok(graph_path.to_path_buf())
     } else {
         Ok(project_root.join(graph_path))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ReadGraphOperationError {
+    Read { path: PathBuf, source: String },
+    Parse { path: PathBuf, source: String },
+    Canonicalize { path: PathBuf, source: String },
+    UnsafeReference { reference: String, reason: String },
+}
+
+impl fmt::Display for ReadGraphOperationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Read { path, source } => {
+                write!(
+                    formatter,
+                    "read operation {} failed: {source}",
+                    path.display()
+                )
+            }
+            Self::Parse { path, source } => {
+                write!(
+                    formatter,
+                    "parse operation {} failed: {source}",
+                    path.display()
+                )
+            }
+            Self::Canonicalize { path, source } => {
+                write!(
+                    formatter,
+                    "canonicalize path {} failed: {source}",
+                    path.display()
+                )
+            }
+            Self::UnsafeReference { reference, reason } => {
+                write!(formatter, "unsafe operation_ref {reference}: {reason}")
+            }
+        }
     }
 }
 
