@@ -11,6 +11,7 @@
 //! binary entrypoint in `main.rs` keeps resolving them through
 //! `crate::cli_util::*`.
 
+use crate::cli_error::ExitError;
 use crate::{
     HostAdapterProcessTarget, HostAdapterProjectionTarget, HostAdapterUpdateChannel,
     PayloadFileSpec,
@@ -337,5 +338,194 @@ pub fn resolve_now_unix(flag: Option<i64>) -> i64 {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| i64::try_from(d.as_secs()).unwrap_or(0))
             .unwrap_or(0)
+    })
+}
+
+// ===========================================================================
+// R8 fallout: Result-returning variants of the legacy exit-on-error helpers.
+//
+// The legacy helpers above (`next_arg`, `parse_u64`, `require_value`, ...)
+// call `std::process::exit` on a malformed argv. That makes the dispatchers
+// impossible to unit-test as plain functions and forces business logic to
+// live in the same layer as shell-exit policy.
+//
+// The `_or_err` variants below return `Result<T, ExitError>` instead. Each
+// dispatcher migrates to its `_or_err` counterpart as part of R8; once every
+// dispatcher is migrated, the legacy exit-on-error helpers will be deleted.
+// ===========================================================================
+
+/// Result variant of [`next_arg`].
+pub fn next_arg_or_err(args: &[String], index: usize) -> Result<&str, ExitError> {
+    args.get(index)
+        .map(String::as_str)
+        .ok_or_else(|| ExitError::usage(usage()))
+}
+
+/// Result variant of [`next_path`].
+pub fn next_path_or_err(args: &[String], index: usize) -> Result<PathBuf, ExitError> {
+    Ok(PathBuf::from(next_arg_or_err(args, index)?))
+}
+
+/// Result variant of [`parse_payload_arg`].
+pub fn parse_payload_arg_or_err(value: &str) -> Result<PayloadFileSpec, ExitError> {
+    let (target_ref, path) = value
+        .split_once('=')
+        .ok_or_else(|| ExitError::usage(usage()))?;
+    Ok(PayloadFileSpec {
+        target_ref: target_ref.to_string(),
+        path: PathBuf::from(path),
+    })
+}
+
+/// Result variant of [`parse_u64`].
+pub fn parse_u64_or_err(value: &str) -> Result<u64, ExitError> {
+    value
+        .parse::<u64>()
+        .map_err(|_| ExitError::usage(usage()))
+}
+
+/// Result variant of [`parse_i64`].
+pub fn parse_i64_or_err(value: &str) -> Result<i64, ExitError> {
+    value
+        .parse::<i64>()
+        .map_err(|_| ExitError::usage(usage()))
+}
+
+/// Result variant of [`parse_usize`].
+pub fn parse_usize_or_err(value: &str) -> Result<usize, ExitError> {
+    value
+        .parse::<usize>()
+        .map_err(|_| ExitError::usage(usage()))
+}
+
+/// Result variant of [`parse_target_kind`].
+pub fn parse_target_kind_or_err(value: &str) -> Result<EffectTargetKind, ExitError> {
+    match value {
+        "file_path" => Ok(EffectTargetKind::FilePath),
+        "glob" => Ok(EffectTargetKind::Glob),
+        "state_key" => Ok(EffectTargetKind::StateKey),
+        "artifact_id" => Ok(EffectTargetKind::ArtifactId),
+        "evidence_id" => Ok(EffectTargetKind::EvidenceId),
+        "ledger_stream" => Ok(EffectTargetKind::LedgerStream),
+        "request_stream" => Ok(EffectTargetKind::RequestStream),
+        "completion_id" => Ok(EffectTargetKind::CompletionId),
+        _ => Err(ExitError::usage(usage())),
+    }
+}
+
+/// Result variant of [`parse_runtime_kind`].
+pub fn parse_runtime_kind_or_err(value: &str) -> Result<RuntimeKind, ExitError> {
+    match value {
+        "codex" => Ok(RuntimeKind::Codex),
+        "cursor" => Ok(RuntimeKind::Cursor),
+        "claude" => Ok(RuntimeKind::Claude),
+        "opencode" => Ok(RuntimeKind::Opencode),
+        "vscode" => Ok(RuntimeKind::Vscode),
+        "pidev" => Ok(RuntimeKind::Pidev),
+        "forge_standalone" => Ok(RuntimeKind::ForgeStandalone),
+        "custom" => Ok(RuntimeKind::Custom),
+        _ => Err(ExitError::usage(usage())),
+    }
+}
+
+/// Result variant of [`parse_metadata_consumer_use`].
+pub fn parse_metadata_consumer_use_or_err(
+    value: &str,
+) -> Result<EffectMetadataConsumerUse, ExitError> {
+    match value {
+        "discovery" => Ok(EffectMetadataConsumerUse::Discovery),
+        "diagnostics" => Ok(EffectMetadataConsumerUse::Diagnostics),
+        "handoff_context" => Ok(EffectMetadataConsumerUse::HandoffContext),
+        _ => Err(ExitError::usage(usage())),
+    }
+}
+
+/// Result variant of [`parse_metadata_adapter_trigger`].
+pub fn parse_metadata_adapter_trigger_or_err(
+    value: &str,
+) -> Result<EffectMetadataAdapterTrigger, ExitError> {
+    match value {
+        "evidence_discovery" => Ok(EffectMetadataAdapterTrigger::EvidenceDiscovery),
+        "diagnostics" => Ok(EffectMetadataAdapterTrigger::Diagnostics),
+        "handoff_preparation" => Ok(EffectMetadataAdapterTrigger::HandoffPreparation),
+        "manual_inspection" => Ok(EffectMetadataAdapterTrigger::ManualInspection),
+        _ => Err(ExitError::usage(usage())),
+    }
+}
+
+/// Result variant of [`parse_host_adapter_projection_target`].
+pub fn parse_host_adapter_projection_target_or_err(
+    value: &str,
+) -> Result<HostAdapterProjectionTarget, ExitError> {
+    match value {
+        "mcp_tools" => Ok(HostAdapterProjectionTarget::McpTools),
+        "borrowed_shell" => Ok(HostAdapterProjectionTarget::BorrowedShell),
+        "app_ui" => Ok(HostAdapterProjectionTarget::AppUi),
+        _ => Err(ExitError::usage(usage())),
+    }
+}
+
+/// Result variant of [`parse_host_adapter_process_target`].
+pub fn parse_host_adapter_process_target_or_err(
+    value: &str,
+) -> Result<HostAdapterProcessTarget, ExitError> {
+    match value {
+        "mcp_stdio" => Ok(HostAdapterProcessTarget::McpStdio),
+        "borrowed_shell" => Ok(HostAdapterProcessTarget::BorrowedShell),
+        "app_bridge" => Ok(HostAdapterProcessTarget::AppBridge),
+        _ => Err(ExitError::usage(usage())),
+    }
+}
+
+/// Result variant of [`parse_update_channel`].
+pub fn parse_update_channel_or_err(value: &str) -> Result<HostAdapterUpdateChannel, ExitError> {
+    match value {
+        "stable" => Ok(HostAdapterUpdateChannel::Stable),
+        "canary" => Ok(HostAdapterUpdateChannel::Canary),
+        "dev" => Ok(HostAdapterUpdateChannel::Dev),
+        _ => Err(ExitError::usage(usage())),
+    }
+}
+
+/// Result variant of [`require_value`].
+///
+/// Surfaces `ExitError::InvalidValue` (exit 3) to match the historical
+/// strict-value rejection code used by governance commands.
+pub fn require_value_or_err(
+    args: &[String],
+    idx: usize,
+    flag: &str,
+) -> Result<String, ExitError> {
+    match args.get(idx) {
+        Some(v) if !v.is_empty() && !v.starts_with("--") => Ok(v.clone()),
+        _ => Err(ExitError::invalid_value(format!(
+            "claim: --{flag} requires a value"
+        ))),
+    }
+}
+
+/// Result variant of [`parse_strict`].
+///
+/// Surfaces `ExitError::InvalidValue` (exit 3) on a malformed number, matching
+/// the historical strict-parse rejection used by `claim` and `isolation`.
+pub fn parse_strict_or_err<T: std::str::FromStr>(
+    s: &str,
+    flag: &str,
+) -> Result<T, ExitError> {
+    s.parse::<T>()
+        .map_err(|_| ExitError::invalid_value(format!("claim: invalid value for --{flag}: '{s}'")))
+}
+
+/// Result variant of [`resolve_stateful_roots_or_exit`].
+///
+/// The error variant is `ExitError::Failed` (exit 1) to match the historical
+/// "command failed" code emitted by the legacy wrapper.
+pub fn resolve_stateful_roots_or_err(
+    command: &str,
+    root: &Path,
+    allow_bootstrap_core: bool,
+) -> Result<StatefulCommandRoots, ExitError> {
+    resolve_stateful_command_roots(root, allow_bootstrap_core).map_err(|message| {
+        ExitError::failed(format!("{command} failed: {message}"))
     })
 }
