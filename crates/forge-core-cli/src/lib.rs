@@ -10,6 +10,7 @@ pub(crate) mod execute_operation;
 pub mod graph_cmd;
 pub mod guide;
 pub(crate) mod host_adapter_types;
+pub(crate) mod host_command;
 pub mod io_util;
 pub mod isolation;
 pub mod m1_cmd;
@@ -37,6 +38,13 @@ pub use effect_index::{
 // `crypto_hashing`.
 pub(crate) use crypto_hashing::{
     hex_bytes, hex_sha256, normalize_sha256_digest, normalize_sha256_display, valid_sha256_digest,
+};
+// Re-export the host-command builder and admission safety predicates at the
+// crate root so existing call sites inside `lib.rs` keep resolving after the
+// helpers moved into `host_command`.
+pub(crate) use host_command::{
+    argv_has_shell_control, env_key_is_forbidden, host_command, source_ref_is_immutable,
+    version_like, HostCommandMetadata,
 };
 // Re-export all host-adapter types at the crate root so `main.rs` and
 // `tests/validate.rs` keep importing `HostAdapterManifest`, etc., directly
@@ -4644,45 +4652,6 @@ fn first_dsse_rekor_signature(value: &Value) -> Option<String> {
         })
 }
 
-struct HostCommandMetadata<'a> {
-    name: &'a str,
-    command_kind: HostAdapterCommandKind,
-    mutation_class: HostAdapterMutationClass,
-    authority_class: HostAdapterAuthorityClass,
-    required_contracts: Vec<&'a str>,
-    safe_auto_invocation_triggers: Vec<HostAdapterAutoTrigger>,
-    output_treatment: Vec<HostAdapterOutputTreatment>,
-    policy_refs: Vec<&'a str>,
-    adapters_must_not: Vec<&'a str>,
-}
-
-fn host_command(metadata: HostCommandMetadata<'_>) -> HostAdapterCommand {
-    HostAdapterCommand {
-        name: metadata.name.to_string(),
-        command_kind: metadata.command_kind,
-        mutation_class: metadata.mutation_class,
-        authority_class: metadata.authority_class,
-        json_supported: true,
-        required_contracts: metadata
-            .required_contracts
-            .into_iter()
-            .map(str::to_string)
-            .collect(),
-        safe_auto_invocation_triggers: metadata.safe_auto_invocation_triggers,
-        output_treatment: metadata.output_treatment,
-        policy_refs: metadata
-            .policy_refs
-            .into_iter()
-            .map(str::to_string)
-            .collect(),
-        adapters_must_not: metadata
-            .adapters_must_not
-            .into_iter()
-            .map(str::to_string)
-            .collect(),
-    }
-}
-
 fn command_process_admission(
     command: &HostAdapterCommand,
     target: HostAdapterProcessTarget,
@@ -4712,35 +4681,6 @@ fn command_process_admission(
             && command.mutation_class == HostAdapterMutationClass::MutatingOperation),
         required_controls,
     }
-}
-
-fn argv_has_shell_control(argv: &[String]) -> bool {
-    argv.iter().any(|arg| {
-        ["&&", "||", ";", "|", "`", "$(", ">", "<"]
-            .iter()
-            .any(|token| arg.contains(token))
-    })
-}
-
-fn env_key_is_forbidden(key: &str) -> bool {
-    let upper = key.to_ascii_uppercase();
-    ["TOKEN", "SECRET", "KEY", "PASSWORD"]
-        .iter()
-        .any(|pattern| upper.contains(pattern))
-}
-
-fn source_ref_is_immutable(source_ref: &str) -> bool {
-    source_ref
-        .split(|character: char| !character.is_ascii_hexdigit())
-        .any(|segment| segment.len() == 40 && segment.chars().all(|item| item.is_ascii_hexdigit()))
-}
-
-fn version_like(value: &str) -> bool {
-    let trimmed = value.trim();
-    !trimmed.is_empty()
-        && trimmed
-            .chars()
-            .all(|item| item.is_ascii_alphanumeric() || matches!(item, '.' | '-' | '_' | '+'))
 }
 
 fn read_required_file(path: &Path, label: &str, reasons: &mut Vec<String>) -> Option<Vec<u8>> {
