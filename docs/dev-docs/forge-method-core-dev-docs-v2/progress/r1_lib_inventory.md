@@ -501,7 +501,57 @@ Total: 7472 linhas, 141 funções, ~243 itens públicos.
     warnings — paridade perfeita com baseline), `cargo fmt --check` verde.
   - Âncora de regressão: `validate --root . --json` emitiu
     `"diagnostics": []` — zero mudança observável.
-- [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
-- [ ] R1.4 — Mover verificação X.509/CRL/OCSP
-- [ ] R1.6 — Mover project link resolve/init
-- [ ] R1.7 — Validar (lib.rs ≤ 1500 linhas)
+- [x] R1.HostAdapterVerification — Extrair `host_adapter_verification.rs` (2026-06-29)
+  - Movidos: 13 funções `pub fn run_host_adapter_*_verification` (L145-2197
+    pré-extração, 2053 linhas) — artifact, provenance, rekor, sigstore
+    trust policy, fulcio certificate identity, sigstore bundle subject,
+    sigstore DSSE in-toto subject, sigstore timestamp authority,
+    certificate transparency SCT, certificate revocation policy, TUF
+    trusted root freshness, certificate CRL status, certificate OCSP
+    status.
+  - Módulo `pub(crate)` re-exportado via `pub use host_adapter_verification::*;`
+    (wildcard **público**, não `pub(crate)` — `main.rs`, `tests/validate.rs`
+    e `forge-contract-validator` importam `forge_core_cli::run_host_adapter_*`
+    diretamente do crate root).
+  - Imports do novo módulo: `p256::ecdsa::VerifyingKey as P256VerifyingKey`,
+    `p256::pkcs8::DecodePublicKey` (rekor), `rasn_ocsp::OcspResponseStatus`
+    (OCSP), `serde_json::Value` (várias), `std::fs` (5 call sites),
+    `x509_parser::parse_x509_crl` (CRL). Imports `crate::*`: `crypto_hashing`,
+    `crypto_ocsp`, `crypto_rekor` (com path qualificado `crypto_rekor::*`
+    + import explícito dos 3 items), `crypto_tuf`, `file_io`, `host_command`,
+    `crypto_sigstore::*` (wildcard com `#[allow(clippy::wildcard_imports)]`),
+    `crypto_slsa_transparency::*` (idem), `host_adapter_types::*` (idem).
+  - Em `lib.rs`: removidos imports órfãos `p256::*`, `rasn_ocsp::*`,
+    `serde_json::Value`, `std::fs`, `x509_parser::parse_x509_crl` (todos
+    migrados para o novo módulo). Re-exports `pub(crate) use` limpos:
+    removidos `crypto_ocsp::{...}`, `crypto_tuf::verify_*`, `crypto_sigstore::*`,
+    `crypto_slsa_transparency::*`, `host_command::{source_ref_is_immutable,
+    version_like}` — todos agora consumidos apenas dentro de
+    `host_adapter_verification`, que os importa diretamente. Mantidos:
+    `crypto_hashing::{hex_bytes, hex_sha256, normalize_sha256_display}`
+    (ainda usados por `crypto_rekor.rs` e `execute_operation.rs`) e
+    `file_io::read_required_file` (ainda usado por `crypto_tuf.rs`).
+  - `lib.rs`: 2197 → 94 linhas (-2103, -95.7%). Redução acumulada desde o
+    início de R1: 7472 → 94 (-7378, **-98.7%**). `host_adapter_verification.rs`:
+    2099 linhas.
+  - Gates: `cargo check --workspace` (zero warnings), `cargo test -p
+    forge-core-cli --lib` (103/103 verdes), `cargo test --workspace` (360
+    passed, 1 falha pré-existente `validate_binary_outputs_json_summary`
+    — case mismatch, NÃO regressão), `cargo clippy --workspace --all-targets
+    -- -W clippy::pedantic` (570 warnings — paridade perfeita com baseline
+    R1.FileIo), `cargo fmt --check` verde.
+  - Âncora de regressão: `validate --root . --json` emitiu
+    `"diagnostics": []` — zero mudança observável.
+  - **R1 essencialmente completo.** `lib.rs` agora contém apenas
+    `pub(crate) mod`/`pub mod` declarations (27 módulos) + um conjunto
+    mínimo de re-exports `pub use`/`pub(crate) use` que sustentam a API
+    pública do crate. Próximas recomendações do roadmap (R2 em diante)
+    podem prosseguir.
+- [x] R1.2 — Criar módulos-alvo (esqueleto) — concluído (todos os 14
+  módulos planejados foram extraídos)
+- [x] R1.4 — Mover verificação X.509/CRL/OCSP — concluído via
+  R1.CryptoOCSP + R1.HostAdapterVerification
+- [x] R1.6 — Mover project link resolve/init — já não estava em `lib.rs`
+  (movido em commit anterior para `project_cmd`)
+- [x] R1.7 — Validar (lib.rs ≤ 1500 linhas) — **superado amplamente**:
+  `lib.rs` agora tem 94 linhas (meta era ≤ 1500)
