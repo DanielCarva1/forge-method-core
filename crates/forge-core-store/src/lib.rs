@@ -2,6 +2,7 @@ use forge_core_contracts::claim::ActorRole;
 use forge_core_contracts::runtime::RuntimeKind;
 use forge_core_contracts::tool_effect::{AccessMode, EffectTargetKind, ToolEffectContractDocument};
 use forge_core_contracts::StableId;
+use forge_core_trace::TraceEvent;
 use forge_core_validate::{
     validate_tool_effect, Diagnostic, DiagnosticCode, DiagnosticSeverity, ParsedYamlDocument,
     ReferenceIndex, ReferenceKind,
@@ -143,6 +144,23 @@ pub fn append_json_line<T>(
 where
     T: Serialize,
 {
+    append_json_line_with_lock(
+        root,
+        relative_path,
+        &append_json_line_lock_relative_path(relative_path),
+        record,
+    )
+}
+
+fn append_json_line_with_lock<T>(
+    root: impl AsRef<Path>,
+    relative_path: &str,
+    lock_relative_path: &str,
+    record: &T,
+) -> Result<PathBuf, AppendJsonLineError>
+where
+    T: Serialize,
+{
     let root = root.as_ref();
     let target = resolve_safe_repo_relative(root, relative_path)?;
     let parent = target
@@ -156,10 +174,9 @@ where
     })?;
     line.push(b'\n');
 
-    let lock_relative_path = append_json_line_lock_relative_path(relative_path);
-    let _lock = acquire_effect_store_lock(root, &lock_relative_path).map_err(|source| {
+    let _lock = acquire_effect_store_lock(root, lock_relative_path).map_err(|source| {
         AppendJsonLineError::Lock {
-            path: lock_relative_path,
+            path: lock_relative_path.to_string(),
             source: source.to_string(),
         }
     })?;
@@ -213,6 +230,186 @@ pub fn append_effect_target_metadata_records(
         paths.push(append_json_line(root, index_relative_path, record)?);
     }
     Ok(paths)
+}
+
+pub const DEFAULT_TRACE_LOG_RELATIVE_PATH: &str = "traces/events.ndjson";
+
+pub fn append_trace_event(
+    state_root: impl AsRef<Path>,
+    event: &TraceEvent,
+) -> Result<PathBuf, AppendJsonLineError> {
+    append_json_line_with_lock(
+        state_root,
+        DEFAULT_TRACE_LOG_RELATIVE_PATH,
+        &state_append_json_line_lock_relative_path(DEFAULT_TRACE_LOG_RELATIVE_PATH),
+        event,
+    )
+}
+
+pub fn query_trace_events(
+    state_root: impl AsRef<Path>,
+    query: &TraceEventQuery,
+) -> TraceEventQueryResult {
+    query_trace_events_at(state_root, DEFAULT_TRACE_LOG_RELATIVE_PATH, query)
+}
+
+pub fn query_trace_events_at(
+    state_root: impl AsRef<Path>,
+    trace_relative_path: &str,
+    query: &TraceEventQuery,
+) -> TraceEventQueryResult {
+    let state_root = state_root.as_ref();
+    let trace_path = match resolve_safe_repo_relative(state_root, trace_relative_path) {
+        Ok(path) => path,
+        Err(_) => {
+            return TraceEventQueryResult {
+                status: TraceEventQueryStatus::Failed,
+                scanned_events: 0,
+                matched_events: 0,
+                returned_events: 0,
+                events: Vec::new(),
+                reasons: vec![TraceEventQueryReason::InvalidTracePath],
+                diagnostics: vec![format!("invalid trace path {trace_relative_path}")],
+            };
+        }
+    };
+    if !trace_path.exists() {
+        return TraceEventQueryResult {
+            status: TraceEventQueryStatus::Noop,
+            scanned_events: 0,
+            matched_events: 0,
+            returned_events: 0,
+            events: Vec::new(),
+            reasons: vec![TraceEventQueryReason::NoTraceFile],
+            diagnostics: Vec::new(),
+        };
+    }
+    let text = match fs::read_to_string(&trace_path) {
+        Ok(text) => text,
+        Err(error) => {
+            return TraceEventQueryResult {
+                status: TraceEventQueryStatus::Failed,
+                scanned_events: 0,
+                matched_events: 0,
+                returned_events: 0,
+                events: Vec::new(),
+                reasons: vec![TraceEventQueryReason::TraceReadFailed],
+                diagnostics: vec![format!("read trace log failed: {error}")],
+            };
+        }
+    };
+
+    let mut scanned_events = 0usize;
+    let mut matched = Vec::new();
+    for (index, line) in text.lines().enumerate() {
+        let event = match serde_json::from_str::<TraceEvent>(line) {
+            Ok(event) => event,
+            Err(error) => {
+                return TraceEventQueryResult {
+                    status: TraceEventQueryStatus::Failed,
+                    scanned_events,
+                    matched_events: matched.len(),
+                    returned_events: 0,
+                    events: Vec::new(),
+                    reasons: vec![TraceEventQueryReason::TraceParseFailed],
+                    diagnostics: vec![format!(
+                        "parse trace log line {} failed: {error}",
+                        index + 1
+                    )],
+                };
+            }
+        };
+        scanned_events += 1;
+        if trace_event_matches(&event, query) {
+            matched.push(event);
+        }
+    }
+
+    if query.latest_run {
+        if let Some(run_id) = matched.last().map(|event| event.run_id.clone()) {
+            matched.retain(|event| event.run_id == run_id);
+        }
+    }
+    if let Some(limit) = query.limit {
+        if matched.len() > limit {
+            let keep_from = matched.len() - limit;
+            matched = matched.split_off(keep_from);
+        }
+    }
+
+    let returned_events = matched.len();
+    TraceEventQueryResult {
+        status: TraceEventQueryStatus::Matched,
+        scanned_events,
+        matched_events: returned_events,
+        returned_events,
+        events: matched,
+        reasons: vec![TraceEventQueryReason::Matched],
+        diagnostics: Vec::new(),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TraceEventQuery {
+    pub run_id: Option<String>,
+    pub trace_id: Option<String>,
+    pub latest_run: bool,
+    pub limit: Option<usize>,
+}
+
+impl Default for TraceEventQuery {
+    fn default() -> Self {
+        Self {
+            run_id: None,
+            trace_id: None,
+            latest_run: false,
+            limit: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct TraceEventQueryResult {
+    pub status: TraceEventQueryStatus,
+    pub scanned_events: usize,
+    pub matched_events: usize,
+    pub returned_events: usize,
+    pub events: Vec<TraceEvent>,
+    pub reasons: Vec<TraceEventQueryReason>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TraceEventQueryStatus {
+    Noop,
+    Matched,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TraceEventQueryReason {
+    InvalidTracePath,
+    NoTraceFile,
+    TraceReadFailed,
+    TraceParseFailed,
+    Matched,
+}
+
+fn trace_event_matches(event: &TraceEvent, query: &TraceEventQuery) -> bool {
+    if let Some(run_id) = &query.run_id {
+        if &event.run_id != run_id {
+            return false;
+        }
+    }
+    if let Some(trace_id) = &query.trace_id {
+        if &event.trace_id != trace_id {
+            return false;
+        }
+    }
+    true
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -2184,6 +2381,11 @@ fn ensure_target_chain_within_root(root: &Path, target: &Path) -> io::Result<()>
 fn append_json_line_lock_relative_path(relative_path: &str) -> String {
     let digest = Sha256::digest(relative_path.as_bytes());
     format!(".forge-method/locks/append-json-line/{digest:x}.lock")
+}
+
+fn state_append_json_line_lock_relative_path(relative_path: &str) -> String {
+    let digest = Sha256::digest(relative_path.as_bytes());
+    format!("locks/append-json-line/{digest:x}.lock")
 }
 
 fn resolve_effect_target(

@@ -5,9 +5,9 @@ edition.workspace = true
 
 [dependencies]
 forge-core-contracts = { path = "../forge-core-contracts" }
+forge-core-trace = { path = "../forge-core-trace" }
 forge-core-validate = { path = "../forge-core-validate" }
 serde.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
 sha2.workspace = true
-

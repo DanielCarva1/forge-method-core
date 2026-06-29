@@ -5,6 +5,7 @@ pub mod coordination;
 pub mod guide;
 pub mod io_util;
 pub mod isolation;
+pub mod m1_cmd;
 pub mod project_cmd;
 
 use base64::{

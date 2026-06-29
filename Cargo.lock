@@ -566,6 +566,7 @@ dependencies = [
  "forge-core-engine",
  "forge-core-runtime",
  "forge-core-store",
+ "forge-core-trace",
  "forge-core-validate",
  "p256",
  "proptest",
@@ -629,11 +630,20 @@ name = "forge-core-store"
 version = "0.1.0"
 dependencies = [
  "forge-core-contracts",
+ "forge-core-trace",
  "forge-core-validate",
  "serde",
  "serde_json",
  "serde_yaml",
  "sha2",
+]
+
+[[package]]
+name = "forge-core-trace"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

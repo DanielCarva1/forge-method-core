@@ -157,6 +157,18 @@ Use one integration branch plus narrow worktrees/branches per lane. Each impleme
 | L4 CLI commands | `crates/forge-core-cli/src/main.rs`, new CLI module/tests | thin CLI, error envelopes, no full parser refactor | targeted CLI tests for `preview`, `ready`, `explain` |
 | L5 schema/docs fixtures | `crates/forge-core-schema/**`, focused fixtures/docs only | schema matches wire format, fixtures stable | targeted schema tests and fixture validation |
 
+Docs-only L5 fixture anchor:
+
+- Existing validated OperationContract fixtures and CLI acceptance examples are
+  pinned in `docs/fixtures/m1-preview-ready-trace/`.
+- This pass intentionally adds no new OperationContract YAML because the current
+  fixture set already covers preview, ready-pass, ready-missing, ready-pending,
+  destructive-blocked, and explain/no-mutation cases.
+- M1 trace/explain tests must first resolve `data.state_root` via
+  `forge-core project resolve`; trace NDJSON and explain last-run state belong
+  below that resolved state root, never under a guessed consumer-repo
+  `.forge-method/` path.
+
 ## Suggested execution order
 
 1. L0 + L1 first: manifest and trace crate.
