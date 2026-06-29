@@ -157,3 +157,106 @@ top_5_quick_wins:
   - "W4-005"
   - "W4-007"
   - "W4-010"
+
+resolution:
+  status: "implemented_verified_on_branch"
+  branch: "codex/forge-wave4-audit-hardening"
+  resolved_at: "2026-06-29"
+  scope_note: "Closes the 15 Wave4 audit candidates for the audited autonomy contracts, router, and CLI command; this is not a release readiness claim for all Forge product surfaces."
+  final_gate:
+    status: "passed"
+    log_dir: "target/codex-gates/20260629-0919-wave4-audit-hardening"
+    commands:
+      - "cargo check --workspace"
+      - "cargo test --workspace"
+      - "cargo clippy --workspace --all-targets -- -W clippy::pedantic"
+      - "cargo fmt --all -- --check"
+      - "forge-core validate --root ."
+      - "git diff --check"
+  reviewer_findings_addressed:
+    - "Scoped CLI --tool-class was added so normal file/code operations can reach Fast while legacy/no-scope routing remains conservative."
+    - "RouteOptions test compile blocker was fixed and covered by parser + process e2e tests."
+    - "Schemars range metadata was added and tested so Schemars-derived schemas expose the same bounds enforced by Serde."
+    - "No in-workspace const-context callers of verification_goal.is_satisfied were found; strict runtime validation intentionally made it a non-const helper."
+  candidate_status:
+    - id: "W4-001"
+      status: "closed"
+      evidence:
+        - "VerificationGoalContract::is_satisfied now fail-closes non-all-satisfied, pending, flaky, failed, empty, or count-mismatched evidence."
+        - "cargo test -p forge-core-engine autonomy_router"
+        - "cargo test -p forge-core-contracts verification_goal"
+    - id: "W4-002"
+      status: "closed"
+      evidence:
+        - "Strict is_satisfied cross-checks overall verdict, non-empty goals, satisfied/total counts, and every goal.status == passed."
+        - "cargo test -p forge-core-contracts verification_goal"
+    - id: "W4-003"
+      status: "closed"
+      evidence:
+        - "route_lane_for_tool_classes honors in-scope manual overrides; route_lane remains fail-closed for legacy callers by treating all declared classes as in scope."
+        - "forge-core autonomy route e2e verifies --tool-class file_edit can route fast while no tool scope routes rigorous/manual_mode."
+    - id: "W4-004"
+      status: "closed"
+      evidence:
+        - "Route parser rejects missing values and flag-as-value cases before file I/O."
+        - "cargo test -p forge-core-cli autonomy_cmd"
+    - id: "W4-005"
+      status: "closed"
+      evidence:
+        - "Unknown route args emit CliEnvelope JSON by default."
+        - "cargo test -p forge-core-cli autonomy_cmd"
+    - id: "W4-006"
+      status: "closed"
+      evidence:
+        - "Unknown autonomy subcommands emit CliEnvelope JSON by default."
+        - "cargo test -p forge-core-cli autonomy_cmd"
+    - id: "W4-007"
+      status: "closed"
+      evidence:
+        - "LaneDecision denies unknown fields."
+        - "cargo test -p forge-core-engine autonomy_router"
+    - id: "W4-008"
+      status: "closed"
+      evidence:
+        - "High-risk escalation is evaluated for any non-satisfied goal, not only explicit failed goals."
+        - "cargo test -p forge-core-engine autonomy_router"
+    - id: "W4-009"
+      status: "closed"
+      evidence:
+        - "Router honors escalation.on_high_risk_path and per-tool requires_approval_above, falling back to documented default risk threshold."
+        - "cargo test -p forge-core-engine autonomy_router"
+    - id: "W4-010"
+      status: "closed"
+      evidence:
+        - "Memory freshness parse failures and TTL overflow now fail stale instead of silently refreshing entries."
+        - "cargo test -p forge-core-contracts memory"
+    - id: "W4-011"
+      status: "closed"
+      evidence:
+        - "Autonomy risk_score and requires_approval_above reject >100 during deserialization and expose schema range bounds."
+        - "cargo test -p forge-core-contracts autonomy_policy"
+        - "cargo test -p forge-core-contracts --test schema_bounds"
+    - id: "W4-012"
+      status: "closed"
+      evidence:
+        - "MemoryEntry.confidence rejects >100 during deserialization and exposes schema range bounds."
+        - "cargo test -p forge-core-contracts memory"
+        - "cargo test -p forge-core-contracts --test schema_bounds"
+    - id: "W4-013"
+      status: "closed"
+      evidence:
+        - "QualitySignals.confidence rejects >100 during deserialization and exposes schema range bounds."
+        - "cargo test -p forge-core-contracts eval_run"
+        - "cargo test -p forge-core-contracts --test schema_bounds"
+    - id: "W4-014"
+      status: "closed"
+      evidence:
+        - "SamplingPolicy.rate rejects >10000 during deserialization and exposes schema range bounds."
+        - "cargo test -p forge-core-contracts telemetry"
+        - "cargo test -p forge-core-contracts --test schema_bounds"
+    - id: "W4-015"
+      status: "closed"
+      evidence:
+        - "Pure parser/load tests now cover route success and error paths; autonomy_route_e2e covers real process stdout/stderr/exit behavior."
+        - "cargo test -p forge-core-cli autonomy_cmd"
+        - "cargo test -p forge-core-cli --test autonomy_route_e2e"

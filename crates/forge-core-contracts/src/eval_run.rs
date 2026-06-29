@@ -1,6 +1,30 @@
 use crate::common::StableId;
 use schemars::JsonSchema;
+use serde::de::{Deserializer, Error as DeError};
 use serde::{Deserialize, Serialize};
+
+const MAX_CONFIDENCE: u64 = 100;
+
+fn deserialize_optional_confidence<'de, D>(deserializer: D) -> Result<Option<u8>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<u64>::deserialize(deserializer)?
+        .map(|value| bounded_percent(value, "quality_signals.confidence"))
+        .transpose()
+}
+
+fn bounded_percent<E>(value: u64, field: &str) -> Result<u8, E>
+where
+    E: DeError,
+{
+    match u8::try_from(value) {
+        Ok(percent) if value <= MAX_CONFIDENCE => Ok(percent),
+        _ => Err(E::custom(format!(
+            "{field} must be in the inclusive range 0..=100; got {value}"
+        ))),
+    }
+}
 
 /// A machine-readable eval-run outcome contract document.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -111,6 +135,8 @@ pub struct QualitySignals {
     pub correct_location: Option<bool>,
     pub semantic_correct: Option<bool>,
     pub overfit_suspected: Option<bool>,
+    #[schemars(range(min = 0, max = 100))]
+    #[serde(default, deserialize_with = "deserialize_optional_confidence")]
     pub confidence: Option<u8>,
 }
 
@@ -181,6 +207,18 @@ mod tests {
     }
 
     #[test]
+    fn example_eval_run_yaml_round_trips() {
+        let yaml = include_str!("../../../contracts/examples/eval-run.yaml");
+        let document: EvalRunContractDocument =
+            serde_yaml::from_str(yaml).expect("deserialize eval-run example");
+        let serialized = serde_yaml::to_string(&document).expect("serialize eval-run example");
+        let reparsed: EvalRunContractDocument =
+            serde_yaml::from_str(&serialized).expect("deserialize serialized eval-run example");
+
+        assert_eq!(document, reparsed);
+    }
+
+    #[test]
     fn deny_unknown_fields_rejects_unknown_key() {
         let yaml = r#"
 schema_version: "0.1"
@@ -214,6 +252,19 @@ eval_run_contract:
         let result = serde_yaml::from_str::<EvalRunContractDocument>(yaml);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_quality_signal_confidence_above_100() {
+        let yaml = include_str!("../../../contracts/examples/eval-run.yaml").replacen(
+            "confidence: 94",
+            "confidence: 101",
+            1,
+        );
+
+        let err = serde_yaml::from_str::<EvalRunContractDocument>(&yaml).unwrap_err();
+
+        assert!(err.to_string().contains("confidence"));
     }
 
     #[test]

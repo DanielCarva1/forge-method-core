@@ -1,6 +1,39 @@
 use crate::common::{EvidenceBasis, StableId};
 use schemars::JsonSchema;
+use serde::de::{Deserializer, Error as DeError};
 use serde::{Deserialize, Serialize};
+
+const MAX_RISK_SCORE: u64 = 100;
+
+fn deserialize_optional_risk_score<'de, D>(deserializer: D) -> Result<Option<u8>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<u64>::deserialize(deserializer)?
+        .map(|value| bounded_percent(value, "risk_score"))
+        .transpose()
+}
+
+fn deserialize_optional_approval_threshold<'de, D>(deserializer: D) -> Result<Option<u8>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    Option::<u64>::deserialize(deserializer)?
+        .map(|value| bounded_percent(value, "requires_approval_above"))
+        .transpose()
+}
+
+fn bounded_percent<E>(value: u64, field: &str) -> Result<u8, E>
+where
+    E: DeError,
+{
+    match u8::try_from(value) {
+        Ok(percent) if value <= MAX_RISK_SCORE => Ok(percent),
+        _ => Err(E::custom(format!(
+            "{field} must be in the inclusive range 0..=100; got {value}"
+        ))),
+    }
+}
 
 /// A document declaring the autonomy policy applied to a run, agent, lane, phase, or repo.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -47,7 +80,11 @@ pub struct PolicyScope {
 pub struct ToolClassPolicy {
     pub class: ToolClass,
     pub mode: AutonomyMode,
+    #[schemars(range(min = 0, max = 100))]
+    #[serde(default, deserialize_with = "deserialize_optional_risk_score")]
     pub risk_score: Option<u8>,
+    #[schemars(range(min = 0, max = 100))]
+    #[serde(default, deserialize_with = "deserialize_optional_approval_threshold")]
     pub requires_approval_above: Option<u8>,
 }
 
@@ -173,6 +210,19 @@ mod tests {
     }
 
     #[test]
+    fn example_autonomy_policy_yaml_round_trips() {
+        let yaml = include_str!("../../../contracts/examples/autonomy-policy.yaml");
+        let document: AutonomyPolicyContractDocument =
+            serde_yaml::from_str(yaml).expect("deserialize autonomy policy example");
+        let serialized =
+            serde_yaml::to_string(&document).expect("serialize autonomy policy example");
+        let reparsed: AutonomyPolicyContractDocument =
+            serde_yaml::from_str(&serialized).expect("deserialize serialized autonomy example");
+
+        assert_eq!(document, reparsed);
+    }
+
+    #[test]
     fn deny_unknown_fields_rejects_extra_contract_key() {
         let yaml = r#"
 schema_version: "0.1"
@@ -196,6 +246,32 @@ autonomy_policy_contract:
         let result = serde_yaml::from_str::<AutonomyPolicyContractDocument>(yaml);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_risk_score_above_100() {
+        let yaml = include_str!("../../../contracts/examples/autonomy-policy.yaml").replacen(
+            "risk_score: 25",
+            "risk_score: 101",
+            1,
+        );
+
+        let err = serde_yaml::from_str::<AutonomyPolicyContractDocument>(&yaml).unwrap_err();
+
+        assert!(err.to_string().contains("risk_score"));
+    }
+
+    #[test]
+    fn rejects_requires_approval_above_above_100() {
+        let yaml = include_str!("../../../contracts/examples/autonomy-policy.yaml").replacen(
+            "requires_approval_above: 80",
+            "requires_approval_above: 101",
+            1,
+        );
+
+        let err = serde_yaml::from_str::<AutonomyPolicyContractDocument>(&yaml).unwrap_err();
+
+        assert!(err.to_string().contains("requires_approval_above"));
     }
 
     #[test]

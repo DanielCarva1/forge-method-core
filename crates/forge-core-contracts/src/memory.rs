@@ -1,6 +1,28 @@
 use crate::common::StableId;
 use schemars::JsonSchema;
+use serde::de::{Deserializer, Error as DeError};
 use serde::{Deserialize, Serialize};
+
+const MAX_CONFIDENCE: u64 = 100;
+
+fn deserialize_confidence<'de, D>(deserializer: D) -> Result<u8, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    bounded_percent(u64::deserialize(deserializer)?, "confidence")
+}
+
+fn bounded_percent<E>(value: u64, field: &str) -> Result<u8, E>
+where
+    E: DeError,
+{
+    match u8::try_from(value) {
+        Ok(percent) if value <= MAX_CONFIDENCE => Ok(percent),
+        _ => Err(E::custom(format!(
+            "{field} must be in the inclusive range 0..=100; got {value}"
+        ))),
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -36,14 +58,18 @@ impl MemoryContract {
 
     pub fn mark_stale(&mut self, now_unix_seconds: u64) {
         for entry in &mut self.entries {
-            entry.freshness.stale = entry
-                .freshness
-                .ttl_seconds
-                .zip(entry.freshness.last_confirmed_at.parse::<u64>().ok())
-                .and_then(|(ttl_seconds, last_confirmed_at)| {
-                    last_confirmed_at.checked_add(ttl_seconds)
-                })
-                .is_some_and(|expires_at| expires_at <= now_unix_seconds);
+            entry.freshness.stale = match entry.freshness.ttl_seconds {
+                None => entry.freshness.stale,
+                Some(ttl_seconds) => entry
+                    .freshness
+                    .last_confirmed_at
+                    .parse::<u64>()
+                    .ok()
+                    .and_then(|last_confirmed_at| last_confirmed_at.checked_add(ttl_seconds))
+                    .is_none_or(|expires_at| {
+                        entry.freshness.stale || expires_at <= now_unix_seconds
+                    }),
+            };
         }
     }
 }
@@ -72,6 +98,8 @@ pub struct MemoryEntry {
     pub content: String,
     pub provenance: MemoryProvenance,
     pub freshness: Freshness,
+    #[schemars(range(min = 0, max = 100))]
+    #[serde(deserialize_with = "deserialize_confidence")]
     pub confidence: u8,
     pub approval: ApprovalState,
     pub supersedes: Option<StableId>,
@@ -177,6 +205,18 @@ mod tests {
     }
 
     #[test]
+    fn example_memory_yaml_round_trips() {
+        let yaml = include_str!("../../../contracts/examples/memory.yaml");
+        let doc: MemoryContractDocument =
+            serde_yaml::from_str(yaml).expect("deserialize memory example");
+        let serialized = serde_yaml::to_string(&doc).expect("serialize memory example");
+        let parsed: MemoryContractDocument =
+            serde_yaml::from_str(&serialized).expect("deserialize serialized example");
+
+        assert_eq!(doc, parsed);
+    }
+
+    #[test]
     fn denies_unknown_fields() {
         let yaml = r#"schema_version: "0.1"
 memory_contract:
@@ -191,6 +231,19 @@ memory_contract:
 
         let err = serde_yaml::from_str::<MemoryContractDocument>(yaml).unwrap_err();
         assert!(err.to_string().contains("unknown"));
+    }
+
+    #[test]
+    fn rejects_memory_entry_confidence_above_100() {
+        let yaml = include_str!("../../../contracts/examples/memory.yaml").replacen(
+            "confidence: 96",
+            "confidence: 101",
+            1,
+        );
+
+        let err = serde_yaml::from_str::<MemoryContractDocument>(&yaml).unwrap_err();
+
+        assert!(err.to_string().contains("confidence"));
     }
 
     #[test]
@@ -236,11 +289,35 @@ memory_contract:
                 },
                 MemoryEntry {
                     freshness: Freshness {
-                        ttl_seconds: Some(60),
-                        last_confirmed_at: "not-a-unix-second".into(),
+                        ttl_seconds: None,
+                        last_confirmed_at: "1".into(),
                         stale: true,
                     },
+                    ..entry("no-ttl-already-stale", ApprovalState::Approved, "1")
+                },
+                MemoryEntry {
+                    freshness: Freshness {
+                        ttl_seconds: Some(60),
+                        last_confirmed_at: "not-a-unix-second".into(),
+                        stale: false,
+                    },
                     ..entry("parse-error", ApprovalState::Approved, "1")
+                },
+                MemoryEntry {
+                    freshness: Freshness {
+                        ttl_seconds: Some(u64::MAX),
+                        last_confirmed_at: "1".into(),
+                        stale: false,
+                    },
+                    ..entry("overflow", ApprovalState::Approved, "1")
+                },
+                MemoryEntry {
+                    freshness: Freshness {
+                        ttl_seconds: Some(60),
+                        last_confirmed_at: "1000".into(),
+                        stale: true,
+                    },
+                    ..entry("already-stale", ApprovalState::Approved, "1")
                 },
             ],
             superseded: vec![],
@@ -259,7 +336,10 @@ memory_contract:
                 ("elapsed", true),
                 ("fresh", false),
                 ("no-ttl", false),
-                ("parse-error", false),
+                ("no-ttl-already-stale", true),
+                ("parse-error", true),
+                ("overflow", true),
+                ("already-stale", true),
             ]
         );
     }

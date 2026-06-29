@@ -85,3 +85,30 @@ autonomous_mode_note: |
   wave boundaries. Driver orchestrates + wires; workers flesh out disjoint
   contract modules. No human needed until a real fork (sandbox enforcement
   boundary, signature key model).
+
+implementation_updates:
+  - date: "2026-06-29"
+    branch: "codex/forge-wave4-audit-hardening"
+    status: "wave4_audit_hardening_implemented_full_gate_passed"
+    source_audit: "contracts/audit/comb-through-wave4-v1.yaml"
+    gate_log_dir: "target/codex-gates/20260629-0919-wave4-audit-hardening"
+    clusters_advanced:
+      - cluster: "C1"
+        status_delta: "autonomy policy + router hardened for scoped tool classes, manual override precedence, high-risk thresholds, and structured CLI failures"
+      - cluster: "C3"
+        status_delta: "verification goal satisfaction hardened fail-closed before fast-lane routing"
+      - cluster: "C4"
+        status_delta: "memory freshness/confidence bounds hardened"
+      - cluster: "C5"
+        status_delta: "eval confidence and telemetry sampling bounds hardened, with Schemars-derived bound tests"
+    product_meaning: |
+      This makes the autonomy router safer and more usable for real agents:
+      a caller can pass the actual proposed tool classes to avoid unrelated
+      manual policy overrides, while omitted scope remains conservative.
+      Fast lane now requires strict, internally consistent verification
+      evidence; malformed percentages/rates are rejected at deserialization
+      and represented in schema metadata.
+    explicit_non_claims:
+      - "Does not claim every Forge product surface is release-ready."
+      - "Does not complete all C2/C5/C6 roadmap work."
+      - "Does not install/update the global binary until the branch lands and release/install is intentionally run."

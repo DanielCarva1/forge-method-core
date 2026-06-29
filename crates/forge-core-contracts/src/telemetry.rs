@@ -1,6 +1,9 @@
 use crate::common::StableId;
 use schemars::JsonSchema;
+use serde::de::{Deserializer, Error as DeError};
 use serde::{Deserialize, Serialize};
+
+const MAX_SAMPLING_RATE_PER_MYRIAD: u64 = 10_000;
 
 const ALL_TELEMETRY_EVENT_KINDS: [TelemetryEventKind; 9] = [
     TelemetryEventKind::PhaseTransition,
@@ -13,6 +16,19 @@ const ALL_TELEMETRY_EVENT_KINDS: [TelemetryEventKind; 9] = [
     TelemetryEventKind::ConflictDetected,
     TelemetryEventKind::HumanHandoff,
 ];
+
+fn deserialize_sampling_rate<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = u64::deserialize(deserializer)?;
+    match u32::try_from(value) {
+        Ok(rate) if value <= MAX_SAMPLING_RATE_PER_MYRIAD => Ok(rate),
+        _ => Err(D::Error::custom(format!(
+            "sampling.rate must be in the inclusive range 0..=10000; got {value}"
+        ))),
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -70,6 +86,8 @@ pub enum TelemetryEventKind {
 pub struct SamplingPolicy {
     /// Per-myriad sampling rate: `10_000` means always eligible, `0` means never
     /// eligible except for `always_record_kinds`.
+    #[schemars(range(min = 0, max = 10_000))]
+    #[serde(deserialize_with = "deserialize_sampling_rate")]
     pub rate: u32,
     pub max_per_second: Option<u32>,
     pub always_record_kinds: Vec<TelemetryEventKind>,
@@ -181,6 +199,18 @@ mod tests {
     }
 
     #[test]
+    fn example_telemetry_yaml_round_trips() {
+        let yaml = include_str!("../../../contracts/examples/telemetry.yaml");
+        let doc: TelemetryContractDocument =
+            serde_yaml::from_str(yaml).expect("deserialize telemetry example");
+        let serialized = serde_yaml::to_string(&doc).expect("serialize telemetry example");
+        let reparsed: TelemetryContractDocument =
+            serde_yaml::from_str(&serialized).expect("deserialize serialized telemetry example");
+
+        assert_eq!(doc, reparsed);
+    }
+
+    #[test]
     fn telemetry_contract_rejects_unknown_fields() {
         let yaml = r#"
 schema_version: "0.1"
@@ -207,6 +237,19 @@ telemetry_contract:
 
         let err = serde_yaml::from_str::<TelemetryContractDocument>(yaml).unwrap_err();
         assert!(err.to_string().contains("unknown field"));
+    }
+
+    #[test]
+    fn rejects_sampling_rate_above_10_000() {
+        let yaml = include_str!("../../../contracts/examples/telemetry.yaml").replacen(
+            "rate: 10000",
+            "rate: 10001",
+            1,
+        );
+
+        let err = serde_yaml::from_str::<TelemetryContractDocument>(&yaml).unwrap_err();
+
+        assert!(err.to_string().contains("sampling.rate"));
     }
 
     #[test]
