@@ -85,7 +85,10 @@ pub(crate) fn select_rekor_integrated_time_for_timestamp_authority(
                 *observed_timestamp_unix = Some(entry.integrated_time);
                 verified_evidence.push("timestamp_rekor_integrated_time_verified".to_string());
             }
-            Err(reason) => reasons.push(format!("timestamp_rekor_log_entry_parse_failed:{reason}")),
+            Err(reason) => reasons.push(format!(
+                "timestamp_rekor_log_entry_parse_failed:{}",
+                reason.display()
+            )),
         }
     } else {
         reasons.extend(

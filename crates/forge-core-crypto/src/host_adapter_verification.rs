@@ -305,7 +305,7 @@ pub fn run_host_adapter_rekor_verification(
                 verified_evidence.push("rekor_log_entry_parsed".to_string());
                 log_entry = Some(entry);
             }
-            Err(reason) => reasons.push(reason),
+            Err(reason) => reasons.push(reason.display()),
         }
     }
 
@@ -644,7 +644,7 @@ pub fn run_host_adapter_sigstore_bundle_subject_verification(
                 Some(entry)
             }
             Err(reason) => {
-                reasons.push(reason);
+                reasons.push(reason.display());
                 None
             }
         });
@@ -842,7 +842,7 @@ pub fn run_host_adapter_sigstore_dsse_in_toto_subject_verification(
                 Some(entry)
             }
             Err(reason) => {
-                reasons.push(reason);
+                reasons.push(reason.display());
                 None
             }
         });
