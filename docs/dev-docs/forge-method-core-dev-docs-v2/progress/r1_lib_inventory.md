@@ -204,6 +204,44 @@ Total: 7472 linhas, 141 funções, ~243 itens públicos.
     com baseline), `cargo fmt --check` verde.
   - Âncora de regressão: `validate --root . --json` emitiu
     `"diagnostics": []` — zero mudança observável.
+- [x] R1.HostAdapterManifest — Extrair `host_adapter_manifest.rs` (2026-06-29)
+  - Movido: `run_host_adapter_manifest` (L94-587 de `lib.rs` pré-extração,
+    ~493 linhas) — única função do domínio manifest movida agora. Os 5
+    siblings (`run_host_adapter_projection`,
+    `run_host_adapter_process_security_policy`,
+    `run_host_adapter_invocation_admission`,
+    `run_host_adapter_distribution_policy`,
+    `run_host_adapter_distribution_admission`) **não movidos** — dependem
+    de helpers privados (`project_host_command`,
+    `command_process_admission`, `projection_target_id`, `process_target_id`)
+    que pertencem ao domínio projection/MCP e serão extraídos juntos em
+    R1.HostAdapterProjection.
+  - A função é puramente declarativa — literal de struct gigante com dados
+    estáticos do manifest, sem lógica/condicionais/loops. Só chama
+    `host_command(HostCommandMetadata { ... })` para cada comando.
+  - Imports do novo módulo: `forge_core_contracts::RuntimeKind`, 7 tipos
+    `HostAdapter*` de `crate::host_adapter_types::{...}` (import explícito,
+    não wildcard — preserva paridade de clippy), `host_command` +
+    `HostCommandMetadata` de `crate::host_command`.
+  - Em `lib.rs`: removidos `host_command` e `HostCommandMetadata` do
+    `pub(crate) use host_command::{...}` (não mais usados em `lib.rs`, só
+    pelo novo módulo que importa direto). Os 4 predicados de admissão
+    (`argv_has_shell_control`, `env_key_is_forbidden`,
+    `source_ref_is_immutable`, `version_like`) continuam re-exportados.
+  - Módulo `pub(crate)`, re-exportado via `pub use
+    host_adapter_manifest::run_host_adapter_manifest;` no crate root —
+    preserva todos os callers (`main.rs`, `tests/validate.rs`, e os 5
+    siblings ainda em `lib.rs`).
+  - `lib.rs`: 5338 → 4843 linhas (-495); `host_adapter_manifest.rs`:
+    547 linhas.
+  - Gates: `cargo check` (zero warnings), `cargo test --workspace`
+    (1 falha pré-existente `validate_binary_outputs_json_summary` —
+    case mismatch `Passed` vs `passed`, confirmada via stash que falha
+    também no commit anterior, NÃO é regressão), `cargo clippy --pedantic`
+    (320 warnings — paridade perfeita com baseline), `cargo fmt --check`
+    verde.
+  - Âncora de regressão: `validate --root . --json` emitiu
+    `"diagnostics": []` — zero mudança observável.
 - [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
 - [ ] R1.4 — Mover verificação X.509/CRL/OCSP
 - [ ] R1.6 — Mover project link resolve/init
