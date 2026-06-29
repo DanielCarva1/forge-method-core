@@ -149,6 +149,28 @@ Total: 7472 linhas, 141 funções, ~243 itens públicos.
     em `tests/claim_wal_stress.rs` é flaky de concorrência de FS — passa
     isolado), `cargo clippy --pedantic` (320 warnings — paridade perfeita
     com baseline), `cargo fmt --check` verde.
+- [x] R1.HostCommand — Extrair `host_command.rs` (2026-06-29)
+  - Movidos: `HostCommandMetadata<'a>` struct + 5 funções helpers:
+    `host_command` (builder de `HostAdapterCommand`),
+    `argv_has_shell_control` (detector de shell metacharacters em argv),
+    `env_key_is_forbidden` (detector de TOKEN/SECRET/KEY/PASSWORD em env
+    keys), `source_ref_is_immutable` (detector de git SHA-1 40-hex),
+    `version_like` (validador de string de versão `[A-Za-z0-9.\-_+]`).
+  - Todas as 5 funções são usadas apenas dentro de `lib.rs` (em
+    `run_host_adapter_manifest` e nos gates de invocation/distribution/
+    artifact-verification admission), nunca externamente — por isso o
+    módulo é `pub(crate)` e o re-export é `pub(crate) use host_command::{...}`.
+  - `command_process_admission` (sibling de `host_command`) **não movido**
+    — fica em `lib.rs` como parte do domínio admission; será extraído
+    junto com o módulo admission/projection em fase futura.
+  - Imports do novo módulo: 6 tipos `HostAdapter*` de
+    `crate::host_adapter_types`.
+  - `lib.rs`: 5972 → 5912 linhas (-60); `host_command.rs`: 96 linhas.
+  - Gates: `cargo check` (zero warnings), `cargo test --workspace` (todos
+    verdes), `cargo clippy --pedantic` (320 warnings — paridade perfeita
+    com baseline), `cargo fmt --check` verde.
+  - Âncora de regressão: `validate --root . --json` emitiu
+    `"diagnostics": []` — zero mudança observável.
 - [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
 - [ ] R1.4 — Mover verificação X.509/CRL/OCSP
 - [ ] R1.6 — Mover project link resolve/init
