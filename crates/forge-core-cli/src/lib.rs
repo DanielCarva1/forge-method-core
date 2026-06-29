@@ -2,6 +2,7 @@ pub mod autonomy_cmd;
 pub mod claim;
 pub mod contract_cmd;
 pub mod coordination;
+pub(crate) mod crypto_hashing;
 pub(crate) mod crypto_rekor;
 pub(crate) mod effect_index;
 pub mod eval_cmd;
@@ -28,6 +29,13 @@ pub use execute_operation::{
 pub use effect_index::{
     run_query_effect_index, run_query_effect_index_context, run_rebuild_effect_index,
     QueryEffectIndexInput, RebuildEffectIndexInput,
+};
+// Re-export the shared hashing helpers at the crate root so existing
+// call sites (`crate::hex_sha256`, `crate::hex_bytes`, ...) inside `lib.rs`
+// and the crypto submodules keep resolving after the helpers moved into
+// `crypto_hashing`.
+pub(crate) use crypto_hashing::{
+    hex_bytes, hex_sha256, normalize_sha256_digest, normalize_sha256_display, valid_sha256_digest,
 };
 
 use asn1_rs::{BitString as Asn1BitString, FromDer as _};
@@ -5537,25 +5545,6 @@ fn source_ref_is_immutable(source_ref: &str) -> bool {
         .any(|segment| segment.len() == 40 && segment.chars().all(|item| item.is_ascii_hexdigit()))
 }
 
-pub(crate) fn valid_sha256_digest(value: &str) -> bool {
-    normalize_sha256_digest(value).is_some()
-}
-
-pub(crate) fn normalize_sha256_digest(value: &str) -> Option<String> {
-    let trimmed = value.trim();
-    let digest = trimmed.strip_prefix("sha256:").unwrap_or(trimmed);
-    (digest.len() == 64 && digest.chars().all(|item| item.is_ascii_hexdigit()))
-        .then(|| digest.to_ascii_lowercase())
-}
-
-pub(crate) fn normalize_sha256_display(value: &str) -> String {
-    let trimmed = value.trim();
-    trimmed
-        .strip_prefix("sha256:")
-        .unwrap_or(trimmed)
-        .to_ascii_lowercase()
-}
-
 fn version_like(value: &str) -> bool {
     let trimmed = value.trim();
     !trimmed.is_empty()
@@ -6669,16 +6658,6 @@ fn read_yaml<T: serde::de::DeserializeOwned>(
             None
         }
     }
-}
-
-pub(crate) fn hex_sha256(content: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(content);
-    format!("{:x}", hasher.finalize())
-}
-
-pub(crate) fn hex_bytes(content: &[u8]) -> String {
-    content.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn yaml_files(dir: &Path, summary: &mut ValidateSummary) -> Vec<PathBuf> {
