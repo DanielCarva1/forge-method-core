@@ -95,8 +95,29 @@ Total: 7472 linhas, 141 funções, ~243 itens públicos.
   - Gates: `cargo check` (zero warnings), `cargo test --workspace`
     (440+ testes, todos verdes), `cargo clippy --pedantic` (só warnings
     pré-existentes), `cargo fmt --check` verde.
+- [x] R1.EffectIndex — Extrair `effect_index.rs` (2026-06-29)
+  - Movido: `RebuildEffectIndexInput`, `QueryEffectIndexInput` (+
+    `Default`), `run_rebuild_effect_index`, `run_query_effect_index`,
+    `run_query_effect_index_context`.
+  - API pública re-exportada via `pub use effect_index::{...}` no crate
+    root — `main.rs` e `tests/validate.rs` continuam importando de
+    `forge_core_cli` sem mudanças.
+  - `lib.rs`: 6887 → 6810 linhas (-77); `effect_index.rs`: 124 linhas.
+  - Removidos imports não usados em `lib.rs`: `StableId`,
+    `tool_effect::EffectTargetKind`, `build_effect_metadata_context`,
+    `query_effect_target_metadata_index`,
+    `rebuild_effect_target_metadata_index_with_lock`,
+    `EffectMetadataConsumerUse`, `EffectMetadataContextBuildOptions`,
+    `EffectMetadataContextBuildResult`, `EffectTargetMetadataIndexQuery`,
+    `EffectTargetMetadataIndexQueryResult`,
+    `EffectTargetMetadataIndexRebuildResult`.
+  - Gates: `cargo check` (zero warnings), `cargo test --workspace` (440+
+    testes verdes), `cargo clippy --pedantic` (warnings pré-existentes
+    preservados — `must_use_candidate`/`needless_pass_by_value` já
+    existiam em `lib.rs`), `cargo fmt --check` verde.
 - [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
 - [ ] R1.4 — Mover verificação X.509/CRL/OCSP
 - [x] R1.5 — Mover `execute_operation` flow (2026-06-29)
+- [x] R1.EffectIndex — Mover effect index commands (2026-06-29)
 - [ ] R1.6 — Mover project link resolve/init
 - [ ] R1.7 — Validar (lib.rs ≤ 1500 linhas)
