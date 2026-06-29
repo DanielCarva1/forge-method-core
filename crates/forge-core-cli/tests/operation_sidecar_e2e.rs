@@ -316,6 +316,147 @@ fn run_execute_fixture(fixture: &ConsumerFixture) -> Value {
     serde_json::from_slice(&output.stdout).expect("execute-operation json")
 }
 
+fn assert_outside_root_contract_failure(output: &std::process::Output, expected_kind: &str) {
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "outside-root contract paths should fail with the runtime/config boundary exit code\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(expected_kind),
+        "failure should identify the contract path kind\nstderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("outside project root"),
+        "failure should explain the project-root boundary\nstderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("--root"),
+        "failure should be actionable for callers\nstderr:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("parse "),
+        "outside-root contract rejection should happen before YAML parsing\nstderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn execute_operation_rejects_outside_root_operation_path_before_read() {
+    let fixture = consumer_fixture("outside-operation");
+    let outside_dir = fixture
+        .app
+        .parent()
+        .expect("fixture app has parent directory")
+        .join("outside-contracts");
+    fs::create_dir_all(&outside_dir).expect("create outside contract dir");
+    let outside_operation = outside_dir.join("outside-operation.yaml");
+    fs::write(&outside_operation, "not: [valid").expect("write invalid outside operation");
+
+    let output = bin()
+        .args(["execute-operation", "--root"])
+        .arg(&fixture.app)
+        .args(["--operation"])
+        .arg(&outside_operation)
+        .args(["--json"])
+        .output()
+        .expect("run execute-operation with outside operation path");
+
+    assert_outside_root_contract_failure(&output, "operation contract path");
+    let _ = fs::remove_dir_all(
+        fixture
+            .app
+            .parent()
+            .expect("fixture app has parent directory"),
+    );
+}
+
+#[test]
+fn execute_operation_rejects_outside_root_command_path_before_read() {
+    let fixture = consumer_fixture("outside-command");
+    let outside_dir = fixture
+        .app
+        .parent()
+        .expect("fixture app has parent directory")
+        .join("outside-contracts");
+    fs::create_dir_all(&outside_dir).expect("create outside contract dir");
+    let outside_command = outside_dir.join("outside-command.yaml");
+    fs::write(&outside_command, "not: [valid").expect("write invalid outside command");
+
+    let output = bin()
+        .args(["execute-operation", "--root"])
+        .arg(&fixture.app)
+        .args([
+            "--operation",
+            "docs/fixtures/operation-contract-v0/read-only-command.yaml",
+            "--command",
+        ])
+        .arg(&outside_command)
+        .args([
+            "--recorded-at",
+            "2026-06-29T00:00:03Z",
+            "--tx-id-prefix",
+            "operation-sidecar-outside-command-e2e",
+            "--json",
+        ])
+        .output()
+        .expect("run execute-operation with outside command path");
+
+    assert_outside_root_contract_failure(&output, "command contract path");
+    let _ = fs::remove_dir_all(
+        fixture
+            .app
+            .parent()
+            .expect("fixture app has parent directory"),
+    );
+}
+
+#[test]
+fn execute_operation_rejects_outside_root_effect_path_before_read() {
+    let fixture = consumer_fixture("outside-effect");
+    let outside_dir = fixture
+        .app
+        .parent()
+        .expect("fixture app has parent directory")
+        .join("outside-contracts");
+    fs::create_dir_all(&outside_dir).expect("create outside contract dir");
+    let outside_effect = outside_dir.join("outside-effect.yaml");
+    fs::write(&outside_effect, "not: [valid").expect("write invalid outside effect");
+
+    let output = bin()
+        .args(["execute-operation", "--root"])
+        .arg(&fixture.app)
+        .args([
+            "--operation",
+            "docs/fixtures/operation-contract-v0/execute-trivial-write.yaml",
+            "--effect",
+        ])
+        .arg(&outside_effect)
+        .args([
+            "--payload",
+            ".forge-method/artifacts/story-current-result.yaml=payloads/story.yaml",
+            "--payload",
+            ".forge-method/evidence/story-validation.json=payloads/evidence.json",
+            "--recorded-at",
+            "2026-06-29T00:00:04Z",
+            "--tx-id-prefix",
+            "operation-sidecar-outside-effect-e2e",
+            "--json",
+        ])
+        .output()
+        .expect("run execute-operation with outside effect path");
+
+    assert_outside_root_contract_failure(&output, "effect contract path");
+    let _ = fs::remove_dir_all(
+        fixture
+            .app
+            .parent()
+            .expect("fixture app has parent directory"),
+    );
+}
+
 #[test]
 fn execute_operation_writes_command_evidence_to_sidecar_not_consumer_repo() {
     let fixture = consumer_fixture("command-evidence");

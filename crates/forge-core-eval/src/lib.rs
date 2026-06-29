@@ -133,6 +133,10 @@ pub enum EvalDiagnosticCode {
     TaskSetMismatch,
     MissingEvidenceRefs,
     MissingTraceRefs,
+    InvalidEvidenceRef,
+    MissingEvidenceFile,
+    EvidenceRefNotFile,
+    EvidenceRefEscapesProject,
     DuplicateTaskRun,
     UnsupportedRunSchemaVersion,
 }
@@ -251,6 +255,27 @@ pub fn compare_eval_runs(
     baseline_runs: &[EvalRunInput],
     candidate_runs: &[EvalRunInput],
 ) -> EvalComparisonReport {
+    compare_eval_runs_with_diagnostics(
+        suite,
+        requested_baseline,
+        requested_candidate,
+        baseline_runs,
+        candidate_runs,
+        Vec::new(),
+    )
+}
+
+/// Compares precomputed eval runs while preserving caller-supplied boundary
+/// diagnostics in the final fail-closed recommendation.
+#[must_use]
+pub fn compare_eval_runs_with_diagnostics(
+    suite: &EvalCompareSuite,
+    requested_baseline: EvalArmLabel,
+    requested_candidate: EvalArmLabel,
+    baseline_runs: &[EvalRunInput],
+    candidate_runs: &[EvalRunInput],
+    extra_diagnostics: Vec<EvalDiagnostic>,
+) -> EvalComparisonReport {
     let mut diagnostics = Vec::new();
     if suite.baseline.label != requested_baseline {
         diagnostics.push(EvalDiagnostic::error(
@@ -278,6 +303,7 @@ pub fn compare_eval_runs(
     if suite.policy.require_matching_tasks {
         validate_matching_tasks(&mut diagnostics, baseline_runs, candidate_runs);
     }
+    diagnostics.extend(extra_diagnostics);
 
     let baseline_summary = summarize_runs(suite.baseline.label, baseline_runs);
     let candidate_summary = summarize_runs(suite.candidate.label, candidate_runs);

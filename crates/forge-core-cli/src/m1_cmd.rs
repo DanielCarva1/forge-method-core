@@ -75,9 +75,19 @@ pub struct ExplainCommandOutput {
 pub enum M1CommandError {
     MissingOperationPath,
     ProjectResolve(ProjectResolveError),
+    MissingSidecarStateRoot {
+        project_root: PathBuf,
+        state_root: PathBuf,
+    },
     ReferenceIndexBuild(String),
-    ReadOperation { path: PathBuf, source: String },
-    ParseOperation { path: PathBuf, source: String },
+    ReadOperation {
+        path: PathBuf,
+        source: String,
+    },
+    ParseOperation {
+        path: PathBuf,
+        source: String,
+    },
     TraceAppend(String),
 }
 
@@ -86,6 +96,15 @@ impl fmt::Display for M1CommandError {
         match self {
             Self::MissingOperationPath => write!(formatter, "--operation is required"),
             Self::ProjectResolve(error) => write!(formatter, "project resolve failed: {error}"),
+            Self::MissingSidecarStateRoot {
+                project_root,
+                state_root,
+            } => write!(
+                formatter,
+                "env/config failure: Forge Project Link for project root '{}' resolves to missing sidecar state_root '{}'; restore the Forge Runtime Sidecar or run project init before M1 commands",
+                project_root.display(),
+                state_root.display()
+            ),
             Self::ReferenceIndexBuild(message) => {
                 write!(formatter, "reference index build failed: {message}")
             }
@@ -121,7 +140,7 @@ pub fn run_preview(input: &M1CommandInput) -> Result<PreviewCommandOutput, M1Com
     let resolved = resolve_project(&input.root, input.allow_bootstrap_core)
         .map_err(M1CommandError::ProjectResolve)?;
     let project_root = PathBuf::from(&resolved.project_root);
-    let state_root = PathBuf::from(&resolved.state_root);
+    let state_root = existing_state_root_for_m1(&resolved)?;
     let operation_path = input
         .operation_path
         .as_ref()
@@ -169,7 +188,7 @@ pub fn run_ready(input: &M1CommandInput) -> Result<ReadyCommandOutput, M1Command
     let resolved = resolve_project(&input.root, input.allow_bootstrap_core)
         .map_err(M1CommandError::ProjectResolve)?;
     let project_root = PathBuf::from(&resolved.project_root);
-    let state_root = PathBuf::from(&resolved.state_root);
+    let state_root = existing_state_root_for_m1(&resolved)?;
     let operation_path = input
         .operation_path
         .as_ref()
@@ -214,7 +233,7 @@ pub fn run_ready(input: &M1CommandInput) -> Result<ReadyCommandOutput, M1Command
 pub fn run_explain(input: &M1CommandInput) -> Result<ExplainCommandOutput, M1CommandError> {
     let resolved = resolve_project(&input.root, input.allow_bootstrap_core)
         .map_err(M1CommandError::ProjectResolve)?;
-    let state_root = PathBuf::from(&resolved.state_root);
+    let state_root = existing_state_root_for_m1(&resolved)?;
     let query = query_trace_events(
         &state_root,
         &TraceEventQuery {
@@ -230,6 +249,19 @@ pub fn run_explain(input: &M1CommandInput) -> Result<ExplainCommandOutput, M1Com
         query,
         explanation,
     })
+}
+
+fn existing_state_root_for_m1(
+    resolved: &crate::project_cmd::ProjectResolvePayload,
+) -> Result<PathBuf, M1CommandError> {
+    let state_root = PathBuf::from(&resolved.state_root);
+    if !resolved.state_exists && !resolved.bootstrap_core_exception {
+        return Err(M1CommandError::MissingSidecarStateRoot {
+            project_root: PathBuf::from(&resolved.project_root),
+            state_root,
+        });
+    }
+    Ok(state_root)
 }
 
 fn read_operation(path: &Path) -> Result<OperationContractDocument, M1CommandError> {

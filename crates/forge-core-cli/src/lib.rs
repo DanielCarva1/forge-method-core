@@ -5985,6 +5985,23 @@ impl Default for PayloadLoadPolicy {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecuteOperationContractPathKind {
+    Operation,
+    Command,
+    Effect,
+}
+
+impl ExecuteOperationContractPathKind {
+    const fn label(self) -> &'static str {
+        match self {
+            ExecuteOperationContractPathKind::Operation => "operation contract path",
+            ExecuteOperationContractPathKind::Command => "command contract path",
+            ExecuteOperationContractPathKind::Effect => "effect contract path",
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum ExecuteOperationError {
     ReferenceIndexBuild(String),
@@ -5997,6 +6014,11 @@ pub enum ExecuteOperationError {
         source: serde_yaml::Error,
     },
     InvalidEffectPath {
+        root: PathBuf,
+        path: PathBuf,
+    },
+    ContractPathOutsideRoot {
+        kind: ExecuteOperationContractPathKind,
         root: PathBuf,
         path: PathBuf,
     },
@@ -6029,6 +6051,13 @@ impl fmt::Display for ExecuteOperationError {
                 path.display(),
                 root.display()
             ),
+            ExecuteOperationError::ContractPathOutsideRoot { kind, root, path } => write!(
+                formatter,
+                "{} {} is outside project root {}; pass a path under --root so operation provenance stays within one project",
+                kind.label(),
+                path.display(),
+                root.display()
+            ),
             ExecuteOperationError::PayloadPathOutsideRoot { root, path } => write!(
                 formatter,
                 "payload path {} is outside root {}",
@@ -6055,26 +6084,53 @@ pub fn run_execute_operation(
 ) -> Result<RuntimeOperationExecution, ExecuteOperationError> {
     let root = input.root;
     let effect_store_root = input.effect_store_root.unwrap_or_else(|| root.clone());
-    let index = build_reference_index(&root)
-        .map_err(|error| ExecuteOperationError::ReferenceIndexBuild(error.to_string()))?;
-    let operation_path = resolve_input_path(&root, &input.operation_path);
-    let operation = read_yaml_result::<OperationContractDocument>(&operation_path)?;
-    let commands = input
+    let canonical_root = canonicalize_existing_path(&root)?;
+    let operation_path = resolve_contract_input_path(
+        &root,
+        &canonical_root,
+        &input.operation_path,
+        ExecuteOperationContractPathKind::Operation,
+    )?;
+    let command_paths = input
         .command_paths
         .iter()
         .map(|path| {
-            let path = resolve_input_path(&root, path);
-            read_yaml_result::<CommandContractDocument>(&path)
-                .map(|document| RuntimeOperationCommandInput { document })
+            resolve_contract_input_path(
+                &root,
+                &canonical_root,
+                path,
+                ExecuteOperationContractPathKind::Command,
+            )
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let effects = input
+    let effect_paths = input
         .effect_paths
         .iter()
         .map(|path| {
-            let path = resolve_input_path(&root, path);
-            let document = read_yaml_result::<ToolEffectContractDocument>(&path)?;
-            let effect_ref = forge_core_contracts::RepoPath(repo_relative_checked(&root, &path)?);
+            resolve_contract_input_path(
+                &root,
+                &canonical_root,
+                path,
+                ExecuteOperationContractPathKind::Effect,
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let index = build_reference_index(&root)
+        .map_err(|error| ExecuteOperationError::ReferenceIndexBuild(error.to_string()))?;
+    let operation = read_yaml_result::<OperationContractDocument>(&operation_path)?;
+    let commands = command_paths
+        .iter()
+        .map(|path| {
+            read_yaml_result::<CommandContractDocument>(path)
+                .map(|document| RuntimeOperationCommandInput { document })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let effects = effect_paths
+        .iter()
+        .map(|path| {
+            let document = read_yaml_result::<ToolEffectContractDocument>(path)?;
+            let effect_ref =
+                forge_core_contracts::RepoPath(repo_relative_checked(&canonical_root, path)?);
             Ok(RuntimeOperationEffectInput {
                 effect_ref,
                 document,
@@ -6477,6 +6533,31 @@ fn runtime_payload_from_file(
         content_hash: format!("sha256:{}", hex_sha256(&content)),
         content,
     })
+}
+
+fn canonicalize_existing_path(path: &Path) -> Result<PathBuf, ExecuteOperationError> {
+    fs::canonicalize(path).map_err(|source| ExecuteOperationError::ReadFile {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
+fn resolve_contract_input_path(
+    root: &Path,
+    canonical_root: &Path,
+    path: &Path,
+    kind: ExecuteOperationContractPathKind,
+) -> Result<PathBuf, ExecuteOperationError> {
+    let path = canonicalize_existing_path(&resolve_input_path(root, path))?;
+    if path.starts_with(canonical_root) {
+        Ok(path)
+    } else {
+        Err(ExecuteOperationError::ContractPathOutsideRoot {
+            kind,
+            root: canonical_root.to_path_buf(),
+            path,
+        })
+    }
 }
 
 fn validate_payload_scope(

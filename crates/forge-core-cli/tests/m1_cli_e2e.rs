@@ -16,16 +16,28 @@ fn repo_root() -> PathBuf {
 }
 
 fn fresh_project(label: &str) -> (PathBuf, PathBuf) {
+    let (app, _sidecar_root, state_root) = fresh_project_layout(label, true);
+    (app, state_root)
+}
+
+fn fresh_project_missing_sidecar(label: &str) -> (PathBuf, PathBuf, PathBuf) {
+    fresh_project_layout(label, false)
+}
+
+fn fresh_project_layout(label: &str, create_sidecar: bool) -> (PathBuf, PathBuf, PathBuf) {
     static SEQ: AtomicUsize = AtomicUsize::new(0);
     let n = SEQ.fetch_add(1, Ordering::SeqCst);
     let parent = repo_root()
         .join("target")
         .join(format!("m1-cli-e2e-{label}-{n}"));
     let app = parent.join("app");
-    let sidecar = parent.join("forge-app").join(".forge-method");
+    let sidecar_root = parent.join("forge-app");
+    let state_root = sidecar_root.join(".forge-method");
     let _ = fs::remove_dir_all(&parent);
     fs::create_dir_all(&app).expect("create app root");
-    fs::create_dir_all(&sidecar).expect("create sidecar state root");
+    if create_sidecar {
+        fs::create_dir_all(&state_root).expect("create sidecar state root");
+    }
     copy_dir(&repo_root().join("contracts"), &app.join("contracts"));
     copy_dir(
         &repo_root().join("docs").join("fixtures"),
@@ -36,7 +48,7 @@ fn fresh_project(label: &str) -> (PathBuf, PathBuf) {
         "schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: ../forge-app\nstate_root: ../forge-app/.forge-method\n",
     )
     .expect("write project link");
-    (app, sidecar)
+    (app, sidecar_root, state_root)
 }
 
 fn copy_dir(source: &Path, target: &Path) {
@@ -60,6 +72,92 @@ fn copy_dir(source: &Path, target: &Path) {
             });
         }
     }
+}
+
+#[test]
+fn m1_preview_missing_sidecar_state_fails_without_creating_state() {
+    let (app, sidecar_root, state_root) = fresh_project_missing_sidecar("preview-missing-sidecar");
+
+    let output = bin()
+        .args([
+            "preview",
+            "--root",
+            &app.display().to_string(),
+            "--operation",
+            "docs/fixtures/operation-contract-v0/mechanical-story-execute.yaml",
+            "--recorded-at",
+            "2026-06-29T01:04:00Z",
+            "--agent-id",
+            "codex-test",
+            "--principal-id",
+            "principal.test",
+            "--json",
+        ])
+        .output()
+        .expect("run preview");
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("env/config failure"), "{stderr}");
+    assert!(stderr.contains("missing sidecar state_root"), "{stderr}");
+    assert!(!sidecar_root.exists());
+    assert!(!state_root.exists());
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn m1_ready_missing_sidecar_state_fails_without_creating_state() {
+    let (app, sidecar_root, state_root) = fresh_project_missing_sidecar("ready-missing-sidecar");
+
+    let output = bin()
+        .args([
+            "ready",
+            "--root",
+            &app.display().to_string(),
+            "--operation",
+            "docs/fixtures/operation-contract-v0/mechanical-story-execute.yaml",
+            "--recorded-at",
+            "2026-06-29T01:05:00Z",
+            "--agent-id",
+            "codex-test",
+            "--principal-id",
+            "principal.test",
+            "--json",
+        ])
+        .output()
+        .expect("run ready");
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("env/config failure"), "{stderr}");
+    assert!(stderr.contains("missing sidecar state_root"), "{stderr}");
+    assert!(!sidecar_root.exists());
+    assert!(!state_root.exists());
+    assert!(!app.join(".forge-method").exists());
+}
+
+#[test]
+fn m1_explain_missing_sidecar_state_fails_without_creating_state() {
+    let (app, sidecar_root, state_root) = fresh_project_missing_sidecar("explain-missing-sidecar");
+
+    let output = bin()
+        .args([
+            "explain",
+            "--root",
+            &app.display().to_string(),
+            "--last-run",
+            "--json",
+        ])
+        .output()
+        .expect("run explain");
+
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("env/config failure"), "{stderr}");
+    assert!(stderr.contains("missing sidecar state_root"), "{stderr}");
+    assert!(!sidecar_root.exists());
+    assert!(!state_root.exists());
+    assert!(!app.join(".forge-method").exists());
 }
 
 #[test]
