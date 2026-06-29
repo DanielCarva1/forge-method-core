@@ -171,6 +171,39 @@ Total: 7472 linhas, 141 funções, ~243 itens públicos.
     com baseline), `cargo fmt --check` verde.
   - Âncora de regressão: `validate --root . --json` emitiu
     `"diagnostics": []` — zero mudança observável.
+- [x] R1.Validate — Extrair `validate.rs` (2026-06-29)
+  - Movidos: 4 tipos públicos (`ValidateSummary`, `ValidateCheck`,
+    `ValidateDiagnostic`, `ValidationStatus`) + função pública
+    `run_validate` + 10 helpers privados (`validate_operation_fixtures`,
+    `validate_side_contracts`, `validate_runtime_contracts`,
+    `validate_named_dir_instances`, `validate_cross_ref_instances`,
+    `validate_named`, `validate_named_cross`, `read_yaml`, `yaml_files`,
+    `repo_relative`) + 2 impls (`ValidateSummary` com métodos pub + privados,
+    `ValidateDiagnostic` com métodos privados).
+  - `ValidationStatus` ganhou `Copy + Eq` derives no novo módulo
+    (original só tinha `PartialEq` + `Serialize`) — mudança de derive não
+    quebra ABI/behavior, apenas permite `==` em mais contextos e clonagem
+    barata. Sem impacto observável.
+  - Imports movidos integralmente para `validate.rs`:
+    `forge_core_contracts::{14 tipos Document}` (excluindo `RuntimeKind`,
+    que fica em `lib.rs` por ser usado pelo host_adapter manifest +
+    distribution policy), `forge_core_store::{build_reference_index,
+    collect_known_repo_paths, collect_validation_yaml_documents}` e
+    `forge_core_validate::{27 validate_* functions + Diagnostic,
+    DiagnosticSeverity, ReferenceIndex, ValidationReport}`.
+  - Em `lib.rs`: `use serde::{Deserialize, Serialize}` reduziu para
+    `use serde::Deserialize` (Serialize não é mais usado em `lib.rs` após a
+    extração).
+  - Módulo `pub(crate)`, re-exportado via `pub use validate::{run_validate,
+    ValidateCheck, ValidateDiagnostic, ValidateSummary, ValidationStatus};`
+    — preserva todos os callers externos (`main.rs`, `tests/validate.rs`,
+    `forge-contract-validator/{src/main.rs, tests/parity.rs}`).
+  - `lib.rs`: 5912 → 5331 linhas (-581); `validate.rs`: 621 linhas.
+  - Gates: `cargo check` (zero warnings), `cargo test --workspace` (todos
+    verdes), `cargo clippy --pedantic` (320 warnings — paridade perfeita
+    com baseline), `cargo fmt --check` verde.
+  - Âncora de regressão: `validate --root . --json` emitiu
+    `"diagnostics": []` — zero mudança observável.
 - [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
 - [ ] R1.4 — Mover verificação X.509/CRL/OCSP
 - [ ] R1.6 — Mover project link resolve/init
