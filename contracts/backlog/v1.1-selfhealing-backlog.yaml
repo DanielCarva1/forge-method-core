@@ -2,8 +2,9 @@ schema_version: "0.1.0"
 artifact:
   id: v1.1-selfhealing-backlog
   kind: backlog
-  status: queued
+  status: partially_verified_current_core
   created: 2026-06-27
+  reconciled: 2026-06-29
   target_version: "1.1"
   deferred_from: "v1 (self-healing é endurecimento pós-lançamento, NÃO pré-requisito da promessa central)"
 
@@ -35,6 +36,18 @@ priority_1_high:
     fix: "checked_add / saturating_add com rejection path (InvalidRequest) para TTL irrepresentável."
     source: [W3 F-line 285/356, review-claim-engine F3]
     effort: S
+    status: verified_current_core
+    verified_by:
+      files:
+        - crates/forge-core-engine/src/claim_engine.rs
+      tests:
+        - cargo test -p forge-core-engine claim_engine
+      evidence:
+        - checked_lease_expiry uses checked conversion and checked_add.
+        - acquire_rejects_ttl_overflow
+        - acquire_rejects_expires_at_overflow
+        - heartbeat_rejects_ttl_overflow
+        - heartbeat_rejects_expires_at_overflow
 
   - id: P1.2
     title: "fix: rfc3339_to_unix aceita datas inválidas (viola fail-closed + DD21)"
@@ -44,6 +57,15 @@ priority_1_high:
     fix: "Validar day vs mês/leap-year + h(0..23) m(0..59) s(0..59) antes de days_from_civil. Retornar None → fail-closed."
     source: [W3 lines 54-57, review-claim-engine F2]
     effort: S
+    status: verified_current_core
+    verified_by:
+      files:
+        - crates/forge-core-engine/src/claim_engine.rs
+      tests:
+        - cargo test -p forge-core-engine claim_engine
+      evidence:
+        - rfc3339_to_unix validates leap years, month length, hour, minute, and second before conversion.
+        - timestamp_rejects_invalid_calendar_values
 
   - id: P1.3
     title: "fix: acquire() gera claim inválida pelo próprio validador"
@@ -54,6 +76,15 @@ priority_1_high:
     source: [review-claim-engine F1]
     effort: M
     note: "Investigar se o validador roda em runtime ou só em build-time — pode ser que afete apenas validação estática, não runtime. Confirmar antes de priorizar."
+    status: verified_current_core
+    verified_by:
+      files:
+        - crates/forge-core-engine/src/claim_engine.rs
+      tests:
+        - cargo test -p forge-core-engine claim_engine
+      evidence:
+        - default_expiry_policy sets handoff_request_ref to contracts/requests/claim-expiry-handoff-request.yaml.
+        - acquire_default_expiry_policy_is_validator_consistent
 
   - id: P1.4
     title: "fix: root paths (./) viram escopo vazio → false negative em conflito"
@@ -63,6 +94,40 @@ priority_1_high:
     fix: "Rejeitar '.','/','' na acquisition COM erro tipado, OU representar root explicitamente. Testes: '.','/', '', child 'src/lib.rs'."
     source: [review-conflict-detection F1]
     effort: M
+    status: verified_current_core
+    accepted_semantics: "Represent explicit repo-root claims instead of rejecting them; root claims cover descendants and overlap detection blocks conflicting acquisitions."
+    verified_by:
+      files:
+        - crates/forge-core-engine/src/conflict_detection.rs
+      tests:
+        - cargo test -p forge-core-engine conflict_detection
+      evidence:
+        - is_explicit_repo_root_path recognizes '.', '/', empty, and separator-only paths.
+        - explicit_repo_root_claim_blocks_descendant_paths
+        - repo_paths_overlap_uses_same_segment_containment_rules_as_write_checks
+
+  - id: P1.5
+    title: "fix: expired handoff-required claims need an actionable official recovery path"
+    files: [crates/forge-core-cli/src/claim.rs, crates/forge-core-cli/tests/claim_handoff_e2e.rs]
+    problem: "Agents that hit expired_requires_handoff can get stuck retrying heartbeat/release/acquire even though the product requires handoff evidence before reuse."
+    fix: "Keep claim handoff as the official recovery edge, persist handoff artifact, mark old claim handoff_recorded, unblock reacquire, and include the exact recovery command in rejected claim errors."
+    source: [real_project_feedback_2026_06_29]
+    effort: S
+    status: implemented_pending_full_gate
+    verified_by:
+      files:
+        - crates/forge-core-cli/src/claim.rs
+        - crates/forge-core-cli/tests/claim_handoff_e2e.rs
+        - C:\Users\User\.agents\skills\forge-method\SKILL.md
+      tests:
+        - cargo test -p forge-core-cli claim::tests::expired_handoff_rejection_points_to_official_recovery_command
+        - cargo test -p forge-core-cli --test claim_handoff_e2e
+      acceptance:
+        - heartbeat/release/acquire remain fail-closed after expiry when handoff is required.
+        - rejected errors point to forge-core claim handoff.
+        - handoff writes state_root/handoffs/expired-claims artifact.
+        - handoff_recorded claim no longer blocks reacquire.
+        - global forge-method skill tells agents not to delete claim files and to run the recovery command.
 
 priority_2_medium:
   - id: P2.1
@@ -71,6 +136,7 @@ priority_2_medium:
     summary: "Formato FMW1 + header(24B) + payload + CRC-32C duplo. 6 record types. Prefix recovery estrito (para no 1º inválido, trunca sob lock exclusivo). Append durável via fs4 lock + O_APPEND + write_all + sync_data."
     crates_new: ["fs4", "crc32c"]
     effort: L
+    status: pending
     depends_on: [P1.1, P1.2]  # não buildar WAL sobre aritmética buggy
 
   - id: P2.2
@@ -78,12 +144,14 @@ priority_2_medium:
     summary: "Hoje cada comando re-read todos YAMLs. Mudar: derive_state(WAL replay) vira a única fonte. load_claims legado vira fallback/debug."
     source: [W1 q2]
     effort: M
+    status: pending
     depends_on: [P2.1]
 
   - id: P2.3
     title: "feat: reconcile loop via tokio interval (NÃO notify — UNSOUND no WSL)"
     summary: "Reconcilia estado (detecta claims expirados, heartbeat stale) num interval, não via fs-watch. notify tem issue #254 no WSL."
     effort: M
+    status: pending
     depends_on: [P2.2]
 
   - id: P2.4
@@ -91,6 +159,7 @@ priority_2_medium:
     summary: "Resultado do W3: 7 Result/Diagnostic, 5 debug_assert, 1 abort_at_commit. Converter panics do store commit-path em tiered failures."
     source: [W3 tiered_invariant_recommendations]
     effort: M
+    status: pending
     depends_on: [P2.1]
 
 priority_3_low:
@@ -102,6 +171,16 @@ priority_3_low:
     fix: "lockfile com pid+timestamp; acquire detecta idade/dono; timeout retorna EnvConfig com remediação."
     source: [W1 io_util.rs entries, W3 recommendation]
     effort: M
+    status: verified_current_core
+    verified_by:
+      files:
+        - crates/forge-core-cli/src/io_util.rs
+      tests:
+        - cargo test -p forge-core-cli io_util
+      evidence:
+        - DirLockFileState records pid, acquired_unix, and token.
+        - process_may_be_alive_platform distinguishes reclaimable dead owners.
+        - dir_lock_drop_only_removes_matching_owner_token
 
   - id: P3.2
     title: "fix: case-fold ASCII-only em conflito (Unicode quebra WSL/Windows)"
@@ -110,18 +189,21 @@ priority_3_low:
     fix: "Unicode case folding ou canonical path identity no IO boundary."
     source: [review-conflict-detection F3]
     effort: S
+    status: pending
 
   - id: P3.3
     title: "feat: WAL rotation (snapshot + checkpoint_ref)"
     summary: "WAL cresce sem bound. Trigger: >64MiB, >100k records, replay >250ms. Protocol do W2 step-by-step."
     source: [W2 rotation_strategy]
     effort: L
+    status: pending
     depends_on: [P2.1]
 
   - id: P3.4
     title: "feat: proptest de WAL (truncation, bitflip, 50-process stress, recovery idempotence)"
     source: [W2 open_questions]
     effort: M
+    status: pending
     depends_on: [P2.1]
 
 explicit_non_goals_for_v1:
@@ -129,8 +211,26 @@ explicit_non_goals_for_v1:
   - "Durabilidade fsync no WSL/DrvFS: best-effort, documentado."
 
 verification_status_at_handoff:
-  repo: GREEN
-  tests: "382 passed, 0 failed"
-  clippy: clean
-  fmt: clean
-  git_head: "e8a158c (parallel stress test) + este backlog commit"
+  repo: reconciled_with_current_core
+  reconciled_on: 2026-06-29
+  reconciled_branch: codex/forge-selfhealing-p1-claims
+  previous_snapshot_was_stale: true
+  current_status:
+    p1_high: "P1.1, P1.2, P1.3, and P1.4 verified in current core; P1.5 implemented in this slice."
+    p2_medium: "WAL, derive_state, reconcile loop, and tiered invariants remain pending."
+    p3_low: "P3.1 verified in current core; P3.2-P3.4 remain pending."
+  targeted_verification:
+    - cargo test -p forge-core-engine claim_engine
+    - cargo test -p forge-core-engine conflict_detection
+    - cargo test -p forge-core-cli io_util
+    - cargo test -p forge-core-cli --test claim_handoff_e2e
+  full_gate: passed_2026-06-29
+  full_gate_commands:
+    - cargo check --workspace
+    - cargo test --workspace
+    - cargo clippy --workspace --all-targets -- -W clippy::pedantic
+    - cargo fmt --all -- --check
+  full_gate_log_dir: <repo-root>\target\codex-gates\20260629-055304
+  installed_binary_smoke:
+    binary: C:\Users\User\.cargo\bin\forge-core.exe
+    result: "expired release reports forge-core claim handoff recovery hint; claim handoff records artifact; reacquire succeeds with fresh agent."

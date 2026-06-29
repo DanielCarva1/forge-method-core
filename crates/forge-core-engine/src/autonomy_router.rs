@@ -283,7 +283,6 @@ mod tests {
         );
     }
 
-    #[test]
     // W4-001: fail-closed. A non-satisfied goal (failed/pending/flaky) must
     // NEVER unlock the fast lane, regardless of tool-class risk. Previously a
     // failed goal with a low-risk non-YOLO class incorrectly stayed Fast.

@@ -772,7 +772,7 @@ fn save_handoff_artifact(path: &Path, artifact: &ClaimHandoffArtifact) -> std::i
 fn rejected_handoff_envelope(reason: &ClaimRejection) -> CliEnvelope<ClaimHandoffResult> {
     let rejected = ClaimRejected {
         reject_code: reject_code(reason),
-        detail: format!("{reason:?}"),
+        detail: rejection_detail(reason),
     };
     let mut env: CliEnvelope<ClaimHandoffResult> = CliEnvelope::err(
         "claim.handoff",
@@ -824,7 +824,7 @@ pub fn parse_role(s: &str) -> Option<ActorRole> {
 fn rejected_envelope(op: &str, reason: &ClaimRejection) -> CliEnvelope<ClaimResult> {
     let rejected = ClaimRejected {
         reject_code: reject_code(reason),
-        detail: format!("{reason:?}"),
+        detail: rejection_detail(reason),
     };
     let mut env: CliEnvelope<ClaimResult> =
         CliEnvelope::err(op, ExitReason::RejectedByGate, &rejected.detail);
@@ -845,6 +845,16 @@ fn reject_code(r: &ClaimRejection) -> String {
         ClaimRejection::InvalidRequest { .. } => "invalid_request",
     }
     .into()
+}
+
+fn rejection_detail(reason: &ClaimRejection) -> String {
+    match reason {
+        ClaimRejection::ExpiredRequiresHandoff { claim_id } => format!(
+            "{reason:?}. Recovery: record the required handoff with `forge-core claim handoff --id {} --agent <recorder-agent> --summary <what-happened> [--evidence <path>...]`; do not delete the claim file.",
+            claim_id.0
+        ),
+        _ => format!("{reason:?}"),
+    }
 }
 
 /// If the claims dir produced load errors, build the `EnvConfig` envelope once.
@@ -1072,6 +1082,38 @@ mod tests {
         let env = run_release(&dir, &claim_id, &StableId("agentB".into()), T0);
         assert!(!env.ok);
         assert_eq!(env.exit_code(), 2);
+    }
+
+    #[test]
+    fn expired_handoff_rejection_points_to_official_recovery_command() {
+        let dir = tempfile_dir();
+        let acquired = run_acquire(&dir, &req("s1", "agentA"), T0);
+        let claim_id = acquired.data.as_ref().unwrap().claim_id.clone();
+        let env = run_release(
+            &dir,
+            &StableId(claim_id.clone()),
+            &StableId("agentA".into()),
+            T0 + 601,
+        );
+
+        assert!(!env.ok);
+        assert_eq!(env.exit_code(), 2);
+        let err = env.error.as_ref().expect("release should return error");
+        assert!(
+            err.code.0.starts_with("expired_requires_handoff"),
+            "unexpected code: {}",
+            err.code.0
+        );
+        assert!(
+            err.message.contains("forge-core claim handoff --id"),
+            "message should be actionable: {}",
+            err.message
+        );
+        assert!(
+            err.message.contains(&claim_id),
+            "message should name the blocking claim: {}",
+            err.message
+        );
     }
 
     #[test]
