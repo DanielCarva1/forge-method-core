@@ -16,13 +16,17 @@ forge-core-runtime = { path = "../forge-core-runtime" }
 forge-core-store = { path = "../forge-core-store" }
 forge-core-trace = { path = "../forge-core-trace" }
 forge-core-validate = { path = "../forge-core-validate" }
+asn1-rs.workspace = true
 base64.workspace = true
 ed25519-dalek.workspace = true
 p256.workspace = true
+rasn.workspace = true
+rasn-ocsp.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_json_canonicalizer.workspace = true
 serde_yaml.workspace = true
+sha1.workspace = true
 sha2.workspace = true
 sct.workspace = true
 sigstore-tsa.workspace = true

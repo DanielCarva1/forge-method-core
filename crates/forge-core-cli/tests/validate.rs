@@ -3,6 +3,7 @@ use ed25519_dalek::{Signer as _, SigningKey};
 use forge_core_cli::{
     run_execute_operation, run_host_adapter_artifact_verification,
     run_host_adapter_certificate_crl_status_verification,
+    run_host_adapter_certificate_ocsp_status_verification,
     run_host_adapter_certificate_revocation_policy_verification,
     run_host_adapter_certificate_transparency_sct_verification,
     run_host_adapter_distribution_admission, run_host_adapter_distribution_policy,
@@ -19,6 +20,8 @@ use forge_core_cli::{
     HostAdapterAuthorityClass, HostAdapterAutoTrigger,
     HostAdapterCertificateCrlStatusVerificationInput,
     HostAdapterCertificateCrlStatusVerificationStatus,
+    HostAdapterCertificateOcspStatusVerificationInput,
+    HostAdapterCertificateOcspStatusVerificationStatus,
     HostAdapterCertificateRevocationPolicyVerificationInput,
     HostAdapterCertificateRevocationPolicyVerificationStatus,
     HostAdapterCertificateTransparencySctVerificationInput,
@@ -66,6 +69,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
+use x509_parser::prelude::{FromDer as _, X509Certificate};
 
 const RFC3161_VALID_BUNDLE: &str = include_str!("fixtures/rfc3161/valid_bundle.json");
 const RFC3161_PAYLOAD_MISMATCH_BUNDLE: &str =
@@ -371,7 +375,7 @@ fn rekor_entry_fixture(label: &str) -> RekorEntryFixture {
     .replace("\\u{2014}", "\u{2014}");
     let log_entry = json!({
         "body": BASE64.encode(&body_bytes),
-        "integratedTime": 1767225600_i64,
+        "integratedTime": 1_767_225_600_i64,
         "logID": expected_log_id,
         "logIndex": 0_i64,
         "verification": {
@@ -517,6 +521,348 @@ fn write_crl_fixture(
     path
 }
 
+struct OcspCertificateFixture {
+    policy_path: PathBuf,
+    certificate_path: PathBuf,
+    issuer_certificate_path: PathBuf,
+    verification_time_unix: i64,
+    issuer_certificate_der: Vec<u8>,
+    issuer_key_pair: KeyPair,
+    responder_mismatch_name_der: Vec<u8>,
+}
+
+#[derive(Clone, Copy)]
+enum OcspFixtureCertStatus {
+    Good,
+    Revoked,
+    Unknown,
+}
+
+struct OcspResponseFixtureOptions {
+    status: OcspFixtureCertStatus,
+    produced_at: &'static str,
+    this_update: &'static str,
+    next_update: Option<&'static str>,
+    hash_algorithm_oid: &'static [u64],
+    cert_serial: &'static [u8],
+    nonce: Option<&'static [u8]>,
+    responder_name_der: Option<Vec<u8>>,
+    tamper_signature: bool,
+}
+
+impl OcspResponseFixtureOptions {
+    fn good() -> Self {
+        Self {
+            status: OcspFixtureCertStatus::Good,
+            produced_at: "20260707022640Z",
+            this_update: "20260701000000Z",
+            next_update: Some("20270701000000Z"),
+            hash_algorithm_oid: &[2, 16, 840, 1, 101, 3, 4, 2, 1],
+            cert_serial: &[0x12, 0x34],
+            nonce: None,
+            responder_name_der: None,
+            tamper_signature: false,
+        }
+    }
+}
+
+fn ocsp_certificate_fixture(label: &str) -> OcspCertificateFixture {
+    let policy = sigstore_trust_policy_fixture(label, &["fulcio-root.pem"]);
+    set_sigstore_revocation_policy(&policy.policy_path, "explicit_status_required", None);
+    let root = policy.policy_path.parent().expect("policy parent");
+    let certificate_path = root.join("fulcio-leaf.pem");
+    let issuer_certificate_path = root.join("fulcio-root.pem");
+    let verification_time_unix = 1_783_391_200_i64;
+
+    let (ca_certificate, ca_params, ca_key_pair) =
+        test_ocsp_ca("Forge Test Fulcio OCSP Root", (2026, 1, 1), (2027, 1, 1));
+    let leaf_key_pair = KeyPair::generate().expect("generate OCSP leaf key");
+    let issuer = Issuer::from_params(&ca_params, &ca_key_pair);
+    let leaf_certificate = test_ocsp_leaf(&issuer, &leaf_key_pair);
+    fs::write(&issuer_certificate_path, ca_certificate.pem()).expect("write OCSP root");
+    fs::write(&certificate_path, leaf_certificate.pem()).expect("write OCSP leaf");
+
+    let (mismatch_certificate, _, _) = test_ocsp_ca(
+        "Forge Test Unauthorized OCSP Responder",
+        (2026, 1, 1),
+        (2027, 1, 1),
+    );
+    let mismatch_certificate_der = mismatch_certificate.der().to_vec();
+
+    OcspCertificateFixture {
+        policy_path: policy.policy_path,
+        certificate_path,
+        issuer_certificate_path,
+        verification_time_unix,
+        issuer_certificate_der: ca_certificate.der().to_vec(),
+        issuer_key_pair: ca_key_pair,
+        responder_mismatch_name_der: x509_subject_der(&mismatch_certificate_der),
+    }
+}
+
+fn test_ocsp_ca(
+    common_name: &str,
+    not_before: (i32, u8, u8),
+    not_after: (i32, u8, u8),
+) -> (Certificate, CertificateParams, KeyPair) {
+    let mut params =
+        CertificateParams::new(Vec::default()).expect("empty SAN can create OCSP CA params");
+    params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+    params
+        .distinguished_name
+        .push(DnType::CommonName, common_name);
+    params.key_usages.push(KeyUsagePurpose::DigitalSignature);
+    params.key_usages.push(KeyUsagePurpose::KeyCertSign);
+    params.key_usages.push(KeyUsagePurpose::CrlSign);
+    params.not_before = date_time_ymd(not_before.0, not_before.1, not_before.2);
+    params.not_after = date_time_ymd(not_after.0, not_after.1, not_after.2);
+    let key_pair = KeyPair::generate().expect("generate OCSP CA key");
+    let certificate = params.self_signed(&key_pair).expect("self-sign OCSP CA");
+    (certificate, params, key_pair)
+}
+
+fn test_ocsp_leaf(issuer: &Issuer<'_, &KeyPair>, key_pair: &KeyPair) -> Certificate {
+    let mut params =
+        CertificateParams::new(Vec::default()).expect("empty SAN can create OCSP leaf params");
+    params.serial_number = Some(SerialNumber::from(0x1234_u64));
+    params
+        .distinguished_name
+        .push(DnType::CommonName, "Forge Test OCSP Leaf");
+    params.key_usages.push(KeyUsagePurpose::DigitalSignature);
+    params
+        .extended_key_usages
+        .push(ExtendedKeyUsagePurpose::CodeSigning);
+    params.not_before = date_time_ymd(2026, 1, 1);
+    params.not_after = date_time_ymd(2027, 1, 1);
+    params
+        .signed_by(key_pair, issuer)
+        .expect("sign OCSP leaf certificate")
+}
+
+fn write_ocsp_response_fixture(
+    fixture: &OcspCertificateFixture,
+    label: &str,
+    options: OcspResponseFixtureOptions,
+) -> PathBuf {
+    let root = fixture.policy_path.parent().expect("policy parent");
+    let path = root.join(format!("{label}.ocsp.der"));
+    let ocsp_response = ocsp_response_der(fixture, options);
+    fs::write(&path, ocsp_response).expect("write OCSP response fixture");
+    path
+}
+
+fn ocsp_response_der(
+    fixture: &OcspCertificateFixture,
+    options: OcspResponseFixtureOptions,
+) -> Vec<u8> {
+    let issuer_subject_der = x509_subject_der(&fixture.issuer_certificate_der);
+    let responder_name_der = options
+        .responder_name_der
+        .unwrap_or_else(|| issuer_subject_der.clone());
+    let responder_id = der_context_explicit(1, &responder_name_der);
+    let produced_at = der_generalized_time(options.produced_at);
+    let single_response = der_ocsp_single_response(
+        fixture,
+        options.status,
+        options.this_update,
+        options.next_update,
+        options.hash_algorithm_oid,
+        options.cert_serial,
+    );
+    let responses = der_sequence(&[single_response]);
+    let mut response_data_parts = vec![responder_id, produced_at, responses];
+    if let Some(nonce) = options.nonce {
+        response_data_parts.push(der_context_explicit(
+            1,
+            &der_sequence(&[der_ocsp_nonce_extension(nonce)]),
+        ));
+    }
+    let response_data = der_sequence(&response_data_parts);
+    let mut signature = fixture
+        .issuer_key_pair
+        .sign(&response_data)
+        .expect("sign OCSP response data");
+    if options.tamper_signature {
+        let last = signature.last_mut().expect("OCSP signature byte");
+        *last ^= 0x01;
+    }
+    let basic_ocsp_response = der_sequence(&[
+        response_data,
+        der_algorithm_identifier(&[1, 2, 840, 10045, 4, 3, 2]),
+        der_bit_string(&signature),
+    ]);
+    let response_bytes = der_sequence(&[
+        der_oid(&[1, 3, 6, 1, 5, 5, 7, 48, 1, 1]),
+        der_octet_string(&basic_ocsp_response),
+    ]);
+    der_sequence(&[der_enumerated(0), der_context_explicit(0, &response_bytes)])
+}
+
+fn der_ocsp_single_response(
+    fixture: &OcspCertificateFixture,
+    status: OcspFixtureCertStatus,
+    this_update: &str,
+    next_update: Option<&str>,
+    hash_algorithm_oid: &[u64],
+    cert_serial: &[u8],
+) -> Vec<u8> {
+    let mut parts = vec![
+        der_ocsp_cert_id(
+            &fixture.issuer_certificate_der,
+            hash_algorithm_oid,
+            cert_serial,
+        ),
+        der_ocsp_cert_status(status),
+        der_generalized_time(this_update),
+    ];
+    if let Some(next_update) = next_update {
+        parts.push(der_context_explicit(0, &der_generalized_time(next_update)));
+    }
+    der_sequence(&parts)
+}
+
+fn der_ocsp_cert_id(
+    issuer_certificate_der: &[u8],
+    hash_algorithm_oid: &[u64],
+    cert_serial: &[u8],
+) -> Vec<u8> {
+    let (_, issuer_certificate) =
+        X509Certificate::from_der(issuer_certificate_der).expect("parse OCSP issuer certificate");
+    let issuer_name_hash = Sha256::digest(issuer_certificate.tbs_certificate.subject.as_raw());
+    let issuer_key_hash = Sha256::digest(
+        issuer_certificate
+            .tbs_certificate
+            .subject_pki
+            .subject_public_key
+            .data
+            .as_ref(),
+    );
+    der_sequence(&[
+        der_algorithm_identifier(hash_algorithm_oid),
+        der_octet_string(&issuer_name_hash),
+        der_octet_string(&issuer_key_hash),
+        der_integer_positive(cert_serial),
+    ])
+}
+
+fn der_ocsp_cert_status(status: OcspFixtureCertStatus) -> Vec<u8> {
+    match status {
+        OcspFixtureCertStatus::Good => der_context_primitive(0, &[]),
+        OcspFixtureCertStatus::Revoked => der(0xa1, &der_generalized_time("20260615000000Z")),
+        OcspFixtureCertStatus::Unknown => der_context_primitive(2, &[]),
+    }
+}
+
+fn der_ocsp_nonce_extension(nonce: &[u8]) -> Vec<u8> {
+    der_sequence(&[
+        der_oid(&[1, 3, 6, 1, 5, 5, 7, 48, 1, 2]),
+        der_octet_string(&der_octet_string(nonce)),
+    ])
+}
+
+fn x509_subject_der(certificate_der: &[u8]) -> Vec<u8> {
+    let (_, certificate) =
+        X509Certificate::from_der(certificate_der).expect("parse certificate subject");
+    certificate.tbs_certificate.subject.as_raw().to_vec()
+}
+
+fn der_sequence(parts: &[Vec<u8>]) -> Vec<u8> {
+    let content_len = parts.iter().map(Vec::len).sum();
+    let mut content = Vec::with_capacity(content_len);
+    for part in parts {
+        content.extend_from_slice(part);
+    }
+    der(0x30, &content)
+}
+
+fn der_context_explicit(tag_number: u8, content: &[u8]) -> Vec<u8> {
+    der(0xa0 | tag_number, content)
+}
+
+fn der_context_primitive(tag_number: u8, content: &[u8]) -> Vec<u8> {
+    der(0x80 | tag_number, content)
+}
+
+fn der_algorithm_identifier(oid: &[u64]) -> Vec<u8> {
+    der_sequence(&[der_oid(oid)])
+}
+
+fn der_oid(arcs: &[u64]) -> Vec<u8> {
+    assert!(arcs.len() >= 2, "OID needs at least two arcs");
+    let mut body = Vec::new();
+    body.push(u8::try_from((arcs[0] * 40) + arcs[1]).expect("OID first arcs fit in u8"));
+    for arc in &arcs[2..] {
+        let mut encoded = vec![u8::try_from(arc & 0x7f).expect("OID arc byte")];
+        let mut value = arc >> 7;
+        while value > 0 {
+            let byte = u8::try_from(value & 0x7f).expect("OID arc byte") | 0x80;
+            encoded.push(byte);
+            value >>= 7;
+        }
+        body.extend(encoded.iter().rev());
+    }
+    der(0x06, &body)
+}
+
+fn der_octet_string(content: &[u8]) -> Vec<u8> {
+    der(0x04, content)
+}
+
+fn der_bit_string(content: &[u8]) -> Vec<u8> {
+    let mut body = Vec::with_capacity(content.len() + 1);
+    body.push(0);
+    body.extend_from_slice(content);
+    der(0x03, &body)
+}
+
+fn der_integer_positive(content: &[u8]) -> Vec<u8> {
+    let first_non_zero = content
+        .iter()
+        .position(|byte| *byte != 0)
+        .unwrap_or_else(|| content.len().saturating_sub(1));
+    let mut body = content[first_non_zero..].to_vec();
+    if body.first().is_some_and(|byte| byte & 0x80 != 0) {
+        body.insert(0, 0);
+    }
+    der(0x02, &body)
+}
+
+fn der_enumerated(value: u64) -> Vec<u8> {
+    let bytes = value.to_be_bytes();
+    let first_non_zero = bytes
+        .iter()
+        .position(|byte| *byte != 0)
+        .unwrap_or(bytes.len() - 1);
+    der(0x0a, &bytes[first_non_zero..])
+}
+
+fn der_generalized_time(value: &str) -> Vec<u8> {
+    der(0x18, value.as_bytes())
+}
+
+fn der(tag: u8, content: &[u8]) -> Vec<u8> {
+    let mut output = Vec::with_capacity(1 + 5 + content.len());
+    output.push(tag);
+    output.extend(der_length(content.len()));
+    output.extend_from_slice(content);
+    output
+}
+
+fn der_length(len: usize) -> Vec<u8> {
+    if len < 0x80 {
+        return vec![u8::try_from(len).expect("short DER length")];
+    }
+    let bytes = len.to_be_bytes();
+    let first_non_zero = bytes
+        .iter()
+        .position(|byte| *byte != 0)
+        .expect("non-zero DER length");
+    let content = &bytes[first_non_zero..];
+    let mut output = vec![0x80 | u8::try_from(content.len()).expect("DER length width")];
+    output.extend_from_slice(content);
+    output
+}
+
 fn fulcio_certificate_fixture(label: &str, fulcio_refs: &[&str]) -> FulcioCertificateFixture {
     fulcio_certificate_fixture_with_validity(label, fulcio_refs, (2026, 1, 1), (2027, 1, 1))
 }
@@ -647,23 +993,7 @@ fn test_fulcio_leaf_with_validity(
 }
 
 fn der_utf8(value: &str) -> Vec<u8> {
-    let bytes = value.as_bytes();
-    let mut encoded = vec![0x0c];
-    if bytes.len() < 128 {
-        encoded.push(bytes.len() as u8);
-    } else {
-        let mut length = bytes.len();
-        let mut length_bytes = Vec::new();
-        while length > 0 {
-            length_bytes.push((length & 0xff) as u8);
-            length >>= 8;
-        }
-        length_bytes.reverse();
-        encoded.push(0x80 | length_bytes.len() as u8);
-        encoded.extend(length_bytes);
-    }
-    encoded.extend(bytes);
-    encoded
+    der(0x0c, value.as_bytes())
 }
 
 fn install_rfc3161_timestamp_fixture(
@@ -3648,6 +3978,588 @@ fn host_adapter_verify_certificate_crl_status_binary_outputs_json() {
     let json: Value = serde_json::from_slice(&output.stdout).expect("json output");
     assert_eq!(json["status"], "passed");
     assert_eq!(json["revocation_status"], "good_by_supplied_crl");
+}
+
+fn ocsp_verification_input(
+    fixture: &OcspCertificateFixture,
+    ocsp_response_path: PathBuf,
+    expected_nonce: Option<&[u8]>,
+) -> HostAdapterCertificateOcspStatusVerificationInput {
+    HostAdapterCertificateOcspStatusVerificationInput {
+        trust_policy_path: fixture.policy_path.clone(),
+        certificate_path: fixture.certificate_path.clone(),
+        issuer_certificate_path: fixture.issuer_certificate_path.clone(),
+        ocsp_response_path,
+        verification_time_unix: fixture.verification_time_unix,
+        expected_nonce_hex: expected_nonce.map(hex_bytes),
+    }
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_passes_good_by_supplied_ocsp() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-good");
+    let ocsp_response_path =
+        write_ocsp_response_fixture(&fixture, "good", OcspResponseFixtureOptions::good());
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, None),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Passed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("good_by_supplied_ocsp")
+    );
+    assert!(verification
+        .verified_evidence
+        .contains(&"ocsp_status_response_signature_verified".to_string()));
+    assert!(verification
+        .verified_evidence
+        .contains(&"ocsp_status_nonce_not_supplied".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_fails_revoked_by_supplied_ocsp() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-revoked");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "revoked",
+        OcspResponseFixtureOptions {
+            status: OcspFixtureCertStatus::Revoked,
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, None),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("revoked_by_supplied_ocsp")
+    );
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_certificate_revoked".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_fails_unknown_by_supplied_ocsp() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-unknown");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "unknown",
+        OcspResponseFixtureOptions {
+            status: OcspFixtureCertStatus::Unknown,
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, None),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("unknown_by_supplied_ocsp")
+    );
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_certificate_unknown".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_fails_expired_response() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-expired");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "expired",
+        OcspResponseFixtureOptions {
+            next_update: Some("20260701000000Z"),
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, None),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("unknown_due_to_failed_ocsp_verification")
+    );
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_response_expired".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_fails_future_this_update() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-future-this-update");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "future-this-update",
+        OcspResponseFixtureOptions {
+            this_update: "20270701000000Z",
+            next_update: Some("20280701000000Z"),
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, None),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("unknown_due_to_failed_ocsp_verification")
+    );
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_this_update_in_future".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_fails_future_produced_at() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-future-produced-at");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "future-produced-at",
+        OcspResponseFixtureOptions {
+            produced_at: "20270701000000Z",
+            next_update: Some("20280701000000Z"),
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, None),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("unknown_due_to_failed_ocsp_verification")
+    );
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_produced_at_in_future".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_fails_missing_next_update() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-missing-next-update");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "missing-next-update",
+        OcspResponseFixtureOptions {
+            next_update: None,
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, None),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("unknown_due_to_failed_ocsp_verification")
+    );
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_next_update_missing".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_fails_cert_id_serial_mismatch() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-cert-id-mismatch");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "cert-id-mismatch",
+        OcspResponseFixtureOptions {
+            cert_serial: &[0x12, 0x35],
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, None),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("unknown_due_to_failed_ocsp_verification")
+    );
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_certificate_serial_not_found".to_string()));
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_single_response_match_missing".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_fails_unsupported_cert_id_hash() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-unsupported-cert-id-hash");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "unsupported-cert-id-hash",
+        OcspResponseFixtureOptions {
+            hash_algorithm_oid: &[1, 2, 3, 4],
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, None),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("unknown_due_to_failed_ocsp_verification")
+    );
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_cert_id_hash_algorithm_unsupported".to_string()));
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_single_response_match_missing".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_fails_bad_target_certificate_signature() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-bad-target-certificate-signature");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "bad-target-certificate-signature",
+        OcspResponseFixtureOptions::good(),
+    );
+    let (_, wrong_ca_params, wrong_ca_key_pair) = test_ocsp_ca(
+        "Forge Test Wrong OCSP Leaf Issuer",
+        (2026, 1, 1),
+        (2027, 1, 1),
+    );
+    let wrong_issuer = Issuer::from_params(&wrong_ca_params, &wrong_ca_key_pair);
+    let wrong_leaf_key_pair = KeyPair::generate().expect("generate wrong OCSP leaf key");
+    let wrong_leaf_certificate = test_ocsp_leaf(&wrong_issuer, &wrong_leaf_key_pair);
+    fs::write(&fixture.certificate_path, wrong_leaf_certificate.pem())
+        .expect("overwrite OCSP leaf with bad target certificate");
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, None),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("unknown_due_to_failed_ocsp_verification")
+    );
+    assert!(verification
+        .reasons
+        .iter()
+        .any(|reason| reason.starts_with("ocsp_status_certificate_signature_failed:")));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_fails_responder_mismatch() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-responder-mismatch");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "responder-mismatch",
+        OcspResponseFixtureOptions {
+            responder_name_der: Some(fixture.responder_mismatch_name_der.clone()),
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, None),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("unknown_due_to_failed_ocsp_verification")
+    );
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_responder_unauthorized".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_fails_bad_signature() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-bad-signature");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "bad-signature",
+        OcspResponseFixtureOptions {
+            tamper_signature: true,
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, None),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("unknown_due_to_failed_ocsp_verification")
+    );
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_response_signature_invalid".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_does_not_trust_revoked_bad_signature() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-revoked-bad-signature");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "revoked-bad-signature",
+        OcspResponseFixtureOptions {
+            status: OcspFixtureCertStatus::Revoked,
+            tamper_signature: true,
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, None),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("unknown_due_to_failed_ocsp_verification")
+    );
+    assert_eq!(verification.revoked_at_unix, None);
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_response_signature_invalid".to_string()));
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_certificate_revoked".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_does_not_trust_unknown_bad_signature() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-unknown-bad-signature");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "unknown-bad-signature",
+        OcspResponseFixtureOptions {
+            status: OcspFixtureCertStatus::Unknown,
+            tamper_signature: true,
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, None),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("unknown_due_to_failed_ocsp_verification")
+    );
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_response_signature_invalid".to_string()));
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_certificate_unknown".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_passes_matching_nonce() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-nonce-match");
+    let expected_nonce = b"forge-ocsp-nonce-20260629";
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "nonce-match",
+        OcspResponseFixtureOptions {
+            nonce: Some(expected_nonce),
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        ocsp_verification_input(&fixture, ocsp_response_path, Some(expected_nonce)),
+    );
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Passed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("good_by_supplied_ocsp")
+    );
+    assert!(verification
+        .verified_evidence
+        .contains(&"ocsp_status_nonce_verified".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_fails_nonce_mismatch() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-nonce-mismatch");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "nonce-mismatch",
+        OcspResponseFixtureOptions {
+            nonce: Some(b"actual-forge-ocsp-nonce"),
+            ..OcspResponseFixtureOptions::good()
+        },
+    );
+
+    let verification =
+        run_host_adapter_certificate_ocsp_status_verification(ocsp_verification_input(
+            &fixture,
+            ocsp_response_path,
+            Some(b"expected-forge-ocsp-nonce"),
+        ));
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("unknown_due_to_failed_ocsp_verification")
+    );
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_nonce_mismatch".to_string()));
+}
+
+#[test]
+fn host_adapter_certificate_ocsp_status_verification_fails_missing_nonce_when_expected() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-nonce-missing");
+    let ocsp_response_path = write_ocsp_response_fixture(
+        &fixture,
+        "nonce-missing",
+        OcspResponseFixtureOptions::good(),
+    );
+
+    let verification =
+        run_host_adapter_certificate_ocsp_status_verification(ocsp_verification_input(
+            &fixture,
+            ocsp_response_path,
+            Some(b"expected-forge-ocsp-nonce"),
+        ));
+
+    assert_eq!(
+        verification.status,
+        HostAdapterCertificateOcspStatusVerificationStatus::Failed
+    );
+    assert_eq!(
+        verification.revocation_status.as_deref(),
+        Some("unknown_due_to_failed_ocsp_verification")
+    );
+    assert!(verification
+        .reasons
+        .contains(&"ocsp_status_nonce_missing".to_string()));
+}
+
+#[test]
+fn host_adapter_verify_certificate_ocsp_status_binary_outputs_json() {
+    let fixture = ocsp_certificate_fixture("verify-ocsp-binary");
+    let ocsp_response_path =
+        write_ocsp_response_fixture(&fixture, "binary", OcspResponseFixtureOptions::good());
+
+    let output = Command::new(env!("CARGO_BIN_EXE_forge-core"))
+        .args([
+            "host-adapter-verify-certificate-ocsp-status",
+            "--trust-policy-path",
+            fixture.policy_path.to_str().expect("utf8 policy path"),
+            "--certificate-path",
+            fixture
+                .certificate_path
+                .to_str()
+                .expect("utf8 certificate path"),
+            "--issuer-certificate-path",
+            fixture
+                .issuer_certificate_path
+                .to_str()
+                .expect("utf8 issuer certificate path"),
+            "--ocsp-response-path",
+            ocsp_response_path
+                .to_str()
+                .expect("utf8 OCSP response path"),
+            "--verification-time-unix",
+            &fixture.verification_time_unix.to_string(),
+            "--json",
+        ])
+        .output()
+        .expect("run forge-core host-adapter-verify-certificate-ocsp-status");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: Value = serde_json::from_slice(&output.stdout).expect("json output");
+    assert_eq!(json["status"], "passed");
+    assert_eq!(json["revocation_status"], "good_by_supplied_ocsp");
+    assert!(json["verified_evidence"]
+        .as_array()
+        .expect("verified evidence array")
+        .contains(&Value::String(
+            "ocsp_status_response_signature_verified".to_string()
+        )));
 }
 
 #[test]

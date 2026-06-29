@@ -1,0 +1,81 @@
+# R1 — Inventário de `forge-core-cli/src/lib.rs`
+
+Data: 2026-06-29
+Total: 7472 linhas, 141 funções, ~243 itens públicos.
+
+## Mapa de domínios (por faixa de linhas)
+
+| Faixa | Domínio | Funções principais |
+|---|---|---|
+| 1-80 | imports/prelude | — |
+| 81-900 | `HostAdapter*` types (structs/enums) | ~70 tipos de contrato do host adapter |
+| 901-1395 | `run_host_adapter_manifest` | monta o manifest estático |
+| 1396-1545 | `run_host_adapter_projection` + `process_security_policy` + `invocation_admission` | projection/admission |
+| 1546-3735 | `run_host_adapter_distribution_*` + `*_verification` (sigstore, fulcio, rekor, CT, CRL, OCSP, TUF) | 14 funções públicas de verificação |
+| 3736-4255 | helpers OCSP/TUF/datetime | `decode_ocsp_response`, `verify_basic_ocsp_signature_with_issuer`, `parse_tuf_datetime_utc_to_unix`, etc. |
+| 4256-5522 | helpers sigstore/CT/TSA | `select_rekor_integrated_time_for_timestamp_authority`, `verify_sigstore_trust_policy`, `verify_fulcio_chain`, etc. |
+| 5523-5664 | rekor checkpoint + merkle | `verify_rekor_entry_inclusion`, `verify_rekor_checkpoint`, `parse_signed_checkpoint`, `rfc6962_leaf_hash` |
+| 5665-5800 | host command helpers | `host_command`, `argv_has_shell_control`, `env_key_is_forbidden` |
+| 5801-6105 | SLSA + transparency proof | `verify_slsa_statement`, `verify_transparency_log_proof`, `verify_merkle_inclusion` |
+| 6106-6560 | projection/MCP/annotations | `project_host_command`, `mcp_annotations`, `command_input_schema` |
+| 6561-6626 | effect index | `run_rebuild_effect_index`, `run_query_effect_index` |
+| 6627-6905 | validate + execute_operation | `run_validate`, `run_execute_operation` |
+| 6906-7472 | validate helpers + path utils | `validate_operation_fixtures`, `read_yaml`, `resolve_input_path`, `hex_sha256`, `yaml_files` |
+
+## Módulos-alvo propostos
+
+1. **`host_adapter_types.rs`** (linhas 81-900) — todos os `HostAdapter*` structs/enums
+2. **`host_adapter_manifest.rs`** (linhas 901-1545) — `run_host_adapter_manifest`, `run_host_adapter_projection`, `run_host_adapter_process_security_policy`, `run_host_adapter_invocation_admission`
+3. **`host_adapter_verification.rs`** (linhas 1546-3735) — as 14 `run_host_adapter_*_verification`
+4. **`crypto_ocsp.rs`** (linhas 3736-4255) — helpers OCSP/TUF/datetime
+5. **`crypto_sigstore.rs`** (linhas 4256-5522) — helpers sigstore/CT/TSA/fulcio
+6. **`crypto_rekor.rs`** (linhas 5523-5664) — rekor checkpoint + merkle
+7. **`host_adapter_command.rs`** (linhas 5665-5800) — host command helpers
+8. **`crypto_slsa_transparency.rs`** (linhas 5801-6105) — SLSA + transparency proof
+9. **`host_adapter_projection.rs`** (linhas 6106-6560) — projection/MCP/annotations
+10. **`effect_index.rs`** (linhas 6561-6626) — effect index commands
+11. **`validate.rs`** (linhas 6627-6905) — `run_validate`, `run_execute_operation`
+12. **`validate_helpers.rs`** (linhas 6906-7472) — validate helpers + path utils
+
+## Ordem de extração (menor risco primeiro)
+
+1. `crypto_rekor.rs` (5 funções, isoladas, sem dependência de tipos do projeto)
+2. `crypto_ocsp.rs` (helpers OCSP, só dependem de `rasn`/`rasn-ocsp`)
+3. `crypto_sigstore.rs` (helpers sigstore, dependem de x509-parser)
+4. `crypto_slsa_transparency.rs` (SLSA + merkle)
+5. `host_adapter_types.rs` (só tipos, sem lógica)
+6. `host_adapter_manifest.rs`
+7. `host_adapter_verification.rs`
+8. `host_adapter_command.rs`
+9. `host_adapter_projection.rs`
+10. `effect_index.rs`
+11. `validate.rs`
+12. `validate_helpers.rs`
+
+## Notas
+
+- O WIP do Codex mexe em `lib.rs` (OCSP boundary). Vou evitar a faixa 3451-3735
+  (OCSP verification) e 3736-4255 (OCSP helpers) na primeira extração.
+- Começar por `crypto_rekor.rs` é seguro: não toca no WIP do Codex.
+
+## Progresso
+
+- [x] R1.1 — Inventariar `lib.rs` (este documento)
+- [x] R1.3 — Extrair `crypto_rekor.rs` (2026-06-29)
+  - Movido: `ParsedRekorEntry`, `ParsedRekorInclusionProof`, `ParsedCheckpoint`,
+    `parse_rekor_log_entry`, `required_string`/`required_i64`/`required_u64`,
+    `verify_rekor_entry_inclusion`, `verify_rekor_checkpoint`,
+    `parse_signed_checkpoint`, `decode_checkpoint_signature`, `rfc6962_leaf_hash`,
+    `verify_merkle_inclusion`, `hash_merkle_node`, `hex_to_bytes`.
+  - Helpers `hex_sha256`, `hex_bytes`, `normalize_sha256_display`,
+    `normalize_sha256_digest`, `valid_sha256_digest` ficaram em `lib.rs` como
+    `pub(crate)` (usados por múltiplos domínios — serão extraídos depois para
+    `crypto_hashing.rs`).
+  - `lib.rs`: 7472 → 7205 linhas (-267).
+  - Gates: `cargo check`, `cargo test --workspace`, `cargo clippy --pedantic`,
+    `cargo fmt --check` todos verdes.
+- [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
+- [ ] R1.4 — Mover verificação X.509/CRL/OCSP
+- [ ] R1.5 — Mover `execute_operation` flow
+- [ ] R1.6 — Mover project link resolve/init
+- [ ] R1.7 — Validar (lib.rs ≤ 1500 linhas)
