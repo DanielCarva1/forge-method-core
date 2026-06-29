@@ -17,32 +17,30 @@ use serde_json::Value;
 use std::fs;
 use x509_parser::parse_x509_crl;
 
-use crate::crypto_hashing::{
-    hex_bytes, hex_sha256, normalize_sha256_digest, normalize_sha256_display,
-};
-use crate::crypto_ocsp::{
+use crate::hashing::{hex_bytes, hex_sha256, normalize_sha256_digest, normalize_sha256_display};
+use crate::ocsp::{
     apply_ocsp_cert_status, decode_basic_ocsp_response, decode_ocsp_response,
     extract_ocsp_response_nonce_hex, find_matching_ocsp_single_response,
     normalize_expected_ocsp_nonce_hex, ocsp_responder_id_matches_issuer, rasn_oid_matches,
     verify_basic_ocsp_signature_with_issuer, verify_ocsp_nonce,
     verify_ocsp_single_response_freshness,
 };
-use crate::crypto_rekor;
-// Items below are accessed via the qualified `crypto_rekor::*` path used by
+use crate::rekor;
+// Items below are accessed via the qualified `rekor::*` path used by
 // the verification functions (kept verbatim from the original `lib.rs`).
-#[allow(unused_imports)]
-use crate::crypto_rekor::{parse_rekor_log_entry, verify_rekor_entry_inclusion, ParsedRekorEntry};
-use crate::crypto_tuf::verify_tuf_metadata_freshness_role;
 use crate::file_io::{read_public_key_file, read_required_file, read_signature_file};
 use crate::host_command::{source_ref_is_immutable, version_like};
+#[allow(unused_imports)]
+use crate::rekor::{parse_rekor_log_entry, verify_rekor_entry_inclusion, ParsedRekorEntry};
+use crate::tuf::verify_tuf_metadata_freshness_role;
 // Re-export wildcard for the sigstore / SLSA helpers and host-adapter types
 // (same pattern as the original crate-root re-exports in `lib.rs`).
 #[allow(clippy::wildcard_imports)]
-use crate::crypto_sigstore::*;
-#[allow(clippy::wildcard_imports)]
-use crate::crypto_slsa_transparency::*;
-#[allow(clippy::wildcard_imports)]
 use crate::host_adapter_types::*;
+#[allow(clippy::wildcard_imports)]
+use crate::sigstore::*;
+#[allow(clippy::wildcard_imports)]
+use crate::slsa_transparency::*;
 
 pub fn run_host_adapter_artifact_verification(
     input: HostAdapterArtifactVerificationInput,
@@ -300,9 +298,9 @@ pub fn run_host_adapter_rekor_verification(
     let public_key_bytes =
         read_required_file(&input.public_key_path, "rekor_public_key", &mut reasons);
 
-    let mut log_entry: Option<crypto_rekor::ParsedRekorEntry> = None;
+    let mut log_entry: Option<rekor::ParsedRekorEntry> = None;
     if let Some(text) = log_entry_text.as_deref() {
-        match crypto_rekor::parse_rekor_log_entry(text) {
+        match rekor::parse_rekor_log_entry(text) {
             Ok(entry) => {
                 verified_evidence.push("rekor_log_entry_parsed".to_string());
                 log_entry = Some(entry);
@@ -333,12 +331,7 @@ pub fn run_host_adapter_rekor_verification(
         }
 
         if let Some(key) = rekor_key.as_ref() {
-            crypto_rekor::verify_rekor_entry_inclusion(
-                entry,
-                key,
-                &mut verified_evidence,
-                &mut reasons,
-            );
+            rekor::verify_rekor_entry_inclusion(entry, key, &mut verified_evidence, &mut reasons);
         }
     }
 
@@ -644,7 +637,7 @@ pub fn run_host_adapter_sigstore_bundle_subject_verification(
             ))
         })
         .ok()
-        .and_then(|text| match crypto_rekor::parse_rekor_log_entry(&text) {
+        .and_then(|text| match rekor::parse_rekor_log_entry(&text) {
             Ok(entry) => {
                 rekor_integrated_time = Some(entry.integrated_time);
                 verified_evidence.push("bundle_rekor_log_entry_parsed".to_string());
@@ -842,7 +835,7 @@ pub fn run_host_adapter_sigstore_dsse_in_toto_subject_verification(
     let parsed_rekor_entry = fs::read_to_string(&input.rekor_log_entry_path)
         .map_err(|err| reasons.push(format!("dsse_rekor_log_entry_read_failed:{:?}", err.kind())))
         .ok()
-        .and_then(|text| match crypto_rekor::parse_rekor_log_entry(&text) {
+        .and_then(|text| match rekor::parse_rekor_log_entry(&text) {
             Ok(entry) => {
                 rekor_integrated_time = Some(entry.integrated_time);
                 verified_evidence.push("dsse_rekor_log_entry_parsed".to_string());

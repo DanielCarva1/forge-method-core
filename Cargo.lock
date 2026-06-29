@@ -610,6 +610,7 @@ dependencies = [
  "base64",
  "ed25519-dalek",
  "forge-core-contracts",
+ "forge-core-crypto",
  "forge-core-engine",
  "forge-core-eval",
  "forge-core-graph",
@@ -643,6 +644,31 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+]
+
+[[package]]
+name = "forge-core-crypto"
+version = "0.1.0"
+dependencies = [
+ "asn1-rs",
+ "base64",
+ "ed25519-dalek",
+ "forge-core-contracts",
+ "p256",
+ "proptest",
+ "rasn",
+ "rasn-ocsp",
+ "rcgen",
+ "rustls-pki-types",
+ "sct",
+ "serde",
+ "serde_json",
+ "serde_json_canonicalizer",
+ "serde_yaml",
+ "sha1",
+ "sha2",
+ "sigstore-tsa",
+ "x509-parser",
 ]
 
 [[package]]

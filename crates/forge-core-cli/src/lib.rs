@@ -1,23 +1,35 @@
+//! `forge-core-cli` — Binary entrypoint crate for the Forge Method core.
+//!
+//! Historically a single 7400-line `lib.rs` god-file, this crate now contains
+//! only the presentation-layer concerns (argv parsing in `main.rs`, the
+//! `validate` / `execute_operation` / `effect_index` host surfaces, and the
+//! host-adapter manifest + projection builders that the CLI owns). All
+//! cryptographic verification primitives, host-adapter verification
+//! entrypoints, and host-adapter data types have been moved to the
+//! [`forge_core_crypto`](::forge_core_crypto) crate, which this crate
+//! re-exports transitively at the crate root so existing call sites in
+//! `main.rs`, `tests/validate.rs`, and `forge-contract-validator` keep
+//! resolving `forge_core_cli::run_host_adapter_*_verification` and
+//! `forge_core_cli::HostAdapter*` unchanged.
+
 pub mod autonomy_cmd;
 pub mod claim;
 pub mod contract_cmd;
 pub mod coordination;
-pub(crate) mod crypto_hashing;
-pub(crate) mod crypto_ocsp;
-pub(crate) mod crypto_rekor;
-pub(crate) mod crypto_sigstore;
-pub(crate) mod crypto_slsa_transparency;
-pub(crate) mod crypto_tuf;
 pub(crate) mod effect_index;
 pub mod eval_cmd;
 pub(crate) mod execute_operation;
-pub(crate) mod file_io;
 pub mod graph_cmd;
 pub mod guide;
 pub(crate) mod host_adapter_manifest;
 pub(crate) mod host_adapter_projection;
-pub(crate) mod host_adapter_types;
-pub(crate) mod host_adapter_verification;
+// `host_command` here (the CLI's manifest/projection-side helpers) shadows
+// the same-named module re-exported from `forge_core_crypto` (which contains
+// only the two admission predicates `source_ref_is_immutable` and
+// `version_like`). The CLI's own `host_command` already defines those two
+// predicates locally for its projection/admission callers, so the shadow is
+// intentional and safe.
+#[allow(hidden_glob_reexports)]
 pub(crate) mod host_command;
 pub mod io_util;
 pub mod isolation;
@@ -41,19 +53,6 @@ pub use effect_index::{
     run_query_effect_index, run_query_effect_index_context, run_rebuild_effect_index,
     QueryEffectIndexInput, RebuildEffectIndexInput,
 };
-// Re-export the two shared helpers still consumed via `crate::*` paths
-// from peer modules after R1.HostAdapterVerification moved the
-// host-adapter verification entrypoints (and with them all remaining
-// callers of the crypto helpers) into `host_adapter_verification`:
-//   - `crate::hex_sha256` is used by `execute_operation`
-//   - `crate::read_required_file` is used by `crypto_tuf`
-// All other previously re-exported helpers are now consumed only inside
-// `host_adapter_verification`, which imports them directly from their
-// respective modules (`crypto_sigstore`, `crypto_slsa_transparency`,
-// `crypto_ocsp`, `crypto_tuf`, `file_io`, `crypto_hashing`,
-// `host_command`).
-pub(crate) use crypto_hashing::{hex_bytes, hex_sha256, normalize_sha256_display};
-pub(crate) use file_io::read_required_file;
 // Re-export the public validate API at the crate root so `main.rs`,
 // `tests/validate.rs`, and `forge-contract-validator` keep importing
 // `run_validate`, `ValidateSummary`, `ValidateCheck`, `ValidateDiagnostic`,
@@ -61,15 +60,10 @@ pub(crate) use file_io::read_required_file;
 pub use validate::{
     run_validate, ValidateCheck, ValidateDiagnostic, ValidateSummary, ValidationStatus,
 };
-// Re-export all host-adapter types at the crate root so `main.rs` and
-// `tests/validate.rs` keep importing `HostAdapterManifest`, etc., directly
-// from `forge_core_cli` after the types moved into `host_adapter_types`.
-pub use host_adapter_types::*;
 // Re-export the host adapter manifest builder at the crate root so
 // `main.rs`, `tests/validate.rs`, and the projection/policy/admission
-// builders still in `lib.rs` keep calling `run_host_adapter_manifest()`
-// directly from `forge_core_cli` after the builder moved into the
-// `host_adapter_manifest` module.
+// builders keep calling `run_host_adapter_manifest()` directly from
+// `forge_core_cli`.
 pub use host_adapter_manifest::run_host_adapter_manifest;
 // Re-export the host adapter projection/policy/admission builders at the
 // crate root so `main.rs`, `tests/validate.rs`, and
@@ -78,17 +72,23 @@ pub use host_adapter_manifest::run_host_adapter_manifest;
 // `run_host_adapter_invocation_admission`,
 // `run_host_adapter_distribution_policy`, and
 // `run_host_adapter_distribution_admission` directly from
-// `forge_core_cli` after the builders moved into the
-// `host_adapter_projection` module.
+// `forge_core_cli`.
 pub use host_adapter_projection::{
     run_host_adapter_distribution_admission, run_host_adapter_distribution_policy,
     run_host_adapter_invocation_admission, run_host_adapter_process_security_policy,
     run_host_adapter_projection,
 };
 
-// Re-export all of the `run_host_adapter_*_verification` entrypoints at the
-// crate root so `main.rs`, `tests/validate.rs`, and
-// `forge-contract-validator` keep importing
-// `forge_core_cli::run_host_adapter_*_verification` directly after the
-// functions moved into the `host_adapter_verification` module.
-pub use host_adapter_verification::*;
+// Re-export everything from `forge_core_crypto` at the crate root so the
+// historical API surface (`forge_core_cli::run_host_adapter_*_verification`,
+// `forge_core_cli::HostAdapter*` types, `forge_core_cli::hex_sha256`,
+// `forge_core_cli::read_required_file`, ...) keeps resolving after the
+// cryptographic primitives moved into their own crate.
+//
+// The modules that stay inside `forge-core-cli`
+// (`host_adapter_manifest`, `host_adapter_projection`, `execute_operation`)
+// reference crypto types/helpers via `crate::HostAdapter*` and
+// `crate::hex_sha256` paths; the wildcard re-export below makes those paths
+// resolve.
+#[allow(clippy::wildcard_imports)]
+pub use forge_core_crypto::*;

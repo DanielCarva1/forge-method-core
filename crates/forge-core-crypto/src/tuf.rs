@@ -26,8 +26,8 @@ use std::path::Path;
 
 use serde_json::Value;
 
+use crate::file_io::read_required_file;
 use crate::host_adapter_types::HostAdapterTufMetadataFreshnessRole;
-use crate::read_required_file;
 
 /// Load a TUF role metadata document, verify role type, version floor, and
 /// expiry freshness against `update_start_time_unix`, and push a structured
