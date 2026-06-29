@@ -1,6 +1,7 @@
-use forge_core_contracts::claim::ClaimContract;
+use forge_core_contracts::claim::{ClaimContract, ClaimStatus};
 use fs4::FileExt;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
@@ -18,6 +19,8 @@ const DEFAULT_MAX_PAYLOAD_LEN: u32 = 16 * 1024 * 1024;
 
 pub const CLAIM_WAL_RELATIVE_PATH: &str = "wal/claims.fmw1";
 pub const CLAIM_WAL_LOCK_RELATIVE_PATH: &str = "locks/claims.wal.lock";
+
+type ClaimIdIndex = BTreeMap<String, Vec<String>>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -102,6 +105,114 @@ pub enum ClaimWalStopReason {
     SequenceGap,
     PayloadDecodeFailed,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClaimWalProjection {
+    pub recovery: ClaimWalRecovery,
+    pub last_applied_seq: u64,
+    pub applied_records: usize,
+    pub claims: Vec<ClaimContract>,
+    pub latest_by_claim_id: BTreeMap<String, ProjectedClaim>,
+    pub active_by_claim_id: BTreeMap<String, ProjectedClaim>,
+    pub released_by_claim_id: BTreeMap<String, ProjectedClaim>,
+    pub handoff_recorded_by_claim_id: BTreeMap<String, ProjectedClaim>,
+    pub active_claim_ids_by_agent: BTreeMap<String, Vec<String>>,
+    pub active_claim_ids_by_scope: BTreeMap<String, Vec<String>>,
+    pub active_claim_ids_by_path: BTreeMap<String, Vec<String>>,
+    pub diagnostics: Vec<ClaimWalProjectionDiagnostic>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProjectedClaim {
+    pub claim_contract: ClaimContract,
+    pub last_seq: u64,
+    pub last_operation: ClaimWalOperation,
+    pub recorded_at: String,
+    pub wal_offset: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClaimWalProjectionDiagnostic {
+    pub severity: ClaimWalProjectionDiagnosticSeverity,
+    pub code: ClaimWalProjectionDiagnosticCode,
+    pub seq: u64,
+    pub claim_id: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClaimWalProjectionDiagnosticSeverity {
+    Warning,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ClaimWalProjectionDiagnosticCode {
+    HeartbeatWithoutActiveClaim,
+    HeartbeatAgentMismatch,
+    ReleaseWithoutActiveClaim,
+    ReleaseAgentMismatch,
+    HandoffWithoutActiveClaim,
+    HandoffAgentMismatch,
+    ReacquireByDifferentAgent,
+    OperationStatusMismatch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClaimWalProjectionStopPolicy {
+    ProjectValidPrefix,
+    RequireCleanEof,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaimWalProjectionOptions {
+    pub repair: bool,
+    pub stop_policy: ClaimWalProjectionStopPolicy,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClaimWalProjectionError {
+    RecoverWal {
+        source: ClaimWalReadError,
+    },
+    RecoveryStopped {
+        stop_reason: ClaimWalStopReason,
+        last_good_offset: u64,
+        original_len: u64,
+    },
+}
+
+impl Default for ClaimWalProjectionOptions {
+    fn default() -> Self {
+        Self {
+            repair: false,
+            stop_policy: ClaimWalProjectionStopPolicy::ProjectValidPrefix,
+        }
+    }
+}
+
+impl fmt::Display for ClaimWalProjectionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::RecoverWal { source } => write!(formatter, "recover claim WAL failed: {source}"),
+            Self::RecoveryStopped {
+                stop_reason,
+                last_good_offset,
+                original_len,
+            } => write!(
+                formatter,
+                "claim WAL recovery stopped with {stop_reason:?} at {last_good_offset}/{original_len}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ClaimWalProjectionError {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClaimWalAppendError {
@@ -345,6 +456,308 @@ pub fn recover_claim_wal(
         path: wal_path,
         source: source.to_string(),
     })
+}
+
+/// Replay the claim WAL into the materialized claim state.
+///
+/// Projection is deterministic and last-record-wins per claim id. Released and
+/// handoff-recorded claims remain present in the projected state so the engine
+/// can distinguish historical/non-live claims from absent claims.
+///
+/// If `repair` is true, the underlying recovery pass may truncate a non-empty
+/// invalid tail to the last verified byte offset before projection.
+///
+/// # Errors
+///
+/// Returns [`ClaimWalReadError`] when the WAL lock cannot be acquired, the WAL
+/// file cannot be read, or a requested repair truncation cannot be persisted.
+pub fn replay_claim_wal(
+    state_root: impl AsRef<Path>,
+    repair: bool,
+) -> Result<ClaimWalProjection, ClaimWalReadError> {
+    let recovery = recover_claim_wal(state_root, repair)?;
+    Ok(project_claim_wal_recovery(recovery))
+}
+
+/// Project claim WAL records using explicit projection options.
+///
+/// # Errors
+///
+/// Returns [`ClaimWalProjectionError`] when WAL recovery fails or when
+/// `RequireCleanEof` is selected and the recovered prefix stopped before clean
+/// EOF.
+pub fn project_claim_wal(
+    state_root: impl AsRef<Path>,
+    options: &ClaimWalProjectionOptions,
+) -> Result<ClaimWalProjection, ClaimWalProjectionError> {
+    let recovery = recover_claim_wal(state_root, options.repair)
+        .map_err(|source| ClaimWalProjectionError::RecoverWal { source })?;
+    if options.stop_policy == ClaimWalProjectionStopPolicy::RequireCleanEof
+        && recovery.stop_reason != ClaimWalStopReason::CleanEof
+    {
+        return Err(ClaimWalProjectionError::RecoveryStopped {
+            stop_reason: recovery.stop_reason,
+            last_good_offset: recovery.last_good_offset,
+            original_len: recovery.original_len,
+        });
+    }
+    Ok(project_claim_wal_recovery(recovery))
+}
+
+#[must_use]
+pub fn project_claim_wal_recovery(recovery: ClaimWalRecovery) -> ClaimWalProjection {
+    let mut accumulator = ProjectionAccumulator::default();
+    for record in &recovery.records {
+        accumulator.apply_record(record);
+    }
+    let claims = accumulator
+        .latest_by_claim_id
+        .values()
+        .map(|projected| projected.claim_contract.clone())
+        .collect();
+    let (active_claim_ids_by_agent, active_claim_ids_by_scope, active_claim_ids_by_path) =
+        build_active_indexes(&accumulator.active_by_claim_id);
+    ClaimWalProjection {
+        recovery,
+        last_applied_seq: accumulator.last_applied_seq,
+        applied_records: accumulator.applied_records,
+        claims,
+        latest_by_claim_id: accumulator.latest_by_claim_id,
+        active_by_claim_id: accumulator.active_by_claim_id,
+        released_by_claim_id: accumulator.released_by_claim_id,
+        handoff_recorded_by_claim_id: accumulator.handoff_recorded_by_claim_id,
+        active_claim_ids_by_agent,
+        active_claim_ids_by_scope,
+        active_claim_ids_by_path,
+        diagnostics: accumulator.diagnostics,
+    }
+}
+
+#[derive(Debug, Default)]
+struct ProjectionAccumulator {
+    latest_by_claim_id: BTreeMap<String, ProjectedClaim>,
+    active_by_claim_id: BTreeMap<String, ProjectedClaim>,
+    released_by_claim_id: BTreeMap<String, ProjectedClaim>,
+    handoff_recorded_by_claim_id: BTreeMap<String, ProjectedClaim>,
+    diagnostics: Vec<ClaimWalProjectionDiagnostic>,
+    last_applied_seq: u64,
+    applied_records: usize,
+}
+
+impl ProjectionAccumulator {
+    fn apply_record(&mut self, record: &ClaimWalRecord) {
+        let claim_id = record.payload.claim_contract.id.0.clone();
+        let projected = projected_claim(record);
+        push_status_mismatch_diagnostic(record, &mut self.diagnostics);
+        match record.operation {
+            ClaimWalOperation::Acquire => {
+                if let Some(active) = self.active_by_claim_id.get(&claim_id) {
+                    if active.claim_contract.claim.claimant_agent_id
+                        != projected.claim_contract.claim.claimant_agent_id
+                    {
+                        self.diagnostics.push(projection_warning(
+                            ClaimWalProjectionDiagnosticCode::ReacquireByDifferentAgent,
+                            record,
+                            "acquire replaced an active claim held by another agent",
+                        ));
+                    }
+                }
+                self.latest_by_claim_id
+                    .insert(claim_id.clone(), projected.clone());
+                self.active_by_claim_id.insert(claim_id.clone(), projected);
+                self.released_by_claim_id.remove(&claim_id);
+                self.handoff_recorded_by_claim_id.remove(&claim_id);
+                self.record_applied(record);
+            }
+            ClaimWalOperation::Heartbeat => {
+                if matching_active_claim(
+                    record,
+                    &self.active_by_claim_id,
+                    &mut self.diagnostics,
+                    MissingOp::Heartbeat,
+                ) {
+                    self.latest_by_claim_id
+                        .insert(claim_id.clone(), projected.clone());
+                    self.active_by_claim_id.insert(claim_id, projected);
+                    self.record_applied(record);
+                }
+            }
+            ClaimWalOperation::Release => {
+                if matching_active_claim(
+                    record,
+                    &self.active_by_claim_id,
+                    &mut self.diagnostics,
+                    MissingOp::Release,
+                ) {
+                    self.active_by_claim_id.remove(&claim_id);
+                    self.latest_by_claim_id
+                        .insert(claim_id.clone(), projected.clone());
+                    self.released_by_claim_id
+                        .insert(claim_id.clone(), projected);
+                    self.handoff_recorded_by_claim_id.remove(&claim_id);
+                    self.record_applied(record);
+                }
+            }
+            ClaimWalOperation::HandoffRecorded => {
+                if matching_active_claim(
+                    record,
+                    &self.active_by_claim_id,
+                    &mut self.diagnostics,
+                    MissingOp::Handoff,
+                ) {
+                    self.active_by_claim_id.remove(&claim_id);
+                    self.latest_by_claim_id
+                        .insert(claim_id.clone(), projected.clone());
+                    self.handoff_recorded_by_claim_id
+                        .insert(claim_id.clone(), projected);
+                    self.released_by_claim_id.remove(&claim_id);
+                    self.record_applied(record);
+                }
+            }
+        }
+    }
+
+    fn record_applied(&mut self, record: &ClaimWalRecord) {
+        self.last_applied_seq = record.seq;
+        self.applied_records = self.applied_records.saturating_add(1);
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MissingOp {
+    Heartbeat,
+    Release,
+    Handoff,
+}
+
+fn matching_active_claim(
+    record: &ClaimWalRecord,
+    active_by_claim_id: &BTreeMap<String, ProjectedClaim>,
+    diagnostics: &mut Vec<ClaimWalProjectionDiagnostic>,
+    op: MissingOp,
+) -> bool {
+    let claim_id = &record.payload.claim_contract.id.0;
+    let Some(active) = active_by_claim_id.get(claim_id) else {
+        diagnostics.push(projection_warning(
+            missing_diag_code(op),
+            record,
+            missing_message(op),
+        ));
+        return false;
+    };
+    if active.claim_contract.claim.claimant_agent_id
+        != record.payload.claim_contract.claim.claimant_agent_id
+    {
+        diagnostics.push(projection_warning(
+            mismatch_diag_code(op),
+            record,
+            "claim lifecycle record agent does not match active claim agent",
+        ));
+        return false;
+    }
+    true
+}
+
+fn missing_diag_code(op: MissingOp) -> ClaimWalProjectionDiagnosticCode {
+    match op {
+        MissingOp::Heartbeat => ClaimWalProjectionDiagnosticCode::HeartbeatWithoutActiveClaim,
+        MissingOp::Release => ClaimWalProjectionDiagnosticCode::ReleaseWithoutActiveClaim,
+        MissingOp::Handoff => ClaimWalProjectionDiagnosticCode::HandoffWithoutActiveClaim,
+    }
+}
+
+fn mismatch_diag_code(op: MissingOp) -> ClaimWalProjectionDiagnosticCode {
+    match op {
+        MissingOp::Heartbeat => ClaimWalProjectionDiagnosticCode::HeartbeatAgentMismatch,
+        MissingOp::Release => ClaimWalProjectionDiagnosticCode::ReleaseAgentMismatch,
+        MissingOp::Handoff => ClaimWalProjectionDiagnosticCode::HandoffAgentMismatch,
+    }
+}
+
+fn missing_message(op: MissingOp) -> &'static str {
+    match op {
+        MissingOp::Heartbeat => "heartbeat has no matching active claim",
+        MissingOp::Release => "release has no matching active claim",
+        MissingOp::Handoff => "handoff has no matching active claim",
+    }
+}
+
+fn push_status_mismatch_diagnostic(
+    record: &ClaimWalRecord,
+    diagnostics: &mut Vec<ClaimWalProjectionDiagnostic>,
+) {
+    let status = record.payload.claim_contract.status.value;
+    let ok = match record.operation {
+        ClaimWalOperation::Acquire | ClaimWalOperation::Heartbeat => status == ClaimStatus::Active,
+        ClaimWalOperation::Release => status == ClaimStatus::Released,
+        ClaimWalOperation::HandoffRecorded => status == ClaimStatus::HandoffRecorded,
+    };
+    if !ok {
+        diagnostics.push(projection_warning(
+            ClaimWalProjectionDiagnosticCode::OperationStatusMismatch,
+            record,
+            "claim WAL operation does not match embedded claim status",
+        ));
+    }
+}
+
+fn projection_warning(
+    code: ClaimWalProjectionDiagnosticCode,
+    record: &ClaimWalRecord,
+    message: &str,
+) -> ClaimWalProjectionDiagnostic {
+    ClaimWalProjectionDiagnostic {
+        severity: ClaimWalProjectionDiagnosticSeverity::Warning,
+        code,
+        seq: record.seq,
+        claim_id: record.payload.claim_contract.id.0.clone(),
+        message: message.to_string(),
+    }
+}
+
+fn projected_claim(record: &ClaimWalRecord) -> ProjectedClaim {
+    ProjectedClaim {
+        claim_contract: record.payload.claim_contract.clone(),
+        last_seq: record.seq,
+        last_operation: record.operation,
+        recorded_at: record.payload.recorded_at.clone(),
+        wal_offset: record.offset,
+    }
+}
+
+fn build_active_indexes(
+    active_by_claim_id: &BTreeMap<String, ProjectedClaim>,
+) -> (ClaimIdIndex, ClaimIdIndex, ClaimIdIndex) {
+    let mut by_agent = ClaimIdIndex::new();
+    let mut by_scope = ClaimIdIndex::new();
+    let mut by_path = ClaimIdIndex::new();
+    for (claim_id, projected) in active_by_claim_id {
+        by_agent
+            .entry(projected.claim_contract.claim.claimant_agent_id.0.clone())
+            .or_default()
+            .push(claim_id.clone());
+        by_scope
+            .entry(projected.claim_contract.scope.id.0.clone())
+            .or_default()
+            .push(claim_id.clone());
+        for path in &projected.claim_contract.scope.paths {
+            by_path
+                .entry(path.0.clone())
+                .or_default()
+                .push(claim_id.clone());
+        }
+    }
+    sort_index_values(&mut by_agent);
+    sort_index_values(&mut by_scope);
+    sort_index_values(&mut by_path);
+    (by_agent, by_scope, by_path)
+}
+
+fn sort_index_values(index: &mut BTreeMap<String, Vec<String>>) {
+    for values in index.values_mut() {
+        values.sort();
+        values.dedup();
+    }
 }
 
 fn recover_claim_wal_under_lock(wal_path: &Path, repair: bool) -> io::Result<ClaimWalRecovery> {

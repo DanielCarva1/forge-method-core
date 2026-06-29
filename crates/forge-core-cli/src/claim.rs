@@ -7,12 +7,11 @@
 //!
 //! # Coordination bus = filesystem (DD15, DD22)
 //!
-//! Claims are materialized as `ClaimContractDocument` YAML files in a claims
-//! directory (default `contracts/claims`) and every mutating lifecycle
-//! transition is also appended to the claim WAL under the resolved state root.
-//! P2.1 provides the append-only recovery spine; P2.2 makes WAL replay the sole
-//! authority for the live bus. Until then, the YAML files remain the materialized
-//! compatibility cache used by status/check-write.
+//! Every mutating lifecycle transition is appended to the claim WAL under the
+//! resolved state root. `ClaimContractDocument` YAML files in `claims-active`
+//! are now only a materialized compatibility/debug cache. WAL replay is the
+//! default authority for status/check-write/mutating decisions; cache-only
+//! state without a WAL fails closed instead of silently becoming authoritative.
 //!
 //! # Time is injected (DD23)
 //!
@@ -32,7 +31,11 @@ use forge_core_engine::{
     release, unix_to_rfc3339, AcquireRequest, ActiveClaimSummary, ClaimLifecycleDecision,
     ClaimRejection, RecordHandoffRequest,
 };
-use forge_core_store::claim_wal::{append_claim_wal_record, ClaimWalOperation};
+use forge_core_store::claim_wal::{
+    append_claim_wal_record, claim_wal_path, replay_claim_wal, ClaimWalOperation,
+    ClaimWalStopReason,
+};
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 // ============================================================================
@@ -574,7 +577,7 @@ pub struct WriteCheckPayload {
 ///
 /// - allowed + no blocks  -> every target is inside the writer's own live
 ///   claim.
-/// - blocked              -> exit 2 (RejectedByGate); the writer must acquire
+/// - blocked              -> exit 2 (`RejectedByGate`); the writer must acquire
 ///   its own scope or wait for a handoff. The `blocks` / `ungoverned` arrays
 ///   tell it exactly which paths need correction.
 ///
@@ -636,7 +639,7 @@ pub fn run_check_write(
                     ungoverned.len()
                 );
                 for path in &ungoverned {
-                    msg.push_str(&format!("  - {path}\n"));
+                    let _ = writeln!(msg, "  - {path}");
                 }
                 msg.push_str("acquire a claim covering every target before writing.");
                 CliEnvelope::reject("check-write", ExitReason::RejectedByGate, msg, payload)
@@ -667,13 +670,14 @@ pub fn run_check_write(
                 blocks.len()
             );
             for b in &blocks {
-                msg.push_str(&format!(
-                    "  - {} (claimed by '{}' via claim '{}'; conflict: {})\n",
+                let _ = writeln!(
+                    msg,
+                    "  - {} (claimed by '{}' via claim '{}'; conflict: {})",
                     b.blocked_path.0,
                     b.claimant.0,
                     b.blocking_claim_id.0,
                     conflict_code_str(b.conflict_code)
-                ));
+                );
             }
             msg.push_str("acquire your own scope or wait for a handoff.");
             CliEnvelope::reject("check-write", ExitReason::RejectedByGate, msg, payload)
@@ -681,7 +685,7 @@ pub fn run_check_write(
     }
 }
 
-/// Map a [`ConflictCode`] to its stable snake_case string for the
+/// Map a [`ConflictCode`] to its stable `snake_case` string for the
 /// machine-readable payload. Hard-coded (not Debug-derived) so the wire
 /// format is independent of future enum refactors (review S4.5 M1).
 #[must_use]
@@ -701,19 +705,110 @@ pub fn conflict_code_str(c: ConflictCode) -> &'static str {
 // persistence (DD22: filesystem is the bus; spine audits writes)
 // ============================================================================
 
-/// Load every `*.yaml` claim document in `dir`. Returns the contracts and a
-/// list of per-file errors (a malformed claim file is never silently dropped
-/// — it would corrupt authority, so it surfaces as `EnvConfig`).
+/// Load the authoritative claim state for `dir`.
+///
+/// WAL replay is authoritative when `wal/claims.fmw1` exists under the inferred
+/// state root. The YAML files in `dir` are only a materialized cache. If that
+/// cache contains claim documents but no WAL exists, this fails closed with a
+/// migration/debug error instead of silently trusting cache-only state.
 #[must_use]
 pub fn load_claims(dir: &Path) -> (Vec<ClaimContract>, Vec<String>) {
+    let state_root = state_root_from_claims_dir(dir);
+    let wal_path = claim_wal_path(&state_root);
+    if wal_path.exists() {
+        return load_claims_from_wal(&state_root);
+    }
+    let (cache_claims, cache_errors) = load_claims_from_cache(dir);
+    if !cache_errors.is_empty() {
+        return (Vec::new(), cache_errors);
+    }
+    if cache_claims.is_empty() {
+        return (cache_claims, Vec::new());
+    }
+    (
+        Vec::new(),
+        vec![format!(
+            "{}: claim cache contains {} YAML document(s), but authoritative WAL {} is missing; run an explicit migration/import or inspect with a cache/debug reader",
+            dir.display(),
+            cache_claims.len(),
+            wal_path.display()
+        )],
+    )
+}
+
+fn load_claims_from_wal(state_root: &Path) -> (Vec<ClaimContract>, Vec<String>) {
+    match replay_claim_wal(state_root, false) {
+        Ok(projection) if projection.recovery.stop_reason == ClaimWalStopReason::CleanEof => {
+            (projection.claims, Vec::new())
+        }
+        Ok(projection)
+            if matches!(
+                projection.recovery.stop_reason,
+                ClaimWalStopReason::TruncatedHeader | ClaimWalStopReason::TruncatedPayload
+            ) =>
+        {
+            match replay_claim_wal(state_root, true) {
+                Ok(_) => match replay_claim_wal(state_root, false) {
+                    Ok(repaired)
+                        if repaired.recovery.stop_reason == ClaimWalStopReason::CleanEof =>
+                    {
+                        (repaired.claims, Vec::new())
+                    }
+                    Ok(repaired) => (
+                        Vec::new(),
+                        vec![format!(
+                            "{}: claim WAL recovery still stopped with {:?} after repair",
+                            repaired.recovery.wal_path.display(),
+                            repaired.recovery.stop_reason
+                        )],
+                    ),
+                    Err(error) => (
+                        Vec::new(),
+                        vec![format!(
+                            "{}: claim WAL reread after repair failed: {error}",
+                            state_root.display()
+                        )],
+                    ),
+                },
+                Err(error) => (
+                    Vec::new(),
+                    vec![format!(
+                        "{}: claim WAL truncation repair failed: {error}",
+                        state_root.display()
+                    )],
+                ),
+            }
+        }
+        Ok(projection) => (
+            Vec::new(),
+            vec![format!(
+                "{}: claim WAL recovery stopped with {:?} at {}/{}; refusing YAML fallback",
+                projection.recovery.wal_path.display(),
+                projection.recovery.stop_reason,
+                projection.recovery.last_good_offset,
+                projection.recovery.original_len
+            )],
+        ),
+        Err(error) => (
+            Vec::new(),
+            vec![format!(
+                "{}: claim WAL replay failed: {error}",
+                state_root.display()
+            )],
+        ),
+    }
+}
+
+/// Load every `*.yaml` claim document in `dir` as a compatibility/debug cache.
+#[must_use]
+pub fn load_claims_from_cache(dir: &Path) -> (Vec<ClaimContract>, Vec<String>) {
     let mut claims = Vec::new();
     let mut errors = Vec::new();
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
-        // A missing dir is a fresh/empty claims bus — not an error.
+        // A missing dir is a fresh/empty claims bus, not an error.
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return (claims, errors),
-        // Permission/IO errors MUST surface: an unreadable dir would blind
-        // the engine to existing claims and break authority.
+        // Permission/IO errors MUST surface: an unreadable cache is a broken local state.
         Err(e) => {
             errors.push(format!("{}: cannot read claims dir: {e}", dir.display()));
             return (claims, errors);
@@ -727,7 +822,7 @@ pub fn load_claims(dir: &Path) -> (Vec<ClaimContract>, Vec<String>) {
         }
     }
     paths.retain(|p| p.extension().is_some_and(|x| x == "yaml"));
-    paths.sort(); // deterministic load order
+    paths.sort();
     for path in paths {
         let Ok(text) = std::fs::read_to_string(&path) else {
             errors.push(format!("{}: unreadable", path.display()));
@@ -784,8 +879,7 @@ fn state_root_from_claims_dir(claims_dir: &Path) -> PathBuf {
     match claims_dir.file_name().and_then(|name| name.to_str()) {
         Some("claims-active") => claims_dir
             .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| claims_dir.to_path_buf()),
+            .map_or_else(|| claims_dir.to_path_buf(), Path::to_path_buf),
         _ => claims_dir.to_path_buf(),
     }
 }
@@ -916,6 +1010,7 @@ fn env_config_if_errors<T: serde::Serialize>(
 }
 
 /// Sanitize an id into a filesystem-safe filename stem (no traversal).
+#[must_use]
 pub fn slug_for_file(id: &str) -> String {
     id.chars()
         .map(|c| {

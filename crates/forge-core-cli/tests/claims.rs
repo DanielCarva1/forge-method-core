@@ -5,7 +5,8 @@
 //! pure write-conflict checks over the persisted claims bus.
 
 use forge_core_cli::claim::{
-    load_claims, run_acquire, run_heartbeat, run_release, run_status, save_claim,
+    load_claims, run_acquire, run_check_write, run_handoff, run_heartbeat, run_release, run_status,
+    save_claim,
 };
 use forge_core_contracts::{
     claim::{ActorRole, ClaimScopeKind, ClaimStatus},
@@ -15,6 +16,8 @@ use forge_core_engine::{
     check_write_against_claims, expire_stale, is_expired, is_live, project_active, unix_to_rfc3339,
     AcquireRequest, WriteCheck,
 };
+use forge_core_store::claim_wal::claim_wal_path;
+use std::fs;
 use std::path::PathBuf;
 
 const NOW: i64 = 1_800_000_000;
@@ -85,21 +88,6 @@ fn short_ttl_claim_id_from_acquire(
     let acquired = run_acquire(dir, &req, NOW);
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     StableId(acquired.data.expect("successful acquire data").claim_id)
-}
-
-fn set_persisted_claim_status(dir: &std::path::Path, claim_id: &StableId, status: ClaimStatus) {
-    let (claims, errors) = load_claims(dir);
-    assert!(
-        errors.is_empty(),
-        "claims dir must load cleanly before status mutation: {errors:?}"
-    );
-    let mut claim = claims
-        .into_iter()
-        .find(|claim| claim.id.0 == claim_id.0)
-        .unwrap_or_else(|| panic!("claim {} should exist", claim_id.0));
-    claim.status.value = status;
-    claim.status.evaluated_at = unix_to_rfc3339(NOW + 1);
-    save_claim(dir, &claim).expect("persist mutated claim status");
 }
 
 #[test]
@@ -316,17 +304,17 @@ fn claim_status_preserves_active_claims_while_reporting_handoff_blockers() {
 #[test]
 fn claim_status_reports_only_unresolved_handoff_blocker_statuses() {
     let dir = tmp_claims_dir("status-handoff-statuses");
-    let stale_id = short_ttl_claim_id_from_acquire(
+    let _stale_id = short_ttl_claim_id_from_acquire(
         "alice",
         &dir,
         "S6.5-stale",
         "contracts/stories/S6.5-stale.yaml",
     );
-    let handoff_required_id = short_ttl_claim_id_from_acquire(
+    let _second_expired_id = short_ttl_claim_id_from_acquire(
         "bob",
         &dir,
-        "S6.5-handoff-required",
-        "contracts/stories/S6.5-handoff-required.yaml",
+        "S6.5-second-expired",
+        "contracts/stories/S6.5-second-expired.yaml",
     );
     let released_id = short_ttl_claim_id_from_acquire(
         "cara",
@@ -340,10 +328,17 @@ fn claim_status_reports_only_unresolved_handoff_blocker_statuses() {
         "S6.5-handoff-recorded",
         "contracts/stories/S6.5-handoff-recorded.yaml",
     );
-    set_persisted_claim_status(&dir, &stale_id, ClaimStatus::Stale);
-    set_persisted_claim_status(&dir, &handoff_required_id, ClaimStatus::HandoffRequired);
-    set_persisted_claim_status(&dir, &released_id, ClaimStatus::Released);
-    set_persisted_claim_status(&dir, &handoff_recorded_id, ClaimStatus::HandoffRecorded);
+    let released = run_release(&dir, &released_id, &StableId("cara".to_string()), NOW + 1);
+    assert!(released.ok, "release should succeed: {:?}", released.error);
+    let handoff = run_handoff(
+        &dir,
+        &handoff_recorded_id,
+        &StableId("drew".to_string()),
+        "worker crashed; recovery evidence recorded",
+        &[],
+        NOW + 10,
+    );
+    assert!(handoff.ok, "handoff should succeed: {:?}", handoff.error);
 
     let status = run_status(&dir, NOW + 10);
 
@@ -364,8 +359,8 @@ fn claim_status_reports_only_unresolved_handoff_blocker_statuses() {
         "expired stale claim should require handoff: {blockers:?}"
     );
     assert!(
-        blockers.contains(&("S6.5-handoff-required", "handoff_required")),
-        "materialized handoff_required claim should remain visible: {blockers:?}"
+        blockers.contains(&("S6.5-second-expired", "expired_requires_handoff")),
+        "second expired active claim should require handoff: {blockers:?}"
     );
     let blocker_ids: Vec<&str> = view
         .expired_handoff_required
@@ -425,4 +420,85 @@ fn check_write_denies_peer_claimed_path_and_allows_unclaimed_path() {
         }
         WriteCheck::Blocked { blocks } => panic!("unclaimed path must be allowed: {blocks:?}"),
     }
+}
+
+#[test]
+fn wal_authority_survives_missing_yaml_cache() {
+    let dir = tmp_claims_dir("wal-authority-missing-cache");
+    let path = "contracts/stories/S6.7.yaml";
+    let acquired = run_acquire(&dir, &acquire_req("alice", "S6.7", &[path]), NOW);
+    assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
+    for entry in fs::read_dir(&dir).expect("read cache dir") {
+        let entry = entry.expect("cache dir entry");
+        if entry.path().extension().is_some_and(|ext| ext == "yaml") {
+            fs::remove_file(entry.path()).expect("remove YAML cache file");
+        }
+    }
+
+    let status = run_status(&dir, NOW + 1);
+
+    assert!(status.ok, "status must replay WAL: {:?}", status.error);
+    let view = status.data.expect("status data");
+    assert_eq!(view.active.len(), 1);
+    assert_eq!(view.active[0].scope_id, "S6.7");
+    let write = run_check_write(
+        &dir,
+        &StableId("bob".to_string()),
+        &[path.to_string()],
+        NOW + 1,
+    );
+    assert!(!write.ok, "peer write must remain blocked by WAL authority");
+    assert_eq!(write.exit_code(), ExitReason::RejectedByGate.as_code());
+}
+
+#[test]
+fn wal_authority_ignores_stale_yaml_cache_after_release() {
+    let dir = tmp_claims_dir("wal-authority-stale-cache");
+    let path = "contracts/stories/S6.8.yaml";
+    let acquired = run_acquire(&dir, &acquire_req("alice", "S6.8", &[path]), NOW);
+    assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
+    let stale_active_claim = load_one_claim(&dir);
+    let claim_id = StableId(acquired.data.expect("acquire data").claim_id);
+    let released = run_release(&dir, &claim_id, &StableId("alice".to_string()), NOW + 1);
+    assert!(released.ok, "release should succeed: {:?}", released.error);
+    save_claim(&dir, &stale_active_claim).expect("overwrite cache with stale active claim");
+
+    let status = run_status(&dir, NOW + 2);
+
+    assert!(
+        status.ok,
+        "status must ignore stale cache: {:?}",
+        status.error
+    );
+    let view = status.data.expect("status data");
+    assert!(view.active.is_empty(), "released WAL state must win");
+    let reacquired = run_acquire(&dir, &acquire_req("bob", "S6.8", &[path]), NOW + 2);
+    assert!(
+        reacquired.ok,
+        "released WAL state must not resurrect stale cache blocker: {:?}",
+        reacquired.error
+    );
+}
+
+#[test]
+fn cache_only_claim_without_wal_fails_closed() {
+    let dir = tmp_claims_dir("cache-only-no-wal");
+    let acquired = run_acquire(
+        &dir,
+        &acquire_req("alice", "S6.9", &["contracts/stories/S6.9.yaml"]),
+        NOW,
+    );
+    assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
+    fs::remove_file(claim_wal_path(&dir)).expect("remove authoritative WAL");
+
+    let status = run_status(&dir, NOW + 1);
+
+    assert!(!status.ok, "cache-only state must fail closed");
+    assert_eq!(status.exit_code(), ExitReason::EnvConfig.as_code());
+    let error = status.error.expect("env config error");
+    assert!(
+        error.message.contains("authoritative WAL") && error.message.contains("missing"),
+        "error should explain missing WAL authority: {}",
+        error.message
+    );
 }
