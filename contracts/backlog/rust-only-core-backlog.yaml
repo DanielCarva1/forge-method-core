@@ -332,6 +332,7 @@ epics:
           - "sigstore_rfc3161_tsa_token_boundary"
           - "certificate_transparency_sct_boundary"
           - "certificate_revocation_policy_boundary"
+          - "explicit_crl_revocation_status_boundary"
           - "tuf_trusted_root_freshness_boundary"
         existing_artifacts:
           - "contracts/policies/sigstore-timestamp-authority-boundary.yaml"
@@ -342,14 +343,40 @@ epics:
           - "contracts/migration/certificate-transparency-sct-boundary-grill-audit.yaml"
           - "contracts/policies/certificate-revocation-policy-boundary.yaml"
           - "contracts/migration/certificate-revocation-policy-boundary-grill-audit.yaml"
+          - "contracts/policies/explicit-crl-revocation-status-boundary.yaml"
+          - "contracts/migration/explicit-crl-revocation-status-boundary-grill-audit.yaml"
           - "contracts/policies/tuf-trusted-root-freshness-boundary.yaml"
           - "contracts/migration/tuf-trusted-root-freshness-boundary-grill-audit.yaml"
           - "crates/forge-core-cli"
         remaining_boundaries:
-          - "explicit_crl_ocsp_revocation_status_boundary"
+          - "explicit_ocsp_revocation_status_boundary"
         acceptance:
           - "Timestamp and certificate validity semantics are explicit."
-          - "TUF freshness and explicit CRL/OCSP revocation are not silently implied by other checks."
+          - "TUF freshness, explicit local CRL status, and explicit OCSP status are not silently implied by other checks."
+          - "Explicit local CRL status remains local/supplied-CRL only; CRL distribution fetch, delta CRL, indirect CRL, and OCSP remain separate boundaries."
+      - id: "FRUST-052"
+        title: "Explicit OCSP revocation status boundary"
+        status: "planned"
+        priority: "high"
+        evidence_refs:
+          - "rfc6960_ocsp_certificate_status"
+          - "rfc5280_x509_crl_profile"
+        depends_on:
+          - "FRUST-051"
+        planned_outputs:
+          - "contracts/policies/explicit-ocsp-revocation-status-boundary.yaml"
+          - "contracts/migration/explicit-ocsp-revocation-status-boundary-grill-audit.yaml"
+          - "crates/forge-core-cli"
+        non_goals:
+          - "Do not infer OCSP status from short-lived certificate policy, CRL status, CT, TSA, Rekor, or TUF freshness."
+          - "Do not perform network OCSP fetch unless a later host-adapter boundary explicitly permits it."
+          - "Do not claim install/update authority from OCSP verification alone."
+        acceptance:
+          - "Read-only verifier accepts supplied OCSP response evidence and reports good, revoked, or unknown status explicitly."
+          - "Verifier fails closed for stale/expired OCSP responses, issuer/responder mismatch, bad signatures, and unsupported responder authority."
+          - "Nonce freshness is verified when nonce evidence is present and explicitly reported when absent or unsupported."
+          - "Host-adapter projection exposes the OCSP command schema instead of falling through to an empty schema."
+          - "Fixtures cover good, revoked, unknown, stale, responder mismatch, bad signature, and nonce cases before the boundary is recommended."
   - id: "FRUST-E6"
     title: "Release Readiness and Cross-Host Conformance"
     goal: "Prove the core works as a product across borrowed shells."
@@ -396,5 +423,5 @@ open_questions:
     question: "What counts as usable install/update for non-developers?"
     recommended_answer: "One copy-paste install command, one copy-paste update command, local version diagnosis, and human-readable patch summary generated from typed release metadata."
 next_ready_story:
-  id: "FRUST-051"
-  reason: "Rekor trusted-time, RFC3161 token verification, certificate validity-window evaluation, offline CT SCT signature verification, short-lived certificate revocation policy verification, and local TUF trusted-root freshness checks are implemented; explicit CRL/OCSP status remains a trust gap before install/update can claim stronger long-lived PKI assurance."
+  id: "FRUST-052"
+  reason: "FRUST-051 is reconciled as implemented_partial with explicit local CRL already implemented. The remaining long-lived PKI trust gap is explicit OCSP status; implementation should not start until parser/fixture strategy is selected and grilled against RFC6960."

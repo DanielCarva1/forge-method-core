@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use forge_core_cli::claim::ClaimHandoffArtifact;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Output;
@@ -118,6 +119,9 @@ fn assert_handoff_artifact(
     state_root: &Path,
     summary: &str,
     evidence: &Path,
+    expected_original_agent: &str,
+    expected_scope_id: &str,
+    expected_path: &str,
 ) -> PathBuf {
     let raw_path = json["data"]["handoff_path"]
         .as_str()
@@ -127,11 +131,14 @@ fn assert_handoff_artifact(
 
     assert!(
         handoff_path.exists(),
-        "handoff artifact should exist at {handoff_path:?}"
+        "handoff artifact should exist at {}",
+        handoff_path.display()
     );
     assert!(
         handoff_path.starts_with(&expected_root),
-        "handoff artifact should be under {expected_root:?}, got {handoff_path:?}"
+        "handoff artifact should be under {}, got {}",
+        expected_root.display(),
+        handoff_path.display()
     );
 
     let artifact = std::fs::read_to_string(&handoff_path).expect("read handoff artifact");
@@ -146,6 +153,35 @@ fn assert_handoff_artifact(
     assert!(
         artifact.contains(evidence_name),
         "handoff artifact should include evidence reference '{evidence_name}'\nartifact:\n{artifact}"
+    );
+    let parsed: ClaimHandoffArtifact =
+        serde_yaml::from_str(&artifact).expect("handoff artifact should deserialize");
+    assert_eq!(
+        parsed.claim_id,
+        json["data"]["claim_id"].as_str().expect("claim_id string")
+    );
+    assert_eq!(parsed.scope_id, expected_scope_id);
+    assert_eq!(parsed.original_claimant_agent_id, expected_original_agent);
+    assert_eq!(parsed.previous_status, "active");
+    assert_eq!(parsed.recorded_status, "handoff_recorded");
+    assert_eq!(parsed.summary, summary);
+    assert_eq!(
+        parsed.claim_contract.claim.claimant_agent_id.0,
+        expected_original_agent
+    );
+    assert_eq!(parsed.claim_contract.scope.id.0, expected_scope_id);
+    assert!(
+        parsed
+            .claim_contract
+            .scope
+            .paths
+            .iter()
+            .any(|path| path.0 == expected_path),
+        "embedded claim should preserve path {expected_path}: {parsed:#?}"
+    );
+    assert!(
+        parsed.claim_contract.lease.expires_at > parsed.claim_contract.lease.acquired_at,
+        "embedded claim should preserve a valid lease: {parsed:#?}"
     );
 
     handoff_path
@@ -174,6 +210,7 @@ fn consumer_app(label: &str) -> ConsumerApp {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn expired_claim_handoff_records_artifact_and_unblocks_reacquire() {
     let parent = fresh_parent("explicit-claims-dir");
     let state_root = parent.join(".forge-method");
@@ -284,7 +321,15 @@ fn expired_claim_handoff_records_artifact_and_unblocks_reacquire() {
     assert_eq!(handoff_json["command"], "claim.handoff");
     assert_eq!(handoff_json["data"]["claim_id"], claim_id);
     assert_eq!(handoff_json["data"]["status"], "handoff_recorded");
-    assert_handoff_artifact(&handoff_json, &state_root, summary, &evidence);
+    let handoff_path = assert_handoff_artifact(
+        &handoff_json,
+        &state_root,
+        summary,
+        &evidence,
+        "alice",
+        "HANDOFF-E2E-EXPLICIT",
+        path,
+    );
 
     let status_after_handoff = bin()
         .args([
@@ -327,6 +372,10 @@ fn expired_claim_handoff_records_artifact_and_unblocks_reacquire() {
     let reacquire_json = assert_success(&reacquire, "reacquire after handoff");
     assert_eq!(reacquire_json["data"]["status"], "active");
     assert_eq!(reacquire_json["data"]["agent_id"], "bob");
+    assert!(
+        handoff_path.exists(),
+        "handoff artifact must remain durable after reacquire"
+    );
 
     let status_after_reacquire = bin()
         .args([
@@ -354,6 +403,7 @@ fn expired_claim_handoff_records_artifact_and_unblocks_reacquire() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)]
 fn handoff_uses_sidecar_defaults_without_creating_consumer_state() {
     let fixture = consumer_app("sidecar-default");
     let app = fixture.app.display().to_string();
@@ -421,7 +471,15 @@ fn handoff_uses_sidecar_defaults_without_creating_consumer_state() {
         "claim.story.HANDOFF-E2E-SIDECAR.HANDOFF-E2E-SIDECAR"
     );
     assert_eq!(handoff_json["data"]["status"], "handoff_recorded");
-    assert_handoff_artifact(&handoff_json, &fixture.state_root, summary, &evidence);
+    let handoff_path = assert_handoff_artifact(
+        &handoff_json,
+        &fixture.state_root,
+        summary,
+        &evidence,
+        "sidecar-alice",
+        "HANDOFF-E2E-SIDECAR",
+        "src/sidecar.rs",
+    );
     assert!(
         !fixture.app.join(".forge-method").exists(),
         "claim handoff via --root must not create consumer-local .forge-method"
@@ -451,8 +509,206 @@ fn handoff_uses_sidecar_defaults_without_creating_consumer_state() {
     let reacquire_json = assert_success(&reacquire, "sidecar reacquire after handoff");
     assert_eq!(reacquire_json["data"]["agent_id"], "sidecar-bob");
     assert!(
+        handoff_path.exists(),
+        "sidecar handoff artifact must remain durable after reacquire"
+    );
+    assert!(
         !fixture.app.join(".forge-method").exists(),
         "reacquire via --root must not create consumer-local .forge-method"
+    );
+}
+
+#[test]
+fn expired_claim_heartbeat_points_to_handoff_before_recovery() {
+    let parent = fresh_parent("heartbeat-before-handoff");
+    let claims_dir = parent.join(".forge-method").join("claims-active");
+    let claims_arg = claims_dir.display().to_string();
+    let path = "src/heartbeat-expired.rs";
+    let expired_at = NOW + TTL_SECONDS;
+    let after_expiry = expired_at + 1;
+
+    let acquire = bin()
+        .args([
+            "claim",
+            "acquire",
+            "--claims-dir",
+            &claims_arg,
+            "--scope",
+            "story",
+            "--id",
+            "HANDOFF-E2E-HEARTBEAT",
+            "--agent",
+            "alice",
+            "--path",
+            path,
+            "--ttl",
+            &TTL_SECONDS.to_string(),
+            "--now-unix",
+            &NOW.to_string(),
+        ])
+        .output()
+        .expect("run initial claim acquire");
+    let acquire_json = assert_success(&acquire, "initial claim acquire");
+    let claim_id = acquire_json["data"]["claim_id"]
+        .as_str()
+        .expect("claim id")
+        .to_string();
+
+    let heartbeat = bin()
+        .args([
+            "claim",
+            "heartbeat",
+            "--claims-dir",
+            &claims_arg,
+            "--id",
+            &claim_id,
+            "--agent",
+            "alice",
+            "--now-unix",
+            &after_expiry.to_string(),
+        ])
+        .output()
+        .expect("run expired claim heartbeat");
+    let heartbeat_json = assert_rejected_with_code(
+        &heartbeat,
+        "expired claim heartbeat",
+        "expired_requires_handoff",
+    );
+    let message = heartbeat_json["error"]["message"]
+        .as_str()
+        .expect("error message string");
+    assert!(
+        message.contains("forge-core claim handoff --id"),
+        "expired heartbeat should point to official recovery command: {heartbeat_json:#}"
+    );
+}
+
+#[test]
+fn handoff_empty_summary_fails_without_artifact() {
+    let parent = fresh_parent("empty-summary");
+    let state_root = parent.join(".forge-method");
+    let claims_dir = state_root.join("claims-active");
+    let claims_arg = claims_dir.display().to_string();
+    let evidence = write_evidence(&parent, "empty-summary");
+    let evidence_arg = evidence.display().to_string();
+    let after_expiry = NOW + TTL_SECONDS + 1;
+
+    let acquire = bin()
+        .args([
+            "claim",
+            "acquire",
+            "--claims-dir",
+            &claims_arg,
+            "--scope",
+            "story",
+            "--id",
+            "HANDOFF-E2E-EMPTY-SUMMARY",
+            "--agent",
+            "alice",
+            "--path",
+            "src/empty-summary.rs",
+            "--ttl",
+            &TTL_SECONDS.to_string(),
+            "--now-unix",
+            &NOW.to_string(),
+        ])
+        .output()
+        .expect("run setup acquire");
+    let acquire_json = assert_success(&acquire, "setup acquire");
+    let claim_id = acquire_json["data"]["claim_id"]
+        .as_str()
+        .expect("claim id")
+        .to_string();
+
+    let handoffs_dir = state_root.join("handoffs").join("expired-claims");
+    let handoff = bin()
+        .args([
+            "claim",
+            "handoff",
+            "--claims-dir",
+            &claims_arg,
+            "--id",
+            &claim_id,
+            "--agent",
+            "alice",
+            "--summary",
+            "   ",
+            "--evidence",
+            &evidence_arg,
+            "--now-unix",
+            &after_expiry.to_string(),
+        ])
+        .output()
+        .expect("run handoff with empty summary");
+    assert_rejected_with_code(&handoff, "handoff empty summary", "invalid_request");
+    assert_eq!(
+        entry_count(&handoffs_dir),
+        0,
+        "empty summary must not write a handoff artifact"
+    );
+}
+
+#[test]
+fn handoff_live_claim_fails_without_artifact() {
+    let parent = fresh_parent("live-claim");
+    let state_root = parent.join(".forge-method");
+    let claims_dir = state_root.join("claims-active");
+    let claims_arg = claims_dir.display().to_string();
+    let evidence = write_evidence(&parent, "live");
+    let evidence_arg = evidence.display().to_string();
+
+    let acquire = bin()
+        .args([
+            "claim",
+            "acquire",
+            "--claims-dir",
+            &claims_arg,
+            "--scope",
+            "story",
+            "--id",
+            "HANDOFF-E2E-LIVE",
+            "--agent",
+            "alice",
+            "--path",
+            "src/live.rs",
+            "--ttl",
+            "600",
+            "--now-unix",
+            &NOW.to_string(),
+        ])
+        .output()
+        .expect("run setup acquire");
+    let acquire_json = assert_success(&acquire, "setup acquire");
+    let claim_id = acquire_json["data"]["claim_id"]
+        .as_str()
+        .expect("claim id")
+        .to_string();
+
+    let handoffs_dir = state_root.join("handoffs").join("expired-claims");
+    let handoff = bin()
+        .args([
+            "claim",
+            "handoff",
+            "--claims-dir",
+            &claims_arg,
+            "--id",
+            &claim_id,
+            "--agent",
+            "alice",
+            "--summary",
+            "live claim should not be handoff-recorded",
+            "--evidence",
+            &evidence_arg,
+            "--now-unix",
+            &NOW.to_string(),
+        ])
+        .output()
+        .expect("run handoff for live claim");
+    assert_rejected_with_code(&handoff, "handoff live claim", "illegal_transition");
+    assert_eq!(
+        entry_count(&handoffs_dir),
+        0,
+        "live claim handoff must not write a handoff artifact"
     );
 }
 
