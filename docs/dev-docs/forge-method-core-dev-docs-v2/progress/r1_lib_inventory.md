@@ -126,10 +126,30 @@ Total: 7472 linhas, 141 funções, ~243 itens públicos.
   - Gates: `cargo check` (zero warnings), `cargo test --workspace`
     (440+ testes verdes), `cargo clippy --pedantic` (320 warnings —
     paridade perfeita com a baseline), `cargo fmt --check` verde.
+- [x] R1.HostAdapterTypes — Extrair `host_adapter_types.rs` (2026-06-29)
+  - Movidos: 74 tipos `HostAdapter*` (structs + enums) das linhas 101-914 de
+    `lib.rs`: manifest, command, projection, process security, distribution
+    policy/evidence/admission, e todos os pares `*VerificationInput` /
+    `*Verification` para os 14 fluxos de verificação (artifact, provenance,
+    rekor, sigstore trust policy, fulcio, bundle subject, dsse in-toto,
+    timestamp authority, CT SCT, revocation policy, TUF freshness, CRL, OCSP)
+    + as projections MCP/borrowed shell/app UI.
+  - `ValidationStatus` (linhas 94-99) **não movido** — não é tipo
+    `HostAdapter*`, é tipo de domínio genérico de validação, fica em `lib.rs`.
+  - Módulo `host_adapter_types` é `pub(crate)`, re-exportado via
+    `pub use host_adapter_types::*;` no crate root — preserva todos os
+    callers externos (`main.rs`, `tests/validate.rs`) que importam
+    `HostAdapterManifest`, etc., diretamente de `forge_core_cli::`.
+  - Imports do novo módulo: `forge_core_contracts::RuntimeKind`,
+    `serde::Serialize`, `serde_json::Value`, `std::path::PathBuf`.
+  - `lib.rs`: 6787 → 5972 linhas (-815, -12.0%); `host_adapter_types.rs`:
+    828 linhas.
+  - Gates: `cargo check` (zero warnings), `cargo test --workspace` (todos
+    verdes; `claim_wal_cli_parallel_acquire_preserves_clean_monotonic_wal`
+    em `tests/claim_wal_stress.rs` é flaky de concorrência de FS — passa
+    isolado), `cargo clippy --pedantic` (320 warnings — paridade perfeita
+    com baseline), `cargo fmt --check` verde.
 - [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
 - [ ] R1.4 — Mover verificação X.509/CRL/OCSP
-- [x] R1.5 — Mover `execute_operation` flow (2026-06-29)
-- [x] R1.EffectIndex — Mover effect index commands (2026-06-29)
-- [x] R1.CryptoHashing — Mover helpers de hash para `crypto_hashing.rs` (2026-06-29)
 - [ ] R1.6 — Mover project link resolve/init
 - [ ] R1.7 — Validar (lib.rs ≤ 1500 linhas)
