@@ -353,8 +353,44 @@ priority_3_low:
     title: "feat: proptest de WAL (truncation, bitflip, 50-process stress, recovery idempotence)"
     source: [W2 open_questions]
     effort: M
-    status: pending
+    status: verified_current_core
     depends_on: [P2.1]
+    scope_note: "Adds bounded default CI coverage for WAL projection properties, exhaustive truncation prefix recovery, repair idempotence, second rotation checkpoint state, and practical multi-process CLI contention. The full 50-process stress is present as an ignored/manual test and was executed successfully once for this closure so default CI stays stable. This validates accidental corruption/concurrency robustness; CRC32C is not a malicious tamper-proofing claim."
+    verified_by:
+      files:
+        - Cargo.lock
+        - crates/forge-core-store/Cargo.toml
+        - crates/forge-core-store/tests/claim_wal_properties.rs
+        - crates/forge-core-cli/tests/claim_wal_stress.rs
+      commands:
+        - cargo test -p forge-core-store --test claim_wal_properties
+        - cargo test -p forge-core-store --test claim_wal
+        - cargo test -p forge-core-cli --test claim_wal_stress
+        - cargo test -p forge-core-cli --test claim_wal_stress -- --ignored --test-threads=1 --nocapture
+        - cargo test -p forge-core-cli --test claim_wal_e2e
+        - cargo clippy -p forge-core-store --all-targets -- -W clippy::pedantic
+        - cargo clippy -p forge-core-cli --test claim_wal_stress -- -W clippy::pedantic
+        - cargo fmt --all -- --check
+      implementers:
+        - worker 019f1325-c5a1-7e53-9d55-88bc7e5b7c41
+        - worker 019f1326-1a47-7532-a9a3-a219aae180f6
+      reviewer:
+        - qa_validator 019f1320-eb56-7ee0-8a9a-757c20878494
+    acceptance:
+      - Bounded proptest projection scripts match a small reference model for active, released, handoff-recorded, and historical-only claim partitions.
+      - Exhaustive truncation over a small real WAL recovers exactly the verified prefix, never mutates read-only recovery, and never resynchronizes past a torn record.
+      - Torn tail and checksum-corrupt tail repair are idempotent, and later appends resume at the next prefix sequence.
+      - Second rotation after a checkpoint snapshots checkpoint-seeded state plus suffix records and preserves logical projection.
+      - Default CLI stress runs parallel acquire processes against one claims dir and verifies CleanEof, gapless monotonic WAL sequence, unique claim ids, active projection, and status agreement.
+      - Manual 50-process stress passes via ignored test without forcing default CI flakiness.
+    evidence:
+      - projection_valid_lifecycle_scripts_match_reference_model
+      - claim_wal_exhaustive_truncation_sweep_recovers_only_valid_prefix
+      - claim_wal_append_repairs_torn_tail_then_repair_is_idempotent
+      - claim_wal_checksum_tail_repair_is_idempotent_and_append_resumes_sequence
+      - claim_wal_second_rotation_snapshots_checkpoint_state_plus_suffix
+      - claim_wal_cli_parallel_acquire_preserves_clean_monotonic_wal
+      - claim_wal_cli_50_process_parallel_acquire_preserves_clean_monotonic_wal
 
 explicit_non_goals_for_v1:
   - "TOCTOU do check-write: é ADVISORY por design (documentado em claim.rs:347-354). Não fechar no v1."
@@ -368,13 +404,16 @@ verification_status_at_handoff:
   current_status:
     p1_high: "P1.1, P1.2, P1.3, P1.4, and P1.5 verified in current core."
     p2_medium: "P2.1 WAL append/recovery, P2.2 WAL-derived claim state authority, P2.3 reconcile loop, and P2.4 tiered invariants verified."
-    p3_low: "P3.1, P3.2, and P3.3 verified in current core; P3.4 remains pending."
+    p3_low: "P3.1, P3.2, P3.3, and P3.4 verified in current core."
   targeted_verification:
     - cargo test -p forge-core-engine claim_engine
     - cargo test -p forge-core-engine conflict_detection
     - cargo test -p forge-core-cli io_util
     - cargo test -p forge-core-cli --test claim_handoff_e2e
     - cargo test -p forge-core-store --test claim_wal
+    - cargo test -p forge-core-store --test claim_wal_properties
+    - cargo test -p forge-core-cli --test claim_wal_stress
+    - cargo test -p forge-core-cli --test claim_wal_stress -- --ignored --test-threads=1 --nocapture
     - cargo test -p forge-core-cli --test claim_wal_e2e
     - cargo test -p forge-core-cli --test claims
     - cargo test -p forge-core-cli --test claim_reconcile_e2e
@@ -390,7 +429,7 @@ verification_status_at_handoff:
     - cargo test --workspace
     - cargo clippy --workspace --all-targets -- -W clippy::pedantic
     - cargo fmt --all -- --check
-  full_gate_log_dir: <repo-root>\target\codex-gates\20260629-0818-p3-wal-rotation
+  full_gate_log_dir: <repo-root>\target\codex-gates\20260629-0842-p3-wal-proptest
   installed_binary_smoke:
     binary: C:\Users\User\.cargo\bin\forge-core.exe
     result: "expired release reports forge-core claim handoff recovery hint; claim handoff records artifact; reacquire succeeds with fresh agent; acquire -> heartbeat -> release creates wal/claims.fmw1 with FMW1 magic; missing/stale YAML cache does not override WAL-derived authority; P2.3 acquire -> reconcile stale -> idempotent no-op -> reconcile handoff_required -> status handoff blocker -> heartbeat recovery error -> bounded loop no-op with WAL magic FMW1; installed forge-core.exe refreshed after P3.3 and validates this repo successfully."
