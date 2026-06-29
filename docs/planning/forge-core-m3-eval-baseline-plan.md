@@ -51,6 +51,14 @@ keeps the baseline.
 - Fixture evidence and trace refs backed by local files under
   `docs/fixtures/eval-run-v0/evidence/` and
   `docs/fixtures/eval-run-v0/traces/`.
+- Evidence hardening after audit:
+  - `--suite` must be project-relative and stay under the resolved project
+    root;
+  - every `evidence_refs` entry in a precomputed eval run must be a
+    project-relative file path;
+  - missing evidence files, directory refs, invalid refs, and canonicalized
+    symlink escapes block the comparison report instead of allowing a
+    recommendation on decorative strings.
 
 ## This slice explicitly does not implement
 
@@ -68,3 +76,7 @@ keeps the baseline.
 - `cargo check -p forge-core-cli` passes.
 - `forge-core eval compare --root . --allow-bootstrap-core --baseline single-agent --candidate graph --json` returns deterministic JSON from local fixtures.
 - The default command does not create or mutate `.forge-method` state.
+- Mutating a fixture to reference missing/invalid/non-file evidence returns a
+  blocked JSON report with a typed diagnostic.
+- Passing an absolute `--suite` path outside the project fails before reading
+  the suite.

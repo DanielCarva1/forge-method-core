@@ -64,6 +64,51 @@ fn prepend_utf8_bom(path: &Path) {
     fs::write(path, with_bom).expect("write UTF-8 BOM file");
 }
 
+fn create_dir_link(link: &Path, target: &Path) {
+    #[cfg(windows)]
+    {
+        let output = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .output()
+            .expect("create Windows directory junction");
+        assert!(
+            output.status.success(),
+            "mklink /J failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(target, link).expect("create Unix directory symlink");
+    }
+
+    #[cfg(not(any(windows, unix)))]
+    {
+        panic!("directory-link escape tests require Windows junctions or Unix symlinks");
+    }
+}
+
+fn eval_compare_json(app: &Path) -> std::process::Output {
+    bin()
+        .args([
+            "eval",
+            "compare",
+            "--root",
+            &app.display().to_string(),
+            "--baseline",
+            "single-agent",
+            "--candidate",
+            "graph",
+            "--json",
+        ])
+        .output()
+        .expect("run eval compare")
+}
+
 #[test]
 fn eval_compare_default_suite_outputs_deterministic_json() {
     let root = repo_root();
@@ -108,6 +153,142 @@ fn eval_compare_default_suite_outputs_deterministic_json() {
         .unwrap()
         .iter()
         .any(|gap| { gap.as_str().unwrap().contains("human_intervention_count") }));
+}
+
+#[test]
+fn eval_compare_missing_evidence_file_blocks_report() {
+    let (app, _sidecar) = fresh_project("missing-evidence-file");
+    copy_eval_fixtures(&app);
+    fs::remove_file(
+        app.join("docs")
+            .join("fixtures")
+            .join("eval-run-v0")
+            .join("evidence")
+            .join("single-agent-task-a.json"),
+    )
+    .expect("remove evidence fixture");
+
+    let output = eval_compare_json(&app);
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["status"], "blocked");
+    assert!(json["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|diagnostic| diagnostic["code"] == "missing_evidence_file"));
+}
+
+#[test]
+fn eval_compare_invalid_evidence_ref_blocks_report() {
+    let (app, _sidecar) = fresh_project("invalid-evidence-ref");
+    copy_eval_fixtures(&app);
+    let run_path = app
+        .join("docs")
+        .join("fixtures")
+        .join("eval-run-v0")
+        .join("single-agent")
+        .join("task-a.yaml");
+    let content = fs::read_to_string(&run_path).expect("read run fixture");
+    fs::write(
+        &run_path,
+        content.replacen(
+            r#""docs/fixtures/eval-run-v0/evidence/single-agent-task-a.json""#,
+            r#""../outside-evidence.json""#,
+            1,
+        ),
+    )
+    .expect("write mutated run fixture");
+
+    let output = eval_compare_json(&app);
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["status"], "blocked");
+    assert!(json["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|diagnostic| diagnostic["code"] == "invalid_evidence_ref"));
+}
+
+#[test]
+fn eval_compare_directory_evidence_ref_blocks_report() {
+    let (app, _sidecar) = fresh_project("directory-evidence-ref");
+    copy_eval_fixtures(&app);
+    let run_path = app
+        .join("docs")
+        .join("fixtures")
+        .join("eval-run-v0")
+        .join("single-agent")
+        .join("task-a.yaml");
+    let content = fs::read_to_string(&run_path).expect("read run fixture");
+    fs::write(
+        &run_path,
+        content.replacen(
+            r#""docs/fixtures/eval-run-v0/evidence/single-agent-task-a.json""#,
+            r#""docs/fixtures/eval-run-v0/evidence""#,
+            1,
+        ),
+    )
+    .expect("write mutated run fixture");
+
+    let output = eval_compare_json(&app);
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["status"], "blocked");
+    assert!(json["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|diagnostic| diagnostic["code"] == "evidence_ref_not_file"));
+}
+
+#[test]
+fn eval_compare_junction_evidence_ref_escape_blocks_report() {
+    let (app, _sidecar) = fresh_project("junction-evidence-ref");
+    copy_eval_fixtures(&app);
+    let outside_dir = app
+        .parent()
+        .expect("app parent")
+        .join("outside-evidence-dir");
+    fs::create_dir_all(&outside_dir).expect("create outside evidence dir");
+    fs::write(outside_dir.join("outside-evidence.json"), "{}\n").expect("write outside evidence");
+    let link = app
+        .join("docs")
+        .join("fixtures")
+        .join("eval-run-v0")
+        .join("evidence-junction");
+    create_dir_link(&link, &outside_dir);
+    let run_path = app
+        .join("docs")
+        .join("fixtures")
+        .join("eval-run-v0")
+        .join("single-agent")
+        .join("task-a.yaml");
+    let content = fs::read_to_string(&run_path).expect("read run fixture");
+    fs::write(
+        &run_path,
+        content.replacen(
+            r#""docs/fixtures/eval-run-v0/evidence/single-agent-task-a.json""#,
+            r#""docs/fixtures/eval-run-v0/evidence-junction/outside-evidence.json""#,
+            1,
+        ),
+    )
+    .expect("write mutated run fixture");
+
+    let output = eval_compare_json(&app);
+
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["status"], "blocked");
+    assert!(json["diagnostics"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|diagnostic| diagnostic["code"] == "evidence_ref_escapes_project"));
 }
 
 #[test]
@@ -282,6 +463,131 @@ eval_compare_suite:
 
     assert_eq!(output.status.code(), Some(5));
     assert!(String::from_utf8_lossy(&output.stderr).contains("read eval run"));
+}
+
+#[test]
+fn eval_compare_rejects_suite_outside_project_root() {
+    let (app, _sidecar) = fresh_project("suite-outside-root");
+    copy_eval_fixtures(&app);
+    let outside_suite = app
+        .parent()
+        .expect("app parent")
+        .join("outside-eval-compare-suite.yaml");
+    fs::copy(
+        app.join("docs")
+            .join("fixtures")
+            .join("eval-run-v0")
+            .join("eval-compare-smoke-suite.yaml"),
+        &outside_suite,
+    )
+    .expect("copy outside suite");
+
+    let output = bin()
+        .args([
+            "eval",
+            "compare",
+            "--root",
+            &app.display().to_string(),
+            "--suite",
+            &outside_suite.display().to_string(),
+            "--baseline",
+            "single-agent",
+            "--candidate",
+            "graph",
+            "--json",
+        ])
+        .output()
+        .expect("run eval compare");
+
+    assert_eq!(output.status.code(), Some(5));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("suite refs must stay under"));
+}
+
+#[test]
+fn eval_compare_rejects_suite_junction_escape() {
+    let (app, _sidecar) = fresh_project("suite-junction-escape");
+    copy_eval_fixtures(&app);
+    let outside_dir = app.parent().expect("app parent").join("outside-suite-dir");
+    fs::create_dir_all(&outside_dir).expect("create outside suite dir");
+    fs::copy(
+        app.join("docs")
+            .join("fixtures")
+            .join("eval-run-v0")
+            .join("eval-compare-smoke-suite.yaml"),
+        outside_dir.join("outside-eval-compare-suite.yaml"),
+    )
+    .expect("copy outside suite");
+    let link = app
+        .join("docs")
+        .join("fixtures")
+        .join("eval-run-v0")
+        .join("suite-junction");
+    create_dir_link(&link, &outside_dir);
+
+    let output = bin()
+        .args([
+            "eval",
+            "compare",
+            "--root",
+            &app.display().to_string(),
+            "--suite",
+            "docs/fixtures/eval-run-v0/suite-junction/outside-eval-compare-suite.yaml",
+            "--baseline",
+            "single-agent",
+            "--candidate",
+            "graph",
+            "--json",
+        ])
+        .output()
+        .expect("run eval compare");
+
+    assert_eq!(output.status.code(), Some(5));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("suite refs must stay under"));
+}
+
+#[test]
+fn eval_compare_rejects_run_ref_junction_escape() {
+    let (app, _sidecar) = fresh_project("run-ref-junction-escape");
+    copy_eval_fixtures(&app);
+    let outside_dir = app.parent().expect("app parent").join("outside-run-dir");
+    fs::create_dir_all(&outside_dir).expect("create outside run dir");
+    fs::copy(
+        app.join("docs")
+            .join("fixtures")
+            .join("eval-run-v0")
+            .join("single-agent")
+            .join("task-a.yaml"),
+        outside_dir.join("external-task-a.yaml"),
+    )
+    .expect("copy outside run");
+    let link = app
+        .join("docs")
+        .join("fixtures")
+        .join("eval-run-v0")
+        .join("run-junction");
+    create_dir_link(&link, &outside_dir);
+    let suite_path = app
+        .join("docs")
+        .join("fixtures")
+        .join("eval-run-v0")
+        .join("eval-compare-smoke-suite.yaml");
+    let content = fs::read_to_string(&suite_path).expect("read suite fixture");
+    fs::write(
+        &suite_path,
+        content.replacen(
+            r#""docs/fixtures/eval-run-v0/single-agent/task-a.yaml""#,
+            r#""docs/fixtures/eval-run-v0/run-junction/external-task-a.yaml""#,
+            1,
+        ),
+    )
+    .expect("write mutated suite fixture");
+
+    let output = eval_compare_json(&app);
+
+    assert_eq!(output.status.code(), Some(5));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("eval run ref"), "{stderr}");
+    assert!(stderr.contains("under the project root"), "{stderr}");
 }
 
 #[test]

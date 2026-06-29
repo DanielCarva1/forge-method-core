@@ -1,7 +1,8 @@
 use crate::project_cmd::{resolve_project, ProjectResolveError};
 use forge_core_contracts::{EvalRunContractDocument, RepoPath};
 use forge_core_eval::{
-    compare_eval_runs, EvalArmLabel, EvalCompareSuiteDocument, EvalComparisonReport, EvalRunInput,
+    compare_eval_runs_with_diagnostics, EvalArmLabel, EvalCompareSuiteDocument,
+    EvalComparisonReport, EvalDiagnostic, EvalDiagnosticCode, EvalRunInput,
 };
 use std::fmt;
 use std::fs;
@@ -22,12 +23,14 @@ pub struct EvalCompareCommandInput {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EvalCommandError {
     ProjectResolve(ProjectResolveError),
+    CanonicalizeProjectRoot { path: PathBuf, source: String },
     ReadSuite { path: PathBuf, source: String },
     ParseSuite { path: PathBuf, source: String },
     UnsupportedSuiteSchemaVersion { path: PathBuf, found: String },
     ReadRun { path: PathBuf, source: String },
     ParseRun { path: PathBuf, source: String },
     UnsupportedRunSchemaVersion { path: PathBuf, found: String },
+    InvalidSuitePath { path: String },
     InvalidRunPath { path: String },
 }
 
@@ -35,6 +38,11 @@ impl fmt::Display for EvalCommandError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ProjectResolve(error) => write!(formatter, "project resolve failed: {error}"),
+            Self::CanonicalizeProjectRoot { path, source } => write!(
+                formatter,
+                "canonicalize project root {} failed: {source}",
+                path.display()
+            ),
             Self::ReadSuite { path, source } => {
                 write!(
                     formatter,
@@ -75,6 +83,10 @@ impl fmt::Display for EvalCommandError {
                 path.display(),
                 found
             ),
+            Self::InvalidSuitePath { path } => write!(
+                formatter,
+                "eval suite path '{path}' is invalid; suite refs must stay under the project root"
+            ),
             Self::InvalidRunPath { path } => write!(
                 formatter,
                 "eval run ref '{path}' is invalid; refs must stay under the project root"
@@ -102,8 +114,15 @@ pub fn run_compare(
 ) -> Result<EvalComparisonReport, EvalCommandError> {
     let resolved = resolve_project(&input.root, input.allow_bootstrap_core)?;
     let project_root = PathBuf::from(&resolved.project_root);
+    let canonical_project_root = fs::canonicalize(&project_root).map_err(|source| {
+        EvalCommandError::CanonicalizeProjectRoot {
+            path: project_root.clone(),
+            source: source.to_string(),
+        }
+    })?;
     let suite_path = resolve_project_relative_path(
         &project_root,
+        &canonical_project_root,
         input
             .suite_path
             .as_deref()
@@ -111,15 +130,38 @@ pub fn run_compare(
     )?;
     let suite_document = read_suite(&suite_path)?;
     let suite = suite_document.eval_compare_suite;
-    let baseline_runs = read_run_inputs(&project_root, &suite.baseline.run_refs)?;
-    let candidate_runs = read_run_inputs(&project_root, &suite.candidate.run_refs)?;
+    let baseline_runs = read_run_inputs(
+        &project_root,
+        &canonical_project_root,
+        &suite.baseline.run_refs,
+    )?;
+    let candidate_runs = read_run_inputs(
+        &project_root,
+        &canonical_project_root,
+        &suite.candidate.run_refs,
+    )?;
+    let evidence_diagnostics = evidence_ref_diagnostics(
+        &project_root,
+        &canonical_project_root,
+        "baseline",
+        &baseline_runs,
+    )
+    .into_iter()
+    .chain(evidence_ref_diagnostics(
+        &project_root,
+        &canonical_project_root,
+        "candidate",
+        &candidate_runs,
+    ))
+    .collect();
 
-    Ok(compare_eval_runs(
+    Ok(compare_eval_runs_with_diagnostics(
         &suite,
         input.baseline,
         input.candidate,
         &baseline_runs,
         &candidate_runs,
+        evidence_diagnostics,
     ))
 }
 
@@ -146,18 +188,25 @@ fn read_suite(path: &Path) -> Result<EvalCompareSuiteDocument, EvalCommandError>
 
 fn read_run_inputs(
     project_root: &Path,
+    canonical_project_root: &Path,
     refs: &[RepoPath],
 ) -> Result<Vec<EvalRunInput>, EvalCommandError> {
     refs.iter()
-        .map(|reference| read_run_input(project_root, reference))
+        .map(|reference| read_run_input(project_root, canonical_project_root, reference))
         .collect()
 }
 
 fn read_run_input(
     project_root: &Path,
+    canonical_project_root: &Path,
     reference: &RepoPath,
 ) -> Result<EvalRunInput, EvalCommandError> {
-    let path = resolve_safe_repo_path(project_root, &reference.0)?;
+    let path = resolve_safe_repo_file_path(
+        project_root,
+        canonical_project_root,
+        &reference.0,
+        EvalRepoFileKind::Run,
+    )?;
     let text = fs::read_to_string(&path).map_err(|source| EvalCommandError::ReadRun {
         path: path.clone(),
         source: source.to_string(),
@@ -183,29 +232,65 @@ fn read_run_input(
 
 fn resolve_project_relative_path(
     project_root: &Path,
+    canonical_project_root: &Path,
     path: &Path,
 ) -> Result<PathBuf, EvalCommandError> {
     if path.is_absolute() {
-        Ok(path.to_path_buf())
+        Err(EvalCommandError::InvalidSuitePath {
+            path: path.display().to_string(),
+        })
     } else {
-        resolve_safe_repo_path(project_root, &path.to_string_lossy())
+        resolve_safe_repo_file_path(
+            project_root,
+            canonical_project_root,
+            &path.to_string_lossy(),
+            EvalRepoFileKind::Suite,
+        )
     }
 }
 
-fn resolve_safe_repo_path(
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EvalRepoFileKind {
+    Suite,
+    Run,
+}
+
+impl EvalRepoFileKind {
+    fn invalid_error(self, path: impl Into<String>) -> EvalCommandError {
+        match self {
+            Self::Suite => EvalCommandError::InvalidSuitePath { path: path.into() },
+            Self::Run => EvalCommandError::InvalidRunPath { path: path.into() },
+        }
+    }
+}
+
+fn resolve_safe_repo_file_path(
     project_root: &Path,
+    canonical_project_root: &Path,
     relative_path: &str,
+    kind: EvalRepoFileKind,
 ) -> Result<PathBuf, EvalCommandError> {
     let path = Path::new(relative_path);
     if path.as_os_str().is_empty()
         || path.is_absolute()
         || path.components().any(forbidden_relative_component)
     {
-        return Err(EvalCommandError::InvalidRunPath {
-            path: relative_path.to_string(),
-        });
+        return Err(kind.invalid_error(relative_path.to_string()));
     }
-    Ok(project_root.join(path))
+    let joined = project_root.join(path);
+    if !joined.exists() {
+        return Ok(joined);
+    }
+    if !joined.is_file() {
+        return Err(kind.invalid_error(relative_path.to_string()));
+    }
+    let canonical =
+        fs::canonicalize(&joined).map_err(|_| kind.invalid_error(relative_path.to_string()))?;
+    if canonical.starts_with(canonical_project_root) {
+        Ok(canonical)
+    } else {
+        Err(kind.invalid_error(relative_path.to_string()))
+    }
 }
 
 fn forbidden_relative_component(component: Component<'_>) -> bool {
@@ -217,4 +302,121 @@ fn forbidden_relative_component(component: Component<'_>) -> bool {
 
 fn strip_utf8_bom(raw: &str) -> &str {
     raw.strip_prefix('\u{feff}').unwrap_or(raw)
+}
+
+fn evidence_ref_diagnostics(
+    project_root: &Path,
+    canonical_project_root: &Path,
+    arm_path: &str,
+    runs: &[EvalRunInput],
+) -> Vec<EvalDiagnostic> {
+    runs.iter()
+        .flat_map(|run| {
+            run.document
+                .eval_run_contract
+                .evidence_refs
+                .iter()
+                .enumerate()
+                .filter_map(move |(index, reference)| {
+                    evidence_ref_diagnostic(
+                        project_root,
+                        canonical_project_root,
+                        arm_path,
+                        run,
+                        index,
+                        reference,
+                    )
+                })
+        })
+        .collect()
+}
+
+fn evidence_ref_diagnostic(
+    project_root: &Path,
+    canonical_project_root: &Path,
+    arm_path: &str,
+    run: &EvalRunInput,
+    index: usize,
+    reference: &str,
+) -> Option<EvalDiagnostic> {
+    match validate_evidence_ref(project_root, canonical_project_root, reference) {
+        Ok(()) => None,
+        Err(EvidenceRefValidationError::Invalid) => Some(EvalDiagnostic::error(
+            EvalDiagnosticCode::InvalidEvidenceRef,
+            evidence_ref_path(arm_path, run, index),
+            format!(
+                "eval run {} has invalid evidence ref '{}'; refs must be relative file paths under the project root",
+                run.document.eval_run_contract.run_id.0, reference
+            ),
+        )),
+        Err(EvidenceRefValidationError::Missing) => Some(EvalDiagnostic::error(
+            EvalDiagnosticCode::MissingEvidenceFile,
+            evidence_ref_path(arm_path, run, index),
+            format!(
+                "eval run {} evidence ref '{}' does not exist",
+                run.document.eval_run_contract.run_id.0, reference
+            ),
+        )),
+        Err(EvidenceRefValidationError::NotFile) => Some(EvalDiagnostic::error(
+            EvalDiagnosticCode::EvidenceRefNotFile,
+            evidence_ref_path(arm_path, run, index),
+            format!(
+                "eval run {} evidence ref '{}' is not a file",
+                run.document.eval_run_contract.run_id.0, reference
+            ),
+        )),
+        Err(EvidenceRefValidationError::EscapesProject) => Some(EvalDiagnostic::error(
+            EvalDiagnosticCode::EvidenceRefEscapesProject,
+            evidence_ref_path(arm_path, run, index),
+            format!(
+                "eval run {} evidence ref '{}' resolves outside the project root",
+                run.document.eval_run_contract.run_id.0, reference
+            ),
+        )),
+    }
+}
+
+fn evidence_ref_path(arm_path: &str, run: &EvalRunInput, index: usize) -> String {
+    format!(
+        "eval_compare_suite.{arm_path}.run_refs.{}.evidence_refs[{index}]",
+        run.source_ref.0
+    )
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EvidenceRefValidationError {
+    Invalid,
+    Missing,
+    NotFile,
+    EscapesProject,
+}
+
+fn validate_evidence_ref(
+    project_root: &Path,
+    canonical_project_root: &Path,
+    reference: &str,
+) -> Result<(), EvidenceRefValidationError> {
+    let relative = Path::new(reference);
+    if relative.as_os_str().is_empty()
+        || relative.is_absolute()
+        || relative.components().any(forbidden_relative_component)
+    {
+        return Err(EvidenceRefValidationError::Invalid);
+    }
+
+    let joined = project_root.join(relative);
+    if !joined.exists() {
+        return Err(EvidenceRefValidationError::Missing);
+    }
+    if !joined.is_file() {
+        return Err(EvidenceRefValidationError::NotFile);
+    }
+
+    let canonical_evidence =
+        fs::canonicalize(&joined).map_err(|_| EvidenceRefValidationError::Missing)?;
+    if canonical_evidence.starts_with(canonical_project_root) {
+        Ok(())
+    } else {
+        Err(EvidenceRefValidationError::EscapesProject)
+    }
 }
