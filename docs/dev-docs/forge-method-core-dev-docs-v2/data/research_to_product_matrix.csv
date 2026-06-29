@@ -1,0 +1,39 @@
+source_id,source_title,forge_decision,product_feature_ids
+P01,Rethinking the Value of Multi-Agent Workflow: A Strong Single Agent Baseline,Single-agent forte deve ser baseline obrigatorio antes de MAS homogeneo.,"F05,F13"
+P02,Do More Agents Help? Controlled and Protocol-Aligned Evaluation of LLM Agent Workflows,"MAS homogeneo raramente vence baseline single-agent quando loader, tools, answer contract e logging sao normalizados.","F05,F13"
+P03,On the Uncertainty of Large Language Model-Based Multi-Agent Systems,Mais agentes e mais rodadas nao garantem ganho; a incerteza inicial e a base do modelo pesam muito.,F05
+P04,From Static Templates to Dynamic Runtime Graphs: A Survey of Workflow Optimization for LLM Agents,"Separar template reutilizavel, realized graph e execution trace como entidades distintas.","F03,F04"
+P05,GraphBit: A Graph-based Agentic Framework for Non-Linear Agent Orchestration,"Grafo/DAG deterministico reduz routing alucinado, loops e execucao nao reproduzivel.",F04
+P06,Verified Multi-Agent Orchestration: A Plan-Execute-Verify-Replan Framework for Complex Query Resolution,"Verifier e replan devem fazer parte do loop, nao so reviewer no final.","F02,F04,F10"
+P07,"AgentBeats: Agentifying Agent Assessment for Openness, Standardization, and Reproducibility","Avaliar agentes via protocolos padronizados, traces e judge agents para reduzir mismatch entre benchmark e producao.","F03,F05"
+P08,MPAC: A Multi-Principal Agent Coordination Protocol for Interoperable Multi-Agent Collaboration,"Shared state entre agentes de donos diferentes precisa de intent, conflict, governance e optimistic concurrency.","F07,F09"
+P09,MemFlow: Intent-Driven Memory Orchestration for Small Language Model Agents,"Memoria deve ser roteada por intencao e budget, nao exposta como RAG plano.",F06
+P10,MemRouter: Memory-as-Embedding Routing for Long-Term Conversational Agents,"Write-side memory admission pode ser leve, roteada por embedding e separada da geracao de resposta.",F06
+P11,"Experience Compression Spectrum: Unifying Memory, Skills, and Rules in LLM Agents","Memoria, skills e regras sao niveis de compressao; o Forge deve modelar promocao e autoridade entre niveis.",F06
+P12,Kimi K2.5: Visual Agentic Intelligence,"Swarm paralelo paga quando existe decomposicao heterogenea, multimodalidade e paralelismo real.","F04,F05"
+P13,K-BrowseComp: A Web Browsing Agent Benchmark Grounded in Korean Contexts,Benchmarks locais e nao ingleses expõem gaps escondidos por avaliacao ocidental/inglesa.,F14
+P14,EvoBrowseComp: Benchmarking Search Agents on Evolving Knowledge,Benchmarks de search agents precisam ser atualizaveis para evitar contaminacao e memorizacao.,F14
+P15,Agents-K1: Towards Agent-native Knowledge Orchestration,"Research agents precisam de grafos de conhecimento com entidades, claims, evidencia e linhagem de metodo, nao so abstracts e embeddings.",F14
+P16,Efficient Serving for Dynamic Agent Workflows with Prediction-based KV-Cache Management,"Custo e latencia precisam conhecer estrutura de workflow, nao so recencia de cache.",F13
+P17,"Security Threat Modeling for Emerging AI-Agent Protocols: A Comparative Analysis of MCP, A2A, Agora, and ANP","Protocolos agenticos precisam threat model de identidade, lifecycle, composicao e execucao errada de tool.","F08,F09"
+P18,Breaking the Protocol: Security Analysis of the Model Context Protocol Specification and Prompt Injection Vulnerabilities in Tool-Integrated LLM Agents,"MCP precisa capability attestation, message authentication e defesa contra trust propagation implicito.",F08
+P19,AIP: Agent Identity Protocol for Verifiable Delegation Across MCP and A2A,"Delegacao precisa ligar identidade, escopo, invocacao e provenance com tokens assinados.","F08,F09"
+P20,AgentRFC: Security Design Principles and Conformance Testing for Agent Protocols,Composicao entre protocolos pode quebrar garantias locais; usar conformance tests e invariantes.,"F08,F09"
+P21,What Challenges Do Developers Face in AI Agent Systems? An Empirical Study on Stack Overflow,"Comunidade dev sofre com runtime integration, dependency management, orchestration complexity e evaluation reliability.","F01,F02,F10,F12"
+P22,AIRA: AI-Induced Risk Audit: A Structured Inspection Framework for AI-Generated Code,Codigo atribuido a IA pode concentrar falhas severas e fail-soft; Forge deve ter risk audit gate fail-closed.,"F02,F11"
+P23,Governance Controls for AI-Generated Test Artifacts in Autonomous Software Testing,"Artefatos de teste gerados por IA precisam governanca, explicabilidade, risco, compliance e auditoria.","F02,F11"
+P24,Agentic Much? Adoption of Coding Agents on GitHub,"Coding agents ja deixam rastros em PRs/commits; Forge deve capturar autoria, trace e risco por agente.","F03,F07"
+P25,AIDev: Studying AI Coding Agents on GitHub,"Agent-authored PRs viraram objeto de estudo; o Forge deve produzir metadados de PR, evidencia e review.","F03,F07"
+P26,Fingerprinting AI Coding Agents on GitHub,Contribuicoes de agentes têm fingerprints; Forge deve registrar actor_agent_id e principal_id explicitamente.,"F03,F07"
+P27,Configuring Agentic AI Coding Tools: An Exploratory Study,Context files dominam; skills e subagents ainda sao rasos. Forge deve transformar configuracao estatica em workflow executavel validavel.,"F04,F12,F15"
+P28,What Security and Privacy Transparency Users Need from Consumer-Facing Generative AI,"Usuario comum precisa transparencia acionavel, on-demand e confiavel sobre seguranca e privacidade.","F01,F02,F03,F06,F12"
+P29,"Generative AI in Saudi Arabia: A National Survey of Adoption, Risks, and Public Perceptions","Adoção alta convive com baixa literacia, privacidade, misinformation e demanda por treinamento estruturado.",F12
+P30,Taking a Pulse on How Generative AI is Reshaping the Software Engineering Research Landscape,"Usuarios tecnicos percebem ganho, mas pedem verificacao humana, governanca e mitigacao de risco.","F02,F11"
+P31,MISRust: Mapping MISRA-C++ Coding Guidelines to the Rust Programming Language,"Safe Rust elimina parte relevante de classes de guideline, mas unsafe e APIs criticas exigem regras e lint explicito.",F15
+O01,Model Context Protocol docs: What is MCP?,"MCP padroniza conexao de apps de IA a sistemas externos, dados, tools e workflows.",F08
+O02,A2A Protocol docs,A2A padroniza interoperabilidade agent-to-agent; MCP e A2A sao complementares.,F09
+O03,GitHub Copilot cloud agent docs,"Demanda de mercado inclui custom agents, hooks, MCP, sandboxes, memory, budgets, audit logs, integrations e rollback.","F06,F08,F10,F12,F13"
+O04,clap derive docs,"CLI deve usar Parser, Subcommand e Args declarativos no lugar de parsing manual crescente.",F15
+O05,tracing crate docs,Spans e eventos estruturados devem ser a base de runtime trace e diagnostics.,"F03,F15"
+O06,thiserror crate docs,"Erros de biblioteca devem ser enums tipados com Display, source e From controlados.",F15
+O07,Rust API Guidelines,"APIs publicas devem otimizar naming, predictability, interoperability, type safety e debuggability.",F15

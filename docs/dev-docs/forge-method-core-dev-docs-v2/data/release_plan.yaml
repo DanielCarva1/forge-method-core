@@ -1,0 +1,50 @@
+release_plan:
+  schema_version: "0.1"
+  target: "forge-method-core-v2"
+  milestones:
+    - id: "M0"
+      title: "Rust ergonomics and kernel cleanup"
+      features: ["F15"]
+      exit_criteria:
+        - "CLI parsing is declarative"
+        - "store is module-split"
+        - "builders and snapshots exist for core contracts"
+    - id: "M1"
+      title: "Preview, ready, trace"
+      features: ["F01", "F02", "F03"]
+      exit_criteria:
+        - "preview is deterministic"
+        - "ready gate fails closed"
+        - "trace events are emitted for runtime paths"
+    - id: "M2"
+      title: "WorkflowGraph"
+      features: ["F04"]
+      exit_criteria:
+        - "graph validate exists"
+        - "graph dry-run exists"
+        - "verifier node can block mutation"
+    - id: "M3"
+      title: "Eval baseline"
+      features: ["F05", "F13"]
+      exit_criteria:
+        - "single-agent baseline compare exists"
+        - "cost and latency accounting are recorded"
+    - id: "M4"
+      title: "Memory policy"
+      features: ["F06"]
+      exit_criteria:
+        - "summary cannot create authority"
+        - "forget and promote are policy controlled"
+    - id: "M5"
+      title: "Secure protocols"
+      features: ["F08", "F09"]
+      exit_criteria:
+        - "MCP exposes read-only tools first"
+        - "A2A task output cannot mutate store directly"
+    - id: "M6"
+      title: "Governance and control plane"
+      features: ["F07", "F10", "F11", "F12", "F14"]
+      exit_criteria:
+        - "conflict contracts exist"
+        - "control plane shows claims, gates and traces"
+        - "guided start can reach preview and ready"

@@ -1,0 +1,26 @@
+schema_version: "0.1"
+kind: "trace_event"
+trace_id: "trace.example"
+event_id: "evt.0001"
+run_id: "run.example"
+graph_id: null
+node_id: null
+event_kind: "run_started"
+recorded_at: "2026-06-28T00:00:00Z"
+actor:
+  principal_id: "principal.human.daniel"
+  agent_id: "agent.codex.local"
+  role: "driver"
+authority:
+  operation_id: null
+  capability_ids: []
+inputs: []
+outputs: []
+risk:
+  risk_level: "unknown"
+  destructive: false
+cost:
+  model_calls: 0
+  tool_calls: 0
+  estimated_tokens: 0
+message: "Run started"
