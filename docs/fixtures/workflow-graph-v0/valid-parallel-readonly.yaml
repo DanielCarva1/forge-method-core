@@ -15,13 +15,13 @@ nodes:
       max_tool_calls: 0
   - node_id: "read_plan_context"
     node_kind: "operation"
-    operation_ref: "docs/fixtures/operation-contract-v0/plan-sprint-slice.yaml"
+    operation_ref: "docs/fixtures/operation-contract-v0/research-market-scan.yaml"
     budget:
       max_steps: 1
       max_tool_calls: 0
   - node_id: "read_spec_checkpoint"
     node_kind: "operation"
-    operation_ref: "docs/fixtures/operation-contract-v0/checkpoint-spec-review.yaml"
+    operation_ref: "docs/fixtures/operation-contract-v0/diagnose-host-health.yaml"
     budget:
       max_steps: 1
       max_tool_calls: 0

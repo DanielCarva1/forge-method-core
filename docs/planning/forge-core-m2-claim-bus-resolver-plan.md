@@ -184,6 +184,23 @@ That gap is closed by the official handoff protocol above: the command records
 context in `handoffs/expired-claims/`, transitions the old claim to
 `handoff_recorded`, and reopens the scope without manual file moves.
 
+## OperationContract-aware graph dry-run follow-up
+
+M2 graph dry-run must not trust graph YAML alone for mutation safety. The
+follow-up acceptance criteria are:
+
+- operation refs resolve relative to the resolved project root;
+- missing or invalid OperationContract refs fail closed during dry-run;
+- dry-run reports per-node preview/readiness metadata from the OperationContract;
+- `RuntimeReadyStatus::NotReady` blocks nodes when preview says the operation is
+  blocked, awaiting human input, gate-required, review-required, or when a
+  mutating operation is not ready;
+- effective `mutation_capable` is derived from OperationContract authority and
+  side-effect policy, not trusted from graph YAML alone;
+- failed verifier nodes block downstream effective mutations;
+- dry-run remains non-mutating and does not append trace/effect records;
+- no `anyhow` or `thiserror`.
+
 ## Next slices after this
 
 1. Project link hardening implementation for the PL-H1 rules above.

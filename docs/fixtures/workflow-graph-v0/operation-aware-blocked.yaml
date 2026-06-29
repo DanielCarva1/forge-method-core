@@ -1,0 +1,17 @@
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.fixture.operation-aware-blocked"
+created_at: "2026-06-29T00:00:00Z"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+nodes:
+  - node_id: "release_gate"
+    node_kind: "operation"
+    operation_ref: "docs/fixtures/operation-contract-v0/release-gate-required.yaml"
+    mutation_capable: false
+edges: []
+stop_conditions:
+  - "validation_errors"
+  - "gate_blocked"
