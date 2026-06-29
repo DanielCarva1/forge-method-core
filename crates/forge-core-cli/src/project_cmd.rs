@@ -1148,6 +1148,13 @@ fn project_usage() -> &'static str {
     "forge-core project <subcommand> [options]\n  init [--root <path>] [--project-id <id>] [--sidecar-root <path>] [--state-root <path>] [--json|--no-json]\n  resolve [--root <path>] [--allow-bootstrap-core] [--json|--no-json]"
 }
 
+pub fn run_project_command(args: &[String]) {
+    let (output, exit) = dispatch(args);
+    if !output.is_empty() {
+        println!("{output}");
+    }
+    std::process::exit(exit);
+}
 #[cfg(test)]
 mod tests {
     use super::*;

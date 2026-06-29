@@ -1,4 +1,4 @@
-use crate::cli_util::{eval_usage, next_arg, usage};
+use crate::cli_util::eval_usage;
 use crate::project_cmd::{resolve_project, ProjectResolveError};
 use forge_core_contracts::{EvalRunContractDocument, RepoPath};
 use forge_core_eval::{

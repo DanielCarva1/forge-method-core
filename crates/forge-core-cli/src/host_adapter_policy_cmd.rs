@@ -11,12 +11,11 @@
 //! (see `docs/dev-docs/forge-method-core-dev-docs-v2/09_system_design_roadmap.md`).
 
 use crate::cli_util::{
-    next_arg, next_path, parse_host_adapter_process_target, parse_host_adapter_projection_target,
+    next_arg, parse_host_adapter_process_target, parse_host_adapter_projection_target,
     parse_runtime_kind, parse_update_channel, usage,
 };
 use crate::*;
 use forge_core_contracts::runtime::RuntimeKind;
-use std::path::PathBuf;
 
 pub fn run_host_adapter_distribution_policy_command(args: &[String]) {
     let mut json = false;
