@@ -280,6 +280,39 @@ Total: 7472 linhas, 141 funções, ~243 itens públicos.
     (320 warnings — paridade), `cargo fmt --check` verde.
   - Âncora de regressão: `validate --root . --json` emitiu
     `"diagnostics": []` — zero mudança observável.
+- [x] R1.CryptoOCSP — Extrair `crypto_ocsp.rs` (2026-06-29)
+  - Movidos: 14 helpers OCSP (decode, verify, freshness, status, nonce) —
+    11 `pub(crate)` (`decode_ocsp_response`, `decode_basic_ocsp_response`,
+    `verify_basic_ocsp_signature_with_issuer`, `ocsp_responder_id_matches_issuer`,
+    `find_matching_ocsp_single_response`, `verify_ocsp_single_response_freshness`,
+    `apply_ocsp_cert_status`, `extract_ocsp_response_nonce_hex`,
+    `verify_ocsp_nonce`, `normalize_expected_ocsp_nonce_hex`, `rasn_oid_matches`)
+    + 3 privados (`ocsp_cert_id_issuer_hashes_match`, `ocsp_digest_for_algorithm`,
+    `sha1_digest` — só consumidos dentro do módulo).
+  - Public entrypoint `run_host_adapter_certificate_ocsp_status_verification`
+    (L1884-2168) **não movido** — consome `OcspResponseStatus` diretamente,
+    fica em `lib.rs` como parte do domínio host-adapter verification.
+  - Imports do novo módulo: `asn1_rs::{BitString, FromDer}`,
+    `rasn::types::ObjectIdentifier`, `rasn_ocsp::{6 tipos}`, `sha1::Sha1`,
+    `sha2::{Digest, Sha256, Sha384, Sha512}`, `x509_parser::certificate::X509Certificate`,
+    `x509_parser::x509::AlgorithmIdentifier`, e `hex_bytes` de
+    `crate::crypto_hashing` (cross-module helper).
+  - Em `lib.rs`: removidos imports totalmente órfãos após a extração
+    (confirmado via grep: único uso fora do bloco removido era
+    `OcspResponseStatus::Successful` em L2003):
+    `asn1_rs::{...}`, `rasn::types::ObjectIdentifier`, `sha1::Sha1`,
+    `sha2::{Digest, Sha256, Sha384, Sha512}`, `x509_parser::x509::AlgorithmIdentifier`.
+    Reduzido `rasn_ocsp::{7 itens}` → `rasn_ocsp::OcspResponseStatus`.
+  - Módulo `pub(crate)`, re-exportado via `pub(crate) use crypto_ocsp::{11 itens}`
+    no crate root — preserva todos os call sites `crate::decode_ocsp_response`,
+    etc., em `run_host_adapter_certificate_ocsp_status_verification`.
+  - `lib.rs`: 4146 → 3785 linhas (-361); `crypto_ocsp.rs`: 404 linhas.
+  - Gates: `cargo check` (zero warnings), `cargo test -p forge-core-cli --lib`
+    (103/103 verdes), OCSP-focused tests `--test validate ocsp` (18/18 verdes),
+    `cargo clippy --pedantic` (320 warnings — paridade perfeita com baseline),
+    `cargo fmt --check` verde.
+  - Âncora de regressão: `validate --root . --json` emitiu
+    `"diagnostics": []` — zero mudança observável.
 - [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
 - [ ] R1.4 — Mover verificação X.509/CRL/OCSP
 - [ ] R1.6 — Mover project link resolve/init
