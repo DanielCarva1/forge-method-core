@@ -188,13 +188,44 @@ network.
 
 ## Quick start
 
-### Initialize the coordination bus
+### Resolve the Forge runtime state
 
-Pick a directory where active claims will live (gitignore it):
+Consumer projects keep product code and Forge runtime state separate. The
+product repo carries only a small `.forge-method.yaml` pointer; the real runtime
+state lives in a sibling sidecar:
+
+```txt
+<parent>/
+  <project>/
+    .forge-method.yaml
+  forge-<project>/
+    .forge-method/
+      state.yaml
+      claims-active/
+      artifacts/
+      evidence/
+```
+
+Example pointer:
+
+```yaml
+schema_version: forge_project_link_v1
+project_id: my-project
+sidecar_root: ../forge-my-project
+state_root: ../forge-my-project/.forge-method
+```
+
+Resolve it before work:
 
 ```bash
-mkdir -p .forge-method/claims-active
-echo ".forge-method/claims-active/" >> .gitignore
+forge-core project resolve --root . --json
+```
+
+The Forge core repository is a temporary bootstrap exception and may resolve its
+local `.forge-method/` explicitly:
+
+```bash
+forge-core project resolve --root . --allow-bootstrap-core --json
 ```
 
 ### Ask the guide what to do
@@ -262,6 +293,7 @@ forge-core claim release --id claim.story.my-feature.my-feature --agent codex-wo
 ### Validate the project
 
 ```bash
+forge-core project resolve --root . --json
 forge-core validate              # checks every contract in the tree
 forge-core execute-operation --root . --operation contracts/operations/ship.yaml
 ```
