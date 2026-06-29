@@ -333,6 +333,7 @@ epics:
           - "certificate_transparency_sct_boundary"
           - "certificate_revocation_policy_boundary"
           - "explicit_crl_revocation_status_boundary"
+          - "explicit_ocsp_revocation_status_boundary_direct_issuer"
           - "tuf_trusted_root_freshness_boundary"
         existing_artifacts:
           - "contracts/policies/sigstore-timestamp-authority-boundary.yaml"
@@ -349,34 +350,39 @@ epics:
           - "contracts/migration/tuf-trusted-root-freshness-boundary-grill-audit.yaml"
           - "crates/forge-core-cli"
         remaining_boundaries:
-          - "explicit_ocsp_revocation_status_boundary"
+          - "delegated_ocsp_responder_certificate_authority"
         acceptance:
           - "Timestamp and certificate validity semantics are explicit."
           - "TUF freshness, explicit local CRL status, and explicit OCSP status are not silently implied by other checks."
           - "Explicit local CRL status remains local/supplied-CRL only; CRL distribution fetch, delta CRL, indirect CRL, and OCSP remain separate boundaries."
       - id: "FRUST-052"
         title: "Explicit OCSP revocation status boundary"
-        status: "planned"
+        status: "implemented_partial"
         priority: "high"
         evidence_refs:
           - "rfc6960_ocsp_certificate_status"
           - "rfc5280_x509_crl_profile"
         depends_on:
           - "FRUST-051"
-        planned_outputs:
+        implementation_note: "Runtime integrated as of 2026-06-29 for supplied/offline OCSP responses signed directly by the supplied issuer certificate. The verifier is read-only, performs no network OCSP fetch, fails closed for verification/freshness/binding failures, and exposes host-adapter CLI/projection. Delegated OCSP responder certificate authority remains a pending extension and is intentionally fail-closed instead of implied."
+        existing_artifacts:
           - "contracts/policies/explicit-ocsp-revocation-status-boundary.yaml"
           - "contracts/migration/explicit-ocsp-revocation-status-boundary-grill-audit.yaml"
-          - "crates/forge-core-cli"
+          - "crates/forge-core-cli/src/lib.rs"
+          - "crates/forge-core-cli/src/main.rs"
+          - "crates/forge-core-cli/tests/validate.rs"
+        pending_extensions:
+          - "delegated_ocsp_responder_certificate_authority"
         non_goals:
           - "Do not infer OCSP status from short-lived certificate policy, CRL status, CT, TSA, Rekor, or TUF freshness."
           - "Do not perform network OCSP fetch unless a later host-adapter boundary explicitly permits it."
           - "Do not claim install/update authority from OCSP verification alone."
         acceptance:
-          - "Read-only verifier accepts supplied OCSP response evidence and reports good, revoked, or unknown status explicitly."
-          - "Verifier fails closed for stale/expired OCSP responses, issuer/responder mismatch, bad signatures, and unsupported responder authority."
-          - "Nonce freshness is verified when nonce evidence is present and explicitly reported when absent or unsupported."
+          - "Read-only verifier accepts supplied OCSP response evidence signed by the supplied issuer and reports good, revoked, or unknown status explicitly."
+          - "Verifier fails closed for stale/expired/future OCSP responses, absent nextUpdate, issuer/responder mismatch, bad target certificate signatures, bad response signatures, unsupported CertID hash algorithms, CertID serial mismatch, and unsupported responder authority."
+          - "Nonce freshness is verified when nonce evidence is present and explicitly reported when no nonce is supplied, absent, mismatched, or unsupported."
           - "Host-adapter projection exposes the OCSP command schema instead of falling through to an empty schema."
-          - "Fixtures cover good, revoked, unknown, stale, responder mismatch, bad signature, and nonce cases before the boundary is recommended."
+          - "Fixtures cover good, revoked, unknown, stale/expired, future thisUpdate, future producedAt, absent nextUpdate, responder mismatch, bad response signature, bad target certificate signature, CertID serial mismatch, unsupported CertID hash, nonce absent, nonce match, and nonce mismatch cases before the boundary is recommended."
   - id: "FRUST-E6"
     title: "Release Readiness and Cross-Host Conformance"
     goal: "Prove the core works as a product across borrowed shells."
@@ -423,5 +429,5 @@ open_questions:
     question: "What counts as usable install/update for non-developers?"
     recommended_answer: "One copy-paste install command, one copy-paste update command, local version diagnosis, and human-readable patch summary generated from typed release metadata."
 next_ready_story:
-  id: "FRUST-052"
-  reason: "FRUST-051 is reconciled as implemented_partial with explicit local CRL already implemented. The remaining long-lived PKI trust gap is explicit OCSP status; implementation should not start until parser/fixture strategy is selected and grilled against RFC6960."
+  id: "FRUST-011"
+  reason: "FRUST-052 now has a direct-issuer supplied/offline OCSP runtime slice; cross-host conformance still depends on the borrowed-shell host conformance contract before FRUST-060 can prove multi-host product behavior."

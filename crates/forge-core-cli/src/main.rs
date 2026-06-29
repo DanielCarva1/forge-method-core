@@ -5,6 +5,7 @@ use forge_core_cli::telemetry_cmd::{TelemetryExportCommandInput, TelemetryExport
 use forge_core_cli::{
     run_execute_operation, run_host_adapter_artifact_verification,
     run_host_adapter_certificate_crl_status_verification,
+    run_host_adapter_certificate_ocsp_status_verification,
     run_host_adapter_certificate_revocation_policy_verification,
     run_host_adapter_certificate_transparency_sct_verification,
     run_host_adapter_distribution_admission, run_host_adapter_distribution_policy,
@@ -21,6 +22,8 @@ use forge_core_cli::{
     HostAdapterArtifactVerificationInput, HostAdapterArtifactVerificationStatus,
     HostAdapterCertificateCrlStatusVerificationInput,
     HostAdapterCertificateCrlStatusVerificationStatus,
+    HostAdapterCertificateOcspStatusVerificationInput,
+    HostAdapterCertificateOcspStatusVerificationStatus,
     HostAdapterCertificateRevocationPolicyVerificationInput,
     HostAdapterCertificateRevocationPolicyVerificationStatus,
     HostAdapterCertificateTransparencySctVerificationInput,
@@ -106,6 +109,9 @@ fn main() {
         }
         "host-adapter-verify-certificate-crl-status" => {
             run_host_adapter_verify_certificate_crl_status_command(&args)
+        }
+        "host-adapter-verify-certificate-ocsp-status" => {
+            run_host_adapter_verify_certificate_ocsp_status_command(&args);
         }
         "--help" | "-h" => println!("{}", usage()),
         _ => {
@@ -1296,6 +1302,102 @@ fn run_host_adapter_verify_certificate_crl_status_command(args: &[String]) {
         );
     }
     if verification.status == HostAdapterCertificateCrlStatusVerificationStatus::Failed {
+        std::process::exit(1);
+    }
+}
+
+fn run_host_adapter_verify_certificate_ocsp_status_command(args: &[String]) {
+    let mut trust_policy_path: Option<PathBuf> = None;
+    let mut certificate_path: Option<PathBuf> = None;
+    let mut issuer_certificate_path: Option<PathBuf> = None;
+    let mut ocsp_response_path: Option<PathBuf> = None;
+    let mut verification_time_unix: Option<i64> = None;
+    let mut expected_nonce_hex: Option<String> = None;
+    let mut json = false;
+    let mut index = 1usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--trust-policy-path" => {
+                index += 1;
+                trust_policy_path = Some(PathBuf::from(next_arg(args, index)));
+            }
+            "--certificate-path" => {
+                index += 1;
+                certificate_path = Some(PathBuf::from(next_arg(args, index)));
+            }
+            "--issuer-certificate-path" => {
+                index += 1;
+                issuer_certificate_path = Some(PathBuf::from(next_arg(args, index)));
+            }
+            "--ocsp-response-path" => {
+                index += 1;
+                ocsp_response_path = Some(PathBuf::from(next_arg(args, index)));
+            }
+            "--verification-time-unix" => {
+                index += 1;
+                verification_time_unix = Some(parse_i64(next_arg(args, index)));
+            }
+            "--expected-nonce-hex" => {
+                index += 1;
+                expected_nonce_hex = Some(next_arg(args, index).to_string());
+            }
+            "--json" => json = true,
+            "--help" | "-h" => {
+                println!("{}", usage());
+                return;
+            }
+            _ => {
+                eprintln!("{}", usage());
+                std::process::exit(2);
+            }
+        }
+        index += 1;
+    }
+
+    let (
+        Some(trust_policy_path),
+        Some(certificate_path),
+        Some(issuer_certificate_path),
+        Some(ocsp_response_path),
+        Some(verification_time_unix),
+    ) = (
+        trust_policy_path,
+        certificate_path,
+        issuer_certificate_path,
+        ocsp_response_path,
+        verification_time_unix,
+    )
+    else {
+        eprintln!("{}", usage());
+        std::process::exit(2);
+    };
+
+    let verification = run_host_adapter_certificate_ocsp_status_verification(
+        HostAdapterCertificateOcspStatusVerificationInput {
+            trust_policy_path,
+            certificate_path,
+            issuer_certificate_path,
+            ocsp_response_path,
+            verification_time_unix,
+            expected_nonce_hex,
+        },
+    );
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&verification)
+                .expect("serialize certificate OCSP status verification")
+        );
+    } else {
+        println!(
+            "forge_core_host_adapter_certificate_ocsp_status_verification certificate={} status={:?} revocation_status={:?} reasons={:?}",
+            verification.certificate_path,
+            verification.status,
+            verification.revocation_status,
+            verification.reasons
+        );
+    }
+    if verification.status == HostAdapterCertificateOcspStatusVerificationStatus::Failed {
         std::process::exit(1);
     }
 }
@@ -3571,7 +3673,8 @@ fn usage() -> &'static str {
         "       forge-core host-adapter-verify-certificate-transparency-sct --trust-policy-path <path> --certificate-path <path> --sct-path <path> [--sct-path <path>] --verification-time-unix-ms <milliseconds> [--json]\n",
         "       forge-core host-adapter-verify-certificate-revocation-policy --trust-policy-path <path> --certificate-path <path> --trusted-signing-time-unix <seconds> [--json]\n",
         "       forge-core host-adapter-verify-tuf-trusted-root-freshness --trust-policy-path <path> --root-metadata-path <path> [--timestamp-metadata-path <path>] [--snapshot-metadata-path <path>] [--targets-metadata-path <path>] --update-start-time-unix <seconds> [--min-root-version <n>] [--min-timestamp-version <n>] [--min-snapshot-version <n>] [--min-targets-version <n>] [--json]",
-        "\n       forge-core host-adapter-verify-certificate-crl-status --trust-policy-path <path> --certificate-path <path> --issuer-certificate-path <path> --crl-path <path> --verification-time-unix <seconds> [--json]",
+        "\n       forge-core host-adapter-verify-certificate-crl-status --trust-policy-path <path> --certificate-path <path> --issuer-certificate-path <path> --crl-path <path> --verification-time-unix <seconds> [--json]\n",
+        "       forge-core host-adapter-verify-certificate-ocsp-status --trust-policy-path <path> --certificate-path <path> --issuer-certificate-path <path> --ocsp-response-path <path> --verification-time-unix <seconds> [--expected-nonce-hex <hex>] [--json]",
     )
 }
 

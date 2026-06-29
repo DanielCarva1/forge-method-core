@@ -1,0 +1,91 @@
+schema_version: "0.1"
+audit: "explicit_ocsp_revocation_status_boundary_grill"
+created_at: "2026-06-29"
+status: "closed"
+runtime_status: "implemented_partial_direct_issuer_only"
+inputs:
+  - "contracts/policies/certificate-revocation-policy-boundary.yaml"
+  - "contracts/policies/explicit-crl-revocation-status-boundary.yaml"
+  - "contracts/policies/tuf-trusted-root-freshness-boundary.yaml"
+  - "contracts/research/field-evidence-20260625.yaml"
+grill_question:
+  id: "explicit_ocsp_revocation_status_boundary"
+  question: "How should Forge verify explicit OCSP revocation status without treating CRL status, short-lived policy, CT, Rekor, timestamp, or TUF freshness as the same evidence?"
+  options:
+    - id: "presence_only_ocsp"
+      summary: "Accept a supplied OCSP response path or blob as enough evidence."
+      advantages:
+        - "Smallest contract and implementation shape."
+      disadvantages:
+        - "Does not verify response status, CertID binding, responder authority, signature, freshness, or nonce evidence."
+        - "Would recreate the presence-only trust bug this release is eliminating."
+    - id: "live_ocsp_fetch_and_cache_now"
+      summary: "Fetch OCSP from certificate AIA, cache responses, retry responders, and decide offline behavior in this slice."
+      advantages:
+        - "Closer to broad browser-style online revocation behavior."
+      disadvantages:
+        - "Combines supplied evidence, network privacy, retry/cache semantics, responder availability, and host adapter authority in one boundary."
+        - "Violates the current non-goal of no network OCSP fetch."
+    - id: "supplied_ocsp_response_verifier"
+      summary: "Verify a supplied/offline OCSP response first: successful response status, CertID binding, responder authority, response signature, response freshness, explicit good/revoked/unknown status, and nonce evidence reporting."
+      advantages:
+        - "Implements the RFC 6960 evidence boundary without network behavior."
+        - "Keeps CRL, CT, Rekor, TUF freshness, and install/update authority as separate explicit boundaries."
+        - "Gives adapters typed status and failure reasons instead of letting them infer revocation state from prose or adjacent trust signals."
+      disadvantages:
+        - "Does not fetch OCSP from Authority Information Access."
+        - "Does not define OCSP cache, retry, or responder availability policy."
+        - "Does not make an install/update admission decision by itself."
+  selected_option: "supplied_ocsp_response_verifier"
+  decision: "Forge adds a read-only supplied/offline OCSP verifier. The implemented runtime slice supports direct issuer-signed BasicOCSPResponse evidence only: it reports good_by_supplied_ocsp only when successful response status, matching CertID, issuer responder authority, valid response signature, fresh thisUpdate/nextUpdate/producedAt window, explicit policy, and nonce rules all pass; it fails closed for revoked, unknown, stale/expired/future-dated, absent nextUpdate, responder mismatch, bad signature, bad target certificate signature, bad CertID binding, unsupported CertID hash, unsupported delegated responder authority, and nonce mismatch."
+acceptance_criteria:
+  - "Policy contract exists."
+  - "Migration grill-audit exists."
+  - "Backlog marks FRUST-052 implemented_partial as a direct-issuer runtime slice with delegated OCSP responder authority still pending."
+  - "Rust runtime integration exists in crates/forge-core-cli for direct issuer-signed supplied/offline OCSP responses."
+  - "Host-adapter projection exposes a read-only command."
+  - "No Python is introduced."
+  - "No Markdown authority is introduced."
+runtime_acceptance_implemented:
+  - "Runtime exposes a read-only host adapter command for supplied/offline OCSP status verification."
+  - "Runtime passes supplied direct-issuer OCSP response with status good only when CertID binding, responder authority, signature, freshness, policy, and nonce rules pass."
+  - "Runtime fails supplied OCSP response with status revoked."
+  - "Runtime fails supplied OCSP response with status unknown."
+  - "Runtime fails stale/expired, future-dated thisUpdate, future producedAt, or absent-nextUpdate OCSP responses for this boundary."
+  - "Runtime fails issuer/responder mismatch, unauthorized responder, bad response signature, unsupported CertID hash, CertID serial mismatch, and bad target certificate signature."
+  - "Runtime reports nonce_not_supplied when no request nonce evidence exists, passes matching nonce evidence, and fails nonce mismatch or missing expected nonce evidence."
+runtime_extensions_pending:
+  - "Delegated OCSP responder certificate authority with issuer path validation, OCSP Signing EKU, responder certificate validity, responderID binding, and response signature verification with the delegated responder public key."
+fixture_matrix_implemented:
+  - "good"
+  - "revoked"
+  - "unknown"
+  - "stale_or_expired"
+  - "future_this_update"
+  - "future_produced_at"
+  - "absent_next_update"
+  - "certid_serial_mismatch"
+  - "unauthorized_responder"
+  - "bad_response_signature"
+  - "bad_target_certificate_signature"
+  - "unsupported_certid_hash"
+  - "nonce_not_supplied"
+  - "nonce_match"
+  - "nonce_mismatch"
+evidence_basis:
+  direct_patterns:
+    - source_id: "rfc6960_ocsp_certificate_status"
+      supports: "OCSP is explicit signed response evidence with successful response status, BasicOCSPResponse signature, responder identity, CertID-bound SingleResponse entries, good/revoked/unknown status, and freshness fields."
+    - source_id: "rfc5280_x509_crl_profile"
+      supports: "X.509 issuer, signature, and key usage semantics are needed for target certificate and delegated responder authority, while CRL evidence remains separate from OCSP."
+  inference_boundary: "The decision closes the supplied/offline OCSP status contract only. It does not close OCSP network fetch, OCSP cache/retry policy, CRL status, CT/Rekor proof, TUF freshness, root refresh, or release install/update authority."
+non_goals:
+  - "No network OCSP fetch."
+  - "No CRL-to-OCSP inference."
+  - "No CT/Rekor/TUF/short-lived-policy-to-OCSP inference."
+  - "No install/update authority."
+  - "No delegated OCSP responder acceptance until certificate authority, EKU, validity, responderID binding, and delegated signature verification are implemented."
+next_grill_question:
+  id: "delegated_ocsp_responder_certificate_authority"
+  question: "How should Forge accept delegated OCSP responder certificates without adding network fetch or install/update authority?"
+  recommended_answer: "Implement a separate fail-closed extension that validates responder certificate issuer path, OCSP Signing EKU, responder certificate validity at verification time, responderID byName/byKey binding, and BasicOCSPResponse signature with the delegated responder key, with fixtures for valid delegated responder and each failed authority check."

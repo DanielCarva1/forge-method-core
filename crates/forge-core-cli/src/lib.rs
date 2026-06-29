@@ -2,6 +2,7 @@ pub mod autonomy_cmd;
 pub mod claim;
 pub mod contract_cmd;
 pub mod coordination;
+pub(crate) mod crypto_rekor;
 pub mod eval_cmd;
 pub mod graph_cmd;
 pub mod guide;
@@ -11,6 +12,7 @@ pub mod m1_cmd;
 pub mod project_cmd;
 pub mod telemetry_cmd;
 
+use asn1_rs::{BitString as Asn1BitString, FromDer as _};
 use base64::{
     engine::general_purpose::{STANDARD as BASE64, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD},
     Engine as _,
@@ -55,10 +57,16 @@ use forge_core_validate::{
 };
 use p256::ecdsa::{Signature as P256Signature, VerifyingKey as P256VerifyingKey};
 use p256::pkcs8::DecodePublicKey;
+use rasn::types::ObjectIdentifier as RasnObjectIdentifier;
+use rasn_ocsp::{
+    BasicOcspResponse, CertId, CertStatus, OcspResponse, OcspResponseStatus, ResponderId,
+    SingleResponse,
+};
 use rustls_pki_types::CertificateDer;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use sha2::{Digest, Sha256};
+use sha1::Sha1;
+use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::fmt;
 use std::fs;
 use std::io;
@@ -66,6 +74,7 @@ use std::path::{Path, PathBuf};
 use x509_parser::certificate::X509Certificate;
 use x509_parser::extensions::{GeneralName, ParsedExtension};
 use x509_parser::pem::parse_x509_pem;
+use x509_parser::x509::AlgorithmIdentifier as X509AlgorithmIdentifier;
 use x509_parser::{parse_x509_certificate, parse_x509_crl};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -268,6 +277,13 @@ pub enum HostAdapterTufTrustedRootFreshnessVerificationStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostAdapterCertificateCrlStatusVerificationStatus {
+    Passed,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostAdapterCertificateOcspStatusVerificationStatus {
     Passed,
     Failed,
 }
@@ -796,6 +812,43 @@ pub struct HostAdapterCertificateCrlStatusVerification {
     pub inference_boundary: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct HostAdapterCertificateOcspStatusVerificationInput {
+    pub trust_policy_path: PathBuf,
+    pub certificate_path: PathBuf,
+    pub issuer_certificate_path: PathBuf,
+    pub ocsp_response_path: PathBuf,
+    pub verification_time_unix: i64,
+    pub expected_nonce_hex: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct HostAdapterCertificateOcspStatusVerification {
+    pub status: HostAdapterCertificateOcspStatusVerificationStatus,
+    pub trust_policy_path: String,
+    pub certificate_path: String,
+    pub issuer_certificate_path: String,
+    pub ocsp_response_path: String,
+    pub verification_time_unix: i64,
+    pub expected_nonce_hex: Option<String>,
+    pub observed_nonce_hex: Option<String>,
+    pub policy_mode: Option<String>,
+    pub certificate_serial_hex: Option<String>,
+    pub issuer_subject: Option<String>,
+    pub ocsp_response_status: Option<String>,
+    pub responder_authority: Option<String>,
+    pub ocsp_produced_at_unix: Option<i64>,
+    pub ocsp_this_update_unix: Option<i64>,
+    pub ocsp_next_update_unix: Option<i64>,
+    pub revocation_status: Option<String>,
+    pub revoked_at_unix: Option<i64>,
+    pub revocation_reason: Option<String>,
+    pub deferred_verification: Vec<String>,
+    pub reasons: Vec<String>,
+    pub verified_evidence: Vec<String>,
+    pub inference_boundary: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct HostAdapterProjectedCommand {
     pub name: String,
@@ -1311,6 +1364,30 @@ pub fn run_host_adapter_manifest() -> HostAdapterManifest {
                     "fetch CRL distribution points from this command",
                     "treat CRL status verification as TUF trusted-root freshness",
                     "install or update when CRL status verification fails",
+                ],
+            }),
+            host_command(HostCommandMetadata {
+                name: "host-adapter-verify-certificate-ocsp-status",
+                command_kind: HostAdapterCommandKind::Validation,
+                mutation_class: HostAdapterMutationClass::ReadOnly,
+                authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
+                required_contracts: vec![
+                    "SigstoreTrustedRootPolicy",
+                    "FulcioCertificate",
+                    "IssuerCertificate",
+                    "OcspResponse",
+                ],
+                safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
+                output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
+                policy_refs: vec![
+                    "contracts/policies/explicit-ocsp-revocation-status-boundary.yaml",
+                ],
+                adapters_must_not: vec![
+                    "fetch OCSP responder URLs from this command",
+                    "treat OCSP status verification as CRL verification",
+                    "infer OCSP status from CT, Rekor, TUF, or short-lived certificate policy",
+                    "treat OCSP status verification as TUF trusted-root freshness",
+                    "install or update when OCSP status verification fails",
                 ],
             }),
         ],
@@ -1864,9 +1941,9 @@ pub fn run_host_adapter_rekor_verification(
     let public_key_bytes =
         read_required_file(&input.public_key_path, "rekor_public_key", &mut reasons);
 
-    let mut log_entry: Option<ParsedRekorEntry> = None;
+    let mut log_entry: Option<crypto_rekor::ParsedRekorEntry> = None;
     if let Some(text) = log_entry_text.as_deref() {
-        match parse_rekor_log_entry(text) {
+        match crypto_rekor::parse_rekor_log_entry(text) {
             Ok(entry) => {
                 verified_evidence.push("rekor_log_entry_parsed".to_string());
                 log_entry = Some(entry);
@@ -1897,7 +1974,12 @@ pub fn run_host_adapter_rekor_verification(
         }
 
         if let Some(key) = rekor_key.as_ref() {
-            verify_rekor_entry_inclusion(entry, key, &mut verified_evidence, &mut reasons);
+            crypto_rekor::verify_rekor_entry_inclusion(
+                entry,
+                key,
+                &mut verified_evidence,
+                &mut reasons,
+            );
         }
     }
 
@@ -2203,7 +2285,7 @@ pub fn run_host_adapter_sigstore_bundle_subject_verification(
             ))
         })
         .ok()
-        .and_then(|text| match parse_rekor_log_entry(&text) {
+        .and_then(|text| match crypto_rekor::parse_rekor_log_entry(&text) {
             Ok(entry) => {
                 rekor_integrated_time = Some(entry.integrated_time);
                 verified_evidence.push("bundle_rekor_log_entry_parsed".to_string());
@@ -2401,7 +2483,7 @@ pub fn run_host_adapter_sigstore_dsse_in_toto_subject_verification(
     let parsed_rekor_entry = fs::read_to_string(&input.rekor_log_entry_path)
         .map_err(|err| reasons.push(format!("dsse_rekor_log_entry_read_failed:{:?}", err.kind())))
         .ok()
-        .and_then(|text| match parse_rekor_log_entry(&text) {
+        .and_then(|text| match crypto_rekor::parse_rekor_log_entry(&text) {
             Ok(entry) => {
                 rekor_integrated_time = Some(entry.integrated_time);
                 verified_evidence.push("dsse_rekor_log_entry_parsed".to_string());
@@ -3372,6 +3454,652 @@ pub fn run_host_adapter_certificate_crl_status_verification(
     }
 }
 
+pub fn run_host_adapter_certificate_ocsp_status_verification(
+    input: HostAdapterCertificateOcspStatusVerificationInput,
+) -> HostAdapterCertificateOcspStatusVerification {
+    let trust_policy_path = input.trust_policy_path.to_string_lossy().to_string();
+    let certificate_path = input.certificate_path.to_string_lossy().to_string();
+    let issuer_certificate_path = input.issuer_certificate_path.to_string_lossy().to_string();
+    let ocsp_response_path = input.ocsp_response_path.to_string_lossy().to_string();
+    let deferred_verification = vec![
+        "network_ocsp_fetch".to_string(),
+        "crl_status".to_string(),
+        "tuf_freshness".to_string(),
+        "install_update_authority".to_string(),
+    ];
+    let mut reasons = Vec::new();
+    let mut verified_evidence = Vec::new();
+    let mut policy_mode = None;
+    let mut certificate_serial_hex = None;
+    let mut issuer_subject = None;
+    let mut ocsp_response_status = None;
+    let mut responder_authority = None;
+    let mut ocsp_produced_at_unix = None;
+    let mut ocsp_this_update_unix = None;
+    let mut ocsp_next_update_unix = None;
+    let mut revocation_status = None;
+    let mut revoked_at_unix = None;
+    let mut revocation_reason = None;
+    let expected_nonce_hex = input
+        .expected_nonce_hex
+        .as_deref()
+        .and_then(|value| normalize_expected_ocsp_nonce_hex(value, &mut reasons));
+    let mut observed_nonce_hex = None;
+
+    let trust_policy = read_sigstore_trust_policy_document(
+        &input.trust_policy_path,
+        "ocsp_status_trust_policy",
+        &mut verified_evidence,
+        &mut reasons,
+    );
+    if let Some(document) = trust_policy.as_ref() {
+        verify_sigstore_trust_policy(document, &mut verified_evidence, &mut reasons);
+        let policy = &document.sigstore_trusted_root_policy;
+        if let Some(revocation) = policy.revocation.as_ref() {
+            policy_mode = Some(revocation.mode.clone());
+            if revocation.mode == "explicit_status_required" {
+                verified_evidence.push("ocsp_status_explicit_revocation_policy".to_string());
+            } else {
+                reasons.push("ocsp_status_policy_not_explicit_status_required".to_string());
+            }
+        } else {
+            reasons.push("ocsp_status_revocation_policy_missing".to_string());
+        }
+        if path_matches_any_ref(
+            &input.issuer_certificate_path,
+            &policy.fulcio.certificate_authority_refs,
+        ) {
+            verified_evidence.push("ocsp_status_issuer_declared_ca_ref_matched".to_string());
+        } else {
+            reasons.push("ocsp_status_issuer_declared_ca_ref_missing".to_string());
+        }
+    }
+
+    let certificate_der = read_certificate_der(
+        &input.certificate_path,
+        "ocsp_status_certificate",
+        &mut verified_evidence,
+        &mut reasons,
+    );
+    let issuer_der = read_certificate_der(
+        &input.issuer_certificate_path,
+        "ocsp_status_issuer_certificate",
+        &mut verified_evidence,
+        &mut reasons,
+    );
+    let ocsp_der = read_certificate_der(
+        &input.ocsp_response_path,
+        "ocsp_status_response",
+        &mut verified_evidence,
+        &mut reasons,
+    );
+
+    if let (Some(certificate_der), Some(issuer_der), Some(ocsp_der)) = (
+        certificate_der.as_ref(),
+        issuer_der.as_ref(),
+        ocsp_der.as_ref(),
+    ) {
+        let certificate = parse_certificate(
+            certificate_der,
+            "ocsp_status_certificate",
+            &mut verified_evidence,
+            &mut reasons,
+        );
+        let issuer = parse_certificate(
+            issuer_der,
+            "ocsp_status_issuer_certificate",
+            &mut verified_evidence,
+            &mut reasons,
+        );
+        let ocsp_response = decode_ocsp_response(ocsp_der, &mut verified_evidence, &mut reasons);
+
+        if let (Some(certificate), Some(issuer)) = (certificate.as_ref(), issuer.as_ref()) {
+            certificate_serial_hex = Some(hex_bytes(certificate.tbs_certificate.raw_serial()));
+            issuer_subject = Some(format!("{}", issuer.subject()));
+
+            if certificate.issuer() == issuer.subject() {
+                verified_evidence.push("ocsp_status_certificate_issuer_subject_match".to_string());
+            } else {
+                reasons.push("ocsp_status_certificate_issuer_subject_mismatch".to_string());
+            }
+            match certificate.verify_signature(Some(issuer.public_key())) {
+                Ok(()) => {
+                    verified_evidence.push("ocsp_status_certificate_signature_verified".to_string())
+                }
+                Err(err) => reasons.push(format!("ocsp_status_certificate_signature_failed:{err}")),
+            }
+        }
+
+        if let Some(ocsp_response) = ocsp_response.as_ref() {
+            ocsp_response_status = Some(format!("{:?}", ocsp_response.status));
+            match ocsp_response.status {
+                OcspResponseStatus::Successful => {
+                    verified_evidence.push("ocsp_status_response_successful".to_string());
+                }
+                status => reasons.push(format!("ocsp_status_response_not_successful:{status:?}")),
+            }
+
+            if let Some(response_bytes) = ocsp_response.bytes.as_ref() {
+                if rasn_oid_matches(&response_bytes.r#type, &[1, 3, 6, 1, 5, 5, 7, 48, 1, 1]) {
+                    verified_evidence.push("ocsp_status_basic_response_type".to_string());
+                } else {
+                    reasons.push(format!(
+                        "ocsp_status_response_type_unsupported:{}",
+                        response_bytes.r#type
+                    ));
+                }
+
+                if let Some(basic_response) = decode_basic_ocsp_response(
+                    response_bytes.response.as_ref(),
+                    &mut verified_evidence,
+                    &mut reasons,
+                ) {
+                    ocsp_produced_at_unix =
+                        Some(basic_response.tbs_response_data.produced_at.timestamp());
+                    if input.verification_time_unix
+                        >= basic_response.tbs_response_data.produced_at.timestamp()
+                    {
+                        verified_evidence.push("ocsp_status_produced_at_not_in_future".to_string());
+                    } else {
+                        reasons.push("ocsp_status_produced_at_in_future".to_string());
+                    }
+                    observed_nonce_hex = extract_ocsp_response_nonce_hex(
+                        &basic_response,
+                        &mut verified_evidence,
+                        &mut reasons,
+                    );
+                    verify_ocsp_nonce(
+                        expected_nonce_hex.as_deref(),
+                        observed_nonce_hex.as_deref(),
+                        &mut verified_evidence,
+                        &mut reasons,
+                    );
+
+                    if let Some(issuer) = issuer.as_ref() {
+                        if ocsp_responder_id_matches_issuer(
+                            &basic_response.tbs_response_data.responder_id,
+                            issuer,
+                            &mut verified_evidence,
+                            &mut reasons,
+                        ) {
+                            responder_authority = Some("issuer_certificate_direct".to_string());
+                        } else {
+                            reasons.push("ocsp_status_responder_unauthorized".to_string());
+                        }
+
+                        let signature_verified = verify_basic_ocsp_signature_with_issuer(
+                            &basic_response,
+                            issuer,
+                            &mut verified_evidence,
+                            &mut reasons,
+                        );
+                        if !signature_verified
+                            && basic_response
+                                .certs
+                                .as_ref()
+                                .is_some_and(|certs| !certs.is_empty())
+                        {
+                            reasons.push(
+                                "ocsp_status_delegated_responder_certificate_unsupported"
+                                    .to_string(),
+                            );
+                        }
+                    }
+
+                    if let (Some(certificate), Some(issuer)) =
+                        (certificate.as_ref(), issuer.as_ref())
+                    {
+                        if let Some(single_response) = find_matching_ocsp_single_response(
+                            &basic_response,
+                            certificate,
+                            issuer,
+                            &mut verified_evidence,
+                            &mut reasons,
+                        ) {
+                            ocsp_this_update_unix = Some(single_response.this_update.timestamp());
+                            ocsp_next_update_unix = single_response
+                                .next_update
+                                .as_ref()
+                                .map(|time| time.timestamp());
+                            verify_ocsp_single_response_freshness(
+                                single_response,
+                                input.verification_time_unix,
+                                &mut verified_evidence,
+                                &mut reasons,
+                            );
+                            let verification_had_reasons_before_status = !reasons.is_empty();
+                            apply_ocsp_cert_status(
+                                &single_response.cert_status,
+                                &mut revocation_status,
+                                &mut revoked_at_unix,
+                                &mut revocation_reason,
+                                &mut verified_evidence,
+                                &mut reasons,
+                            );
+                            if verification_had_reasons_before_status
+                                && matches!(
+                                    revocation_status.as_deref(),
+                                    Some("revoked_by_supplied_ocsp")
+                                        | Some("unknown_by_supplied_ocsp")
+                                )
+                            {
+                                revocation_status =
+                                    Some("unknown_due_to_failed_ocsp_verification".to_string());
+                                revoked_at_unix = None;
+                                revocation_reason = None;
+                            }
+                        } else {
+                            revocation_status =
+                                Some("unknown_due_to_failed_ocsp_verification".to_string());
+                        }
+                    }
+                }
+            } else {
+                reasons.push("ocsp_status_response_bytes_missing".to_string());
+            }
+        }
+    }
+
+    if matches!(
+        revocation_status.as_deref(),
+        Some("good_by_supplied_ocsp") | None
+    ) && !reasons.is_empty()
+    {
+        revocation_status = Some("unknown_due_to_failed_ocsp_verification".to_string());
+    }
+
+    HostAdapterCertificateOcspStatusVerification {
+        status: if reasons.is_empty() {
+            HostAdapterCertificateOcspStatusVerificationStatus::Passed
+        } else {
+            HostAdapterCertificateOcspStatusVerificationStatus::Failed
+        },
+        trust_policy_path,
+        certificate_path,
+        issuer_certificate_path,
+        ocsp_response_path,
+        verification_time_unix: input.verification_time_unix,
+        expected_nonce_hex,
+        observed_nonce_hex,
+        policy_mode,
+        certificate_serial_hex,
+        issuer_subject,
+        ocsp_response_status,
+        responder_authority,
+        ocsp_produced_at_unix,
+        ocsp_this_update_unix,
+        ocsp_next_update_unix,
+        revocation_status,
+        revoked_at_unix,
+        revocation_reason,
+        deferred_verification,
+        reasons,
+        verified_evidence,
+        inference_boundary: "Verifies explicit offline OCSP revocation status from a supplied RFC6960 DER OCSP response by checking successful OCSPResponse, BasicOCSPResponse, direct issuer responder authority, OCSP signature, CertID serial and issuer hashes, thisUpdate/nextUpdate freshness, and optional nonce equality. It does not fetch OCSP over the network, infer OCSP from CRL, CT, Rekor, TUF, or short-lived policy, refresh TUF trusted roots, mutate installations, or decide release update authority.".to_string(),
+    }
+}
+
+fn decode_ocsp_response(
+    der: &[u8],
+    verified_evidence: &mut Vec<String>,
+    reasons: &mut Vec<String>,
+) -> Option<OcspResponse> {
+    match rasn::der::decode::<OcspResponse>(der) {
+        Ok(response) => {
+            verified_evidence.push("ocsp_status_response_parsed".to_string());
+            Some(response)
+        }
+        Err(err) => {
+            reasons.push(format!("ocsp_status_response_parse_failed:{err}"));
+            None
+        }
+    }
+}
+
+fn decode_basic_ocsp_response(
+    der: &[u8],
+    verified_evidence: &mut Vec<String>,
+    reasons: &mut Vec<String>,
+) -> Option<BasicOcspResponse> {
+    match rasn::der::decode::<BasicOcspResponse>(der) {
+        Ok(response) => {
+            verified_evidence.push("ocsp_status_basic_response_parsed".to_string());
+            Some(response)
+        }
+        Err(err) => {
+            reasons.push(format!("ocsp_status_basic_response_parse_failed:{err}"));
+            None
+        }
+    }
+}
+
+fn verify_basic_ocsp_signature_with_issuer(
+    basic_response: &BasicOcspResponse,
+    issuer: &X509Certificate<'_>,
+    verified_evidence: &mut Vec<String>,
+    reasons: &mut Vec<String>,
+) -> bool {
+    let tbs_der = match rasn::der::encode(&basic_response.tbs_response_data) {
+        Ok(value) => value,
+        Err(err) => {
+            reasons.push(format!("ocsp_status_tbs_response_encode_failed:{err}"));
+            return false;
+        }
+    };
+    let algorithm_der = match rasn::der::encode(&basic_response.signature_algorithm) {
+        Ok(value) => value,
+        Err(err) => {
+            reasons.push(format!(
+                "ocsp_status_signature_algorithm_encode_failed:{err}"
+            ));
+            return false;
+        }
+    };
+    let signature_der = match rasn::der::encode(&basic_response.signature) {
+        Ok(value) => value,
+        Err(err) => {
+            reasons.push(format!("ocsp_status_signature_encode_failed:{err}"));
+            return false;
+        }
+    };
+
+    let algorithm = match X509AlgorithmIdentifier::from_der(&algorithm_der) {
+        Ok((remaining, algorithm)) if remaining.is_empty() => algorithm,
+        Ok((_remaining, _algorithm)) => {
+            reasons.push("ocsp_status_signature_algorithm_trailing_der".to_string());
+            return false;
+        }
+        Err(err) => {
+            reasons.push(format!(
+                "ocsp_status_signature_algorithm_parse_failed:{err}"
+            ));
+            return false;
+        }
+    };
+    let signature = match Asn1BitString::from_der(&signature_der) {
+        Ok((remaining, signature)) if remaining.is_empty() => signature,
+        Ok((_remaining, _signature)) => {
+            reasons.push("ocsp_status_signature_trailing_der".to_string());
+            return false;
+        }
+        Err(err) => {
+            reasons.push(format!("ocsp_status_signature_parse_failed:{err}"));
+            return false;
+        }
+    };
+
+    match x509_parser::verify::verify_signature(
+        issuer.public_key(),
+        &algorithm,
+        &signature,
+        &tbs_der,
+    ) {
+        Ok(()) => {
+            verified_evidence.push("ocsp_status_response_signature_verified".to_string());
+            true
+        }
+        Err(err) => {
+            reasons.push("ocsp_status_response_signature_invalid".to_string());
+            reasons.push(format!("ocsp_status_signature_failed:{err}"));
+            false
+        }
+    }
+}
+
+fn ocsp_responder_id_matches_issuer(
+    responder_id: &ResponderId,
+    issuer: &X509Certificate<'_>,
+    verified_evidence: &mut Vec<String>,
+    reasons: &mut Vec<String>,
+) -> bool {
+    match responder_id {
+        ResponderId::ByName(name) => match rasn::der::encode(name) {
+            Ok(name_der) if name_der == issuer.subject().as_raw() => {
+                verified_evidence.push("ocsp_status_responder_name_matches_issuer".to_string());
+                true
+            }
+            Ok(_name_der) => false,
+            Err(err) => {
+                reasons.push(format!("ocsp_status_responder_name_encode_failed:{err}"));
+                false
+            }
+        },
+        ResponderId::ByKey(key_hash) => {
+            let issuer_key_hash = sha1_digest(issuer.public_key().subject_public_key.data.as_ref());
+            if key_hash.as_ref() == issuer_key_hash.as_slice() {
+                verified_evidence.push("ocsp_status_responder_key_matches_issuer".to_string());
+                true
+            } else {
+                false
+            }
+        }
+    }
+}
+
+fn find_matching_ocsp_single_response<'a>(
+    basic_response: &'a BasicOcspResponse,
+    certificate: &X509Certificate<'_>,
+    issuer: &X509Certificate<'_>,
+    verified_evidence: &mut Vec<String>,
+    reasons: &mut Vec<String>,
+) -> Option<&'a SingleResponse> {
+    let certificate_serial_decimal = certificate.tbs_certificate.serial.to_string();
+    let mut saw_serial = false;
+    let mut saw_supported_hash = false;
+    let mut saw_issuer_hash_match = false;
+
+    for single_response in basic_response.tbs_response_data.responses.iter() {
+        let serial_matches =
+            single_response.cert_id.serial_number.to_string() == certificate_serial_decimal;
+        if serial_matches {
+            saw_serial = true;
+        }
+        match ocsp_cert_id_issuer_hashes_match(&single_response.cert_id, issuer) {
+            Some(true) => {
+                saw_supported_hash = true;
+                saw_issuer_hash_match = true;
+                if serial_matches {
+                    verified_evidence
+                        .push("ocsp_status_cert_id_serial_and_issuer_hash_match".to_string());
+                    return Some(single_response);
+                }
+            }
+            Some(false) => saw_supported_hash = true,
+            None => {}
+        }
+    }
+
+    if !saw_supported_hash {
+        reasons.push("ocsp_status_cert_id_hash_algorithm_unsupported".to_string());
+    }
+    if !saw_serial {
+        reasons.push("ocsp_status_certificate_serial_not_found".to_string());
+    }
+    if !saw_issuer_hash_match {
+        reasons.push("ocsp_status_issuer_hash_mismatch".to_string());
+    }
+    reasons.push("ocsp_status_single_response_match_missing".to_string());
+    None
+}
+
+fn ocsp_cert_id_issuer_hashes_match(
+    cert_id: &CertId,
+    issuer: &X509Certificate<'_>,
+) -> Option<bool> {
+    let issuer_name_hash =
+        ocsp_digest_for_algorithm(&cert_id.hash_algorithm.algorithm, issuer.subject().as_raw())?;
+    let issuer_key_hash = ocsp_digest_for_algorithm(
+        &cert_id.hash_algorithm.algorithm,
+        issuer.public_key().subject_public_key.data.as_ref(),
+    )?;
+    Some(
+        cert_id.issuer_name_hash.as_ref() == issuer_name_hash.as_slice()
+            && cert_id.issuer_key_hash.as_ref() == issuer_key_hash.as_slice(),
+    )
+}
+
+fn verify_ocsp_single_response_freshness(
+    single_response: &SingleResponse,
+    verification_time_unix: i64,
+    verified_evidence: &mut Vec<String>,
+    reasons: &mut Vec<String>,
+) {
+    let this_update = single_response.this_update.timestamp();
+    if verification_time_unix >= this_update {
+        verified_evidence.push("ocsp_status_this_update_not_in_future".to_string());
+    } else {
+        reasons.push("ocsp_status_this_update_in_future".to_string());
+    }
+    if let Some(next_update) = single_response
+        .next_update
+        .as_ref()
+        .map(|time| time.timestamp())
+    {
+        if verification_time_unix <= next_update {
+            verified_evidence.push("ocsp_status_next_update_not_expired".to_string());
+        } else {
+            reasons.push("ocsp_status_response_expired".to_string());
+        }
+    } else {
+        reasons.push("ocsp_status_next_update_missing".to_string());
+    }
+}
+
+fn apply_ocsp_cert_status(
+    cert_status: &CertStatus,
+    revocation_status: &mut Option<String>,
+    revoked_at_unix: &mut Option<i64>,
+    revocation_reason: &mut Option<String>,
+    verified_evidence: &mut Vec<String>,
+    reasons: &mut Vec<String>,
+) {
+    match cert_status {
+        CertStatus::Good => {
+            *revocation_status = Some("good_by_supplied_ocsp".to_string());
+            verified_evidence.push("ocsp_status_certificate_good".to_string());
+        }
+        CertStatus::Revoked(info) => {
+            *revocation_status = Some("revoked_by_supplied_ocsp".to_string());
+            *revoked_at_unix = Some(info.revocation_time.timestamp());
+            *revocation_reason = info
+                .revocation_reason
+                .as_ref()
+                .map(|reason| format!("{reason:?}"));
+            reasons.push("ocsp_status_certificate_revoked".to_string());
+        }
+        CertStatus::Unknown(()) => {
+            *revocation_status = Some("unknown_by_supplied_ocsp".to_string());
+            reasons.push("ocsp_status_certificate_unknown".to_string());
+        }
+    }
+}
+
+fn extract_ocsp_response_nonce_hex(
+    basic_response: &BasicOcspResponse,
+    verified_evidence: &mut Vec<String>,
+    reasons: &mut Vec<String>,
+) -> Option<String> {
+    let Some(extensions) = basic_response
+        .tbs_response_data
+        .response_extensions
+        .as_ref()
+    else {
+        return None;
+    };
+    for extension in extensions.iter() {
+        if rasn_oid_matches(&extension.extn_id, &[1, 3, 6, 1, 5, 5, 7, 48, 1, 2]) {
+            return match rasn::der::decode::<rasn_ocsp::Nonce>(extension.extn_value.as_ref()) {
+                Ok(nonce) => {
+                    verified_evidence.push("ocsp_status_nonce_observed".to_string());
+                    Some(hex_bytes(nonce.as_ref()))
+                }
+                Err(err) => {
+                    reasons.push(format!("ocsp_status_nonce_parse_failed:{err}"));
+                    None
+                }
+            };
+        }
+    }
+    None
+}
+
+fn verify_ocsp_nonce(
+    expected_nonce_hex: Option<&str>,
+    observed_nonce_hex: Option<&str>,
+    verified_evidence: &mut Vec<String>,
+    reasons: &mut Vec<String>,
+) {
+    match (expected_nonce_hex, observed_nonce_hex) {
+        (Some(expected), Some(observed)) if expected == observed => {
+            verified_evidence.push("ocsp_status_nonce_verified".to_string());
+        }
+        (Some(_expected), Some(_observed)) => {
+            reasons.push("ocsp_status_nonce_mismatch".to_string());
+        }
+        (Some(_expected), None) => {
+            reasons.push("ocsp_status_nonce_missing".to_string());
+        }
+        (None, Some(_observed)) => {
+            verified_evidence.push("ocsp_status_nonce_present_without_expectation".to_string());
+        }
+        (None, None) => {
+            verified_evidence.push("ocsp_status_nonce_not_supplied".to_string());
+        }
+    }
+}
+
+fn normalize_expected_ocsp_nonce_hex(value: &str, reasons: &mut Vec<String>) -> Option<String> {
+    let mut normalized = String::new();
+    for character in value.chars() {
+        if character.is_ascii_hexdigit() {
+            normalized.push(character.to_ascii_lowercase());
+        } else if matches!(character, ':' | '-' | ' ' | '\t' | '\n' | '\r') {
+            continue;
+        } else {
+            reasons.push("ocsp_status_expected_nonce_hex_invalid".to_string());
+            return None;
+        }
+    }
+    if normalized.is_empty() || normalized.len() % 2 != 0 {
+        reasons.push("ocsp_status_expected_nonce_hex_invalid".to_string());
+        None
+    } else {
+        Some(normalized)
+    }
+}
+
+fn ocsp_digest_for_algorithm(algorithm: &RasnObjectIdentifier, content: &[u8]) -> Option<Vec<u8>> {
+    match algorithm.as_ref() {
+        [1, 3, 14, 3, 2, 26] => Some(sha1_digest(content)),
+        [2, 16, 840, 1, 101, 3, 4, 2, 1] => {
+            let mut hasher = Sha256::new();
+            hasher.update(content);
+            Some(hasher.finalize().to_vec())
+        }
+        [2, 16, 840, 1, 101, 3, 4, 2, 2] => {
+            let mut hasher = Sha384::new();
+            hasher.update(content);
+            Some(hasher.finalize().to_vec())
+        }
+        [2, 16, 840, 1, 101, 3, 4, 2, 3] => {
+            let mut hasher = Sha512::new();
+            hasher.update(content);
+            Some(hasher.finalize().to_vec())
+        }
+        _ => None,
+    }
+}
+
+fn sha1_digest(content: &[u8]) -> Vec<u8> {
+    let mut hasher = Sha1::new();
+    hasher.update(content);
+    hasher.finalize().to_vec()
+}
+
+fn rasn_oid_matches(oid: &RasnObjectIdentifier, expected: &[u32]) -> bool {
+    oid.as_ref() == expected
+}
+
 fn verify_tuf_metadata_freshness_role(
     expected_role: &str,
     metadata_path: &Path,
@@ -3565,7 +4293,7 @@ fn select_rekor_integrated_time_for_timestamp_authority(
                 return;
             }
         };
-        match parse_rekor_log_entry(&text) {
+        match crypto_rekor::parse_rekor_log_entry(&text) {
             Ok(entry) => {
                 *selected_timestamp_source = Some("rekor_integrated_time".to_string());
                 *observed_timestamp_unix = Some(entry.integrated_time);
@@ -4612,7 +5340,7 @@ fn verify_dsse_signature_with_certificate(
 }
 
 fn verify_rekor_body_binds_bundle(
-    entry: &ParsedRekorEntry,
+    entry: &crypto_rekor::ParsedRekorEntry,
     message_digest: &[u8],
     signature: &[u8],
     verified_evidence: &mut Vec<String>,
@@ -4643,7 +5371,7 @@ fn verify_rekor_body_binds_bundle(
 }
 
 fn verify_rekor_body_binds_dsse(
-    entry: &ParsedRekorEntry,
+    entry: &crypto_rekor::ParsedRekorEntry,
     expected_payload_hash: &str,
     expected_envelope_hash: &str,
     signature: &[u8],
@@ -4710,222 +5438,6 @@ fn first_dsse_rekor_signature(value: &Value) -> Option<String> {
                 .and_then(Value::as_str)
                 .map(str::to_string)
         })
-}
-
-struct ParsedRekorEntry {
-    body: Value,
-    log_id: String,
-    log_index: i64,
-    integrated_time: i64,
-    proof: ParsedRekorInclusionProof,
-}
-
-struct ParsedRekorInclusionProof {
-    hashes: Vec<String>,
-    log_index: i64,
-    root_hash: String,
-    tree_size: u64,
-    checkpoint: String,
-}
-
-struct ParsedCheckpoint {
-    signed_body: String,
-    tree_size: u64,
-    root_hash: String,
-    signatures: Vec<Vec<u8>>,
-}
-
-fn parse_rekor_log_entry(text: &str) -> Result<ParsedRekorEntry, String> {
-    let value = serde_json::from_str::<Value>(text)
-        .map_err(|err| format!("rekor_log_entry_json_invalid:{err}"))?;
-    let body_b64 = required_string(&value, "body")?;
-    let body_bytes = BASE64
-        .decode(body_b64.as_bytes())
-        .map_err(|err| format!("rekor_body_base64_invalid:{err}"))?;
-    let body = serde_json::from_slice::<Value>(&body_bytes)
-        .map_err(|err| format!("rekor_body_json_invalid:{err}"))?;
-    let verification = value
-        .get("verification")
-        .ok_or_else(|| "rekor_verification_missing".to_string())?;
-    let inclusion = verification
-        .get("inclusionProof")
-        .ok_or_else(|| "rekor_inclusion_proof_missing".to_string())?;
-    let hashes = inclusion
-        .get("hashes")
-        .and_then(Value::as_array)
-        .ok_or_else(|| "rekor_inclusion_hashes_missing".to_string())?
-        .iter()
-        .map(|item| {
-            item.as_str()
-                .map(str::to_string)
-                .ok_or_else(|| "rekor_inclusion_hash_invalid".to_string())
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(ParsedRekorEntry {
-        body,
-        log_id: required_string(&value, "logID")?.to_string(),
-        log_index: required_i64(&value, "logIndex")?,
-        integrated_time: required_i64(&value, "integratedTime")?,
-        proof: ParsedRekorInclusionProof {
-            hashes,
-            log_index: required_i64(inclusion, "logIndex")?,
-            root_hash: required_string(inclusion, "rootHash")?.to_string(),
-            tree_size: required_u64(inclusion, "treeSize")?,
-            checkpoint: required_string(inclusion, "checkpoint")?.to_string(),
-        },
-    })
-}
-
-fn required_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .ok_or_else(|| format!("rekor_{key}_missing"))
-}
-
-fn required_i64(value: &Value, key: &str) -> Result<i64, String> {
-    value
-        .get(key)
-        .and_then(Value::as_i64)
-        .ok_or_else(|| format!("rekor_{key}_missing"))
-}
-
-fn required_u64(value: &Value, key: &str) -> Result<u64, String> {
-    value
-        .get(key)
-        .and_then(Value::as_u64)
-        .ok_or_else(|| format!("rekor_{key}_missing"))
-}
-
-fn verify_rekor_entry_inclusion(
-    entry: &ParsedRekorEntry,
-    rekor_key: &P256VerifyingKey,
-    verified_evidence: &mut Vec<String>,
-    reasons: &mut Vec<String>,
-) {
-    if entry.proof.log_index != entry.log_index {
-        reasons.push("rekor_inclusion_log_index_mismatch".to_string());
-        return;
-    }
-    let canonical_body = match serde_json_canonicalizer::to_vec(&entry.body) {
-        Ok(bytes) => bytes,
-        Err(err) => {
-            reasons.push(format!("rekor_body_canonicalization_failed:{err}"));
-            return;
-        }
-    };
-    let leaf_hash = rfc6962_leaf_hash(&canonical_body);
-
-    match verify_rekor_checkpoint(&entry.proof, rekor_key) {
-        Ok(()) => verified_evidence.push("rekor_signed_checkpoint_valid".to_string()),
-        Err(reason) => {
-            reasons.push(format!("rekor_inclusion_verification_failed:{reason}"));
-            return;
-        }
-    }
-
-    if entry.proof.log_index < 0 {
-        reasons.push("rekor_log_index_negative".to_string());
-        return;
-    }
-    if verify_merkle_inclusion(
-        &leaf_hash,
-        &entry.proof.hashes,
-        entry.proof.log_index as u64,
-        entry.proof.tree_size,
-        &entry.proof.root_hash,
-    ) {
-        verified_evidence.push("rekor_inclusion_proof_valid".to_string());
-    } else {
-        reasons.push("rekor_inclusion_verification_failed:merkle_path_invalid".to_string());
-    }
-}
-
-fn verify_rekor_checkpoint(
-    proof: &ParsedRekorInclusionProof,
-    rekor_key: &P256VerifyingKey,
-) -> Result<(), String> {
-    let checkpoint = parse_signed_checkpoint(&proof.checkpoint)?;
-    if checkpoint.tree_size != proof.tree_size {
-        return Err("checkpoint_tree_size_mismatch".to_string());
-    }
-    if checkpoint.root_hash != normalize_sha256_display(&proof.root_hash) {
-        return Err("checkpoint_root_hash_mismatch".to_string());
-    }
-    if checkpoint.signatures.is_empty() {
-        return Err("checkpoint_signature_missing".to_string());
-    }
-    for signature in checkpoint.signatures {
-        let Ok(signature) = P256Signature::from_der(&signature) else {
-            continue;
-        };
-        if rekor_key
-            .verify(checkpoint.signed_body.as_bytes(), &signature)
-            .is_ok()
-        {
-            return Ok(());
-        }
-    }
-    Err("checkpoint_signature_invalid".to_string())
-}
-
-fn parse_signed_checkpoint(checkpoint: &str) -> Result<ParsedCheckpoint, String> {
-    let checkpoint = checkpoint.trim_matches('"');
-    let (note, signatures) = checkpoint
-        .split_once("\n\n")
-        .ok_or_else(|| "checkpoint_format_invalid".to_string())?;
-    let lines = note.split('\n').collect::<Vec<_>>();
-    let [origin, tree_size, root_hash_b64, other @ ..] = lines.as_slice() else {
-        return Err("checkpoint_note_invalid".to_string());
-    };
-    if origin.trim().is_empty() {
-        return Err("checkpoint_origin_missing".to_string());
-    }
-    let tree_size = tree_size
-        .parse::<u64>()
-        .map_err(|_| "checkpoint_tree_size_invalid".to_string())?;
-    let root_hash = BASE64
-        .decode(root_hash_b64.as_bytes())
-        .map_err(|err| format!("checkpoint_root_hash_base64_invalid:{err}"))
-        .map(|bytes| hex_bytes(&bytes))?;
-    let mut signed_body = format!("{origin}\n{tree_size}\n{root_hash_b64}\n");
-    for item in other.iter().filter(|item| !item.is_empty()) {
-        signed_body.push_str(item);
-        signed_body.push('\n');
-    }
-    let signatures = signatures
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .filter_map(decode_checkpoint_signature)
-        .collect::<Vec<_>>();
-
-    Ok(ParsedCheckpoint {
-        signed_body,
-        tree_size,
-        root_hash,
-        signatures,
-    })
-}
-
-fn decode_checkpoint_signature(line: &str) -> Option<Vec<u8>> {
-    let line = line
-        .trim()
-        .strip_prefix('\u{2014}')
-        .or_else(|| line.trim().strip_prefix("--"))?
-        .trim();
-    let mut parts = line.split_whitespace();
-    let _name = parts.next()?;
-    let signature = parts.next()?;
-    let decoded = BASE64.decode(signature.as_bytes()).ok()?;
-    (decoded.len() > 4).then(|| decoded[4..].to_vec())
-}
-
-fn rfc6962_leaf_hash(entry: &[u8]) -> String {
-    let mut content = Vec::with_capacity(entry.len() + 1);
-    content.push(0);
-    content.extend_from_slice(entry);
-    hex_sha256(&content)
 }
 
 struct HostCommandMetadata<'a> {
@@ -5019,18 +5531,18 @@ fn source_ref_is_immutable(source_ref: &str) -> bool {
         .any(|segment| segment.len() == 40 && segment.chars().all(|item| item.is_ascii_hexdigit()))
 }
 
-fn valid_sha256_digest(value: &str) -> bool {
+pub(crate) fn valid_sha256_digest(value: &str) -> bool {
     normalize_sha256_digest(value).is_some()
 }
 
-fn normalize_sha256_digest(value: &str) -> Option<String> {
+pub(crate) fn normalize_sha256_digest(value: &str) -> Option<String> {
     let trimmed = value.trim();
     let digest = trimmed.strip_prefix("sha256:").unwrap_or(trimmed);
     (digest.len() == 64 && digest.chars().all(|item| item.is_ascii_hexdigit()))
         .then(|| digest.to_ascii_lowercase())
 }
 
-fn normalize_sha256_display(value: &str) -> String {
+pub(crate) fn normalize_sha256_display(value: &str) -> String {
     let trimmed = value.trim();
     trimmed
         .strip_prefix("sha256:")
@@ -5304,7 +5816,8 @@ fn verify_transparency_log_proof(
         return;
     };
 
-    if verify_merkle_inclusion(&leaf_hash, &hashes, log_index, tree_size, &root_hash) {
+    if crypto_rekor::verify_merkle_inclusion(&leaf_hash, &hashes, log_index, tree_size, &root_hash)
+    {
         verified_evidence.push("transparency_inclusion_proof_valid".to_string());
     } else {
         reasons.push("transparency_inclusion_proof_invalid".to_string());
@@ -5321,64 +5834,6 @@ fn transparency_leaf_hash(provenance_sha256: &str, signature_sha256: &str) -> St
     content.push(0);
     content.extend_from_slice(payload.as_bytes());
     hex_sha256(&content)
-}
-
-fn verify_merkle_inclusion(
-    leaf_hash: &str,
-    hashes: &[String],
-    log_index: u64,
-    tree_size: u64,
-    root_hash: &str,
-) -> bool {
-    if tree_size == 0 || log_index >= tree_size {
-        return false;
-    }
-    if tree_size == 1 {
-        return hashes.is_empty() && leaf_hash == root_hash;
-    }
-
-    let mut computed = leaf_hash.to_string();
-    let mut index = log_index;
-    let mut last = tree_size - 1;
-    for proof_hash in hashes {
-        if index % 2 == 1 || index == last {
-            computed = hash_merkle_node(proof_hash, &computed);
-            while index.is_multiple_of(2) && index != 0 {
-                index /= 2;
-                last /= 2;
-            }
-        } else {
-            computed = hash_merkle_node(&computed, proof_hash);
-        }
-        index /= 2;
-        last /= 2;
-    }
-    computed == root_hash
-}
-
-fn hash_merkle_node(left: &str, right: &str) -> String {
-    let Some(left_bytes) = hex_to_bytes(left) else {
-        return String::new();
-    };
-    let Some(right_bytes) = hex_to_bytes(right) else {
-        return String::new();
-    };
-    let mut content = Vec::with_capacity(1 + left_bytes.len() + right_bytes.len());
-    content.push(1);
-    content.extend_from_slice(&left_bytes);
-    content.extend_from_slice(&right_bytes);
-    hex_sha256(&content)
-}
-
-fn hex_to_bytes(value: &str) -> Option<Vec<u8>> {
-    let value = normalize_sha256_display(value);
-    if !value.len().is_multiple_of(2) || !value.chars().all(|item| item.is_ascii_hexdigit()) {
-        return None;
-    }
-    (0..value.len())
-        .step_by(2)
-        .map(|index| u8::from_str_radix(&value[index..index + 2], 16).ok())
-        .collect()
 }
 
 fn project_host_command(
@@ -5471,6 +5926,7 @@ fn command_title(name: &str) -> String {
         }
         "host-adapter-verify-tuf-trusted-root-freshness" => "Verify TUF trusted-root freshness",
         "host-adapter-verify-certificate-crl-status" => "Verify certificate CRL status",
+        "host-adapter-verify-certificate-ocsp-status" => "Verify certificate OCSP status",
         _ => "Forge Core command",
     }
     .to_string()
@@ -5517,6 +5973,9 @@ fn command_description(command: &HostAdapterCommand) -> String {
         }
         "host-adapter-verify-certificate-crl-status" => {
             "Read-only explicit CRL revocation status verification for a supplied certificate, issuer certificate, and local CRL without claiming OCSP or update authority."
+        }
+        "host-adapter-verify-certificate-ocsp-status" => {
+            "Read-only offline verification of a supplied OCSP response for a supplied certificate and issuer certificate without network fetch or update authority."
         }
         _ => "Forge Core command projection.",
     }
@@ -5743,6 +6202,19 @@ fn command_input_schema(name: &str) -> Value {
                 "issuer_certificate_path": { "type": "string" },
                 "crl_path": { "type": "string" },
                 "verification_time_unix": { "type": "integer" }
+            }
+        }),
+        "host-adapter-verify-certificate-ocsp-status" => json!({
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["trust_policy_path", "certificate_path", "issuer_certificate_path", "ocsp_response_path", "verification_time_unix"],
+            "properties": {
+                "trust_policy_path": { "type": "string" },
+                "certificate_path": { "type": "string" },
+                "issuer_certificate_path": { "type": "string" },
+                "ocsp_response_path": { "type": "string" },
+                "verification_time_unix": { "type": "integer" },
+                "expected_nonce_hex": { "type": "string" }
             }
         }),
         _ => json!({
@@ -6601,13 +7073,13 @@ fn repo_relative_checked(root: &Path, path: &Path) -> Result<String, ExecuteOper
         })
 }
 
-fn hex_sha256(content: &[u8]) -> String {
+pub(crate) fn hex_sha256(content: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content);
     format!("{:x}", hasher.finalize())
 }
 
-fn hex_bytes(content: &[u8]) -> String {
+pub(crate) fn hex_bytes(content: &[u8]) -> String {
     content.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
