@@ -47,7 +47,7 @@ use forge_core_contracts::tool_effect::EffectTargetKind;
 use forge_core_eval::{EvalArmLabel, EvalCompareStatus};
 use forge_core_store::{EffectMetadataAdapterTrigger, EffectMetadataConsumerUse};
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
@@ -2003,6 +2003,7 @@ fn run_execute_operation_command(args: &[String]) {
     let mut effect_paths = Vec::new();
     let mut payloads = Vec::new();
     let mut payload_policy = PayloadLoadPolicy::default();
+    let mut allow_bootstrap_core = false;
     let mut recorded_at = "unknown".to_string();
     let mut tx_id_prefix = "cli-execute-operation".to_string();
     let mut json = false;
@@ -2036,6 +2037,9 @@ fn run_execute_operation_command(args: &[String]) {
             "--allow-payload-outside-root" => {
                 payload_policy.allow_outside_root = true;
             }
+            "--allow-bootstrap-core" => {
+                allow_bootstrap_core = true;
+            }
             "--recorded-at" => {
                 index += 1;
                 recorded_at = next_arg(args, index).to_string();
@@ -2061,8 +2065,10 @@ fn run_execute_operation_command(args: &[String]) {
         eprintln!("{}", usage());
         std::process::exit(2);
     };
+    let roots = resolve_stateful_roots_or_exit("execute-operation", &root, allow_bootstrap_core);
     let input = ExecuteOperationInput {
-        root,
+        root: roots.project_root,
+        effect_store_root: Some(roots.effect_store_root),
         operation_path,
         command_paths,
         effect_paths,
@@ -2096,6 +2102,7 @@ fn run_execute_operation_command(args: &[String]) {
 
 fn run_rebuild_effect_index_command(args: &[String]) {
     let mut input = RebuildEffectIndexInput::default();
+    let mut allow_bootstrap_core = false;
     let mut json = false;
     let mut index = 1usize;
     while index < args.len() {
@@ -2116,6 +2123,9 @@ fn run_rebuild_effect_index_command(args: &[String]) {
                 index += 1;
                 input.lock_relative_path = next_arg(args, index).to_string();
             }
+            "--allow-bootstrap-core" => {
+                allow_bootstrap_core = true;
+            }
             "--recorded-at" => {
                 index += 1;
                 input.recorded_at = Some(next_arg(args, index).to_string());
@@ -2132,6 +2142,10 @@ fn run_rebuild_effect_index_command(args: &[String]) {
         }
         index += 1;
     }
+
+    let roots =
+        resolve_stateful_roots_or_exit("rebuild-effect-index", &input.root, allow_bootstrap_core);
+    input.root = roots.effect_store_root;
 
     let result = run_rebuild_effect_index(input);
     if json {
@@ -2152,6 +2166,7 @@ fn run_rebuild_effect_index_command(args: &[String]) {
 
 fn run_query_effect_index_command(args: &[String]) {
     let mut input = QueryEffectIndexInput::default();
+    let mut allow_bootstrap_core = false;
     let mut json = false;
     let mut context = false;
     let mut index = 1usize;
@@ -2186,6 +2201,9 @@ fn run_query_effect_index_command(args: &[String]) {
                 input.consumer_use = parse_metadata_consumer_use(next_arg(args, index));
             }
             "--context" => context = true,
+            "--allow-bootstrap-core" => {
+                allow_bootstrap_core = true;
+            }
             "--max-context-groups" => {
                 index += 1;
                 input.context_options.max_groups = parse_usize(next_arg(args, index));
@@ -2214,6 +2232,13 @@ fn run_query_effect_index_command(args: &[String]) {
         index += 1;
     }
 
+    let roots =
+        resolve_stateful_roots_or_exit("query-effect-index", &input.root, allow_bootstrap_core);
+    input.root = roots.effect_store_root;
+    emit_query_effect_index_result(input, context, json);
+}
+
+fn emit_query_effect_index_result(input: QueryEffectIndexInput, context: bool, json: bool) {
     if context {
         let result = run_query_effect_index_context(input);
         if json {
@@ -2252,6 +2277,60 @@ fn run_query_effect_index_command(args: &[String]) {
     if result.status == forge_core_store::EffectTargetMetadataIndexQueryStatus::Failed {
         std::process::exit(1);
     }
+}
+
+#[derive(Debug, Clone)]
+struct StatefulCommandRoots {
+    project_root: PathBuf,
+    effect_store_root: PathBuf,
+}
+
+fn resolve_stateful_roots_or_exit(
+    command: &str,
+    root: &Path,
+    allow_bootstrap_core: bool,
+) -> StatefulCommandRoots {
+    match resolve_stateful_command_roots(root, allow_bootstrap_core) {
+        Ok(roots) => roots,
+        Err(message) => {
+            eprintln!("{command} failed: {message}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn resolve_stateful_command_roots(
+    root: &Path,
+    allow_bootstrap_core: bool,
+) -> Result<StatefulCommandRoots, String> {
+    let resolved = forge_core_cli::project_cmd::resolve_project(root, allow_bootstrap_core)
+        .map_err(|error| format!("project resolve failed: {error}"))?;
+    let state_root = PathBuf::from(&resolved.state_root);
+    if !state_root.exists() {
+        return Err(format!(
+            "resolved Forge state_root does not exist for state-bearing command: {}; create the sidecar .forge-method directory or fix .forge-method.yaml",
+            resolved.state_root
+        ));
+    }
+    if state_root
+        .file_name()
+        .is_none_or(|name| name != std::ffi::OsStr::new(".forge-method"))
+    {
+        return Err(format!(
+            "resolved Forge state_root must end with .forge-method for state-bearing operation/effect commands: {}",
+            resolved.state_root
+        ));
+    }
+    let Some(effect_store_root) = state_root.parent() else {
+        return Err(format!(
+            "resolved Forge state_root has no parent sidecar root: {}",
+            resolved.state_root
+        ));
+    };
+    Ok(StatefulCommandRoots {
+        project_root: PathBuf::from(resolved.project_root),
+        effect_store_root: effect_store_root.to_path_buf(),
+    })
 }
 
 fn next_arg(args: &[String], index: usize) -> &str {
@@ -3175,9 +3254,9 @@ fn usage() -> &'static str {
         "       forge-core preview [--root <path>] --operation <path> [--allow-bootstrap-core] [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json]\n",
         "       forge-core ready [--root <path>] --operation <path> [--allow-bootstrap-core] [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json]\n",
         "       forge-core explain [--root <path>] --last-run [--allow-bootstrap-core] [--json]\n",
-        "       forge-core execute-operation --root <path> --operation <path> [--command <path>] [--effect <path>] [--payload <target_ref>=<path>] [--max-payload-bytes <bytes>] [--allow-payload-outside-root] [--recorded-at <value>] [--tx-id-prefix <value>] [--json]\n",
-        "       forge-core rebuild-effect-index [--root <path>] [--wal <path>] [--index <path>] [--lock <path>] [--recorded-at <value>] [--json]\n",
-        "       forge-core query-effect-index [--root <path>] [--index <path>] [--logical-ref <ref>] [--effect-id <id>] [--operation-id <id>] [--target-kind <kind>] [--consumer-use <discovery|diagnostics|handoff_context>] [--context] [--max-context-groups <n>] [--adapter-kind <codex|cursor|claude|opencode|vscode|pidev|forge_standalone|custom>] [--adapter-trigger <evidence_discovery|diagnostics|handoff_preparation|manual_inspection>] [--latest] [--json]\n",
+        "       forge-core execute-operation --root <path> --operation <path> [--command <path>] [--effect <path>] [--payload <target_ref>=<path>] [--max-payload-bytes <bytes>] [--allow-payload-outside-root] [--allow-bootstrap-core] [--recorded-at <value>] [--tx-id-prefix <value>] [--json]\n",
+        "       forge-core rebuild-effect-index [--root <path>] [--wal <path>] [--index <path>] [--lock <path>] [--allow-bootstrap-core] [--recorded-at <value>] [--json]\n",
+        "       forge-core query-effect-index [--root <path>] [--index <path>] [--logical-ref <ref>] [--effect-id <id>] [--operation-id <id>] [--target-kind <kind>] [--consumer-use <discovery|diagnostics|handoff_context>] [--context] [--max-context-groups <n>] [--adapter-kind <codex|cursor|claude|opencode|vscode|pidev|forge_standalone|custom>] [--adapter-trigger <evidence_discovery|diagnostics|handoff_preparation|manual_inspection>] [--latest] [--allow-bootstrap-core] [--json]\n",
         "       forge-core host-adapter-manifest [--json]\n",
         "       forge-core host-adapter-projection [--target <mcp_tools|borrowed_shell|app_ui>] [--json]\n",
         "       forge-core host-adapter-process-policy [--target <mcp_stdio|borrowed_shell|app_bridge>] [--json]\n",

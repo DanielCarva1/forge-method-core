@@ -245,6 +245,13 @@ a product-repo-local state folder. If the resolved sidecar state root is
 missing, the command fails closed instead of creating `<consumer>/.forge-method`
 as a fallback.
 
+State-bearing operation/effect commands follow the same rule. By default,
+`execute-operation`, `rebuild-effect-index`, and `query-effect-index` resolve
+the Forge Project Link from `--root .`; operation contracts and payload files are
+read relative to the consumer project root, while Forge WAL, metadata index,
+evidence, and `.forge-method/artifacts/*` writes are stored under the sibling
+sidecar state. A missing Project Link or missing sidecar state root fails closed.
+
 The Forge core repository is a temporary bootstrap exception and may resolve its
 local `.forge-method/` explicitly:
 
@@ -343,6 +350,10 @@ forge-core project resolve --root . --json
 forge-core validate              # checks every contract in the tree
 forge-core execute-operation --root . --operation contracts/operations/ship.yaml
 ```
+
+When running these state-bearing commands inside the Forge core repository
+itself, pass `--allow-bootstrap-core`; ordinary consumer projects should not use
+that flag.
 
 All commands accept `--json` for machine consumption — that is how host agents
 call them.

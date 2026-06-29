@@ -396,6 +396,7 @@ pub struct RuntimeOperationEffectPayload {
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeOperationExecutionContext<'a> {
     pub command_context: CommandExecutionContext<'a>,
+    pub effect_store_root: &'a Path,
     pub evidence_log_relative_path: &'a str,
     pub wal_relative_path: &'a str,
     pub lock_relative_path: &'a str,
@@ -408,6 +409,7 @@ impl<'a> RuntimeOperationExecutionContext<'a> {
     pub fn single_root(root: &'a Path) -> Self {
         Self {
             command_context: CommandExecutionContext::single_root(root),
+            effect_store_root: root,
             evidence_log_relative_path: ".forge-method/evidence/command-execution.ndjson",
             wal_relative_path: ".forge-method/wal/effects.ndjson",
             lock_relative_path: ".forge-method/locks/effects.lock",
@@ -578,7 +580,7 @@ pub fn execute_operation(
             run_staged_read_only_command(&staging, &command.document, &context.command_context);
         let evidence = command_execution_evidence_record(&staging, &execution, context.recorded_at);
         if append_json_line(
-            context.command_context.repo_root,
+            context.effect_store_root,
             context.evidence_log_relative_path,
             &evidence,
         )
@@ -657,7 +659,7 @@ pub fn execute_operation(
         }
 
         let mut application = apply_file_effect_transaction_with_wal_lock(
-            context.command_context.repo_root,
+            context.effect_store_root,
             &effect.document,
             &store_payloads,
             context.wal_relative_path,
@@ -687,7 +689,7 @@ pub fn execute_operation(
             record.recorded_at = Some(context.recorded_at.to_string());
         }
         if append_effect_target_metadata_records(
-            context.command_context.repo_root,
+            context.effect_store_root,
             context.effect_metadata_index_relative_path,
             &application.metadata_records,
         )
@@ -1913,6 +1915,7 @@ mod tests {
         fs::create_dir_all(&index_path).expect("create directory where metadata file should be");
         let context = RuntimeOperationExecutionContext {
             command_context: CommandExecutionContext::single_root(&temp_root),
+            effect_store_root: &temp_root,
             evidence_log_relative_path: ".forge-method/evidence/command-execution.ndjson",
             wal_relative_path: ".forge-method/wal/effects.ndjson",
             lock_relative_path: ".forge-method/locks/effects.lock",
