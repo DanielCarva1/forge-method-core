@@ -115,9 +115,21 @@ Total: 7472 linhas, 141 funções, ~243 itens públicos.
     testes verdes), `cargo clippy --pedantic` (warnings pré-existentes
     preservados — `must_use_candidate`/`needless_pass_by_value` já
     existiam em `lib.rs`), `cargo fmt --check` verde.
+- [x] R1.CryptoHashing — Extrair `crypto_hashing.rs` (2026-06-29)
+  - Movido: `hex_sha256`, `hex_bytes`, `valid_sha256_digest`,
+    `normalize_sha256_digest`, `normalize_sha256_display` (helpers de
+    hash/hex compartilhados por rekor, slsa, x509, payloads).
+  - Módulo novo `pub(crate)`, re-exportado via `pub(crate) use
+    crypto_hashing::{...}` no crate root — preserva todos os
+    call sites `crate::hex_sha256`, `crate::hex_bytes`, etc.
+  - `lib.rs`: 6810 → 6771 linhas (-39); `crypto_hashing.rs`: 47 linhas.
+  - Gates: `cargo check` (zero warnings), `cargo test --workspace`
+    (440+ testes verdes), `cargo clippy --pedantic` (320 warnings —
+    paridade perfeita com a baseline), `cargo fmt --check` verde.
 - [ ] R1.2 — Criar módulos-alvo (esqueleto) — em andamento
 - [ ] R1.4 — Mover verificação X.509/CRL/OCSP
 - [x] R1.5 — Mover `execute_operation` flow (2026-06-29)
 - [x] R1.EffectIndex — Mover effect index commands (2026-06-29)
+- [x] R1.CryptoHashing — Mover helpers de hash para `crypto_hashing.rs` (2026-06-29)
 - [ ] R1.6 — Mover project link resolve/init
 - [ ] R1.7 — Validar (lib.rs ≤ 1500 linhas)
