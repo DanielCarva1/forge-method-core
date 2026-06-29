@@ -320,8 +320,34 @@ priority_3_low:
     summary: "WAL cresce sem bound. Trigger: >64MiB, >100k records, replay >250ms. Protocol do W2 step-by-step."
     source: [W2 rotation_strategy]
     effort: L
-    status: pending
+    status: verified_current_core
     depends_on: [P2.1]
+    scope_note: "Implemented as compatibility-preserving active WAL replacement: `wal/claims.fmw1` remains the public active WAL, rotation archives the old WAL under `wal/archive/`, writes a CRC32C-protected snapshot under `wal/snapshots/`, installs a checkpoint_ref record type 4 as the first active record, and writes `wal/claims.wal.manifest.json` for audit/next-evolution manifest semantics. Full segmented `claims.wal.N` active-pointer mode remains unnecessary for current callers and can be an additive follow-up."
+    verified_by:
+      files:
+        - crates/forge-core-store/src/claim_wal.rs
+        - crates/forge-core-store/tests/claim_wal.rs
+      commands:
+        - cargo test -p forge-core-store claim_wal
+        - cargo test -p forge-core-store --test claim_wal
+        - cargo clippy -p forge-core-store --all-targets -- -W clippy::pedantic
+        - cargo fmt --all -- --check
+        - cargo check --workspace
+      reviewer:
+        - qa_validator 019f130e-3c1c-7c20-b5fb-b8215215658f
+    acceptance:
+      - Default rotation thresholds are 64MiB WAL bytes, 100000 valid records, and 250ms replay time.
+      - Rotation writes an external snapshot, validates it by CRC32C through checkpoint_ref, and fails closed when the snapshot is missing or corrupted.
+      - Active WAL starts with record type 4 checkpoint_ref after rotation, and later lifecycle appends continue with global monotonic seq.
+      - Old WAL bytes are preserved in an archive file before active WAL replacement.
+      - Rotation manifest records active WAL, archive, snapshot, checkpoint seq, last snapshot seq, and snapshot CRC.
+    evidence:
+      - claim_wal_rotation_writes_snapshot_checkpoint_and_replays_from_snapshot
+      - claim_wal_rotation_triggers_by_size_threshold
+      - claim_wal_checkpoint_missing_snapshot_fails_closed_and_blocks_append
+      - claim_wal_checkpoint_snapshot_crc_mismatch_fails_closed
+      - rotation_defaults_match_backlog_thresholds
+      - rotation_reason_prefers_size_then_records_then_replay_time
 
   - id: P3.4
     title: "feat: proptest de WAL (truncation, bitflip, 50-process stress, recovery idempotence)"
@@ -342,7 +368,7 @@ verification_status_at_handoff:
   current_status:
     p1_high: "P1.1, P1.2, P1.3, P1.4, and P1.5 verified in current core."
     p2_medium: "P2.1 WAL append/recovery, P2.2 WAL-derived claim state authority, P2.3 reconcile loop, and P2.4 tiered invariants verified."
-    p3_low: "P3.1 and P3.2 verified in current core; P3.3-P3.4 remain pending."
+    p3_low: "P3.1, P3.2, and P3.3 verified in current core; P3.4 remains pending."
   targeted_verification:
     - cargo test -p forge-core-engine claim_engine
     - cargo test -p forge-core-engine conflict_detection
@@ -364,7 +390,7 @@ verification_status_at_handoff:
     - cargo test --workspace
     - cargo clippy --workspace --all-targets -- -W clippy::pedantic
     - cargo fmt --all -- --check
-  full_gate_log_dir: <repo-root>\target\codex-gates\20260629-0734-p2-tiered-invariants
+  full_gate_log_dir: <repo-root>\target\codex-gates\20260629-0818-p3-wal-rotation
   installed_binary_smoke:
     binary: C:\Users\User\.cargo\bin\forge-core.exe
-    result: "expired release reports forge-core claim handoff recovery hint; claim handoff records artifact; reacquire succeeds with fresh agent; acquire -> heartbeat -> release creates wal/claims.fmw1 with FMW1 magic; missing/stale YAML cache does not override WAL-derived authority; P2.3 acquire -> reconcile stale -> idempotent no-op -> reconcile handoff_required -> status handoff blocker -> heartbeat recovery error -> bounded loop no-op with WAL magic FMW1."
+    result: "expired release reports forge-core claim handoff recovery hint; claim handoff records artifact; reacquire succeeds with fresh agent; acquire -> heartbeat -> release creates wal/claims.fmw1 with FMW1 magic; missing/stale YAML cache does not override WAL-derived authority; P2.3 acquire -> reconcile stale -> idempotent no-op -> reconcile handoff_required -> status handoff blocker -> heartbeat recovery error -> bounded loop no-op with WAL magic FMW1; installed forge-core.exe refreshed after P3.3 and validates this repo successfully."
