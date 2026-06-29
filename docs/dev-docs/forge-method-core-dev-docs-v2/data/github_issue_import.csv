@@ -1,0 +1,301 @@
+title,labels,body
+F01 forge preview,"v2,p0","## Feature
+forge preview
+
+## Demand
+Medo de mutacao errada, necessidade de entender impacto antes da acao.
+
+## Product shape
+Comando e API que mostram plano, arquivos, comandos, authority, gates, efeitos e rollback antes de aplicar.
+
+## Evidence
+P21,P22,P28,O03,C06
+
+## Crates
+forge-core-runtime, forge-core-store, forge-core-cli
+
+## Acceptance
+- Dado um OperationContract mutavel, preview retorna JSON deterministico com status, touched_refs, risk, gates, rollback_available e next_human_action.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
+F02 forge ready,"v2,p0","## Feature
+forge ready
+
+## Demand
+Confianca operacional e validacao antes de declarar pronto.
+
+## Product shape
+Gate unificado para tests, lint, typecheck, evals, security checks e readiness report.
+
+## Evidence
+P22,P23,P30,C06
+
+## Crates
+forge-core-runtime, forge-core-validate, forge-core-cli
+
+## Acceptance
+- Um run so passa se todos os gates obrigatorios passarem; falhas retornam reasons tipadas e evidencias.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
+F03 TraceEvent canonico e forge explain,"v2,p0","## Feature
+TraceEvent canonico e forge explain
+
+## Demand
+Saber o que aconteceu, por que aconteceu e como auditar.
+
+## Product shape
+Trace NDJSON machine-readable e explicacao humana por run.
+
+## Evidence
+P04,P07,P17,P24,P26,C06
+
+## Crates
+novo forge-core-trace, runtime, cli
+
+## Acceptance
+- Toda operacao gera trace_id, node_id, actor_agent_id, principal_id, input_refs, output_refs, decision_reason e cost.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
+F04 WorkflowGraph v0,"v2,p0","## Feature
+WorkflowGraph v0
+
+## Demand
+Orquestrar sem routing solto por prompt.
+
+## Product shape
+Grafo declarativo com nodes, edges, budgets, verifier nodes e replan boundaries.
+
+## Evidence
+P04,P05,P06,C03,C06
+
+## Crates
+novo forge-core-graph, runtime
+
+## Acceptance
+- forge graph validate e forge graph run --dry-run funcionam sem executar efeitos; executor respeita dependencias e stop conditions.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
+F05 Eval Compare single-agent baseline,"v2,p1","## Feature
+Eval Compare single-agent baseline
+
+## Demand
+Provar quando multi-agent vale o custo.
+
+## Product shape
+Harness para comparar single-agent anchor, graph workflow e MAS sob mesmo loader, tools, output contract e usage accounting.
+
+## Evidence
+P01,P02,P03,P07
+
+## Crates
+novo forge-core-eval
+
+## Acceptance
+- Relatorio mostra accuracy, cost, latency, trajectory length, failures e delta contra baseline.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
+F06 Memory Policy,"v2,p1","## Feature
+Memory Policy
+
+## Demand
+Personalizacao sem memoria opaca ou perigosa.
+
+## Product shape
+Memory admission, retention, forget, promote, raw evidence e authority boundary.
+
+## Evidence
+P09,P10,P11,P28,O03
+
+## Crates
+novo forge-core-memory
+
+## Acceptance
+- Nenhuma memoria vira authority automaticamente; promote exige policy e evidencia raw.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
+F07 Multi-principal governance,"v2,p1","## Feature
+Multi-principal governance
+
+## Demand
+Varios agentes e pessoas no mesmo estado sem overwrites silenciosos.
+
+## Product shape
+PrincipalId, IntentContract, ConflictContract, GovernancePolicy e arbitration ledger.
+
+## Evidence
+P08,P24,P25,P26,C01
+
+## Crates
+contracts, validate, runtime, store
+
+## Acceptance
+- Conflito entre principals vira objeto estruturado, nao merge manual silencioso.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
+F08 Secure MCP adapter,"v2,p1","## Feature
+Secure MCP adapter
+
+## Demand
+Conectar ferramentas reais com seguranca.
+
+## Product shape
+MCP server para preview, ready, graph, trace, memory e effect application com allowlist e attestation.
+
+## Evidence
+O01,P17,P18,P19,P20,O03
+
+## Crates
+novo forge-core-protocol-mcp
+
+## Acceptance
+- Nenhuma tool MCP muta estado sem OperationContract e authority validada.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
+F09 Secure A2A adapter,"v2,p2","## Feature
+Secure A2A adapter
+
+## Demand
+Interoperabilidade entre agentes de vendors diferentes.
+
+## Product shape
+A2A agent card e task surface para delegacao controlada.
+
+## Evidence
+O02,P08,P17,P19,P20
+
+## Crates
+novo forge-core-protocol-a2a
+
+## Acceptance
+- A2A nao substitui MCP nem vira subagent protocol interno; tarefa externa sempre tem PrincipalId e delegation chain.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
+F10 Control Plane local,"v2,p2","## Feature
+Control Plane local
+
+## Demand
+Ver lanes, claims, traces, gates e risco em uma tela.
+
+## Product shape
+TUI ou HTML estatico lendo .forge-method sem SaaS obrigatorio.
+
+## Evidence
+P06,P07,P21,P28,O03,C01
+
+## Crates
+novo forge-core-ui ou cli
+
+## Acceptance
+- Mostra run status, active claims, stale claims, conflicts, gates, cost e next action.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
+F11 Risk Audit Gate para codigo de IA,"v2,p1","## Feature
+Risk Audit Gate para codigo de IA
+
+## Demand
+Detectar fail-soft, exception swallowing, security slop e teste falso.
+
+## Product shape
+Gate com checks deterministios e extensao para SAST/linters.
+
+## Evidence
+P22,P23,P30
+
+## Crates
+validate, runtime, cli
+
+## Acceptance
+- Risk gate falha fechado em padroes proibidos e gera report com evidencia por arquivo.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
+F12 Guided Start e Product UX,"v2,p2","## Feature
+Guided Start e Product UX
+
+## Demand
+Entrar no produto sem entender agentes, YAML ou protocolo.
+
+## Product shape
+Fluxo guiado com escolha de objetivo, risco, scaffold e primeiro preview.
+
+## Evidence
+P28,P29,O03
+
+## Crates
+cli, docs, templates
+
+## Acceptance
+- Usuario cria projeto Forge, ve spec minima, preview e ready sem editar YAML manualmente.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
+F13 Budget and Cost Accounting,"v2,p2","## Feature
+Budget and Cost Accounting
+
+## Demand
+Controlar custo, rounds, model calls e tool calls.
+
+## Product shape
+Budget por run, graph node, agent, principal e tool.
+
+## Evidence
+P01,P02,P16,O03
+
+## Crates
+trace, eval, runtime
+
+## Acceptance
+- Run bloqueia ou pede confirmacao quando budget threshold e atingido.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
+F14 Knowledge Orchestration mode,"v2,p3","## Feature
+Knowledge Orchestration mode
+
+## Demand
+Research agents precisam de fontes, claims e evidencias, nao so resumo.
+
+## Product shape
+Modo research com evidence graph, source ledger e citation checks.
+
+## Evidence
+P13,P14,P15
+
+## Crates
+memory, trace, eval
+
+## Acceptance
+- Cada claim importante aponta para source_id e evidencia local ou web registrada.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
+F15 Rust ergonomics and codegen track,"v2,p0","## Feature
+Rust ergonomics and codegen track
+
+## Demand
+Reduzir sofrimento do agente escrevendo Rust manual repetitivo.
+
+## Product shape
+clap derive, thiserror, tracing, builders, fixtures, module split, codegen de contratos e snapshots.
+
+## Evidence
+O04,O05,O06,O07,P31,C04,C05
+
+## Crates
+todos
+
+## Acceptance
+- Novo comando ou contrato nao exige editar mais de dois pontos manuais fora de tests e docs.
+- JSON output and human output exist.
+- Trace integration exists when applicable.
+"
