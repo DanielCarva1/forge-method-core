@@ -252,6 +252,77 @@ fn raw_claim_commands_default_to_sidecar_claim_bus() {
 }
 
 #[test]
+fn claim_reconcile_defaults_to_sidecar_claim_bus() {
+    let fixture = consumer_app("reconcile-sidecar");
+    let app = fixture.app.display().to_string();
+    let claims_dir = fixture.state_root.join("claims-active");
+
+    let acquire = bin()
+        .args([
+            "claim",
+            "acquire",
+            "--root",
+            &app,
+            "--scope",
+            "story",
+            "--id",
+            "P23-sidecar",
+            "--agent",
+            "sidecar-agent",
+            "--path",
+            "src/reconcile.rs",
+            "--ttl",
+            "10",
+            "--heartbeat-interval",
+            "5",
+            "--now-unix",
+            &NOW.to_string(),
+        ])
+        .output()
+        .expect("run claim acquire");
+    assert_success(&acquire, "claim acquire");
+
+    let reconcile = bin()
+        .args([
+            "claim",
+            "reconcile",
+            "--root",
+            &app,
+            "--now-unix",
+            &(NOW + 5).to_string(),
+        ])
+        .output()
+        .expect("run claim reconcile");
+    let reconcile_json = assert_success(&reconcile, "claim reconcile");
+    assert_eq!(reconcile_json["command"], "claim.reconcile");
+    assert_eq!(reconcile_json["data"]["changed"], 1);
+    assert_eq!(reconcile_json["data"]["transitions"][0]["to"], "stale");
+    assert!(
+        fixture.state_root.join("wal").join("claims.fmw1").exists(),
+        "reconcile should append sidecar WAL"
+    );
+    assert_eq!(yaml_file_count(&claims_dir), 1);
+    assert!(
+        !fixture.app.join(".forge-method").exists(),
+        "claim reconcile must not create consumer-local .forge-method"
+    );
+
+    let status = bin()
+        .args([
+            "claim",
+            "status",
+            "--root",
+            &app,
+            "--now-unix",
+            &(NOW + 6).to_string(),
+        ])
+        .output()
+        .expect("run claim status");
+    let status_json = assert_success(&status, "claim status after reconcile");
+    assert_eq!(status_json["data"]["active"][0]["status"], "stale");
+}
+
+#[test]
 fn explicit_claims_dir_override_preserves_existing_behavior() {
     let fixture = consumer_app("override");
     let app = fixture.app.display().to_string();

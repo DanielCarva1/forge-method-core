@@ -29,6 +29,10 @@ pub enum ClaimWalOperation {
     Release,
     Heartbeat,
     HandoffRecorded,
+    /// Materialized by the periodic reconciler. Uses record type 7 so it does
+    /// not collide with the original research reservation for 4/5/6
+    /// (checkpoint/tombstone/rotate); older binaries will fail closed on it.
+    ReconcileStatus,
 }
 
 impl ClaimWalOperation {
@@ -39,6 +43,7 @@ impl ClaimWalOperation {
             Self::Release => 2,
             Self::Heartbeat => 3,
             Self::HandoffRecorded => 5,
+            Self::ReconcileStatus => 7,
         }
     }
 
@@ -48,6 +53,7 @@ impl ClaimWalOperation {
             2 => Some(Self::Release),
             3 => Some(Self::Heartbeat),
             5 => Some(Self::HandoffRecorded),
+            7 => Some(Self::ReconcileStatus),
             _ => None,
         }
     }
@@ -159,6 +165,8 @@ pub enum ClaimWalProjectionDiagnosticCode {
     ReleaseAgentMismatch,
     HandoffWithoutActiveClaim,
     HandoffAgentMismatch,
+    ReconcileWithoutOpenClaim,
+    ReconcileAgentMismatch,
     ReacquireByDifferentAgent,
     OperationStatusMismatch,
 }
@@ -599,11 +607,10 @@ impl ProjectionAccumulator {
                 }
             }
             ClaimWalOperation::HandoffRecorded => {
-                if matching_active_claim(
+                if matching_open_claim_for_handoff(
                     record,
-                    &self.active_by_claim_id,
+                    &self.latest_by_claim_id,
                     &mut self.diagnostics,
-                    MissingOp::Handoff,
                 ) {
                     self.active_by_claim_id.remove(&claim_id);
                     self.latest_by_claim_id
@@ -611,6 +618,32 @@ impl ProjectionAccumulator {
                     self.handoff_recorded_by_claim_id
                         .insert(claim_id.clone(), projected);
                     self.released_by_claim_id.remove(&claim_id);
+                    self.record_applied(record);
+                }
+            }
+            ClaimWalOperation::ReconcileStatus => {
+                if matching_active_claim(
+                    record,
+                    &self.active_by_claim_id,
+                    &mut self.diagnostics,
+                    MissingOp::Reconcile,
+                ) {
+                    match projected.claim_contract.status.value {
+                        ClaimStatus::Active | ClaimStatus::Stale => {
+                            self.active_by_claim_id
+                                .insert(claim_id.clone(), projected.clone());
+                        }
+                        ClaimStatus::Expired
+                        | ClaimStatus::HandoffRequired
+                        | ClaimStatus::HandoffRecorded
+                        | ClaimStatus::Released => {
+                            self.active_by_claim_id.remove(&claim_id);
+                        }
+                    }
+                    self.latest_by_claim_id
+                        .insert(claim_id.clone(), projected.clone());
+                    self.released_by_claim_id.remove(&claim_id);
+                    self.handoff_recorded_by_claim_id.remove(&claim_id);
                     self.record_applied(record);
                 }
             }
@@ -627,7 +660,7 @@ impl ProjectionAccumulator {
 enum MissingOp {
     Heartbeat,
     Release,
-    Handoff,
+    Reconcile,
 }
 
 fn matching_active_claim(
@@ -662,7 +695,7 @@ fn missing_diag_code(op: MissingOp) -> ClaimWalProjectionDiagnosticCode {
     match op {
         MissingOp::Heartbeat => ClaimWalProjectionDiagnosticCode::HeartbeatWithoutActiveClaim,
         MissingOp::Release => ClaimWalProjectionDiagnosticCode::ReleaseWithoutActiveClaim,
-        MissingOp::Handoff => ClaimWalProjectionDiagnosticCode::HandoffWithoutActiveClaim,
+        MissingOp::Reconcile => ClaimWalProjectionDiagnosticCode::ReconcileWithoutOpenClaim,
     }
 }
 
@@ -670,7 +703,7 @@ fn mismatch_diag_code(op: MissingOp) -> ClaimWalProjectionDiagnosticCode {
     match op {
         MissingOp::Heartbeat => ClaimWalProjectionDiagnosticCode::HeartbeatAgentMismatch,
         MissingOp::Release => ClaimWalProjectionDiagnosticCode::ReleaseAgentMismatch,
-        MissingOp::Handoff => ClaimWalProjectionDiagnosticCode::HandoffAgentMismatch,
+        MissingOp::Reconcile => ClaimWalProjectionDiagnosticCode::ReconcileAgentMismatch,
     }
 }
 
@@ -678,8 +711,46 @@ fn missing_message(op: MissingOp) -> &'static str {
     match op {
         MissingOp::Heartbeat => "heartbeat has no matching active claim",
         MissingOp::Release => "release has no matching active claim",
-        MissingOp::Handoff => "handoff has no matching active claim",
+        MissingOp::Reconcile => "reconcile status record has no matching active claim",
     }
+}
+
+fn matching_open_claim_for_handoff(
+    record: &ClaimWalRecord,
+    latest_by_claim_id: &BTreeMap<String, ProjectedClaim>,
+    diagnostics: &mut Vec<ClaimWalProjectionDiagnostic>,
+) -> bool {
+    let claim_id = &record.payload.claim_contract.id.0;
+    let Some(latest) = latest_by_claim_id.get(claim_id) else {
+        diagnostics.push(projection_warning(
+            ClaimWalProjectionDiagnosticCode::HandoffWithoutActiveClaim,
+            record,
+            "handoff has no matching open claim",
+        ));
+        return false;
+    };
+    if !matches!(
+        latest.claim_contract.status.value,
+        ClaimStatus::Active | ClaimStatus::Stale | ClaimStatus::HandoffRequired
+    ) {
+        diagnostics.push(projection_warning(
+            ClaimWalProjectionDiagnosticCode::HandoffWithoutActiveClaim,
+            record,
+            "handoff target is not open or handoff-required",
+        ));
+        return false;
+    }
+    if latest.claim_contract.claim.claimant_agent_id
+        != record.payload.claim_contract.claim.claimant_agent_id
+    {
+        diagnostics.push(projection_warning(
+            ClaimWalProjectionDiagnosticCode::HandoffAgentMismatch,
+            record,
+            "handoff lifecycle record agent does not match open claim agent",
+        ));
+        return false;
+    }
+    true
 }
 
 fn push_status_mismatch_diagnostic(
@@ -691,6 +762,12 @@ fn push_status_mismatch_diagnostic(
         ClaimWalOperation::Acquire | ClaimWalOperation::Heartbeat => status == ClaimStatus::Active,
         ClaimWalOperation::Release => status == ClaimStatus::Released,
         ClaimWalOperation::HandoffRecorded => status == ClaimStatus::HandoffRecorded,
+        ClaimWalOperation::ReconcileStatus => {
+            matches!(
+                status,
+                ClaimStatus::Stale | ClaimStatus::Expired | ClaimStatus::HandoffRequired
+            )
+        }
     };
     if !ok {
         diagnostics.push(projection_warning(

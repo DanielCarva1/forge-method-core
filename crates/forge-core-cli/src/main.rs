@@ -2719,6 +2719,7 @@ fn run_claim_command(args: &[String]) {
         "release" => run_claim_release(&args[2..]),
         "handoff" => run_claim_handoff(&args[2..]),
         "status" => run_claim_status(&args[2..]),
+        "reconcile" => run_claim_reconcile(&args[2..]),
         "check-write" => run_claim_check_write(&args[2..]),
         "--help" | "-h" | "help" => {
             println!("forge-core claim <subcommand> [options]");
@@ -2727,11 +2728,12 @@ fn run_claim_command(args: &[String]) {
             println!("  release [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
             println!("  handoff [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> --summary <text> [--evidence <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
             println!("  status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  reconcile [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--loop] [--interval-ms 30000] [--max-ticks <n>] [--no-json]");
             println!("  check-write [--root <path>] [--allow-bootstrap-core] --agent <id> --target <path> [--target <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
             println!("  Defaults: without --claims-dir, resolves --root as a Forge project and uses <state_root>/claims-active; --claims-dir is an explicit override.");
         }
         other => {
-            eprintln!("forge-core claim: unknown subcommand '{other}'. Try: acquire | heartbeat | release | handoff | status | check-write");
+            eprintln!("forge-core claim: unknown subcommand '{other}'. Try: acquire | heartbeat | release | handoff | status | reconcile | check-write");
             std::process::exit(2);
         }
     }
@@ -3120,6 +3122,148 @@ fn run_claim_status(args: &[String]) {
     emit_envelope("claim", env, want_json);
 }
 
+fn run_claim_reconcile(args: &[String]) {
+    use forge_core_cli::claim::run_reconcile_once;
+
+    let mut claims_dir: Option<PathBuf> = None;
+    let mut root = PathBuf::from(".");
+    let mut allow_bootstrap_core = false;
+    let mut now_unix: Option<i64> = None;
+    let mut want_json = true;
+    let mut run_loop = false;
+    let mut interval_ms: u64 = 30_000;
+    let mut max_ticks: Option<u64> = None;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--root" => {
+                idx += 1;
+                root = PathBuf::from(require_value(args, idx, "root"));
+            }
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
+            "--claims-dir" => {
+                idx += 1;
+                claims_dir = Some(PathBuf::from(require_value(args, idx, "claims-dir")));
+            }
+            "--now-unix" => {
+                idx += 1;
+                now_unix = Some(parse_strict(
+                    &require_value(args, idx, "now-unix"),
+                    "now-unix",
+                ));
+            }
+            "--loop" => run_loop = true,
+            "--interval-ms" => {
+                idx += 1;
+                interval_ms = parse_strict(&require_value(args, idx, "interval-ms"), "interval-ms");
+            }
+            "--max-ticks" => {
+                idx += 1;
+                max_ticks = Some(parse_strict(
+                    &require_value(args, idx, "max-ticks"),
+                    "max-ticks",
+                ));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core claim reconcile [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--loop] [--interval-ms 30000] [--max-ticks <n>] [--no-json]");
+                println!("  One-shot mode is deterministic and materializes stale/expired claim statuses once.");
+                println!("  --loop runs a foreground Tokio interval reconciler; missed ticks use Skip and no filesystem watcher/notify is used.");
+                println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
+                return;
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    if interval_ms == 0 {
+        eprintln!("claim reconcile: --interval-ms must be greater than zero");
+        std::process::exit(3);
+    }
+
+    let claims_dir = resolve_claims_dir_or_exit(
+        "claim.reconcile",
+        claims_dir,
+        &root,
+        allow_bootstrap_core,
+        want_json,
+    );
+    if !run_loop {
+        let env = run_reconcile_once(&claims_dir, resolve_now_unix(now_unix));
+        emit_envelope("claim", env, want_json);
+    }
+
+    run_claim_reconcile_loop_or_exit(ClaimReconcileLoopConfig {
+        claims_dir,
+        now_unix,
+        interval_ms,
+        max_ticks,
+        want_json,
+    });
+}
+
+#[derive(Debug, Clone)]
+struct ClaimReconcileLoopConfig {
+    claims_dir: PathBuf,
+    now_unix: Option<i64>,
+    interval_ms: u64,
+    max_ticks: Option<u64>,
+    want_json: bool,
+}
+
+fn run_claim_reconcile_loop_or_exit(config: ClaimReconcileLoopConfig) -> ! {
+    use forge_core_cli::claim::run_reconcile_once;
+    use std::time::Duration;
+    use tokio::time::{interval_at, Instant, MissedTickBehavior};
+
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("claim reconcile: cannot build Tokio runtime: {error}");
+            std::process::exit(5);
+        }
+    };
+    let ClaimReconcileLoopConfig {
+        claims_dir,
+        now_unix,
+        interval_ms,
+        max_ticks,
+        want_json,
+    } = config;
+    let exit_code = runtime.block_on(async move {
+        let period = Duration::from_millis(interval_ms);
+        let mut ticker = interval_at(Instant::now(), period);
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        let mut ticks = 0_u64;
+        loop {
+            ticker.tick().await;
+            ticks = ticks.saturating_add(1);
+            let env = run_reconcile_once(&claims_dir, resolve_now_unix(now_unix));
+            let code = env.exit_code();
+            if want_json {
+                println!("{}", serde_json::to_string(&env).unwrap());
+            } else if let Some(data) = env.data.as_ref() {
+                eprintln!(
+                    "claim.reconcile tick={ticks} scanned={} changed={}",
+                    data.scanned, data.changed
+                );
+            } else if let Some(error) = env.error.as_ref() {
+                eprintln!("claim.reconcile tick={ticks} failed: {}", error.message);
+            }
+            if code != 0 {
+                return code;
+            }
+            if max_ticks.is_some_and(|limit| ticks >= limit) {
+                return 0;
+            }
+        }
+    });
+    std::process::exit(exit_code);
+}
+
 fn run_claim_check_write(args: &[String]) {
     use forge_core_cli::claim::run_check_write;
     use forge_core_contracts::StableId;
@@ -3248,6 +3392,7 @@ fn usage() -> &'static str {
         "       forge-core claim release [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--no-json]\n",
         "       forge-core claim handoff [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> --summary <text> [--evidence <path>...] [--claims-dir <path>] [--no-json]\n",
         "       forge-core claim status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--no-json]\n",
+        "       forge-core claim reconcile [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--loop] [--interval-ms <ms>] [--max-ticks <n>] [--no-json]\n",
         "       forge-core claim check-write [--root <path>] [--allow-bootstrap-core] --agent <id> --target <path> [--claims-dir <path>] [--no-json]\n",
         "       forge-core graph validate --root <project> --graph <path> [--allow-bootstrap-core] [--json]\n",
         "       forge-core graph run --root <project> --graph <path> --dry-run [--agent <id>] [--claims-dir <path>] [--now-unix <epoch>] [--allow-bootstrap-core] [--json]\n",

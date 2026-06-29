@@ -27,9 +27,9 @@ use forge_core_contracts::{
     ClaimId, CliEnvelope, ExitReason, ScopeId, StableId, ENVELOPE_SCHEMA_VERSION,
 };
 use forge_core_engine::{
-    acquire, check_write_against_claims, heartbeat, is_expired, project_active, record_handoff,
-    release, unix_to_rfc3339, AcquireRequest, ActiveClaimSummary, ClaimLifecycleDecision,
-    ClaimRejection, RecordHandoffRequest,
+    acquire, check_write_against_claims, heartbeat, is_expired, project_active, reconcile_claims,
+    record_handoff, release, unix_to_rfc3339, AcquireRequest, ActiveClaimSummary,
+    ClaimLifecycleDecision, ClaimReconcileTransition, ClaimRejection, RecordHandoffRequest,
 };
 use forge_core_store::claim_wal::{
     append_claim_wal_record, claim_wal_path, replay_claim_wal, ClaimWalOperation,
@@ -96,6 +96,30 @@ pub struct ClaimStatusView {
     /// still prevent reacquire until a handoff is recorded.
     #[serde(default)]
     pub expired_handoff_required: Vec<ExpiredHandoffRequiredClaimSummary>,
+}
+
+/// Success payload for `claim reconcile`.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct ClaimReconcileResult {
+    pub schema_version: String,
+    pub now_unix: i64,
+    pub scanned: usize,
+    pub changed: usize,
+    pub transitions: Vec<ClaimReconcileTransitionSummary>,
+}
+
+/// One materialized reconcile transition in the CLI envelope.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct ClaimReconcileTransitionSummary {
+    pub claim_id: String,
+    pub scope_kind: String,
+    pub scope_id: String,
+    pub agent_id: String,
+    pub from: String,
+    pub to: String,
+    pub reason_code: String,
+    pub evaluated_at: String,
+    pub paths: Vec<String>,
 }
 
 /// A compact summary of a non-live claim that still blocks reacquire because
@@ -503,6 +527,52 @@ pub fn run_status(claims_dir: &Path, now_unix: i64) -> CliEnvelope<ClaimStatusVi
     CliEnvelope::ok("claim.status", view)
 }
 
+/// Run one deterministic claim reconciliation pass.
+///
+/// This materializes stale/expired claim lifecycle transitions in the WAL and
+/// refreshes the YAML compatibility cache. It does not record handoff evidence;
+/// `claim handoff` remains the official recovery edge.
+#[must_use]
+pub fn run_reconcile_once(claims_dir: &Path, now_unix: i64) -> CliEnvelope<ClaimReconcileResult> {
+    let _lock = match crate::io_util::DirLock::acquire(claims_dir, ".forge-claim.lock") {
+        Ok(l) => l,
+        Err(e) => {
+            return CliEnvelope::err(
+                "claim.reconcile",
+                ExitReason::EnvConfig,
+                format!("cannot acquire claims lock: {e}"),
+            );
+        }
+    };
+    let (existing, errs) = load_claims(claims_dir);
+    if let Some(env) = env_config_if_errors(claims_dir, &errs) {
+        return env;
+    }
+    let report = reconcile_claims(&existing, now_unix);
+    let mut transitions = Vec::with_capacity(report.transitions.len());
+    for transition in report.transitions {
+        if let Err(e) = persist_claim_mutation(
+            claims_dir,
+            ClaimWalOperation::ReconcileStatus,
+            &transition.updated,
+            transition.updated.status.evaluated_at.as_str(),
+        ) {
+            return CliEnvelope::err("claim.reconcile", ExitReason::EnvConfig, e.to_string());
+        }
+        transitions.push(reconcile_transition_summary(&transition));
+    }
+    CliEnvelope::ok(
+        "claim.reconcile",
+        ClaimReconcileResult {
+            schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
+            now_unix,
+            scanned: report.scanned,
+            changed: transitions.len(),
+            transitions,
+        },
+    )
+}
+
 fn expired_handoff_required_summary(
     claim: &ClaimContract,
     now_unix: i64,
@@ -546,6 +616,28 @@ fn handoff_hint(claim: &ClaimContract) -> String {
         "Record recovery evidence with `forge-core claim handoff --id {} --agent <recorder-agent> --summary <summary> [--evidence <path>]`; do not delete the claim file.",
         claim.id.0
     )
+}
+
+fn reconcile_transition_summary(
+    transition: &ClaimReconcileTransition,
+) -> ClaimReconcileTransitionSummary {
+    ClaimReconcileTransitionSummary {
+        claim_id: transition.claim_id.0.clone(),
+        scope_kind: scope_kind_slug(transition.updated.scope.kind),
+        scope_id: transition.updated.scope.id.0.clone(),
+        agent_id: transition.updated.claim.claimant_agent_id.0.clone(),
+        from: status_slug(transition.from),
+        to: status_slug(transition.to),
+        reason_code: transition.reason_code.0.clone(),
+        evaluated_at: transition.updated.status.evaluated_at.clone(),
+        paths: transition
+            .updated
+            .scope
+            .paths
+            .iter()
+            .map(|path| path.0.clone())
+            .collect(),
+    }
 }
 
 // ---------------------------------------------------------------------------
