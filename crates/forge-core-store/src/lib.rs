@@ -525,6 +525,7 @@ pub enum EffectApplicationStatus {
 #[serde(rename_all = "snake_case")]
 pub enum EffectApplicationReason {
     EffectValidationErrors,
+    InternalInvariant,
     StoreLockFailed,
     WalAppendFailed,
     UnsupportedTargetKind,
@@ -946,32 +947,41 @@ pub fn apply_file_effect_transaction(
     let prepared = prepare_file_writes(root, effect, payloads, &mut reasons, &mut diagnostics);
 
     if !reasons.is_empty() {
-        return EffectApplicationResult {
-            status: EffectApplicationStatus::Blocked,
-            effect_id: effect_contract.id.clone(),
-            applied_refs: Vec::new(),
-            metadata_records: Vec::new(),
-            rolled_back: false,
+        return blocked_effect_application_result(
+            effect_contract.id.clone(),
             reasons,
             diagnostics,
             validation_error_count,
             validation_warning_count,
-        };
+        );
     }
 
-    let mut writes = prepared.expect("prepared writes when no preflight reasons");
-    if !revalidate_prepared_writes(root, &mut writes, &mut reasons, &mut diagnostics) {
-        return EffectApplicationResult {
-            status: EffectApplicationStatus::Blocked,
-            effect_id: effect_contract.id.clone(),
-            applied_refs: Vec::new(),
-            metadata_records: Vec::new(),
-            rolled_back: false,
+    let Some(mut writes) = prepared else {
+        debug_assert!(
+            !reasons.is_empty(),
+            "prepared writes missing when there are no preflight reasons"
+        );
+        reasons.push(EffectApplicationReason::InternalInvariant);
+        diagnostics.push(
+            "internal invariant: prepared writes missing despite empty preflight reasons"
+                .to_string(),
+        );
+        return blocked_effect_application_result(
+            effect_contract.id.clone(),
             reasons,
             diagnostics,
             validation_error_count,
             validation_warning_count,
-        };
+        );
+    };
+    if !revalidate_prepared_writes(root, &mut writes, &mut reasons, &mut diagnostics) {
+        return blocked_effect_application_result(
+            effect_contract.id.clone(),
+            reasons,
+            diagnostics,
+            validation_error_count,
+            validation_warning_count,
+        );
     }
     let originals = capture_originals(&writes);
     let mut applied_refs = Vec::new();
@@ -1074,32 +1084,41 @@ pub fn apply_file_effect_transaction_with_wal(
     validate_file_backed_reads(root, effect, &mut reasons, &mut diagnostics);
     let prepared = prepare_file_writes(root, effect, payloads, &mut reasons, &mut diagnostics);
     if !reasons.is_empty() {
-        return EffectApplicationResult {
-            status: EffectApplicationStatus::Blocked,
-            effect_id: effect_contract.id.clone(),
-            applied_refs: Vec::new(),
-            metadata_records: Vec::new(),
-            rolled_back: false,
+        return blocked_effect_application_result(
+            effect_contract.id.clone(),
             reasons,
             diagnostics,
             validation_error_count,
             validation_warning_count,
-        };
+        );
     }
 
-    let mut writes = prepared.expect("prepared writes when no preflight reasons");
-    if !revalidate_prepared_writes(root, &mut writes, &mut reasons, &mut diagnostics) {
-        return EffectApplicationResult {
-            status: EffectApplicationStatus::Blocked,
-            effect_id: effect_contract.id.clone(),
-            applied_refs: Vec::new(),
-            metadata_records: Vec::new(),
-            rolled_back: false,
+    let Some(mut writes) = prepared else {
+        debug_assert!(
+            !reasons.is_empty(),
+            "prepared writes missing when there are no preflight reasons"
+        );
+        reasons.push(EffectApplicationReason::InternalInvariant);
+        diagnostics.push(
+            "internal invariant: prepared writes missing despite empty preflight reasons"
+                .to_string(),
+        );
+        return blocked_effect_application_result(
+            effect_contract.id.clone(),
             reasons,
             diagnostics,
             validation_error_count,
             validation_warning_count,
-        };
+        );
+    };
+    if !revalidate_prepared_writes(root, &mut writes, &mut reasons, &mut diagnostics) {
+        return blocked_effect_application_result(
+            effect_contract.id.clone(),
+            reasons,
+            diagnostics,
+            validation_error_count,
+            validation_warning_count,
+        );
     }
     let originals = capture_originals(&writes);
     if append_effect_wal_record(
@@ -1111,17 +1130,13 @@ pub fn apply_file_effect_transaction_with_wal(
     {
         reasons.push(EffectApplicationReason::WalAppendFailed);
         diagnostics.push("failed to append WAL begin record".to_string());
-        return EffectApplicationResult {
-            status: EffectApplicationStatus::Blocked,
-            effect_id: effect_contract.id.clone(),
-            applied_refs: Vec::new(),
-            metadata_records: Vec::new(),
-            rolled_back: false,
+        return blocked_effect_application_result(
+            effect_contract.id.clone(),
             reasons,
             diagnostics,
             validation_error_count,
             validation_warning_count,
-        };
+        );
     }
 
     let mut applied_refs = Vec::new();
@@ -1847,6 +1862,10 @@ pub fn compact_effect_wal(
 
 #[derive(Debug)]
 pub enum ReferenceIndexBuildError {
+    PathOutsideRoot {
+        root: PathBuf,
+        path: PathBuf,
+    },
     ReadDir {
         path: PathBuf,
         source: io::Error,
@@ -1864,6 +1883,14 @@ pub enum ReferenceIndexBuildError {
 impl fmt::Display for ReferenceIndexBuildError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::PathOutsideRoot { root, path } => {
+                write!(
+                    formatter,
+                    "path {} is not under repo root {}",
+                    path.display(),
+                    root.display()
+                )
+            }
             Self::ReadDir { path, source } => {
                 write!(formatter, "read dir {}: {source}", path.display())
             }
@@ -2075,7 +2102,7 @@ fn add_command_contracts(
         if file_name_is(&path, "command-contract-v0.yaml") {
             continue;
         }
-        index.insert(repo_relative(root, &path), ReferenceKind::CommandContract);
+        index.insert(repo_relative(root, &path)?, ReferenceKind::CommandContract);
         let value = read_yaml_value(&path)?;
         if let Some(id) = nested_str(&value, &["command_contract", "id"]) {
             index.insert(id, ReferenceKind::CommandContract);
@@ -2104,7 +2131,7 @@ fn add_runtime_contracts(
             None
         };
         if let Some(kind) = kind {
-            index.insert(repo_relative(root, &path), kind);
+            index.insert(repo_relative(root, &path)?, kind);
         }
     }
     Ok(())
@@ -2139,7 +2166,7 @@ fn add_instance_dir(
     let dir = root.join(relative_dir);
     for path in yaml_files(&dir)? {
         if !file_name_is(&path, definition_file) {
-            index.insert(repo_relative(root, &path), kind);
+            index.insert(repo_relative(root, &path)?, kind);
         }
     }
     Ok(())
@@ -2153,7 +2180,7 @@ fn add_yaml_files_in_dir(
 ) -> Result<(), ReferenceIndexBuildError> {
     let dir = root.join(relative_dir);
     for path in yaml_files(&dir)? {
-        index.insert(repo_relative(root, &path), kind);
+        index.insert(repo_relative(root, &path)?, kind);
     }
     Ok(())
 }
@@ -2181,6 +2208,25 @@ fn yaml_files(dir: &Path) -> Result<Vec<PathBuf>, ReferenceIndexBuildError> {
     Ok(files)
 }
 
+fn repo_relative_for_diagnostic(
+    root: &Path,
+    path: &Path,
+    diagnostics: &mut Vec<Diagnostic>,
+    code: DiagnosticCode,
+) -> Option<String> {
+    match repo_relative(root, path) {
+        Ok(relative_path) => Some(relative_path),
+        Err(source) => {
+            diagnostics.push(Diagnostic::error(
+                code,
+                diagnostic_path(path),
+                source.to_string(),
+            ));
+            None
+        }
+    }
+}
+
 fn collect_yaml_documents_recursive(
     root: &Path,
     dir: &Path,
@@ -2192,11 +2238,18 @@ fn collect_yaml_documents_recursive(
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(source) => {
-            collection.diagnostics.push(Diagnostic::error(
+            if let Some(relative_path) = repo_relative_for_diagnostic(
+                root,
+                dir,
+                &mut collection.diagnostics,
                 DiagnosticCode::YamlReadFailed,
-                repo_relative(root, dir),
-                source.to_string(),
-            ));
+            ) {
+                collection.diagnostics.push(Diagnostic::error(
+                    DiagnosticCode::YamlReadFailed,
+                    relative_path,
+                    source.to_string(),
+                ));
+            }
             return;
         }
     };
@@ -2204,11 +2257,18 @@ fn collect_yaml_documents_recursive(
         let entry = match entry {
             Ok(entry) => entry,
             Err(source) => {
-                collection.diagnostics.push(Diagnostic::error(
+                if let Some(relative_path) = repo_relative_for_diagnostic(
+                    root,
+                    dir,
+                    &mut collection.diagnostics,
                     DiagnosticCode::YamlReadFailed,
-                    repo_relative(root, dir),
-                    source.to_string(),
-                ));
+                ) {
+                    collection.diagnostics.push(Diagnostic::error(
+                        DiagnosticCode::YamlReadFailed,
+                        relative_path,
+                        source.to_string(),
+                    ));
+                }
                 continue;
             }
         };
@@ -2217,15 +2277,33 @@ fn collect_yaml_documents_recursive(
             collect_yaml_documents_recursive(root, &path, collection);
         } else if path.extension().and_then(|value| value.to_str()) == Some("yaml") {
             match read_yaml_value(&path) {
-                Ok(value) => collection.documents.push(ParsedYamlDocument {
-                    path: repo_relative(root, &path),
-                    value,
-                }),
-                Err(source) => collection.diagnostics.push(Diagnostic::error(
-                    DiagnosticCode::YamlParseFailed,
-                    repo_relative(root, &path),
-                    source.to_string(),
-                )),
+                Ok(value) => {
+                    if let Some(relative_path) = repo_relative_for_diagnostic(
+                        root,
+                        &path,
+                        &mut collection.diagnostics,
+                        DiagnosticCode::YamlReadFailed,
+                    ) {
+                        collection.documents.push(ParsedYamlDocument {
+                            path: relative_path,
+                            value,
+                        });
+                    }
+                }
+                Err(source) => {
+                    if let Some(relative_path) = repo_relative_for_diagnostic(
+                        root,
+                        &path,
+                        &mut collection.diagnostics,
+                        DiagnosticCode::YamlParseFailed,
+                    ) {
+                        collection.diagnostics.push(Diagnostic::error(
+                            DiagnosticCode::YamlParseFailed,
+                            relative_path,
+                            source.to_string(),
+                        ));
+                    }
+                }
             }
         }
     }
@@ -2239,29 +2317,53 @@ fn collect_known_paths_recursive(
     if !path.exists() {
         return;
     }
-    collection.paths.insert(repo_relative(root, path));
+    let Some(relative_path) = repo_relative_for_diagnostic(
+        root,
+        path,
+        &mut collection.diagnostics,
+        DiagnosticCode::YamlReadFailed,
+    ) else {
+        return;
+    };
+    collection.paths.insert(relative_path);
     if !path.is_dir() {
         return;
     }
     let entries = match fs::read_dir(path) {
         Ok(entries) => entries,
         Err(source) => {
-            collection.diagnostics.push(Diagnostic::error(
+            if let Some(relative_path) = repo_relative_for_diagnostic(
+                root,
+                path,
+                &mut collection.diagnostics,
                 DiagnosticCode::YamlReadFailed,
-                repo_relative(root, path),
-                source.to_string(),
-            ));
+            ) {
+                collection.diagnostics.push(Diagnostic::error(
+                    DiagnosticCode::YamlReadFailed,
+                    relative_path,
+                    source.to_string(),
+                ));
+            }
             return;
         }
     };
     for entry in entries {
         match entry {
             Ok(entry) => collect_known_paths_recursive(root, &entry.path(), collection),
-            Err(source) => collection.diagnostics.push(Diagnostic::error(
-                DiagnosticCode::YamlReadFailed,
-                repo_relative(root, path),
-                source.to_string(),
-            )),
+            Err(source) => {
+                if let Some(relative_path) = repo_relative_for_diagnostic(
+                    root,
+                    path,
+                    &mut collection.diagnostics,
+                    DiagnosticCode::YamlReadFailed,
+                ) {
+                    collection.diagnostics.push(Diagnostic::error(
+                        DiagnosticCode::YamlReadFailed,
+                        relative_path,
+                        source.to_string(),
+                    ));
+                }
+            }
         }
     }
 }
@@ -2557,11 +2659,89 @@ struct PreparedWrite {
     physical_reference: String,
     target: PathBuf,
     target_kind: EffectTargetKind,
-    access_mode: AccessMode,
+    access_mode: PreparedAccessMode,
     destructive: bool,
     expected_hash: Option<String>,
     payload_content: Option<Vec<u8>>,
     content: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PreparedAccessMode {
+    Create,
+    Write,
+    Append,
+    Delete,
+}
+
+impl PreparedAccessMode {
+    fn from_contract(
+        reference: &str,
+        access_mode: AccessMode,
+    ) -> Result<Self, PrepareFileWriteError> {
+        match access_mode {
+            AccessMode::Create => Ok(Self::Create),
+            AccessMode::Write => Ok(Self::Write),
+            AccessMode::Append => Ok(Self::Append),
+            AccessMode::Delete => Ok(Self::Delete),
+            AccessMode::Read => Err(PrepareFileWriteError::UnsupportedAccessMode {
+                reference: reference.to_string(),
+                access_mode,
+            }),
+        }
+    }
+
+    const fn as_contract(self) -> AccessMode {
+        match self {
+            Self::Create => AccessMode::Create,
+            Self::Write => AccessMode::Write,
+            Self::Append => AccessMode::Append,
+            Self::Delete => AccessMode::Delete,
+        }
+    }
+
+    const fn requires_payload(self) -> bool {
+        !matches!(self, Self::Delete)
+    }
+
+    const fn is_delete(self) -> bool {
+        matches!(self, Self::Delete)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PrepareFileWriteError {
+    UnsupportedAccessMode {
+        reference: String,
+        access_mode: AccessMode,
+    },
+    MissingPayloadForWrite {
+        reference: String,
+    },
+}
+
+impl PrepareFileWriteError {
+    fn push_diagnostic(
+        &self,
+        reasons: &mut Vec<EffectApplicationReason>,
+        diagnostics: &mut Vec<String>,
+    ) {
+        match self {
+            Self::UnsupportedAccessMode {
+                reference,
+                access_mode,
+            } => {
+                reasons.push(EffectApplicationReason::UnsupportedAccessMode);
+                diagnostics.push(format!(
+                    "unsupported write access mode for {reference}: {access_mode:?}"
+                ));
+            }
+            Self::MissingPayloadForWrite { reference } => {
+                reasons.push(EffectApplicationReason::MissingPayloadForWrite);
+                diagnostics.push(format!("missing payload for {reference}"));
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -2616,14 +2796,14 @@ fn prepare_file_writes(
             diagnostics.push(format!("unsupported target kind for {}", write.reference));
             continue;
         }
-        if write.access_mode == AccessMode::Read {
-            reasons.push(EffectApplicationReason::UnsupportedAccessMode);
-            diagnostics.push(format!(
-                "unsupported write access mode for {}",
-                write.reference
-            ));
-            continue;
-        }
+        let access_mode =
+            match PreparedAccessMode::from_contract(&write.reference, write.access_mode) {
+                Ok(access_mode) => access_mode,
+                Err(error) => {
+                    error.push_diagnostic(reasons, diagnostics);
+                    continue;
+                }
+            };
 
         let (target, physical_reference) =
             match resolve_effect_target(root, write.target_kind, &write.reference) {
@@ -2635,17 +2815,19 @@ fn prepare_file_writes(
                 }
             };
 
-        let payload = if write.access_mode == AccessMode::Delete {
-            None
-        } else {
+        let payload = if access_mode.requires_payload() {
             match payload_for(payloads, &write.reference) {
                 Some(payload) => Some(payload),
                 None => {
-                    reasons.push(EffectApplicationReason::MissingPayloadForWrite);
-                    diagnostics.push(format!("missing payload for {}", write.reference));
+                    PrepareFileWriteError::MissingPayloadForWrite {
+                        reference: write.reference.clone(),
+                    }
+                    .push_diagnostic(reasons, diagnostics);
                     continue;
                 }
             }
+        } else {
+            None
         };
 
         if let Some(payload) = payload {
@@ -2658,18 +2840,18 @@ fn prepare_file_writes(
         }
 
         let target_exists = target.exists();
-        match write.access_mode {
-            AccessMode::Create if target_exists => {
+        match access_mode {
+            PreparedAccessMode::Create if target_exists => {
                 reasons.push(EffectApplicationReason::TargetExistsForCreate);
                 diagnostics.push(format!("create target exists {}", write.reference));
                 continue;
             }
-            AccessMode::Write if !target_exists => {
+            PreparedAccessMode::Write if !target_exists => {
                 reasons.push(EffectApplicationReason::TargetMissingForWrite);
                 diagnostics.push(format!("write target missing {}", write.reference));
                 continue;
             }
-            AccessMode::Write if write.expected_hash.is_none() => {
+            PreparedAccessMode::Write if write.expected_hash.is_none() => {
                 reasons.push(EffectApplicationReason::MissingExpectedHashForOverwrite);
                 diagnostics.push(format!(
                     "write target missing expected hash {}",
@@ -2677,7 +2859,7 @@ fn prepare_file_writes(
                 ));
                 continue;
             }
-            AccessMode::Delete if !target_exists => {
+            PreparedAccessMode::Delete if !target_exists => {
                 reasons.push(EffectApplicationReason::TargetMissingForDelete);
                 diagnostics.push(format!("delete target missing {}", write.reference));
                 continue;
@@ -2696,16 +2878,26 @@ fn prepare_file_writes(
             }
         }
 
-        let content = match (write.access_mode, payload) {
-            (AccessMode::Create | AccessMode::Write, Some(payload)) => payload.content.clone(),
-            (AccessMode::Append, Some(payload)) => {
+        let content = match (access_mode, payload) {
+            (PreparedAccessMode::Create | PreparedAccessMode::Write, Some(payload)) => {
+                payload.content.clone()
+            }
+            (PreparedAccessMode::Append, Some(payload)) => {
                 let mut content = fs::read(&target).unwrap_or_default();
                 content.extend_from_slice(&payload.content);
                 content
             }
-            (AccessMode::Delete, _) => Vec::new(),
-            (AccessMode::Read, _) => unreachable!("read access mode was rejected"),
-            (_, None) => unreachable!("non-delete payload absence was rejected"),
+            (PreparedAccessMode::Delete, _) => Vec::new(),
+            (
+                PreparedAccessMode::Create | PreparedAccessMode::Write | PreparedAccessMode::Append,
+                None,
+            ) => {
+                PrepareFileWriteError::MissingPayloadForWrite {
+                    reference: write.reference.clone(),
+                }
+                .push_diagnostic(reasons, diagnostics);
+                continue;
+            }
         };
 
         writes.push(PreparedWrite {
@@ -2713,7 +2905,7 @@ fn prepare_file_writes(
             physical_reference,
             target,
             target_kind: write.target_kind,
-            access_mode: write.access_mode,
+            access_mode,
             destructive: write.destructive,
             expected_hash: write.expected_hash.clone(),
             payload_content: payload.map(|payload| payload.content.clone()),
@@ -2748,19 +2940,19 @@ fn revalidate_prepared_writes(
 
         let target_exists = write.target.exists();
         match write.access_mode {
-            AccessMode::Create if target_exists => {
+            PreparedAccessMode::Create if target_exists => {
                 ok = false;
                 reasons.push(EffectApplicationReason::TargetExistsForCreate);
                 diagnostics.push(format!("create target exists {}", write.reference));
                 continue;
             }
-            AccessMode::Write if !target_exists => {
+            PreparedAccessMode::Write if !target_exists => {
                 ok = false;
                 reasons.push(EffectApplicationReason::TargetMissingForWrite);
                 diagnostics.push(format!("write target missing {}", write.reference));
                 continue;
             }
-            AccessMode::Delete if !target_exists => {
+            PreparedAccessMode::Delete if !target_exists => {
                 ok = false;
                 reasons.push(EffectApplicationReason::TargetMissingForDelete);
                 diagnostics.push(format!("delete target missing {}", write.reference));
@@ -2782,20 +2974,33 @@ fn revalidate_prepared_writes(
         }
 
         match write.access_mode {
-            AccessMode::Create | AccessMode::Write => {
-                write.content = write.payload_content.clone().unwrap_or_default();
+            PreparedAccessMode::Create | PreparedAccessMode::Write => {
+                let Some(payload_content) = &write.payload_content else {
+                    ok = false;
+                    PrepareFileWriteError::MissingPayloadForWrite {
+                        reference: write.reference.clone(),
+                    }
+                    .push_diagnostic(reasons, diagnostics);
+                    continue;
+                };
+                write.content = payload_content.clone();
             }
-            AccessMode::Append => {
+            PreparedAccessMode::Append => {
+                let Some(payload_content) = &write.payload_content else {
+                    ok = false;
+                    PrepareFileWriteError::MissingPayloadForWrite {
+                        reference: write.reference.clone(),
+                    }
+                    .push_diagnostic(reasons, diagnostics);
+                    continue;
+                };
                 let mut content = fs::read(&write.target).unwrap_or_default();
-                if let Some(payload_content) = &write.payload_content {
-                    content.extend_from_slice(payload_content);
-                }
+                content.extend_from_slice(payload_content);
                 write.content = content;
             }
-            AccessMode::Delete => {
+            PreparedAccessMode::Delete => {
                 write.content.clear();
             }
-            AccessMode::Read => unreachable!("read access mode was rejected"),
         }
     }
     ok
@@ -2816,8 +3021,8 @@ fn effect_target_metadata_records(
             logical_ref: write.reference.clone(),
             physical_ref: write.physical_reference.clone(),
             target_kind: write.target_kind,
-            access_mode: write.access_mode,
-            content_hash: if write.access_mode == AccessMode::Delete {
+            access_mode: write.access_mode.as_contract(),
+            content_hash: if write.access_mode.is_delete() {
                 None
             } else {
                 Some(sha256_content_hash(&write.content))
@@ -2923,7 +3128,13 @@ fn latest_effect_target_metadata_records(
     latest_indices.sort_unstable();
     latest_indices
         .into_iter()
-        .map(|index| records[index].clone())
+        .filter_map(|index| {
+            debug_assert!(
+                index < records.len(),
+                "latest metadata index must originate from records.iter().enumerate()"
+            );
+            records.get(index).cloned()
+        })
         .collect()
 }
 
@@ -3028,6 +3239,26 @@ fn rollback_wal_transaction_result(
     }
 }
 
+fn blocked_effect_application_result(
+    effect_id: StableId,
+    reasons: Vec<EffectApplicationReason>,
+    diagnostics: Vec<String>,
+    validation_error_count: usize,
+    validation_warning_count: usize,
+) -> EffectApplicationResult {
+    EffectApplicationResult {
+        status: EffectApplicationStatus::Blocked,
+        effect_id,
+        applied_refs: Vec::new(),
+        metadata_records: Vec::new(),
+        rolled_back: false,
+        reasons,
+        diagnostics,
+        validation_error_count,
+        validation_warning_count,
+    }
+}
+
 fn push_unique_reason(reasons: &mut Vec<EffectApplicationReason>, reason: EffectApplicationReason) {
     if !reasons.contains(&reason) {
         reasons.push(reason);
@@ -3045,19 +3276,55 @@ fn capture_originals(writes: &[PreparedWrite]) -> Vec<OriginalFileState> {
         .collect()
 }
 
-fn apply_prepared_write(write: &PreparedWrite) -> io::Result<()> {
-    match write.access_mode {
-        AccessMode::Create | AccessMode::Write | AccessMode::Append => {
-            atomic_replace_file(&write.target, &write.content)
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ApplyPreparedWriteError {
+    Io {
+        action: &'static str,
+        path: PathBuf,
+        source: String,
+    },
+}
+
+impl fmt::Display for ApplyPreparedWriteError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io {
+                action,
+                path,
+                source,
+            } => write!(formatter, "{action} {}: {source}", path.display()),
         }
-        AccessMode::Delete => {
-            fs::remove_file(&write.target)?;
+    }
+}
+
+impl std::error::Error for ApplyPreparedWriteError {}
+
+fn apply_prepared_write(write: &PreparedWrite) -> Result<(), ApplyPreparedWriteError> {
+    match write.access_mode {
+        PreparedAccessMode::Create | PreparedAccessMode::Write | PreparedAccessMode::Append => {
+            atomic_replace_file(&write.target, &write.content).map_err(|source| {
+                ApplyPreparedWriteError::Io {
+                    action: "atomic replace",
+                    path: write.target.clone(),
+                    source: source.to_string(),
+                }
+            })
+        }
+        PreparedAccessMode::Delete => {
+            fs::remove_file(&write.target).map_err(|source| ApplyPreparedWriteError::Io {
+                action: "remove file",
+                path: write.target.clone(),
+                source: source.to_string(),
+            })?;
             if let Some(parent) = write.target.parent() {
-                sync_parent_dir(parent)?;
+                sync_parent_dir(parent).map_err(|source| ApplyPreparedWriteError::Io {
+                    action: "sync parent dir",
+                    path: parent.to_path_buf(),
+                    source: source.to_string(),
+                })?;
             }
             Ok(())
         }
-        AccessMode::Read => unreachable!("read access mode was rejected"),
     }
 }
 
@@ -3118,13 +3385,51 @@ fn atomic_replace_file(target: &Path, content: &[u8]) -> io::Result<()> {
     }
 
     if let Err(error) = fs::rename(&temp, target) {
-        if fs::remove_file(&temp).is_ok() {
-            sync_parent_dir(parent)?;
+        let mut cleanup_errors = Vec::new();
+        match fs::remove_file(&temp) {
+            Ok(()) => {
+                if let Err(sync_error) = sync_parent_dir(parent) {
+                    cleanup_errors.push(format!(
+                        "sync parent after removing temp {} failed: {sync_error}",
+                        temp.display()
+                    ));
+                }
+            }
+            Err(remove_error) if remove_error.kind() == io::ErrorKind::NotFound => {}
+            Err(remove_error) => cleanup_errors.push(format!(
+                "remove temp {} failed: {remove_error}",
+                temp.display()
+            )),
         }
-        if had_target && fs::rename(&backup, target).is_ok() {
-            sync_parent_dir(parent)?;
+        if had_target {
+            match fs::rename(&backup, target) {
+                Ok(()) => {
+                    if let Err(sync_error) = sync_parent_dir(parent) {
+                        cleanup_errors.push(format!(
+                            "sync parent after restoring backup {} failed: {sync_error}",
+                            backup.display()
+                        ));
+                    }
+                }
+                Err(restore_error) => cleanup_errors.push(format!(
+                    "restore backup {} to {} failed: {restore_error}",
+                    backup.display(),
+                    target.display()
+                )),
+            }
         }
-        return Err(error);
+        if cleanup_errors.is_empty() {
+            return Err(error);
+        }
+        return Err(io::Error::new(
+            error.kind(),
+            format!(
+                "rename temp {} to {} failed: {error}; cleanup diagnostics: {}",
+                temp.display(),
+                target.display(),
+                cleanup_errors.join("; ")
+            ),
+        ));
     }
     sync_parent_dir(parent)?;
 
@@ -3213,8 +3518,8 @@ impl EffectWalRecord {
             target_metadata: Some(EffectWalTargetMetadata {
                 operation_id: effect.tool_effect_contract.operation_ref.clone(),
                 target_kind: write.target_kind,
-                access_mode: write.access_mode,
-                content_hash: if write.access_mode == AccessMode::Delete {
+                access_mode: write.access_mode.as_contract(),
+                content_hash: if write.access_mode.is_delete() {
                     None
                 } else {
                     Some(sha256_content_hash(&write.content))
@@ -3413,12 +3718,36 @@ fn acquire_effect_store_lock_inner(
             }
         }
     } else {
-        file.lock().map_err(|source| EffectStoreLockError::Lock {
-            path: path.clone(),
-            source,
-        })?;
+        acquire_effect_store_lock_with_deadline(&file, &path)?;
     }
     Ok(EffectStoreLock { file, path })
+}
+
+const EFFECT_STORE_LOCK_RETRY_ATTEMPTS: u32 = 60;
+
+fn acquire_effect_store_lock_with_deadline(
+    file: &File,
+    path: &Path,
+) -> Result<(), EffectStoreLockError> {
+    for attempt in 0..EFFECT_STORE_LOCK_RETRY_ATTEMPTS {
+        match file.try_lock() {
+            Ok(()) => return Ok(()),
+            Err(TryLockError::WouldBlock) => {
+                let shift = attempt.min(5);
+                let backoff_ms = 2_u64.checked_shl(shift).unwrap_or(64);
+                std::thread::sleep(std::time::Duration::from_millis(backoff_ms));
+            }
+            Err(TryLockError::Error(source)) => {
+                return Err(EffectStoreLockError::Lock {
+                    path: path.to_path_buf(),
+                    source,
+                });
+            }
+        }
+    }
+    Err(EffectStoreLockError::WouldBlock {
+        path: path.to_path_buf(),
+    })
 }
 
 fn effect_wal_compaction_manifest_path(wal_path: &Path) -> PathBuf {
@@ -3557,11 +3886,17 @@ fn file_name_is(path: &Path, expected: &str) -> bool {
     path.file_name().and_then(|value| value.to_str()) == Some(expected)
 }
 
-fn repo_relative(root: &Path, path: &Path) -> String {
+fn repo_relative(root: &Path, path: &Path) -> Result<String, ReferenceIndexBuildError> {
     path.strip_prefix(root)
-        .expect("path under root")
-        .to_string_lossy()
-        .replace('\\', "/")
+        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+        .map_err(|_| ReferenceIndexBuildError::PathOutsideRoot {
+            root: root.to_path_buf(),
+            path: path.to_path_buf(),
+        })
+}
+
+fn diagnostic_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 #[cfg(test)]
@@ -3657,6 +3992,23 @@ mod tests {
             EffectTargetResolveError::InvalidTargetPath { .. }
         ));
 
+        fs::remove_dir_all(root).expect("cleanup temp root");
+    }
+
+    #[test]
+    fn repo_relative_returns_error_for_path_outside_root() {
+        let root = temp_root("repo-relative-outside-root");
+        let outside = root
+            .parent()
+            .expect("temp root has parent")
+            .join("forge-core-store-outside-root.yaml");
+
+        let error = repo_relative(&root, &outside).expect_err("outside path should fail closed");
+
+        assert!(matches!(
+            error,
+            ReferenceIndexBuildError::PathOutsideRoot { .. }
+        ));
         fs::remove_dir_all(root).expect("cleanup temp root");
     }
 }

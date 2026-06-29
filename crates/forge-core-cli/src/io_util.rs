@@ -27,10 +27,10 @@ pub fn atomic_write(target: &Path, bytes: &str) -> std::io::Result<()> {
     let parent = target_parent(target);
     let (tmp, file) = create_atomic_temp_file(target, parent)?;
     let result = write_and_rename_atomically(&tmp, target, parent, bytes, file);
-    if result.is_err() {
-        let _ = std::fs::remove_file(&tmp);
+    if let Err(error) = result {
+        return Err(cleanup_atomic_temp_after_error(error, &tmp, parent));
     }
-    result
+    Ok(())
 }
 
 fn target_parent(target: &Path) -> &Path {
@@ -95,6 +95,38 @@ fn write_and_rename_atomically(
     #[cfg(not(unix))]
     sync_parent_dir(parent);
     Ok(())
+}
+
+fn cleanup_atomic_temp_after_error(
+    original: std::io::Error,
+    tmp: &Path,
+    parent: &Path,
+) -> std::io::Error {
+    #[cfg(not(unix))]
+    let _ = parent;
+    match std::fs::remove_file(tmp) {
+        Ok(()) => {
+            #[cfg(unix)]
+            if let Err(cleanup_error) = sync_parent_dir(parent) {
+                return std::io::Error::new(
+                    original.kind(),
+                    format!(
+                        "atomic write failed: {original}; removed temp {} but parent sync failed: {cleanup_error}",
+                        tmp.display()
+                    ),
+                );
+            }
+            original
+        }
+        Err(cleanup_error) if cleanup_error.kind() == std::io::ErrorKind::NotFound => original,
+        Err(cleanup_error) => std::io::Error::new(
+            original.kind(),
+            format!(
+                "atomic write failed: {original}; additionally failed to remove temp {}: {cleanup_error}",
+                tmp.display()
+            ),
+        ),
+    }
 }
 
 #[cfg(unix)]

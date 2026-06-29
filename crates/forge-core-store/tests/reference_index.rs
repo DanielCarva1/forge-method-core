@@ -793,6 +793,63 @@ fn apply_file_effect_transaction_rejects_path_like_artifact_outside_projection()
 }
 
 #[test]
+fn apply_file_effect_transaction_blocks_read_access_mode_in_write_set() {
+    let root = temp_store_root("apply-file-effect-read-write-mode");
+    let read_ref = ".forge-method/input.txt";
+    let target_ref = ".forge-method/artifacts/read-mode.txt";
+    fs::create_dir_all(root.join(".forge-method")).expect("create root");
+    fs::write(root.join(read_ref), b"input").expect("write read file");
+    let effect = test_effect(
+        vec![effect_write(target_ref, AccessMode::Read, None)],
+        read_ref,
+        sha256_content_hash(b"input"),
+    );
+
+    let result = apply_file_effect_transaction(&root, &effect, &[]);
+
+    assert_eq!(result.status, EffectApplicationStatus::Blocked);
+    assert!(result
+        .reasons
+        .contains(&EffectApplicationReason::UnsupportedAccessMode));
+    assert!(result
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.contains("unsupported write access mode")));
+    assert!(!root.join(target_ref).exists());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn apply_file_effect_transaction_with_wal_blocks_missing_payload_before_wal_begin() {
+    let root = temp_store_root("apply-file-effect-missing-payload-wal");
+    let read_ref = ".forge-method/input.txt";
+    let target_ref = ".forge-method/artifacts/missing-payload.txt";
+    let wal_ref = ".forge-method/ledger/effects-wal.ndjson";
+    fs::create_dir_all(root.join(".forge-method")).expect("create root");
+    fs::write(root.join(read_ref), b"input").expect("write read file");
+    let effect = test_effect(
+        vec![effect_write(target_ref, AccessMode::Create, None)],
+        read_ref,
+        sha256_content_hash(b"input"),
+    );
+
+    let result =
+        apply_file_effect_transaction_with_wal(&root, &effect, &[], wal_ref, "tx-missing-payload");
+
+    assert_eq!(result.status, EffectApplicationStatus::Blocked);
+    assert!(result
+        .reasons
+        .contains(&EffectApplicationReason::MissingPayloadForWrite));
+    assert!(result
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.contains("missing payload")));
+    assert!(!root.join(target_ref).exists());
+    assert!(!root.join(wal_ref).exists());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn apply_file_effect_transaction_blocks_stale_read_without_writing() {
     let root = temp_store_root("apply-file-effect-stale-read");
     let read_ref = ".forge-method/input.txt";
