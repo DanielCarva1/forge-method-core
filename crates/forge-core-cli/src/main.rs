@@ -189,55 +189,121 @@ fn main() {
             }
         }
         "host-adapter-verify-artifact" => {
-            host_adapter_verify_cmd::run_host_adapter_verify_artifact_command(&args)
+            match host_adapter_verify_cmd::run_host_adapter_verify_artifact_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-verify-provenance" => {
-            host_adapter_verify_cmd::run_host_adapter_verify_provenance_command(&args)
+            match host_adapter_verify_cmd::run_host_adapter_verify_provenance_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-verify-rekor-entry" => {
-            host_adapter_verify_cmd::run_host_adapter_verify_rekor_entry_command(&args)
+            match host_adapter_verify_cmd::run_host_adapter_verify_rekor_entry_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-verify-sigstore-trust-policy" => {
-            host_adapter_verify_cmd::run_host_adapter_verify_sigstore_trust_policy_command(&args)
+            match host_adapter_verify_cmd::run_host_adapter_verify_sigstore_trust_policy_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-verify-fulcio-certificate-identity" => {
-            host_adapter_verify_cmd::run_host_adapter_verify_fulcio_certificate_identity_command(
-                &args,
-            )
+            match host_adapter_verify_cmd::run_host_adapter_verify_fulcio_certificate_identity_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-verify-sigstore-bundle-subject" => {
-            host_adapter_verify_cmd::run_host_adapter_verify_sigstore_bundle_subject_command(&args)
+            match host_adapter_verify_cmd::run_host_adapter_verify_sigstore_bundle_subject_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-verify-sigstore-dsse-in-toto-subject" => {
-            host_adapter_verify_cmd::run_host_adapter_verify_sigstore_dsse_in_toto_subject_command(
-                &args,
-            )
+            match host_adapter_verify_cmd::run_host_adapter_verify_sigstore_dsse_in_toto_subject_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-verify-sigstore-timestamp-authority" => {
-            host_adapter_verify_cmd::run_host_adapter_verify_sigstore_timestamp_authority_command(
-                &args,
-            )
+            match host_adapter_verify_cmd::run_host_adapter_verify_sigstore_timestamp_authority_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-verify-certificate-transparency-sct" => {
-            host_adapter_verify_cmd::run_host_adapter_verify_certificate_transparency_sct_command(
-                &args,
-            )
+            match host_adapter_verify_cmd::run_host_adapter_verify_certificate_transparency_sct_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-verify-certificate-revocation-policy" => {
-            host_adapter_verify_cmd::run_host_adapter_verify_certificate_revocation_policy_command(
-                &args,
-            )
+            match host_adapter_verify_cmd::run_host_adapter_verify_certificate_revocation_policy_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-verify-tuf-trusted-root-freshness" => {
-            host_adapter_verify_cmd::run_host_adapter_verify_tuf_trusted_root_freshness_command(
-                &args,
-            )
+            match host_adapter_verify_cmd::run_host_adapter_verify_tuf_trusted_root_freshness_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-verify-certificate-crl-status" => {
-            host_adapter_verify_cmd::run_host_adapter_verify_certificate_crl_status_command(&args)
+            match host_adapter_verify_cmd::run_host_adapter_verify_certificate_crl_status_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-verify-certificate-ocsp-status" => {
-            host_adapter_verify_cmd::run_host_adapter_verify_certificate_ocsp_status_command(&args);
+            match host_adapter_verify_cmd::run_host_adapter_verify_certificate_ocsp_status_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "--help" | "-h" => println!("{}", usage()),
         _ => {
