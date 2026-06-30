@@ -29,41 +29,79 @@ pub struct StatefulCommandRoots {
     pub effect_store_root: PathBuf,
 }
 
+/// Hand-rolled error enum for [`resolve_stateful_command_roots`]. Replaces the
+/// legacy `Result<_, String>` signature so callers get typed variants instead
+/// of opaque diagnostic strings.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StatefulRootsError {
+    /// `resolve_project` failed; carries its lossy display string.
+    ProjectResolve { source: String },
+    /// The resolved `state_root` does not exist on disk.
+    StateRootMissing { state_root: String },
+    /// The resolved `state_root` is not named `.forge-method`.
+    StateRootNotSidecar { state_root: String },
+    /// The resolved `state_root` has no parent directory.
+    StateRootHasNoParent { state_root: String },
+}
+
+impl std::fmt::Display for StatefulRootsError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ProjectResolve { source } => {
+                write!(formatter, "project resolve failed: {source}")
+            }
+            Self::StateRootMissing { state_root } => write!(
+                formatter,
+                "resolved Forge state_root does not exist for state-bearing command: {state_root}; create the sidecar .forge-method directory or fix .forge-method.yaml"
+            ),
+            Self::StateRootNotSidecar { state_root } => write!(
+                formatter,
+                "resolved Forge state_root must end with .forge-method for state-bearing operation/effect commands: {state_root}"
+            ),
+            Self::StateRootHasNoParent { state_root } => write!(
+                formatter,
+                "resolved Forge state_root has no parent sidecar root: {state_root}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for StatefulRootsError {}
+
 /// Resolves `project_root` and `effect_store_root` for any state-bearing
 /// command (operation/effect) by reading the project's `.forge-method.yaml`.
 ///
 /// # Errors
 ///
-/// Returns a `String` description when project resolution fails, when the
+/// Returns [`StatefulRootsError`] when project resolution fails, when the
 /// resolved `state_root` does not exist on disk, when it is not named
 /// `.forge-method`, or when it has no parent sidecar root.
 pub fn resolve_stateful_command_roots(
     root: &Path,
     allow_bootstrap_core: bool,
-) -> Result<StatefulCommandRoots, String> {
+) -> Result<StatefulCommandRoots, StatefulRootsError> {
     let resolved = crate::project_cmd::resolve_project(root, allow_bootstrap_core)
-        .map_err(|error| format!("project resolve failed: {error}"))?;
+        .map_err(|error| StatefulRootsError::ProjectResolve {
+            source: error.to_string(),
+        })?;
     let state_root = PathBuf::from(&resolved.state_root);
     if !state_root.exists() {
-        return Err(format!(
-            "resolved Forge state_root does not exist for state-bearing command: {}; create the sidecar .forge-method directory or fix .forge-method.yaml",
-            resolved.state_root
-        ));
+        return Err(StatefulRootsError::StateRootMissing {
+            state_root: resolved.state_root.clone(),
+        });
     }
     if state_root
         .file_name()
         .is_none_or(|name| name != std::ffi::OsStr::new(".forge-method"))
     {
-        return Err(format!(
-            "resolved Forge state_root must end with .forge-method for state-bearing operation/effect commands: {}",
-            resolved.state_root
-        ));
+        return Err(StatefulRootsError::StateRootNotSidecar {
+            state_root: resolved.state_root.clone(),
+        });
     }
     let Some(effect_store_root) = state_root.parent() else {
-        return Err(format!(
-            "resolved Forge state_root has no parent sidecar root: {}",
-            resolved.state_root
-        ));
+        return Err(StatefulRootsError::StateRootHasNoParent {
+            state_root: resolved.state_root.clone(),
+        });
     };
     Ok(StatefulCommandRoots {
         project_root: PathBuf::from(resolved.project_root),
@@ -409,8 +447,9 @@ pub fn resolve_stateful_roots_or_err(
     root: &Path,
     allow_bootstrap_core: bool,
 ) -> Result<StatefulCommandRoots, ExitError> {
-    resolve_stateful_command_roots(root, allow_bootstrap_core)
-        .map_err(|message| ExitError::failed(format!("{command} failed: {message}")))
+    resolve_stateful_command_roots(root, allow_bootstrap_core).map_err(|error| {
+        ExitError::failed(format!("{command} failed: {error}"))
+    })
 }
 
 /// Result variant of [`emit_envelope`].

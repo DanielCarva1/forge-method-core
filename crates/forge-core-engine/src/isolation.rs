@@ -242,11 +242,16 @@ fn contains_shell_metachar(s: &str) -> bool {
 }
 
 /// Same check returning a human reason for the validator error path.
-fn shell_metachar_check(s: &str) -> Result<(), String> {
+///
+/// Returns `Some("contains a shell metacharacter")` when the input contains
+/// a shell metacharacter, `None` when it is safe. Replaces the legacy
+/// `Result<_, String>` signature.
+#[must_use]
+fn shell_metachar_check(s: &str) -> Option<&'static str> {
     if contains_shell_metachar(s) {
-        Err("contains a shell metacharacter".to_string())
+        Some("contains a shell metacharacter")
     } else {
-        Ok(())
+        None
     }
 }
 
@@ -294,7 +299,10 @@ fn validate_branch_name(name: &str) -> Result<(), IsolationError> {
     }
     // Defense in depth (review S4.6 C1): branch_name flows into a copy-pasted
     // `git worktree add -b <branch>` — reject shell metacharacters here too.
-    shell_metachar_check(name).map_err(|reason| illegal_branch(&reason, name))
+    if let Some(reason) = shell_metachar_check(name) {
+        return Err(illegal_branch(reason, name));
+    }
+    Ok(())
 }
 
 /// Reject empty or traversal-prone worktree paths. Lexical only (DD29): we do
@@ -312,7 +320,10 @@ fn validate_worktree_path(path: &str) -> Result<(), IsolationError> {
     }
     // Defense in depth (review S4.6 C1): worktree_path flows into `git worktree
     // add ... <path>` and `cd <path>` — reject shell metacharacters.
-    shell_metachar_check(path).map_err(|reason| illegal_path(&reason, path))
+    if let Some(reason) = shell_metachar_check(path) {
+        return Err(illegal_path(reason, path));
+    }
+    Ok(())
 }
 
 /// Normalize a path for collision comparison: ASCII-lowercase + segment split

@@ -54,14 +54,41 @@ impl RouterScore {
     }
 }
 
+/// Hand-rolled error enum for [`load_eval_corpus`]. Replaces the legacy
+/// `Result<_, String>` signature so callers get typed variants.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EvalCorpusLoadError {
+    /// `fs::read_to_string` failed; carries the lossy io error string.
+    Read { source: String },
+    /// `yaml_serde::from_str` failed; carries the lossy deserialize error string.
+    Deserialize { source: String },
+}
+
+impl std::fmt::Display for EvalCorpusLoadError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Read { source } => write!(formatter, "read error: {source}"),
+            Self::Deserialize { source } => {
+                write!(formatter, "deserialize error: {source}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for EvalCorpusLoadError {}
+
 /// Load an eval corpus from a YAML file.
 ///
 /// # Errors
 ///
-/// Returns an error string if the file cannot be read or deserialized.
-pub fn load_eval_corpus(path: &Path) -> Result<EvalCorpusDocument, String> {
-    let text = std::fs::read_to_string(path).map_err(|e| format!("read error: {e}"))?;
-    yaml_serde::from_str(&text).map_err(|e| format!("deserialize error: {e}"))
+/// Returns [`EvalCorpusLoadError`] if the file cannot be read or deserialized.
+pub fn load_eval_corpus(path: &Path) -> Result<EvalCorpusDocument, EvalCorpusLoadError> {
+    let text = std::fs::read_to_string(path).map_err(|source| EvalCorpusLoadError::Read {
+        source: source.to_string(),
+    })?;
+    yaml_serde::from_str(&text).map_err(|source| EvalCorpusLoadError::Deserialize {
+        source: source.to_string(),
+    })
 }
 
 /// Score a router closure against the corpus. `router` maps an utterance to the
