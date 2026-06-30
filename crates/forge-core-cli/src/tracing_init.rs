@@ -56,6 +56,25 @@ impl LogFormat {
 /// successful runs quiet while still surfacing recoverable problems.
 const DEFAULT_FILTER: &str = "warn";
 
+/// Environment variable that identifies the agent driving this invocation.
+/// When set, the value propagates into every tracing span emitted by the
+/// process so that multi-agent runs (e.g. host + sub-agent, or N parallel
+/// workers) can be correlated in the trace store without parsing argv.
+pub const AGENT_ID_ENV: &str = "FORGE_AGENT_ID";
+
+/// Read the agent identity from the environment, if any.
+///
+/// Returns `None` when `FORGE_AGENT_ID` is unset or empty. The caller is
+/// responsible for emitting an empty tracing field (via `tracing::field::Empty`)
+/// so that agents-in-waiting are still distinguishable from human-driven runs.
+#[must_use]
+pub fn current_agent_id() -> Option<String> {
+    match env::var(AGENT_ID_ENV) {
+        Ok(value) if !value.trim().is_empty() => Some(value),
+        _ => None,
+    }
+}
+
 static SUBSCRIBER_INSTALLED: OnceLock<()> = OnceLock::new();
 
 /// Initialize the global tracing subscriber for the process.
@@ -128,5 +147,22 @@ mod tests {
         init_with(LogFormat::Json);
         init_with(LogFormat::Human);
         init_subscriber();
+    }
+
+    #[test]
+    fn agent_id_reads_env_when_set() {
+        // SAFETY: single-threaded test, FORGE_AGENT_ID is forge-only.
+        unsafe {
+            env::set_var(AGENT_ID_ENV, "codex-001");
+        }
+        assert_eq!(current_agent_id().as_deref(), Some("codex-001"));
+
+        unsafe {
+            env::set_var(AGENT_ID_ENV, "   ");
+        }
+        assert!(current_agent_id().is_none(), "whitespace-only is not an id");
+
+        env::remove_var(AGENT_ID_ENV);
+        assert!(current_agent_id().is_none(), "unset env returns None");
     }
 }
