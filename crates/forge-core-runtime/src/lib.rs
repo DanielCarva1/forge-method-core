@@ -1,3 +1,10 @@
+// The operation executor and the staged-read-only-command runner carry
+// long bodies by design: they walk the runtime effect plan step by step,
+// capturing per-step evidence into the typed execution result. Splitting
+// them just to satisfy `clippy::too_many_lines` would obscure the linear
+// step ordering.
+#![allow(clippy::too_many_lines)]
+
 use forge_core_contracts::command::{
     CommandExecutor, CommandSideEffectPolicy, CwdPolicy, EnvInheritPolicy, EnvPolicy,
     NetworkPolicy, Platform,

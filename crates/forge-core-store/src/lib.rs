@@ -1,3 +1,9 @@
+// The WAL replay, effect application, and metadata-index query entrypoints
+// are long because they materialise full typed status structs while walking
+// JSON-Lines records line-by-line. Splitting them to satisfy
+// `clippy::too_many_lines` would harm readability.
+#![allow(clippy::too_many_lines)]
+
 use forge_core_contracts::claim::ActorRole;
 use forge_core_contracts::runtime::RuntimeKind;
 use forge_core_contracts::tool_effect::{AccessMode, EffectTargetKind, ToolEffectContractDocument};

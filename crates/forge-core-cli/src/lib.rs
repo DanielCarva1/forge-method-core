@@ -12,6 +12,12 @@
 //! resolving `forge_core_cli::run_host_adapter_*_verification` and
 //! `forge_core_cli::HostAdapter*` unchanged.
 
+// The CLI dispatchers (`*_cmd.rs`, `claim.rs`, `isolation.rs`) are long by
+// construction: each one parses a flat argv list, assembles a typed input,
+// invokes the engine, and emits an envelope. Splitting them to fit under
+// `clippy::too_many_lines` would obscure the linear argument-parsing flow.
+#![allow(clippy::too_many_lines)]
+
 pub mod autonomy_cmd;
 pub mod claim;
 pub mod cli_error;
