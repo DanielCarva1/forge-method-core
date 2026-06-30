@@ -47,6 +47,7 @@ pub(crate) mod host_command;
 pub mod io_util;
 pub mod isolation;
 pub mod m1_cmd;
+pub mod preflight_cmd;
 pub mod project_cmd;
 pub mod telemetry_cmd;
 pub mod tracing_init;

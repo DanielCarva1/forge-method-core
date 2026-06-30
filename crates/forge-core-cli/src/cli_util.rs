@@ -113,6 +113,7 @@ pub fn resolve_stateful_command_roots(
 pub fn usage() -> &'static str {
     concat!(
         "usage: forge-core validate [--root <path>] [--json]\n",
+        "       forge-core preflight [--root <path>] [--allow-bootstrap-core] [--json|--no-json] [--gate <name>]... [--expected-anchor <count>]\n",
         "       forge-core project init [--root <path>] [--project-id <id>] [--sidecar-root <path>] [--state-root <path>] [--json|--no-json]\n",
         "       forge-core project resolve [--root <path>] [--allow-bootstrap-core] [--json|--no-json]\n",
         "       forge-core claim acquire [--root <path>] [--allow-bootstrap-core] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--claims-dir <path>] [--no-json]\n",
