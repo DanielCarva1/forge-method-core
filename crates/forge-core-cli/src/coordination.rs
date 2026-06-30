@@ -216,6 +216,12 @@ fn print_validate_human(env: &CliEnvelope<CoordinationValidatePayload>) {
     }
 }
 
+/// Dispatch entrypoint for the `forge-core coordination` command tree.
+///
+/// # Errors
+///
+/// Returns `ExitError::with_code` carrying the dispatcher's non-zero exit
+/// code so the entrypoint can translate it into `process::exit(code)`.
 pub fn run_coordination_command(args: &[String]) -> Result<(), ExitError> {
     let (json, exit) = dispatch(args);
     if !json.is_empty() {
