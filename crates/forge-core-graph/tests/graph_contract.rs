@@ -161,6 +161,68 @@ authority_boundary:
 }
 
 #[test]
+fn dangling_verifies_and_budget_refs_are_reported_as_errors() {
+    // Verifier node points at a node that does not exist, and a budget is
+    // attributed to another non-existent node. Both must surface as errors so
+    // verifier-blocking logic and budget attribution do not silently no-op.
+    let graph_yaml = r#"
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.dangling-refs"
+budgets:
+  - budget_id: "budget.lost"
+    node_id: "ghost"
+    max_steps: 5
+nodes:
+  - node_id: "plan"
+    node_kind: "operation"
+    operation_ref: "contracts/operations/plan.yaml"
+  - node_id: "verify"
+    node_kind: "verifier"
+    verifies: ["plan", "missing_target"]
+    pass_condition: "all_required_evidence_present"
+    verifier_result: "passed"
+edges: []
+stop_conditions:
+  - "validation_errors"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+"#;
+    let graph = parse_workflow_graph_yaml(graph_yaml).expect("dangling-refs graph parses");
+    let validation = validate_graph(&graph);
+    let codes = validation
+        .diagnostics()
+        .iter()
+        .map(|diagnostic| diagnostic.code)
+        .collect::<Vec<_>>();
+
+    assert!(validation.has_errors());
+    assert!(
+        codes.contains(&GraphDiagnosticCode::DanglingVerifiesRef),
+        "expected DanglingVerifiesRef in {codes:?}"
+    );
+    assert!(
+        codes.contains(&GraphDiagnosticCode::DanglingBudgetNodeRef),
+        "expected DanglingBudgetNodeRef in {codes:?}"
+    );
+    // The existing `plan` verifies entry must NOT produce a diagnostic.
+    let dangling_count = validation
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| {
+            diagnostic.code == GraphDiagnosticCode::DanglingVerifiesRef
+                || diagnostic.code == GraphDiagnosticCode::DanglingBudgetNodeRef
+        })
+        .count();
+    assert_eq!(
+        dangling_count, 2,
+        "expected exactly one dangling verifies + one dangling budget, got {dangling_count}"
+    );
+}
+
+#[test]
 fn cycle_detection_reports_error() {
     let cyclic_graph = r#"
 schema_version: "0.1"
