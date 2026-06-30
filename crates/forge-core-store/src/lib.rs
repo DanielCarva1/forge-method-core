@@ -4119,4 +4119,33 @@ mod tests {
         ));
         fs::remove_dir_all(root).expect("cleanup temp root");
     }
+
+    #[test]
+    fn append_json_line_with_no_sync_writes_record_without_fsync() {
+        // ADR-0009: NoSync skips sync_all but the record still lands on disk
+        // (write_all + flush). We verify the content is correct and readable;
+        // we cannot directly assert that fsync was skipped, but we confirm the
+        // API path is reachable and produces the same on-disk bytes as the
+        // default SyncOnAppend path.
+        let root = temp_root("append-jsonl-no-sync");
+        let record = serde_json::json!({"k": "v", "n": 42});
+
+        let path_sync = append_json_line(&root, "log/a.jsonl", &record).expect("sync append");
+        let path_nosync =
+            append_json_line_with_durability(&root, "log/b.jsonl", &record, WalDurability::NoSync)
+                .expect("nosync append");
+
+        let a = fs::read_to_string(&path_sync).expect("read sync file");
+        let b = fs::read_to_string(&path_nosync).expect("read nosync file");
+        assert_eq!(a, b, "NoSync and SyncOnAppend must write identical bytes");
+        assert!(a.ends_with('\n'), "append_json_line terminates with newline");
+        fs::remove_dir_all(root).expect("cleanup temp root");
+    }
+
+    #[test]
+    fn wal_durability_default_is_sync_on_append() {
+        // The default MUST be the durable variant; this is the load-bearing
+        // invariant of ADR-0009 (opt-in only).
+        assert_eq!(WalDurability::default(), WalDurability::SyncOnAppend);
+    }
 }
