@@ -1,4 +1,5 @@
 use crate::claim::{conflict_code_str, load_claims};
+use crate::cli_error::ExitError;
 use crate::cli_util::graph_usage;
 use crate::project_cmd::{resolve_project, ProjectResolveError};
 use forge_core_contracts::{
@@ -929,37 +930,42 @@ fn display_path(path: &Path) -> String {
     raw.strip_prefix(r"\\?\")
         .map_or(raw.clone(), std::string::ToString::to_string)
 }
-pub fn run_graph_command(args: &[String]) {
+pub fn run_graph_command(args: &[String]) -> Result<(), ExitError> {
     let subcommand = args.get(1).map_or("--help", String::as_str);
     match subcommand {
         "validate" => {
+            if args.iter().any(|a| matches!(a.as_str(), "--help" | "-h")) {
+                println!("{}", graph_usage());
+                return Ok(());
+            }
             let (input, json, _dry_run) =
-                parse_graph_command_args(args, GraphCommandKind::Validate);
-            run_graph_validate(&input, json);
+                parse_graph_command_args(args, GraphCommandKind::Validate)?;
+            run_graph_validate(&input, json)
         }
         "run" => {
-            let (input, json, dry_run) =
-                parse_graph_command_args(args, GraphCommandKind::RunDryRun);
-            if !dry_run {
-                eprintln!("graph run requires --dry-run");
-                std::process::exit(2);
+            if args.iter().any(|a| matches!(a.as_str(), "--help" | "-h")) {
+                println!("{}", graph_usage());
+                return Ok(());
             }
-            run_graph_dry_run(&input, json);
+            let (input, json, dry_run) =
+                parse_graph_command_args(args, GraphCommandKind::RunDryRun)?;
+            if !dry_run {
+                return Err(ExitError::usage("graph run requires --dry-run"));
+            }
+            run_graph_dry_run(&input, json)
         }
         "--help" | "-h" | "help" => {
             println!("{}", graph_usage());
+            Ok(())
         }
-        _ => {
-            eprintln!("{}", graph_usage());
-            std::process::exit(2);
-        }
+        _ => Err(ExitError::usage(graph_usage())),
     }
 }
 
 pub fn parse_graph_command_args(
     args: &[String],
     kind: GraphCommandKind,
-) -> (GraphCommandInput, bool, bool) {
+) -> Result<(GraphCommandInput, bool, bool), ExitError> {
     let mut root = PathBuf::from(".");
     let mut graph_path: Option<PathBuf> = None;
     let mut allow_bootstrap_core = false;
@@ -973,40 +979,38 @@ pub fn parse_graph_command_args(
         match args[index].as_str() {
             "--root" => {
                 index += 1;
-                root = next_graph_path(args, index, "root");
+                root = next_graph_path_or_err(args, index, "root")?;
             }
             "--graph" => {
                 index += 1;
-                graph_path = Some(next_graph_path(args, index, "graph"));
+                graph_path = Some(next_graph_path_or_err(args, index, "graph")?);
             }
             "--agent" | "--agent-id" if kind == GraphCommandKind::RunDryRun => {
                 index += 1;
-                agent_id = Some(next_graph_value(args, index, "agent").to_string());
+                agent_id = Some(next_graph_value_or_err(args, index, "agent")?.to_string());
             }
             "--claims-dir" if kind == GraphCommandKind::RunDryRun => {
                 index += 1;
-                claims_dir = Some(next_graph_path(args, index, "claims-dir"));
+                claims_dir = Some(next_graph_path_or_err(args, index, "claims-dir")?);
             }
             "--now-unix" if kind == GraphCommandKind::RunDryRun => {
                 index += 1;
-                now_unix = Some(parse_graph_i64(next_graph_value(args, index, "now-unix")));
+                now_unix = Some(parse_graph_i64_or_err(next_graph_value_or_err(
+                    args, index, "now-unix",
+                )?)?);
             }
             "--dry-run" if kind == GraphCommandKind::RunDryRun => dry_run = true,
             "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--json" => json = true,
-            "--help" | "-h" => {
-                println!("{}", graph_usage());
-                std::process::exit(0);
-            }
+            "--help" | "-h" => break,
             _ => {
-                eprintln!("{}", graph_usage());
-                std::process::exit(2);
+                return Err(ExitError::usage(graph_usage()));
             }
         }
         index += 1;
     }
 
-    (
+    Ok((
         GraphCommandInput {
             root,
             graph_path,
@@ -1017,38 +1021,40 @@ pub fn parse_graph_command_args(
         },
         json,
         dry_run,
-    )
+    ))
 }
 
-pub fn next_graph_value<'a>(args: &'a [String], index: usize, flag: &str) -> &'a str {
-    let value = args.get(index).map_or_else(
-        || {
-            eprintln!("graph: missing value for --{flag}");
-            std::process::exit(3);
-        },
-        String::as_str,
-    );
+pub fn next_graph_value_or_err<'a>(
+    args: &'a [String],
+    index: usize,
+    flag: &str,
+) -> Result<&'a str, ExitError> {
+    let value = args.get(index).ok_or_else(|| {
+        ExitError::invalid_value(format!("graph: missing value for --{flag}"))
+    })?;
     if value.starts_with('-') {
-        eprintln!("graph: missing value for --{flag}");
-        std::process::exit(3);
+        return Err(ExitError::invalid_value(format!(
+            "graph: missing value for --{flag}"
+        )));
     }
-    value
+    Ok(value.as_str())
 }
 
-pub fn next_graph_path(args: &[String], index: usize, flag: &str) -> PathBuf {
-    PathBuf::from(next_graph_value(args, index, flag))
+pub fn next_graph_path_or_err(
+    args: &[String],
+    index: usize,
+    flag: &str,
+) -> Result<PathBuf, ExitError> {
+    Ok(PathBuf::from(next_graph_value_or_err(args, index, flag)?))
 }
 
-pub fn parse_graph_i64(value: &str) -> i64 {
-    if let Ok(parsed) = value.parse::<i64>() {
-        parsed
-    } else {
-        eprintln!("graph: invalid value for --now-unix: '{value}'");
-        std::process::exit(3);
-    }
+pub fn parse_graph_i64_or_err(value: &str) -> Result<i64, ExitError> {
+    value.parse::<i64>().map_err(|_| {
+        ExitError::invalid_value(format!("graph: invalid value for --now-unix: '{value}'"))
+    })
 }
 
-pub fn run_graph_validate(input: &GraphCommandInput, json: bool) {
+pub fn run_graph_validate(input: &GraphCommandInput, json: bool) -> Result<(), ExitError> {
     match run_validate(input) {
         Ok(output) => {
             if json {
@@ -1064,17 +1070,15 @@ pub fn run_graph_validate(input: &GraphCommandInput, json: bool) {
                 );
             }
             if output.status == GraphCommandStatus::Blocked {
-                std::process::exit(1);
+                return Err(ExitError::failed("graph validate status blocked"));
             }
+            Ok(())
         }
-        Err(error) => {
-            eprintln!("graph validate failed: {error}");
-            std::process::exit(1);
-        }
+        Err(error) => Err(ExitError::failed(format!("graph validate failed: {error}"))),
     }
 }
 
-pub fn run_graph_dry_run(input: &GraphCommandInput, json: bool) {
+pub fn run_graph_dry_run(input: &GraphCommandInput, json: bool) -> Result<(), ExitError> {
     match run_dry_run(input) {
         Ok(output) => {
             if json {
@@ -1089,12 +1093,10 @@ pub fn run_graph_dry_run(input: &GraphCommandInput, json: bool) {
                 );
             }
             if output.status == GraphCommandStatus::Blocked {
-                std::process::exit(1);
+                return Err(ExitError::failed("graph run status blocked"));
             }
+            Ok(())
         }
-        Err(error) => {
-            eprintln!("graph run failed: {error}");
-            std::process::exit(1);
-        }
+        Err(error) => Err(ExitError::failed(format!("graph run failed: {error}"))),
     }
 }
