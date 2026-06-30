@@ -1174,6 +1174,13 @@ fn project_usage() -> &'static str {
     "forge-core project <subcommand> [options]\n  init [--root <path>] [--project-id <id>] [--sidecar-root <path>] [--state-root <path>] [--json|--no-json]\n  resolve [--root <path>] [--allow-bootstrap-core] [--json|--no-json]"
 }
 
+/// Dispatch entrypoint for the `forge-core project` command tree
+/// (`init`, `resolve`, `link`, etc.).
+///
+/// # Errors
+///
+/// Returns `ExitError::with_code` carrying the dispatcher's non-zero exit
+/// code so the entrypoint can translate it into `process::exit(code)`.
 pub fn run_project_command(args: &[String]) -> Result<(), ExitError> {
     let (output, exit) = dispatch(args);
     if !output.is_empty() {
