@@ -80,7 +80,7 @@ Meta: reduzir a **2 edit points** — (1) criar o módulo do comando, (2) regist
 
 ## Follow-up (não bloqueia F15 closure)
 
-- [ ] F15.7b-extend — Replicar threading `--no-sync` nos commands stateful restantes: `execute-operation`, `rebuild-effect-index`, `query-effect-index`. Mecânico, mesmo padrão do F15.7b claim. Não bloqueia o critério F15 (2 edit points) — é ganho de perf adicional.
+- [x] **F15.7b-extend** — Replicar threading `--no-sync` nos commands stateful restantes: `execute-operation`, `rebuild-effect-index`. Fechado em commits `c2d2571` (store layer), `ba049f3` (runtime context), `a21666d` (CLI surface + tests + ADR-0009 amend). `query-effect-index` foi intencionalmente excluído (read-only; flag seria no-op). ADR-0009 amended em status para refletir essa decisão.
 
 ## Status
 

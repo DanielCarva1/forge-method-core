@@ -1,6 +1,6 @@
 # ADR-0009: Opt-in `--no-sync` for WAL append (tiered durability)
 
-- **Status**: Accepted
+- **Status**: Accepted (amended 2026-06-30: `query-effect-index` excluded — read-only)
 - **Date**: 2026-06-30
 - **Track**: F15.7 — Rust ergonomics + perf
 - **Supersedes**: none
@@ -47,8 +47,12 @@ Introduce **tiered durability** as an explicit, opt-in knob:
 
 2. A new CLI flag `--no-sync`, accepted by every state-bearing command that
    touches the WAL or the JSONL effect log (`claim *`, `execute-operation`,
-   `rebuild-effect-index`, `query-effect-index`). When present, the command
-   constructs the store with `WalDurability::NoSync`.
+   `rebuild-effect-index`). When present, the command constructs the store
+   with `WalDurability::NoSync`.
+
+   `query-effect-index` is intentionally excluded from this list: it is
+   read-only and the flag would be a no-op. The usage text and command
+   registry do not advertise `--no-sync` for it.
 
 3. The default — when `--no-sync` is **absent** — is unchanged:
    `WalDurability::SyncOnAppend`. Existing tests, existing users, and existing
