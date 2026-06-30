@@ -85,6 +85,7 @@ pub fn init_with(format: LogFormat) {
                     .with_target(true)
                     .with_thread_ids(false)
                     .with_ansi(false)
+                    .with_span_events(tracing_subscriber::fmt::format::FmtSpan::ENTER)
                     .json()
                     .try_init();
             }
@@ -94,6 +95,7 @@ pub fn init_with(format: LogFormat) {
                     .with_writer(std::io::stderr)
                     .with_target(true)
                     .with_ansi(true)
+                    .with_span_events(tracing_subscriber::fmt::format::FmtSpan::ENTER)
                     .try_init();
             }
         }
