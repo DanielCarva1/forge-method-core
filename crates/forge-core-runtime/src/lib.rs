@@ -27,6 +27,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
+use tracing::instrument;
 
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeReadSnapshot<'a> {
@@ -484,6 +485,7 @@ pub enum RuntimeEffectTransactionReason {
     TransactionReady,
 }
 
+#[instrument(skip_all, fields(operation_id = tracing::field::Empty, effect_count = effects.len(), command_count = commands.len()), level = "info")]
 pub fn execute_operation(
     document: &OperationContractDocument,
     snapshot: RuntimeReadSnapshot<'_>,
@@ -494,6 +496,7 @@ pub fn execute_operation(
 ) -> RuntimeOperationExecution {
     let plan = plan_operation_with_snapshot(document, snapshot);
     let operation_id = plan.contract_id.clone();
+    tracing::Span::current().record("operation_id", operation_id.0.as_str());
     let mut reasons = Vec::new();
 
     if plan.status != RuntimePlanStatus::ReadyToCallOperation {
@@ -811,6 +814,7 @@ pub fn preview_runtime_plan(plan: &RuntimePlan) -> RuntimePreviewReport {
     }
 }
 
+#[instrument(skip_all, fields(operation_id = %document.operation_contract.contract_id.0), level = "info")]
 fn preview_operation_inner(
     document: &OperationContractDocument,
     snapshot: Option<RuntimeReadSnapshot<'_>>,
@@ -851,6 +855,7 @@ pub fn ready_runtime_plan(plan: &RuntimePlan) -> RuntimeReadyReport {
     runtime_ready_report(plan, &staging, &[], &[])
 }
 
+#[instrument(skip_all, fields(operation_id = %document.operation_contract.contract_id.0), level = "info")]
 fn ready_operation_inner(
     document: &OperationContractDocument,
     snapshot: Option<RuntimeReadSnapshot<'_>>,
@@ -899,6 +904,7 @@ fn runtime_ready_report(
     }
 }
 
+#[instrument(skip_all, fields(operation_id = %document.operation_contract.contract_id.0), level = "info")]
 fn plan_operation_inner(
     document: &OperationContractDocument,
     snapshot: Option<RuntimeReadSnapshot<'_>>,
