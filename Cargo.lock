@@ -679,6 +679,7 @@ dependencies = [
  "sha1",
  "sha2",
  "sigstore-tsa",
+ "tracing",
  "x509-parser",
 ]
 
@@ -721,6 +722,7 @@ dependencies = [
  "serde",
  "serde_yaml",
  "sha2",
+ "tracing",
 ]
 
 [[package]]
@@ -747,6 +749,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sha2",
+ "tracing",
 ]
 
 [[package]]
@@ -764,6 +767,7 @@ dependencies = [
  "forge-core-contracts",
  "serde",
  "serde_yaml",
+ "tracing",
 ]
 
 [[package]]

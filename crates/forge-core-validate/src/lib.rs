@@ -10,6 +10,7 @@ use forge_core_contracts::{
 use serde::Serialize;
 use serde_yaml::Value;
 use std::collections::{HashMap, HashSet};
+use tracing::instrument;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ValidationReport {
@@ -524,6 +525,7 @@ pub fn validate_inventory_references(
     report
 }
 
+#[instrument(skip_all, fields(contract_id = %operation.operation_contract.contract_id.0))]
 pub fn validate_operation_cross_references(
     operation: &OperationContractDocument,
     index: &ReferenceIndex,
@@ -1028,6 +1030,7 @@ pub fn validate_coordination_eval_cross_references(
     report
 }
 
+#[instrument(skip_all, fields(command_id = %command.command_contract.id.0))]
 pub fn validate_command(command: &CommandContractDocument) -> ValidationReport {
     let mut report = ValidationReport::new();
     let command = &command.command_contract;
@@ -1062,6 +1065,7 @@ pub fn validate_command(command: &CommandContractDocument) -> ValidationReport {
     report
 }
 
+#[instrument(skip_all, fields(contract_id = %operation.operation_contract.contract_id.0))]
 pub fn validate_operation(operation: &OperationContractDocument) -> ValidationReport {
     let mut report = ValidationReport::new();
     let operation = &operation.operation_contract;

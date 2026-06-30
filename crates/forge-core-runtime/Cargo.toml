@@ -8,6 +8,7 @@ forge-core-contracts = { path = "../forge-core-contracts" }
 forge-core-store = { path = "../forge-core-store" }
 forge-core-validate = { path = "../forge-core-validate" }
 serde.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 serde_yaml.workspace = true
