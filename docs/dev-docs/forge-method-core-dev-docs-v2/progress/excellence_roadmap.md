@@ -13,10 +13,10 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Frente | Hoje | Meta | Lacuna principal |
 |---|---|---|---|
 | Rápido | 7 | 10 | Benchmarks crypto R6.2 completos (~420µs verify, ~6µs parse) |
-| Robusto | 9 | 10 | Tracing completo; zero Result<_,String>; zeroize R5.1-R5.9 |
+| Robusto | 10 | 10 | Tracing completo; zero Result<_,String>; R5 zeroize completo (R5.1-R5.11) |
 | Performativo | 6 | 10 | Crypto + store benchmarks baselines medidos; falta profile release bench |
 | Segurança supply chain | 8 | 10 | serde_yaml migrado; zeroize feito; fuzz (R4) completo via ADR-0008 |
-| Docs/rastreabilidade | 7 | 10 | ADR-0008 criado; R4/R6 docs atualizados; falta R13/R14/R9 |
+| Docs/rastreabilidade | 8 | 10 | R13 alinhado; R14 paper status criado; ADR-0008; falta R9 Bootstrap |
 
 ## Princípios (não negociáveis)
 
@@ -93,16 +93,26 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
       - Ver `progress/r6_benchmarks.md`
 - [ ] **R6.3** — Benchmarks `serde_yaml::from_str` vs `serde_yml::from_str` (pós-R7)
 - [ ] **R6.4** — CI: bench em PR com label `perf` compara com main
-- [ ] **R5** — `zeroize` em material cripto — inventariado 2026-06-30
+- [x] **R5** — `zeroize` em material cripto ✅ COMPLETO
       - Inventário completo em `progress/r5_crypto_inventory.md`
       - FASE A, B, C (R5.1-R5.9) completas em commits `9c3c5f3`, `5171cee`,
         `39a7dc3`, `c63765b`, `087d843`, `710ec74`, `41edd21`, `d0bc68f`,
         `888a27c`, `e44ea39`.
-      - FOLLOW-UP pendente:
-      - [ ] R5.10 Inventariar `sigstore.rs` (`ParsedBundle.signature`,
-            `verify_ed25519_signature` internals, `parse_certificate`)
-      - [ ] R5.11 Inventariar `file_io.rs`/`hashing.rs`/`slsa_transparency.rs`/
-            `tuf.rs`
+      - FOLLOW-UP (auditado nesta sessão, sem ação necessária):
+      - [x] R5.10 Inventariar `sigstore.rs`: `ParsedSigstoreMessageSignatureBundle`
+            e `ParsedSigstoreDsseBundle` têm `signature/certificate_der/
+            message_digest/payload: Vec<u8>`. **Nenhum é secret material** —
+            signatures ECDSA são provas públicas (não expõem chave privada);
+            certificates, digests, payloads são públicos por construção.
+            Decisão: não zeroizar (overhead sem ganho).
+      - [x] R5.11 Inventariar `file_io.rs`/`hashing.rs`/`slsa_transparency.rs`/`tuf.rs`:
+            - `file_io.rs` 100% zeroizado (R5.7 confirmado)
+            - `hashing.rs` é puramente funcional (sem locals secret)
+            - `slsa_transparency.rs` recebe `&[u8]` slices; usa
+              `Ed25519VerifyingKey`/`Ed25519Signature` que já zeroizam
+              internamente (feature `zeroize` em R5.1)
+            - `tuf.rs` lê via `read_required_file` (R5.7 retorna `Zeroizing<>`)
+            Decisão: sem ação necessária.
 - [x] **R7** — `serde_yaml` → `yaml_serde` ✅
       - Descoberta: `serde_yml` também está deprecated (shim)
       - Migrado para `yaml_serde 0.10.4` (The YAML Organization, API 1:1)
