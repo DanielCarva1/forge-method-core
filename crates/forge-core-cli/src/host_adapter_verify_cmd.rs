@@ -46,6 +46,19 @@ use crate::{
 };
 use std::path::PathBuf;
 
+/// Runs the `host-adapter-verify-artifact` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the artifact verification reports a
+/// non-passed status.
+///
+/// # Panics
+///
+/// Panics if the verification result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_verify_artifact_command(args: &[String]) -> Result<(), ExitError> {
     let mut artifact_path: Option<PathBuf> = None;
     let mut expected_sha256: Option<String> = None;
@@ -141,6 +154,19 @@ pub fn run_host_adapter_verify_artifact_command(args: &[String]) -> Result<(), E
     Ok(())
 }
 
+/// Runs the `host-adapter-verify-provenance` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the provenance verification reports a
+/// non-passed status.
+///
+/// # Panics
+///
+/// Panics if the verification result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_verify_provenance_command(args: &[String]) -> Result<(), ExitError> {
     let mut artifact_path: Option<PathBuf> = None;
     let mut provenance_path: Option<PathBuf> = None;
@@ -258,6 +284,19 @@ pub fn run_host_adapter_verify_provenance_command(args: &[String]) -> Result<(),
     Ok(())
 }
 
+/// Runs the `host-adapter-verify-rekor-entry` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the Rekor entry verification reports a
+/// non-passed status.
+///
+/// # Panics
+///
+/// Panics if the verification result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_verify_rekor_entry_command(args: &[String]) -> Result<(), ExitError> {
     let mut log_entry_path: Option<PathBuf> = None;
     let mut public_key_path: Option<PathBuf> = None;
@@ -319,6 +358,19 @@ pub fn run_host_adapter_verify_rekor_entry_command(args: &[String]) -> Result<()
     Ok(())
 }
 
+/// Runs the `host-adapter-verify-sigstore-trust-policy` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the Sigstore trust policy verification reports
+/// a non-passed status.
+///
+/// # Panics
+///
+/// Panics if the verification result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_verify_sigstore_trust_policy_command(
     args: &[String],
 ) -> Result<(), ExitError> {
@@ -368,6 +420,19 @@ pub fn run_host_adapter_verify_sigstore_trust_policy_command(
     Ok(())
 }
 
+/// Runs the `host-adapter-verify-fulcio-certificate-identity` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the Fulcio certificate identity verification
+/// reports a non-passed status.
+///
+/// # Panics
+///
+/// Panics if the verification result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_verify_fulcio_certificate_identity_command(
     args: &[String],
 ) -> Result<(), ExitError> {
@@ -439,6 +504,19 @@ pub fn run_host_adapter_verify_fulcio_certificate_identity_command(
     Ok(())
 }
 
+/// Runs the `host-adapter-verify-sigstore-bundle-subject` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the Sigstore bundle subject verification
+/// reports a non-passed status.
+///
+/// # Panics
+///
+/// Panics if the verification result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_verify_sigstore_bundle_subject_command(
     args: &[String],
 ) -> Result<(), ExitError> {
@@ -549,6 +627,19 @@ pub fn run_host_adapter_verify_sigstore_bundle_subject_command(
     Ok(())
 }
 
+/// Runs the `host-adapter-verify-sigstore-dsse-in-toto-subject` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the Sigstore DSSE in-toto subject verification
+/// reports a non-passed status.
+///
+/// # Panics
+///
+/// Panics if the verification result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_verify_sigstore_dsse_in_toto_subject_command(
     args: &[String],
 ) -> Result<(), ExitError> {
@@ -665,6 +756,19 @@ pub fn run_host_adapter_verify_sigstore_dsse_in_toto_subject_command(
     Ok(())
 }
 
+/// Runs the `host-adapter-verify-sigstore-timestamp-authority` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the Sigstore timestamp authority verification
+/// reports a non-passed status.
+///
+/// # Panics
+///
+/// Panics if the verification result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_verify_sigstore_timestamp_authority_command(
     args: &[String],
 ) -> Result<(), ExitError> {
@@ -754,6 +858,19 @@ pub fn run_host_adapter_verify_sigstore_timestamp_authority_command(
     Ok(())
 }
 
+/// Runs the `host-adapter-verify-certificate-transparency-sct` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the certificate transparency SCT verification
+/// reports a non-passed status.
+///
+/// # Panics
+///
+/// Panics if the verification result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_verify_certificate_transparency_sct_command(
     args: &[String],
 ) -> Result<(), ExitError> {
@@ -827,6 +944,19 @@ pub fn run_host_adapter_verify_certificate_transparency_sct_command(
     Ok(())
 }
 
+/// Runs the `host-adapter-verify-certificate-revocation-policy` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the certificate revocation policy verification
+/// reports a non-passed status.
+///
+/// # Panics
+///
+/// Panics if the verification result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_verify_certificate_revocation_policy_command(
     args: &[String],
 ) -> Result<(), ExitError> {
@@ -894,6 +1024,19 @@ pub fn run_host_adapter_verify_certificate_revocation_policy_command(
     Ok(())
 }
 
+/// Runs the `host-adapter-verify-tuf-trusted-root-freshness` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the TUF trusted root freshness verification
+/// reports a non-passed status.
+///
+/// # Panics
+///
+/// Panics if the verification result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_verify_tuf_trusted_root_freshness_command(
     args: &[String],
 ) -> Result<(), ExitError> {
@@ -1003,6 +1146,19 @@ pub fn run_host_adapter_verify_tuf_trusted_root_freshness_command(
     Ok(())
 }
 
+/// Runs the `host-adapter-verify-certificate-crl-status` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the certificate CRL status verification
+/// reports a non-passed status.
+///
+/// # Panics
+///
+/// Panics if the verification result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_verify_certificate_crl_status_command(
     args: &[String],
 ) -> Result<(), ExitError> {
@@ -1094,6 +1250,19 @@ pub fn run_host_adapter_verify_certificate_crl_status_command(
     Ok(())
 }
 
+/// Runs the `host-adapter-verify-certificate-ocsp-status` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the certificate OCSP status verification
+/// reports a non-passed status.
+///
+/// # Panics
+///
+/// Panics if the verification result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_verify_certificate_ocsp_status_command(
     args: &[String],
 ) -> Result<(), ExitError> {
