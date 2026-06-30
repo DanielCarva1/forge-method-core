@@ -223,6 +223,58 @@ authority_boundary:
 }
 
 #[test]
+fn blocks_until_passed_from_non_verifier_emits_warning_not_error() {
+    // A `blocks_until_passed` edge from an Operation node is semantically
+    // suspect: only Verifier nodes carry a verifier_result. The graph must
+    // still validate (warning, not error) and dry-run, so existing fixtures
+    // that rely on the v0 transitive behavior keep working.
+    let graph_yaml = r#"
+schema_version: "0.1"
+kind: "workflow_graph"
+graph_id: "graph.edge-mismatch"
+nodes:
+  - node_id: "plan"
+    node_kind: "operation"
+    operation_ref: "contracts/operations/plan.yaml"
+  - node_id: "apply"
+    node_kind: "operation"
+    operation_ref: "contracts/operations/apply.yaml"
+edges:
+  - from: "plan"
+    to: "apply"
+    edge_kind: "blocks_until_passed"
+stop_conditions:
+  - "validation_errors"
+authority_boundary:
+  source_of_truth: "forge-core-runtime"
+  adapters_may_suggest: true
+  adapters_may_mutate: false
+"#;
+    let graph =
+        parse_workflow_graph_yaml(graph_yaml).expect("edge-mismatch graph parses");
+    let validation = validate_graph(&graph);
+
+    assert!(
+        !validation.has_errors(),
+        "warnings should not escalate to errors; diagnostics = {:?}",
+        validation.diagnostics()
+    );
+    assert!(validation.diagnostics().iter().any(|diagnostic| {
+        diagnostic.code == GraphDiagnosticCode::EdgeKindSourceKindMismatch
+            && diagnostic.severity
+                == forge_core_graph::GraphDiagnosticSeverity::Warning
+    }));
+    assert_eq!(validation.warning_count(), 1);
+
+    // The graph must still dry-run: the warning is advisory, not blocking.
+    let dry_run = dry_run_graph(&graph);
+    assert!(dry_run.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == GraphDiagnosticCode::EdgeKindSourceKindMismatch
+    }));
+    assert_eq!(dry_run.status, GraphDryRunStatus::Planned);
+}
+
+#[test]
 fn cycle_detection_reports_error() {
     let cyclic_graph = r#"
 schema_version: "0.1"
