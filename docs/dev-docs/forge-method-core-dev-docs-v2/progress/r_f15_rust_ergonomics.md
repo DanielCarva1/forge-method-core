@@ -74,7 +74,9 @@ Meta: reduzir a **2 edit points** — (1) criar o módulo do comando, (2) regist
 - [x] F15.4 — command registry (`c4cd6f4`): `command_registry.rs` com `COMMANDS` table, `dispatch()` vira lookup, `usage()` delega para `global_usage()`
 - [ ] F15.5 — co-localize usage (opcional; `<cmd>_usage()` fns específicos permanecem em cli_util.rs, mas são mostrados só em `<cmd> --help`, não no global)
 - [x] F15.6 — validate criterion (abaixo)
-- [ ] F15.7 — `--no-sync` WAL flag (requer ADR)
+- [x] F15.7a — WalDurability type + `_with_durability` APIs + ADR-0009 (`c2df8c4`)
+- [ ] F15.7b — CLI threading: `--no-sync` flag nos commands stateful (claim, execute-operation, effect-index). Store API pronta, falta threading do CLI.
+- [x] F15.7 tests — `append_json_line_with_no_sync_writes_record_without_fsync` + `wal_durability_default_is_sync_on_append`
 
 ## F15.6 — Validação do critério
 
