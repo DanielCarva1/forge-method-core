@@ -15,6 +15,7 @@ use p256::pkcs8::DecodePublicKey;
 use rasn_ocsp::OcspResponseStatus;
 use serde_json::Value;
 use std::fs;
+use tracing::instrument;
 use x509_parser::parse_x509_crl;
 
 use crate::hashing::{hex_bytes, hex_sha256, normalize_sha256_digest, normalize_sha256_display};
@@ -42,6 +43,7 @@ use crate::sigstore::*;
 #[allow(clippy::wildcard_imports)]
 use crate::slsa_transparency::*;
 
+#[instrument(skip_all, fields(artifact_path = %input.artifact_path.to_string_lossy()), level = "info")]
 pub fn run_host_adapter_artifact_verification(
     input: HostAdapterArtifactVerificationInput,
 ) -> HostAdapterArtifactVerification {
@@ -158,6 +160,7 @@ pub fn run_host_adapter_artifact_verification(
     }
 }
 
+#[instrument(skip_all, fields(artifact_path = %input.artifact_path.to_string_lossy(), provenance_path = %input.provenance_path.to_string_lossy()), level = "info")]
 pub fn run_host_adapter_provenance_verification(
     input: HostAdapterProvenanceVerificationInput,
 ) -> HostAdapterProvenanceVerification {
@@ -1806,6 +1809,7 @@ pub fn run_host_adapter_certificate_crl_status_verification(
     }
 }
 
+#[instrument(skip_all, fields(certificate_path = %input.certificate_path.to_string_lossy(), ocsp_response_path = %input.ocsp_response_path.to_string_lossy()), level = "info")]
 pub fn run_host_adapter_certificate_ocsp_status_verification(
     input: HostAdapterCertificateOcspStatusVerificationInput,
 ) -> HostAdapterCertificateOcspStatusVerification {
