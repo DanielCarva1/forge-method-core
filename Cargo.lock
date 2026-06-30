@@ -783,9 +783,11 @@ dependencies = [
  "sha1",
  "sha2",
  "sigstore-tsa",
+ "subtle",
  "tracing",
  "x509-parser",
  "yaml_serde",
+ "zeroize",
 ]
 
 [[package]]
