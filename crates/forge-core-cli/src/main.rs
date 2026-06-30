@@ -10,7 +10,13 @@ fn main() {
     match command {
         "guide" => forge_core_cli::guide::run_guide_command(&args),
         "claim" => forge_core_cli::claim::run_claim_command(&args),
-        "autonomy" => forge_core_cli::autonomy_cmd::run_autonomy_command(&args),
+        "autonomy" => match forge_core_cli::autonomy_cmd::run_autonomy_command(&args) {
+            Ok(()) => {}
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(error.exit_code());
+            }
+        },
         "contract" => forge_core_cli::contract_cmd::run_contract_command(&args),
         "isolation" => forge_core_cli::isolation::run_isolation_command(&args),
         "coordination" => forge_core_cli::coordination::run_coordination_command(&args),
