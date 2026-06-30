@@ -21,6 +21,7 @@ use forge_core_contracts::{
     RepoPath, ScopeId, StableId,
 };
 use forge_core_engine::AcquireRequest;
+use forge_core_store::WalDurability;
 use proptest::prelude::*;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -75,7 +76,7 @@ proptest! {
         let dir = tmp_claims_dir("release");
         let agent = StableId("agentA".to_string());
 
-        let acquired = run_acquire(&dir, &acquire_req(&scope_id, "agentA"), T0);
+        let acquired = run_acquire(&dir, &acquire_req(&scope_id, "agentA"), T0, WalDurability::NoSync);
         prop_assert!(acquired.ok, "acquire must succeed: {:?}", acquired.error);
 
         // The canonical id produced by the engine must DIFFER from the
@@ -89,7 +90,7 @@ proptest! {
 
         // Operator releases by the SCOPE id they actually typed — not the
         // canonical id the engine derived. This is the line R8 broke.
-        let released = run_release(&dir, &StableId(scope_id.clone()), &agent, T0);
+        let released = run_release(&dir, &StableId(scope_id.clone()), &agent, T0, WalDurability::NoSync);
         prop_assert!(
             released.ok,
             "release by scope id '{}' must succeed: {:?}",
@@ -114,9 +115,9 @@ proptest! {
         let dir = tmp_claims_dir("heartbeat");
         let agent = StableId("agentA".to_string());
 
-        let _ = run_acquire(&dir, &acquire_req(&scope_id, "agentA"), T0);
+        let _ = run_acquire(&dir, &acquire_req(&scope_id, "agentA"), T0, WalDurability::NoSync);
 
-        let hb = run_heartbeat(&dir, &StableId(scope_id.clone()), &agent, T0);
+        let hb = run_heartbeat(&dir, &StableId(scope_id.clone()), &agent, T0, WalDurability::NoSync);
         prop_assert!(
             hb.ok,
             "heartbeat by scope id '{}' must succeed: {:?}",
@@ -135,7 +136,7 @@ proptest! {
         let dir = tmp_claims_dir("full");
         let agent = StableId("agentA".to_string());
 
-        let acquired = run_acquire(&dir, &acquire_req(&scope_id, "agentA"), T0);
+        let acquired = run_acquire(&dir, &acquire_req(&scope_id, "agentA"), T0, WalDurability::NoSync);
         let canonical = acquired.data.as_ref().unwrap().claim_id.clone();
 
         // The canonical id MUST parse to the Full variant.
@@ -145,7 +146,7 @@ proptest! {
             canonical
         );
 
-        let released = run_release(&dir, &StableId(canonical), &agent, T0);
+        let released = run_release(&dir, &StableId(canonical), &agent, T0, WalDurability::NoSync);
         prop_assert!(released.ok, "release by full id must still work: {:?}", released.error);
     }
 }

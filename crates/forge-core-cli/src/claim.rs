@@ -34,9 +34,10 @@ use forge_core_engine::{
     ClaimLifecycleDecision, ClaimReconcileTransition, ClaimRejection, RecordHandoffRequest,
 };
 use forge_core_store::claim_wal::{
-    append_claim_wal_record, claim_wal_path, replay_claim_wal, ClaimWalOperation,
-    ClaimWalStopReason,
+    append_claim_wal_record_with_durability, claim_wal_path, replay_claim_wal,
+    ClaimWalOperation, ClaimWalStopReason,
 };
+use forge_core_store::WalDurability;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
@@ -258,6 +259,7 @@ pub fn run_acquire(
     claims_dir: &Path,
     req: &AcquireRequest,
     now_unix: i64,
+    durability: WalDurability,
 ) -> CliEnvelope<ClaimResult> {
     // parse-don't-validate: a scope id that starts with the reserved canonical
     // prefix would be misclassified as the `Full` variant by `parse_claim_ref`
@@ -297,6 +299,7 @@ pub fn run_acquire(
                 ClaimWalOperation::Acquire,
                 &claim,
                 &claim.lease.acquired_at,
+                durability,
             ) {
                 return CliEnvelope::err("claim.acquire", ExitReason::EnvConfig, e.to_string());
             }
@@ -318,6 +321,7 @@ pub fn run_heartbeat(
     claim_id: &StableId,
     agent_id: &StableId,
     now_unix: i64,
+    durability: WalDurability,
 ) -> CliEnvelope<ClaimResult> {
     let _lock = match crate::io_util::DirLock::acquire(claims_dir, ".forge-claim.lock") {
         Ok(l) => l,
@@ -348,6 +352,7 @@ pub fn run_heartbeat(
                 ClaimWalOperation::Heartbeat,
                 &updated,
                 &updated.lease.last_heartbeat_at,
+                durability,
             ) {
                 return CliEnvelope::err("claim.heartbeat", ExitReason::EnvConfig, e.to_string());
             }
@@ -369,6 +374,7 @@ pub fn run_release(
     claim_id: &StableId,
     agent_id: &StableId,
     now_unix: i64,
+    durability: WalDurability,
 ) -> CliEnvelope<ClaimResult> {
     let _lock = match crate::io_util::DirLock::acquire(claims_dir, ".forge-claim.lock") {
         Ok(l) => l,
@@ -399,6 +405,7 @@ pub fn run_release(
                 ClaimWalOperation::Release,
                 &updated,
                 updated.status.evaluated_at.as_str(),
+                durability,
             ) {
                 return CliEnvelope::err("claim.release", ExitReason::EnvConfig, e.to_string());
             }
@@ -423,6 +430,7 @@ pub fn run_handoff(
     summary: &str,
     evidence_refs: &[String],
     now_unix: i64,
+    durability: WalDurability,
 ) -> CliEnvelope<ClaimHandoffResult> {
     let _lock = match crate::io_util::DirLock::acquire(claims_dir, ".forge-claim.lock") {
         Ok(l) => l,
@@ -486,6 +494,7 @@ pub fn run_handoff(
                 ClaimWalOperation::HandoffRecorded,
                 &updated,
                 updated.status.evaluated_at.as_str(),
+                durability,
             ) {
                 return CliEnvelope::err("claim.handoff", ExitReason::EnvConfig, e.to_string());
             }
@@ -535,7 +544,11 @@ pub fn run_status(claims_dir: &Path, now_unix: i64) -> CliEnvelope<ClaimStatusVi
 /// refreshes the YAML compatibility cache. It does not record handoff evidence;
 /// `claim handoff` remains the official recovery edge.
 #[must_use]
-pub fn run_reconcile_once(claims_dir: &Path, now_unix: i64) -> CliEnvelope<ClaimReconcileResult> {
+pub fn run_reconcile_once(
+    claims_dir: &Path,
+    now_unix: i64,
+    durability: WalDurability,
+) -> CliEnvelope<ClaimReconcileResult> {
     let _lock = match crate::io_util::DirLock::acquire(claims_dir, ".forge-claim.lock") {
         Ok(l) => l,
         Err(e) => {
@@ -558,6 +571,7 @@ pub fn run_reconcile_once(claims_dir: &Path, now_unix: i64) -> CliEnvelope<Claim
             ClaimWalOperation::ReconcileStatus,
             &transition.updated,
             transition.updated.status.evaluated_at.as_str(),
+            durability,
         ) {
             return CliEnvelope::err("claim.reconcile", ExitReason::EnvConfig, e.to_string());
         }
@@ -957,13 +971,13 @@ fn persist_claim_mutation(
     operation: ClaimWalOperation,
     claim: &ClaimContract,
     recorded_at: &str,
+    durability: WalDurability,
 ) -> Result<PathBuf, PersistClaimMutationError> {
     let state_root = state_root_from_claims_dir(claims_dir);
-    append_claim_wal_record(&state_root, operation, claim, recorded_at).map_err(|source| {
-        PersistClaimMutationError::WalAppend {
+    append_claim_wal_record_with_durability(&state_root, operation, claim, recorded_at, durability)
+        .map_err(|source| PersistClaimMutationError::WalAppend {
             source: source.to_string(),
-        }
-    })?;
+        })?;
     save_claim(claims_dir, claim).map_err(|source| PersistClaimMutationError::SaveClaim {
         source: source.to_string(),
     })
@@ -1190,7 +1204,7 @@ mod tests {
     #[test]
     fn acquire_writes_claim_and_returns_ok() {
         let dir = tempfile_dir();
-        let env = run_acquire(&dir, &req("s1", "agentA"), T0);
+        let env = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         assert!(env.ok, "{:?}", env.error);
         assert_eq!(env.exit_code(), 0);
         let p = env.data.as_ref().unwrap();
@@ -1217,8 +1231,8 @@ mod tests {
     #[test]
     fn acquire_rejects_second_agent_on_same_scope() {
         let dir = tempfile_dir();
-        let _ = run_acquire(&dir, &req("s1", "agentA"), T0);
-        let env = run_acquire(&dir, &req("s1", "agentB"), T0);
+        let _ = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
+        let env = run_acquire(&dir, &req("s1", "agentB"), T0, WalDurability::NoSync);
         assert!(!env.ok);
         assert_eq!(env.exit_code(), 2);
         let code = env.error.as_ref().unwrap().code.0.clone();
@@ -1228,8 +1242,8 @@ mod tests {
     #[test]
     fn acquire_rejects_same_agent_duplicate_while_live() {
         let dir = tempfile_dir();
-        let _ = run_acquire(&dir, &req("s1", "agentA"), T0);
-        let env = run_acquire(&dir, &req("s1", "agentA"), T0);
+        let _ = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
+        let env = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         assert!(!env.ok);
         assert_eq!(env.exit_code(), 2);
     }
@@ -1237,20 +1251,20 @@ mod tests {
     #[test]
     fn acquire_allows_disjoint_scopes() {
         let dir = tempfile_dir();
-        let a = run_acquire(&dir, &req("s1", "agentA"), T0);
-        let b = run_acquire(&dir, &req("s2", "agentB"), T0);
+        let a = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
+        let b = run_acquire(&dir, &req("s2", "agentB"), T0, WalDurability::NoSync);
         assert!(a.ok && b.ok);
     }
 
     #[test]
     fn acquire_rejects_different_scope_with_overlapping_path() {
         let dir = tempfile_dir();
-        let first = run_acquire(&dir, &req("s1", "agentA"), T0);
+        let first = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         assert!(first.ok, "{:?}", first.error);
 
         let mut overlapping = req("s2", "agentB");
         overlapping.paths = vec![RepoPath("contracts/stories/s1.yaml".into())];
-        let env = run_acquire(&dir, &overlapping, T0 + 1);
+        let env = run_acquire(&dir, &overlapping, T0 + 1, WalDurability::NoSync);
 
         assert!(!env.ok, "overlapping path must be rejected");
         assert_eq!(env.exit_code(), 2);
@@ -1263,9 +1277,9 @@ mod tests {
     #[test]
     fn heartbeat_extends_lease_and_persists() {
         let dir = tempfile_dir();
-        let acquired = run_acquire(&dir, &req("s1", "agentA"), T0);
+        let acquired = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         let claim_id = StableId(acquired.data.as_ref().unwrap().claim_id.clone());
-        let env = run_heartbeat(&dir, &claim_id, &StableId("agentA".into()), T0 + 300);
+        let env = run_heartbeat(&dir, &claim_id, &StableId("agentA".into()), T0 + 300, WalDurability::NoSync);
         assert!(env.ok, "{:?}", env.error);
         assert_eq!(env.data.as_ref().unwrap().status, "active");
     }
@@ -1273,9 +1287,9 @@ mod tests {
     #[test]
     fn heartbeat_rejects_non_claimant() {
         let dir = tempfile_dir();
-        let acquired = run_acquire(&dir, &req("s1", "agentA"), T0);
+        let acquired = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         let claim_id = StableId(acquired.data.as_ref().unwrap().claim_id.clone());
-        let env = run_heartbeat(&dir, &claim_id, &StableId("agentB".into()), T0);
+        let env = run_heartbeat(&dir, &claim_id, &StableId("agentB".into()), T0, WalDurability::NoSync);
         assert!(!env.ok);
         assert_eq!(env.exit_code(), 2);
         assert!(env
@@ -1295,6 +1309,7 @@ mod tests {
             &StableId("claim.nope".into()),
             &StableId("agentA".into()),
             T0,
+            WalDurability::NoSync,
         );
         assert_eq!(env.exit_code(), 3);
     }
@@ -1304,22 +1319,22 @@ mod tests {
     #[test]
     fn release_round_trip_frees_scope() {
         let dir = tempfile_dir();
-        let acquired = run_acquire(&dir, &req("s1", "agentA"), T0);
+        let acquired = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         let claim_id = StableId(acquired.data.as_ref().unwrap().claim_id.clone());
-        let rel = run_release(&dir, &claim_id, &StableId("agentA".into()), T0);
+        let rel = run_release(&dir, &claim_id, &StableId("agentA".into()), T0, WalDurability::NoSync);
         assert!(rel.ok, "{:?}", rel.error);
         assert_eq!(rel.data.as_ref().unwrap().status, "released");
         // scope is now free -> another agent can acquire
-        let again = run_acquire(&dir, &req("s1", "agentB"), T0);
+        let again = run_acquire(&dir, &req("s1", "agentB"), T0, WalDurability::NoSync);
         assert!(again.ok, "released scope must be re-acquirable");
     }
 
     #[test]
     fn release_rejects_non_claimant() {
         let dir = tempfile_dir();
-        let acquired = run_acquire(&dir, &req("s1", "agentA"), T0);
+        let acquired = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         let claim_id = StableId(acquired.data.as_ref().unwrap().claim_id.clone());
-        let env = run_release(&dir, &claim_id, &StableId("agentB".into()), T0);
+        let env = run_release(&dir, &claim_id, &StableId("agentB".into()), T0, WalDurability::NoSync);
         assert!(!env.ok);
         assert_eq!(env.exit_code(), 2);
     }
@@ -1327,13 +1342,14 @@ mod tests {
     #[test]
     fn expired_handoff_rejection_points_to_official_recovery_command() {
         let dir = tempfile_dir();
-        let acquired = run_acquire(&dir, &req("s1", "agentA"), T0);
+        let acquired = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         let claim_id = acquired.data.as_ref().unwrap().claim_id.clone();
         let env = run_release(
             &dir,
             &StableId(claim_id.clone()),
             &StableId("agentA".into()),
             T0 + 601,
+            WalDurability::NoSync,
         );
 
         assert!(!env.ok);
@@ -1363,7 +1379,7 @@ mod tests {
         // must accept both forms. Releasing by scope id must succeed and free the
         // scope for re-acquisition.
         let dir = tempfile_dir();
-        let acquired = run_acquire(&dir, &req("s1", "agentA"), T0);
+        let acquired = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         // The full claim id is `claim.lane.s1.s1`; the operator only knows "s1".
         let scope_id = StableId("s1".into());
         assert_ne!(
@@ -1371,14 +1387,14 @@ mod tests {
             scope_id.0,
             "test setup: scope id must differ from full claim id to exercise R8"
         );
-        let rel = run_release(&dir, &scope_id, &StableId("agentA".into()), T0);
+        let rel = run_release(&dir, &scope_id, &StableId("agentA".into()), T0, WalDurability::NoSync);
         assert!(rel.ok, "release by scope id must work: {:?}", rel.error);
         assert_eq!(rel.data.as_ref().unwrap().status, "released");
         // Full-id form STILL works (backwards compatible with e2e tests).
         let dir2 = tempfile_dir();
-        let acquired2 = run_acquire(&dir2, &req("s1", "agentA"), T0);
+        let acquired2 = run_acquire(&dir2, &req("s1", "agentA"), T0, WalDurability::NoSync);
         let full_id = StableId(acquired2.data.as_ref().unwrap().claim_id.clone());
-        let rel2 = run_release(&dir2, &full_id, &StableId("agentA".into()), T0);
+        let rel2 = run_release(&dir2, &full_id, &StableId("agentA".into()), T0, WalDurability::NoSync);
         assert!(
             rel2.ok,
             "release by full id must still work: {:?}",
@@ -1390,9 +1406,9 @@ mod tests {
     fn heartbeat_resolves_by_scope_id_r8() {
         // R8 echo for heartbeat (same resolve_claim path).
         let dir = tempfile_dir();
-        let _ = run_acquire(&dir, &req("s1", "agentA"), T0);
+        let _ = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         let scope_id = StableId("s1".into());
-        let hb = run_heartbeat(&dir, &scope_id, &StableId("agentA".into()), T0);
+        let hb = run_heartbeat(&dir, &scope_id, &StableId("agentA".into()), T0, WalDurability::NoSync);
         assert!(hb.ok, "heartbeat by scope id must work: {:?}", hb.error);
     }
 
@@ -1401,8 +1417,8 @@ mod tests {
     #[test]
     fn status_shows_active_claims_only() {
         let dir = tempfile_dir();
-        let _ = run_acquire(&dir, &req("s1", "agentA"), T0);
-        let _ = run_acquire(&dir, &req("s2", "agentB"), T0);
+        let _ = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
+        let _ = run_acquire(&dir, &req("s2", "agentB"), T0, WalDurability::NoSync);
         let env = run_status(&dir, T0);
         assert!(env.ok, "{:?}", env.error);
         let view = env.data.as_ref().unwrap();
@@ -1416,8 +1432,8 @@ mod tests {
     #[test]
     fn status_excludes_expired_from_active_and_reports_handoff_blockers() {
         let dir = tempfile_dir();
-        let _ = run_acquire(&dir, &req("s1", "agentA"), T0); // will be expired at T0 + 9999
-        let _ = run_acquire(&dir, &req("s2", "agentB"), T0);
+        let _ = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync); // will be expired at T0 + 9999
+        let _ = run_acquire(&dir, &req("s2", "agentB"), T0, WalDurability::NoSync);
         let env = run_status(&dir, T0 + 9_999); // s1 lease (ttl 600) is long past
         let view = env.data.as_ref().unwrap();
         assert_eq!(view.active.len(), 0, "both past ttl at T0+9999");
@@ -1431,7 +1447,7 @@ mod tests {
     #[test]
     fn status_serializes_to_json_cleanly() {
         let dir = tempfile_dir();
-        let _ = run_acquire(&dir, &req("s1", "agentA"), T0);
+        let _ = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         let env = run_status(&dir, T0);
         let json = serde_json::to_string(&env).unwrap();
         assert!(json.contains("\"active\""));
@@ -1500,7 +1516,7 @@ mod tests {
         // prefix would be misclassified as Full on every later release/
         // heartbeat. Acquire must reject it (parse-don't-validate).
         let dir = tempfile_dir();
-        let env = run_acquire(&dir, &req("claim.evil", "agentA"), T0);
+        let env = run_acquire(&dir, &req("claim.evil", "agentA"), T0, WalDurability::NoSync);
         assert!(!env.ok, "reserved-prefix scope id must be rejected");
         assert_eq!(env.exit_code(), 3, "must be InvalidDecisionShape (3)");
         // and the bus must stay empty (no claim written)
@@ -1548,12 +1564,12 @@ pub fn run_claim_command(args: &[String]) -> Result<(), ExitError> {
         "check-write" => run_claim_check_write(&args[2..]),
         "--help" | "-h" | "help" => {
             println!("forge-core claim <subcommand> [options]");
-            println!("  acquire [--root <path>] [--allow-bootstrap-core] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
-            println!("  heartbeat [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
-            println!("  release [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
-            println!("  handoff [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> --summary <text> [--evidence <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+            println!("  acquire [--root <path>] [--allow-bootstrap-core] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--no-json]");
+            println!("  heartbeat [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--no-json]");
+            println!("  release [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--no-json]");
+            println!("  handoff [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> --summary <text> [--evidence <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--no-json]");
             println!("  status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
-            println!("  reconcile [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--loop] [--interval-ms 30000] [--max-ticks <n>] [--no-json]");
+            println!("  reconcile [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--loop] [--interval-ms 30000] [--max-ticks <n>] [--no-sync] [--no-json]");
             println!("  check-write [--root <path>] [--allow-bootstrap-core] --agent <id> --target <path> [--target <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
             println!("  Defaults: without --claims-dir, resolves --root as a Forge project and uses <state_root>/claims-active; --claims-dir is an explicit override.");
             Ok(())
@@ -1642,6 +1658,7 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
     let mut root = PathBuf::from(".");
     let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
+    let mut no_sync = false;
     let mut want_json = true;
     let mut idx = 0usize;
     while idx < args.len() {
@@ -1697,9 +1714,10 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
                     "now-unix",
                 )?);
             }
+            "--no-sync" => no_sync = true,
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core claim acquire [--root <path>] [--allow-bootstrap-core] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("forge-core claim acquire [--root <path>] [--allow-bootstrap-core] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--no-json]");
                 println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
                 return Ok(());
             }
@@ -1746,7 +1764,13 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
         allow_bootstrap_core,
         want_json,
     )?;
-    let env = run_acquire(&claims_dir, &req, resolve_now_unix(now_unix));
+    let durability = if no_sync {
+        eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        WalDurability::NoSync
+    } else {
+        WalDurability::SyncOnAppend
+    };
+    let env = run_acquire(&claims_dir, &req, resolve_now_unix(now_unix), durability);
     crate::cli_util::emit_envelope_or_err("claim", env, want_json)
 }
 
@@ -1759,8 +1783,8 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
 /// heartbeat operation surfaces a non-zero exit code.
 pub fn run_claim_heartbeat(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_heartbeat;
-    run_claim_single_target(args, "heartbeat", |claims_dir, claim_id, agent_id, now| {
-        run_heartbeat(claims_dir, claim_id, agent_id, now)
+    run_claim_single_target(args, "heartbeat", |claims_dir, claim_id, agent_id, now, durability| {
+        run_heartbeat(claims_dir, claim_id, agent_id, now, durability)
     })
 }
 
@@ -1773,8 +1797,8 @@ pub fn run_claim_heartbeat(args: &[String]) -> Result<(), ExitError> {
 /// release operation surfaces a non-zero exit code.
 pub fn run_claim_release(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_release;
-    run_claim_single_target(args, "release", |claims_dir, claim_id, agent_id, now| {
-        run_release(claims_dir, claim_id, agent_id, now)
+    run_claim_single_target(args, "release", |claims_dir, claim_id, agent_id, now, durability| {
+        run_release(claims_dir, claim_id, agent_id, now, durability)
     })
 }
 
@@ -1793,6 +1817,7 @@ pub fn run_claim_single_target(
         &forge_core_contracts::StableId,
         &forge_core_contracts::StableId,
         i64,
+        WalDurability,
     ) -> forge_core_contracts::CliEnvelope<ClaimResult>,
 ) -> Result<(), ExitError> {
     use forge_core_contracts::StableId;
@@ -1802,6 +1827,7 @@ pub fn run_claim_single_target(
     let mut root = PathBuf::from(".");
     let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
+    let mut no_sync = false;
     let mut want_json = true;
     let mut idx = 0usize;
     while idx < args.len() {
@@ -1834,9 +1860,10 @@ pub fn run_claim_single_target(
                     "now-unix",
                 )?);
             }
+            "--no-sync" => no_sync = true,
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core claim {sub} [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("forge-core claim {sub} [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--no-json]");
                 println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
                 return Ok(());
             }
@@ -1857,11 +1884,18 @@ pub fn run_claim_single_target(
         allow_bootstrap_core,
         want_json,
     )?;
+    let durability = if no_sync {
+        eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        WalDurability::NoSync
+    } else {
+        WalDurability::SyncOnAppend
+    };
     let env = op(
         &claims_dir,
         &StableId(claim_id),
         &StableId(agent_id),
         resolve_now_unix(now_unix),
+        durability,
     );
     crate::cli_util::emit_envelope_or_err("claim", env, want_json)
 }
@@ -1885,6 +1919,7 @@ pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
     let mut root = PathBuf::from(".");
     let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
+    let mut no_sync = false;
     let mut want_json = true;
     let mut idx = 0usize;
     while idx < args.len() {
@@ -1925,9 +1960,10 @@ pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
                     "now-unix",
                 )?);
             }
+            "--no-sync" => no_sync = true,
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core claim handoff [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> --summary <text> [--evidence <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("forge-core claim handoff [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> --summary <text> [--evidence <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--no-json]");
                 println!("  Records official context for an expired handoff-required claim, writes <state_root>/handoffs/expired-claims, marks the old claim handoff_recorded, and reopens the scope.");
                 println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
                 return Ok(());
@@ -1949,6 +1985,12 @@ pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
         allow_bootstrap_core,
         want_json,
     )?;
+    let durability = if no_sync {
+        eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        WalDurability::NoSync
+    } else {
+        WalDurability::SyncOnAppend
+    };
     let env = run_handoff(
         &claims_dir,
         &StableId(claim_id),
@@ -1956,6 +1998,7 @@ pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
         &summary,
         &evidence_refs,
         resolve_now_unix(now_unix),
+        durability,
     );
     crate::cli_util::emit_envelope_or_err("claim", env, want_json)
 }
@@ -2039,6 +2082,7 @@ pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
     let mut run_loop = false;
     let mut interval_ms: u64 = 30_000;
     let mut max_ticks: Option<u64> = None;
+    let mut no_sync = false;
     let mut idx = 0usize;
     while idx < args.len() {
         match args[idx].as_str() {
@@ -2077,9 +2121,10 @@ pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
                     "max-ticks",
                 )?);
             }
+            "--no-sync" => no_sync = true,
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core claim reconcile [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--loop] [--interval-ms 30000] [--max-ticks <n>] [--no-json]");
+                println!("forge-core claim reconcile [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--loop] [--interval-ms 30000] [--max-ticks <n>] [--no-sync] [--no-json]");
                 println!("  One-shot mode is deterministic and materializes stale/expired claim statuses once.");
                 println!("  --loop runs a foreground Tokio interval reconciler; missed ticks use Skip and no filesystem watcher/notify is used.");
                 println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
@@ -2103,8 +2148,14 @@ pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
         allow_bootstrap_core,
         want_json,
     )?;
+    let durability = if no_sync {
+        eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        WalDurability::NoSync
+    } else {
+        WalDurability::SyncOnAppend
+    };
     if !run_loop {
-        let env = run_reconcile_once(&claims_dir, resolve_now_unix(now_unix));
+        let env = run_reconcile_once(&claims_dir, resolve_now_unix(now_unix), durability);
         crate::cli_util::emit_envelope_or_err("claim", env, want_json)?;
         return Ok(());
     }
@@ -2115,6 +2166,7 @@ pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
         interval_ms,
         max_ticks,
         want_json,
+        durability,
     })
 }
 
@@ -2125,6 +2177,7 @@ pub(crate) struct ClaimReconcileLoopConfig {
     interval_ms: u64,
     max_ticks: Option<u64>,
     want_json: bool,
+    durability: WalDurability,
 }
 
 pub(crate) fn run_claim_reconcile_loop_or_err(
@@ -2151,6 +2204,7 @@ pub(crate) fn run_claim_reconcile_loop_or_err(
         interval_ms,
         max_ticks,
         want_json,
+        durability,
     } = config;
     let exit_code = runtime.block_on(async move {
         let period = Duration::from_millis(interval_ms);
@@ -2160,7 +2214,7 @@ pub(crate) fn run_claim_reconcile_loop_or_err(
         loop {
             ticker.tick().await;
             ticks = ticks.saturating_add(1);
-            let env = run_reconcile_once(&claims_dir, resolve_now_unix(now_unix));
+            let env = run_reconcile_once(&claims_dir, resolve_now_unix(now_unix), durability);
             let code = env.exit_code();
             if want_json {
                 println!("{}", serde_json::to_string(&env).unwrap());

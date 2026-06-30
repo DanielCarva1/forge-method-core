@@ -17,6 +17,7 @@ use forge_core_engine::{
     AcquireRequest, WriteCheck,
 };
 use forge_core_store::claim_wal::{claim_wal_path, recover_claim_wal, ClaimWalOperation};
+use forge_core_store::WalDurability;
 use std::fs;
 use std::path::PathBuf;
 
@@ -65,7 +66,7 @@ fn claim_id_from_acquire(
     scope_id: &str,
     path: &str,
 ) -> StableId {
-    let acquired = run_acquire(dir, &acquire_req(agent, scope_id, &[path]), NOW);
+    let acquired = run_acquire(dir, &acquire_req(agent, scope_id, &[path]), NOW, WalDurability::NoSync);
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     let claim_id = acquired
         .data
@@ -85,7 +86,7 @@ fn short_ttl_claim_id_from_acquire(
         heartbeat_interval_seconds: 5,
         ..acquire_req(agent, scope_id, &[path])
     };
-    let acquired = run_acquire(dir, &req, NOW);
+    let acquired = run_acquire(dir, &req, NOW, WalDurability::NoSync);
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     StableId(acquired.data.expect("successful acquire data").claim_id)
 }
@@ -95,7 +96,7 @@ fn acquire_success_persists_active_live_claim() {
     let dir = tmp_claims_dir("acquire");
     let req = acquire_req("alice", "S6.1", &["contracts/stories/S6.1.yaml"]);
 
-    let acquired = run_acquire(&dir, &req, NOW);
+    let acquired = run_acquire(&dir, &req, NOW, WalDurability::NoSync);
 
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     assert_eq!(acquired.exit_code(), ExitReason::Ok.as_code());
@@ -118,10 +119,10 @@ fn acquire_success_persists_active_live_claim() {
 fn conflicting_acquire_same_path_and_scope_is_rejected() {
     let dir = tmp_claims_dir("conflict");
     let path = "contracts/stories/S6.2.yaml";
-    let first = run_acquire(&dir, &acquire_req("alice", "S6.2", &[path]), NOW);
+    let first = run_acquire(&dir, &acquire_req("alice", "S6.2", &[path]), NOW, WalDurability::NoSync);
     assert!(first.ok, "first acquire should succeed: {:?}", first.error);
 
-    let second = run_acquire(&dir, &acquire_req("bob", "S6.2", &[path]), NOW + 1);
+    let second = run_acquire(&dir, &acquire_req("bob", "S6.2", &[path]), NOW + 1, WalDurability::NoSync);
 
     assert!(!second.ok, "second acquire must be rejected");
     assert_eq!(second.exit_code(), ExitReason::RejectedByGate.as_code());
@@ -146,6 +147,7 @@ fn heartbeat_refreshes_last_heartbeat_and_extends_expiry() {
         &claim_id,
         &StableId("alice".to_string()),
         heartbeat_at,
+        WalDurability::NoSync,
     );
 
     assert!(
@@ -172,7 +174,7 @@ fn release_transitions_claim_out_of_live_bus() {
     let dir = tmp_claims_dir("release");
     let claim_id = claim_id_from_acquire("alice", &dir, "S6.4", "contracts/stories/S6.4.yaml");
 
-    let released = run_release(&dir, &claim_id, &StableId("alice".to_string()), NOW + 10);
+    let released = run_release(&dir, &claim_id, &StableId("alice".to_string()), NOW + 10, WalDurability::NoSync);
 
     assert!(released.ok, "release should succeed: {:?}", released.error);
     assert_eq!(released.data.expect("release data").status, "released");
@@ -194,7 +196,7 @@ fn expired_claim_is_not_live_and_expiry_sweep_reports_handoff_required() {
         heartbeat_interval_seconds: 5,
         ..acquire_req("alice", "S6.5", &["contracts/stories/S6.5.yaml"])
     };
-    let acquired = run_acquire(&dir, &req, NOW);
+    let acquired = run_acquire(&dir, &req, NOW, WalDurability::NoSync);
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     let claim = load_one_claim(&dir);
     let after_expiry = NOW + 10;
@@ -222,7 +224,7 @@ fn claim_status_reports_expired_handoff_required_claims() {
         heartbeat_interval_seconds: 5,
         ..acquire_req("alice", "S6.5-status", &[path])
     };
-    let acquired = run_acquire(&dir, &req, NOW);
+    let acquired = run_acquire(&dir, &req, NOW, WalDurability::NoSync);
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     let claim_id = acquired.data.expect("acquire data").claim_id;
 
@@ -266,7 +268,7 @@ fn claim_status_preserves_active_claims_while_reporting_handoff_blockers() {
         heartbeat_interval_seconds: 5,
         ..acquire_req("alice", "S6.5-expired-status", &[expired_path])
     };
-    let expired = run_acquire(&dir, &expired_req, NOW);
+    let expired = run_acquire(&dir, &expired_req, NOW, WalDurability::NoSync);
     assert!(
         expired.ok,
         "expired acquire should succeed: {:?}",
@@ -276,6 +278,7 @@ fn claim_status_preserves_active_claims_while_reporting_handoff_blockers() {
         &dir,
         &acquire_req("bob", "S6.5-active-status", &[active_path]),
         NOW,
+        WalDurability::NoSync,
     );
     assert!(
         active.ok,
@@ -328,7 +331,7 @@ fn claim_status_reports_only_unresolved_handoff_blocker_statuses() {
         "S6.5-handoff-recorded",
         "contracts/stories/S6.5-handoff-recorded.yaml",
     );
-    let released = run_release(&dir, &released_id, &StableId("cara".to_string()), NOW + 1);
+    let released = run_release(&dir, &released_id, &StableId("cara".to_string()), NOW + 1, WalDurability::NoSync);
     assert!(released.ok, "release should succeed: {:?}", released.error);
     let handoff = run_handoff(
         &dir,
@@ -337,6 +340,7 @@ fn claim_status_reports_only_unresolved_handoff_blocker_statuses() {
         "worker crashed; recovery evidence recorded",
         &[],
         NOW + 10,
+        WalDurability::NoSync,
     );
     assert!(handoff.ok, "handoff should succeed: {:?}", handoff.error);
 
@@ -386,10 +390,10 @@ fn reconcile_once_noops_before_heartbeat_deadline() {
         heartbeat_interval_seconds: 5,
         ..acquire_req("alice", "P2.3-before-deadline", &[path])
     };
-    let acquired = run_acquire(&dir, &req, NOW);
+    let acquired = run_acquire(&dir, &req, NOW, WalDurability::NoSync);
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
 
-    let reconciled = run_reconcile_once(&dir, NOW + 4);
+    let reconciled = run_reconcile_once(&dir, NOW + 4, WalDurability::NoSync);
 
     assert!(
         reconciled.ok,
@@ -414,10 +418,10 @@ fn reconcile_once_materializes_stale_and_stale_remains_write_authority() {
         heartbeat_interval_seconds: 5,
         ..acquire_req("alice", "P2.3-stale", &[path])
     };
-    let acquired = run_acquire(&dir, &req, NOW);
+    let acquired = run_acquire(&dir, &req, NOW, WalDurability::NoSync);
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
 
-    let reconciled = run_reconcile_once(&dir, NOW + 5);
+    let reconciled = run_reconcile_once(&dir, NOW + 5, WalDurability::NoSync);
 
     assert!(
         reconciled.ok,
@@ -462,7 +466,7 @@ fn reconcile_once_materializes_stale_and_stale_remains_write_authority() {
         self_write.error
     );
 
-    let second = run_reconcile_once(&dir, NOW + 6);
+    let second = run_reconcile_once(&dir, NOW + 6, WalDurability::NoSync);
     assert!(
         second.ok,
         "second reconcile should succeed: {:?}",
@@ -498,17 +502,17 @@ fn reconcile_once_materializes_handoff_required_and_preserves_recovery_path() {
         heartbeat_interval_seconds: 5,
         ..acquire_req("alice", "P2.3-handoff", &[path])
     };
-    let acquired = run_acquire(&dir, &req, NOW);
+    let acquired = run_acquire(&dir, &req, NOW, WalDurability::NoSync);
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     let claim_id = acquired.data.expect("acquire data").claim_id;
 
-    let stale = run_reconcile_once(&dir, NOW + 5);
+    let stale = run_reconcile_once(&dir, NOW + 5, WalDurability::NoSync);
     assert!(
         stale.ok,
         "stale reconcile should succeed: {:?}",
         stale.error
     );
-    let expired = run_reconcile_once(&dir, NOW + 10);
+    let expired = run_reconcile_once(&dir, NOW + 10, WalDurability::NoSync);
 
     assert!(
         expired.ok,
@@ -538,6 +542,7 @@ fn reconcile_once_materializes_handoff_required_and_preserves_recovery_path() {
         &StableId(claim_id.clone()),
         &StableId("alice".to_string()),
         NOW + 10,
+        WalDurability::NoSync,
     );
     assert!(!heartbeat.ok, "handoff_required heartbeat must fail closed");
     assert!(heartbeat
@@ -561,9 +566,10 @@ fn reconcile_once_materializes_handoff_required_and_preserves_recovery_path() {
         "expired claim reconciled; handoff evidence recorded",
         &[],
         NOW + 11,
+        WalDurability::NoSync,
     );
     assert!(handoff.ok, "handoff should recover: {:?}", handoff.error);
-    let reacquire = run_acquire(&dir, &acquire_req("bob", "P2.3-handoff", &[path]), NOW + 12);
+    let reacquire = run_acquire(&dir, &acquire_req("bob", "P2.3-handoff", &[path]), NOW + 12, WalDurability::NoSync);
     assert!(
         reacquire.ok,
         "handoff_recorded claim must not block reacquire: {:?}",
@@ -599,11 +605,12 @@ fn reconcile_once_cache_only_without_wal_fails_closed() {
             &["contracts/stories/P2.3-cache-only.yaml"],
         ),
         NOW,
+        WalDurability::NoSync,
     );
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     fs::remove_file(claim_wal_path(&dir)).expect("remove authoritative WAL");
 
-    let reconciled = run_reconcile_once(&dir, NOW + 1);
+    let reconciled = run_reconcile_once(&dir, NOW + 1, WalDurability::NoSync);
 
     assert!(!reconciled.ok, "cache-only state must fail closed");
     assert_eq!(reconciled.exit_code(), ExitReason::EnvConfig.as_code());
@@ -619,7 +626,7 @@ fn reconcile_once_cache_only_without_wal_fails_closed() {
 fn check_write_denies_peer_claimed_path_and_allows_unclaimed_path() {
     let dir = tmp_claims_dir("check-write");
     let path = "contracts/stories/S6.6.yaml";
-    let acquired = run_acquire(&dir, &acquire_req("alice", "S6.6", &[path]), NOW);
+    let acquired = run_acquire(&dir, &acquire_req("alice", "S6.6", &[path]), NOW, WalDurability::NoSync);
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     let (claims, errors) = load_claims(&dir);
     assert!(
@@ -664,7 +671,7 @@ fn check_write_denies_peer_claimed_path_and_allows_unclaimed_path() {
 fn wal_authority_survives_missing_yaml_cache() {
     let dir = tmp_claims_dir("wal-authority-missing-cache");
     let path = "contracts/stories/S6.7.yaml";
-    let acquired = run_acquire(&dir, &acquire_req("alice", "S6.7", &[path]), NOW);
+    let acquired = run_acquire(&dir, &acquire_req("alice", "S6.7", &[path]), NOW, WalDurability::NoSync);
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     for entry in fs::read_dir(&dir).expect("read cache dir") {
         let entry = entry.expect("cache dir entry");
@@ -693,11 +700,11 @@ fn wal_authority_survives_missing_yaml_cache() {
 fn wal_authority_ignores_stale_yaml_cache_after_release() {
     let dir = tmp_claims_dir("wal-authority-stale-cache");
     let path = "contracts/stories/S6.8.yaml";
-    let acquired = run_acquire(&dir, &acquire_req("alice", "S6.8", &[path]), NOW);
+    let acquired = run_acquire(&dir, &acquire_req("alice", "S6.8", &[path]), NOW, WalDurability::NoSync);
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     let stale_active_claim = load_one_claim(&dir);
     let claim_id = StableId(acquired.data.expect("acquire data").claim_id);
-    let released = run_release(&dir, &claim_id, &StableId("alice".to_string()), NOW + 1);
+    let released = run_release(&dir, &claim_id, &StableId("alice".to_string()), NOW + 1, WalDurability::NoSync);
     assert!(released.ok, "release should succeed: {:?}", released.error);
     save_claim(&dir, &stale_active_claim).expect("overwrite cache with stale active claim");
 
@@ -710,7 +717,7 @@ fn wal_authority_ignores_stale_yaml_cache_after_release() {
     );
     let view = status.data.expect("status data");
     assert!(view.active.is_empty(), "released WAL state must win");
-    let reacquired = run_acquire(&dir, &acquire_req("bob", "S6.8", &[path]), NOW + 2);
+    let reacquired = run_acquire(&dir, &acquire_req("bob", "S6.8", &[path]), NOW + 2, WalDurability::NoSync);
     assert!(
         reacquired.ok,
         "released WAL state must not resurrect stale cache blocker: {:?}",
@@ -725,6 +732,7 @@ fn cache_only_claim_without_wal_fails_closed() {
         &dir,
         &acquire_req("alice", "S6.9", &["contracts/stories/S6.9.yaml"]),
         NOW,
+        WalDurability::NoSync,
     );
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     fs::remove_file(claim_wal_path(&dir)).expect("remove authoritative WAL");
