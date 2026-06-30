@@ -17,10 +17,10 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Robusto | 10 | 10 | Tracing completo; zero Result<_,String>; R5 zeroize completo (R5.1-R5.11) |
 | Performativo | 8 | 10 | `--no-sync` cobre claim + execute-operation + rebuild-effect-index (F15.7b-extend); crypto + store + serde benchmarks medidos (R6.1, R6.2, **R6.3 ✅**); CI perf workflow (R6.4). Falta medição em regression suite |
 | Protocolo guia | 10 | 10 | F04 ✅ fechado (validate + dry-run + 34 E2E tests); F01 bugs críticos fechados |
-| Workflows | 7 | 10 | WAL/claim ok, mas F11/F13 não existem |
+| Workflows | 8 | 10 | WAL/claim ok; **F11.1 ✅** CLI standalone + **F11.2 ✅** 4 policies canônicas (fail-soft, exception-swallowing, security-slop, false-test) com fixtures e E2E; falta F11.3 (enforcement no execute-operation), F11.4 (TraceEvent), F13 |
 | Agente guia humano | 9 | 10 | F01 bugs de integridade fechados; rollback_available real |
 | Não-script-de-novela | 10 | 10 | **G1 ✅** fechado: 62/62 policies em `contracts/policies/` são framework paramétrico (0/62 script). Auditoria em `progress/g1_policies_script_novela_audit.md`. Bússola `human-agent-interface.yaml` honrada |
-| Features comunidade | 9.5 | 10 | F03/F04/F01/F02/F15 operacionais; falta F05-F14 |
+| Features comunidade | 9.5 | 10 | F03/F04/F01/F02/F15 operacionais; **F11.1+F11.2 ✅** (CLI + 4 policies); falta F05-F14 (exceto F11) |
 | Rust best practices | 10 | 10 | E1 fechado (0 warnings lib); **F15 fechado** (2 edit points) |
 | Segurança supply chain | 8 | 10 | serde_yaml migrado; zeroize feito; fuzz (R4) completo via ADR-0008 |
 | Docs/rastreabilidade | 10 | 10 | R13 alinhado; R14 paper status criado; ADR-0008; **R9 ✅** fechado: Bootstrap Core Exception explícita, opt-in (`--allow-bootstrap-core`), 22 tests E2E comprovam consumer repo limpo opera clean sem ela |
@@ -286,7 +286,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 - [ ] **F08** — Secure MCP adapter
       - MCP server para preview/ready/graph/trace/memory/effect
       - Allowlist + attestation; nenhuma tool muta sem OperationContract
-- [ ] **F11** — Risk Audit Gate (parcial: **F11.1 ✅** standalone CLI)
+- [ ] **F11** — Risk Audit Gate (parcial: **F11.1 ✅** standalone CLI, **F11.2 ✅** canonical policies)
       - Checks determinísticos + extensão SAST/linters
       - Falha fechado em padrões proibidos (fail-soft, exception swallowing)
       - [x] **F11.1** — Standalone CLI `forge-core risk-audit --rules <yaml>`;
@@ -295,8 +295,10 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
             `external_linter`); fail-closed via `ExitReason::RejectedByGate`;
             5 E2E tests + 11 unit tests; rule set canônico em
             `tests/fixtures/risk-audit/valid-rust-antipatterns.yaml`
-      - [ ] **F11.2** — Policies padrão em `contracts/risk-audits/`
-            (fail-soft, exception swallowing, security slop, false test)
+      - [x] **F11.2** — 4 policies canônicas em `contracts/risk-audits/`
+            (fail-soft, exception-swallowing, security-slop, false-test),
+            cada uma com fixture `valid/` (passa) e `invalid/` (falha
+            fechado); 8 E2E tests em `risk_audit_policies_e2e.rs`
       - [ ] **F11.3** — Enforcement real no `execute-operation`
             (gate antes do WAL; flag `--require-risk-audit`)
       - [ ] **F11.4** — Integração com `TraceEvent` (rastreabilidade F03)

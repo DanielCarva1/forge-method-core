@@ -1,0 +1,105 @@
+# F11 Risk Audit Gate — fail-soft anti-patterns.
+#
+# Detects code patterns that hide failures or substitute hard errors with
+# silent fallbacks. These are the most common AI-induced crash and
+# silent-corruption patterns in Rust, Python, and TypeScript code.
+#
+# Schema: risk-audit-v0
+# See: crates/forge-core-validate/src/risk_audit.rs
+
+schema_version: risk-audit-v0
+
+rules:
+  # ── Rust ────────────────────────────────────────────────────────────────
+  # `.unwrap()` panics on None/Err. The single most common AI-induced crash.
+  - id: rust-no-unwrap
+    description: |
+      `.unwrap()` panics on `None`/`Err` and is forbidden in product source.
+      Use `?`, `expect("reason")` with a load-bearing justification, or
+      pattern match. Reviewers may allow specific call sites by exception.
+    severity: error
+    detector:
+      kind: regex
+      pattern: '\.unwrap\(\)'
+    evidence_required: false
+    fix_hint: Replace with `?`, `expect("reason")`, or pattern match.
+    applies_to:
+      - "**/*.rs"
+
+  # `todo!()`, `unimplemented!()`, `unreachable!()` ship panicking stubs.
+  - id: rust-no-todo-macro
+    description: |
+      `todo!()`, `unimplemented!()`, and `unreachable!()` panic at runtime.
+      They are acceptable during scaffolding but must not ship to product
+      code. Replace with a real implementation or a typed `Result` variant.
+    severity: error
+    detector:
+      kind: regex
+      pattern: '\b(todo!|unimplemented!|unreachable!)\('
+    evidence_required: false
+    fix_hint: Implement the branch or return a typed error variant.
+    applies_to:
+      - "**/*.rs"
+
+  # `panic!()` in non-test source is almost always the wrong tool.
+  - id: rust-no-panic-in-product
+    description: |
+      `panic!()` aborts the process. In product source, prefer returning a
+      typed error. `panic!` remains acceptable in tests and build scripts.
+    severity: error
+    detector:
+      kind: regex
+      pattern: '\bpanic!\('
+    evidence_required: false
+    fix_hint: Return a typed error variant; let the caller decide.
+    applies_to:
+      - "**/*.rs"
+
+  # ── Python ──────────────────────────────────────────────────────────────
+  # `assert` statements are stripped under `python -O`. They are not error
+  # handling and must never gate product behaviour.
+  - id: python-no-assert-for-control-flow
+    description: |
+      `assert` is removed when Python runs with `-O`. It must never gate
+      product behaviour, security checks, or input validation. Use a real
+      `raise` or a typed result instead.
+    severity: error
+    detector:
+      kind: regex
+      pattern: '^\s*assert\s'
+    evidence_required: false
+    fix_hint: "Replace `assert cond` with `if not cond: raise ...`."
+    applies_to:
+      - "**/*.py"
+
+  # `except Exception:` followed by `pass` is the canonical fail-soft.
+  - id: python-no-bare-except-pass
+    description: |
+      `except Exception: pass` (or `except: pass`) swallows every error
+      silently. Use targeted exception types and at minimum log the failure.
+    severity: error
+    detector:
+      kind: regex
+      pattern: 'except\s+\w*\s*:\s*\n\s*pass'
+    evidence_required: false
+    fix_hint: Catch the specific exception; log or re-raise.
+    applies_to:
+      - "**/*.py"
+
+  # ── TypeScript / JavaScript ─────────────────────────────────────────────
+  # Empty catch blocks swallow errors with no logging surface.
+  - id: ts-no-empty-catch
+    description: |
+      Empty `catch` blocks (`catch { }` or `catch (e) {}`) hide failures.
+      At minimum log the error; ideally re-throw or surface a typed result.
+    severity: error
+    detector:
+      kind: regex
+      pattern: 'catch\s*(\([^)]*\))?\s*\{\s*\}'
+    evidence_required: false
+    fix_hint: Log the error or re-throw with context.
+    applies_to:
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.js"
+      - "**/*.jsx"

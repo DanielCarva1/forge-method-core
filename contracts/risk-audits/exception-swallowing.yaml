@@ -1,0 +1,108 @@
+# F11 Risk Audit Gate — exception swallowing anti-patterns.
+#
+# Detects code patterns that silently drop errors. Distinct from fail-soft:
+# fail-soft substitutes hard errors with fallbacks; exception swallowing
+# drops the error entirely with no record that it happened.
+#
+# Schema: risk-audit-v0
+# See: crates/forge-core-validate/src/risk_audit.rs
+
+schema_version: risk-audit-v0
+
+rules:
+  # ── Rust ────────────────────────────────────────────────────────────────
+  # `let _ = result` silently drops a Result without inspecting it.
+  - id: rust-no-let-underscore-result
+    description: |
+      `let _ = some_result()` discards a `Result` without inspecting it.
+      This hides failures from every caller. Use `if let Err(e) = ... { ... }`
+      to handle, or `let _ = ...` only on values that are not Results.
+    severity: error
+    detector:
+      kind: regex
+      # `let _ = <expr ending in call or path that could be a Result>`
+      # We can't type-check in regex; we flag call-shaped RHS so reviewers
+      # confirm none of them return Result.
+      pattern: 'let _ = .+(\(|::)'
+    evidence_required: false
+    fix_hint: Handle the error with `if let Err(e) = ... { ... }`.
+    applies_to:
+      - "**/*.rs"
+
+  # `.ok()` on a Result drops the error variant. Often wrong in product paths.
+  - id: rust-no-ok-drop-in-hot-path
+    description: |
+      `.ok()` on a `Result<T, E>` discards the error. In hot paths this is
+      usually wrong — it converts a recoverable failure into a silent
+      `None`. Use explicit `match` or propagate via `?`.
+    severity: warning
+    detector:
+      kind: regex
+      pattern: '\.ok\(\)'
+    evidence_required: false
+    fix_hint: Match explicitly or propagate with `?`.
+    applies_to:
+      - "**/*.rs"
+
+  # ── Python ──────────────────────────────────────────────────────────────
+  # `except: pass` (bare except) catches SystemExit and KeyboardInterrupt.
+  - id: python-no-bare-except
+    description: |
+      Bare `except:` (no exception type) catches `SystemExit` and
+      `KeyboardInterrupt`, breaking shutdown and interrupt handling.
+      Always specify the exception type.
+    severity: error
+    detector:
+      kind: regex
+      pattern: '^\s*except\s*:'
+    evidence_required: false
+    fix_hint: Specify `except Exception:` at minimum, or a narrower type.
+    applies_to:
+      - "**/*.py"
+
+  # `contextlib.suppress(Exception)` silently swallows everything.
+  - id: python-no-suppress-exception
+    description: |
+      `contextlib.suppress(Exception)` silently swallows every error in a
+      block. Use it only for documented, narrow cases; flag for review.
+    severity: warning
+    detector:
+      kind: regex
+      pattern: 'suppress\(\s*(Exception|BaseException)\s*\)'
+    evidence_required: false
+    fix_hint: Catch and log the specific exception instead.
+    applies_to:
+      - "**/*.py"
+
+  # ── Go ─────────────────────────────────────────────────────────────────
+  # `_ = someErr()` discards an error return.
+  - id: go-no-discard-err
+    description: |
+      `_ = fn()` discards an error return value. Always check or explicitly
+      document why the error is safe to ignore with a `//nolint` comment.
+    severity: error
+    detector:
+      kind: regex
+      pattern: '^\s*_\s*=\s*\w+\('
+    evidence_required: false
+    fix_hint: "Check the error: `if err := fn(); err != nil { ... }`."
+    applies_to:
+      - "**/*.go"
+
+  # ── TypeScript / JavaScript ─────────────────────────────────────────────
+  # `.catch(() => {})` swallows promise rejections silently.
+  - id: ts-no-empty-promise-catch
+    description: |
+      `.catch(() => {})` swallows a promise rejection with no logging.
+      At minimum log the error so failures are observable.
+    severity: error
+    detector:
+      kind: regex
+      pattern: '\.catch\(\s*\(\s*\)\s*=>\s*\{\s*\}\s*\)'
+    evidence_required: false
+    fix_hint: Log the error or re-throw with context.
+    applies_to:
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.js"
+      - "**/*.jsx"

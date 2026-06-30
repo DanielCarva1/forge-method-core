@@ -1,8 +1,9 @@
 # F11 — Risk Audit Gate
 
-**Status**: em andamento (**F11.1 ✅ fechado**)
+**Status**: em andamento (**F11.1 ✅ fechado**, **F11.2 ✅ fechado**)
 **Data de abertura**: 2026-06-30
 **Data de fechamento F11.1**: 2026-06-30
+**Data de fechamento F11.2**: 2026-06-30
 **Branch**: `codex/forge-frust-052-ocsp-boundary`
 **Frente do roadmap**: Workflows (7 → 8.5), Features comunidade (9.5 → ?)
 **Spec**: `docs/dev-docs/forge-method-core-dev-docs-v2/01_feature_specs.md` (F11)
@@ -104,18 +105,57 @@ o summary completo com todos os findings sem re-rodar o gate.
 - `cargo test -p forge-core-cli --test risk_audit_cli_e2e` ✅ (5/5)
 - `cargo fmt -p forge-core-validate -p forge-core-cli -- --check` ✅ (meus arquivos limpos; drift preexistente em `claim.rs`, `cli_util.rs`, `preflight_cmd.rs`, `claims.rs` não tocado)
 
+## F11.2 — Canonical policies (FECHADO)
+
+### Entregue
+
+- `contracts/risk-audits/fail-soft.yaml` (6 regras: `rust-no-unwrap`,
+  `rust-no-todo-macro`, `rust-no-panic-in-product`,
+  `python-no-assert-for-control-flow`, `python-no-bare-except-pass`,
+  `ts-no-empty-catch`)
+- `contracts/risk-audits/exception-swallowing.yaml` (6 regras cobrindo
+  Rust `let _ = result` + `.ok()`, Python bare except + suppress(Exception),
+  Go `_ = fn()`, TS `.catch(() => {})`)
+- `contracts/risk-audits/security-slop.yaml` (5 regras: hardcoded password/key,
+  AWS key shape, disabled TLS verify, empty `expect("...")`, TODO em
+  security-sensitive paths)
+- `contracts/risk-audits/false-test.yaml` (5 regras: `assert!(true)`,
+  tautological `assert_eq!`, empty test body, `#[ignore]` sem reason,
+  Python `pass`-only test)
+- Fixtures pareadas para cada policy:
+  - `contracts/risk-audits/fixtures/<policy>/valid/lib.rs` — passa limpo
+  - `contracts/risk-audits/fixtures/<policy>/invalid/lib.rs` — falha fechado
+- `crates/forge-core-cli/tests/risk_audit_policies_e2e.rs` (8 tests, 2 por
+  policy): `assert_valid_fixture_passes` + `assert_invalid_fixture_fails_closed`
+
+### Lições de design
+
+1. **Comentários que descrevem anti-padrões disparam os próprios
+   anti-padrões**: o detector regex é textual e não entende semântica da
+   linguagem. Uma fixture não pode mencionar `let _ = result` no comentário
+   sem disparar a regra `rust-no-let-underscore-result`. A solução é não
+   documentar o padrão literal na fixture; o policy yaml já documenta.
+2. **O crate `regex` do Rust é RE2-based e não suporta backreferences**
+   (`\1`). Isso limita a regra `any-no-tautological-assert`: em vez de
+   casar `assert_eq!(X, X)` arbitrário, listamos os literais comuns
+   (`0`, `1`, `2`, `true`, `false`, `None`, `Some(N)`, strings curtas).
+   Isso é feature, não bug: o regex crate é linear-time e não tem catastrophic
+   backtracking, o que é importante porque o Risk Audit processa código
+   não-confiável de consumidores.
+3. **YAML quoting**: `fix_hint: Replace with `X: Y`.` quebra o parser YAML
+   porque o `: ` é interpretado como mapping. Strings com `:` precisam
+   de aspas duplas.
+
+### Validação rodada
+
+- 4 policies × 2 fixtures = 8 combinações testadas manualmente, todas
+  consistentes (válidas passam; inválidas falham fechado com contagens
+  esperadas)
+- `cargo test -p forge-core-cli --test risk_audit_policies_e2e` ✅ 8/8
+- `cargo clippy -p forge-core-cli` ✅ 0 warnings no trabalho novo
+- `cargo fmt -p forge-core-cli` ✅ limpo
+
 ## Próximos passos
-
-### F11.2 — Policies padrão
-
-Criar `contracts/risk-audits/` com 4 policies canônicas:
-- `fail-soft.yaml` — `unwrap`, `expect`, panic em hot path
-- `exception-swallowing.yaml` — `let _ = result`, `catch _`, `ignore(err)`
-- `security-slop.yaml` — hardcoded secrets, `todo!`, `unimplemented!`
-- `false-test.yaml` — `assert!(true)`, testes sem assertion
-
-Cada policy vem com uma fixture válida e uma inválida em
-`contracts/risk-audits/fixtures/`.
 
 ### F11.3 — Enforcement real
 
