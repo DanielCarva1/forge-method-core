@@ -164,21 +164,21 @@ pub enum IsolationError {
         worktree_path: String,
         owner: StableId,
     },
-    /// claim_id set but the claim does not belong to this agent (DD36).
+    /// `claim_id` set but the claim does not belong to this agent (DD36).
     ClaimAgentMismatch {
         claim_id: StableId,
         expected: StableId,
         actual: StableId,
     },
-    /// created_at is not parseable RFC3339.
+    /// `created_at` is not parseable RFC3339.
     UnparseableCreatedAt { raw: String },
-    /// base_ref is empty.
+    /// `base_ref` is empty.
     EmptyBaseRef,
     /// A field that flows into a copy-pasted shell command contains a shell
     /// metacharacter (review S4.6 C1 defense-in-depth). `field` is the
     /// contract field name; `value` is the offending input.
     ShellMetacharInField { field: String, value: String },
-    /// agent_id is empty.
+    /// `agent_id` is empty.
     EmptyAgentId,
     /// Illegal lifecycle transition (DD35).
     IllegalTransition {
@@ -241,10 +241,10 @@ impl std::fmt::Display for IsolationError {
     }
 }
 
-/// Lowercase snake_case name for an [`IsolationStatus`] (mirrors the serde
+/// Lowercase `snake_case` name for an [`IsolationStatus`] (mirrors the serde
 /// `rename_all = "snake_case"`), for use in human-readable messages.
 fn status_lc(s: IsolationStatus) -> &'static str {
-    use IsolationStatus::*;
+    use IsolationStatus::{Abandoned, Active, Merged, Merging, Proposed};
     match s {
         Proposed => "proposed",
         Active => "active",

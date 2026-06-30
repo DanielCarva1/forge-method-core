@@ -18,6 +18,7 @@ pub struct ValidationReport {
 }
 
 impl ValidationReport {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             diagnostics: Vec::new(),
@@ -32,10 +33,12 @@ impl ValidationReport {
         self.diagnostics.extend(other.diagnostics);
     }
 
+    #[must_use]
     pub fn diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics
     }
 
+    #[must_use]
     pub fn has_errors(&self) -> bool {
         self.diagnostics
             .iter()
@@ -186,6 +189,7 @@ pub struct ReferenceIndex {
 }
 
 impl ReferenceIndex {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -194,15 +198,18 @@ impl ReferenceIndex {
         self.entries.insert(reference.into(), kind);
     }
 
+    #[must_use]
     pub fn kind_of(&self, reference: &str) -> Option<ReferenceKind> {
         self.entries.get(reference).copied()
     }
 
+    #[must_use]
     pub fn contains(&self, reference: &str) -> bool {
         self.entries.contains_key(reference)
     }
 }
 
+#[must_use]
 pub fn validate_evidence_registry(registry: &FieldEvidenceRegistry) -> ValidationReport {
     let mut report = ValidationReport::new();
     let mut seen = HashSet::new();
@@ -227,6 +234,7 @@ pub fn validate_evidence_registry(registry: &FieldEvidenceRegistry) -> Validatio
     report
 }
 
+#[must_use]
 pub fn validate_yaml_source_id_references(
     documents: &[ParsedYamlDocument],
     evidence: &FieldEvidenceRegistry,
@@ -241,6 +249,7 @@ pub fn validate_yaml_source_id_references(
     report
 }
 
+#[must_use]
 pub fn validate_yaml_known_repo_references(
     documents: &[ParsedYamlDocument],
     known_paths: &HashSet<String>,
@@ -311,7 +320,7 @@ fn validate_ref_like_value(
             }
         }
         Value::Mapping(_) => {
-            validate_known_refs_in_value(report, document_path, value, known_paths)
+            validate_known_refs_in_value(report, document_path, value, known_paths);
         }
         Value::Null => {}
         _ => {}
@@ -423,6 +432,7 @@ fn validate_source_ids_in_value(
     }
 }
 
+#[must_use]
 pub fn validate_inventory(
     inventory: &ContractFamilyInventoryDocument,
     evidence: &FieldEvidenceRegistry,
@@ -486,6 +496,7 @@ pub fn validate_inventory(
     report
 }
 
+#[must_use]
 pub fn validate_inventory_references(
     inventory: &ContractFamilyInventoryDocument,
     index: &ReferenceIndex,
@@ -638,6 +649,7 @@ pub fn validate_operation_cross_references(
     report
 }
 
+#[must_use]
 pub fn validate_claim_cross_references(
     claim: &ClaimContractDocument,
     index: &ReferenceIndex,
@@ -677,6 +689,7 @@ pub fn validate_claim_cross_references(
     report
 }
 
+#[must_use]
 pub fn validate_completion_cross_references(
     completion: &CompletionContractDocument,
     index: &ReferenceIndex,
@@ -713,6 +726,7 @@ pub fn validate_completion_cross_references(
     report
 }
 
+#[must_use]
 pub fn validate_gate_cross_references(
     gate: &GateContractDocument,
     index: &ReferenceIndex,
@@ -740,6 +754,7 @@ pub fn validate_gate_cross_references(
     report
 }
 
+#[must_use]
 pub fn validate_request_cross_references(
     request: &RequestContractDocument,
     index: &ReferenceIndex,
@@ -783,6 +798,7 @@ pub fn validate_request_cross_references(
     report
 }
 
+#[must_use]
 pub fn validate_tool_effect_cross_references(
     effect: &ToolEffectContractDocument,
     index: &ReferenceIndex,
@@ -837,6 +853,7 @@ pub fn validate_tool_effect_cross_references(
     report
 }
 
+#[must_use]
 pub fn validate_decision_close_cross_references(
     decision: &DecisionCloseContractDocument,
     index: &ReferenceIndex,
@@ -864,6 +881,7 @@ pub fn validate_decision_close_cross_references(
     report
 }
 
+#[must_use]
 pub fn validate_runtime_handoff_cross_references(
     handoff: &RuntimeHandoffContractDocument,
     index: &ReferenceIndex,
@@ -927,6 +945,7 @@ pub fn validate_runtime_handoff_cross_references(
     report
 }
 
+#[must_use]
 pub fn validate_runtime_registry_cross_references(
     registry: &RuntimeRegistryEntryDocument,
     index: &ReferenceIndex,
@@ -947,6 +966,7 @@ pub fn validate_runtime_registry_cross_references(
     report
 }
 
+#[must_use]
 pub fn validate_health_recovery_cross_references(
     recovery: &HealthRecoveryContractDocument,
     index: &ReferenceIndex,
@@ -992,6 +1012,7 @@ pub fn validate_health_recovery_cross_references(
     report
 }
 
+#[must_use]
 pub fn validate_coordination_eval_cross_references(
     eval: &CoordinationEvalContractDocument,
     index: &ReferenceIndex,
@@ -1115,8 +1136,7 @@ pub fn validate_operation(operation: &OperationContractDocument) -> ValidationRe
             .concurrency
             .agent_id
             .as_ref()
-            .map(|value| value.0.trim().is_empty())
-            .unwrap_or(true)
+            .is_none_or(|value| value.0.trim().is_empty())
         {
             report.push(Diagnostic::error(
                 DiagnosticCode::FleetOperationMissingAgent,
@@ -1132,8 +1152,7 @@ pub fn validate_operation(operation: &OperationContractDocument) -> ValidationRe
             .concurrency
             .registry_ref
             .as_ref()
-            .map(|value| value.0.trim().is_empty())
-            .unwrap_or(true)
+            .is_none_or(|value| value.0.trim().is_empty())
         {
             report.push(Diagnostic::error(
                 DiagnosticCode::FleetOperationMissingRegistry,
@@ -1163,6 +1182,7 @@ pub fn validate_operation(operation: &OperationContractDocument) -> ValidationRe
     report
 }
 
+#[must_use]
 pub fn validate_claim(claim: &ClaimContractDocument) -> ValidationReport {
     let mut report = ValidationReport::new();
     let claim = &claim.claim_contract;
@@ -1198,6 +1218,7 @@ pub fn validate_claim(claim: &ClaimContractDocument) -> ValidationReport {
     report
 }
 
+#[must_use]
 pub fn validate_completion(completion: &CompletionContractDocument) -> ValidationReport {
     let mut report = ValidationReport::new();
     let completion = &completion.completion_contract;
@@ -1227,6 +1248,7 @@ pub fn validate_completion(completion: &CompletionContractDocument) -> Validatio
     report
 }
 
+#[must_use]
 pub fn validate_gate(gate: &GateContractDocument) -> ValidationReport {
     let mut report = ValidationReport::new();
     let gate = &gate.gate_contract;
@@ -1248,6 +1270,7 @@ pub fn validate_gate(gate: &GateContractDocument) -> ValidationReport {
     report
 }
 
+#[must_use]
 pub fn validate_decision_close(decision: &DecisionCloseContractDocument) -> ValidationReport {
     let mut report = ValidationReport::new();
     let decision = &decision.decision_close_contract;
@@ -1321,6 +1344,7 @@ pub fn validate_decision_close(decision: &DecisionCloseContractDocument) -> Vali
     report
 }
 
+#[must_use]
 pub fn validate_runtime_handoff(handoff: &RuntimeHandoffContractDocument) -> ValidationReport {
     let mut report = ValidationReport::new();
     let handoff = &handoff.runtime_handoff_contract;
@@ -1402,6 +1426,7 @@ pub fn validate_runtime_handoff(handoff: &RuntimeHandoffContractDocument) -> Val
     report
 }
 
+#[must_use]
 pub fn validate_runtime_registry_entry(
     registry: &RuntimeRegistryEntryDocument,
 ) -> ValidationReport {
@@ -1428,6 +1453,7 @@ pub fn validate_runtime_registry_entry(
     report
 }
 
+#[must_use]
 pub fn validate_runtime_capability(capability: &RuntimeCapabilityDocument) -> ValidationReport {
     let mut report = ValidationReport::new();
     let capability = &capability.runtime_capability;
@@ -1443,6 +1469,7 @@ pub fn validate_runtime_capability(capability: &RuntimeCapabilityDocument) -> Va
     report
 }
 
+#[must_use]
 pub fn validate_health_recovery(recovery: &HealthRecoveryContractDocument) -> ValidationReport {
     let mut report = ValidationReport::new();
     let recovery = &recovery.health_recovery_contract;
@@ -1512,6 +1539,7 @@ pub fn validate_health_recovery(recovery: &HealthRecoveryContractDocument) -> Va
     report
 }
 
+#[must_use]
 pub fn validate_coordination_eval(eval: &CoordinationEvalContractDocument) -> ValidationReport {
     let mut report = ValidationReport::new();
     let eval = &eval.coordination_eval_contract;
@@ -1627,6 +1655,7 @@ pub fn validate_coordination_eval(eval: &CoordinationEvalContractDocument) -> Va
     report
 }
 
+#[must_use]
 pub fn validate_request(request: &RequestContractDocument) -> ValidationReport {
     let mut report = ValidationReport::new();
     let request = &request.request_contract;
@@ -1656,6 +1685,7 @@ pub fn validate_request(request: &RequestContractDocument) -> ValidationReport {
     report
 }
 
+#[must_use]
 pub fn validate_tool_effect(effect: &ToolEffectContractDocument) -> ValidationReport {
     let mut report = ValidationReport::new();
     let effect = &effect.tool_effect_contract;

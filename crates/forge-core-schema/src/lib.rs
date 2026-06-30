@@ -29,6 +29,7 @@ pub struct CompactAgentView {
     pub authority_note: &'static str,
 }
 
+#[must_use]
 pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
     vec![
         schema_artifact::<FieldEvidenceRegistry>(
@@ -130,6 +131,7 @@ pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
     ]
 }
 
+#[must_use]
 pub fn compact_agent_views() -> Vec<CompactAgentView> {
     generated_contract_schemas()
         .into_iter()
@@ -138,10 +140,10 @@ pub fn compact_agent_views() -> Vec<CompactAgentView> {
             document_type: artifact.document_type,
             root_key: artifact.root_key,
             top_level_required_fields: required_fields(&artifact.schema),
-            contract_required_fields: artifact
-                .root_key
-                .map(|root_key| required_fields_for_property(&artifact.schema, root_key))
-                .unwrap_or_else(|| required_fields(&artifact.schema)),
+            contract_required_fields: artifact.root_key.map_or_else(
+                || required_fields(&artifact.schema),
+                |root_key| required_fields_for_property(&artifact.schema, root_key),
+            ),
             enum_definitions: enum_definitions(&artifact.schema),
             authority_note: authority_note(artifact.family_id),
         })

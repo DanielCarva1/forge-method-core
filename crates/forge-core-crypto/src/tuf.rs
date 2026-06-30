@@ -197,7 +197,7 @@ fn is_leap_year(year: i32) -> bool {
 /// Gregorian `(year, month, day)` into a count of days since the Unix epoch
 /// (1970-01-01). Produces negative values for dates before the epoch.
 fn days_from_civil(year: i32, month: i32, day: i32) -> i64 {
-    let year = year - if month <= 2 { 1 } else { 0 };
+    let year = year - i32::from(month <= 2);
     let era = if year >= 0 { year } else { year - 399 } / 400;
     let year_of_era = year - era * 400;
     let month = month + if month > 2 { -3 } else { 9 };

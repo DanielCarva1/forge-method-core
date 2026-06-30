@@ -47,6 +47,7 @@ use crate::valid_sha256_digest;
 /// The projection adapts manifest command metadata for a specific host
 /// surface (MCP tools, borrowed shell, or app UI) while preserving the
 /// mutation class, authority class, and required contracts from the manifest.
+#[must_use]
 pub fn run_host_adapter_projection(target: HostAdapterProjectionTarget) -> HostAdapterProjection {
     let manifest = run_host_adapter_manifest();
     HostAdapterProjection {
@@ -87,6 +88,7 @@ pub fn run_host_adapter_projection(target: HostAdapterProjectionTarget) -> HostA
 ///
 /// The policy pins argv, cwd, env, and stdio guardrails for local process
 /// execution and enumerates per-command admission decisions.
+#[must_use]
 pub fn run_host_adapter_process_security_policy(
     target: HostAdapterProcessTarget,
 ) -> HostAdapterProcessSecurityPolicy {
@@ -145,6 +147,7 @@ pub fn run_host_adapter_process_security_policy(
 /// The admission consults the manifest command metadata, the process
 /// admission policy, and runtime guards (shell control tokens, forbidden
 /// env keys, cwd escape) before returning an allowed/blocked verdict.
+#[must_use]
 pub fn run_host_adapter_invocation_admission(
     request: HostAdapterInvocationRequest,
 ) -> HostAdapterInvocationAdmission {
@@ -210,6 +213,7 @@ pub fn run_host_adapter_invocation_admission(
 ///
 /// The policy enumerates supported runtime targets, default admission,
 /// required distribution evidence, channel rules, and updater constraints.
+#[must_use]
 pub fn run_host_adapter_distribution_policy() -> HostAdapterDistributionPolicy {
     HostAdapterDistributionPolicy {
         schema_version: "0.1".to_string(),

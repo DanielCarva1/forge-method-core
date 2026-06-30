@@ -10,7 +10,40 @@
 
 use crate::cli_error::ExitError;
 use crate::cli_util::{next_arg_or_err, parse_i64_or_err, usage};
-use crate::*;
+use crate::{
+    run_host_adapter_artifact_verification, run_host_adapter_certificate_crl_status_verification,
+    run_host_adapter_certificate_ocsp_status_verification,
+    run_host_adapter_certificate_revocation_policy_verification,
+    run_host_adapter_certificate_transparency_sct_verification,
+    run_host_adapter_fulcio_certificate_identity_verification,
+    run_host_adapter_provenance_verification, run_host_adapter_rekor_verification,
+    run_host_adapter_sigstore_bundle_subject_verification,
+    run_host_adapter_sigstore_dsse_in_toto_subject_verification,
+    run_host_adapter_sigstore_timestamp_authority_verification,
+    run_host_adapter_sigstore_trust_policy_verification,
+    run_host_adapter_tuf_trusted_root_freshness_verification, HostAdapterArtifactVerificationInput,
+    HostAdapterArtifactVerificationStatus, HostAdapterCertificateCrlStatusVerificationInput,
+    HostAdapterCertificateCrlStatusVerificationStatus,
+    HostAdapterCertificateOcspStatusVerificationInput,
+    HostAdapterCertificateOcspStatusVerificationStatus,
+    HostAdapterCertificateRevocationPolicyVerificationInput,
+    HostAdapterCertificateRevocationPolicyVerificationStatus,
+    HostAdapterCertificateTransparencySctVerificationInput,
+    HostAdapterCertificateTransparencySctVerificationStatus,
+    HostAdapterFulcioCertificateIdentityVerificationInput,
+    HostAdapterFulcioCertificateIdentityVerificationStatus, HostAdapterProvenanceVerificationInput,
+    HostAdapterProvenanceVerificationStatus, HostAdapterRekorVerificationInput,
+    HostAdapterRekorVerificationStatus, HostAdapterSigstoreBundleSubjectVerificationInput,
+    HostAdapterSigstoreBundleSubjectVerificationStatus,
+    HostAdapterSigstoreDsseInTotoSubjectVerificationInput,
+    HostAdapterSigstoreDsseInTotoSubjectVerificationStatus,
+    HostAdapterSigstoreTimestampAuthorityVerificationInput,
+    HostAdapterSigstoreTimestampAuthorityVerificationStatus,
+    HostAdapterSigstoreTrustPolicyVerificationInput,
+    HostAdapterSigstoreTrustPolicyVerificationStatus,
+    HostAdapterTufTrustedRootFreshnessVerificationInput,
+    HostAdapterTufTrustedRootFreshnessVerificationStatus,
+};
 use std::path::PathBuf;
 
 pub fn run_host_adapter_verify_artifact_command(args: &[String]) -> Result<(), ExitError> {

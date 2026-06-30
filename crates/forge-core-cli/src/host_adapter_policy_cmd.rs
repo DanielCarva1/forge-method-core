@@ -16,7 +16,14 @@ use crate::cli_util::{
     parse_host_adapter_projection_target_or_err, parse_runtime_kind_or_err,
     parse_update_channel_or_err, usage,
 };
-use crate::*;
+use crate::{
+    run_host_adapter_distribution_admission, run_host_adapter_distribution_policy,
+    run_host_adapter_invocation_admission, run_host_adapter_manifest,
+    run_host_adapter_process_security_policy, run_host_adapter_projection,
+    HostAdapterDistributionAdmissionStatus, HostAdapterDistributionEvidence,
+    HostAdapterInvocationAdmissionStatus, HostAdapterInvocationRequest, HostAdapterProcessTarget,
+    HostAdapterProjectionTarget, HostAdapterUpdateChannel,
+};
 use forge_core_contracts::runtime::RuntimeKind;
 
 pub fn run_host_adapter_distribution_policy_command(args: &[String]) -> Result<(), ExitError> {

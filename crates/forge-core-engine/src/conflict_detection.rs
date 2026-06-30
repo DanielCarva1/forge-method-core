@@ -31,7 +31,7 @@
 //! 1. A live claim held by ANOTHER agent always blocks. The engine never lets a
 //!    writer clobber a peer's reserved scope.
 //! 2. Only **live** claims (status `Active` or `Stale` AND not past
-//!    `expires_at`) block. Expired / Released / HandoffRequired claims have no
+//!    `expires_at`) block. Expired / Released / `HandoffRequired` claims have no
 //!    active owner, so they do not block — consistent with the fail-closed
 //!    lease rule (DD21): a dead lease is never treated as authority.
 //!

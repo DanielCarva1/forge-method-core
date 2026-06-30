@@ -11,7 +11,7 @@
 //! We exercise the FULL validate-before-write path that includes WAL locking
 //! (`apply_file_effect_transaction_with_wal_lock`) and assert three things:
 //!   1. status == Blocked (rejected, not applied)
-//!   2. the rejection carries a TYPED reason_code, never a panic
+//!   2. the rejection carries a TYPED `reason_code`, never a panic
 //!   3. the WAL file is byte-for-byte unchanged (hash before == hash after),
 //!      AND the target file is untouched — i.e. state projection is unchanged
 //!      by the attempt.
@@ -197,8 +197,7 @@ fn s04_out_of_authority_write_is_rejected_before_touching_wal() {
     let wal_after = wal_snapshot(&root);
     assert_eq!(
         wal_before, wal_after,
-        "WAL must be unchanged by the rejected attempt (before={:?} after={:?})",
-        wal_before, wal_after
+        "WAL must be unchanged by the rejected attempt (before={wal_before:?} after={wal_after:?})"
     );
 
     fs::remove_dir_all(&root).ok();

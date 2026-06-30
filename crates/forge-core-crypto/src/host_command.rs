@@ -14,6 +14,7 @@
 /// treating it as a git SHA-1-style immutable commit reference. Used by the
 /// distribution admission and artifact-verification gates to require an
 /// immutable source anchor.
+#[must_use]
 pub fn source_ref_is_immutable(source_ref: &str) -> bool {
     source_ref
         .split(|character: char| !character.is_ascii_hexdigit())
@@ -23,6 +24,7 @@ pub fn source_ref_is_immutable(source_ref: &str) -> bool {
 /// Returns `true` when `value` looks like a version string: non-empty after
 /// trimming and composed only of `[A-Za-z0-9.\-+_]+`. Used by the distribution
 /// admission and artifact-verification gates to validate version evidence.
+#[must_use]
 pub fn version_like(value: &str) -> bool {
     let trimmed = value.trim();
     !trimmed.is_empty()

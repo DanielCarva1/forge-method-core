@@ -79,7 +79,7 @@ pub struct ValidateSummary {
 ///
 /// Serializes as lowercase (`"passed"` / `"failed"`) to match the rest of
 /// the workspace's JSON contract (`gate_status`, `coordination` verdicts,
-/// trace `gate` events). The original PascalCase emit was inconsistent
+/// trace `gate` events). The original `PascalCase` emit was inconsistent
 /// with every other status field in the binary.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -91,11 +91,13 @@ pub enum ValidationStatus {
 impl ValidateSummary {
     /// Returns `true` when every check passed and no error diagnostics were
     /// collected.
+    #[must_use]
     pub fn passed(&self) -> bool {
         self.status == ValidationStatus::Passed
     }
 
     /// One-line human-readable summary used by the legacy validator bridge.
+    #[must_use]
     pub fn human_summary(&self) -> String {
         if self.passed() {
             format!(

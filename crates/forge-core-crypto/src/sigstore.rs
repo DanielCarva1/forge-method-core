@@ -924,7 +924,7 @@ pub(crate) fn parse_sigstore_message_signature_bundle(
         "bundle_message_digest_algorithm_missing",
         reasons,
     )
-    .map(|value| value.to_ascii_lowercase())?;
+    .map(str::to_ascii_lowercase)?;
     let signature = required_json_string(
         message_signature,
         &["signature"],
@@ -1015,20 +1015,18 @@ pub(crate) fn required_json_string<'a>(
 ) -> Option<&'a str> {
     let mut current = value;
     for segment in path {
-        current = match current.get(*segment) {
-            Some(value) => value,
-            None => {
-                reasons.push(reason.to_string());
-                return None;
-            }
+        current = if let Some(value) = current.get(*segment) {
+            value
+        } else {
+            reasons.push(reason.to_string());
+            return None;
         };
     }
-    match current.as_str() {
-        Some(value) => Some(value),
-        None => {
-            reasons.push(reason.to_string());
-            None
-        }
+    if let Some(value) = current.as_str() {
+        Some(value)
+    } else {
+        reasons.push(reason.to_string());
+        None
     }
 }
 

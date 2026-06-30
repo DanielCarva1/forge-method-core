@@ -54,6 +54,7 @@ impl Default for RebuildEffectIndexInput {
 }
 
 /// Rebuild the effect-target metadata index on disk under a lock.
+#[must_use]
 pub fn run_rebuild_effect_index(
     input: RebuildEffectIndexInput,
 ) -> EffectTargetMetadataIndexRebuildResult {
@@ -115,6 +116,7 @@ pub fn run_query_effect_index(
 }
 
 /// Query the index and collapse the rows into a per-target "context" view.
+#[must_use]
 pub fn run_query_effect_index_context(
     input: QueryEffectIndexInput,
 ) -> EffectMetadataContextBuildResult {

@@ -1069,6 +1069,169 @@ fn risk_level_name(kind: forge_core_trace::TraceRiskLevel) -> &'static str {
         forge_core_trace::TraceRiskLevel::Blocked => "blocked",
     }
 }
+pub fn run_telemetry_command(args: &[String]) -> Result<(), ExitError> {
+    let subcommand = args.get(1).map_or("--help", String::as_str);
+    match subcommand {
+        "export" => {
+            // --help short-circuits before parsing so the parser can return a
+            // fully-formed input on the success path.
+            if args.iter().any(|a| matches!(a.as_str(), "--help" | "-h")) {
+                println!("{}", telemetry_usage());
+                return Ok(());
+            }
+            let (input, json) = parse_telemetry_export_args(args)?;
+            run_telemetry_export(&input, json)
+        }
+        "--help" | "-h" | "help" => {
+            println!("{}", telemetry_usage());
+            Ok(())
+        }
+        _ => Err(ExitError::usage(telemetry_usage())),
+    }
+}
+
+pub fn parse_telemetry_export_args(
+    args: &[String],
+) -> Result<(TelemetryExportCommandInput, bool), ExitError> {
+    let mut root = PathBuf::from(".");
+    let mut contract_path: Option<PathBuf> = None;
+    let mut output_path: Option<PathBuf> = None;
+    let mut format = TelemetryExportFormat::Jsonl;
+    let mut trace_id: Option<String> = None;
+    let mut run_id: Option<String> = None;
+    let mut latest_run = false;
+    let mut allow_bootstrap_core = false;
+    let mut json = false;
+    let mut index = 2usize;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--root" => {
+                index += 1;
+                root = PathBuf::from(next_telemetry_value_or_err(args, index, "root")?);
+            }
+            "--contract" => {
+                index += 1;
+                contract_path = Some(PathBuf::from(next_telemetry_value_or_err(
+                    args, index, "contract",
+                )?));
+            }
+            "--output" => {
+                index += 1;
+                output_path = Some(PathBuf::from(next_telemetry_value_or_err(
+                    args, index, "output",
+                )?));
+            }
+            "--format" => {
+                index += 1;
+                format = parse_telemetry_format_or_err(next_telemetry_value_or_err(
+                    args, index, "format",
+                )?)?;
+            }
+            "--trace-id" => {
+                index += 1;
+                trace_id = Some(next_telemetry_value_or_err(args, index, "trace-id")?.to_string());
+            }
+            "--run-id" => {
+                index += 1;
+                run_id = Some(next_telemetry_value_or_err(args, index, "run-id")?.to_string());
+            }
+            "--latest-run" => latest_run = true,
+            "--allow-bootstrap-core" => allow_bootstrap_core = true,
+            "--json" => json = true,
+            "--no-json" => json = false,
+            "--help" | "-h" => {
+                // Already handled by run_telemetry_command; if we somehow reach
+                // here, treat as success.
+                break;
+            }
+            _ => {
+                return Err(ExitError::usage(telemetry_usage()));
+            }
+        }
+        index += 1;
+    }
+
+    let selected_filters =
+        usize::from(trace_id.is_some()) + usize::from(run_id.is_some()) + usize::from(latest_run);
+    if selected_filters > 1 {
+        return Err(ExitError::invalid_value(
+            "telemetry export accepts only one of --trace-id, --run-id, or --latest-run",
+        ));
+    }
+
+    Ok((
+        TelemetryExportCommandInput {
+            root,
+            contract_path,
+            output_path,
+            format,
+            trace_id,
+            run_id,
+            latest_run,
+            allow_bootstrap_core,
+        },
+        json,
+    ))
+}
+
+pub fn next_telemetry_value_or_err<'a>(
+    args: &'a [String],
+    index: usize,
+    flag: &str,
+) -> Result<&'a str, ExitError> {
+    let value = args.get(index).ok_or_else(|| {
+        ExitError::invalid_value(format!("telemetry export: missing value for --{flag}"))
+    })?;
+    if value.starts_with('-') {
+        return Err(ExitError::invalid_value(format!(
+            "telemetry export: missing value for --{flag}"
+        )));
+    }
+    Ok(value.as_str())
+}
+
+pub fn parse_telemetry_format_or_err(value: &str) -> Result<TelemetryExportFormat, ExitError> {
+    match value {
+        "jsonl" | "forge-jsonl" => Ok(TelemetryExportFormat::Jsonl),
+        "otel-json" | "otel-jsonl" | "opentelemetry-json" => Ok(TelemetryExportFormat::OtelJson),
+        other => Err(ExitError::invalid_value(format!(
+            "telemetry export: invalid value for --format '{other}'; expected jsonl or otel-json"
+        ))),
+    }
+}
+
+pub fn run_telemetry_export(
+    input: &TelemetryExportCommandInput,
+    json: bool,
+) -> Result<(), ExitError> {
+    match run_export(input) {
+        Ok(output) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output)
+                        .expect("serialize telemetry export output")
+                );
+            } else {
+                println!(
+                    "forge_core_telemetry_export status={:?} format={:?} exported={} skipped={} output={}",
+                    output.status,
+                    output.format,
+                    output.exported_event_count,
+                    output.skipped_event_count,
+                    output.output_path.as_deref().unwrap_or("<memory>")
+                );
+                for diagnostic in &output.diagnostics {
+                    println!("diagnostic={diagnostic}");
+                }
+            }
+            Ok(())
+        }
+        Err(error) => Err(ExitError::env_config(format!(
+            "telemetry export failed: {error}"
+        ))),
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -1251,168 +1414,5 @@ mod tests {
             line["span"]["attributes"]["forge.telemetry_kind"],
             "verification_run"
         );
-    }
-}
-pub fn run_telemetry_command(args: &[String]) -> Result<(), ExitError> {
-    let subcommand = args.get(1).map_or("--help", String::as_str);
-    match subcommand {
-        "export" => {
-            // --help short-circuits before parsing so the parser can return a
-            // fully-formed input on the success path.
-            if args.iter().any(|a| matches!(a.as_str(), "--help" | "-h")) {
-                println!("{}", telemetry_usage());
-                return Ok(());
-            }
-            let (input, json) = parse_telemetry_export_args(args)?;
-            run_telemetry_export(&input, json)
-        }
-        "--help" | "-h" | "help" => {
-            println!("{}", telemetry_usage());
-            Ok(())
-        }
-        _ => Err(ExitError::usage(telemetry_usage())),
-    }
-}
-
-pub fn parse_telemetry_export_args(
-    args: &[String],
-) -> Result<(TelemetryExportCommandInput, bool), ExitError> {
-    let mut root = PathBuf::from(".");
-    let mut contract_path: Option<PathBuf> = None;
-    let mut output_path: Option<PathBuf> = None;
-    let mut format = TelemetryExportFormat::Jsonl;
-    let mut trace_id: Option<String> = None;
-    let mut run_id: Option<String> = None;
-    let mut latest_run = false;
-    let mut allow_bootstrap_core = false;
-    let mut json = false;
-    let mut index = 2usize;
-    while index < args.len() {
-        match args[index].as_str() {
-            "--root" => {
-                index += 1;
-                root = PathBuf::from(next_telemetry_value_or_err(args, index, "root")?);
-            }
-            "--contract" => {
-                index += 1;
-                contract_path = Some(PathBuf::from(next_telemetry_value_or_err(
-                    args, index, "contract",
-                )?));
-            }
-            "--output" => {
-                index += 1;
-                output_path = Some(PathBuf::from(next_telemetry_value_or_err(
-                    args, index, "output",
-                )?));
-            }
-            "--format" => {
-                index += 1;
-                format = parse_telemetry_format_or_err(next_telemetry_value_or_err(
-                    args, index, "format",
-                )?)?;
-            }
-            "--trace-id" => {
-                index += 1;
-                trace_id = Some(next_telemetry_value_or_err(args, index, "trace-id")?.to_string());
-            }
-            "--run-id" => {
-                index += 1;
-                run_id = Some(next_telemetry_value_or_err(args, index, "run-id")?.to_string());
-            }
-            "--latest-run" => latest_run = true,
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
-            "--json" => json = true,
-            "--no-json" => json = false,
-            "--help" | "-h" => {
-                // Already handled by run_telemetry_command; if we somehow reach
-                // here, treat as success.
-                break;
-            }
-            _ => {
-                return Err(ExitError::usage(telemetry_usage()));
-            }
-        }
-        index += 1;
-    }
-
-    let selected_filters =
-        usize::from(trace_id.is_some()) + usize::from(run_id.is_some()) + usize::from(latest_run);
-    if selected_filters > 1 {
-        return Err(ExitError::invalid_value(
-            "telemetry export accepts only one of --trace-id, --run-id, or --latest-run",
-        ));
-    }
-
-    Ok((
-        TelemetryExportCommandInput {
-            root,
-            contract_path,
-            output_path,
-            format,
-            trace_id,
-            run_id,
-            latest_run,
-            allow_bootstrap_core,
-        },
-        json,
-    ))
-}
-
-pub fn next_telemetry_value_or_err<'a>(
-    args: &'a [String],
-    index: usize,
-    flag: &str,
-) -> Result<&'a str, ExitError> {
-    let value = args.get(index).ok_or_else(|| {
-        ExitError::invalid_value(format!("telemetry export: missing value for --{flag}"))
-    })?;
-    if value.starts_with('-') {
-        return Err(ExitError::invalid_value(format!(
-            "telemetry export: missing value for --{flag}"
-        )));
-    }
-    Ok(value.as_str())
-}
-
-pub fn parse_telemetry_format_or_err(value: &str) -> Result<TelemetryExportFormat, ExitError> {
-    match value {
-        "jsonl" | "forge-jsonl" => Ok(TelemetryExportFormat::Jsonl),
-        "otel-json" | "otel-jsonl" | "opentelemetry-json" => Ok(TelemetryExportFormat::OtelJson),
-        other => Err(ExitError::invalid_value(format!(
-            "telemetry export: invalid value for --format '{other}'; expected jsonl or otel-json"
-        ))),
-    }
-}
-
-pub fn run_telemetry_export(
-    input: &TelemetryExportCommandInput,
-    json: bool,
-) -> Result<(), ExitError> {
-    match run_export(input) {
-        Ok(output) => {
-            if json {
-                println!(
-                    "{}",
-                    serde_json::to_string_pretty(&output)
-                        .expect("serialize telemetry export output")
-                );
-            } else {
-                println!(
-                    "forge_core_telemetry_export status={:?} format={:?} exported={} skipped={} output={}",
-                    output.status,
-                    output.format,
-                    output.exported_event_count,
-                    output.skipped_event_count,
-                    output.output_path.as_deref().unwrap_or("<memory>")
-                );
-                for diagnostic in &output.diagnostics {
-                    println!("diagnostic={diagnostic}");
-                }
-            }
-            Ok(())
-        }
-        Err(error) => Err(ExitError::env_config(format!(
-            "telemetry export failed: {error}"
-        ))),
     }
 }
