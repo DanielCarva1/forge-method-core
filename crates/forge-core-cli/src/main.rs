@@ -51,7 +51,13 @@ fn main() {
                 std::process::exit(error.exit_code());
             }
         },
-        "graph" => forge_core_cli::graph_cmd::run_graph_command(&args),
+        "graph" => match forge_core_cli::graph_cmd::run_graph_command(&args) {
+            Ok(()) => {}
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(error.exit_code());
+            }
+        },
         "eval" => match forge_core_cli::eval_cmd::run_eval_command(&args) {
             Ok(()) => {}
             Err(error) => {
