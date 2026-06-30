@@ -3,9 +3,15 @@ use forge_core_cli::cli_util::*;
 use forge_core_cli::host_adapter_policy_cmd;
 use forge_core_cli::host_adapter_verify_cmd;
 use forge_core_cli::m1_cmd::M1CommandKind;
+use forge_core_cli::tracing_init;
 use std::env;
 
 fn main() {
+    // Initialize structured tracing BEFORE any dispatcher runs. The subscriber
+    // is idempotent and writes to stderr; stdout (the JSON contract channel)
+    // is untouched. Format is auto-selected from FORGE_LOG_FORMAT or stderr
+    // TTY detection.
+    tracing_init::init_subscriber();
     let args: Vec<String> = env::args().skip(1).collect();
     let command = args.first().map(String::as_str).unwrap_or("validate");
     let result: Result<(), ExitError> = match command {

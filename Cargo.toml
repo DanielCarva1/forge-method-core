@@ -41,6 +41,8 @@ x509-parser = { version = "0.18.1", features = ["verify"] }
 crc32c = "0.6.8"
 fs4 = "1.1.0"
 tokio = { version = "1.52.3", default-features = false, features = ["rt", "time"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "registry", "fmt", "json", "env-filter", "ansi"] }
 
 [workspace.dependencies.rcgen]
 version = "0.14.8"

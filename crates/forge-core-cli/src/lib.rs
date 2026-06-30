@@ -40,6 +40,7 @@ pub mod isolation;
 pub mod m1_cmd;
 pub mod project_cmd;
 pub mod telemetry_cmd;
+pub mod tracing_init;
 pub mod validate;
 
 // Re-export the execute-operation API at the crate root so that the binary
