@@ -112,6 +112,13 @@ pub struct ParsedCheckpoint {
     pub(crate) signatures: Vec<Zeroizing<Vec<u8>>>,
 }
 
+/// Parses a Rekor log entry JSON blob into a [`ParsedRekorEntry`].
+///
+/// # Errors
+///
+/// Returns [`RekorParseError`] when the input is not valid JSON, when
+/// required fields are missing, or when the body/integration-proof payloads
+/// fail base64 or JSON decoding.
 pub fn parse_rekor_log_entry(text: &str) -> Result<ParsedRekorEntry, RekorParseError> {
     let value = serde_json::from_str::<Value>(text).map_err(|err| {
         RekorParseError::LogEntryJsonInvalid {
@@ -261,6 +268,13 @@ pub(crate) fn verify_rekor_checkpoint(
     Err(RekorParseError::CheckpointSignatureInvalid)
 }
 
+/// Parses a signed checkpoint text blob into a [`ParsedCheckpoint`].
+///
+/// # Errors
+///
+/// Returns [`RekorParseError`] when the checkpoint is malformed (missing note
+/// / signature separator, wrong line count, empty origin, non-numeric tree
+/// size, or undecodable signatures).
 pub fn parse_signed_checkpoint(
     checkpoint: &str,
 ) -> Result<ParsedCheckpoint, RekorParseError> {
