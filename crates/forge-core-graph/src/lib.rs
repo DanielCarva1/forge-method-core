@@ -287,6 +287,11 @@ pub struct GraphDryRunStep {
     pub operation_plan_allowed: Option<bool>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub operation_blocking_reasons: Vec<String>,
+    /// Repo paths the operation would touch if executed, sourced from the
+    /// runtime preview. Empty for read-only nodes, verifier nodes, and any
+    /// node whose operation contract could not be evaluated.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub operation_touched_refs: Vec<RepoPath>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub claim_preflight: Option<GraphClaimPreflightEvaluation>,
     pub status: GraphDryRunStepStatus,
@@ -341,6 +346,11 @@ pub struct GraphOperationEvaluation {
     pub ready_status: Option<String>,
     pub blocking_reasons: Vec<String>,
     pub claim_preflight: Option<GraphClaimPreflightEvaluation>,
+    /// Repo paths this operation would touch if executed, sourced from the
+    /// runtime preview's `touched_refs` (union of `CoordinationScope.target.paths`
+    /// and, where available, `ToolEffectContractDocument` write-sets). Empty for
+    /// read-only operations, failed evaluations, and missing contracts.
+    pub touched_refs: Vec<RepoPath>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -581,6 +591,8 @@ fn dry_run_step(
             operation_plan_allowed: operation_evaluation.map(|evaluation| evaluation.plan_allowed),
             operation_blocking_reasons: operation_evaluation
                 .map_or_else(Vec::new, |evaluation| evaluation.blocking_reasons.clone()),
+            operation_touched_refs: operation_evaluation
+                .map_or_else(Vec::new, |evaluation| evaluation.touched_refs.clone()),
             claim_preflight: operation_evaluation
                 .and_then(|evaluation| evaluation.claim_preflight.clone()),
             status: if blocked {
