@@ -338,7 +338,7 @@ fn load_route_contracts(options: &RouteOptions) -> Result<RouteContracts, RouteL
         }
     })?;
     let policy_doc: AutonomyPolicyContractDocument =
-        serde_yaml::from_str(&policy_text).map_err(|source| RouteLoadError::PolicyYaml {
+        yaml_serde::from_str(&policy_text).map_err(|source| RouteLoadError::PolicyYaml {
             source: source.to_string(),
         })?;
 
@@ -351,7 +351,7 @@ fn load_route_contracts(options: &RouteOptions) -> Result<RouteContracts, RouteL
                     path: display_path(path),
                     source: source.to_string(),
                 })?;
-            let goal_doc: VerificationGoalContractDocument = serde_yaml::from_str(&goal_text)
+            let goal_doc: VerificationGoalContractDocument = yaml_serde::from_str(&goal_text)
                 .map_err(|source| RouteLoadError::GoalYaml {
                     source: source.to_string(),
                 })?;

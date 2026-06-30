@@ -35,7 +35,7 @@ fn all_migrated_workflows_deserialize_into_typed_schema() {
     let mut failures = Vec::new();
     for path in &files {
         let text = fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path:?}: {e}"));
-        match serde_yaml::from_str::<WorkflowDocument>(&text) {
+        match yaml_serde::from_str::<WorkflowDocument>(&text) {
             Ok(doc) => {
                 // Sanity: every workflow must have a non-empty id and all 7 fields.
                 assert!(
@@ -97,7 +97,7 @@ fn all_phase_tags_are_canonical_or_anytime() {
             continue;
         }
         let text = fs::read_to_string(&path).unwrap();
-        let doc: WorkflowDocument = serde_yaml::from_str(&text).unwrap();
+        let doc: WorkflowDocument = yaml_serde::from_str(&text).unwrap();
         for tag in &doc.workflow.phases {
             let raw = tag.0.trim();
             if raw == "anytime" {
@@ -128,7 +128,7 @@ fn workflow_catalog_has_unique_ids() {
             continue;
         }
         let text = fs::read_to_string(&path).unwrap();
-        let doc: WorkflowDocument = serde_yaml::from_str(&text)
+        let doc: WorkflowDocument = yaml_serde::from_str(&text)
             .unwrap_or_else(|e| panic!("{}: {e}", path.file_name().unwrap().to_string_lossy()));
         ids.push(doc.workflow.id.0);
     }

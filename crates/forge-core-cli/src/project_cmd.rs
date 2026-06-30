@@ -769,7 +769,7 @@ fn write_project_link_atomically(plan: &ProjectInitPlan) -> Result<(), ProjectIn
         sidecar_root: RepoPath(plan.sidecar_link.clone()),
         state_root: RepoPath(plan.state_link.clone()),
     };
-    let mut raw = serde_yaml::to_string(&document).map_err(|source| {
+    let mut raw = yaml_serde::to_string(&document).map_err(|source| {
         ProjectInitError::ProjectLinkSerialize {
             source: source.to_string(),
         }
@@ -878,7 +878,7 @@ fn resolve_from_link(
         source: source.to_string(),
     })?;
     let link: ProjectLinkDocument =
-        serde_yaml::from_str(strip_utf8_bom(&raw)).map_err(|source| {
+        yaml_serde::from_str(strip_utf8_bom(&raw)).map_err(|source| {
             ProjectResolveError::LinkParse {
                 path: display_path(link_path),
                 source: source.to_string(),

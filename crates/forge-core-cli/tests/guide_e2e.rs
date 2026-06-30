@@ -52,7 +52,7 @@ fn decision_file(wf: &str, phase: &str, next: Option<&str>, reason: &str) -> std
             proposed_next_phase: next,
         },
     };
-    let body = serde_yaml::to_string(&doc).unwrap();
+    let body = yaml_serde::to_string(&doc).unwrap();
     tmp_decision("decision.yaml", &body)
 }
 

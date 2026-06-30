@@ -176,9 +176,9 @@ mod tests {
     fn serde_round_trip_populated_multi_goal_contract() {
         let document = populated_contract();
 
-        let serialized = serde_yaml::to_string(&document).expect("serializes");
+        let serialized = yaml_serde::to_string(&document).expect("serializes");
         let deserialized: VerificationGoalContractDocument =
-            serde_yaml::from_str(&serialized).expect("deserializes");
+            yaml_serde::from_str(&serialized).expect("deserializes");
 
         assert_eq!(deserialized, document);
     }
@@ -204,7 +204,7 @@ verification_goal_contract:
   evidence_refs: []
 "#;
 
-        let result = serde_yaml::from_str::<VerificationGoalContractDocument>(yaml);
+        let result = yaml_serde::from_str::<VerificationGoalContractDocument>(yaml);
 
         assert!(result.is_err());
     }

@@ -197,7 +197,7 @@ pub fn run_decide(
         }
     };
     let decision: GuideDecision =
-        match serde_yaml::from_str::<GuideDecisionDocument>(&decision_text) {
+        match yaml_serde::from_str::<GuideDecisionDocument>(&decision_text) {
             Ok(doc) => doc.guide_decision,
             Err(e) => {
                 return CliEnvelope::err(
@@ -783,7 +783,7 @@ pub fn load_gates(path: Option<&std::path::Path>) -> Vec<forge_core_engine::Prov
         gate_kind: String,
         status: String,
     }
-    let rows: Vec<GateRow> = serde_yaml::from_str(&text).unwrap_or_default();
+    let rows: Vec<GateRow> = yaml_serde::from_str(&text).unwrap_or_default();
     rows.into_iter()
         .filter_map(|r| {
             let gk = match r.gate_kind.as_str() {

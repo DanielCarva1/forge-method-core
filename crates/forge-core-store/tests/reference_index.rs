@@ -176,7 +176,7 @@ fn repo_root() -> PathBuf {
 fn read_yaml<T: serde::de::DeserializeOwned>(path: &Path) -> T {
     let text =
         fs::read_to_string(path).unwrap_or_else(|err| panic!("read {}: {err}", path.display()));
-    serde_yaml::from_str(&text)
+    yaml_serde::from_str(&text)
         .unwrap_or_else(|err| panic!("deserialize {}: {err}", path.display()))
 }
 

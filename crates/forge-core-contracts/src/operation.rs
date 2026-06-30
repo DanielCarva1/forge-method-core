@@ -381,11 +381,11 @@ mod tests {
 
     #[test]
     fn operation_gate_status_wire_format_remains_snake_case() {
-        let pending = serde_yaml::to_string(&OperationGateStatus::Pending).unwrap();
+        let pending = yaml_serde::to_string(&OperationGateStatus::Pending).unwrap();
         assert_eq!(pending.trim(), "pending");
-        let blocked = serde_yaml::to_string(&OperationGateStatus::Blocked).unwrap();
+        let blocked = yaml_serde::to_string(&OperationGateStatus::Blocked).unwrap();
         assert_eq!(blocked.trim(), "blocked");
-        let round_trip: OperationGateStatus = serde_yaml::from_str("pending").unwrap();
+        let round_trip: OperationGateStatus = yaml_serde::from_str("pending").unwrap();
         assert_eq!(round_trip, OperationGateStatus::Pending);
     }
 }

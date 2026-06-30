@@ -456,7 +456,7 @@ fn read_contract(path: &Path) -> Result<TelemetryContractDocument, TelemetryExpo
         source: source.to_string(),
     })?;
     let document: TelemetryContractDocument =
-        serde_yaml::from_str(strip_utf8_bom(&text)).map_err(|source| {
+        yaml_serde::from_str(strip_utf8_bom(&text)).map_err(|source| {
             TelemetryExportError::ParseContract {
                 path: path.to_path_buf(),
                 source: source.to_string(),

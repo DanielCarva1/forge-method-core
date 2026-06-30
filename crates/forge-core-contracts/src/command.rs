@@ -153,7 +153,7 @@ safety:
 unexpected_field: true
 "#;
 
-        let err = serde_yaml::from_str::<CommandContract>(contract_yaml).unwrap_err();
+        let err = yaml_serde::from_str::<CommandContract>(contract_yaml).unwrap_err();
         assert!(err.to_string().contains("unknown field"));
 
         let document_yaml = r#"
@@ -185,7 +185,7 @@ command_contract:
 unknown_top_level: true
 "#;
 
-        let err = serde_yaml::from_str::<CommandContractDocument>(document_yaml).unwrap_err();
+        let err = yaml_serde::from_str::<CommandContractDocument>(document_yaml).unwrap_err();
         assert!(err.to_string().contains("unknown field"));
     }
 }

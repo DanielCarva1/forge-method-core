@@ -3,7 +3,7 @@
 //! `forge validate` and `forge guide` call this once per invocation to map
 //! the workspace's contract/policy/fixture graph. The cost is dominated by:
 //! - filesystem walk of `contracts/` and `docs/fixtures/operation-contract-v0/`
-//! - serde_yaml parsing of every YAML file found
+//! - yaml_serde parsing of every YAML file found
 //! - building the reference index (`ReferenceIndex`)
 //!
 //! We measure against the workspace itself (the realistic upper bound for a

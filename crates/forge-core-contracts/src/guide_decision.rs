@@ -77,7 +77,7 @@ guide_decision:
   proposed_next_phase: 3-plan
 "#;
         let doc: GuideDecisionDocument =
-            serde_yaml::from_str(yaml).expect("deserialize guide decision");
+            yaml_serde::from_str(yaml).expect("deserialize guide decision");
         assert_eq!(
             doc.guide_decision.recommended_workflow,
             StableId("plan-sprint".into())
@@ -91,8 +91,8 @@ guide_decision:
             Some(Phase::Plan)
         );
 
-        let again = serde_yaml::to_string(&doc).expect("serialize");
-        let doc2: GuideDecisionDocument = serde_yaml::from_str(&again).expect("deserialize again");
+        let again = yaml_serde::to_string(&doc).expect("serialize");
+        let doc2: GuideDecisionDocument = yaml_serde::from_str(&again).expect("deserialize again");
         assert_eq!(doc, doc2, "round-trip not stable");
     }
 
@@ -104,7 +104,7 @@ guide_decision:
   reason: "new project"
   current_phase: 1-discovery
 "#;
-        let doc: GuideDecisionDocument = serde_yaml::from_str(yaml).expect("deserialize");
+        let doc: GuideDecisionDocument = yaml_serde::from_str(yaml).expect("deserialize");
         assert!(doc.guide_decision.proposed_next_phase.is_none());
         assert!(doc.guide_decision.allowed_actions.is_empty());
     }

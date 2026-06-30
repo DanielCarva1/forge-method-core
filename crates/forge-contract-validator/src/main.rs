@@ -1,8 +1,8 @@
 use forge_core_cli::run_validate;
-use serde_yaml::Value;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
+use yaml_serde::Value;
 
 fn main() {
     let root = env::args()
@@ -102,7 +102,7 @@ fn evidence_source_count(root: &Path) -> usize {
     let Ok(text) = fs::read_to_string(registry_path) else {
         return 0;
     };
-    serde_yaml::from_str::<Value>(&text)
+    yaml_serde::from_str::<Value>(&text)
         .ok()
         .and_then(|registry| {
             registry

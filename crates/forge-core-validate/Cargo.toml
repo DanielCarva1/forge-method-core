@@ -6,9 +6,9 @@ edition.workspace = true
 [dependencies]
 forge-core-contracts = { path = "../forge-core-contracts" }
 serde.workspace = true
-serde_yaml.workspace = true
+yaml_serde.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
 serde.workspace = true
-serde_yaml.workspace = true
+yaml_serde.workspace = true

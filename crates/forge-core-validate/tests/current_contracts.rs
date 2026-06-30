@@ -35,7 +35,7 @@ fn repo_root() -> PathBuf {
 fn read_yaml<T: serde::de::DeserializeOwned>(path: &Path) -> T {
     let text =
         fs::read_to_string(path).unwrap_or_else(|err| panic!("read {}: {err}", path.display()));
-    serde_yaml::from_str(&text)
+    yaml_serde::from_str(&text)
         .unwrap_or_else(|err| panic!("deserialize {}: {err}", path.display()))
 }
 
@@ -349,7 +349,7 @@ fn yaml_source_id_validation_reports_unknown_sources() {
     );
     let document = ParsedYamlDocument {
         path: "contracts/policies/synthetic.yaml".to_string(),
-        value: serde_yaml::from_str(
+        value: yaml_serde::from_str(
             r#"
 schema_version: "0.1"
 evidence_basis:
@@ -375,7 +375,7 @@ evidence_basis:
 fn yaml_known_repo_ref_validation_reports_missing_refs() {
     let document = ParsedYamlDocument {
         path: "contracts/inventory/synthetic.yaml".to_string(),
-        value: serde_yaml::from_str(
+        value: yaml_serde::from_str(
             r#"
 schema_version: "0.1"
 contract_family_inventory:

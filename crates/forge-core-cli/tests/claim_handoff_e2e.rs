@@ -155,7 +155,7 @@ fn assert_handoff_artifact(
         "handoff artifact should include evidence reference '{evidence_name}'\nartifact:\n{artifact}"
     );
     let parsed: ClaimHandoffArtifact =
-        serde_yaml::from_str(&artifact).expect("handoff artifact should deserialize");
+        yaml_serde::from_str(&artifact).expect("handoff artifact should deserialize");
     assert_eq!(
         parsed.claim_id,
         json["data"]["claim_id"].as_str().expect("claim_id string")

@@ -143,8 +143,8 @@ mod tests {
     #[test]
     fn round_trips_canonical_forms() {
         for phase in Phase::ALL {
-            let yaml = serde_yaml::to_string(&phase).expect("serialize phase");
-            let back: Phase = serde_yaml::from_str(&yaml).expect("deserialize phase");
+            let yaml = yaml_serde::to_string(&phase).expect("serialize phase");
+            let back: Phase = yaml_serde::from_str(&yaml).expect("deserialize phase");
             assert_eq!(phase, back, "round-trip failed for {phase}");
         }
     }

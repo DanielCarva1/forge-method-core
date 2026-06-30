@@ -61,7 +61,7 @@ impl RouterScore {
 /// Returns an error string if the file cannot be read or deserialized.
 pub fn load_eval_corpus(path: &Path) -> Result<EvalCorpusDocument, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("read error: {e}"))?;
-    serde_yaml::from_str(&text).map_err(|e| format!("deserialize error: {e}"))
+    yaml_serde::from_str(&text).map_err(|e| format!("deserialize error: {e}"))
 }
 
 /// Score a router closure against the corpus. `router` maps an utterance to the

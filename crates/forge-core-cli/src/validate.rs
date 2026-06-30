@@ -578,7 +578,7 @@ fn read_yaml<T: serde::de::DeserializeOwned>(
             return None;
         }
     };
-    match serde_yaml::from_str(&text) {
+    match yaml_serde::from_str(&text) {
         Ok(value) => Some(value),
         Err(err) => {
             summary.push_diagnostic(ValidateDiagnostic::error(

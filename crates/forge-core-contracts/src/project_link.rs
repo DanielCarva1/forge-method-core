@@ -32,18 +32,18 @@ mod tests {
     #[test]
     fn project_link_round_trips_yaml() {
         let raw = "schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: ../forge-app\nstate_root: ../forge-app/.forge-method\n";
-        let doc: ProjectLinkDocument = serde_yaml::from_str(raw).unwrap();
+        let doc: ProjectLinkDocument = yaml_serde::from_str(raw).unwrap();
         assert_eq!(doc.schema_version, PROJECT_LINK_SCHEMA_VERSION);
         assert_eq!(doc.project_id.0, "app");
-        let serialized = serde_yaml::to_string(&doc).unwrap();
-        let reparsed: ProjectLinkDocument = serde_yaml::from_str(&serialized).unwrap();
+        let serialized = yaml_serde::to_string(&doc).unwrap();
+        let reparsed: ProjectLinkDocument = yaml_serde::from_str(&serialized).unwrap();
         assert_eq!(reparsed, doc);
     }
 
     #[test]
     fn project_link_rejects_unknown_fields() {
         let raw = "schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: ../forge-app\nstate_root: ../forge-app/.forge-method\nextra: nope\n";
-        let err = serde_yaml::from_str::<ProjectLinkDocument>(raw).unwrap_err();
+        let err = yaml_serde::from_str::<ProjectLinkDocument>(raw).unwrap_err();
         assert!(err.to_string().contains("extra"));
     }
 
@@ -51,7 +51,7 @@ mod tests {
     fn project_link_requires_state_root() {
         let raw =
             "schema_version: forge_project_link_v1\nproject_id: app\nsidecar_root: ../forge-app\n";
-        let err = serde_yaml::from_str::<ProjectLinkDocument>(raw).unwrap_err();
+        let err = yaml_serde::from_str::<ProjectLinkDocument>(raw).unwrap_err();
         assert!(err.to_string().contains("state_root"));
     }
 }

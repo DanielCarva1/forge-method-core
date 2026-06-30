@@ -1861,7 +1861,7 @@ mod tests {
             .join(name);
         let input = fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-        serde_yaml::from_str(&input)
+        yaml_serde::from_str(&input)
             .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()))
     }
 
@@ -1869,7 +1869,7 @@ mod tests {
         let path = repo_root().join("contracts").join("effects").join(name);
         let input = fs::read_to_string(&path)
             .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-        serde_yaml::from_str(&input)
+        yaml_serde::from_str(&input)
             .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()))
     }
 

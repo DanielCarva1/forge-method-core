@@ -922,7 +922,7 @@ pub fn load_claims_from_cache(dir: &Path) -> (Vec<ClaimContract>, Vec<String>) {
             errors.push(format!("{}: unreadable", path.display()));
             continue;
         };
-        match serde_yaml::from_str::<ClaimContractDocument>(&text) {
+        match yaml_serde::from_str::<ClaimContractDocument>(&text) {
             Ok(doc) => claims.push(doc.claim_contract),
             Err(e) => errors.push(format!("{}: {e}", path.display())),
         }
@@ -942,7 +942,7 @@ pub fn save_claim(dir: &Path, claim: &ClaimContract) -> std::io::Result<PathBuf>
         schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
         claim_contract: claim.clone(),
     };
-    let yaml = serde_yaml::to_string(&doc)
+    let yaml = yaml_serde::to_string(&doc)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     let path = dir.join(format!("{}.yaml", slug_for_file(&claim.id.0)));
     // Atomic write: temp file in the same dir, then rename over the target.
@@ -990,7 +990,7 @@ fn save_handoff_artifact(path: &Path, artifact: &ClaimHandoffArtifact) -> std::i
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let yaml = serde_yaml::to_string(artifact)
+    let yaml = yaml_serde::to_string(artifact)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     crate::io_util::atomic_write(path, &yaml)
 }

@@ -191,9 +191,9 @@ mod tests {
             telemetry_contract: sample_contract(true),
         };
 
-        let yaml = serde_yaml::to_string(&doc).expect("serialize telemetry contract");
+        let yaml = yaml_serde::to_string(&doc).expect("serialize telemetry contract");
         let back: TelemetryContractDocument =
-            serde_yaml::from_str(&yaml).expect("deserialize telemetry contract");
+            yaml_serde::from_str(&yaml).expect("deserialize telemetry contract");
 
         assert_eq!(doc, back);
     }
@@ -202,10 +202,10 @@ mod tests {
     fn example_telemetry_yaml_round_trips() {
         let yaml = include_str!("../../../contracts/examples/telemetry.yaml");
         let doc: TelemetryContractDocument =
-            serde_yaml::from_str(yaml).expect("deserialize telemetry example");
-        let serialized = serde_yaml::to_string(&doc).expect("serialize telemetry example");
+            yaml_serde::from_str(yaml).expect("deserialize telemetry example");
+        let serialized = yaml_serde::to_string(&doc).expect("serialize telemetry example");
         let reparsed: TelemetryContractDocument =
-            serde_yaml::from_str(&serialized).expect("deserialize serialized telemetry example");
+            yaml_serde::from_str(&serialized).expect("deserialize serialized telemetry example");
 
         assert_eq!(doc, reparsed);
     }
@@ -235,7 +235,7 @@ telemetry_contract:
   extra: "not allowed"
 "#;
 
-        let err = serde_yaml::from_str::<TelemetryContractDocument>(yaml).unwrap_err();
+        let err = yaml_serde::from_str::<TelemetryContractDocument>(yaml).unwrap_err();
         assert!(err.to_string().contains("unknown field"));
     }
 
@@ -247,7 +247,7 @@ telemetry_contract:
             1,
         );
 
-        let err = serde_yaml::from_str::<TelemetryContractDocument>(&yaml).unwrap_err();
+        let err = yaml_serde::from_str::<TelemetryContractDocument>(&yaml).unwrap_err();
 
         assert!(err.to_string().contains("sampling.rate"));
     }

@@ -173,7 +173,7 @@ fn read_suite(path: &Path) -> Result<EvalCompareSuiteDocument, EvalCommandError>
         source: source.to_string(),
     })?;
     let document: EvalCompareSuiteDocument =
-        serde_yaml::from_str(strip_utf8_bom(&text)).map_err(|source| {
+        yaml_serde::from_str(strip_utf8_bom(&text)).map_err(|source| {
             EvalCommandError::ParseSuite {
                 path: path.to_path_buf(),
                 source: source.to_string(),
@@ -214,7 +214,7 @@ fn read_run_input(
         source: source.to_string(),
     })?;
     let document: EvalRunContractDocument =
-        serde_yaml::from_str(strip_utf8_bom(&text)).map_err(|source| {
+        yaml_serde::from_str(strip_utf8_bom(&text)).map_err(|source| {
             EvalCommandError::ParseRun {
                 path: path.clone(),
                 source: source.to_string(),

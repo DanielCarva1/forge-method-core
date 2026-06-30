@@ -712,7 +712,7 @@ name = "forge-contract-validator"
 version = "0.1.0"
 dependencies = [
  "forge-core-cli",
- "serde_yaml",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -742,7 +742,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_json_canonicalizer",
- "serde_yaml",
  "sha1",
  "sha2",
  "sigstore-tsa",
@@ -750,6 +749,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "x509-parser",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -759,7 +759,7 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "serde_yaml",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -780,12 +780,12 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_json_canonicalizer",
- "serde_yaml",
  "sha1",
  "sha2",
  "sigstore-tsa",
  "tracing",
  "x509-parser",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -796,7 +796,7 @@ dependencies = [
  "include_dir",
  "serde",
  "serde_json",
- "serde_yaml",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -805,7 +805,7 @@ version = "0.1.0"
 dependencies = [
  "forge-core-contracts",
  "serde",
- "serde_yaml",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -814,7 +814,7 @@ version = "0.1.0"
 dependencies = [
  "forge-core-contracts",
  "serde",
- "serde_yaml",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -825,9 +825,9 @@ dependencies = [
  "forge-core-store",
  "forge-core-validate",
  "serde",
- "serde_yaml",
  "sha2",
  "tracing",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -853,9 +853,9 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
- "serde_yaml",
  "sha2",
  "tracing",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -872,8 +872,8 @@ version = "0.1.0"
 dependencies = [
  "forge-core-contracts",
  "serde",
- "serde_yaml",
  "tracing",
+ "yaml_serde",
 ]
 
 [[package]]
@@ -1369,6 +1369,12 @@ name = "libc"
 version = "0.2.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
+
+[[package]]
+name = "libyaml-rs"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e126dda6f34391ab7b444f9922055facc83c07a910da3eb16f1e4d9c45dc777"
 
 [[package]]
 name = "linux-raw-sys"
@@ -2190,19 +2196,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_yaml"
-version = "0.9.34+deprecated"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
-dependencies = [
- "indexmap",
- "itoa",
- "ryu",
- "serde",
- "unsafe-libyaml",
-]
-
-[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2676,12 +2669,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 
 [[package]]
-name = "unsafe-libyaml"
-version = "0.2.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
-
-[[package]]
 name = "untrusted"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3006,6 +2993,19 @@ name = "xml-no-std"
 version = "0.8.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd223bc94c615fc02bf2f4bbc22a4a9bfe489c2add3ec10b1038df3aca44cac7"
+
+[[package]]
+name = "yaml_serde"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08c7c1b1a6a7c8a6b2741a6c21a4f8918e51899b111cfa08d1288202656e3975"
+dependencies = [
+ "indexmap",
+ "itoa",
+ "libyaml-rs",
+ "ryu",
+ "serde",
+]
 
 [[package]]
 name = "yasna"
