@@ -486,9 +486,7 @@ pub fn parse_eval_compare_args(
         index += 1;
     }
     let baseline = baseline.ok_or_else(|| {
-        ExitError::invalid_value(
-            "eval compare requires --baseline <single-agent|graph|mas|manual>",
-        )
+        ExitError::invalid_value("eval compare requires --baseline <single-agent|graph|mas|manual>")
     })?;
     let candidate = candidate.ok_or_else(|| {
         ExitError::invalid_value(
@@ -530,10 +528,7 @@ pub fn parse_eval_arm_or_err(value: &str, flag: &str) -> Result<EvalArmLabel, Ex
     })
 }
 
-pub fn run_eval_compare(
-    input: &EvalCompareCommandInput,
-    json: bool,
-) -> Result<(), ExitError> {
+pub fn run_eval_compare(input: &EvalCompareCommandInput, json: bool) -> Result<(), ExitError> {
     match run_compare(input) {
         Ok(output) => {
             if json {
@@ -562,6 +557,8 @@ pub fn run_eval_compare(
             }
             Ok(())
         }
-        Err(error) => Err(ExitError::env_config(format!("eval compare failed: {error}"))),
+        Err(error) => Err(ExitError::env_config(format!(
+            "eval compare failed: {error}"
+        ))),
     }
 }

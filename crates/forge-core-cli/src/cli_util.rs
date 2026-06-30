@@ -184,16 +184,12 @@ pub fn parse_payload_arg_or_err(value: &str) -> Result<PayloadFileSpec, ExitErro
 
 /// Result variant of [`parse_u64`].
 pub fn parse_u64_or_err(value: &str) -> Result<u64, ExitError> {
-    value
-        .parse::<u64>()
-        .map_err(|_| ExitError::usage(usage()))
+    value.parse::<u64>().map_err(|_| ExitError::usage(usage()))
 }
 
 /// Result variant of [`parse_i64`].
 pub fn parse_i64_or_err(value: &str) -> Result<i64, ExitError> {
-    value
-        .parse::<i64>()
-        .map_err(|_| ExitError::usage(usage()))
+    value.parse::<i64>().map_err(|_| ExitError::usage(usage()))
 }
 
 /// Result variant of [`parse_usize`].
@@ -296,11 +292,7 @@ pub fn parse_update_channel_or_err(value: &str) -> Result<HostAdapterUpdateChann
 ///
 /// Surfaces `ExitError::InvalidValue` (exit 3) to match the historical
 /// strict-value rejection code used by governance commands.
-pub fn require_value_or_err(
-    args: &[String],
-    idx: usize,
-    flag: &str,
-) -> Result<String, ExitError> {
+pub fn require_value_or_err(args: &[String], idx: usize, flag: &str) -> Result<String, ExitError> {
     match args.get(idx) {
         Some(v) if !v.is_empty() && !v.starts_with("--") => Ok(v.clone()),
         _ => Err(ExitError::invalid_value(format!(
@@ -313,10 +305,7 @@ pub fn require_value_or_err(
 ///
 /// Surfaces `ExitError::InvalidValue` (exit 3) on a malformed number, matching
 /// the historical strict-parse rejection used by `claim` and `isolation`.
-pub fn parse_strict_or_err<T: std::str::FromStr>(
-    s: &str,
-    flag: &str,
-) -> Result<T, ExitError> {
+pub fn parse_strict_or_err<T: std::str::FromStr>(s: &str, flag: &str) -> Result<T, ExitError> {
     s.parse::<T>()
         .map_err(|_| ExitError::invalid_value(format!("claim: invalid value for --{flag}: '{s}'")))
 }
@@ -330,9 +319,8 @@ pub fn resolve_stateful_roots_or_err(
     root: &Path,
     allow_bootstrap_core: bool,
 ) -> Result<StatefulCommandRoots, ExitError> {
-    resolve_stateful_command_roots(root, allow_bootstrap_core).map_err(|message| {
-        ExitError::failed(format!("{command} failed: {message}"))
-    })
+    resolve_stateful_command_roots(root, allow_bootstrap_core)
+        .map_err(|message| ExitError::failed(format!("{command} failed: {message}")))
 }
 
 /// Result variant of [`emit_envelope`].

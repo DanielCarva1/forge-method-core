@@ -1029,9 +1029,9 @@ pub fn next_graph_value_or_err<'a>(
     index: usize,
     flag: &str,
 ) -> Result<&'a str, ExitError> {
-    let value = args.get(index).ok_or_else(|| {
-        ExitError::invalid_value(format!("graph: missing value for --{flag}"))
-    })?;
+    let value = args
+        .get(index)
+        .ok_or_else(|| ExitError::invalid_value(format!("graph: missing value for --{flag}")))?;
     if value.starts_with('-') {
         return Err(ExitError::invalid_value(format!(
             "graph: missing value for --{flag}"

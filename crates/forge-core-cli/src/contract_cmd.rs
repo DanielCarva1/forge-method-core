@@ -109,12 +109,10 @@ pub fn run_validate(args: &[String]) -> Result<(), ExitError> {
         idx += 1;
     }
 
-    let kind = kind.ok_or_else(|| {
-        emit_err("contract validate", "--kind is required", want_json)
-    })?;
-    let file = file.ok_or_else(|| {
-        emit_err("contract validate", "--file is required", want_json)
-    })?;
+    let kind =
+        kind.ok_or_else(|| emit_err("contract validate", "--kind is required", want_json))?;
+    let file =
+        file.ok_or_else(|| emit_err("contract validate", "--file is required", want_json))?;
 
     let text = match std::fs::read_to_string(&file) {
         Ok(text) => text,
@@ -129,7 +127,11 @@ pub fn run_validate(args: &[String]) -> Result<(), ExitError> {
 
     match validate_kind(&kind, &text) {
         Ok(payload) => emit(CliEnvelope::ok("contract validate", payload), want_json),
-        Err(message) => Err(emit_err("contract validate", &message.to_string(), want_json)),
+        Err(message) => Err(emit_err(
+            "contract validate",
+            &message.to_string(),
+            want_json,
+        )),
     }
 }
 
@@ -235,8 +237,7 @@ fn require_value(
 }
 
 fn emit_err(command: &str, message: &str, want_json: bool) -> ExitError {
-    let env: CliEnvelope<()> =
-        CliEnvelope::err(command, ExitReason::InvalidDecisionShape, message);
+    let env: CliEnvelope<()> = CliEnvelope::err(command, ExitReason::InvalidDecisionShape, message);
     // Print the envelope in the same shape as `emit` so behavior is
     // byte-identical to the legacy exit-on-error path.
     if want_json {

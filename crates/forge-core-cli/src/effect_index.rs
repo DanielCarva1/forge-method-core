@@ -164,11 +164,8 @@ pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError
         index += 1;
     }
 
-    let roots = resolve_stateful_roots_or_err(
-        "rebuild-effect-index",
-        &input.root,
-        allow_bootstrap_core,
-    )?;
+    let roots =
+        resolve_stateful_roots_or_err("rebuild-effect-index", &input.root, allow_bootstrap_core)?;
     input.root = roots.effect_store_root;
 
     let result = run_rebuild_effect_index(input);
@@ -258,11 +255,8 @@ pub fn run_query_effect_index_command(args: &[String]) -> Result<(), ExitError> 
         index += 1;
     }
 
-    let roots = resolve_stateful_roots_or_err(
-        "query-effect-index",
-        &input.root,
-        allow_bootstrap_core,
-    )?;
+    let roots =
+        resolve_stateful_roots_or_err("query-effect-index", &input.root, allow_bootstrap_core)?;
     input.root = roots.effect_store_root;
     emit_query_effect_index_result(input, context, json)
 }
