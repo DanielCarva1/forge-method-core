@@ -52,7 +52,13 @@ fn main() {
             }
         },
         "graph" => forge_core_cli::graph_cmd::run_graph_command(&args),
-        "eval" => forge_core_cli::eval_cmd::run_eval_command(&args),
+        "eval" => match forge_core_cli::eval_cmd::run_eval_command(&args) {
+            Ok(()) => {}
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(error.exit_code());
+            }
+        },
         "telemetry" => match forge_core_cli::telemetry_cmd::run_telemetry_command(&args) {
             Ok(()) => {}
             Err(error) => {
