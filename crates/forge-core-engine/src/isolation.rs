@@ -21,6 +21,13 @@ use forge_core_contracts::isolation::{
 ///
 /// Cross-contract checks (duplicate branch/path across siblings, claim-agent
 /// consistency) live in [`detect_isolation_conflict`].
+///
+/// # Errors
+///
+/// Returns [`IsolationError::EmptyAgentId`] when `agent_id` is blank,
+/// [`IsolationError::EmptyBaseRef`] when `base_ref` is blank, plus branch /
+/// worktree-path / shell-metachar / `created_at` parse variants surfaced by
+/// the dedicated validators.
 pub fn validate_isolation_contract(c: &IsolationContract) -> Result<(), IsolationError> {
     if c.agent_id.0.trim().is_empty() {
         return Err(IsolationError::EmptyAgentId);
@@ -55,6 +62,15 @@ pub fn validate_isolation_contract(c: &IsolationContract) -> Result<(), Isolatio
 ///
 /// # Errors
 /// [`IsolationError::DuplicateBranch`] or [`IsolationError::DuplicateWorktreePath`].
+/// Detect collisions between a `new` isolation contract and the live slice
+/// of `existing` siblings (same branch or same worktree path).
+///
+/// # Errors
+///
+/// Returns [`IsolationError::DuplicateBranch`] when a live sibling already
+/// owns the same branch name (case-insensitive), and
+/// [`IsolationError::DuplicateWorktreePath`] when a live sibling already
+/// owns the same normalized worktree path.
 pub fn detect_isolation_conflict(
     new: &IsolationContract,
     existing: &[&IsolationContract],
@@ -90,6 +106,11 @@ pub fn detect_isolation_conflict(
 /// - Active   -> Merging | Abandoned
 /// - Merging  -> Merged | Abandoned | Active (merge aborted, back to work)
 /// - Merged/Abandoned are terminal (no outgoing).
+///
+/// # Errors
+///
+/// Returns [`IsolationError::IllegalTransition`] when `(from, to)` is not
+/// in the legal transition table above.
 pub fn transition_status(
     from: IsolationStatus,
     to: IsolationStatus,
