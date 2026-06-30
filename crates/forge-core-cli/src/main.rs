@@ -27,7 +27,13 @@ fn main() {
         "preview" => forge_core_cli::m1_cmd::run_m1_command(&args, M1CommandKind::Preview),
         "ready" => forge_core_cli::m1_cmd::run_m1_command(&args, M1CommandKind::Ready),
         "explain" => forge_core_cli::m1_cmd::run_m1_command(&args, M1CommandKind::Explain),
-        "validate" => forge_core_cli::validate::run_validate_command(&args),
+        "validate" => match forge_core_cli::validate::run_validate_command(&args) {
+            Ok(()) => {}
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(error.exit_code());
+            }
+        },
         "execute-operation" => {
             forge_core_cli::execute_operation::run_execute_operation_command(&args)
         }

@@ -8,6 +8,7 @@
 //! `forge-contract-validator`. The shape of the JSON output MUST stay
 //! stable; refactors here are behavior-preserving.
 
+use crate::cli_error::ExitError;
 use crate::cli_util::usage;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -620,7 +621,7 @@ fn repo_relative(root: &Path, path: &Path) -> String {
         .to_string_lossy()
         .replace('\\', "/")
 }
-pub fn run_validate_command(args: &[String]) {
+pub fn run_validate_command(args: &[String]) -> Result<(), ExitError> {
     let mut root = PathBuf::from(".");
     let mut json = false;
     let mut index = 1usize;
@@ -629,19 +630,17 @@ pub fn run_validate_command(args: &[String]) {
             "--root" => {
                 index += 1;
                 let Some(value) = args.get(index) else {
-                    eprintln!("{}", usage());
-                    std::process::exit(2);
+                    return Err(ExitError::usage(usage()));
                 };
                 root = PathBuf::from(value);
             }
             "--json" => json = true,
             "--help" | "-h" => {
                 println!("{}", usage());
-                return;
+                return Ok(());
             }
             _ => {
-                eprintln!("{}", usage());
-                std::process::exit(2);
+                return Err(ExitError::usage(usage()));
             }
         }
         index += 1;
@@ -664,6 +663,7 @@ pub fn run_validate_command(args: &[String]) {
     }
 
     if !summary.passed() {
-        std::process::exit(1);
+        return Err(ExitError::failed("validation reported errors"));
     }
+    Ok(())
 }
