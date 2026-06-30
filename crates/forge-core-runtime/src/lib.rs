@@ -1768,7 +1768,7 @@ where
 
         loop {
             match reader.read(&mut buffer) {
-                Ok(0) => break,
+                Ok(0) | Err(_) => break,
                 Ok(bytes_read) => {
                     if captured.len() < max_bytes {
                         let remaining = max_bytes - captured.len();
@@ -1781,7 +1781,6 @@ where
                         truncated = true;
                     }
                 }
-                Err(_) => break,
             }
         }
 

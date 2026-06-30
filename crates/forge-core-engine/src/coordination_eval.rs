@@ -366,9 +366,8 @@ where
         // is an OPEN item.
         let (eff_passed, has_outcome) = match (&outcome, level) {
             (Some(o), _) => (o.passed, true),
-            (None, CoordinationRequiredLevel::MustPass) => (false, false),
+            (None, CoordinationRequiredLevel::MustPass | CoordinationRequiredLevel::ManualReviewRequired) => (false, false),
             (None, CoordinationRequiredLevel::ShouldPass) => (true, false),
-            (None, CoordinationRequiredLevel::ManualReviewRequired) => (false, false),
         };
 
         match level {
