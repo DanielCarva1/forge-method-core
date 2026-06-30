@@ -2,9 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [master, main]
   pull_request:
-    branches: [master]
 
 jobs:
   test:
@@ -24,11 +23,20 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Type-check workspace
+        run: cargo check --workspace --all-targets
 
-      - name: Test
+      - name: Clippy (pedantic, deny warnings)
+        run: cargo clippy --workspace --all-targets -- -W clippy::pedantic -D warnings
+
+      - name: Test workspace
         run: cargo test --workspace
 
       - name: Validate contracts
         run: cargo run -p forge-core-cli -- validate --root .
+
+      - name: Regression anchor (122 clean diagnostics)
+        run: |
+          count=$(cargo run --quiet -p forge-core-cli -- validate --root . --json 2>/dev/null | grep -c '"diagnostics": 0')
+          echo "Anchor count: $count (expected 122)"
+          test "$count" = "122"
