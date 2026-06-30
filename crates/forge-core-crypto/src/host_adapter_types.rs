@@ -28,6 +28,7 @@ impl OcspNonceHex {
     }
 
     /// Access the inner hex string.
+    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
