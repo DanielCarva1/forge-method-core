@@ -36,6 +36,7 @@ use x509_parser::certificate::X509Certificate;
 use x509_parser::extensions::{GeneralName, ParsedExtension};
 use x509_parser::parse_x509_certificate;
 use x509_parser::pem::parse_x509_pem;
+use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 use crate::file_io::read_required_file;
 use crate::hashing::{hex_bytes, normalize_sha256_display};
@@ -287,10 +288,11 @@ pub(crate) struct SigstoreIdentityPolicy {
     pub(crate) expected_github_sha: Option<String>,
 }
 
+#[derive(Zeroize, ZeroizeOnDrop)]
 pub(crate) struct CertificateTransparencyLogMaterial {
     pub(crate) id: [u8; 32],
     pub(crate) id_hex: String,
-    pub(crate) key: Vec<u8>,
+    pub(crate) key: Zeroizing<Vec<u8>>,
 }
 
 pub(crate) fn load_certificate_transparency_log_material(
