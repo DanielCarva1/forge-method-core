@@ -327,7 +327,7 @@ fn normalize_path(path: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for part in path.split(['/', '\\']) {
         match part {
-            "" | "." => continue,
+            "" | "." => {}
             ".." => {
                 // Collapse only if there is a non-`..` segment to pop; a
                 // leading `..` (or excess `..`) is preserved as a segment.
