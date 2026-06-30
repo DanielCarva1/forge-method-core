@@ -76,8 +76,19 @@ pub struct GraphEdge {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GraphEdgeKind {
+    /// Source must reach `RuntimePlanStatus::ReadyToCallOperation` (or an
+    /// equivalent success terminal) before the target may be scheduled.
+    /// Treated as a hard prerequisite by `unpassed_upstream_verifiers`.
     RequiresSuccess,
+    /// Source must simply reach a terminal state (success or failure) before
+    /// the target may be scheduled. Useful for fan-in where downstream work is
+    /// observability rather than mutation.
     RequiresCompletion,
+    /// Source must be a Verifier node whose `verifier_result == Passed` before
+    /// any mutation-capable target may execute. This is the edge kind that
+    /// powers `unpassed_upstream_verifiers`. Using it from a non-Verifier source
+    /// produces an `EdgeKindSourceKindMismatch` warning: the runtime cannot
+    /// evaluate "passed" for an `Operation`, `HumanGate`, or `Memory` node.
     BlocksUntilPassed,
 }
 
@@ -249,6 +260,12 @@ pub enum GraphDiagnosticCode {
     /// A `GraphBudget.node_id` points at a `node_id` that does not exist in
     /// the graph. Budgets that cannot be attributed silently no-op.
     DanglingBudgetNodeRef,
+    /// A `BlocksUntilPassed` edge originates from a node whose `node_kind` is
+    /// not `Verifier`. Only Verifier nodes have a `verifier_result` field, so
+    /// the runtime cannot evaluate "passed" for the source. Emitted as a
+    /// warning: the graph still parses and dry-runs, but the edge is treated
+    /// as a generic upstream dependency.
+    EdgeKindSourceKindMismatch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -490,7 +507,10 @@ pub fn dry_run_graph_with_context(
     let nodes_by_id = nodes_by_id(graph);
     let mut steps = Vec::with_capacity(graph.nodes.len());
     let mut blocked_node_count = 0usize;
-    let mut diagnostics = operation_evaluation_diagnostics(context.operation_evaluations);
+    // Warnings (e.g. EdgeKindSourceKindMismatch) survive into the dry-run report
+    // so consumers can surface them. Errors already short-circuited above.
+    let mut diagnostics = validation.into_diagnostics();
+    diagnostics.extend(operation_evaluation_diagnostics(context.operation_evaluations));
     let operation_evaluations = operation_evaluations_by_ref(context.operation_evaluations);
 
     for (step_index, node_id) in topological_order(graph).into_iter().enumerate() {
@@ -903,6 +923,10 @@ fn validate_cycles(report: &mut GraphValidationReport, graph: &WorkflowGraph) {
 /// node ids; otherwise verifier-blocking logic and budget attribution become
 /// silently ineffective.
 ///
+/// Also surfaces `EdgeKindSourceKindMismatch` warnings for `BlocksUntilPassed`
+/// edges that originate from non-Verifier nodes (only Verifier nodes carry a
+/// `verifier_result`, so "passed" cannot be evaluated for other node kinds).
+///
 /// `GraphNode.operation_ref` and `GraphAuthorityBoundary.required_authority_refs`
 /// are intentionally NOT validated here: the former requires filesystem access
 /// (handled by `forge graph run --dry-run` via `evaluate_graph_operations`),
@@ -912,6 +936,11 @@ fn validate_node_references(report: &mut GraphValidationReport, graph: &Workflow
         .nodes
         .iter()
         .map(|node| node.node_id.0.as_str())
+        .collect();
+    let nodes_by_id: BTreeMap<&str, &GraphNode> = graph
+        .nodes
+        .iter()
+        .map(|node| (node.node_id.0.as_str(), node))
         .collect();
 
     for (index, node) in graph.nodes.iter().enumerate() {
@@ -949,6 +978,45 @@ fn validate_node_references(report: &mut GraphValidationReport, graph: &Workflow
                 ),
             ));
         }
+    }
+
+    for (index, edge) in graph.edges.iter().enumerate() {
+        if edge.edge_kind != GraphEdgeKind::BlocksUntilPassed {
+            continue;
+        }
+        let Some(source) = nodes_by_id.get(edge.from.0.as_str()) else {
+            // Dangling edge endpoints are already flagged by validate_edges.
+            continue;
+        };
+        if source.node_kind != GraphNodeKind::Verifier {
+            report.push(GraphDiagnostic::warning(
+                GraphDiagnosticCode::EdgeKindSourceKindMismatch,
+                format!("edges.{index}.edge_kind"),
+                format!(
+                    "blocks_until_passed edge originates from {kind} node {id}; \
+                     only verifier nodes carry a verifier_result, so the edge \
+                     will be treated as a generic upstream dependency",
+                    kind = graph_node_kind_name(source.node_kind),
+                    id = edge.from.0
+                ),
+            ));
+        }
+    }
+}
+
+/// Lower-case wire name of a [`GraphNodeKind`] variant, matching the
+/// `#[serde(rename_all = "snake_case")]` mapping. Kept inline to avoid pulling
+/// `serde_json` into the graph crate just for diagnostic strings.
+#[must_use]
+fn graph_node_kind_name(kind: GraphNodeKind) -> &'static str {
+    match kind {
+        GraphNodeKind::Operation => "operation",
+        GraphNodeKind::Verifier => "verifier",
+        GraphNodeKind::HumanGate => "human_gate",
+        GraphNodeKind::MemoryRead => "memory_read",
+        GraphNodeKind::MemoryWriteCandidate => "memory_write_candidate",
+        GraphNodeKind::ProtocolCall => "protocol_call",
+        GraphNodeKind::EvalProbe => "eval_probe",
     }
 }
 
