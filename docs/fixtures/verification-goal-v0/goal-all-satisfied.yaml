@@ -1,0 +1,26 @@
+schema_version: "0.1"
+verification_goal_contract:
+  id: verification.fixture.goal_all_satisfied
+  scope:
+    phase: 6-evolve
+    story_ref: story.fixture.satisfied
+    changed_paths:
+      - docs/fixtures/autonomy-policy-v0/policy-yolo-default.yaml
+  goals:
+    - kind: unit_tests_pass
+      target: cargo test -p forge-core-engine
+      status: passed
+      adapter: cargo
+      detail: "All engine tests passed."
+    - kind: lint_clean
+      target: cargo clippy -p forge-core-engine --all-targets
+      status: passed
+      adapter: cargo
+      detail: "clippy clean."
+  overall:
+    value: all_satisfied
+    evaluated_at: "2026-06-30T12:00:00Z"
+    satisfied: 2
+    total: 2
+    notes: null
+  evidence_refs: []

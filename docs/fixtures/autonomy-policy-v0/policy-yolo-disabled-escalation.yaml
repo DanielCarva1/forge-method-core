@@ -1,0 +1,29 @@
+schema_version: "0.1"
+autonomy_policy_contract:
+  id: autonomy.fixture.policy_yolo_disabled_escalation
+  applies_to:
+    kind: phase
+    ids:
+      - 6-evolve
+  # Parametric axis covered: escalation.on_high_risk_path = false disables
+  # the high-risk tool class surfacing path. A high-risk tool that would
+  # normally surface HighRiskToolClass(reason) now returns LowRiskVerified
+  # when evidence is satisfied - proves the high-risk path is opt-in per
+  # policy, not hard-coded.
+  default_mode: yolo
+  tool_classes:
+    - class: file_edit
+      mode: yolo
+      risk_score: 95
+      requires_approval_above: 10
+    - class: secret_access
+      mode: yolo
+      risk_score: 100
+      requires_approval_above: 1
+  escalation:
+    on_repeated_failure: 3
+    on_high_risk_path: false
+    on_semantic_uncertainty: false
+    max_retries_before_human: 5
+    cooldown_seconds: 30
+  evidence_basis: null

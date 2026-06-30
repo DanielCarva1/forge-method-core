@@ -1,0 +1,28 @@
+schema_version: "0.1"
+autonomy_policy_contract:
+  id: autonomy.fixture.policy_yolo_default
+  applies_to:
+    kind: lane
+    ids:
+      - yolo_fast_lane
+  # Parametric axis covered: default_mode = Yolo allows the fast lane when
+  # verification is satisfied and no in-scope manual override is present.
+  # Proves the router does NOT block permitted fast work just because it is
+  # permissive - permissive policy is honored when evidence is green.
+  default_mode: yolo
+  tool_classes:
+    - class: file_edit
+      mode: yolo
+      risk_score: 10
+      requires_approval_above: 90
+    - class: terminal_command
+      mode: yolo
+      risk_score: 20
+      requires_approval_above: 90
+  escalation:
+    on_repeated_failure: 3
+    on_high_risk_path: true
+    on_semantic_uncertainty: false
+    max_retries_before_human: 5
+    cooldown_seconds: 30
+  evidence_basis: null
