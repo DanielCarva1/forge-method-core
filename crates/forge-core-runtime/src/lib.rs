@@ -1249,11 +1249,24 @@ fn ready_plan_blockers(plan: &RuntimePlan) -> Vec<RuntimeReadyBlocker> {
 
 fn ready_gate_blockers(
     gate_status: OperationGateStatus,
-    _required_gates: &[RequiredGate],
+    required_gates: &[RequiredGate],
 ) -> Vec<RuntimeReadyBlocker> {
     let mut blockers = Vec::new();
     match gate_status {
-        OperationGateStatus::Pass => {}
+        OperationGateStatus::Pass => {
+            // The current gate passed, but if the contract also declares
+            // `required_before_mutation` gates we have no signal for those.
+            // Surface a blocker so the host cannot silently mutate based on a
+            // partial gate verdict. The plan stays Ready (the runtime does not
+            // invent a GateRequired status from absence of evidence), but the
+            // preview surfaces status=Blocked via F01.1.
+            if !required_gates.is_empty() {
+                push_ready_blocker(
+                    &mut blockers,
+                    RuntimeReadyBlocker::RequiredGateStatusUnknown,
+                );
+            }
+        }
         OperationGateStatus::Missing => {
             push_ready_blocker(&mut blockers, RuntimeReadyBlocker::GateMissing);
             push_ready_blocker(&mut blockers, RuntimeReadyBlocker::GateMissingOrPending);

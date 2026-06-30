@@ -444,11 +444,60 @@ fn preview_status_agrees_with_risk_when_plan_is_nominally_ready_but_blocked() {
         .contains(&RuntimeReadyBlocker::MissingHostCallEvidence));
     assert_eq!(preview.status, RuntimePreviewStatus::Blocked);
     assert_eq!(preview.risk_level, RuntimeRiskLevel::Blocked);
+    assert_eq!(plan.status, RuntimePlanStatus::ReadyToCallOperation);
     assert!(
         preview.next_human_action.is_some(),
         "Blocked preview must guide the human; got {:?}",
         preview.next_human_action
     );
+}
+
+#[test]
+fn ready_report_fails_closed_for_passing_current_gate_with_unverified_required_gates() {
+    // Regression for F01.2: ready_gate_blockers previously ignored required_gates,
+    // so a contract with current_gate_status=Pass plus required_before_mutation
+    // entries produced no blocker. The host could mutate based on a partial
+    // gate verdict. Now Pass + non-empty required gates surfaces a
+    // RequiredGateStatusUnknown blocker, and preview.status downgrades to
+    // Blocked via F01.1.
+    let mut document = fixture("mechanical-story-execute.yaml");
+    document.operation_contract.gates.current_gate_status = OperationGateStatus::Pass;
+    document
+        .operation_contract
+        .gates
+        .required_before_mutation
+        .push(forge_core_contracts::operation::RequiredGate {
+            scope: forge_core_contracts::operation::OperationGateScope::Release,
+            gate_contract_ref: RepoPath(
+                "contracts/gates/release-missing-gate.yaml".to_string(),
+            ),
+            reason: Some("release requires gate before advance".to_string()),
+        });
+    document
+        .operation_contract
+        .gates
+        .gate_contract_refs
+        .push(RepoPath(
+            "contracts/gates/release-missing-gate.yaml".to_string(),
+        ));
+    let index = build_reference_index(repo_root()).expect("reference index");
+
+    let ready = ready_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+    let preview = preview_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    // Plan stays Ready (the runtime has no RequiredGate status signal to invent
+    // a GateRequired status from). The blocker is what fails the operation closed.
+    assert_eq!(ready.plan_status, RuntimePlanStatus::ReadyToCallOperation);
+    assert!(!ready.ready);
+    assert!(ready
+        .blocking_reasons
+        .contains(&RuntimeReadyBlocker::RequiredGateStatusUnknown));
+    assert!(preview
+        .blockers
+        .contains(&RuntimeReadyBlocker::RequiredGateStatusUnknown));
+    assert_eq!(preview.status, RuntimePreviewStatus::Blocked);
+    assert_eq!(preview.risk_level, RuntimeRiskLevel::Blocked);
+    assert!(preview.next_human_action.is_some());
 }
 
 #[test]
