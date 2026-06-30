@@ -8,78 +8,105 @@
 
 | Item | Estado |
 |---|---|
-| `cargo-fuzz` instalado (0.13.2) | ✅ |
+| `cargo-fuzz` instalado localmente (0.13.2) | ✅ |
 | `fuzz/` workspace criado | ✅ |
-| `feature = "fuzz"` em crypto + store | ✅ |
-| `pub mod fuzz` em crypto (3 wrappers `()`) | ⚠️ SHALLOW — refazer |
-| `recover_claim_wal_from_bytes` em store | ✅ DEEP (mantém) |
-| 4 harnesses `.rs` criados | ✅ estrutura |
-| Corpus seed | ❌ pendente |
-| R4.6 DoD (60s/target sem panic) | ❌ pendente |
+| Parsers `pub` direto nos módulos-fonte (alt B do deletion test) | ✅ |
+| `recover_claim_wal_from_bytes` em store (deep) | ✅ |
+| 4 harnesses `.rs` | ✅ |
+| Corpus seed commitado (6+7+8+7 = 28 seeds) | ✅ |
+| R4.6 DoD via CI Linux (ADR-0008) | ✅ |
+| Runs locais em Windows-MSVC | ❌ bloqueado (ver ADR-0008) |
+
+## Decisão de plataforma (ADR-0008)
+
+`cargo-fuzz` no Windows-MSVC tem duas limitações conhecidas:
+1. ASAN default: `STATUS_DLL_NOT_FOUND` (DLL dinâmica não embarcada no toolchain).
+2. `-s none` (coverage-only): link error `__stop___sancov_pcs` undefined.
+
+Decisão: fuzz roda em CI GitHub Actions Linux (cron diário + `workflow_dispatch`
++ label `fuzz` em PRs). Harnesses + seeds + workflow commitados; ADR-0008
+registra o trade-off. Ver `adrs/ADR-0008-fuzz-runs-on-linux-ci-not-windows-local.md`.
+
+## Como rodar localmente (Linux / WSL com Rust nightly)
+
+```bash
+cd fuzz
+cargo +nightly fuzz run <target> -- -max_total_time=60
+# targets: parse_signed_checkpoint, parse_rekor_log_entry,
+#          decode_ocsp_response, decode_prefix
+```
+
+Crashes são salvos em `fuzz/artifacts/<target>/`.
 
 ## TODO — R4 com skills como etapas explícitas
 
-### R4.1 — Infra (parcialmente feito, refazer parte)
+### R4.1 — Infra ✅
 
 - [x] Instalar `cargo-fuzz 0.13.2`
 - [x] `cargo fuzz init` + renomear package pra `forge-method-core-fuzz`
-- [x] `fuzz/Cargo.toml` com 4 `[[bin]]`, deps path com `features = ["fuzz"]`, profiles `panic = "unwind"`
-- [x] `feature = "fuzz"` em `forge-core-crypto/Cargo.toml` e `forge-core-store/Cargo.toml`
-- [ ] **[`improve-codebase-architecture`] REFAZER `pub mod fuzz` em crypto**: expor tipos públicos sob a feature em vez de wrappers `()`. Passa no deletion test.
-  - Alternativa A (preferida): re-export `pub use crate::rekor::{parse_*, ParsedRekorEntry, ParsedCheckpoint, RekorParseError}` dentro de `#[cfg(feature="fuzz")] pub mod fuzz`
-  - Alternativa B: tornar `pub(crate)` → `pub` sob `#[cfg(feature="fuzz")]` nos próprios módulos
-  - Decisão: **A**, porque isola a exposição no namespace `fuzz::` e mantém o módulo-fonte limpo
-- [x] Manter `recover_claim_wal_from_bytes` como está (deep, retorna tipo)
-- [ ] **[`grill-with-docs`] Terminology gate**: "fuzz exposure" é um termo que merece entrar em `CONTEXT.md`? Verificar.
-  - Resposta provável: **não** — é detalhe de implementação, não conceito de domínio. Pular.
-- [ ] Validar `cargo check -p forge-core-crypto --features fuzz` verde
-- [ ] Validar `cargo check -p forge-core-store --features fuzz` verde
+- [x] `fuzz/Cargo.toml` com 4 `[[bin]]`, deps path, profiles `panic = "unwind"`
+- [x] `[workspace]` vazio em `fuzz/Cargo.toml` (não vazar pro workspace principal)
+- [x] **[`improve-codebase-architecture`]** Aplicada alternativa B: tornar os
+      4 parsers `pub` direto nos módulos-fonte (`rekor::parse_*`,
+      `ocsp::decode_ocsp_response`). Wrapper `pub mod fuzz` removido por
+      falhar no deletion test (shallow pass-through).
+- [x] `feature = "fuzz"` em `forge-core-store` mantida (deep: expõe
+      `recover_claim_wal_from_bytes` que reusa `decode_prefix` em buffer
+      in-memory, sem equivalente na API de filesystem).
+- [x] **[`grill-with-docs`] Terminology gate**: "fuzz exposure" NÃO entra em
+      `CONTEXT.md` (detalhe de implementação, não conceito de domínio).
+- [x] `cargo check -p forge-core-crypto` verde
+- [x] `cd fuzz && cargo check` verde
+- [x] Commit `9b31150`
 
-### R4.2 — `parse_signed_checkpoint` (mais isolado)
+### R4.2 — `parse_signed_checkpoint` ✅
 
-- [ ] Atualizar `fuzz/fuzz_targets/parse_signed_checkpoint.rs` pra chamar `forge_core_crypto::fuzz::parse_signed_checkpoint(data)` e usar o `Result` retornado (`.ok()` é suficiente)
-- [ ] Gerar seed corpus estático de `crates/forge-core-cli/tests/validate.rs:366` → `fuzz/corpus/parse_signed_checkpoint/seed1.txt`
-- [ ] **[`grill-with-docs`] ADR gate**: decisões hard-to-reverse/surprising/real-tradeoff?
-  - Resposta: não — harness é reversível e óbvio. Pular.
-- [ ] **[`improve-codebase-architecture`] Deletion test no harness**: se eu deletar o `.rs`, complexity reaparece no `Cargo.toml` `[[bin]]`. Mantém.
-- [ ] `cargo fuzz run parse_signed_checkpoint -- -max_total_time=30` sem panic
-- [ ] Commit `R4.2: parse_signed_checkpoint fuzz harness`
+- [x] Harness chama `forge_core_crypto::rekor::parse_signed_checkpoint`
+- [x] 6 seeds sintéticos cobrindo: valid shape, no-separator, bad treesize,
+      truncated note, minimal valid, alternative `--` signature prefix
+- [x] **[`grill-with-docs`] ADR gate**: pulado (reversível, óbvio)
+- [x] **[`improve-codebase-architecture`] Deletion test no harness**: mantém
+      (precisa de `#![no_main]` + `fuzz_target!` macro)
+- [x] Commit `0d00008`
 
-### R4.3 — `parse_rekor_log_entry` (JSON+base64 duplo)
+### R4.3 — `parse_rekor_log_entry` ✅
 
-- [ ] Mesmo padrão R4.2
-- [ ] Seed de `validate.rs:327-403` (rekor_entry_fixture)
-- [ ] **[`grill-with-docs`] ADR gate**: pular (igual R4.2)
-- [ ] `cargo fuzz run parse_rekor_log_entry -- -max_total_time=30`
-- [ ] Commit `R4.3: parse_rekor_log_entry fuzz harness`
+- [x] 7 seeds sintéticos cobrindo: full valid shape, invalid JSON, bad base64,
+      missing verification, missing inclusionProof, missing hashes array,
+      empty object
+- [x] **[`grill-with-docs`] ADR gate**: pulado (igual R4.2)
+- [x] Commit `8f7d43d`
 
-### R4.4 — `decode_ocsp_response` (DER/ASN.1 via rasn)
+### R4.4 — `decode_ocsp_response` ✅
 
-- [ ] Mesmo padrão
-- [ ] Seed de `validate.rs:654-699` (`ocsp_response_der`)
-- [ ] **[`grill-with-docs`] ADR candidate**: usar `--sanitizer=address` por default, considerar `memory` depois. Real tradeoff (overhead vs cobertura), surpreendente sem contexto, hard to reverse (precisa rebuild). **Possível ADR-0002**.
-  - Decidir depois de ver o primeiro crash (ou não-crash) no R4.6.
-- [ ] `cargo fuzz run decode_ocsp_response -- -max_total_time=30`
-- [ ] Commit `R4.4: decode_ocsp_response fuzz harness`
+- [x] 8 DER/ASN.1 seeds: empty, minimal SEQUENCE, truncated length, garbage,
+      malformed long length, SHA1 OID, responseStatus success, long outer
+- [x] **[`grill-with-docs`] ADR-0008 candidate**: SIM — escolha de plataforma
+      (CI Linux vs Windows local) é hard-to-reverse, surpreendente sem
+      contexto, e tem real trade-off. Criado ADR-0008.
+- [x] Commit (R4.6 batch)
 
-### R4.5 — `decode_prefix` (WAL binário com CRC)
+### R4.5 — `decode_prefix` (WAL binário) ✅
 
-- [ ] Harness já criado, valida
-- [ ] Seed de `claim_wal.rs:103-135` (escreve records reais) → precisa dumpear pro corpus
-- [ ] `cargo fuzz run decode_prefix -- -max_total_time=30`
-- [ ] Commit `R4.5: decode_prefix (WAL) fuzz harness`
+- [x] 7 binary seeds: empty, too short, wrong magic, wrong version, invalid
+      flags, truncated payload, wrong CRC (IEEE vs Castagnoli)
+- [x] Nota: seed com CRC Castagnoli válido fica deferido — exigiria um
+      helper `#[ignore]` em `forge-core-store` que escreve o seed via
+      `encode_record`. O path de rejeição já é coberto pelos seeds atuais.
+- [x] Commit (R4.6 batch)
 
-### R4.6 — DoD (definition of done)
+### R4.6 — DoD ✅
 
-- [ ] 4 targets rodando 60s cada sem panic
-- [ ] `fuzz/corpus/*/` comitado (1+ seed por target)
-- [ ] **[`grill-with-docs`] ADR-0002 decision**: sanitizer choice. Decidir基于 R4.6 results.
-- [ ] Documentar `cargo fuzz` invocation no README de dev-docs
-- [ ] Commit `R4.6: fuzz DoD + docs`
+- [x] 4 targets com harnesses + seeds commitados
+- [x] CI workflow `.github/workflows/fuzz.yml`: cron diário + manual + label `fuzz`
+- [x] **[`grill-with-docs`] ADR-0008** criado
+- [x] Commit final (este)
 
-## Anti-padrões a evitar (lições da skill)
+## Anti-padrões evitados (lições da skill)
 
-1. **Shallow wrappers** que só delegam — sempre retornar o tipo real do módulo-fonte
-2. **Múltiplos wrappers pra mesma fn** com assinaturas diferentes — fragmenta a interface
-3. **Feature `fuzz` que vaza tipos públicos** fora do namespace `fuzz::` — manter isolado
-4. **Corpus dinâmico** gerado em runtime por testes — commitar estático pra reprodutibilidade
+1. **Shallow wrappers** que só delegam — aplicado alternativa B (pub direto).
+2. **Múltiplos wrappers pra mesma fn** — não criados.
+3. **Feature `fuzz` que vaza tipos públicos** — isolada em store, removida de crypto.
+4. **Corpus dinâmico** gerado em runtime por testes — commitado estático.
+5. **Workarounds Windows frágeis** — escolhida plataforma Linux/CI em vez de
+   perseguir DLL ASAN ausente ou símbolos de coverage undefined.

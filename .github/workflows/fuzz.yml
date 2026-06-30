@@ -1,0 +1,67 @@
+name: Fuzz
+
+on:
+  schedule:
+    # 05:00 UTC daily — captures silent regressions in the four parsers
+    # that handle attacker-controlled input (signed checkpoints, rekor log
+    # entries, OCSP DER, WAL frames). See
+    # docs/dev-docs/forge-method-core-dev-docs-v2/adrs/ADR-0008-fuzz-runs-on-linux-ci-not-windows-local.md
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+    # Manual run from the Actions tab — useful after touching a parser or
+    # when investigating a corpus mutation.
+  pull_request:
+    types: [labeled, synchronize]
+
+jobs:
+  fuzz:
+    # Only run on PRs that explicitly opt in via the `fuzz` label; the
+    # cron and workflow_dispatch paths always run.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'fuzz')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        # cargo-fuzz requires -Zsanitizer=address and -Zbuild-std; only
+        # available on nightly. See ADR-0008 for the platform rationale.
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Cache fuzz artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            fuzz
+
+      - name: Fuzz parse_signed_checkpoint (5 min)
+        working-directory: fuzz
+        run: cargo +nightly fuzz run parse_signed_checkpoint -- -max_total_time=300
+
+      - name: Fuzz parse_rekor_log_entry (5 min)
+        working-directory: fuzz
+        run: cargo +nightly fuzz run parse_rekor_log_entry -- -max_total_time=300
+
+      - name: Fuzz decode_ocsp_response (5 min)
+        working-directory: fuzz
+        run: cargo +nightly fuzz run decode_ocsp_response -- -max_total_time=300
+
+      - name: Fuzz decode_prefix (5 min)
+        working-directory: fuzz
+        run: cargo +nightly fuzz run decode_prefix -- -max_total_time=300
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash-artifacts
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
+          retention-days: 30

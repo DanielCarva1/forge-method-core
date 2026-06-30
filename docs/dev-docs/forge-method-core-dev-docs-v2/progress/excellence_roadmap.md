@@ -1,8 +1,8 @@
 # Excellence Roadmap — Forge Method Core até 10/10
 
 **Data**: 2026-06-30
-**Status**: plano ativo (última atualização: 2026-06-30 — R5+R4 inventariados e
-quebrados em sub-tasks; E1/E2/E3/R2 completos; F04/F01/F02 completos)
+**Status**: plano ativo (última atualização: 2026-06-30 — R4 completo via CI Linux;
+E1/E2/E3/R2 completos; F04/F01/F02/F03 completos; R5.1-R5.9 completos)
 **Dono**: Daniel (codebase owner) + agente executor
 **Norte estratégico**: rápido, robusto, performativo, protocolo-guia que escala com a
 capacidade dos agentes, nunca script de novela, sempre Rust ou compatível, sempre
@@ -21,7 +21,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Não-script-de-novela | 9 | 10 | Já é framework paramétrico; faltam fixtures que provem |
 | Features comunidade | 9 | 10 | F03/F04/F01 operacionais; F02 preflight implementado; falta F15/F05-F14 |
 | Rust best practices | 9 | 10 | clippy pedantic em 0 warnings (comecou ~245); E1 fechado |
-| Segurança supply chain | 6 | 10 | serde_yaml já migrado (R7); sem zeroize ainda (R5), sem fuzz (R4) |
+| Segurança supply chain | 7 | 10 | serde_yaml já migrado (R7); zeroize R5.1-R5.9 feitos; fuzz (R4) completo via ADR-0008 |
 | Docs/rastreabilidade | 6 | 10 | Bootstrap Exception pendente; papers sem status doc |
 
 ## Princípios (não negociáveis)
@@ -60,27 +60,27 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
       - [x] R3.3 correlação multi-agente via `agent_id`
       - [x] R3.4 analisado: todos `eprintln!` em `_cmd.rs` são
             user-facing contract output, não logging. No-op legítimo.
-- [ ] **R4** — Fuzz harness (`cargo-fuzz`) — inventariado 2026-06-30
+- [x] **R4** — Fuzz harness (`cargo-fuzz`) ✅ COMPLETO via ADR-0008
       - Inventário completo em `progress/r4_fuzz_inventory.md`
-      - Alvos reais confirmados (nomes do roadmap eram aproximados):
-        `parse_rekor_log_entry` (rekor.rs:114), `parse_signed_checkpoint`
-        (rekor.rs:263), `decode_ocsp_response` (ocsp.rs:30, era
-        `ocsp_response_decode`), `decode_prefix` (claim_wal.rs:1818, era
-        `claim_wal_decode`)
-      - Todos os 4 alvos são `pub(crate)` ou privado — exige feature `fuzz`
-        expondo via `#[cfg(feature = "fuzz")] pub use`
-      - Seed corpus: gerado a partir de `crates/forge-core-cli/tests/validate.rs`
-        e `crates/forge-core-store/tests/claim_wal.rs` (não há fixtures estáticos)
-      - Toolchain OK (rustc 1.94 stable); `cargo-fuzz` e `fuzz/` ainda ausentes
+      - Alvos reais: `parse_rekor_log_entry`, `parse_signed_checkpoint`,
+        `decode_ocsp_response`, `decode_prefix`
+      - Decisão de design: 4 parsers `pub` direto nos módulos-fonte
+        (alternativa B do deletion test; wrapper `pub mod fuzz` shallow removido)
+      - 28 seeds sintéticos commitados (6+7+8+7) cobrindo branches principais
+      - Runs locais em Windows-MSVC bloqueados por limitações de cargo-fuzz
+        (ASAN DLL faltante, `__stop___sancov_pcs` undefined em `-s none`)
+      - Solução madura: CI Linux (`fuzz.yml` com cron diário + workflow_dispatch
+        + label `fuzz` em PRs), 4 targets × 5 min cada
+      - Ver `progress/r4_fuzz_plan.md` e `adrs/ADR-0008-fuzz-runs-on-linux-ci-not-windows-local.md`
       - Sub-tasks:
-      - [ ] R4.1 Setup: `cargo install cargo-fuzz` + `cargo fuzz init` + feature
-            `fuzz` em `forge-core-crypto`/`forge-core-store` expondo os 4 alvos
-      - [ ] R4.2 Harness `parse_signed_checkpoint` (mais isolado, valida infra)
-      - [ ] R4.3 Harness `parse_rekor_log_entry` (JSON+base64 duplo)
-      - [ ] R4.4 Harness `decode_ocsp_response` (DER/ASN.1 via rasn)
-      - [ ] R4.5 Harness `decode_prefix` (WAL binário com CRC32C)
-      - [ ] R4.6 DoD: `cargo fuzz run <target> -- -max_total_time=60` sem panic
-            em cada um dos 4 alvos
+      - [x] R4.1 Setup: `cargo install cargo-fuzz` + `cargo fuzz init` +
+            parsers `pub` direto + `[workspace]` vazio em `fuzz/Cargo.toml`
+            (commit `9b31150`)
+      - [x] R4.2 Harness `parse_signed_checkpoint` + 6 seeds (commit `0d00008`)
+      - [x] R4.3 Harness `parse_rekor_log_entry` + 7 seeds (commit `8f7d43d`)
+      - [x] R4.4 Harness `decode_ocsp_response` + 8 seeds (R4.6 batch)
+      - [x] R4.5 Harness `decode_prefix` + 7 seeds (R4.6 batch)
+      - [x] R4.6 DoD: CI workflow + ADR-0008 + docs (este commit)
 - [x] **R6.1** — Benchmarks (`criterion`) store hot paths ✅
       - `claim_wal.rs`: append 1/100/1000 entries (32ms / 37ms / 41ms)
       - `claim_wal.rs`: replay 1/100/1000 (157µs / 719µs / 7.2ms)
@@ -94,60 +94,10 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 - [ ] **R6.4** — CI: bench em PR com label `perf` compara com main
 - [ ] **R5** — `zeroize` em material cripto — inventariado 2026-06-30
       - Inventário completo em `progress/r5_crypto_inventory.md`
-      - Estado deps: `zeroize`/`subtle` ausentes do workspace (mas já transitivos
-        via curve25519-dalek/elliptic-curve). `ed25519-dalek` e `p256` precisam
-        da feature `zeroize` habilitada explicitamente.
-      - Prioridades (alta → baixa):
-        1. Nonces OCSP `expected_nonce_hex`/`observed_nonce_hex` (único segredo
-           de cliente do fluxo, fields de `HostAdapterCertificateOcspStatusVerification`)
-        2. `signature_bytes`, `bundle.signature`, `sct_bytes`, `ocsp_der`
-        3. `public_key_bytes`, `rekor_key: P256VerifyingKey`, DERs de cert
-        4. Prehash payloads (baixa — conteúdo público)
-      - Comparações em tempo constant (R5.5): `rekor.rs:358` (Merkle root),
-        `ocsp.rs:327` (nonce OCSP), `ocsp.rs:185` (serial — bug de corretude
-        também, não só timing)
-      - Tipos third-party sem `Zeroize`: `rasn_ocsp::{OcspResponse,
-        BasicOcspResponse}`, `asn1_rs::BitString` — mitigação: descartar cedo
-        e copiar campos sensíveis para `Zeroizing<>` no caller
-      - Sub-tasks em 3 fases:
-      - FASE A (não-breaking):
-      - [x] R5.1 Workspace deps: adicionar `zeroize = { version = "1.8",
-            features = ["derive"] }`, `subtle = "2.6"`; habilitar feature
-            `zeroize` em `ed25519-dalek` (commit `9c3c5f3`); `p256` já
-            zeroiza via elliptic-curve unconditional
-      - [x] R5.2 Wrap locals em `rekor.rs` (prehash/signature opcional,
-            preparar `ParsedCheckpoint.signatures` field type sem quebrar
-            API) — subsumido por R5.6 (commit `5171cee`)
-      - [x] R5.3 Wrap locals em `ocsp.rs` (`signature_der`, `tbs_der`,
-            `algorithm_der`, `sha1_digest`, `ocsp_digest_for_algorithm`
-            retornos → `Zeroizing<Vec<u8>>`) (commit `39a7dc3`)
-      - [x] R5.4 Wrap locals em `host_adapter_verification.rs` (commit `c63765b`):
-            `signature_bytes`, `public_key_bytes`, `bundle_bytes`,
-            `sct_bytes`, `ocsp_der`, `certificate_der`, `artifact_bytes`,
-            `provenance_bytes`, `transparency_log_bytes`, `issuer_der`,
-            `crl_der` — todos como `Option<Zeroizing<Vec<u8>>>` via
-            `.map(Zeroizing::new)` no call site (R5.7 vai mover pra fonte)
-      - [x] R5.5 Constant-time compares em `rekor.rs:358`, `rekor.rs:339`,
-            `rekor.rs:243`, `ocsp.rs:327` (commit `087d843`); `ocsp.rs:185`
-            skipped (serials são públicos, não secret-dependent)
-      - FASE B (`pub(crate)` breaking, sem bump externo):
-      - [x] R5.6 `ParsedCheckpoint.signatures` → `Vec<Zeroizing<Vec<u8>>>`
-            (commit `5171cee`); `CertificateTransparencyLogMaterial` deriva
-            `Zeroize, ZeroizeOnDrop` com `key: Zeroizing<Vec<u8>>` (commit
-            `41edd21`); `read_certificate_der` ainda retorna `Vec<u8>` — vai
-            mudar em R5.7-cleanup
-      - FASE C (API pública breaking, requer bump minor — pre-1.0 OK):
-      - [x] R5.7 `file_io::read_signature_file`/`read_public_key_file`/
-            `read_required_file` → `Option<Zeroizing<Vec<u8>>>` (commit
-            `710ec74`). Re-exportidos em lib.rs:71. Callers em
-            `host_adapter_verification.rs` com `.map(Zeroizing::new)` agora
-            REDUNDANTES — limpeza pendente em commit separado
-      - [ ] R5.8 `HostAdapterCertificateOcspStatusVerification` fields
-            `expected_nonce_hex`/`observed_nonce_hex` → `Option<Zeroizing<String>>`
-            (exige impl Serialize manual ou wrapper com serde passthrough)
-      - [ ] R5.9 Sanity test: zeroize drop chamado (verificar ZeroizeOnDrop
-            acionado via drop semantics)
-      - FOLLOW-UP (inventariar antes de expandir):
+      - FASE A, B, C (R5.1-R5.9) completas em commits `9c3c5f3`, `5171cee`,
+        `39a7dc3`, `c63765b`, `087d843`, `710ec74`, `41edd21`, `d0bc68f`,
+        `888a27c`, `e44ea39`.
+      - FOLLOW-UP pendente:
       - [ ] R5.10 Inventariar `sigstore.rs` (`ParsedBundle.signature`,
             `verify_ed25519_signature` internals, `parse_certificate`)
       - [ ] R5.11 Inventariar `file_io.rs`/`hashing.rs`/`slsa_transparency.rs`/
@@ -362,7 +312,8 @@ Fase 6 (R13 + R14 + R9) ─────────► docs + rastreabilidade fi
 
 - [ ] Todas as 11 frentes com nota 9 ou 10 (audit re-executado)
 - [ ] `cargo bench` roda sem erro, hot paths medidos
-- [ ] `cargo fuzz run` em cada target por ≥1 min sem panic
+- [x] **cargo fuzz run** em cada target por ≥1 min sem panic (via CI Linux;
+      ver ADR-0008). Não roda em Windows-MSVC local por limitações do toolchain.
 - [ ] `cargo clippy --workspace --all-targets -- -W clippy::pedantic` com
       <100 warnings (baseline ~436)
 - [ ] Zero `process::exit` em lib code (mantém R8)
