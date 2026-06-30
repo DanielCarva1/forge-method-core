@@ -348,19 +348,16 @@ pub fn query_trace_events_at(
     query: &TraceEventQuery,
 ) -> TraceEventQueryResult {
     let state_root = state_root.as_ref();
-    let trace_path = match resolve_safe_repo_relative(state_root, trace_relative_path) {
-        Ok(path) => path,
-        Err(_) => {
-            return TraceEventQueryResult {
-                status: TraceEventQueryStatus::Failed,
-                scanned_events: 0,
-                matched_events: 0,
-                returned_events: 0,
-                events: Vec::new(),
-                reasons: vec![TraceEventQueryReason::InvalidTracePath],
-                diagnostics: vec![format!("invalid trace path {trace_relative_path}")],
-            };
-        }
+    let Ok(trace_path) = resolve_safe_repo_relative(state_root, trace_relative_path) else {
+        return TraceEventQueryResult {
+            status: TraceEventQueryStatus::Failed,
+            scanned_events: 0,
+            matched_events: 0,
+            returned_events: 0,
+            events: Vec::new(),
+            reasons: vec![TraceEventQueryReason::InvalidTracePath],
+            diagnostics: vec![format!("invalid trace path {trace_relative_path}")],
+        };
     };
     if !trace_path.exists() {
         return TraceEventQueryResult {
@@ -1322,16 +1319,13 @@ pub fn recover_effect_wal(
     wal_relative_path: &str,
 ) -> EffectWalRecoveryResult {
     let root = root.as_ref();
-    let wal_path = match resolve_safe_repo_relative(root, wal_relative_path) {
-        Ok(path) => path,
-        Err(_) => {
-            return EffectWalRecoveryResult {
-                status: EffectWalRecoveryStatus::RecoveryFailed,
-                recovered_transactions: Vec::new(),
-                reasons: vec![EffectWalRecoveryReason::WalReadFailed],
-                diagnostics: vec![format!("invalid WAL path {wal_relative_path}")],
-            };
-        }
+    let Ok(wal_path) = resolve_safe_repo_relative(root, wal_relative_path) else {
+        return EffectWalRecoveryResult {
+            status: EffectWalRecoveryStatus::RecoveryFailed,
+            recovered_transactions: Vec::new(),
+            reasons: vec![EffectWalRecoveryReason::WalReadFailed],
+            diagnostics: vec![format!("invalid WAL path {wal_relative_path}")],
+        };
     };
     if !wal_path.exists() {
         return EffectWalRecoveryResult {
@@ -1474,18 +1468,15 @@ pub fn rebuild_effect_target_metadata_index(
     recorded_at: Option<&str>,
 ) -> EffectTargetMetadataIndexRebuildResult {
     let root = root.as_ref();
-    let wal_path = match resolve_safe_repo_relative(root, wal_relative_path) {
-        Ok(path) => path,
-        Err(_) => {
-            return EffectTargetMetadataIndexRebuildResult {
-                status: EffectTargetMetadataIndexRebuildStatus::Failed,
-                rebuilt_records: 0,
-                appended_records: 0,
-                records: Vec::new(),
-                reasons: vec![EffectTargetMetadataIndexRebuildReason::WalReadFailed],
-                diagnostics: vec![format!("invalid WAL path {wal_relative_path}")],
-            };
-        }
+    let Ok(wal_path) = resolve_safe_repo_relative(root, wal_relative_path) else {
+        return EffectTargetMetadataIndexRebuildResult {
+            status: EffectTargetMetadataIndexRebuildStatus::Failed,
+            rebuilt_records: 0,
+            appended_records: 0,
+            records: Vec::new(),
+            reasons: vec![EffectTargetMetadataIndexRebuildReason::WalReadFailed],
+            diagnostics: vec![format!("invalid WAL path {wal_relative_path}")],
+        };
     };
     if !wal_path.exists() {
         return EffectTargetMetadataIndexRebuildResult {
@@ -1567,23 +1558,20 @@ pub fn query_effect_target_metadata_index(
     query: &EffectTargetMetadataIndexQuery,
 ) -> EffectTargetMetadataIndexQueryResult {
     let root = root.as_ref();
-    let index_path = match resolve_safe_repo_relative(root, index_relative_path) {
-        Ok(path) => path,
-        Err(_) => {
-            return EffectTargetMetadataIndexQueryResult {
-                status: EffectTargetMetadataIndexQueryStatus::Failed,
-                index_relative_path: index_relative_path.to_string(),
-                consumer_use: query.consumer_use,
-                scanned_records: 0,
-                matched_records: 0,
-                returned_records: 0,
-                latest_per_target: query.latest_per_target,
-                records: Vec::new(),
-                authority_boundary: effect_metadata_authority_boundary(),
-                reasons: vec![EffectTargetMetadataIndexQueryReason::IndexReadFailed],
-                diagnostics: vec![format!("invalid index path {index_relative_path}")],
-            };
-        }
+    let Ok(index_path) = resolve_safe_repo_relative(root, index_relative_path) else {
+        return EffectTargetMetadataIndexQueryResult {
+            status: EffectTargetMetadataIndexQueryStatus::Failed,
+            index_relative_path: index_relative_path.to_string(),
+            consumer_use: query.consumer_use,
+            scanned_records: 0,
+            matched_records: 0,
+            returned_records: 0,
+            latest_per_target: query.latest_per_target,
+            records: Vec::new(),
+            authority_boundary: effect_metadata_authority_boundary(),
+            reasons: vec![EffectTargetMetadataIndexQueryReason::IndexReadFailed],
+            diagnostics: vec![format!("invalid index path {index_relative_path}")],
+        };
     };
     if !index_path.exists() {
         return EffectTargetMetadataIndexQueryResult {
@@ -1774,18 +1762,15 @@ pub fn compact_effect_wal(
     wal_relative_path: &str,
 ) -> EffectWalCompactionResult {
     let root = root.as_ref();
-    let wal_path = match resolve_safe_repo_relative(root, wal_relative_path) {
-        Ok(path) => path,
-        Err(_) => {
-            return EffectWalCompactionResult {
-                status: EffectWalCompactionStatus::Failed,
-                retained_records: 0,
-                dropped_records: 0,
-                incomplete_transactions: Vec::new(),
-                reasons: vec![EffectWalCompactionReason::WalReadFailed],
-                diagnostics: vec![format!("invalid WAL path {wal_relative_path}")],
-            };
-        }
+    let Ok(wal_path) = resolve_safe_repo_relative(root, wal_relative_path) else {
+        return EffectWalCompactionResult {
+            status: EffectWalCompactionStatus::Failed,
+            retained_records: 0,
+            dropped_records: 0,
+            incomplete_transactions: Vec::new(),
+            reasons: vec![EffectWalCompactionReason::WalReadFailed],
+            diagnostics: vec![format!("invalid WAL path {wal_relative_path}")],
+        };
     };
     let mut compaction_diagnostics = Vec::new();
     recover_effect_wal_compaction_debris(&wal_path, &mut compaction_diagnostics);
@@ -2855,11 +2840,9 @@ fn prepare_file_writes(
                 }
             };
 
-        let (target, physical_reference) = if let Ok(resolved) =
+        let Ok((target, physical_reference)) =
             resolve_effect_target(root, write.target_kind, &write.reference)
-        {
-            resolved
-        } else {
+        else {
             reasons.push(EffectApplicationReason::InvalidTargetPath);
             diagnostics.push(format!("invalid write target path {}", write.reference));
             continue;
@@ -3685,9 +3668,7 @@ fn rollback_wal_before_images(
             continue;
         };
         let physical_target_ref = record.physical_target_ref.as_ref().unwrap_or(target_ref);
-        let target = if let Ok(target) = resolve_safe_repo_relative(root, physical_target_ref) {
-            target
-        } else {
+        let Ok(target) = resolve_safe_repo_relative(root, physical_target_ref) else {
             diagnostics.push(format!("invalid WAL target path {physical_target_ref}"));
             ok = false;
             continue;
