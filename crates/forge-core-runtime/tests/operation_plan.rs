@@ -853,3 +853,65 @@ fn execute_operation_records_command_evidence_and_applies_effect_with_wal_lock()
     assert!(effect_index.contains("\"recorded_at\":\"2026-06-25T00:00:00Z\""));
     assert!(!effect_index.contains("story: completed"));
 }
+
+#[test]
+fn compute_rollback_available_returns_true_for_empty_slice() {
+    // Vacuously true: read-only operations have nothing to roll back.
+    assert!(forge_core_runtime::compute_rollback_available(&[]));
+}
+
+#[test]
+#[allow(clippy::cloned_ref_to_slice_refs)] // single-element slices are clearer as &[x] than slice::from_ref
+fn compute_rollback_available_returns_false_when_any_effect_has_inverse_none() {
+    // The shipped story-artifact-write-effect.yaml fixture declares
+    // inverse.kind = none. A single such effect must force rollback_available
+    // to false even when paired with another effect that has a real inverse.
+    use forge_core_contracts::tool_effect::InverseKind;
+
+    let no_inverse = effect_fixture("story-artifact-write-effect.yaml");
+    let mut with_inverse = no_inverse.clone();
+    with_inverse
+        .tool_effect_contract
+        .repair
+        .inverse
+        .kind = InverseKind::ExactRollback;
+
+    assert!(!forge_core_runtime::compute_rollback_available(&[no_inverse.clone()]));
+    assert!(forge_core_runtime::compute_rollback_available(&[with_inverse.clone()]));
+    assert!(!forge_core_runtime::compute_rollback_available(&[
+        with_inverse.clone(),
+        no_inverse,
+    ]));
+    assert!(forge_core_runtime::compute_rollback_available(&[
+        with_inverse.clone(),
+        with_inverse,
+    ]));
+}
+
+#[test]
+fn preview_operation_with_effect_documents_overrides_rollback_placeholder() {
+    // preview_operation_with_snapshot returns rollback_available = false
+    // (conservative placeholder). preview_operation_with_effect_documents must
+    // replace that with the real value derived from the ToolEffect contract.
+    use forge_core_contracts::tool_effect::InverseKind;
+
+    let document = fixture("mechanical-story-execute.yaml");
+    let index = build_reference_index(repo_root()).expect("reference index");
+    let snapshot = RuntimeReadSnapshot::new(&index);
+
+    let placeholder = preview_operation_with_snapshot(&document, snapshot);
+    assert!(!placeholder.rollback_available);
+
+    let mut effect = effect_fixture("story-artifact-write-effect.yaml");
+    effect.tool_effect_contract.repair.inverse.kind = InverseKind::ExactRollback;
+    let resolved = forge_core_runtime::preview_operation_with_effect_documents(
+        &document,
+        snapshot,
+        &[effect],
+    );
+    assert!(resolved.rollback_available);
+    // Everything else in the report must be unchanged.
+    assert_eq!(resolved.status, placeholder.status);
+    assert_eq!(resolved.risk_level, placeholder.risk_level);
+    assert_eq!(resolved.blockers, placeholder.blockers);
+}
