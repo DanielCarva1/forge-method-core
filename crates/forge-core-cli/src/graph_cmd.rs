@@ -979,12 +979,14 @@ pub fn run_graph_command(args: &[String]) -> Result<(), ExitError> {
 /// # Errors
 ///
 /// Returns `ExitError::usage` when an unknown flag is present, or when
-/// [`next_graph_value_or_err`] / [`next_graph_path_or_err`] /
-/// [`parse_graph_i64_or_err`] report a missing or malformed value.
+/// `ArgvCursor::expect_value` reports a missing or malformed value, or when
+/// `parse_graph_i64_or_err` reports a non-numeric `--now-unix`.
 pub fn parse_graph_command_args(
     args: &[String],
     kind: GraphCommandKind,
 ) -> Result<(GraphCommandInput, bool, bool), ExitError> {
+    use crate::cli_util::ArgvCursor;
+
     let mut root = PathBuf::from(".");
     let mut graph_path: Option<PathBuf> = None;
     let mut allow_bootstrap_core = false;
@@ -993,40 +995,35 @@ pub fn parse_graph_command_args(
     let mut now_unix: Option<i64> = None;
     let mut json = false;
     let mut dry_run = false;
-    let mut index = 2usize;
-    while index < args.len() {
-        match args[index].as_str() {
-            "--root" => {
-                index += 1;
-                root = next_graph_path_or_err(args, index, "root")?;
-            }
-            "--graph" => {
-                index += 1;
-                graph_path = Some(next_graph_path_or_err(args, index, "graph")?);
-            }
+    let mut cursor = ArgvCursor::new(args, 2, "graph");
+    while let Some(flag) = cursor.peek_flag() {
+        match flag {
+            "--root" => root = PathBuf::from(cursor.expect_value("root")?),
+            "--graph" => graph_path = Some(PathBuf::from(cursor.expect_value("graph")?)),
             "--agent" | "--agent-id" if kind == GraphCommandKind::RunDryRun => {
-                index += 1;
-                agent_id = Some(next_graph_value_or_err(args, index, "agent")?.to_string());
+                agent_id = Some(cursor.expect_value("agent")?.to_string());
             }
             "--claims-dir" if kind == GraphCommandKind::RunDryRun => {
-                index += 1;
-                claims_dir = Some(next_graph_path_or_err(args, index, "claims-dir")?);
+                claims_dir = Some(PathBuf::from(cursor.expect_value("claims-dir")?));
             }
             "--now-unix" if kind == GraphCommandKind::RunDryRun => {
-                index += 1;
-                now_unix = Some(parse_graph_i64_or_err(next_graph_value_or_err(
-                    args, index, "now-unix",
-                )?)?);
+                now_unix = Some(parse_graph_i64_or_err(cursor.expect_value("now-unix")?)?);
             }
-            "--dry-run" if kind == GraphCommandKind::RunDryRun => dry_run = true,
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
-            "--json" => json = true,
+            "--dry-run" if kind == GraphCommandKind::RunDryRun => {
+                dry_run = true;
+                cursor.advance();
+            }
+            "--allow-bootstrap-core" => {
+                allow_bootstrap_core = true;
+                cursor.advance();
+            }
+            "--json" => {
+                json = true;
+                cursor.advance();
+            }
             "--help" | "-h" => break,
-            _ => {
-                return Err(ExitError::usage(graph_usage()));
-            }
+            _ => return Err(ExitError::usage(graph_usage())),
         }
-        index += 1;
     }
 
     Ok((
@@ -1041,46 +1038,6 @@ pub fn parse_graph_command_args(
         json,
         dry_run,
     ))
-}
-
-/// Reads the value at `args[index]`, rejecting missing slots and values
-/// that look like the next flag.
-///
-/// # Errors
-///
-/// Returns `ExitError::invalid_value` when `index` is out of bounds or the
-/// value at `index` starts with `-` (i.e. looks like another flag rather
-/// than a value for `--{flag}`).
-pub fn next_graph_value_or_err<'a>(
-    args: &'a [String],
-    index: usize,
-    flag: &str,
-) -> Result<&'a str, ExitError> {
-    let value = args
-        .get(index)
-        .ok_or_else(|| ExitError::invalid_value(format!("graph: missing value for --{flag}")))?;
-    if value.starts_with('-') {
-        return Err(ExitError::invalid_value(format!(
-            "graph: missing value for --{flag}"
-        )));
-    }
-    Ok(value.as_str())
-}
-
-/// Reads the path at `args[index]`, delegating validation to
-/// [`next_graph_value_or_err`].
-///
-/// # Errors
-///
-/// Returns `ExitError::invalid_value` (propagated from
-/// [`next_graph_value_or_err`]) when `index` is out of bounds or the value
-/// looks like another flag.
-pub fn next_graph_path_or_err(
-    args: &[String],
-    index: usize,
-    flag: &str,
-) -> Result<PathBuf, ExitError> {
-    Ok(PathBuf::from(next_graph_value_or_err(args, index, flag)?))
 }
 
 /// Parses a CLI string as an `i64`, scoped to graph commands.

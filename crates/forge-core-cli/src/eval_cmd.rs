@@ -460,46 +460,48 @@ pub fn run_eval_command(args: &[String]) -> Result<(), ExitError> {
 pub fn parse_eval_compare_args(
     args: &[String],
 ) -> Result<(EvalCompareCommandInput, bool), ExitError> {
+    use crate::cli_util::ArgvCursor;
+
     let mut root = PathBuf::from(".");
     let mut suite_path: Option<PathBuf> = None;
     let mut baseline: Option<EvalArmLabel> = None;
     let mut candidate: Option<EvalArmLabel> = None;
     let mut allow_bootstrap_core = false;
     let mut json = false;
-    let mut index = 2usize;
-    while index < args.len() {
-        match args[index].as_str() {
-            "--root" => {
-                index += 1;
-                root = PathBuf::from(next_eval_value_or_err(args, index, "root")?);
-            }
+    let mut cursor = ArgvCursor::new(args, 2, "eval compare");
+    while let Some(flag) = cursor.peek_flag() {
+        match flag {
+            "--root" => root = PathBuf::from(cursor.expect_value("root")?),
             "--suite" => {
-                index += 1;
-                suite_path = Some(PathBuf::from(next_eval_value_or_err(args, index, "suite")?));
+                suite_path = Some(PathBuf::from(cursor.expect_value("suite")?));
             }
             "--baseline" => {
-                index += 1;
                 baseline = Some(parse_eval_arm_or_err(
-                    next_eval_value_or_err(args, index, "baseline")?,
+                    cursor.expect_value("baseline")?,
                     "baseline",
                 )?);
             }
             "--candidate" => {
-                index += 1;
                 candidate = Some(parse_eval_arm_or_err(
-                    next_eval_value_or_err(args, index, "candidate")?,
+                    cursor.expect_value("candidate")?,
                     "candidate",
                 )?);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
-            "--json" => json = true,
-            "--no-json" => json = false,
-            "--help" | "-h" => break,
-            _ => {
-                return Err(ExitError::usage(eval_usage()));
+            "--allow-bootstrap-core" => {
+                allow_bootstrap_core = true;
+                cursor.advance();
             }
+            "--json" => {
+                json = true;
+                cursor.advance();
+            }
+            "--no-json" => {
+                json = false;
+                cursor.advance();
+            }
+            "--help" | "-h" => break,
+            _ => return Err(ExitError::usage(eval_usage())),
         }
-        index += 1;
     }
     let baseline = baseline.ok_or_else(|| {
         ExitError::invalid_value("eval compare requires --baseline <single-agent|graph|mas|manual>")
@@ -520,29 +522,6 @@ pub fn parse_eval_compare_args(
         },
         json,
     ))
-}
-
-/// Reads the value at `args[index]`, rejecting missing slots and values
-/// that look like the next flag.
-///
-/// # Errors
-///
-/// Returns `ExitError::invalid_value` when `index` is out of bounds or the
-/// value at `index` starts with `-`.
-pub fn next_eval_value_or_err<'a>(
-    args: &'a [String],
-    index: usize,
-    flag: &str,
-) -> Result<&'a str, ExitError> {
-    let value = args.get(index).ok_or_else(|| {
-        ExitError::invalid_value(format!("eval compare: missing value for --{flag}"))
-    })?;
-    if value.starts_with('-') {
-        return Err(ExitError::invalid_value(format!(
-            "eval compare: missing value for --{flag}"
-        )));
-    }
-    Ok(value.as_str())
 }
 
 /// Parses a CLI string into an [`EvalArmLabel`].
