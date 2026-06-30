@@ -11,6 +11,7 @@
 //! and the CLI crate re-exports a subset of them.
 
 use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 
 /// Lowercase hex SHA-256 of `content`.
 #[must_use]
@@ -59,4 +60,41 @@ pub fn normalize_sha256_display(value: &str) -> String {
         .strip_prefix("sha256:")
         .unwrap_or(trimmed)
         .to_ascii_lowercase()
+}
+
+/// Compare two lowercase hex strings in constant time.
+///
+/// Used for SHA-256 root hashes, OCSP nonces and other secret- or
+/// verification-sensitive digests where a naive `==` on `String`/`&str`
+/// would short-circuit on the first differing character and leak partial
+/// matches through timing. Both inputs are normalised through
+/// [`normalize_sha256_display`] before decoding so `sha256:` prefixes and
+/// uppercase variants are accepted; any malformed input collapses to a
+/// plain `false`.
+///
+/// Length is leaked (it must, since [`ConstantTimeEq`] refuses mismatched
+/// lengths); this is acceptable because the protocol fixes the length of
+/// SHA-256 digests (64 hex chars / 32 bytes) and OCSP nonces are typically
+/// 16 or 32 bytes. The byte-for-byte comparison itself is constant time.
+pub(crate) fn constant_time_eq_hex(left: &str, right: &str) -> bool {
+    match (
+        decode_hex(&normalize_sha256_display(left)),
+        decode_hex(&normalize_sha256_display(right)),
+    ) {
+        (Some(a), Some(b)) => bool::from(a.ct_eq(&b)),
+        _ => false,
+    }
+}
+
+/// Decode a lowercase/uppercase hex string into bytes. Returns `None` on
+/// odd length or any non-hex character. The symmetric inverse of
+/// [`hex_bytes`].
+fn decode_hex(value: &str) -> Option<Vec<u8>> {
+    if !value.len().is_multiple_of(2) || !value.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    (0..value.len())
+        .step_by(2)
+        .map(|index| u8::from_str_radix(&value[index..index + 2], 16).ok())
+        .collect()
 }
