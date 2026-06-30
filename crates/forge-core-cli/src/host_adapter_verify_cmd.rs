@@ -42,7 +42,7 @@ use crate::{
     HostAdapterSigstoreTrustPolicyVerificationInput,
     HostAdapterSigstoreTrustPolicyVerificationStatus,
     HostAdapterTufTrustedRootFreshnessVerificationInput,
-    HostAdapterTufTrustedRootFreshnessVerificationStatus,
+    HostAdapterTufTrustedRootFreshnessVerificationStatus, OcspNonceHex,
 };
 use std::path::PathBuf;
 
@@ -1271,7 +1271,7 @@ pub fn run_host_adapter_verify_certificate_ocsp_status_command(
     let mut issuer_certificate_path: Option<PathBuf> = None;
     let mut ocsp_response_path: Option<PathBuf> = None;
     let mut verification_time_unix: Option<i64> = None;
-    let mut expected_nonce_hex: Option<String> = None;
+    let mut expected_nonce_hex: Option<OcspNonceHex> = None;
     let mut json = false;
     let mut index = 1usize;
     while index < args.len() {
@@ -1298,7 +1298,7 @@ pub fn run_host_adapter_verify_certificate_ocsp_status_command(
             }
             "--expected-nonce-hex" => {
                 index += 1;
-                expected_nonce_hex = Some(next_arg_or_err(args, index)?.to_string());
+                expected_nonce_hex = Some(OcspNonceHex::new(next_arg_or_err(args, index)?));
             }
             "--json" => json = true,
             "--help" | "-h" => {

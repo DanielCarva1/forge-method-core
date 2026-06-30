@@ -1867,9 +1867,10 @@ pub fn run_host_adapter_certificate_ocsp_status_verification(
     let mut revocation_reason = None;
     let expected_nonce_hex = input
         .expected_nonce_hex
-        .as_deref()
-        .and_then(|value| normalize_expected_ocsp_nonce_hex(value, &mut reasons));
-    let mut observed_nonce_hex = None;
+        .as_ref()
+        .and_then(|nonce| normalize_expected_ocsp_nonce_hex(nonce.as_str(), &mut reasons))
+        .map(OcspNonceHex::from);
+    let mut observed_nonce_hex: Option<OcspNonceHex> = None;
 
     let trust_policy = read_sigstore_trust_policy_document(
         &input.trust_policy_path,
@@ -1996,10 +1997,11 @@ pub fn run_host_adapter_certificate_ocsp_status_verification(
                         &basic_response,
                         &mut verified_evidence,
                         &mut reasons,
-                    );
+                    )
+                    .map(OcspNonceHex::from);
                     verify_ocsp_nonce(
-                        expected_nonce_hex.as_deref(),
-                        observed_nonce_hex.as_deref(),
+                        expected_nonce_hex.as_ref().map(OcspNonceHex::as_str),
+                        observed_nonce_hex.as_ref().map(OcspNonceHex::as_str),
                         &mut verified_evidence,
                         &mut reasons,
                     );

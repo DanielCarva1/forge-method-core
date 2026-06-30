@@ -8,9 +8,58 @@
 //! (`main.rs`, `tests/validate.rs`) keep importing from `forge_core_cli`.
 
 use forge_core_contracts::RuntimeKind;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use serde_json::Value;
+use std::ops::Deref;
 use std::path::PathBuf;
+use zeroize::{Zeroize, ZeroizeOnDrop};
+
+/// OCSP nonce as lowercase hex. Wrapped in a newtype because nonces are
+/// client secrets that must be zeroized on drop. Serializes transparently
+/// as a string so existing JSON consumers are unaffected.
+#[derive(Clone, Debug, Zeroize, ZeroizeOnDrop)]
+pub struct OcspNonceHex(pub String);
+
+impl OcspNonceHex {
+    /// Build from any string-like value. Caller is responsible for
+    /// formatting (typically lowercase hex).
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    /// Access the inner hex string.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Deref for OcspNonceHex {
+    type Target = String;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl AsRef<str> for OcspNonceHex {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<String> for OcspNonceHex {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl Serialize for OcspNonceHex {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.0)
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct HostAdapterManifest {
@@ -754,7 +803,7 @@ pub struct HostAdapterCertificateOcspStatusVerificationInput {
     pub issuer_certificate_path: PathBuf,
     pub ocsp_response_path: PathBuf,
     pub verification_time_unix: i64,
-    pub expected_nonce_hex: Option<String>,
+    pub expected_nonce_hex: Option<OcspNonceHex>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -765,8 +814,8 @@ pub struct HostAdapterCertificateOcspStatusVerification {
     pub issuer_certificate_path: String,
     pub ocsp_response_path: String,
     pub verification_time_unix: i64,
-    pub expected_nonce_hex: Option<String>,
-    pub observed_nonce_hex: Option<String>,
+    pub expected_nonce_hex: Option<OcspNonceHex>,
+    pub observed_nonce_hex: Option<OcspNonceHex>,
     pub policy_mode: Option<String>,
     pub certificate_serial_hex: Option<String>,
     pub issuer_subject: Option<String>,
