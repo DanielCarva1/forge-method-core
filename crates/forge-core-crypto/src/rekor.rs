@@ -8,6 +8,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use ed25519_dalek::Verifier as _;
 use p256::ecdsa::{Signature as P256Signature, VerifyingKey as P256VerifyingKey};
 use serde_json::Value;
+use zeroize::Zeroizing;
 
 use crate::hashing::{hex_bytes, hex_sha256, normalize_sha256_display};
 
@@ -108,7 +109,7 @@ pub(crate) struct ParsedCheckpoint {
     pub(crate) signed_body: String,
     pub(crate) tree_size: u64,
     pub(crate) root_hash: String,
-    pub(crate) signatures: Vec<Vec<u8>>,
+    pub(crate) signatures: Vec<Zeroizing<Vec<u8>>>,
 }
 
 pub(crate) fn parse_rekor_log_entry(text: &str) -> Result<ParsedRekorEntry, RekorParseError> {
@@ -305,7 +306,7 @@ pub(crate) fn parse_signed_checkpoint(
     })
 }
 
-fn decode_checkpoint_signature(line: &str) -> Option<Vec<u8>> {
+fn decode_checkpoint_signature(line: &str) -> Option<Zeroizing<Vec<u8>>> {
     let line = line
         .trim()
         .strip_prefix('\u{2014}')
@@ -315,7 +316,7 @@ fn decode_checkpoint_signature(line: &str) -> Option<Vec<u8>> {
     let _name = parts.next()?;
     let signature = parts.next()?;
     let decoded = BASE64.decode(signature.as_bytes()).ok()?;
-    (decoded.len() > 4).then(|| decoded[4..].to_vec())
+    (decoded.len() > 4).then(|| Zeroizing::new(decoded[4..].to_vec()))
 }
 
 fn rfc6962_leaf_hash(entry: &[u8]) -> String {
