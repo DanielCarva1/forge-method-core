@@ -1,3 +1,9 @@
+// The cross-reference and coordination-eval validators walk multiple
+// contract fields and accumulate diagnostics per dimension. Splitting them
+// to satisfy `clippy::too_many_lines` would scatter related checks across
+// helpers and hurt audit readability.
+#![allow(clippy::too_many_lines)]
+
 use forge_core_contracts::{
     ClaimContractDocument, CommandContractDocument, CompletionContractDocument,
     ContractFamilyInventoryDocument, CoordinationDimension, CoordinationEvalContractDocument,

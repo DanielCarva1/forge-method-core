@@ -23,6 +23,16 @@
 //! - [`host_adapter_verification`] — the `run_host_adapter_*_verification`
 //!   entrypoints invoked by the `forge` CLI and integration tests.
 
+// The verification entrypoints in `host_adapter_verification` and the OCSP
+// decoder in `ocsp` are long by design: they walk DER/ASN.1 byte-by-byte and
+// accumulate per-check evidence into typed status structs. Splitting them to
+// fit under `clippy::too_many_lines` would harm readability (state threading,
+// early-return on first failure). We also accept the two redundant-closure
+// warnings on `time.timestamp()` because chrono is re-exported via rasn_ocsp
+// and qualifying the method path inline hurts clarity more than it helps.
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::redundant_closure_for_method_calls)]
+
 pub mod file_io;
 pub mod hashing;
 pub mod host_adapter_types;
