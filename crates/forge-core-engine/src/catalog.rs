@@ -81,9 +81,9 @@ pub fn load_catalog(dir: &Path) -> CatalogLoadReport {
         );
         match load_one(&path, dir) {
             Ok(entry) => report.catalog.entries.push(entry),
-            Err(reason) => report.errors.push(CatalogFileError {
+            Err(error) => report.errors.push(CatalogFileError {
                 path: RepoPath(rel),
-                reason,
+                reason: error.to_string(),
             }),
         }
     }
@@ -91,8 +91,10 @@ pub fn load_catalog(dir: &Path) -> CatalogLoadReport {
     report
 }
 
-fn load_one(path: &Path, dir: &Path) -> Result<CatalogEntry, String> {
-    let text = fs::read_to_string(path).map_err(|e| format!("read error: {e}"))?;
+fn load_one(path: &Path, dir: &Path) -> Result<CatalogEntry, CatalogLoadError> {
+    let text = fs::read_to_string(path).map_err(|source| CatalogLoadError::Read {
+        source: source.to_string(),
+    })?;
     // Resolve a stable repo-relative reference (`contracts/workflows/<name>`).
     let workflow_ref = path.strip_prefix(dir).map_or_else(
         |_| path.to_string_lossy().into_owned(),
@@ -101,12 +103,39 @@ fn load_one(path: &Path, dir: &Path) -> Result<CatalogEntry, String> {
     parse_workflow_yaml(&workflow_ref, &text)
 }
 
+/// Hand-rolled error enum for the catalog YAML loader. Replaces the legacy
+/// `Result<_, String>` signature so callers get typed variants. Converted to
+/// the `CatalogFileError.reason` wire field (still a `String`) at the boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CatalogLoadError {
+    /// `fs::read_to_string` failed; carries the lossy io error string.
+    Read { source: String },
+    /// `yaml_serde::from_str` failed; carries the lossy deserialize error string.
+    Deserialize { source: String },
+}
+
+impl std::fmt::Display for CatalogLoadError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Read { source } => write!(formatter, "read error: {source}"),
+            Self::Deserialize { source } => {
+                write!(formatter, "deserialize error: {source}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for CatalogLoadError {}
+
 /// Parse a single workflow YAML document from its text. Shared by the disk
 /// loader ([`load_one`]) and the embedded loader ([`load_embedded_catalog`])
 /// so both paths produce identical [`CatalogEntry`]s.
-fn parse_workflow_yaml(workflow_ref: &str, text: &str) -> Result<CatalogEntry, String> {
-    let doc: WorkflowDocument =
-        yaml_serde::from_str(text).map_err(|e| format!("deserialize error: {e}"))?;
+fn parse_workflow_yaml(workflow_ref: &str, text: &str) -> Result<CatalogEntry, CatalogLoadError> {
+    let doc: WorkflowDocument = yaml_serde::from_str(text).map_err(|source| {
+        CatalogLoadError::Deserialize {
+            source: source.to_string(),
+        }
+    })?;
     let wf = doc.workflow;
     Ok(CatalogEntry {
         id: wf.id,
@@ -150,9 +179,9 @@ pub fn load_embedded_catalog() -> CatalogLoadReport {
     for (name, text) in &files {
         match parse_workflow_yaml(name, text) {
             Ok(entry) => report.catalog.entries.push(entry),
-            Err(reason) => report.errors.push(CatalogFileError {
+            Err(error) => report.errors.push(CatalogFileError {
                 path: RepoPath(name.clone()),
-                reason,
+                reason: error.to_string(),
             }),
         }
     }
