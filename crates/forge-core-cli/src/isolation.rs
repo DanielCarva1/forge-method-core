@@ -576,6 +576,14 @@ pub fn run_isolation_command(args: &[String]) -> Result<(), ExitError> {
 }
 
 #[must_use]
+/// Resolves `--isolation-dir` to a [`PathBuf`], defaulting to
+/// `<state_root>/contracts/isolations` resolved from `--root`.
+///
+/// # Errors
+///
+/// Returns `ExitError::env_config` (via [`emit_envelope_or_err`]) when
+/// `--isolation-dir` is unset and project resolution fails or the resolved
+/// `state_root` does not exist / is not a directory.
 pub fn resolve_isolation_dir_or_err(
     command: &str,
     isolation_dir: Option<PathBuf>,
@@ -639,6 +647,15 @@ pub fn resolve_isolation_dir_or_err(
     }
 }
 
+/// Runs the `forge-core isolation propose` subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when required flags
+/// (`--agent`, `--branch`, `--worktree-path`) are missing or `--merge-policy`
+/// carries an unknown alias, and `ExitError::with_code` (via
+/// [`emit_envelope_or_err`]) when the propose operation surfaces a non-zero
+/// exit code.
 pub fn run_isolation_propose(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::slug_for_file;
     use forge_core_contracts::isolation::MergePolicy;
@@ -756,6 +773,13 @@ pub fn run_isolation_propose(args: &[String]) -> Result<(), ExitError> {
     emit_envelope_or_err("isolation", env, want_json)
 }
 
+/// Runs the `forge-core isolation status` subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::with_code` (via [`emit_envelope_or_err`]) when the
+/// status read surfaces a non-zero exit code, and `ExitError::env_config`
+/// (via [`resolve_isolation_dir_or_err`]) when project resolution fails.
 pub fn run_isolation_status(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::StableId;
     let mut isolation_dir: Option<PathBuf> = None;
@@ -807,6 +831,13 @@ pub fn run_isolation_status(args: &[String]) -> Result<(), ExitError> {
     emit_envelope_or_err("isolation", env, want_json)
 }
 
+/// Runs the `forge-core isolation merge-plan` subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `--id` is missing, and
+/// `ExitError::with_code` (via [`emit_envelope_or_err`]) when the
+/// merge-plan operation surfaces a non-zero exit code.
 pub fn run_isolation_merge_plan(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::StableId;
     let mut isolation_dir: Option<PathBuf> = None;
@@ -869,6 +900,14 @@ pub fn run_isolation_merge_plan(args: &[String]) -> Result<(), ExitError> {
     emit_envelope_or_err("isolation", env, want_json)
 }
 
+/// Runs the `forge-core isolation transition` subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `--id` or `--to` is missing or
+/// `--to` is not a recognised status alias, and `ExitError::with_code`
+/// (via [`emit_envelope_or_err`]) when the transition surfaces a non-zero
+/// exit code.
 pub fn run_isolation_transition(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::StableId;
     let mut isolation_dir: Option<PathBuf> = None;
