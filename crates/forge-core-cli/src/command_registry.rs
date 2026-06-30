@@ -146,6 +146,11 @@ pub const COMMANDS: &[CommandSpec] = &[
         handler: run_explain,
     },
     CommandSpec {
+        name: "risk-audit",
+        usage_lines: &["       forge-core risk-audit [--root <path>] --rules <path> [--json]"],
+        handler: crate::risk_audit_cmd::run_risk_audit_command,
+    },
+    CommandSpec {
         name: "validate",
         usage_lines: &["       forge-core validate [--root <path>] [--json]"],
         handler: crate::validate::run_validate_command,

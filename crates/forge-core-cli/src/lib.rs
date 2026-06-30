@@ -50,6 +50,7 @@ pub mod isolation;
 pub mod m1_cmd;
 pub mod preflight_cmd;
 pub mod project_cmd;
+pub mod risk_audit_cmd;
 pub mod telemetry_cmd;
 pub mod tracing_init;
 pub mod validate;

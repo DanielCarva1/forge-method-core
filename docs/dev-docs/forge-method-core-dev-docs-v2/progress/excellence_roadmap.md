@@ -286,9 +286,20 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 - [ ] **F08** — Secure MCP adapter
       - MCP server para preview/ready/graph/trace/memory/effect
       - Allowlist + attestation; nenhuma tool muta sem OperationContract
-- [ ] **F11** — Risk Audit Gate
+- [ ] **F11** — Risk Audit Gate (parcial: **F11.1 ✅** standalone CLI)
       - Checks determinísticos + extensão SAST/linters
       - Falha fechado em padrões proibidos (fail-soft, exception swallowing)
+      - [x] **F11.1** — Standalone CLI `forge-core risk-audit --rules <yaml>`;
+            rule engine em `forge-core-validate::risk_audit` com 4 detector
+            kinds (`regex`, `path_glob`, `file_glob_must_exist`,
+            `external_linter`); fail-closed via `ExitReason::RejectedByGate`;
+            5 E2E tests + 11 unit tests; rule set canônico em
+            `tests/fixtures/risk-audit/valid-rust-antipatterns.yaml`
+      - [ ] **F11.2** — Policies padrão em `contracts/risk-audits/`
+            (fail-soft, exception swallowing, security slop, false test)
+      - [ ] **F11.3** — Enforcement real no `execute-operation`
+            (gate antes do WAL; flag `--require-risk-audit`)
+      - [ ] **F11.4** — Integração com `TraceEvent` (rastreabilidade F03)
 
 ### Trilha D — Features P2/P3 da comunidade
 

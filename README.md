@@ -124,6 +124,15 @@ governs the merge back.
 **The validator** — a schema + semantic pass that rejects contracts that violate
 the method's own invariants, at write time.
 
+**Risk audit gate** — a fail-closed inspection pass that scans consumer
+source for AI-induced anti-patterns (fail-soft, exception swallowing,
+security slop, false tests). Rules are parametric YAML contracts
+(`risk-audit-v0`) carried out of band, so adding a rule never requires a
+Rust change. Anti-pattern matches are surfaced as typed diagnostics and
+the command exits non-zero when any error-severity finding lands, while
+still returning the full summary so agents can self-correct without
+re-running.
+
 **Supply-chain surface (host-adapter)** — a set of commands for projecting the
 protocol onto host environments (MCP tools, borrowed shells, app UI) and for
 verifying distribution artifacts (provenance, signatures, transparency logs).

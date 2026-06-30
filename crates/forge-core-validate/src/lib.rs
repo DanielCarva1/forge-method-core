@@ -4,6 +4,8 @@
 // helpers and hurt audit readability.
 #![allow(clippy::too_many_lines)]
 
+pub mod risk_audit;
+
 use forge_core_contracts::{
     ClaimContractDocument, CommandContractDocument, CompletionContractDocument,
     ContractFamilyInventoryDocument, CoordinationDimension, CoordinationEvalContractDocument,
@@ -74,6 +76,19 @@ impl Diagnostic {
     ) -> Self {
         Self {
             severity: DiagnosticSeverity::Error,
+            code,
+            path: path.into(),
+            message: message.into(),
+        }
+    }
+
+    pub fn warning(
+        code: DiagnosticCode,
+        path: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self {
+            severity: DiagnosticSeverity::Warning,
             code,
             path: path.into(),
             message: message.into(),
@@ -158,6 +173,21 @@ pub enum DiagnosticCode {
     CoordinationEvalManualReviewPolicyUnsafe,
     MissingReference,
     ReferenceKindMismatch,
+    // F11 — Risk Audit (AI-induced anti-patterns).
+    RiskAuditRuleMalformed,
+    RiskAuditRuleMissingId,
+    RiskAuditRuleMissingDetector,
+    RiskAuditRuleMissingPattern,
+    RiskAuditRuleInvalidSeverity,
+    RiskAuditRuleInvalidDetectorKind,
+    RiskAuditRuleInvalidAppliesTo,
+    RiskAuditRuleMissingFixHint,
+    RiskAuditRuleSetEmpty,
+    RiskAuditTargetFileUnreadable,
+    RiskAuditAntiPatternMatched,
+    RiskAuditEvidenceMissing,
+    RiskAuditExternalLinterFailed,
+    RiskAuditRequiredFileMissing,
 }
 
 #[derive(Debug, Clone)]
