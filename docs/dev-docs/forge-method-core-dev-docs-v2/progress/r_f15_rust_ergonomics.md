@@ -68,10 +68,47 @@ Meta: reduzir a **2 edit points** — (1) criar o módulo do comando, (2) regist
 
 ## Estado
 
-- [ ] F15.1 — ArgvCursor + piloto
-- [ ] F15.2 — migrate rest
-- [ ] F15.3 — delete dupes
-- [ ] F15.4 — registry
-- [ ] F15.5 — co-localize usage
-- [ ] F15.6 — validate criterion
-- [ ] F15.7 — --no-sync WAL flag
+- [x] F15.1 — ArgvCursor + telemetry pilot (`0d4431d`)
+- [x] F15.2 — migrate eval_cmd + graph_cmd (`47a51bd`)
+- [x] F15.3 — delete dupes (absorvido em F15.1/F15.2: `next_telemetry_value_or_err`, `next_eval_value_or_err`, `next_graph_value_or_err`, `next_graph_path_or_err` deletados)
+- [x] F15.4 — command registry (`c4cd6f4`): `command_registry.rs` com `COMMANDS` table, `dispatch()` vira lookup, `usage()` delega para `global_usage()`
+- [ ] F15.5 — co-localize usage (opcional; `<cmd>_usage()` fns específicos permanecem em cli_util.rs, mas são mostrados só em `<cmd> --help`, não no global)
+- [x] F15.6 — validate criterion (abaixo)
+- [ ] F15.7 — `--no-sync` WAL flag (requer ADR)
+
+## F15.6 — Validação do critério
+
+**Critério**: "novo comando/contrato não exige editar >2 pontos manuais fora de tests/docs"
+
+**Antes do F15** (6+ edit points para adicionar um command):
+1. `main.rs`: `use` import
+2. `main.rs`: match arm em `dispatch()`
+3. `lib.rs`: `pub mod X_cmd;`
+4. `cli_util.rs`: linha em `usage()` concat
+5. `cli_util.rs`: `<cmd>_usage()` fn nova
+6. `X_cmd.rs`: `next_<cmd>_value_or_err` duplicado
+7. `X_cmd.rs`: `while index < args.len() { match... }` skeleton
+
+**Depois do F15** (2 edit points):
+1. **Criar o módulo**: arquivo `X_cmd.rs` + `pub mod X_cmd;` em `lib.rs` (1 ação conceitual — você cria o módulo)
+2. **Registrar**: 1 entrada `CommandSpec` em `command_registry::COMMANDS` (1 linha com `name`, `usage_lines`, `handler`)
+
+Edit points manuais restantes: **2**. ✅ Critério atendido.
+
+O que é agora automático (zero edit points):
+- `main.rs` dispatch: derivado de `COMMANDS`
+- `usage()` global: derivado de `COMMANDS`
+- argv parsing boilerplate: `ArgvCursor` fornece `peek_flag`/`expect_value`/`advance`
+- `<cmd>_value_or_err` helper: `ArgvCursor::expect_value(flag)` substitui
+
+## Notas de design (skills aplicadas)
+
+### `improve-codebase-architecture`
+
+- **ArgvCursor**: deep module. Deletion test: deletar forçaria re-inline do bounds+dash-check em cada flag arm de cada command (N×M explosão). 4-method interface esconde index/bounds/dash/error-format.
+- **command_registry**: deep module. Deletion test: deletar espalharia a tabela de volta em 3 arquivos (main.rs match, lib.rs mod decl, cli_util.rs usage concat) que driftariam fora de sync no primeiro edit perdido.
+
+### `grill-with-docs`
+
+- Terminology gate: "ArgvCursor", "CommandSpec", "CommandRegistry" são **detalhes de impl**, NÃO conceitos de domínio. Não foram pro `CONTEXT.md`.
+- Nenhum ADR criado: nenhuma decisão é hard-to-reverse (o registry é uma refatoração mecânica), surprising o suficiente para justificar, ou real-tradeoff (não havia alternativa genuína — era isto ou continuar com 6+ edit points).
