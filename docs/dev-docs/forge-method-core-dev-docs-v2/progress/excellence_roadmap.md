@@ -13,7 +13,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Frente | Hoje | Meta | Lacuna principal |
 |---|---|---|---|
 | Rápido | 5 | 10 | Sem benchmarks mensuráveis |
-| Robusto | 8 | 10 | Tracing parcial, `Result<_,String>` residuais, sem zeroize |
+| Robusto | 9 | 10 | Tracing completo; zero Result<_,String>; sem zeroize ainda |
 | Performativo | 4 | 10 | Sem criterion, sem profile, sem hot-path baselines |
 | Protocolo guia | 9 | 10 | F04 validate+run --dry-run completos; F01 bugs críticos fechados |
 | Workflows | 7 | 10 | WAL/claim ok, mas F11/F13 não existem |
@@ -46,10 +46,14 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 - [x] **R10** — Criar `forge-core-crypto`, mover cripto da CLI
 - [x] **R11** — Decompor `main.rs` (125 linhas agora)
 - [x] **R8** — Remover 146 `process::exit` do lib code
-- [ ] **R2** — Migrar `Result<_, String>` residuais em store/crypto (~10 sites)
-      - `parse_rekor_log_entry`, `required_string`, etc. em forge-core-crypto/rekor.rs
-      - `EffectStoreLockError` variants com String → enum tipado
-      - Status: ~50% feito; empacotar por arquivo
+- [x] **R2** — Migrar `Result<_, String>` residuais em store/crypto (~10 sites)
+      - **COMPLETO** (commit `0846c79`): zero `Result<_, String>` em `crates/*/src/`
+      - Migrated: `cli_util::resolve_stateful_command_roots`,
+        `catalog::load_one`/`parse_workflow_yaml`,
+        `eval::load_eval_corpus`, `isolation::shell_metachar_check`
+      - Typed enums: `StatefulRootsError`, `CatalogLoadError`,
+        `EvalCorpusLoadError`; `shell_metachar_check` vira
+        `Option<&'static str>` (callers só passam reason pra IsolationError)
 - [x] **R3** — Tracing estruturado (COMPLETO)
       - [x] R3.1 deps + subscriber init + flag `FORGE_LOG_FORMAT`
       - [x] R3.2 spans em validate/store/runtime/crypto/cli
@@ -205,12 +209,12 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
       redundant_closure_for_method_calls
 - Resultado final: 0 warnings em `cargo clippy --workspace --lib
   -- -W clippy::pedantic` (comecou com ~245)
-- [ ] **E2** — Profile release documentado em `Cargo.toml`
-      - LTO thin, codegen-units 1, panic abort, opt-level 3
+- [x] **E2** — Profile release documentado em `Cargo.toml` (commit `984618b`)
+      - LTO thin, codegen-units 1, panic abort, opt-level 3, strip symbols
       - DoD: `cargo build --release` produz binário otimizado
-- [ ] **E3** — CI: gates automáticos em PR
-      - `cargo check --workspace`, `cargo clippy --pedantic`, `cargo test`,
-        `cargo fmt --check`, anchor `validate --json | grep -c 122`
+- [x] **E3** — CI: gates automáticos em PR (commit `d3af5c4`)
+      - `cargo check --workspace`, `cargo clippy --pedantic -D warnings`,
+        `cargo test`, `cargo fmt --check`, anchor `validate --json | grep -c 122`
 
 ### Trilha F — Papers e evidência científica
 
