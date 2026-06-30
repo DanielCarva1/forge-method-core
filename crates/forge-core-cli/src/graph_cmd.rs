@@ -930,6 +930,15 @@ fn display_path(path: &Path) -> String {
     raw.strip_prefix(r"\\?\")
         .map_or(raw.clone(), std::string::ToString::to_string)
 }
+/// Dispatch entrypoint for the `forge-core graph` subcommand tree.
+///
+/// Routes to `validate` or `run` (dry-run only) based on `args[1]`, and
+/// prints usage on `--help` / unknown subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when the subcommand is unknown, when `run`
+/// is invoked without `--dry-run`, or when argument parsing fails.
 pub fn run_graph_command(args: &[String]) -> Result<(), ExitError> {
     let subcommand = args.get(1).map_or("--help", String::as_str);
     match subcommand {
@@ -962,6 +971,13 @@ pub fn run_graph_command(args: &[String]) -> Result<(), ExitError> {
     }
 }
 
+/// Parses argv into a typed [`GraphCommandInput`] plus JSON / dry-run flags.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when an unknown flag is present, or when
+/// [`next_graph_value_or_err`] / [`next_graph_path_or_err`] /
+/// [`parse_graph_i64_or_err`] report a missing or malformed value.
 pub fn parse_graph_command_args(
     args: &[String],
     kind: GraphCommandKind,
@@ -1024,6 +1040,14 @@ pub fn parse_graph_command_args(
     ))
 }
 
+/// Reads the value at `args[index]`, rejecting missing slots and values
+/// that look like the next flag.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `index` is out of bounds or the
+/// value at `index` starts with `-` (i.e. looks like another flag rather
+/// than a value for `--{flag}`).
 pub fn next_graph_value_or_err<'a>(
     args: &'a [String],
     index: usize,
@@ -1040,6 +1064,14 @@ pub fn next_graph_value_or_err<'a>(
     Ok(value.as_str())
 }
 
+/// Reads the path at `args[index]`, delegating validation to
+/// [`next_graph_value_or_err`].
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` (propagated from
+/// [`next_graph_value_or_err`]) when `index` is out of bounds or the value
+/// looks like another flag.
 pub fn next_graph_path_or_err(
     args: &[String],
     index: usize,
@@ -1048,12 +1080,29 @@ pub fn next_graph_path_or_err(
     Ok(PathBuf::from(next_graph_value_or_err(args, index, flag)?))
 }
 
+/// Parses a CLI string as an `i64`, scoped to graph commands.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `value` does not parse as `i64`.
 pub fn parse_graph_i64_or_err(value: &str) -> Result<i64, ExitError> {
     value.parse::<i64>().map_err(|_| {
         ExitError::invalid_value(format!("graph: invalid value for --now-unix: '{value}'"))
     })
 }
 
+/// Runs the `forge-core graph validate` subcommand body.
+///
+/// # Errors
+///
+/// Returns `ExitError::failed` when the underlying validation returns an
+/// error or when its status is `Blocked`.
+///
+/// # Panics
+///
+/// Panics in JSON mode if the validation output cannot be serialized. The
+/// output type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_graph_validate(input: &GraphCommandInput, json: bool) -> Result<(), ExitError> {
     match run_validate(input) {
         Ok(output) => {
@@ -1078,6 +1127,18 @@ pub fn run_graph_validate(input: &GraphCommandInput, json: bool) -> Result<(), E
     }
 }
 
+/// Runs the `forge-core graph run --dry-run` subcommand body.
+///
+/// # Errors
+///
+/// Returns `ExitError::failed` when the underlying dry-run returns an
+/// error or when its status is `Blocked`.
+///
+/// # Panics
+///
+/// Panics in JSON mode if the dry-run output cannot be serialized. The
+/// output type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_graph_dry_run(input: &GraphCommandInput, json: bool) -> Result<(), ExitError> {
     match run_dry_run(input) {
         Ok(output) => {
