@@ -41,6 +41,10 @@ pub struct OutputPolicy {
     pub max_bytes: u64,
 }
 
+// Each field is an independent safety dimension audited by the host adapter.
+// Bitflags would obscure the JSON schema, which downstream agents read field
+// by field, so we keep the explicit bool checklist.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct CommandSafety {
     pub shell_string_allowed: bool,
