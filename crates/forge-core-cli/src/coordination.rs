@@ -18,6 +18,8 @@ use forge_core_contracts::{CliEnvelope, ExitReason};
 use forge_core_engine::{coordination_fixture_gaps, validate_coordination_contract};
 use std::path::{Path, PathBuf};
 
+use crate::cli_error::ExitError;
+
 // ---------------------------------------------------------------------------
 // payload
 // ---------------------------------------------------------------------------
@@ -218,12 +220,18 @@ fn print_validate_human(env: &CliEnvelope<CoordinationValidatePayload>) {
     }
 }
 
-pub fn run_coordination_command(args: &[String]) {
+pub fn run_coordination_command(args: &[String]) -> Result<(), ExitError> {
     let (json, exit) = dispatch(args);
     if !json.is_empty() {
         println!("{json}");
     }
-    std::process::exit(exit);
+    if exit == 0 {
+        Ok(())
+    } else {
+        // dispatch already wrote any stderr / stdout it needed; the
+        // ExitError only carries the exit code for the binary entrypoint.
+        Err(ExitError::with_code(exit, String::new()))
+    }
 }
 #[cfg(test)]
 mod tests {
