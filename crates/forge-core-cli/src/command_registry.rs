@@ -157,12 +157,12 @@ pub const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "execute-operation",
-        usage_lines: &["       forge-core execute-operation --root <path> --operation <path> [--command <path>] [--effect <path>] [--payload <target_ref>=<path>] [--max-payload-bytes <bytes>] [--allow-payload-outside-root] [--allow-bootstrap-core] [--recorded-at <value>] [--tx-id-prefix <value>] [--json]"],
+        usage_lines: &["       forge-core execute-operation --root <path> --operation <path> [--command <path>] [--effect <path>] [--payload <target_ref>=<path>] [--max-payload-bytes <bytes>] [--allow-payload-outside-root] [--allow-bootstrap-core] [--recorded-at <value>] [--tx-id-prefix <value>] [--no-sync] [--json]"],
         handler: crate::execute_operation::run_execute_operation_command,
     },
     CommandSpec {
         name: "rebuild-effect-index",
-        usage_lines: &["       forge-core rebuild-effect-index [--root <path>] [--wal <path>] [--index <path>] [--lock <path>] [--allow-bootstrap-core] [--recorded-at <value>] [--json]"],
+        usage_lines: &["       forge-core rebuild-effect-index [--root <path>] [--wal <path>] [--index <path>] [--lock <path>] [--allow-bootstrap-core] [--recorded-at <value>] [--no-sync] [--json]"],
         handler: crate::effect_index::run_rebuild_effect_index_command,
     },
     CommandSpec {
