@@ -18,7 +18,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Protocolo guia | 10 | 10 | F04 ✅ fechado (validate + dry-run + 34 E2E tests); F01 bugs críticos fechados |
 | Workflows | 7 | 10 | WAL/claim ok, mas F11/F13 não existem |
 | Agente guia humano | 9 | 10 | F01 bugs de integridade fechados; rollback_available real |
-| Não-script-de-novela | 9 | 10 | Já é framework paramétrico; faltam fixtures que provem |
+| Não-script-de-novela | 10 | 10 | **G1 ✅** fechado: 62/62 policies em `contracts/policies/` são framework paramétrico (0/62 script). Auditoria em `progress/g1_policies_script_novela_audit.md`. Bússola `human-agent-interface.yaml` honrada |
 | Features comunidade | 9.5 | 10 | F03/F04/F01/F02/F15 operacionais; falta F05-F14 |
 | Rust best practices | 10 | 10 | E1 fechado (0 warnings lib); **F15 fechado** (2 edit points) |
 | Segurança supply chain | 8 | 10 | serde_yaml migrado; zeroize feito; fuzz (R4) completo via ADR-0008 |
@@ -319,10 +319,15 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 
 ### Trilha G — System design (não-R-track)
 
-- [ ] **G1** — Auditar todos os `contracts/policies/*.yaml` por "script de novela"
+- [x] **G1** — Auditar todos os `contracts/policies/*.yaml` por "script de novela" ✅
       - Critério: cada policy deve ser matriz paramétrica (modes + thresholds),
         não sequência prescritiva
-      - DoD: report diz "X/57 policies são framework, Y são script"
+      - **DoD atingido**: 62/62 policies são framework paramétrico, 0/62 são
+        script. Quatro heurísticas em camadas (lexicais / semânticas /
+        prosa-longa / framework-positivo) + leitura manual de amostras
+        representativas (`human-agent-interface.yaml`,
+        `rust-workspace-architecture.yaml`, `rust-validation-authority.yaml`).
+      - Ver `progress/g1_policies_script_novela_audit.md`
 - [ ] **G2** — Fixtures que provam framework (não script)
       - Para cada policy, fixture testando múltiplos inputs no mesmo policy
       - DoD: `cargo test policies_framework` passa
