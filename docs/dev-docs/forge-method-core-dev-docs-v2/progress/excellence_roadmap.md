@@ -108,9 +108,13 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
       - Migrado para `yaml_serde 0.10.4` (The YAML Organization, API 1:1)
       - 124 refs em 42 arquivos, anchor 122 preservado
       - Ver `progress/r7_yaml_serde.md`
-- [ ] **R13** — Alinhar docs com realidade
-      - `04_rust_refactor_guide.md`: remover `thiserror`/`clap` menções
-      - Auditar todos dev-docs por conflito com `AGENTS.md`
+- [x] **R13** — Alinhar docs com realidade ✅
+      - R13.1 (commit pre-sessão): `04_rust_refactor_guide.md` alinhado
+      - R13.2 (esta sessão): `00_master_development_doc.md`,
+        `02_implementation_plan.md`, `01_feature_specs.md`,
+        `08_priority_recommendations_plan.md` alinhados com AGENTS.md
+        (argv manual sem clap; error enums sem thiserror/anyhow). Todas as
+        menções agora são em negação ou descrição de decisão.
 - [ ] **R14** — Criar `paper_implementation_status.md`
       - Cada paper em `contracts/research/` mapeado pra implementação
 - [ ] **R9** — Remover Bootstrap Exception

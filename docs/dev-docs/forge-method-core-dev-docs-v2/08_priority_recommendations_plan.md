@@ -7,12 +7,18 @@ Vínculo: `AGENTS.md` (regras do projeto), `04_rust_refactor_guide.md`, `01_feat
 `contracts/research/community-trends-and-requested-features-v1.yaml`,
 `contracts/research/best-features-from-papers-and-cases-v1.yaml`
 
-## Conflito de fontes (importante)
+## Conflito de fontes (resolvido em R13.2, 2026-06-30)
 
-O `04_rust_refactor_guide.md` sugere `thiserror` e `clap` derive. O `AGENTS.md`
-do projeto **proíbe explicitamente `thiserror`/`anyhow`** e manda rolar enums
-na mão. Este plano segue o `AGENTS.md` (regra de projeto tem precedência sobre
-doc de refatoração mais antigo). `clap` derive é permitido — não está proibido.
+Originalmente o `04_rust_refactor_guide.md` sugeria `thiserror` e `clap` derive.
+Após auditoria R13.2, todos os dev-docs foram alinhados com `AGENTS.md`:
+- **`thiserror` e `anyhow` são proibidos** — error enums são rolados à mão,
+  derivando `Debug, Clone, PartialEq, Eq`.
+- **`clap` derive não é usado** — Forge mantém argv parsing manual em
+  `main.rs` (padrão estabelecido). `clap` não está proibido pelo `AGENTS.md`,
+  mas o projeto optou por não adotá-lo; novos subcomandos seguem o padrão
+  existente de `match` + `run_<command>(&[String])`.
+
+Ver `04_rust_refactor_guide.md` para o padrão canônico.
 
 ## Princípios orientadores
 

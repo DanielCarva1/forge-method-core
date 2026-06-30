@@ -10,18 +10,18 @@ Objetivo: reduzir custo de alteracao para agentes e maintainers.
 
 Escopo:
 
-- Migrar CLI para `clap` derive.
+- **Manter CLI com argv manual em `main.rs`** (sem `clap`, sem derive macros). Decisão projetual em `AGENTS.md` — ver `04_rust_refactor_guide.md` para o padrão estabelecido. (Original: "Migrar CLI para `clap` derive" — revisado em R13.2.)
 - Separar `forge-core-store/src/lib.rs` em modulos: `paths`, `jsonl`, `reference_index`, `effect_apply`, `effect_wal`, `effect_recovery`, `effect_metadata`, `locks`.
-- Introduzir `thiserror` para erros publicos de biblioteca.
+- **Roller error enums à mão** (sem `thiserror`, sem `anyhow`), derivando `Debug, Clone, PartialEq, Eq`. (Original: "Introduzir `thiserror`" — revisado em R13.2.)
 - Introduzir `tracing` spans nos caminhos de runtime, validation, store e CLI.
 - Criar builders de fixtures para `OperationContract`, `ToolEffectContract`, `CommandContract` e `RuntimePlan`.
 - Adicionar snapshot tests para outputs JSON estaveis.
-- Definir regra: novo comando nao pode exigir parsing manual em `main.rs`.
+- Definir regra: cada subcomando novo adiciona um braço no `match` de `main.rs` e uma fn `run_<command>(&[String])` em `lib.rs`.
 
 Entregas:
 
 - ADR-0001 aceito.
-- `forge-core-cli` com Parser/Subcommand.
+- `forge-core-cli` mantém argv manual (sem Parser/Subcommand de `clap`).
 - Modulos separados em store.
 - Clippy e fmt no CI.
 

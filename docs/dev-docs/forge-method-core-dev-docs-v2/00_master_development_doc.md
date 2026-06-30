@@ -137,8 +137,8 @@ Features traduzidas: PrincipalId, IntentContract, ConflictContract, GovernancePo
 6. MCP e A2A entram como adapters seguros, nao como autoridade.
 7. Memoria precisa de policy e source evidence.
 8. Multi-principal governance vira diferencial do Forge.
-9. CLI deve ser declarativa com `clap`.
-10. Erros e diagnostics devem ser tipados e rastreaveis.
+9. CLI usa argv manual em `main.rs` (sem `clap`, sem derive macros). Cada subcomando novo adiciona um braço no `match` de `main.rs` e uma fn `run_<command>(&[String])`. Ver `04_rust_refactor_guide.md`.
+10. Erros e diagnostics devem ser enums tipados feitos à mão (sem `thiserror`, sem `anyhow`), derivando `Debug, Clone, PartialEq, Eq`.
 
 ## 8. Fonte ledger resumido
 
