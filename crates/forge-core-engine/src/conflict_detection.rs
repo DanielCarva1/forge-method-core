@@ -278,11 +278,12 @@ pub fn repo_paths_overlap(left: &RepoPath, right: &RepoPath) -> bool {
 /// True iff a raw claim path covers normalized target segments.
 ///
 /// `normalize_segments` intentionally returns `[]` for both an empty target and
-/// explicit repo-root spellings such as `.`, `/`, and ``. For claims, those
-/// explicit root spellings are authority over the whole repository; for targets,
-/// an empty path still covers nothing. Keeping the root decision on the claim
-/// side preserves DD28 (a claim with no `scope.paths` governs no path) while
-/// closing the false-negative where a root path governed nothing.
+/// explicit repo-root spellings such as `.`, `/`, and the empty string. For
+/// claims, those explicit root spellings are authority over the whole
+/// repository; for targets, an empty path still covers nothing. Keeping the
+/// root decision on the claim side preserves DD28 (a claim with no
+/// `scope.paths` governs no path) while closing the false-negative where a
+/// root path governed nothing.
 fn claim_path_covers(raw_claim_path: &str, target_segments: &[String]) -> bool {
     if target_segments.is_empty() {
         return false;
@@ -296,8 +297,9 @@ fn claim_path_covers(raw_claim_path: &str, target_segments: &[String]) -> bool {
 /// Is this claim path an explicit spelling of the repository root?
 ///
 /// This deliberately accepts only empty, separator-only, or `.`-only spellings
-/// (``, `.`, `/`, `./`, `\\`, etc.). It does not reinterpret arbitrary traversal
-/// expressions as root, which keeps DD29's lexical traversal handling narrow.
+/// (empty string, `.`, `/`, `./`, `\\`, etc.). It does not reinterpret arbitrary
+/// traversal expressions as root, which keeps DD29's lexical traversal
+/// handling narrow.
 fn is_explicit_repo_root_path(raw: &str) -> bool {
     raw.split(['/', '\\'])
         .all(|part| part.is_empty() || part == ".")
@@ -342,7 +344,7 @@ fn normalize_segments(raw: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for part in raw.split(['/', '\\']) {
         match part {
-            "" | "." => continue,
+            "" | "." => {}
             ".." => {
                 // Collapse only if there is a non-`..` segment to pop; a
                 // leading `..` (or excess `..`) is preserved as a segment so

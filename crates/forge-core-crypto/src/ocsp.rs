@@ -94,7 +94,7 @@ pub(crate) fn verify_basic_ocsp_signature_with_issuer(
     };
 
     let algorithm = match X509AlgorithmIdentifier::from_der(&algorithm_der) {
-        Ok((remaining, algorithm)) if remaining.is_empty() => algorithm,
+        Ok(([], algorithm)) => algorithm,
         Ok((_remaining, _algorithm)) => {
             reasons.push("ocsp_status_signature_algorithm_trailing_der".to_string());
             return false;
@@ -107,7 +107,7 @@ pub(crate) fn verify_basic_ocsp_signature_with_issuer(
         }
     };
     let signature = match Asn1BitString::from_der(&signature_der) {
-        Ok((remaining, signature)) if remaining.is_empty() => signature,
+        Ok(([], signature)) => signature,
         Ok((_remaining, _signature)) => {
             reasons.push("ocsp_status_signature_trailing_der".to_string());
             return false;
@@ -354,9 +354,7 @@ pub(crate) fn normalize_expected_ocsp_nonce_hex(
     for character in value.chars() {
         if character.is_ascii_hexdigit() {
             normalized.push(character.to_ascii_lowercase());
-        } else if matches!(character, ':' | '-' | ' ' | '\t' | '\n' | '\r') {
-            continue;
-        } else {
+        } else if !matches!(character, ':' | '-' | ' ' | '\t' | '\n' | '\r') {
             reasons.push("ocsp_status_expected_nonce_hex_invalid".to_string());
             return None;
         }
