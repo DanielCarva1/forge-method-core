@@ -351,6 +351,16 @@ pub fn load_isolations(dir: &Path) -> (Vec<IsolationContract>, Vec<String>) {
 
 /// Persist an isolation contract atomically (temp + rename). Filename is the
 /// slugified id (no traversal — [`slug_for_file`]).
+/// Persist an [`IsolationContract`] as a YAML envelope inside `dir`.
+///
+/// The file is named after the contract's slugified id and written
+/// atomically via [`atomic_write`].
+///
+/// # Errors
+///
+/// Returns the underlying [`std::io::Error`] when `dir` cannot be created,
+/// when YAML serialization fails (surfaced as `InvalidData`), or when the
+/// atomic write fails.
 pub fn save_isolation(dir: &Path, c: &IsolationContract) -> std::io::Result<PathBuf> {
     std::fs::create_dir_all(dir)?;
     let doc = IsolationContractDocument {
@@ -496,6 +506,12 @@ impl std::fmt::Display for IsolationStatusParseError {
 
 /// Parse a CLI string into a [`MergePolicy`]. Exits 3 on unknown value
 /// (consistent with DD10 — invalid input shape, not env error).
+/// Parse a CLI string into a [`MergePolicy`].
+///
+/// # Errors
+///
+/// Returns [`MergePolicyParseError::Unknown`] when `raw` is not one of the
+/// recognised aliases (`rebase`, `merge`, `squash`).
 pub fn parse_merge_policy(raw: &str) -> Result<MergePolicy, MergePolicyParseError> {
     match raw.trim().to_ascii_lowercase().as_str() {
         "rebase" => Ok(MergePolicy::Rebase),
@@ -508,6 +524,12 @@ pub fn parse_merge_policy(raw: &str) -> Result<MergePolicy, MergePolicyParseErro
 }
 
 /// Parse a CLI string into an [`IsolationStatus`].
+///
+/// # Errors
+///
+/// Returns [`IsolationStatusParseError::Unknown`] when `raw` is not one of
+/// the recognised aliases (`proposed`, `active`, `merging`, `merged`,
+/// `abandoned`).
 pub fn parse_status(raw: &str) -> Result<IsolationStatus, IsolationStatusParseError> {
     use IsolationStatus::{Abandoned, Active, Merged, Merging, Proposed};
     match raw.trim().to_ascii_lowercase().as_str() {
@@ -521,6 +543,16 @@ pub fn parse_status(raw: &str) -> Result<IsolationStatus, IsolationStatusParseEr
         }),
     }
 }
+/// Dispatch entrypoint for the `forge-core isolation` subcommand tree.
+///
+/// Routes to `propose`, `status`, `merge-plan`, or `transition` based on
+/// `args[1]`, and prints usage on `--help` / unknown subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when the subcommand is unknown. Sub-command
+/// dispatchers may surface their own `ExitError::usage` or `ExitError::failed`
+/// variants for missing arguments or command failures.
 pub fn run_isolation_command(args: &[String]) -> Result<(), ExitError> {
     let sub = args.get(1).map_or("--help", String::as_str);
     match sub {
