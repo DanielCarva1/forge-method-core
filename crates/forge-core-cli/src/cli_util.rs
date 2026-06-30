@@ -529,3 +529,40 @@ pub fn resolve_stateful_roots_or_err(
         ExitError::failed(format!("{command} failed: {message}"))
     })
 }
+
+/// Result variant of [`emit_envelope`].
+///
+/// Prints the envelope to stdout (JSON mode) or stderr (text-mode failure),
+/// matching the legacy [`emit_envelope`] byte-for-byte. Returns `Ok(())` when
+/// the envelope exit code is 0 so the caller can keep going (or simply return
+/// `Ok(())` to terminate normally); returns `Err(ExitError::WithCode)` when
+/// the envelope carries a non-zero code so the binary entrypoint can call
+/// `process::exit(code)`.
+///
+/// Unlike [`emit_envelope`], this helper does NOT call `std::process::exit`;
+/// the caller decides how to terminate. This makes it usable from library
+/// code that needs to be unit-testable.
+pub fn emit_envelope_or_err<T: serde::Serialize>(
+    family: &str,
+    env: forge_core_contracts::CliEnvelope<T>,
+    want_json: bool,
+) -> Result<(), ExitError> {
+    let code = env.exit_code();
+    if want_json {
+        println!("{}", serde_json::to_string_pretty(&env).unwrap());
+    } else if !env.ok {
+        eprintln!(
+            "{} failed: {}",
+            family,
+            env.error
+                .as_ref()
+                .map(|e| e.message.as_str())
+                .unwrap_or("unknown")
+        );
+    }
+    if code == 0 {
+        Ok(())
+    } else {
+        Err(ExitError::with_code(code, String::new()))
+    }
+}
