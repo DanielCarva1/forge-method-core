@@ -406,11 +406,11 @@ pub fn run_host_adapter_sigstore_trust_policy_verification(
         trusted_root_ref = Some(policy.trusted_root_ref.clone());
         timestamp_mode = Some(policy.timestamp_authority.mode.clone());
         expected_oidc_issuer = Some(policy.identity_policy.expected_oidc_issuer.clone());
-        expected_certificate_identity =
-            policy.identity_policy.expected_certificate_identity.clone();
-        expected_github_repository = policy.identity_policy.expected_github_repository.clone();
-        expected_github_ref = policy.identity_policy.expected_github_ref.clone();
-        expected_github_sha = policy.identity_policy.expected_github_sha.clone();
+        expected_certificate_identity
+            .clone_from(&policy.identity_policy.expected_certificate_identity);
+        expected_github_repository.clone_from(&policy.identity_policy.expected_github_repository);
+        expected_github_ref.clone_from(&policy.identity_policy.expected_github_ref);
+        expected_github_sha.clone_from(&policy.identity_policy.expected_github_sha);
 
         verify_sigstore_trust_policy(document, &mut verified_evidence, &mut reasons);
     }
@@ -473,10 +473,10 @@ pub fn run_host_adapter_fulcio_certificate_identity_verification(
         verify_sigstore_trust_policy(document, &mut verified_evidence, &mut reasons);
         let identity_policy = &document.sigstore_trusted_root_policy.identity_policy;
         expected_oidc_issuer = Some(identity_policy.expected_oidc_issuer.clone());
-        expected_certificate_identity = identity_policy.expected_certificate_identity.clone();
-        expected_github_repository = identity_policy.expected_github_repository.clone();
-        expected_github_ref = identity_policy.expected_github_ref.clone();
-        expected_github_sha = identity_policy.expected_github_sha.clone();
+        expected_certificate_identity.clone_from(&identity_policy.expected_certificate_identity);
+        expected_github_repository.clone_from(&identity_policy.expected_github_repository);
+        expected_github_ref.clone_from(&identity_policy.expected_github_ref);
+        expected_github_sha.clone_from(&identity_policy.expected_github_sha);
     }
 
     if input.issuer_certificate_paths.is_empty() {
@@ -539,14 +539,15 @@ pub fn run_host_adapter_fulcio_certificate_identity_verification(
                         &mut reasons,
                     );
                     let identity = extract_fulcio_certificate_identity(&leaf);
-                    observed_subject_alt_names = identity.subject_alt_names.clone();
-                    observed_oidc_issuer = identity.oidc_issuer.clone();
-                    observed_build_signer_uri = identity.build_signer_uri.clone();
-                    observed_build_signer_digest = identity.build_signer_digest.clone();
-                    observed_source_repository_uri = identity.source_repository_uri.clone();
-                    observed_source_repository_digest = identity.source_repository_digest.clone();
-                    observed_source_repository_ref = identity.source_repository_ref.clone();
-                    observed_token_subject = identity.token_subject.clone();
+                    observed_subject_alt_names.clone_from(&identity.subject_alt_names);
+                    observed_oidc_issuer.clone_from(&identity.oidc_issuer);
+                    observed_build_signer_uri.clone_from(&identity.build_signer_uri);
+                    observed_build_signer_digest.clone_from(&identity.build_signer_digest);
+                    observed_source_repository_uri.clone_from(&identity.source_repository_uri);
+                    observed_source_repository_digest
+                        .clone_from(&identity.source_repository_digest);
+                    observed_source_repository_ref.clone_from(&identity.source_repository_ref);
+                    observed_token_subject.clone_from(&identity.token_subject);
                     verify_fulcio_identity_selectors(
                         document,
                         &identity,
@@ -656,7 +657,7 @@ pub fn run_host_adapter_sigstore_bundle_subject_verification(
         });
 
     if let Some(bundle) = bundle.as_ref() {
-        media_type = bundle.media_type.clone();
+        media_type.clone_from(&bundle.media_type);
         bundle_message_digest_sha256 =
             Some(format!("sha256:{}", hex_bytes(&bundle.message_digest)));
         bundle_signature_sha256 = Some(format!("sha256:{}", hex_sha256(&bundle.signature)));
@@ -854,7 +855,7 @@ pub fn run_host_adapter_sigstore_dsse_in_toto_subject_verification(
         });
 
     if let Some(bundle) = bundle.as_ref() {
-        media_type = bundle.media_type.clone();
+        media_type.clone_from(&bundle.media_type);
         payload_type = Some(bundle.payload_type.clone());
         let payload_hash = hex_sha256(&bundle.payload);
         let envelope_hash = match serde_json_canonicalizer::to_vec(&bundle.envelope) {
@@ -1091,11 +1092,12 @@ pub fn run_host_adapter_sigstore_timestamp_authority_verification(
                 .mode
                 .clone(),
         );
-        rfc3161_tsa_certificate_refs = document
-            .sigstore_trusted_root_policy
-            .timestamp_authority
-            .certificate_refs
-            .clone();
+        rfc3161_tsa_certificate_refs.clone_from(
+            &document
+                .sigstore_trusted_root_policy
+                .timestamp_authority
+                .certificate_refs,
+        );
     }
 
     let certificate_der = read_certificate_der(
@@ -1245,16 +1247,18 @@ pub fn run_host_adapter_certificate_transparency_sct_verification(
     );
     if let Some(document) = trust_policy.as_ref() {
         verify_sigstore_trust_policy(document, &mut verified_evidence, &mut reasons);
-        policy_log_ids = document
-            .sigstore_trusted_root_policy
-            .certificate_transparency
-            .log_ids
-            .clone();
-        ct_public_key_refs = document
-            .sigstore_trusted_root_policy
-            .certificate_transparency
-            .public_key_refs
-            .clone();
+        policy_log_ids.clone_from(
+            &document
+                .sigstore_trusted_root_policy
+                .certificate_transparency
+                .log_ids,
+        );
+        ct_public_key_refs.clone_from(
+            &document
+                .sigstore_trusted_root_policy
+                .certificate_transparency
+                .public_key_refs,
+        );
     }
 
     let certificate_der = read_certificate_der(
