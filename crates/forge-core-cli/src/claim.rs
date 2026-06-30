@@ -1581,8 +1581,11 @@ pub fn resolve_claims_dir_or_err(
                     forge_core_contracts::PROJECT_LINK_FILE_NAME
                 ),
             );
-            crate::cli_util::emit_envelope_or_err("claim", env, want_json)
-                .map(|()| unreachable!("emit_envelope_or_err Ok path is unreachable: envelope always non-zero here"))
+            crate::cli_util::emit_envelope_or_err("claim", env, want_json).map(|()| {
+                unreachable!(
+                    "emit_envelope_or_err Ok path is unreachable: envelope always non-zero here"
+                )
+            })
         }
         Err(err) => {
             let env = forge_core_contracts::CliEnvelope::<serde_json::Value>::err(
@@ -1590,8 +1593,11 @@ pub fn resolve_claims_dir_or_err(
                 err.exit_reason(),
                 format!("project resolve failed for claim command: {err}"),
             );
-            crate::cli_util::emit_envelope_or_err("claim", env, want_json)
-                .map(|()| unreachable!("emit_envelope_or_err Ok path is unreachable: envelope always non-zero here"))
+            crate::cli_util::emit_envelope_or_err("claim", env, want_json).map(|()| {
+                unreachable!(
+                    "emit_envelope_or_err Ok path is unreachable: envelope always non-zero here"
+                )
+            })
         }
     }
 }
@@ -1654,7 +1660,11 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
             }
             "--claims-dir" => {
                 idx += 1;
-                claims_dir = Some(PathBuf::from(require_value_or_err(args, idx, "claims-dir")?));
+                claims_dir = Some(PathBuf::from(require_value_or_err(
+                    args,
+                    idx,
+                    "claims-dir",
+                )?));
             }
             "--now-unix" => {
                 idx += 1;
@@ -1767,7 +1777,11 @@ pub fn run_claim_single_target(
             }
             "--claims-dir" => {
                 idx += 1;
-                claims_dir = Some(PathBuf::from(require_value_or_err(args, idx, "claims-dir")?));
+                claims_dir = Some(PathBuf::from(require_value_or_err(
+                    args,
+                    idx,
+                    "claims-dir",
+                )?));
             }
             "--now-unix" => {
                 idx += 1;
@@ -1847,7 +1861,11 @@ pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
             }
             "--claims-dir" => {
                 idx += 1;
-                claims_dir = Some(PathBuf::from(require_value_or_err(args, idx, "claims-dir")?));
+                claims_dir = Some(PathBuf::from(require_value_or_err(
+                    args,
+                    idx,
+                    "claims-dir",
+                )?));
             }
             "--now-unix" => {
                 idx += 1;
@@ -1908,7 +1926,11 @@ pub fn run_claim_status(args: &[String]) -> Result<(), ExitError> {
             "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--claims-dir" => {
                 idx += 1;
-                claims_dir = Some(PathBuf::from(require_value_or_err(args, idx, "claims-dir")?));
+                claims_dir = Some(PathBuf::from(require_value_or_err(
+                    args,
+                    idx,
+                    "claims-dir",
+                )?));
             }
             "--now-unix" => {
                 idx += 1;
@@ -1959,7 +1981,11 @@ pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
             "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--claims-dir" => {
                 idx += 1;
-                claims_dir = Some(PathBuf::from(require_value_or_err(args, idx, "claims-dir")?));
+                claims_dir = Some(PathBuf::from(require_value_or_err(
+                    args,
+                    idx,
+                    "claims-dir",
+                )?));
             }
             "--now-unix" => {
                 idx += 1;
@@ -1971,8 +1997,10 @@ pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
             "--loop" => run_loop = true,
             "--interval-ms" => {
                 idx += 1;
-                interval_ms =
-                    parse_strict_or_err(&require_value_or_err(args, idx, "interval-ms")?, "interval-ms")?;
+                interval_ms = parse_strict_or_err(
+                    &require_value_or_err(args, idx, "interval-ms")?,
+                    "interval-ms",
+                )?;
             }
             "--max-ticks" => {
                 idx += 1;
@@ -2117,7 +2145,11 @@ pub fn run_claim_check_write(args: &[String]) -> Result<(), ExitError> {
             }
             "--claims-dir" => {
                 idx += 1;
-                claims_dir = Some(PathBuf::from(require_value_or_err(args, idx, "claims-dir")?));
+                claims_dir = Some(PathBuf::from(require_value_or_err(
+                    args,
+                    idx,
+                    "claims-dir",
+                )?));
             }
             "--now-unix" => {
                 idx += 1;

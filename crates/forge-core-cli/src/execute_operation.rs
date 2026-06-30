@@ -472,7 +472,9 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
     let execution = match run_execute_operation(input) {
         Ok(execution) => execution,
         Err(error) => {
-            return Err(ExitError::failed(format!("execute-operation failed: {error}")));
+            return Err(ExitError::failed(format!(
+                "execute-operation failed: {error}"
+            )));
         }
     };
     if json {

@@ -584,10 +584,7 @@ fn display_path(path: &Path) -> String {
     raw.strip_prefix(r"\\?\")
         .map_or(raw.clone(), std::string::ToString::to_string)
 }
-pub fn run_m1_command(
-    args: &[String],
-    kind: M1CommandKind,
-) -> Result<(), ExitError> {
+pub fn run_m1_command(args: &[String], kind: M1CommandKind) -> Result<(), ExitError> {
     // --help short-circuits before parsing so the parser can return a
     // fully-formed M1CommandInput on the success path.
     if args.iter().any(|a| matches!(a.as_str(), "--help" | "-h")) {

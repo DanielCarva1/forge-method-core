@@ -286,7 +286,9 @@ pub fn run_host_adapter_verify_rekor_entry_command(args: &[String]) -> Result<()
     Ok(())
 }
 
-pub fn run_host_adapter_verify_sigstore_trust_policy_command(args: &[String]) -> Result<(), ExitError> {
+pub fn run_host_adapter_verify_sigstore_trust_policy_command(
+    args: &[String],
+) -> Result<(), ExitError> {
     let mut policy_path: Option<PathBuf> = None;
     let mut json = false;
     let mut index = 1usize;
@@ -333,7 +335,9 @@ pub fn run_host_adapter_verify_sigstore_trust_policy_command(args: &[String]) ->
     Ok(())
 }
 
-pub fn run_host_adapter_verify_fulcio_certificate_identity_command(args: &[String]) -> Result<(), ExitError> {
+pub fn run_host_adapter_verify_fulcio_certificate_identity_command(
+    args: &[String],
+) -> Result<(), ExitError> {
     let mut trust_policy_path: Option<PathBuf> = None;
     let mut certificate_path: Option<PathBuf> = None;
     let mut issuer_certificate_paths = Vec::new();
@@ -402,7 +406,9 @@ pub fn run_host_adapter_verify_fulcio_certificate_identity_command(args: &[Strin
     Ok(())
 }
 
-pub fn run_host_adapter_verify_sigstore_bundle_subject_command(args: &[String]) -> Result<(), ExitError> {
+pub fn run_host_adapter_verify_sigstore_bundle_subject_command(
+    args: &[String],
+) -> Result<(), ExitError> {
     let mut bundle_path: Option<PathBuf> = None;
     let mut artifact_path: Option<PathBuf> = None;
     let mut trust_policy_path: Option<PathBuf> = None;
@@ -510,7 +516,9 @@ pub fn run_host_adapter_verify_sigstore_bundle_subject_command(args: &[String]) 
     Ok(())
 }
 
-pub fn run_host_adapter_verify_sigstore_dsse_in_toto_subject_command(args: &[String]) -> Result<(), ExitError> {
+pub fn run_host_adapter_verify_sigstore_dsse_in_toto_subject_command(
+    args: &[String],
+) -> Result<(), ExitError> {
     let mut bundle_path: Option<PathBuf> = None;
     let mut artifact_path: Option<PathBuf> = None;
     let mut trust_policy_path: Option<PathBuf> = None;
@@ -624,7 +632,9 @@ pub fn run_host_adapter_verify_sigstore_dsse_in_toto_subject_command(args: &[Str
     Ok(())
 }
 
-pub fn run_host_adapter_verify_sigstore_timestamp_authority_command(args: &[String]) -> Result<(), ExitError> {
+pub fn run_host_adapter_verify_sigstore_timestamp_authority_command(
+    args: &[String],
+) -> Result<(), ExitError> {
     let mut trust_policy_path: Option<PathBuf> = None;
     let mut certificate_path: Option<PathBuf> = None;
     let mut rekor_log_entry_path: Option<PathBuf> = None;
@@ -662,7 +672,8 @@ pub fn run_host_adapter_verify_sigstore_timestamp_authority_command(args: &[Stri
             }
             "--rfc3161-timestamped-signature-path" => {
                 index += 1;
-                rfc3161_timestamped_signature_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                rfc3161_timestamped_signature_path =
+                    Some(PathBuf::from(next_arg_or_err(args, index)?));
             }
             "--json" => json = true,
             "--help" | "-h" => {
@@ -710,7 +721,9 @@ pub fn run_host_adapter_verify_sigstore_timestamp_authority_command(args: &[Stri
     Ok(())
 }
 
-pub fn run_host_adapter_verify_certificate_transparency_sct_command(args: &[String]) -> Result<(), ExitError> {
+pub fn run_host_adapter_verify_certificate_transparency_sct_command(
+    args: &[String],
+) -> Result<(), ExitError> {
     let mut trust_policy_path: Option<PathBuf> = None;
     let mut certificate_path: Option<PathBuf> = None;
     let mut sct_paths: Vec<PathBuf> = Vec::new();
@@ -781,7 +794,9 @@ pub fn run_host_adapter_verify_certificate_transparency_sct_command(args: &[Stri
     Ok(())
 }
 
-pub fn run_host_adapter_verify_certificate_revocation_policy_command(args: &[String]) -> Result<(), ExitError> {
+pub fn run_host_adapter_verify_certificate_revocation_policy_command(
+    args: &[String],
+) -> Result<(), ExitError> {
     let mut trust_policy_path: Option<PathBuf> = None;
     let mut certificate_path: Option<PathBuf> = None;
     let mut trusted_signing_time_unix: Option<i64> = None;
@@ -846,7 +861,9 @@ pub fn run_host_adapter_verify_certificate_revocation_policy_command(args: &[Str
     Ok(())
 }
 
-pub fn run_host_adapter_verify_tuf_trusted_root_freshness_command(args: &[String]) -> Result<(), ExitError> {
+pub fn run_host_adapter_verify_tuf_trusted_root_freshness_command(
+    args: &[String],
+) -> Result<(), ExitError> {
     let mut trust_policy_path: Option<PathBuf> = None;
     let mut root_metadata_path: Option<PathBuf> = None;
     let mut timestamp_metadata_path: Option<PathBuf> = None;
@@ -953,7 +970,9 @@ pub fn run_host_adapter_verify_tuf_trusted_root_freshness_command(args: &[String
     Ok(())
 }
 
-pub fn run_host_adapter_verify_certificate_crl_status_command(args: &[String]) -> Result<(), ExitError> {
+pub fn run_host_adapter_verify_certificate_crl_status_command(
+    args: &[String],
+) -> Result<(), ExitError> {
     let mut trust_policy_path: Option<PathBuf> = None;
     let mut certificate_path: Option<PathBuf> = None;
     let mut issuer_certificate_path: Option<PathBuf> = None;
@@ -1042,7 +1061,9 @@ pub fn run_host_adapter_verify_certificate_crl_status_command(args: &[String]) -
     Ok(())
 }
 
-pub fn run_host_adapter_verify_certificate_ocsp_status_command(args: &[String]) -> Result<(), ExitError> {
+pub fn run_host_adapter_verify_certificate_ocsp_status_command(
+    args: &[String],
+) -> Result<(), ExitError> {
     let mut trust_policy_path: Option<PathBuf> = None;
     let mut certificate_path: Option<PathBuf> = None;
     let mut issuer_certificate_path: Option<PathBuf> = None;

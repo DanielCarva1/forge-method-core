@@ -897,8 +897,11 @@ pub fn resolve_isolation_dir_or_err(
                     forge_core_contracts::PROJECT_LINK_FILE_NAME
                 ),
             );
-            crate::cli_util::emit_envelope_or_err("isolation", env, want_json)
-                .map(|()| unreachable!("emit_envelope_or_err Ok path is unreachable: envelope always non-zero here"))
+            crate::cli_util::emit_envelope_or_err("isolation", env, want_json).map(|()| {
+                unreachable!(
+                    "emit_envelope_or_err Ok path is unreachable: envelope always non-zero here"
+                )
+            })
         }
         Err(err) => {
             let env = forge_core_contracts::CliEnvelope::<serde_json::Value>::err(
@@ -906,8 +909,11 @@ pub fn resolve_isolation_dir_or_err(
                 err.exit_reason(),
                 format!("project resolve failed for isolation command: {err}"),
             );
-            crate::cli_util::emit_envelope_or_err("isolation", env, want_json)
-                .map(|()| unreachable!("emit_envelope_or_err Ok path is unreachable: envelope always non-zero here"))
+            crate::cli_util::emit_envelope_or_err("isolation", env, want_json).map(|()| {
+                unreachable!(
+                    "emit_envelope_or_err Ok path is unreachable: envelope always non-zero here"
+                )
+            })
         }
     }
 }
@@ -960,14 +966,16 @@ pub fn run_isolation_propose(args: &[String]) -> Result<(), ExitError> {
             }
             "--merge-policy" => {
                 idx += 1;
-                merge_policy = match parse_merge_policy(&require_value_or_err(args, idx, "merge-policy")?)
-                {
-                    Ok(p) => p,
-                    Err(e) => {
-                        eprintln!("isolation propose: {e}");
-                        return Err(ExitError::invalid_value(format!("isolation propose: {e}")));
-                    }
-                };
+                merge_policy =
+                    match parse_merge_policy(&require_value_or_err(args, idx, "merge-policy")?) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            eprintln!("isolation propose: {e}");
+                            return Err(ExitError::invalid_value(format!(
+                                "isolation propose: {e}"
+                            )));
+                        }
+                    };
             }
             "--claim" => {
                 idx += 1;
@@ -975,7 +983,11 @@ pub fn run_isolation_propose(args: &[String]) -> Result<(), ExitError> {
             }
             "--isolation-dir" => {
                 idx += 1;
-                isolation_dir = Some(PathBuf::from(require_value_or_err(args, idx, "isolation-dir")?));
+                isolation_dir = Some(PathBuf::from(require_value_or_err(
+                    args,
+                    idx,
+                    "isolation-dir",
+                )?));
             }
             "--now-unix" => {
                 idx += 1;
@@ -1044,7 +1056,11 @@ pub fn run_isolation_status(args: &[String]) -> Result<(), ExitError> {
             }
             "--isolation-dir" => {
                 idx += 1;
-                isolation_dir = Some(PathBuf::from(require_value_or_err(args, idx, "isolation-dir")?));
+                isolation_dir = Some(PathBuf::from(require_value_or_err(
+                    args,
+                    idx,
+                    "isolation-dir",
+                )?));
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
@@ -1092,7 +1108,11 @@ pub fn run_isolation_merge_plan(args: &[String]) -> Result<(), ExitError> {
             }
             "--isolation-dir" => {
                 idx += 1;
-                isolation_dir = Some(PathBuf::from(require_value_or_err(args, idx, "isolation-dir")?));
+                isolation_dir = Some(PathBuf::from(require_value_or_err(
+                    args,
+                    idx,
+                    "isolation-dir",
+                )?));
             }
             "--now-unix" => {
                 idx += 1;
@@ -1155,7 +1175,11 @@ pub fn run_isolation_transition(args: &[String]) -> Result<(), ExitError> {
             }
             "--isolation-dir" => {
                 idx += 1;
-                isolation_dir = Some(PathBuf::from(require_value_or_err(args, idx, "isolation-dir")?));
+                isolation_dir = Some(PathBuf::from(require_value_or_err(
+                    args,
+                    idx,
+                    "isolation-dir",
+                )?));
             }
             "--now-unix" => {
                 idx += 1;
@@ -1184,7 +1208,9 @@ pub fn run_isolation_transition(args: &[String]) -> Result<(), ExitError> {
         Ok(s) => s,
         Err(e) => {
             eprintln!("isolation transition: {e}");
-            return Err(ExitError::invalid_value(format!("isolation transition: {e}")));
+            return Err(ExitError::invalid_value(format!(
+                "isolation transition: {e}"
+            )));
         }
     };
     let isolation_dir = resolve_isolation_dir_or_err(

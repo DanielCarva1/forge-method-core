@@ -1313,15 +1313,11 @@ pub fn parse_telemetry_export_args(
             }
             "--trace-id" => {
                 index += 1;
-                trace_id = Some(
-                    next_telemetry_value_or_err(args, index, "trace-id")?.to_string(),
-                );
+                trace_id = Some(next_telemetry_value_or_err(args, index, "trace-id")?.to_string());
             }
             "--run-id" => {
                 index += 1;
-                run_id = Some(
-                    next_telemetry_value_or_err(args, index, "run-id")?.to_string(),
-                );
+                run_id = Some(next_telemetry_value_or_err(args, index, "run-id")?.to_string());
             }
             "--latest-run" => latest_run = true,
             "--allow-bootstrap-core" => allow_bootstrap_core = true,
@@ -1415,6 +1411,8 @@ pub fn run_telemetry_export(
             }
             Ok(())
         }
-        Err(error) => Err(ExitError::env_config(format!("telemetry export failed: {error}"))),
+        Err(error) => Err(ExitError::env_config(format!(
+            "telemetry export failed: {error}"
+        ))),
     }
 }
