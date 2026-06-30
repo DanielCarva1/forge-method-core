@@ -2059,7 +2059,9 @@ struct ClaimReconcileLoopConfig {
     want_json: bool,
 }
 
-pub fn run_claim_reconcile_loop_or_err(config: ClaimReconcileLoopConfig) -> Result<(), ExitError> {
+pub(crate) fn run_claim_reconcile_loop_or_err(
+    config: ClaimReconcileLoopConfig,
+) -> Result<(), ExitError> {
     use crate::claim::run_reconcile_once;
     use std::time::Duration;
     use tokio::time::{interval_at, Instant, MissedTickBehavior};
