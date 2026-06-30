@@ -29,6 +29,14 @@ pub struct StatefulCommandRoots {
     pub effect_store_root: PathBuf,
 }
 
+/// Resolves `project_root` and `effect_store_root` for any state-bearing
+/// command (operation/effect) by reading the project's `.forge-method.yaml`.
+///
+/// # Errors
+///
+/// Returns a `String` description when project resolution fails, when the
+/// resolved `state_root` does not exist on disk, when it is not named
+/// `.forge-method`, or when it has no parent sidecar root.
 pub fn resolve_stateful_command_roots(
     root: &Path,
     allow_bootstrap_core: bool,
@@ -164,6 +172,11 @@ pub fn resolve_now_unix(flag: Option<i64>) -> i64 {
 // ===========================================================================
 
 /// Result variant of [`next_arg`].
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when `index` is out of bounds for `args`,
+/// surfacing the CLI usage string for the dispatcher.
 pub fn next_arg_or_err(args: &[String], index: usize) -> Result<&str, ExitError> {
     args.get(index)
         .map(String::as_str)
@@ -171,11 +184,21 @@ pub fn next_arg_or_err(args: &[String], index: usize) -> Result<&str, ExitError>
 }
 
 /// Result variant of [`next_path`].
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when the underlying [`next_arg_or_err`] reports
+/// that `index` is out of bounds for `args`.
 pub fn next_path_or_err(args: &[String], index: usize) -> Result<PathBuf, ExitError> {
     Ok(PathBuf::from(next_arg_or_err(args, index)?))
 }
 
 /// Result variant of [`parse_payload_arg`].
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when `value` does not contain a `=` separating
+/// the target reference from the payload path.
 pub fn parse_payload_arg_or_err(value: &str) -> Result<PayloadFileSpec, ExitError> {
     let (target_ref, path) = value
         .split_once('=')
@@ -187,16 +210,28 @@ pub fn parse_payload_arg_or_err(value: &str) -> Result<PayloadFileSpec, ExitErro
 }
 
 /// Result variant of [`parse_u64`].
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when `value` does not parse as a `u64`.
 pub fn parse_u64_or_err(value: &str) -> Result<u64, ExitError> {
     value.parse::<u64>().map_err(|_| ExitError::usage(usage()))
 }
 
 /// Result variant of [`parse_i64`].
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when `value` does not parse as an `i64`.
 pub fn parse_i64_or_err(value: &str) -> Result<i64, ExitError> {
     value.parse::<i64>().map_err(|_| ExitError::usage(usage()))
 }
 
 /// Result variant of [`parse_usize`].
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when `value` does not parse as a `usize`.
 pub fn parse_usize_or_err(value: &str) -> Result<usize, ExitError> {
     value
         .parse::<usize>()
@@ -204,6 +239,11 @@ pub fn parse_usize_or_err(value: &str) -> Result<usize, ExitError> {
 }
 
 /// Result variant of [`parse_target_kind`].
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when `value` is not one of the recognised
+/// `EffectTargetKind` aliases.
 pub fn parse_target_kind_or_err(value: &str) -> Result<EffectTargetKind, ExitError> {
     match value {
         "file_path" => Ok(EffectTargetKind::FilePath),
@@ -219,6 +259,11 @@ pub fn parse_target_kind_or_err(value: &str) -> Result<EffectTargetKind, ExitErr
 }
 
 /// Result variant of [`parse_runtime_kind`].
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when `value` is not one of the recognised
+/// `RuntimeKind` aliases.
 pub fn parse_runtime_kind_or_err(value: &str) -> Result<RuntimeKind, ExitError> {
     match value {
         "codex" => Ok(RuntimeKind::Codex),
@@ -234,6 +279,11 @@ pub fn parse_runtime_kind_or_err(value: &str) -> Result<RuntimeKind, ExitError> 
 }
 
 /// Result variant of [`parse_metadata_consumer_use`].
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when `value` is not one of the recognised
+/// `EffectMetadataConsumerUse` aliases.
 pub fn parse_metadata_consumer_use_or_err(
     value: &str,
 ) -> Result<EffectMetadataConsumerUse, ExitError> {
@@ -246,6 +296,11 @@ pub fn parse_metadata_consumer_use_or_err(
 }
 
 /// Result variant of [`parse_metadata_adapter_trigger`].
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when `value` is not one of the recognised
+/// `EffectMetadataAdapterTrigger` aliases.
 pub fn parse_metadata_adapter_trigger_or_err(
     value: &str,
 ) -> Result<EffectMetadataAdapterTrigger, ExitError> {
@@ -259,6 +314,11 @@ pub fn parse_metadata_adapter_trigger_or_err(
 }
 
 /// Result variant of [`parse_host_adapter_projection_target`].
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when `value` is not one of the recognised
+/// `HostAdapterProjectionTarget` aliases.
 pub fn parse_host_adapter_projection_target_or_err(
     value: &str,
 ) -> Result<HostAdapterProjectionTarget, ExitError> {
@@ -271,6 +331,11 @@ pub fn parse_host_adapter_projection_target_or_err(
 }
 
 /// Result variant of [`parse_host_adapter_process_target`].
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when `value` is not one of the recognised
+/// `HostAdapterProcessTarget` aliases.
 pub fn parse_host_adapter_process_target_or_err(
     value: &str,
 ) -> Result<HostAdapterProcessTarget, ExitError> {
@@ -283,6 +348,11 @@ pub fn parse_host_adapter_process_target_or_err(
 }
 
 /// Result variant of [`parse_update_channel`].
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when `value` is not one of the recognised
+/// `HostAdapterUpdateChannel` aliases.
 pub fn parse_update_channel_or_err(value: &str) -> Result<HostAdapterUpdateChannel, ExitError> {
     match value {
         "stable" => Ok(HostAdapterUpdateChannel::Stable),
@@ -296,6 +366,12 @@ pub fn parse_update_channel_or_err(value: &str) -> Result<HostAdapterUpdateChann
 ///
 /// Surfaces `ExitError::InvalidValue` (exit 3) to match the historical
 /// strict-value rejection code used by governance commands.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when the slot at `idx` is missing,
+/// empty, or starts with `--` (i.e. looks like the next flag rather than a
+/// value for `--{flag}`).
 pub fn require_value_or_err(args: &[String], idx: usize, flag: &str) -> Result<String, ExitError> {
     match args.get(idx) {
         Some(v) if !v.is_empty() && !v.starts_with("--") => Ok(v.clone()),
@@ -309,6 +385,10 @@ pub fn require_value_or_err(args: &[String], idx: usize, flag: &str) -> Result<S
 ///
 /// Surfaces `ExitError::InvalidValue` (exit 3) on a malformed number, matching
 /// the historical strict-parse rejection used by `claim` and `isolation`.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `s` does not parse as `T`.
 pub fn parse_strict_or_err<T: std::str::FromStr>(s: &str, flag: &str) -> Result<T, ExitError> {
     s.parse::<T>()
         .map_err(|_| ExitError::invalid_value(format!("claim: invalid value for --{flag}: '{s}'")))
@@ -318,6 +398,12 @@ pub fn parse_strict_or_err<T: std::str::FromStr>(s: &str, flag: &str) -> Result<
 ///
 /// The error variant is `ExitError::Failed` (exit 1) to match the historical
 /// "command failed" code emitted by the legacy wrapper.
+///
+/// # Errors
+///
+/// Returns `ExitError::failed` when [`resolve_stateful_command_roots`] reports
+/// that the project state cannot be resolved (missing `.forge-method`, wrong
+/// directory name, missing parent sidecar, etc.).
 pub fn resolve_stateful_roots_or_err(
     command: &str,
     root: &Path,
@@ -339,6 +425,17 @@ pub fn resolve_stateful_roots_or_err(
 /// Unlike [`emit_envelope`], this helper does NOT call `std::process::exit`;
 /// the caller decides how to terminate. This makes it usable from library
 /// code that needs to be unit-testable.
+///
+/// # Errors
+///
+/// Returns `ExitError::with_code` carrying the envelope's non-zero exit code
+/// so the entrypoint can translate it into `process::exit(code)`.
+///
+/// # Panics
+///
+/// Panics in JSON mode if `env` cannot be serialized by `serde_json`. `T:
+/// Serialize` is bound on the function, so this is a programming error and
+/// never occurs on well-formed envelope types.
 pub fn emit_envelope_or_err<T: serde::Serialize>(
     family: &str,
     env: forge_core_contracts::CliEnvelope<T>,
