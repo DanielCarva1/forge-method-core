@@ -8,14 +8,14 @@ use forge_core_runtime::{
 };
 use forge_core_store::{
     append_trace_event, build_reference_index, query_trace_events, ReferenceIndexBuildError,
-    TraceEventQuery, TraceEventQueryResult,
+    TraceEventQuery, TraceEventQueryResult, TraceEventQueryStatus,
 };
 use forge_core_trace::{
     TraceActor, TraceAuthority, TraceCost, TraceEvent, TraceEventKind, TraceRef, TraceRisk,
     TraceRiskLevel,
 };
 use serde::Serialize;
-use std::fmt;
+use std::fmt::{self, Write};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -37,6 +37,9 @@ pub struct M1CommandInput {
     pub recorded_at: String,
     pub agent_id: String,
     pub principal_id: String,
+    /// When set, `forge explain` narates this specific run instead of the
+    /// latest one. Ignored by `preview` and `ready`.
+    pub run_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -227,7 +230,10 @@ pub fn run_ready(input: &M1CommandInput) -> Result<ReadyCommandOutput, M1Command
     })
 }
 
-/// Explains the latest M1 run from the resolved project's sidecar trace log.
+/// Explains an M1 run from the resolved project's sidecar trace log.
+///
+/// When `input.run_id` is set, only events from that run are narrated. When
+/// it is `None`, the latest run is explained.
 ///
 /// # Errors
 ///
@@ -236,10 +242,12 @@ pub fn run_explain(input: &M1CommandInput) -> Result<ExplainCommandOutput, M1Com
     let resolved = resolve_project(&input.root, input.allow_bootstrap_core)
         .map_err(M1CommandError::ProjectResolve)?;
     let state_root = existing_state_root_for_m1(&resolved)?;
+    let latest_run = input.run_id.is_none();
     let query = query_trace_events(
         &state_root,
         &TraceEventQuery {
-            latest_run: true,
+            run_id: input.run_id.clone(),
+            latest_run,
             ..TraceEventQuery::default()
         },
     );
@@ -545,38 +553,168 @@ fn trace_risk(destructive: bool, level: forge_core_runtime::RuntimeRiskLevel) ->
 }
 
 fn explain_trace_query(query: &TraceEventQueryResult) -> String {
-    if query.events.is_empty() {
-        return "No trace events were found for the last run.".to_string();
+    // Non-matched queries (missing trace file, parse failure, etc.) get a
+    // compact diagnostic block instead of an empty narrative.
+    if query.status != TraceEventQueryStatus::Matched {
+        return narrate_non_matched(query);
     }
-    let Some(first) = query.events.first() else {
-        return "No trace events were found for the last run.".to_string();
+    if query.events.is_empty() {
+        return format!(
+            "Trace query matched but returned no events.\n  scanned: {} | matched: {}",
+            query.scanned_events, query.matched_events,
+        );
+    }
+
+    // NDJSON is append-only; events may arrive out of chronological order on
+    // disk (e.g. interleaved writes). Sort by recorded_at (RFC3339 -> lexical
+    // order is correct) for a stable narrative.
+    let mut ordered: Vec<&TraceEvent> = query.events.iter().collect();
+    ordered.sort_by(|a, b| a.recorded_at.cmp(&b.recorded_at));
+
+    let first = ordered.first().expect("non-empty checked above");
+    let last = ordered.last().expect("non-empty checked above");
+
+    let mut out = String::new();
+    narrate_header(&mut out, first, last, ordered.len());
+
+    let mut totals = NarrateTotals::default();
+    for (idx, event) in ordered.iter().enumerate() {
+        narrate_event(&mut out, idx + 1, event, &mut totals);
+    }
+    narrate_summary(&mut out, ordered.len(), &totals);
+    out
+}
+
+#[derive(Default)]
+struct NarrateTotals {
+    outputs: usize,
+    model_calls: u64,
+    tool_calls: u64,
+    tokens: u64,
+    peak_rank: u8,
+}
+
+fn narrate_non_matched(query: &TraceEventQueryResult) -> String {
+    let reasons: Vec<String> = query.reasons.iter().map(|r| format!("{r:?}")).collect();
+    let diagnostics = if query.diagnostics.is_empty() {
+        String::from("  (no diagnostics)")
+    } else {
+        format!(
+            "  diagnostics:\n{}",
+            query
+                .diagnostics
+                .iter()
+                .map(|d| format!("    - {d}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
     };
-    let Some(last) = query.events.last() else {
-        return "No trace events were found for the last run.".to_string();
-    };
-    let input_refs = first
-        .inputs
-        .iter()
-        .map(|reference| format!("{}={}", reference.ref_kind, reference.reference))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let output_refs = query
-        .events
-        .iter()
-        .flat_map(|event| event.outputs.iter())
-        .map(|reference| format!("{}={}", reference.ref_kind, reference.reference))
-        .collect::<Vec<_>>()
-        .join(", ");
     format!(
-        "Last run {} for trace {} recorded {} event(s). Inputs: [{}]. Outputs: [{}]. Final event {:?}: {}",
-        first.run_id,
-        first.trace_id,
+        "Trace query did not match.\n  status: {:?}\n  reasons: [{}]\n  scanned: {} | matched: {} | returned: {}\n{diagnostics}",
+        query.status,
+        reasons.join(", "),
+        query.scanned_events,
+        query.matched_events,
         query.returned_events,
-        input_refs,
-        output_refs,
-        last.event_kind,
-        last.message
     )
+}
+
+fn narrate_header(out: &mut String, first: &TraceEvent, last: &TraceEvent, count: usize) {
+    let project_id = first
+        .project_id
+        .clone()
+        .unwrap_or_else(|| "<unknown>".to_string());
+    let _ = writeln!(
+        out,
+        "Run {} (project: {})\n  trace: {}\n  agent: {} (principal: {}, role: {})\n  events: {} | span: {} -> {}\n",
+        first.run_id,
+        project_id,
+        first.trace_id,
+        first.actor.agent_id,
+        first.actor.principal_id,
+        first.actor.role,
+        count,
+        first.recorded_at,
+        last.recorded_at,
+    );
+}
+
+fn narrate_event(out: &mut String, idx: usize, event: &TraceEvent, totals: &mut NarrateTotals) {
+    let kind_str = format!("{:?}", event.event_kind);
+    let _ = writeln!(
+        out,
+        "[{}] {} {}: {}",
+        idx, event.recorded_at, kind_str, event.message
+    );
+    let op_id = event.authority.operation_id.as_deref().unwrap_or("none");
+    let caps = if event.authority.capability_ids.is_empty() {
+        String::from("[]")
+    } else {
+        format!("[{}]", event.authority.capability_ids.join(", "))
+    };
+    let _ = writeln!(
+        out,
+        "      authority: operation={op_id} capabilities={caps}"
+    );
+    let rank = risk_level_rank(event.risk.risk_level);
+    if rank > totals.peak_rank {
+        totals.peak_rank = rank;
+    }
+    let _ = writeln!(
+        out,
+        "      risk: {} destructive={}",
+        rank_to_level_str(rank),
+        event.risk.destructive
+    );
+    let inputs = refs_summary(&event.inputs);
+    let outputs = refs_summary(&event.outputs);
+    totals.outputs += event.outputs.len();
+    let _ = writeln!(out, "      inputs:  [{inputs}]");
+    let _ = writeln!(out, "      outputs: [{outputs}]");
+    totals.model_calls += event.cost.model_calls;
+    totals.tool_calls += event.cost.tool_calls;
+    totals.tokens += event.cost.estimated_tokens;
+    out.push('\n');
+}
+
+fn narrate_summary(out: &mut String, count: usize, totals: &NarrateTotals) {
+    let _ = writeln!(
+        out,
+        "Totals:\n  events: {} | outputs: {}\n  model_calls: {} | tool_calls: {} | estimated_tokens: {}\n  peak risk: {}",
+        count,
+        totals.outputs,
+        totals.model_calls,
+        totals.tool_calls,
+        totals.tokens,
+        rank_to_level_str(totals.peak_rank),
+    );
+}
+
+fn risk_level_rank(level: TraceRiskLevel) -> u8 {
+    match level {
+        TraceRiskLevel::Unknown => 0,
+        TraceRiskLevel::Low => 1,
+        TraceRiskLevel::Medium => 2,
+        TraceRiskLevel::High => 3,
+        TraceRiskLevel::Blocked => 4,
+    }
+}
+
+fn rank_to_level_str(rank: u8) -> &'static str {
+    match rank {
+        1 => "low",
+        2 => "medium",
+        3 => "high",
+        4 => "blocked",
+        _ => "unknown",
+    }
+}
+
+fn refs_summary(refs: &[TraceRef]) -> String {
+    refs.iter()
+        .map(|r| format!("{}={}", r.ref_kind, r.reference))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn display_path(path: &Path) -> String {
@@ -612,6 +750,7 @@ pub fn parse_m1_command_args(
     let mut principal_id = "principal.unknown".to_string();
     let mut json = false;
     let mut last_run = false;
+    let mut run_id: Option<String> = None;
     let mut index = 1usize;
     while index < args.len() {
         match args[index].as_str() {
@@ -637,6 +776,10 @@ pub fn parse_m1_command_args(
                 principal_id = next_arg_or_err(args, index)?.to_string();
             }
             "--last-run" => last_run = true,
+            "--run-id" => {
+                index += 1;
+                run_id = Some(next_arg_or_err(args, index)?.to_string());
+            }
             "--json" => json = true,
             "--help" | "-h" => {
                 // Already handled by run_m1_command; if we somehow reach here,
@@ -650,8 +793,15 @@ pub fn parse_m1_command_args(
         index += 1;
     }
 
-    if kind == M1CommandKind::Explain && !last_run {
-        return Err(ExitError::usage("explain requires --last-run"));
+    if kind == M1CommandKind::Explain && !last_run && run_id.is_none() {
+        return Err(ExitError::usage(
+            "explain requires --last-run or --run-id <id>",
+        ));
+    }
+    if last_run && run_id.is_some() {
+        return Err(ExitError::usage(
+            "explain accepts either --last-run or --run-id, not both",
+        ));
     }
 
     Ok((
@@ -663,6 +813,7 @@ pub fn parse_m1_command_args(
             recorded_at,
             agent_id,
             principal_id,
+            run_id,
         },
         json,
     ))
@@ -731,5 +882,257 @@ pub fn run_m1_explain(input: &M1CommandInput, json: bool) -> Result<(), ExitErro
             Ok(())
         }
         Err(error) => Err(ExitError::failed(format!("explain failed: {error}"))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use forge_core_store::TraceEventQueryReason;
+    use forge_core_trace::TraceEventKind;
+
+    fn make_event(
+        run_id: &str,
+        trace_id: &str,
+        recorded_at: &str,
+        kind: TraceEventKind,
+        message: &str,
+    ) -> TraceEvent {
+        let mut event = TraceEvent::new(
+            trace_id,
+            run_id,
+            format!("{run_id}-{recorded_at}"),
+            kind,
+            recorded_at,
+            message,
+        );
+        event = event
+            .with_actor(TraceActor::new("principal.test", "agent.test", "executor"))
+            .with_authority(TraceAuthority::for_operation("op.alpha"))
+            .with_risk(TraceRisk::new(TraceRiskLevel::Low, false))
+            .with_inputs(vec![TraceRef::new("target", "file://input.yaml")])
+            .with_outputs(vec![TraceRef::new("effect", "file://effect.json")])
+            .with_cost(TraceCost {
+                model_calls: 1,
+                tool_calls: 2,
+                estimated_tokens: 100,
+            });
+        event
+    }
+
+    fn matched_result(events: Vec<TraceEvent>) -> TraceEventQueryResult {
+        let returned = events.len();
+        TraceEventQueryResult {
+            status: TraceEventQueryStatus::Matched,
+            scanned_events: events.len(),
+            matched_events: events.len(),
+            returned_events: returned,
+            events,
+            reasons: vec![TraceEventQueryReason::Matched],
+            diagnostics: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn narrative_is_chronological_when_input_is_out_of_order() {
+        // Simulate NDJSON written out of order: later-recorded event appears first.
+        let events = vec![
+            make_event(
+                "run.1",
+                "trace.1",
+                "2026-06-30T10:00:05Z",
+                TraceEventKind::RunCompleted,
+                "done",
+            ),
+            make_event(
+                "run.1",
+                "trace.1",
+                "2026-06-30T10:00:00Z",
+                TraceEventKind::RunStarted,
+                "start",
+            ),
+            make_event(
+                "run.1",
+                "trace.1",
+                "2026-06-30T10:00:02Z",
+                TraceEventKind::EffectApplied,
+                "applied",
+            ),
+        ];
+        let query = matched_result(events);
+        let narrative = explain_trace_query(&query);
+
+        // The [1] index must be RunStarted (earliest recorded_at),
+        // [2] EffectApplied, [3] RunCompleted — regardless of input order.
+        let start_pos = narrative
+            .find("[1] 2026-06-30T10:00:00Z RunStarted")
+            .expect("first line is RunStarted");
+        let mid_pos = narrative
+            .find("[2] 2026-06-30T10:00:02Z EffectApplied")
+            .expect("second line is EffectApplied");
+        let end_pos = narrative
+            .find("[3] 2026-06-30T10:00:05Z RunCompleted")
+            .expect("third line is RunCompleted");
+        assert!(start_pos < mid_pos);
+        assert!(mid_pos < end_pos);
+    }
+
+    #[test]
+    fn narrative_mentions_run_agent_and_totals() {
+        let events = vec![
+            make_event(
+                "run.42",
+                "trace.99",
+                "2026-06-30T10:00:00Z",
+                TraceEventKind::RunStarted,
+                "kickoff",
+            ),
+            make_event(
+                "run.42",
+                "trace.99",
+                "2026-06-30T10:00:01Z",
+                TraceEventKind::EffectApplied,
+                "applied",
+            ),
+        ];
+        let query = matched_result(events);
+        let narrative = explain_trace_query(&query);
+
+        assert!(
+            narrative.contains("Run run.42"),
+            "narrative must reference the run_id"
+        );
+        assert!(
+            narrative.contains("trace.99"),
+            "narrative must reference the trace_id"
+        );
+        assert!(
+            narrative.contains("agent.test"),
+            "narrative must reference the agent_id"
+        );
+        assert!(
+            narrative.contains("principal.test"),
+            "narrative must reference the principal_id"
+        );
+        assert!(
+            narrative.contains("events: 2"),
+            "narrative must report total event count"
+        );
+        // 2 events × 1 output each = 2 outputs
+        assert!(
+            narrative.contains("outputs: 2"),
+            "narrative must aggregate outputs"
+        );
+        // 2 events × (model=1, tool=2, tokens=100)
+        assert!(narrative.contains("model_calls: 2"));
+        assert!(narrative.contains("tool_calls: 4"));
+        assert!(narrative.contains("estimated_tokens: 200"));
+        assert!(narrative.contains("peak risk: low"));
+    }
+
+    #[test]
+    fn narrative_reports_peak_risk_from_highest_event() {
+        let mut high = make_event(
+            "run.1",
+            "trace.1",
+            "2026-06-30T10:00:01Z",
+            TraceEventKind::GateBlocked,
+            "blocked",
+        );
+        high = high.with_risk(TraceRisk::new(TraceRiskLevel::High, true));
+        let events = vec![
+            make_event(
+                "run.1",
+                "trace.1",
+                "2026-06-30T10:00:00Z",
+                TraceEventKind::RunStarted,
+                "start",
+            ),
+            high,
+        ];
+        let query = matched_result(events);
+        let narrative = explain_trace_query(&query);
+        assert!(narrative.contains("peak risk: high"));
+    }
+
+    #[test]
+    fn empty_events_match_has_clear_message() {
+        let query = TraceEventQueryResult {
+            status: TraceEventQueryStatus::Matched,
+            scanned_events: 0,
+            matched_events: 0,
+            returned_events: 0,
+            events: Vec::new(),
+            reasons: vec![TraceEventQueryReason::Matched],
+            diagnostics: Vec::new(),
+        };
+        let narrative = explain_trace_query(&query);
+        assert!(narrative.contains("returned no events"));
+    }
+
+    #[test]
+    fn non_matched_query_reports_status_and_reasons() {
+        let query = TraceEventQueryResult {
+            status: TraceEventQueryStatus::Failed,
+            scanned_events: 0,
+            matched_events: 0,
+            returned_events: 0,
+            events: Vec::new(),
+            reasons: vec![TraceEventQueryReason::NoTraceFile],
+            diagnostics: vec!["trace log not found".to_string()],
+        };
+        let narrative = explain_trace_query(&query);
+        assert!(narrative.contains("did not match"));
+        assert!(narrative.contains("NoTraceFile"));
+        assert!(narrative.contains("trace log not found"));
+    }
+
+    #[test]
+    fn parser_accepts_run_id_as_explain_selector() {
+        let args = vec![
+            "explain".to_string(),
+            "--run-id".to_string(),
+            "run.abc".to_string(),
+        ];
+        let (input, _json) = parse_m1_command_args(&args, M1CommandKind::Explain)
+            .expect("--run-id is a valid explain selector");
+        assert_eq!(input.run_id.as_deref(), Some("run.abc"));
+    }
+
+    #[test]
+    fn parser_accepts_last_run_as_explain_selector() {
+        let args = vec!["explain".to_string(), "--last-run".to_string()];
+        let (input, _json) = parse_m1_command_args(&args, M1CommandKind::Explain)
+            .expect("--last-run remains a valid explain selector");
+        assert!(input.run_id.is_none());
+    }
+
+    #[test]
+    fn parser_rejects_explain_without_selector() {
+        let args = vec!["explain".to_string()];
+        let result = parse_m1_command_args(&args, M1CommandKind::Explain);
+        assert!(result.is_err(), "explain with no selector must error");
+    }
+
+    #[test]
+    fn parser_rejects_both_run_id_and_last_run() {
+        let args = vec![
+            "explain".to_string(),
+            "--last-run".to_string(),
+            "--run-id".to_string(),
+            "run.abc".to_string(),
+        ];
+        let result = parse_m1_command_args(&args, M1CommandKind::Explain);
+        assert!(
+            result.is_err(),
+            "--last-run and --run-id are mutually exclusive"
+        );
+    }
+
+    #[test]
+    fn parser_rejects_unknown_explain_flag() {
+        let args = vec!["explain".to_string(), "--frobnicate".to_string()];
+        let result = parse_m1_command_args(&args, M1CommandKind::Explain);
+        assert!(result.is_err());
     }
 }
