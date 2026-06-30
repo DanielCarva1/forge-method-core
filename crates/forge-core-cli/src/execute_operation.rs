@@ -33,6 +33,9 @@ use forge_core_runtime::{
     RuntimeOperationExecution, RuntimeOperationExecutionContext, RuntimeReadSnapshot,
 };
 use forge_core_store::{build_reference_index, WalDurability};
+use forge_core_validate::risk_audit::{
+    evaluate_risk_audit, validate_risk_audit_rule_set, RiskAuditRuleSet,
+};
 
 use crate::cli_error::ExitError;
 use crate::cli_util::{
@@ -59,6 +62,10 @@ pub struct ExecuteOperationInput {
     /// WAL durability for this run (ADR-0009). Default `SyncOnAppend`;
     /// CLI sets `NoSync` when the user passes `--no-sync`.
     pub durability: WalDurability,
+    /// F11.3: optional risk-audit gate. When `Some`, the rule set YAML is
+    /// loaded and evaluated against the project tree BEFORE any WAL write.
+    /// Fail-closed via `ExecuteOperationError::RiskAuditFailed` on errors.
+    pub risk_audit_rules: Option<PathBuf>,
 }
 
 /// One payload bound for one `target_ref` inside the operation.
@@ -136,6 +143,13 @@ pub enum ExecuteOperationError {
         byte_len: u64,
         max_payload_bytes: u64,
     },
+    /// F11.3: risk-audit gate failed closed. `error_count` is the total of
+    /// Error-severity findings; `first_error` is path+message of the first
+    /// for quick context. The CLI may print the full report separately.
+    RiskAuditFailed {
+        error_count: usize,
+        first_error: String,
+    },
 }
 
 impl fmt::Display for ExecuteOperationError {
@@ -178,6 +192,13 @@ impl fmt::Display for ExecuteOperationError {
                 "payload {} is too large: {byte_len} bytes > {max_payload_bytes} bytes",
                 path.display()
             ),
+            ExecuteOperationError::RiskAuditFailed {
+                error_count,
+                first_error,
+            } => write!(
+                formatter,
+                "risk-audit gate failed with {error_count} error(s); first: {first_error}"
+            ),
         }
     }
 }
@@ -202,6 +223,65 @@ pub fn run_execute_operation(
     let root = input.root;
     let effect_store_root = input.effect_store_root.unwrap_or_else(|| root.clone());
     let canonical_root = canonicalize_existing_path(&root)?;
+    // F11.3: Risk Audit Gate. Run as the FIRST step after root canonicalization,
+    // before any contract parse or WAL write. Auditing is a precondition for
+    // mutation, not a post-parse check, so the gate never depends on the
+    // operation/command/effect contracts being valid. Fail-closed: nothing is
+    // persisted if the rule set is structurally invalid or any Error-severity
+    // finding is reported against the project tree.
+    if let Some(rules_path) = &input.risk_audit_rules {
+        let rules_yaml =
+            fs::read_to_string(rules_path).map_err(|source| ExecuteOperationError::ReadFile {
+                path: rules_path.clone(),
+                source,
+            })?;
+        let ruleset: RiskAuditRuleSet = yaml_serde::from_str(&rules_yaml).map_err(|source| {
+            ExecuteOperationError::ParseYaml {
+                path: rules_path.clone(),
+                source,
+            }
+        })?;
+        let structure_report = validate_risk_audit_rule_set(&ruleset);
+        if structure_report.has_errors() {
+            let first_error = structure_report
+                .diagnostics()
+                .iter()
+                .find(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
+                .map_or_else(
+                    || "unknown structural error".to_string(),
+                    |d| format!("{}: {}", d.path, d.message),
+                );
+            return Err(ExecuteOperationError::RiskAuditFailed {
+                error_count: structure_report.diagnostics().len(),
+                first_error,
+            });
+        }
+        let targets = crate::risk_audit_cmd::collect_targets(&root).map_err(|source| {
+            ExecuteOperationError::ReferenceIndexBuild(format!(
+                "risk-audit collect_targets: {source}"
+            ))
+        })?;
+        let findings = evaluate_risk_audit(&ruleset, &targets);
+        if findings.has_errors() {
+            let error_count = findings
+                .diagnostics()
+                .iter()
+                .filter(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
+                .count();
+            let first_error = findings
+                .diagnostics()
+                .iter()
+                .find(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
+                .map_or_else(
+                    || "unknown error".to_string(),
+                    |d| format!("{}: {}", d.path, d.message),
+                );
+            return Err(ExecuteOperationError::RiskAuditFailed {
+                error_count,
+                first_error,
+            });
+        }
+    }
     let operation_path = resolve_contract_input_path(
         &root,
         &canonical_root,
@@ -423,6 +503,7 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
     let mut tx_id_prefix = "cli-execute-operation".to_string();
     let mut json = false;
     let mut no_sync = false;
+    let mut risk_audit_rules: Option<PathBuf> = None;
     let mut index = 1usize;
     while index < args.len() {
         match args[index].as_str() {
@@ -467,6 +548,10 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
             "--no-sync" => {
                 no_sync = true;
             }
+            "--require-risk-audit" => {
+                index += 1;
+                risk_audit_rules = Some(next_path_or_err(args, index)?);
+            }
             "--json" => json = true,
             "--help" | "-h" => {
                 println!("{}", usage());
@@ -502,6 +587,7 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
         recorded_at,
         tx_id_prefix,
         durability,
+        risk_audit_rules,
     };
     let execution = match run_execute_operation(input) {
         Ok(execution) => execution,
