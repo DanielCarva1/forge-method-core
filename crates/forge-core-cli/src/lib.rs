@@ -25,6 +25,7 @@ pub mod autonomy_cmd;
 pub mod claim;
 pub mod cli_error;
 pub mod cli_util;
+pub mod command_registry;
 pub mod contract_cmd;
 pub mod coordination;
 pub mod effect_index;
