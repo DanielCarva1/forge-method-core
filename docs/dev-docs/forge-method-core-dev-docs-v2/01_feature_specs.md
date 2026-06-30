@@ -476,7 +476,7 @@ Crates principais: todos
 
 Demanda: Reduzir sofrimento do agente escrevendo Rust manual repetitivo.
 
-Produto: clap derive, thiserror, tracing, builders, fixtures, module split, codegen de contratos e snapshots.
+Produto: argv manual em `main.rs` (sem `clap`, sem derive macros — decisão projetual em `AGENTS.md`), error enums rolados à mão (sem `thiserror`, sem `anyhow`), `tracing`, builders, fixtures, module split, codegen de contratos e snapshots.
 
 Criterios de aceite:
 
