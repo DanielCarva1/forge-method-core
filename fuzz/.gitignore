@@ -2,9 +2,11 @@ target
 artifacts
 coverage
 # `corpus/` holds committed seed inputs that keep fuzz runs reproducible.
-# `cargo fuzz` will write discovered inputs back here too, but we want at
-# least the seeds to ship with the repo.
+# `cargo fuzz` will write discovered inputs back here too (long opaque
+# hex-named files), but we want the curated seeds to ship with the repo.
+# Strategy: ignore everything under corpus/<target>/, then re-include any
+# file whose name starts with `seed_` regardless of extension (txt, json,
+# bin, der, ...).
 !corpus/
 corpus/*/*
-!corpus/*/seed_*.txt
-!corpus/*/*.seed
+!corpus/*/seed_*
