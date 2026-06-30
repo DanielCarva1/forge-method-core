@@ -17,6 +17,7 @@ use serde_json::Value;
 use std::fs;
 use tracing::instrument;
 use x509_parser::parse_x509_crl;
+use zeroize::Zeroizing;
 
 use crate::hashing::{hex_bytes, hex_sha256, normalize_sha256_digest, normalize_sha256_display};
 use crate::ocsp::{
@@ -64,7 +65,7 @@ pub fn run_host_adapter_artifact_verification(
     let artifact_bytes = match fs::read(&input.artifact_path) {
         Ok(bytes) => {
             verified_evidence.push("artifact_readable".to_string());
-            Some(bytes)
+            Some(Zeroizing::new(bytes))
         }
         Err(err) => {
             reasons.push(format!("artifact_read_failed:{:?}", err.kind()));
@@ -75,7 +76,7 @@ pub fn run_host_adapter_artifact_verification(
     let computed_sha256 = artifact_bytes
         .as_deref()
         .map(|bytes| format!("sha256:{}", hex_sha256(bytes)));
-    let byte_len = artifact_bytes.as_ref().map(Vec::len);
+    let byte_len = artifact_bytes.as_ref().map(|bytes| bytes.len());
 
     match (normalized_expected.as_deref(), computed_sha256.as_deref()) {
         (Some(expected), Some(computed))
@@ -177,15 +178,19 @@ pub fn run_host_adapter_provenance_verification(
         reasons.push("expected_sha256_invalid".to_string());
     }
 
-    let artifact_bytes = read_required_file(&input.artifact_path, "artifact", &mut reasons);
-    let provenance_bytes = read_required_file(&input.provenance_path, "provenance", &mut reasons);
-    let signature_bytes = read_signature_file(&input.signature_path, &mut reasons);
-    let public_key_bytes = read_public_key_file(&input.public_key_path, &mut reasons);
+    let artifact_bytes = read_required_file(&input.artifact_path, "artifact", &mut reasons)
+        .map(Zeroizing::new);
+    let provenance_bytes =
+        read_required_file(&input.provenance_path, "provenance", &mut reasons).map(Zeroizing::new);
+    let signature_bytes = read_signature_file(&input.signature_path, &mut reasons).map(Zeroizing::new);
+    let public_key_bytes =
+        read_public_key_file(&input.public_key_path, &mut reasons).map(Zeroizing::new);
     let transparency_log_bytes = read_required_file(
         &input.transparency_log_path,
         "transparency_log",
         &mut reasons,
-    );
+    )
+    .map(Zeroizing::new);
 
     let computed_artifact_sha256 = artifact_bytes
         .as_deref()
@@ -299,8 +304,8 @@ pub fn run_host_adapter_rekor_verification(
             None
         }
     };
-    let public_key_bytes =
-        read_required_file(&input.public_key_path, "rekor_public_key", &mut reasons);
+    let public_key_bytes = read_required_file(&input.public_key_path, "rekor_public_key", &mut reasons)
+        .map(Zeroizing::new);
 
     let mut log_entry: Option<rekor::ParsedRekorEntry> = None;
     if let Some(text) = log_entry_text.as_deref() {
@@ -488,7 +493,8 @@ pub fn run_host_adapter_fulcio_certificate_identity_verification(
         "leaf_certificate",
         &mut verified_evidence,
         &mut reasons,
-    );
+    )
+    .map(Zeroizing::new);
     let issuer_ders = input
         .issuer_certificate_paths
         .iter()
@@ -499,6 +505,7 @@ pub fn run_host_adapter_fulcio_certificate_identity_verification(
                 &mut verified_evidence,
                 &mut reasons,
             )
+            .map(Zeroizing::new)
         })
         .collect::<Vec<_>>();
 
@@ -611,12 +618,14 @@ pub fn run_host_adapter_sigstore_bundle_subject_verification(
     let mut rekor_integrated_time = None;
     let mut fulcio_status = None;
 
-    let artifact_bytes = read_required_file(&input.artifact_path, "artifact", &mut reasons);
+    let artifact_bytes = read_required_file(&input.artifact_path, "artifact", &mut reasons)
+        .map(Zeroizing::new);
     let computed_artifact_sha256 = artifact_bytes
         .as_deref()
         .map(|bytes| format!("sha256:{}", hex_sha256(bytes)));
 
-    let bundle_bytes = read_required_file(&input.bundle_path, "sigstore_bundle", &mut reasons);
+    let bundle_bytes = read_required_file(&input.bundle_path, "sigstore_bundle", &mut reasons)
+        .map(Zeroizing::new);
     let bundle = bundle_bytes
         .as_deref()
         .and_then(|bytes| parse_sigstore_message_signature_bundle(bytes, &mut reasons));
@@ -626,7 +635,8 @@ pub fn run_host_adapter_sigstore_bundle_subject_verification(
         "bundle_certificate",
         &mut verified_evidence,
         &mut reasons,
-    );
+    )
+    .map(Zeroizing::new);
     let leaf_certificate = certificate_der.as_deref().and_then(|der| {
         parse_certificate(
             der,
@@ -686,7 +696,7 @@ pub fn run_host_adapter_sigstore_bundle_subject_verification(
         }
 
         if let Some(certificate_der) = certificate_der.as_deref() {
-            if bundle.certificate_der == certificate_der {
+            if bundle.certificate_der == *certificate_der {
                 verified_evidence.push("bundle_certificate_matches_input".to_string());
             } else {
                 reasons.push("bundle_certificate_mismatch".to_string());
@@ -813,13 +823,16 @@ pub fn run_host_adapter_sigstore_dsse_in_toto_subject_verification(
     let mut rekor_integrated_time = None;
     let mut fulcio_status = None;
 
-    let artifact_bytes = read_required_file(&input.artifact_path, "artifact", &mut reasons);
-    let computed_artifact_hex = artifact_bytes.as_deref().map(hex_sha256);
+    let artifact_bytes = read_required_file(&input.artifact_path, "artifact", &mut reasons)
+        .map(Zeroizing::new);
+    let computed_artifact_hex = artifact_bytes.as_deref().map(|bytes| hex_sha256(bytes));
     let computed_artifact_sha256 = computed_artifact_hex
         .as_ref()
         .map(|digest| format!("sha256:{digest}"));
 
-    let bundle_bytes = read_required_file(&input.bundle_path, "sigstore_dsse_bundle", &mut reasons);
+    let bundle_bytes =
+        read_required_file(&input.bundle_path, "sigstore_dsse_bundle", &mut reasons)
+            .map(Zeroizing::new);
     let bundle = bundle_bytes
         .as_deref()
         .and_then(|bytes| parse_sigstore_dsse_bundle(bytes, &mut reasons));
@@ -829,7 +842,8 @@ pub fn run_host_adapter_sigstore_dsse_in_toto_subject_verification(
         "dsse_bundle_certificate",
         &mut verified_evidence,
         &mut reasons,
-    );
+    )
+    .map(Zeroizing::new);
     let leaf_certificate = certificate_der.as_deref().and_then(|der| {
         parse_certificate(
             der,
@@ -884,7 +898,7 @@ pub fn run_host_adapter_sigstore_dsse_in_toto_subject_verification(
         }
 
         if let Some(certificate_der) = certificate_der.as_deref() {
-            if bundle.certificate_der == certificate_der {
+            if bundle.certificate_der == *certificate_der {
                 verified_evidence.push("dsse_bundle_certificate_matches_input".to_string());
             } else {
                 reasons.push("dsse_bundle_certificate_mismatch".to_string());
@@ -1105,7 +1119,8 @@ pub fn run_host_adapter_sigstore_timestamp_authority_verification(
         "timestamp_authority_certificate",
         &mut verified_evidence,
         &mut reasons,
-    );
+    )
+    .map(Zeroizing::new);
     if let Some(certificate_der) = certificate_der.as_ref() {
         if let Some(certificate) = parse_certificate(
             certificate_der,
@@ -1266,7 +1281,8 @@ pub fn run_host_adapter_certificate_transparency_sct_verification(
         "ct_sct_certificate",
         &mut verified_evidence,
         &mut reasons,
-    );
+    )
+    .map(Zeroizing::new);
     if let Some(certificate_der) = certificate_der.as_ref() {
         parse_certificate(
             certificate_der,
@@ -1281,7 +1297,7 @@ pub fn run_host_adapter_certificate_transparency_sct_verification(
     }
     let mut sct_bytes = Vec::new();
     for path in &input.sct_paths {
-        if let Some(bytes) = read_required_file(path, "ct_sct", &mut reasons) {
+        if let Some(bytes) = read_required_file(path, "ct_sct", &mut reasons).map(Zeroizing::new) {
             verified_evidence.push("ct_sct_bytes_loaded".to_string());
             sct_bytes.push((path, bytes));
         }
@@ -1407,7 +1423,8 @@ pub fn run_host_adapter_certificate_revocation_policy_verification(
         "certificate_revocation_certificate",
         &mut verified_evidence,
         &mut reasons,
-    );
+    )
+    .map(Zeroizing::new);
     if let Some(certificate_der) = certificate_der.as_ref() {
         if let Some(certificate) = parse_certificate(
             certificate_der,
@@ -1686,19 +1703,22 @@ pub fn run_host_adapter_certificate_crl_status_verification(
         "crl_status_certificate",
         &mut verified_evidence,
         &mut reasons,
-    );
+    )
+    .map(Zeroizing::new);
     let issuer_der = read_certificate_der(
         &input.issuer_certificate_path,
         "crl_status_issuer_certificate",
         &mut verified_evidence,
         &mut reasons,
-    );
+    )
+    .map(Zeroizing::new);
     let crl_der = read_certificate_der(
         &input.crl_path,
         "crl_status_crl",
         &mut verified_evidence,
         &mut reasons,
-    );
+    )
+    .map(Zeroizing::new);
 
     if let (Some(certificate_der), Some(issuer_der), Some(crl_der)) = (
         certificate_der.as_ref(),
@@ -1888,19 +1908,22 @@ pub fn run_host_adapter_certificate_ocsp_status_verification(
         "ocsp_status_certificate",
         &mut verified_evidence,
         &mut reasons,
-    );
+    )
+    .map(Zeroizing::new);
     let issuer_der = read_certificate_der(
         &input.issuer_certificate_path,
         "ocsp_status_issuer_certificate",
         &mut verified_evidence,
         &mut reasons,
-    );
+    )
+    .map(Zeroizing::new);
     let ocsp_der = read_certificate_der(
         &input.ocsp_response_path,
         "ocsp_status_response",
         &mut verified_evidence,
         &mut reasons,
-    );
+    )
+    .map(Zeroizing::new);
 
     if let (Some(certificate_der), Some(issuer_der), Some(ocsp_der)) = (
         certificate_der.as_ref(),
