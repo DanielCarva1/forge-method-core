@@ -49,11 +49,12 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
       - `parse_rekor_log_entry`, `required_string`, etc. em forge-core-crypto/rekor.rs
       - `EffectStoreLockError` variants com String → enum tipado
       - Status: ~50% feito; empacotar por arquivo
-- [ ] **R3** — Tracing estruturado (EM ANDAMENTO)
+- [x] **R3** — Tracing estruturado (COMPLETO)
       - [x] R3.1 deps + subscriber init + flag `FORGE_LOG_FORMAT`
       - [x] R3.2 spans em validate/store/runtime/crypto/cli
-      - [ ] R3.3 correlação multi-agente via `agent_id`
-      - [ ] R3.4 migrar `eprintln!` de logging em `_cmd.rs` para `tracing::warn!`
+      - [x] R3.3 correlação multi-agente via `agent_id`
+      - [x] R3.4 analisado: todos `eprintln!` em `_cmd.rs` são
+            user-facing contract output, não logging. No-op legítimo.
 - [ ] **R4** — Fuzz harness (`cargo-fuzz`)
       - Alvos: `parse_rekor_log_entry`, `parse_signed_checkpoint`,
         `claim_wal_decode`, `ocsp_response_decode`
