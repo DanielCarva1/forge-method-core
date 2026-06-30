@@ -324,6 +324,7 @@ fn evaluate_graph_operation(
                 ready_status: None,
                 blocking_reasons: vec![error.to_string()],
                 claim_preflight: None,
+                touched_refs: Vec::new(),
             };
         }
     };
@@ -349,6 +350,7 @@ fn evaluate_graph_operation(
                 ready_status: None,
                 blocking_reasons: vec![error.to_string()],
                 claim_preflight: None,
+                touched_refs: Vec::new(),
             };
         }
     };
@@ -395,6 +397,7 @@ fn evaluate_graph_operation(
                 .collect()
         },
         claim_preflight,
+        touched_refs: preview.touched_refs.clone(),
     }
 }
 

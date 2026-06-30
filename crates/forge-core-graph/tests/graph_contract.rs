@@ -456,5 +456,6 @@ fn operation_evaluation(
         ready_status: Some("ready".to_string()),
         blocking_reasons: Vec::new(),
         claim_preflight: None,
+        touched_refs: Vec::new(),
     }
 }
