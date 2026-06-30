@@ -26,6 +26,17 @@ use crate::{
 };
 use forge_core_contracts::runtime::RuntimeKind;
 
+/// Runs the `host-adapter-distribution-policy` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when an unknown flag is present in `args`.
+///
+/// # Panics
+///
+/// Panics if the distribution policy cannot be serialized as JSON. The
+/// policy type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_distribution_policy_command(args: &[String]) -> Result<(), ExitError> {
     let mut json = false;
     let mut index = 1usize;
@@ -60,6 +71,19 @@ pub fn run_host_adapter_distribution_policy_command(args: &[String]) -> Result<(
     Ok(())
 }
 
+/// Runs the `host-adapter-admit-distribution` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the distribution admission comes back as
+/// `Blocked`.
+///
+/// # Panics
+///
+/// Panics if the admission result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_admit_distribution_command(args: &[String]) -> Result<(), ExitError> {
     let mut target = RuntimeKind::Codex;
     let mut channel = HostAdapterUpdateChannel::Stable;
@@ -169,6 +193,17 @@ pub fn run_host_adapter_admit_distribution_command(args: &[String]) -> Result<()
     Ok(())
 }
 
+/// Runs the `host-adapter-process-policy` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid.
+///
+/// # Panics
+///
+/// Panics if the process policy cannot be serialized as JSON. The
+/// policy type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_process_policy_command(args: &[String]) -> Result<(), ExitError> {
     let mut target = HostAdapterProcessTarget::McpStdio;
     let mut json = false;
@@ -208,6 +243,19 @@ pub fn run_host_adapter_process_policy_command(args: &[String]) -> Result<(), Ex
     Ok(())
 }
 
+/// Runs the `host-adapter-admit-invocation` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid,
+/// and `ExitError::failed` when the invocation admission comes back as
+/// `Blocked`.
+///
+/// # Panics
+///
+/// Panics if the admission result cannot be serialized as JSON. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_admit_invocation_command(args: &[String]) -> Result<(), ExitError> {
     let mut command_name: Option<String> = None;
     let mut target = HostAdapterProcessTarget::McpStdio;
@@ -281,6 +329,17 @@ pub fn run_host_adapter_admit_invocation_command(args: &[String]) -> Result<(), 
     Ok(())
 }
 
+/// Runs the `host-adapter-projection` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when required arguments are missing or invalid.
+///
+/// # Panics
+///
+/// Panics if the projection cannot be serialized as JSON. The
+/// projection type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_projection_command(args: &[String]) -> Result<(), ExitError> {
     let mut target = HostAdapterProjectionTarget::McpTools;
     let mut json = false;
@@ -321,6 +380,17 @@ pub fn run_host_adapter_projection_command(args: &[String]) -> Result<(), ExitEr
     Ok(())
 }
 
+/// Runs the `host-adapter-manifest` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when an unknown flag is present in `args`.
+///
+/// # Panics
+///
+/// Panics if the manifest cannot be serialized as JSON. The
+/// manifest type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_host_adapter_manifest_command(args: &[String]) -> Result<(), ExitError> {
     let mut json = false;
     let mut index = 1usize;
