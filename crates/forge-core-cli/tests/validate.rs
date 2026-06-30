@@ -42,7 +42,7 @@ use forge_core_cli::{
     HostAdapterSigstoreTrustPolicyVerificationStatus,
     HostAdapterTufTrustedRootFreshnessVerificationInput,
     HostAdapterTufTrustedRootFreshnessVerificationStatus, HostAdapterUpdateChannel,
-    PayloadFileSpec, PayloadLoadPolicy, QueryEffectIndexInput, RebuildEffectIndexInput,
+    OcspNonceHex, PayloadFileSpec, PayloadLoadPolicy, QueryEffectIndexInput, RebuildEffectIndexInput,
     ValidationStatus,
 };
 use forge_core_contracts::claim::ActorRole;
@@ -3991,7 +3991,7 @@ fn ocsp_verification_input(
         issuer_certificate_path: fixture.issuer_certificate_path.clone(),
         ocsp_response_path,
         verification_time_unix: fixture.verification_time_unix,
-        expected_nonce_hex: expected_nonce.map(hex_bytes),
+        expected_nonce_hex: expected_nonce.map(|b| OcspNonceHex::new(hex_bytes(b))),
     }
 }
 
