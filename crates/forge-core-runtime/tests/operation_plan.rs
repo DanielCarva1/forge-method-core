@@ -991,3 +991,77 @@ fn collect_effect_touched_refs_skips_non_file_backed_targets() {
         "StateKey must be excluded; got {refs:?}"
     );
 }
+
+#[test]
+fn preview_report_review_required_when_mutation_policy_requires_review() {
+    // Variant coverage for F01.6: the runtime had no fixture exercising
+    // RuntimePreviewStatus::ReviewRequired.
+    use forge_core_contracts::operation::MutationPolicy;
+
+    let mut document = fixture("mechanical-story-execute.yaml");
+    document
+        .operation_contract
+        .authority
+        .mutation_policy = MutationPolicy::RequiresReview;
+    let index = build_reference_index(repo_root()).expect("reference index");
+
+    let plan = plan_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+    let preview = preview_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert_eq!(plan.status, RuntimePlanStatus::ReviewRequired);
+    assert_eq!(preview.status, RuntimePreviewStatus::ReviewRequired);
+    // risk_level is not Blocked: the host simply must review. MutationRequiresReview
+    // shows up as an informational blocker matching the plan reason.
+    assert!(preview.blockers.iter().any(|blocker| {
+        matches!(blocker, RuntimeReadyBlocker::MutationRequiresReview)
+    }));
+    assert_eq!(preview.next_human_action.as_deref(), Some("review and approve the operation boundary"));
+}
+
+#[test]
+fn preview_report_read_only_when_execution_mode_is_observe_only() {
+    // Variant coverage for F01.6: the runtime had no fixture exercising
+    // RuntimePreviewStatus::ReadOnly.
+    use forge_core_contracts::operation::ExecutionMode;
+
+    let mut document = fixture("mechanical-story-execute.yaml");
+    document
+        .operation_contract
+        .execution_policy
+        .mode = ExecutionMode::ObserveOnly;
+    let index = build_reference_index(repo_root()).expect("reference index");
+
+    let plan = plan_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+    let preview = preview_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert_eq!(plan.status, RuntimePlanStatus::ReadOnlyStatus);
+    assert_eq!(preview.status, RuntimePreviewStatus::ReadOnly);
+    // ObserveOnly shows up as an informational blocker matching the plan reason.
+    assert!(preview.blockers.iter().any(|blocker| {
+        matches!(blocker, RuntimeReadyBlocker::ObserveOnly)
+    }));
+    assert_eq!(
+        preview.next_human_action.as_deref(),
+        Some("show read-only status; no mutation is authorized")
+    );
+}
+
+#[test]
+fn preview_report_publish_side_effect_classified_as_high_risk() {
+    // Variant coverage for F01.6: no fixture exercised side_effect_policy=Publish,
+    // so RuntimeRiskLevel::High was never asserted.
+    use forge_core_contracts::operation::OperationSideEffectPolicy;
+
+    let mut document = fixture("mechanical-story-execute.yaml");
+    document
+        .operation_contract
+        .authority
+        .side_effect_policy = OperationSideEffectPolicy::Publish;
+    let index = build_reference_index(repo_root()).expect("reference index");
+
+    let preview = preview_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
+
+    assert!(preview.operation_mutates_state);
+    assert_eq!(preview.risk_level, RuntimeRiskLevel::High);
+    assert!(preview.destructive);
+}
