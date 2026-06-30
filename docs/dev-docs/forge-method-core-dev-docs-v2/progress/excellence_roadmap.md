@@ -1,7 +1,8 @@
 # Excellence Roadmap — Forge Method Core até 10/10
 
 **Data**: 2026-06-30
-**Status**: plano ativo (última atualização: 2026-06-30 — E1 COMPLETO, clippy pedantic em 0 warnings)
+**Status**: plano ativo (última atualização: 2026-06-30 — E1 completo; auditoria F04/F01
+feita, breakdown em sub-tasks adicionado)
 **Dono**: Daniel (codebase owner) + agente executor
 **Norte estratégico**: rápido, robusto, performativo, protocolo-guia que escala com a
 capacidade dos agentes, nunca script de novela, sempre Rust ou compatível, sempre
@@ -100,13 +101,52 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
         mutuamente exclusivo, empty events, non-matched
       - Helpers quebrados (`narrate_header`, `narrate_event`, `narrate_summary`,
         `narrate_non_matched`) — clippy pedantic limpo no trabalho novo
-- [ ] **F04** — WorkflowGraph v0 (PARCIAL)
-      - `forge-core-graph` existe (1014 linhas), mas `forge graph run` não executa
-      - DoD: `forge graph validate` + `forge graph run --dry-run` funcionam
+- [ ] **F04** — WorkflowGraph v0 (PARCIAL — plumbing completo, gaps semânticos)
+      - **Achado da auditoria 2026-06-30:** ambos subcomandos já executam end-to-end.
+        `forge graph validate` (4 passes: identity, nodes, edges, cycles via Kahn).
+        `forge graph run --dry-run` (topological order + per-node preview +
+        claim preflight + blocked_by upstream verifiers). `forge graph run`
+        sem `--dry-run` é rejeitado por design (ainda não há executor real).
+      - DoD original: `forge graph validate` + `forge graph run --dry-run`
+        funcionam — **substantivamente atendido**
+      - Gaps remanescentes (commits pequenos):
+        - [ ] **F04.1** Per-node `touched_refs` no dry-run output
+              (hoje `evaluate_graph_operation` descarta o campo do preview)
+        - [ ] **F04.2** Validar referências secundárias: `verifies`,
+              `GraphBudget.node_id`, `required_authority_refs` — hoje silent
+              dangling refs passam
+        - [ ] **F04.3** Edge-kind semantics: `RequiresSuccess` /
+              `RequiresCompletion` / `BlocksUntilPassed` hoje são decorativos;
+              decidir entre enforces ou marcar como warning documentado
+        - [ ] **F04.4** Tests E2E: `validate` (Passed + Blocked + cycle),
+              `run --dry-run` (Planned + Blocked + Invalid) com fixtures
       - Depende: F03 (tracing) pra narrar execução do grafo
-- [ ] **F01** — `forge preview`
-      - Operação mutável → preview JSON determinístico com `status`, `touched_refs`,
-        `risk`, `gates`, `rollback_available`, `next_human_action`
+- [ ] **F01** — `forge preview` (plumbing completo, gaps semânticos)
+      - **Achado da auditoria 2026-06-30:** CLI plumbing é completo. JSON
+        output já carrega todos os 6 campos DoD (`status`, `touched_refs`,
+        `risk_level`, `required_gate_refs`/`gate_contract_refs`,
+        `rollback_available`, `next_human_action`). Bugs reais no runtime:
+      - **Bug crítico de integridade:** `preview_status` IGNORA `blockers` →
+        um plano Ready com blockers reporta `status: Ready` enquanto
+        `risk_level: Blocked`. Os dois sinais discordam. `next_human_action`
+        retorna `None` pra Ready, então o humano não é orientado.
+      - Gaps remanescentes (commits pequenos):
+        - [ ] **F01.1** Fix bug: `preview_status` deve consultar `blockers`
+              e desqualificar Ready→Blocked quando non-empty
+        - [ ] **F01.2** Fix bug: `ready_gate_blockers` ignora `_required_gates`
+              (Pass com required gate contract faltante passa batido)
+        - [ ] **F01.3** Implementar `rollback_available` de verdade:
+              ler `EffectRepair.inverse.kind` dos staged effects
+              (hoje hardcoded `false`)
+        - [ ] **F01.4** Union `touched_refs`: `CoordinationScope.target.paths`
+              + write-sets dos `ToolEffectContractDocument`. Path plan-only
+              hoje retorna `Vec::new()`
+        - [ ] **F01.5** Garantir `next_human_action` sempre `Some` quando
+              bloqueado (vira `String` após F01.1 fechar o caso Ready+blockers)
+        - [ ] **F01.6** Tests: `ReviewRequired`, `ReadOnly`, `Publish` (High
+              risk) — variantes sem fixture hoje
+        - [ ] **F01.7** (opcional) Separar `PreviewJsonPayload` do envelope
+              CLI (hoje mistura com `project_root`, `state_root`, `trace_id`)
       - É o coração do "agente guia humano"
       - Depende: F03 (tracing explica decisão), F04 (graph preview)
 - [ ] **F02** — `forge ready`
