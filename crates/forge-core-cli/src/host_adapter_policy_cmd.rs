@@ -256,6 +256,7 @@ pub fn run_host_adapter_process_policy_command(args: &[String]) -> Result<(), Ex
 /// Panics if the admission result cannot be serialized as JSON. The
 /// result type derives `Serialize`, so this is a programming error and
 /// never occurs on valid input.
+#[allow(clippy::similar_names)]
 pub fn run_host_adapter_admit_invocation_command(args: &[String]) -> Result<(), ExitError> {
     let mut command_name: Option<String> = None;
     let mut target = HostAdapterProcessTarget::McpStdio;

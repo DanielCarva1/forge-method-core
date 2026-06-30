@@ -18,6 +18,11 @@
 //! gate. Even before the full system-design workflow exists, the engine
 //! enforces the gate reference (content is filled in slice 3).
 
+// The coordination-eval aggregator and a few routers walk many independent
+// dimensions while accumulating diagnostics; splitting them just to satisfy
+// `clippy::too_many_lines` would scatter related checks.
+#![allow(clippy::too_many_lines)]
+
 pub mod autonomy_router;
 pub mod catalog;
 pub mod claim_engine;

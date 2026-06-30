@@ -3588,6 +3588,10 @@ impl EffectWalRecord {
     }
 }
 
+// Callers pass freshly-built `EffectWalRecord` values, so taking ownership
+// keeps the call sites concise without forcing a binding just to take a
+// reference.
+#[allow(clippy::needless_pass_by_value)]
 fn append_effect_wal_record(
     root: &Path,
     wal_relative_path: &str,

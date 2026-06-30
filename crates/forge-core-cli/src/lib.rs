@@ -16,7 +16,10 @@
 // construction: each one parses a flat argv list, assembles a typed input,
 // invokes the engine, and emits an envelope. Splitting them to fit under
 // `clippy::too_many_lines` would obscure the linear argument-parsing flow.
+// Envelope emitters take `CliEnvelope<T>` by value intentionally: ownership
+// moves into the emitter so the caller never has to keep the envelope alive.
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::needless_pass_by_value)]
 
 pub mod autonomy_cmd;
 pub mod claim;

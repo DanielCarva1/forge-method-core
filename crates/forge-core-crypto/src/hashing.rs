@@ -23,7 +23,12 @@ pub fn hex_sha256(content: &[u8]) -> String {
 /// Lowercase hex encoding of an arbitrary byte slice.
 #[must_use]
 pub fn hex_bytes(content: &[u8]) -> String {
-    content.iter().map(|byte| format!("{byte:02x}")).collect()
+    use std::fmt::Write as _;
+    let mut out = String::with_capacity(content.len() * 2);
+    for byte in content {
+        let _ = write!(out, "{byte:02x}");
+    }
+    out
 }
 
 /// `true` if `value` looks like a canonical `sha256:<64 hex>` or bare
