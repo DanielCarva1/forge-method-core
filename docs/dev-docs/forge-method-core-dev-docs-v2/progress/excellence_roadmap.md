@@ -19,7 +19,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Workflows | 7 | 10 | WAL/claim ok, mas F11/F13 não existem |
 | Agente guia humano | 9 | 10 | F01 bugs de integridade fechados; rollback_available real |
 | Não-script-de-novela | 9 | 10 | Já é framework paramétrico; faltam fixtures que provem |
-| Features comunidade | 8 | 10 | F03/F04 operacionais; F01 plumbing+semântica completos; falta F02/F15 |
+| Features comunidade | 9 | 10 | F03/F04/F01 operacionais; F02 preflight implementado; falta F15/F05-F14 |
 | Rust best practices | 9 | 10 | clippy pedantic em 0 warnings (comecou ~245); E1 fechado |
 | Segurança supply chain | 6 | 10 | serde_yaml deprecated (R7), sem zeroize (R5), sem fuzz (R4) |
 | Docs/rastreabilidade | 6 | 10 | Bootstrap Exception pendente; papers sem status doc |
@@ -155,9 +155,13 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
               CLI (hoje mistura com `project_root`, `state_root`, `trace_id`)
       - É o coração do "agente guia humano"
       - Depende: F03 (tracing explica decisão), F04 (graph preview)
-- [ ] **F02** — `forge ready`
-      - Gate unificado: tests + lint + typecheck + evals + security
-      - DoD: run só passa se todos gates obrigatórios passam; failures tipadas
+- [x] **F02** — `forge preflight` (commit `986536d`)
+      - Gate unificado: cargo check / fmt / clippy pedantic / test / validate /
+        regression anchor — todos com status tipado + duração + log tail
+      - JSON output estável, accumulating (não pula gates), fail-soft
+        (optional gates falhando vira `Degraded`, exit 0)
+      - `--gate <name>...` permite rodar subset; `--expected-anchor` configura
+        o count esperado (default 122)
 - [ ] **F15** — Rust ergonomics + codegen track (PARCIAL)
       - Reduzir sofrimento do agente escrevendo Rust repetitivo
       - Snapshot tests, fixtures, module split, codegen de contratos
