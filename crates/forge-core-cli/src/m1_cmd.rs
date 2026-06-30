@@ -1,4 +1,5 @@
-use crate::cli_util::{next_arg, next_path, usage};
+use crate::cli_error::ExitError;
+use crate::cli_util::{next_arg_or_err, next_path_or_err, usage};
 use crate::project_cmd::{resolve_project, ProjectResolveError};
 use forge_core_contracts::OperationContractDocument;
 use forge_core_runtime::{
@@ -583,8 +584,17 @@ fn display_path(path: &Path) -> String {
     raw.strip_prefix(r"\\?\")
         .map_or(raw.clone(), std::string::ToString::to_string)
 }
-pub fn run_m1_command(args: &[String], kind: M1CommandKind) {
-    let (input, json) = parse_m1_command_args(args, kind);
+pub fn run_m1_command(
+    args: &[String],
+    kind: M1CommandKind,
+) -> Result<(), ExitError> {
+    // --help short-circuits before parsing so the parser can return a
+    // fully-formed M1CommandInput on the success path.
+    if args.iter().any(|a| matches!(a.as_str(), "--help" | "-h")) {
+        println!("{}", usage());
+        return Ok(());
+    }
+    let (input, json) = parse_m1_command_args(args, kind)?;
 
     match kind {
         M1CommandKind::Preview => run_m1_preview(&input, json),
@@ -593,7 +603,10 @@ pub fn run_m1_command(args: &[String], kind: M1CommandKind) {
     }
 }
 
-pub fn parse_m1_command_args(args: &[String], kind: M1CommandKind) -> (M1CommandInput, bool) {
+pub fn parse_m1_command_args(
+    args: &[String],
+    kind: M1CommandKind,
+) -> Result<(M1CommandInput, bool), ExitError> {
     let mut root = PathBuf::from(".");
     let mut operation_path: Option<PathBuf> = None;
     let mut allow_bootstrap_core = false;
@@ -607,45 +620,44 @@ pub fn parse_m1_command_args(args: &[String], kind: M1CommandKind) -> (M1Command
         match args[index].as_str() {
             "--root" => {
                 index += 1;
-                root = next_path(args, index);
+                root = next_path_or_err(args, index)?;
             }
             "--operation" => {
                 index += 1;
-                operation_path = Some(next_path(args, index));
+                operation_path = Some(next_path_or_err(args, index)?);
             }
             "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--recorded-at" => {
                 index += 1;
-                recorded_at = next_arg(args, index).to_string();
+                recorded_at = next_arg_or_err(args, index)?.to_string();
             }
             "--agent-id" => {
                 index += 1;
-                agent_id = next_arg(args, index).to_string();
+                agent_id = next_arg_or_err(args, index)?.to_string();
             }
             "--principal-id" => {
                 index += 1;
-                principal_id = next_arg(args, index).to_string();
+                principal_id = next_arg_or_err(args, index)?.to_string();
             }
             "--last-run" => last_run = true,
             "--json" => json = true,
             "--help" | "-h" => {
-                println!("{}", usage());
-                std::process::exit(0);
+                // Already handled by run_m1_command; if we somehow reach here,
+                // treat as success.
+                break;
             }
             _ => {
-                eprintln!("{}", usage());
-                std::process::exit(2);
+                return Err(ExitError::usage(usage()));
             }
         }
         index += 1;
     }
 
     if kind == M1CommandKind::Explain && !last_run {
-        eprintln!("explain requires --last-run");
-        std::process::exit(2);
+        return Err(ExitError::usage("explain requires --last-run"));
     }
 
-    (
+    Ok((
         M1CommandInput {
             kind,
             root,
@@ -656,10 +668,10 @@ pub fn parse_m1_command_args(args: &[String], kind: M1CommandKind) -> (M1Command
             principal_id,
         },
         json,
-    )
+    ))
 }
 
-pub fn run_m1_preview(input: &M1CommandInput, json: bool) {
+pub fn run_m1_preview(input: &M1CommandInput, json: bool) -> Result<(), ExitError> {
     match run_preview(input) {
         Ok(output) => {
             if json {
@@ -674,17 +686,15 @@ pub fn run_m1_preview(input: &M1CommandInput, json: bool) {
                 );
             }
             if output.report.status == forge_core_runtime::RuntimePreviewStatus::Blocked {
-                std::process::exit(1);
+                return Err(ExitError::failed("preview status blocked"));
             }
+            Ok(())
         }
-        Err(error) => {
-            eprintln!("preview failed: {error}");
-            std::process::exit(1);
-        }
+        Err(error) => Err(ExitError::failed(format!("preview failed: {error}"))),
     }
 }
 
-pub fn run_m1_ready(input: &M1CommandInput, json: bool) {
+pub fn run_m1_ready(input: &M1CommandInput, json: bool) -> Result<(), ExitError> {
     match run_ready(input) {
         Ok(output) => {
             if json {
@@ -699,17 +709,15 @@ pub fn run_m1_ready(input: &M1CommandInput, json: bool) {
                 );
             }
             if !output.report.ready {
-                std::process::exit(1);
+                return Err(ExitError::failed("ready report: not ready"));
             }
+            Ok(())
         }
-        Err(error) => {
-            eprintln!("ready failed: {error}");
-            std::process::exit(1);
-        }
+        Err(error) => Err(ExitError::failed(format!("ready failed: {error}"))),
     }
 }
 
-pub fn run_m1_explain(input: &M1CommandInput, json: bool) {
+pub fn run_m1_explain(input: &M1CommandInput, json: bool) -> Result<(), ExitError> {
     match run_explain(input) {
         Ok(output) => {
             if json {
@@ -721,12 +729,10 @@ pub fn run_m1_explain(input: &M1CommandInput, json: bool) {
                 println!("{}", output.explanation);
             }
             if output.query.events.is_empty() {
-                std::process::exit(1);
+                return Err(ExitError::failed("explain query returned no events"));
             }
+            Ok(())
         }
-        Err(error) => {
-            eprintln!("explain failed: {error}");
-            std::process::exit(1);
-        }
+        Err(error) => Err(ExitError::failed(format!("explain failed: {error}"))),
     }
 }
