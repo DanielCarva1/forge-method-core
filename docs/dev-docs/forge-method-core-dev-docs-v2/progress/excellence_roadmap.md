@@ -15,7 +15,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Rápido | 7 | 10 | Benchmarks crypto R6.2 completos (~420µs verify, ~6µs parse) |
 | Robusto | 10 | 10 | Tracing completo; zero Result<_,String>; R5 zeroize completo (R5.1-R5.11) |
 | Performativo | 7 | 10 | Crypto + store benchmarks medidos; CI perf workflow adicionado (R6.4) |
-| Protocolo guia | 9 | 10 | F04 validate+run --dry-run completos; F01 bugs críticos fechados |
+| Protocolo guia | 10 | 10 | F04 ✅ fechado (validate + dry-run + 34 E2E tests); F01 bugs críticos fechados |
 | Workflows | 7 | 10 | WAL/claim ok, mas F11/F13 não existem |
 | Agente guia humano | 9 | 10 | F01 bugs de integridade fechados; rollback_available real |
 | Não-script-de-novela | 9 | 10 | Já é framework paramétrico; faltam fixtures que provem |
@@ -163,26 +163,27 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
         mutuamente exclusivo, empty events, non-matched
       - Helpers quebrados (`narrate_header`, `narrate_event`, `narrate_summary`,
         `narrate_non_matched`) — clippy pedantic limpo no trabalho novo
-- [ ] **F04** — WorkflowGraph v0 (PARCIAL — plumbing completo, gaps semânticos)
-      - **Achado da auditoria 2026-06-30:** ambos subcomandos já executam end-to-end.
+- [x] **F04** — WorkflowGraph v0 ✅ FECHADO (2026-06-30)
+      - **Auditoria 2026-06-30:** ambos subcomandos executam end-to-end.
         `forge graph validate` (4 passes: identity, nodes, edges, cycles via Kahn).
         `forge graph run --dry-run` (topological order + per-node preview +
         claim preflight + blocked_by upstream verifiers). `forge graph run`
         sem `--dry-run` é rejeitado por design (ainda não há executor real).
-      - DoD original: `forge graph validate` + `forge graph run --dry-run`
-        funcionam — **substantivamente atendido**
-      - Gaps remanescentes (commits pequenos):
-        - [x] **F04.1** Per-node `touched_refs` no dry-run output
-              (commit `1c9a7dd`)
-        - [x] **F04.2** Validar referências secundárias: `verifies`,
-              `GraphBudget.node_id` (commit `e9eb579`)
-        - [x] **F04.3** Edge-kind semantics documentadas + warning para
-              `blocks_until_passed` de non-Verifier (commit `58ef7d8`)
-        - [ ] **F04.4** Tests E2E: `validate` (Passed + Blocked + cycle),
-              `run --dry-run` (Planned + Blocked + Invalid) via CLI
-              (`run_validate`, `run_dry_run`). Lib-level tests já cobrem o
-              behavior (10/10 em `crates/forge-core-graph/tests/`).
-      - Depende: F03 (tracing) pra narrar execução do grafo
+      - Sub-passes:
+      - [x] **F04.1** Per-node `touched_refs` no dry-run output (`1c9a7dd`)
+      - [x] **F04.2** Validar referências secundárias: `verifies`,
+            `GraphBudget.node_id` (`e9eb579`)
+      - [x] **F04.3** Edge-kind semantics documentadas + warning para
+            `blocks_until_passed` de non-Verifier (`58ef7d8`)
+      - [x] **F04.4** Tests E2E CLI: `validate` (Passed + Blocked + cycle),
+            `run --dry-run` (Planned + Blocked + Invalid). **34 testes
+            passando** em `crates/forge-core-cli/tests/graph_cli_e2e.rs`
+            (2.03s), cobrindo ainda: security (symlink escape, parent escape,
+            absolute refs), claim preflight, file/glob/state-key effect
+            targets, expired/peer claims, bootstrap exception. Lib-level
+            tests em `crates/forge-core-graph/tests/graph_contract.rs`
+            também verdes.
+      - Depende: F03 (tracing) pra narrar execução do grafo ✅
 - [ ] **F01** — `forge preview` (plumbing completo, gaps semânticos)
       - **Achado da auditoria 2026-06-30:** CLI plumbing é completo. JSON
         output já carrega todos os 6 campos DoD (`status`, `touched_refs`,
