@@ -115,6 +115,10 @@ pub struct RuntimeCapability {
     pub safety: RuntimeCapabilitySafety,
 }
 
+// Each field is an independent capability that the runtime advertises.
+// Modeling them as bitflags would obscure the JSON schema consumed by
+// downstream agents and policy authors.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RuntimeCapabilityConstraints {

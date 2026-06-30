@@ -321,6 +321,10 @@ pub struct HostAdapterDistributionPolicy {
     pub updater_policy: HostAdapterUpdaterPolicy,
 }
 
+// Each field is an independent evidence requirement that distribution
+// admission checks individually. Keeping them as bools preserves the JSON
+// schema that agents and operators inspect.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Serialize)]
 pub struct HostAdapterDistributionRequiredEvidence {
     pub immutable_source_ref: bool,
@@ -337,6 +341,9 @@ pub struct HostAdapterDistributionChannelPolicy {
     pub dev_allowed_for_general_install: bool,
 }
 
+// Each field is an independent updater-policy switch that distribution
+// admission evaluates separately.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Serialize)]
 pub struct HostAdapterUpdaterPolicy {
     pub update_summary_required: bool,
@@ -802,6 +809,10 @@ pub struct HostAdapterMcpToolProjection {
     pub annotations: HostAdapterMcpToolAnnotations,
 }
 
+// Mirrors the MCP `ToolAnnotations` schema (read_only/destructive/idempotent/
+// open_world). Keeping the bools matches the upstream spec byte-for-byte so
+// the host adapter can roundtrip them without remapping.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HostAdapterMcpToolAnnotations {

@@ -76,6 +76,10 @@ pub struct RuntimePlan {
     pub used_read_snapshot: bool,
 }
 
+// The preview report carries independent risk/gate signals that the host
+// inspects one by one; collapsing them into bitflags would hurt schema
+// clarity for downstream agents.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuntimePreviewReport {
