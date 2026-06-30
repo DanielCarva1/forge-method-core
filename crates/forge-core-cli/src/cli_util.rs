@@ -497,3 +497,209 @@ pub fn emit_envelope_or_err<T: serde::Serialize>(
         Err(ExitError::with_code(code, String::new()))
     }
 }
+
+// ===========================================================================
+// ArgvCursor — a small argv-walking type that collapses the per-command
+// `while index < args.len() { match ... index += 1; }` boilerplate.
+//
+// Before F15.1 every command module (telemetry_cmd, eval_cmd, claim, ...)
+// hand-wrote the same loop and its own `next_<cmd>_value_or_err` helper that
+// differed only in the embedded command name. ArgvCursor is the deep module
+// behind that seam: a four-method interface (peek_flag / expect_value /
+// advance / exhausted) that owns bounds-checking, dash-rejection, and error
+// formatting for every dispatcher in the crate.
+//
+// Adding a new command no longer requires writing a per-command value helper
+// or an index-increment loop; the dispatcher becomes a flat `match` over
+// `peek_flag()` that calls `expect_value(flag)` for value-bearing flags and
+// `advance()` for boolean flags.
+// ===========================================================================
+
+/// Borrowed cursor over a flat `&[String]` argv slice, used by every CLI
+/// dispatcher to walk flags without re-implementing bounds checks and
+/// dash-rejection per command.
+///
+/// The cursor is created at the first flag position (typically `args[2]` for
+/// `forge-core <command> <subcommand> [--flags...]`) and advances monotonically.
+/// The `command` field is embedded in error messages so callers get
+/// `"telemetry export: missing value for --root"` instead of a generic usage
+/// dump, matching the pre-F15.1 error contract byte-for-byte.
+pub struct ArgvCursor<'a> {
+    args: &'a [String],
+    index: usize,
+    command: &'a str,
+}
+
+impl<'a> ArgvCursor<'a> {
+    /// Creates a new cursor starting at `start`. The `command` string is used
+    /// only for error context (e.g. `"telemetry export"`, `"eval compare"`).
+    #[must_use]
+    pub fn new(args: &'a [String], start: usize, command: &'a str) -> Self {
+        Self {
+            args,
+            index: start,
+            command,
+        }
+    }
+
+    /// Returns the flag at the current position without consuming it, or
+    /// `None` when the cursor is past the last argument.
+    ///
+    /// This is the loop condition for dispatcher `while let` loops: the
+    /// dispatcher peeks, matches on the flag, and either calls
+    /// [``expect_value`](Self::expect_value) (which advances past both flag and
+    /// value) or [`advance`](Self::advance) (which advances past a boolean
+    /// flag).
+    #[must_use]
+    pub fn peek_flag(&self) -> Option<&'a str> {
+        self.args.get(self.index).map(String::as_str)
+    }
+
+    /// Consumes the current flag and returns the value that follows it.
+    ///
+    /// Used for value-bearing flags like `--root <path>`. The cursor advances
+    /// past both the flag and its value, so the next [`peek_flag`](Self::peek_flag)
+    /// call sees the following flag.
+    ///
+    /// `flag` is the flag name without the leading `--`; it is used only to
+    /// build the error message and is NOT validated against the current
+    /// position (the caller already matched on it in its `match` arm).
+    ///
+    /// # Errors
+    ///
+    /// Returns `ExitError::invalid_value` when no argument follows the flag
+    /// (out of bounds) or when the following argument starts with `-` (looks
+    /// like another flag rather than a value). The message embeds `command` and
+    /// `flag` to match the historical per-command helper messages.
+    pub fn expect_value(&mut self, flag: &str) -> Result<&'a str, ExitError> {
+        let value_index = self.index + 1;
+        let value = self.args.get(value_index).ok_or_else(|| {
+            ExitError::invalid_value(format!(
+                "{}: missing value for --{flag}",
+                self.command
+            ))
+        })?;
+        if value.starts_with('-') {
+            return Err(ExitError::invalid_value(format!(
+                "{}: missing value for --{flag}",
+                self.command
+            )));
+        }
+        self.index = value_index + 1;
+        Ok(value.as_str())
+    }
+
+    /// Advances the cursor past the current flag without consuming a value.
+    ///
+    /// Used for boolean flags like `--json`, `--latest-run`,
+    /// `--allow-bootstrap-core`. The dispatcher calls this after setting its
+    /// boolean state.
+    pub fn advance(&mut self) {
+        self.index += 1;
+    }
+
+    /// Returns `true` when the cursor has consumed every argument.
+    #[must_use]
+    pub fn exhausted(&self) -> bool {
+        self.index >= self.args.len()
+    }
+}
+
+#[cfg(test)]
+mod argv_cursor_tests {
+    use super::*;
+
+    fn args(slice: &[&str]) -> Vec<String> {
+        slice.iter().map(std::string::ToString::to_string).collect()
+    }
+
+    #[test]
+    fn peek_flag_returns_none_when_exhausted() {
+        let args = args(&["telemetry", "export"]);
+        let cursor = ArgvCursor::new(&args, 2, "telemetry export");
+        assert!(cursor.peek_flag().is_none());
+        assert!(cursor.exhausted());
+    }
+
+    #[test]
+    fn peek_flag_returns_current_without_consuming() {
+        let args = args(&["telemetry", "export", "--root", "."]);
+        let cursor = ArgvCursor::new(&args, 2, "telemetry export");
+        assert_eq!(cursor.peek_flag(), Some("--root"));
+        // peek did not advance
+        assert_eq!(cursor.peek_flag(), Some("--root"));
+    }
+
+    #[test]
+    fn expect_value_advances_past_flag_and_value() {
+        let args = args(&["telemetry", "export", "--root", ".", "--json"]);
+        let mut cursor = ArgvCursor::new(&args, 2, "telemetry export");
+        let value = cursor.expect_value("root").unwrap();
+        assert_eq!(value, ".");
+        // cursor is now at --json
+        assert_eq!(cursor.peek_flag(), Some("--json"));
+    }
+
+    #[test]
+    fn advance_skips_boolean_flag() {
+        let args = args(&["telemetry", "export", "--json", "--root", "."]);
+        let mut cursor = ArgvCursor::new(&args, 2, "telemetry export");
+        cursor.advance();
+        assert_eq!(cursor.peek_flag(), Some("--root"));
+    }
+
+    #[test]
+    fn expect_value_errors_when_value_missing() {
+        let args = args(&["telemetry", "export", "--root"]);
+        let mut cursor = ArgvCursor::new(&args, 2, "telemetry export");
+        let error = cursor.expect_value("root").unwrap_err();
+        assert_eq!(
+            error.message(),
+            "telemetry export: missing value for --root"
+        );
+        assert_eq!(error.exit_code(), 3);
+    }
+
+    #[test]
+    fn expect_value_errors_when_value_looks_like_flag() {
+        let args = args(&["telemetry", "export", "--root", "--json"]);
+        let mut cursor = ArgvCursor::new(&args, 2, "telemetry export");
+        let error = cursor.expect_value("root").unwrap_err();
+        assert_eq!(
+            error.message(),
+            "telemetry export: missing value for --root"
+        );
+    }
+
+    #[test]
+    fn full_telemetry_style_walk() {
+        let args = args(&[
+            "telemetry",
+            "export",
+            "--root",
+            ".",
+            "--format",
+            "jsonl",
+            "--json",
+        ]);
+        let mut cursor = ArgvCursor::new(&args, 2, "telemetry export");
+        let mut root = String::new();
+        let mut format = String::new();
+        let mut json = false;
+        while let Some(flag) = cursor.peek_flag() {
+            match flag {
+                "--root" => root = cursor.expect_value("root").unwrap().to_string(),
+                "--format" => format = cursor.expect_value("format").unwrap().to_string(),
+                "--json" => {
+                    json = true;
+                    cursor.advance();
+                }
+                _ => panic!("unexpected flag {flag}"),
+            }
+        }
+        assert_eq!(root, ".");
+        assert_eq!(format, "jsonl");
+        assert!(json);
+        assert!(cursor.exhausted());
+    }
+}
