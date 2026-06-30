@@ -1,0 +1,50 @@
+name: Perf
+
+on:
+  schedule:
+    # 06:00 UTC daily — captures performance regressions in store and crypto
+    # hot paths. Runs the criterion benchmarks and uploads the JSON output
+    # plus the per-bench estimates as a build artifact so regressions can
+    # be diffed by hand against the previous day.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize]
+
+jobs:
+  bench:
+    # Opt-in via the `perf` label on PRs; the cron and workflow_dispatch
+    # paths always run. Uses --save-baseline so successive runs in the
+    # same branch produce a comparable criterion estimate directory.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'perf')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Bench forge-core-store (claim_wal, reference_index)
+        run: |
+          cargo bench -p forge-core-store -- --save-baseline ci-perf | tee store_bench.txt
+
+      - name: Bench forge-core-crypto (rekor parse + verify)
+        run: |
+          cargo bench -p forge-core-crypto --bench rekor -- --save-baseline ci-perf | tee crypto_bench.txt
+
+      - name: Upload bench output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-bench-output
+          path: |
+            store_bench.txt
+            crypto_bench.txt
+            target/criterion/
+          if-no-files-found: warn
+          retention-days: 30
