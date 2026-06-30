@@ -643,6 +643,29 @@ pub fn append_claim_wal_record(
     claim_contract: &ClaimContract,
     recorded_at: &str,
 ) -> Result<ClaimWalAppendResult, ClaimWalAppendError> {
+    append_claim_wal_record_with_durability(
+        state_root,
+        operation,
+        claim_contract,
+        recorded_at,
+        crate::WalDurability::SyncOnAppend,
+    )
+}
+
+/// Like [`append_claim_wal_record`] but lets the caller pick the
+/// [`WalDurability`] tier. See ADR-0009 for when `NoSync` is appropriate
+/// (benchmarks, tests, dev) and when it is not (production).
+///
+/// # Errors
+///
+/// Forwards [`ClaimWalAppendError`] from the inner append path.
+pub fn append_claim_wal_record_with_durability(
+    state_root: impl AsRef<Path>,
+    operation: ClaimWalOperation,
+    claim_contract: &ClaimContract,
+    recorded_at: &str,
+    durability: crate::WalDurability,
+) -> Result<ClaimWalAppendResult, ClaimWalAppendError> {
     let state_root = state_root.as_ref();
     let wal_path = claim_wal_path(state_root);
     let lock_path = claim_wal_lock_path(state_root);
@@ -664,7 +687,7 @@ pub fn append_claim_wal_record(
     let payload_bytes = lifecycle_payload_bytes(operation, claim_contract, recorded_at)?;
     let record_bytes = encode_record(seq, operation.record_type(), &payload_bytes)?;
 
-    write_claim_wal_record_bytes(&wal_path, &record_bytes)?;
+    write_claim_wal_record_bytes_durability(&wal_path, &record_bytes, durability)?;
     maybe_rotate_after_append(
         state_root,
         &wal_path,
@@ -739,9 +762,10 @@ fn lifecycle_payload_bytes(
     Ok(payload_bytes)
 }
 
-fn write_claim_wal_record_bytes(
+fn write_claim_wal_record_bytes_durability(
     wal_path: &Path,
     record_bytes: &[u8],
+    durability: crate::WalDurability,
 ) -> Result<(), ClaimWalAppendError> {
     let mut file = OpenOptions::new()
         .create(true)
@@ -756,11 +780,14 @@ fn write_claim_wal_record_bytes(
             path: wal_path.to_path_buf(),
             source: source.to_string(),
         })?;
-    file.sync_data()
-        .map_err(|source| ClaimWalAppendError::SyncWal {
-            path: wal_path.to_path_buf(),
-            source: source.to_string(),
-        })
+    if let crate::WalDurability::SyncOnAppend = durability {
+        file.sync_data()
+            .map_err(|source| ClaimWalAppendError::SyncWal {
+                path: wal_path.to_path_buf(),
+                source: source.to_string(),
+            })?;
+    }
+    Ok(())
 }
 
 fn maybe_rotate_after_append(
