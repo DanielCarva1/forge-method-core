@@ -584,6 +584,7 @@ pub fn run_isolation_command(args: &[String]) -> Result<(), ExitError> {
 /// Returns `ExitError::env_config` (via [`emit_envelope_or_err`]) when
 /// `--isolation-dir` is unset and project resolution fails or the resolved
 /// `state_root` does not exist / is not a directory.
+#[allow(clippy::double_must_use)]
 pub fn resolve_isolation_dir_or_err(
     command: &str,
     isolation_dir: Option<PathBuf>,

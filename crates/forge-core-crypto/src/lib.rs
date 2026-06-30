@@ -30,8 +30,13 @@
 // early-return on first failure). We also accept the two redundant-closure
 // warnings on `time.timestamp()` because chrono is re-exported via rasn_ocsp
 // and qualifying the method path inline hurts clarity more than it helps.
+// The `*VerificationInput` structs are passed by value because they are the
+// public host-adapter entrypoint surface; taking references would force every
+// caller (CLI dispatcher, integration tests, downstream crates) to keep the
+// input alive across the verify call, and the inputs are cheap to move.
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::redundant_closure_for_method_calls)]
+#![allow(clippy::needless_pass_by_value)]
 
 pub mod file_io;
 pub mod hashing;

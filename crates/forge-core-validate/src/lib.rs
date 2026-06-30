@@ -255,6 +255,9 @@ pub fn validate_yaml_source_id_references(
     report
 }
 
+// Using the default `RandomState` keeps the API simple; downstream callers do
+// not need to inject a custom hasher.
+#[allow(clippy::implicit_hasher)]
 #[must_use]
 pub fn validate_yaml_known_repo_references(
     documents: &[ParsedYamlDocument],

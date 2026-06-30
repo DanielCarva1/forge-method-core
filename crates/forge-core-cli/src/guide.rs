@@ -603,14 +603,15 @@ pub fn load_gates(path: Option<&std::path::Path>) -> Vec<forge_core_engine::Prov
     let Some(path) = path else {
         return Vec::new();
     };
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return Vec::new();
-    };
+    #[allow(clippy::items_after_statements)]
     #[derive(serde::Deserialize)]
     struct GateRow {
         gate_kind: String,
         status: String,
     }
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
     let rows: Vec<GateRow> = yaml_serde::from_str(&text).unwrap_or_default();
     rows.into_iter()
         .filter_map(|r| {

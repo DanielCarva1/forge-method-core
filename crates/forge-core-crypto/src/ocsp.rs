@@ -295,13 +295,10 @@ pub(crate) fn extract_ocsp_response_nonce_hex(
     verified_evidence: &mut Vec<String>,
     reasons: &mut Vec<String>,
 ) -> Option<String> {
-    let Some(extensions) = basic_response
+    let extensions = basic_response
         .tbs_response_data
         .response_extensions
-        .as_ref()
-    else {
-        return None;
-    };
+        .as_ref()?;
     for extension in extensions.iter() {
         if rasn_oid_matches(&extension.extn_id, &[1, 3, 6, 1, 5, 5, 7, 48, 1, 2]) {
             return match rasn::der::decode::<rasn_ocsp::Nonce>(extension.extn_value.as_ref()) {

@@ -270,6 +270,10 @@ pub(crate) struct SigstoreRevocationPolicy {
     pub(crate) max_certificate_lifetime_seconds: Option<i64>,
 }
 
+// The `expected_*` prefix is a deliberate naming convention that signals
+// "this is the value the policy demands from the issuer"; collapsing it
+// would obscure the policy semantics.
+#[allow(clippy::struct_field_names)]
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct SigstoreIdentityPolicy {
     pub(crate) expected_oidc_issuer: String,
@@ -446,10 +450,10 @@ pub(crate) fn verify_sigstore_identity_policy(
         reasons.push("sigstore_identity_oidc_issuer_missing".to_string());
     }
 
-    let has_identity_selector = optional_non_empty(&policy.expected_certificate_identity)
-        || optional_non_empty(&policy.expected_github_repository)
-        || optional_non_empty(&policy.expected_github_ref)
-        || optional_non_empty(&policy.expected_github_sha);
+    let has_identity_selector = optional_non_empty(policy.expected_certificate_identity.as_deref())
+        || optional_non_empty(policy.expected_github_repository.as_deref())
+        || optional_non_empty(policy.expected_github_ref.as_deref())
+        || optional_non_empty(policy.expected_github_sha.as_deref());
     if has_identity_selector {
         verified_evidence.push("sigstore_identity_selector_present".to_string());
     } else {
@@ -469,10 +473,8 @@ pub(crate) fn non_empty_string(value: &str) -> bool {
     !value.trim().is_empty()
 }
 
-pub(crate) fn optional_non_empty(value: &Option<String>) -> bool {
-    value
-        .as_deref()
-        .is_some_and(|value| !value.trim().is_empty())
+pub(crate) fn optional_non_empty(value: Option<&str>) -> bool {
+    value.is_some_and(|value| !value.trim().is_empty())
 }
 
 pub(crate) fn non_empty_items(values: &[String]) -> bool {

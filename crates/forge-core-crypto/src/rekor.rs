@@ -217,10 +217,12 @@ pub(crate) fn verify_rekor_entry_inclusion(
         reasons.push("rekor_log_index_negative".to_string());
         return;
     }
+    // Checked above: log_index >= 0 here, so the conversion is infallible.
+    let log_index = u64::try_from(entry.proof.log_index).expect("log_index checked non-negative");
     if verify_merkle_inclusion(
         &leaf_hash,
         &entry.proof.hashes,
-        entry.proof.log_index as u64,
+        log_index,
         entry.proof.tree_size,
         &entry.proof.root_hash,
     ) {
