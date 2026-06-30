@@ -72,11 +72,19 @@ Meta: reduzir a **2 edit points** — (1) criar o módulo do comando, (2) regist
 - [x] F15.2 — migrate eval_cmd + graph_cmd (`47a51bd`)
 - [x] F15.3 — delete dupes (absorvido em F15.1/F15.2: `next_telemetry_value_or_err`, `next_eval_value_or_err`, `next_graph_value_or_err`, `next_graph_path_or_err` deletados)
 - [x] F15.4 — command registry (`c4cd6f4`): `command_registry.rs` com `COMMANDS` table, `dispatch()` vira lookup, `usage()` delega para `global_usage()`
-- [ ] F15.5 — co-localize usage (opcional; `<cmd>_usage()` fns específicos permanecem em cli_util.rs, mas são mostrados só em `<cmd> --help`, não no global)
+- [~] F15.5 — co-localize usage (opcional, deferido; `<cmd>_usage()` fns específicos permanecem em cli_util.rs, mas são mostrados só em `<cmd> --help`, não no global). Não bloqueia critério F15 (2 edit points já atendidos em F15.6).
 - [x] F15.6 — validate criterion (abaixo)
 - [x] F15.7a — WalDurability type + `_with_durability` APIs + ADR-0009 (`c2df8c4`)
-- [ ] F15.7b — CLI threading: `--no-sync` flag nos commands stateful (claim, execute-operation, effect-index). Store API pronta, falta threading do CLI.
+- [x] F15.7b — CLI threading: `--no-sync` flag threaded end-to-end no claim surface (acquire/heartbeat/release/handoff/reconcile). Commit `7474139`. Implementa ADR-0009 totalmente na superfície claim.
 - [x] F15.7 tests — `append_json_line_with_no_sync_writes_record_without_fsync` + `wal_durability_default_is_sync_on_append`
+
+## Follow-up (não bloqueia F15 closure)
+
+- [ ] F15.7b-extend — Replicar threading `--no-sync` nos commands stateful restantes: `execute-operation`, `rebuild-effect-index`, `query-effect-index`. Mecânico, mesmo padrão do F15.7b claim. Não bloqueia o critério F15 (2 edit points) — é ganho de perf adicional.
+
+## Status
+
+**F15 FECHADO** ✅ — critério atendido (2 edit points para novo command), todos os sub-passos principais completos, ADR-0009 implementado.
 
 ## F15.6 — Validação do critério
 

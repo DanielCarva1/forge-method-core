@@ -1,7 +1,7 @@
 # Excellence Roadmap — Forge Method Core até 10/10
 
 **Data**: 2026-06-30
-**Status**: plano ativo (última atualização: 2026-06-30 — R4 completo via CI Linux;
+**Status**: plano ativo (última atualização: 2026-06-30 — **F15 fechado** (commits `7d0934b`→`7474139`); R4 completo via CI Linux;
 E1/E2/E3/R2 completos; F04/F01/F02/F03 completos; R5.1-R5.9 completos)
 **Dono**: Daniel (codebase owner) + agente executor
 **Norte estratégico**: rápido, robusto, performativo, protocolo-guia que escala com a
@@ -19,8 +19,8 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Workflows | 7 | 10 | WAL/claim ok, mas F11/F13 não existem |
 | Agente guia humano | 9 | 10 | F01 bugs de integridade fechados; rollback_available real |
 | Não-script-de-novela | 9 | 10 | Já é framework paramétrico; faltam fixtures que provem |
-| Features comunidade | 9 | 10 | F03/F04/F01/F02 operacionais; falta F15 e F05-F14 |
-| Rust best practices | 9 | 10 | clippy pedantic em 0 warnings (comecou ~245); E1 fechado |
+| Features comunidade | 9.5 | 10 | F03/F04/F01/F02/F15 operacionais; falta F05-F14 |
+| Rust best practices | 10 | 10 | E1 fechado (0 warnings lib); **F15 fechado** (2 edit points) |
 | Segurança supply chain | 8 | 10 | serde_yaml migrado; zeroize feito; fuzz (R4) completo via ADR-0008 |
 | Docs/rastreabilidade | 8 | 10 | R13 alinhado; R14 paper status criado; ADR-0008; falta R9 Bootstrap |
 
@@ -220,10 +220,21 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
         (optional gates falhando vira `Degraded`, exit 0)
       - `--gate <name>...` permite rodar subset; `--expected-anchor` configura
         o count esperado (default 122)
-- [ ] **F15** — Rust ergonomics + codegen track (PARCIAL)
-      - Reduzir sofrimento do agente escrevendo Rust repetitivo
-      - Snapshot tests, fixtures, module split, codegen de contratos
-      - Critério: novo comando/contrato não exige editar >2 pontos fora de tests/docs
+- [x] **F15** — Rust ergonomics + codegen track ✅ FECHADO (2026-06-30)
+      - Critério atendido: novo comando/contrato exige **2 edit points** (criar módulo +
+        registrar entrada em `command_registry::COMMANDS`); era 6+ antes.
+      - Sub-passos:
+      - [x] F15.0 — plano (`7d0934b`)
+      - [x] F15.1 — `ArgvCursor` em `cli_util.rs` + piloto telemetry (`0d4431d`)
+      - [x] F15.2 — migrate eval_cmd + graph_cmd (`47a51bd`)
+      - [x] F15.3 — delete dupes (`next_<cmd>_value_or_err` absorvidos em `ArgvCursor`)
+      - [x] F15.4 — `command_registry::COMMANDS` table, dispatch vira lookup (`c4cd6f4`)
+      - [~] F15.5 — co-localize usage (opcional, deferido; não bloqueia critério)
+      - [x] F15.6 — validar critério F15 (2 edit points) (`6ebba3e`)
+      - [x] F15.7a — `WalDurability` enum + APIs `_with_durability` + ADR-0009 (`c2df8c4`)
+      - [x] F15.7b — CLI threading `--no-sync` no claim surface (`7474139`)
+      - Follow-up (não bloqueia F15): F15.7b-extend — replicar `--no-sync` em
+        `execute-operation`, `rebuild-effect-index`, `query-effect-index`
 
 ### Trilha C — Features P1 da comunidade
 
