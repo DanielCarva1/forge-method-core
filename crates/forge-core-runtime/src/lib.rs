@@ -14,7 +14,7 @@ use forge_core_contracts::operation::{
     HumanPrompt, MutationPolicy, NextActor, OperationGateStatus, OperationSideEffectPolicy,
     RequiredGate,
 };
-use forge_core_contracts::tool_effect::{AccessMode, ToolEffectContractDocument};
+use forge_core_contracts::tool_effect::{AccessMode, InverseKind, ToolEffectContractDocument};
 use forge_core_contracts::{
     CommandContractDocument, OperationContractDocument, RepoPath, StableId,
 };
@@ -839,6 +839,46 @@ fn preview_operation_inner(
 ) -> RuntimePreviewReport {
     let plan = plan_operation_inner(document, snapshot);
     preview_operation_from_plan(document, &plan)
+}
+
+/// Compute whether every staged effect has a real rollback path, based on the
+/// `EffectRepair.inverse.kind` declared in each `ToolEffect` contract.
+///
+/// Returns `true` only when every provided effect has `inverse.kind` other than
+/// [`InverseKind::None`]. An empty slice returns `true` (vacuously: read-only
+/// operations have nothing to roll back). When `stop_if_inverse_missing` is
+/// `true` for any effect and that effect's inverse kind is `None`, returns
+/// `false` and the host should treat the operation as non-rollbackable.
+///
+/// This is the building block that powers `rollback_available` in
+/// [`preview_operation_with_effect_documents`]. Callers without effect
+/// documents (e.g. plan-only previews) keep the legacy `false` placeholder.
+#[must_use]
+pub fn compute_rollback_available(effects: &[ToolEffectContractDocument]) -> bool {
+    effects.iter().all(|document| {
+        document
+            .tool_effect_contract
+            .repair
+            .inverse
+            .kind
+            != InverseKind::None
+    })
+}
+
+/// Like [`preview_operation_with_snapshot`], but also computes the real
+/// `rollback_available` value from the provided `ToolEffect` contract documents.
+/// The documents should correspond to `plan.effect_contract_refs`; callers
+/// that cannot supply them should fall back to `preview_operation_with_snapshot`
+/// and accept the conservative `rollback_available = false` placeholder.
+#[must_use]
+pub fn preview_operation_with_effect_documents(
+    document: &OperationContractDocument,
+    snapshot: RuntimeReadSnapshot<'_>,
+    effects: &[ToolEffectContractDocument],
+) -> RuntimePreviewReport {
+    let mut report = preview_operation_with_snapshot(document, snapshot);
+    report.rollback_available = compute_rollback_available(effects);
+    report
 }
 
 #[must_use]
