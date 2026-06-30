@@ -324,7 +324,9 @@ pub(crate) fn verify_ocsp_nonce(
     reasons: &mut Vec<String>,
 ) {
     match (expected_nonce_hex, observed_nonce_hex) {
-        (Some(expected), Some(observed)) if expected == observed => {
+        (Some(expected), Some(observed))
+            if crate::hashing::constant_time_eq_hex(expected, observed) =>
+        {
             verified_evidence.push("ocsp_status_nonce_verified".to_string());
         }
         (Some(_expected), Some(_observed)) => {

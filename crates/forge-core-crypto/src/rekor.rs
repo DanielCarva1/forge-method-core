@@ -240,7 +240,7 @@ pub(crate) fn verify_rekor_checkpoint(
     if checkpoint.tree_size != proof.tree_size {
         return Err(RekorParseError::CheckpointTreeSizeMismatch);
     }
-    if checkpoint.root_hash != normalize_sha256_display(&proof.root_hash) {
+    if !crate::hashing::constant_time_eq_hex(&checkpoint.root_hash, &proof.root_hash) {
         return Err(RekorParseError::CheckpointRootHashMismatch);
     }
     if checkpoint.signatures.is_empty() {
@@ -336,7 +336,7 @@ pub(crate) fn verify_merkle_inclusion(
         return false;
     }
     if tree_size == 1 {
-        return hashes.is_empty() && leaf_hash == root_hash;
+        return hashes.is_empty() && crate::hashing::constant_time_eq_hex(leaf_hash, root_hash);
     }
 
     let mut computed = leaf_hash.to_string();
@@ -355,7 +355,7 @@ pub(crate) fn verify_merkle_inclusion(
         index /= 2;
         last /= 2;
     }
-    computed == root_hash
+    crate::hashing::constant_time_eq_hex(&computed, root_hash)
 }
 
 fn hash_merkle_node(left: &str, right: &str) -> String {
