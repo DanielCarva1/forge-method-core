@@ -2051,7 +2051,7 @@ pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
 }
 
 #[derive(Debug, Clone)]
-struct ClaimReconcileLoopConfig {
+pub(crate) struct ClaimReconcileLoopConfig {
     claims_dir: PathBuf,
     now_unix: Option<i64>,
     interval_ms: u64,
