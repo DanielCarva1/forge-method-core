@@ -120,19 +120,19 @@ fn gate_table() -> Vec<DescribeGate> {
 /// `forge-core` binary now carries its 110 workflows inside it, so
 /// `guide status` works on any machine without `--catalog-dir`.
 fn resolve_catalog(catalog_dir: Option<&Path>) -> CatalogLoadReport {
-    match catalog_dir {
-        Some(dir) => load_catalog(dir),
-        None => {
-            let local = Path::new("contracts/workflows");
-            if local.is_dir() {
-                load_catalog(local)
-            } else {
-                load_embedded_catalog()
-            }
+    if let Some(dir) = catalog_dir {
+        load_catalog(dir)
+    } else {
+        let local = Path::new("contracts/workflows");
+        if local.is_dir() {
+            load_catalog(local)
+        } else {
+            load_embedded_catalog()
         }
     }
 }
 
+#[must_use]
 pub fn run_describe(catalog_dir: Option<&Path>) -> CliEnvelope<DescribePayload> {
     let report = resolve_catalog(catalog_dir);
     if !report.is_clean() {
@@ -375,6 +375,248 @@ fn gate_str(g: GateKind) -> String {
         GateKind::Release => "release".into(),
     }
 }
+pub fn run_guide_command(args: &[String]) -> Result<(), ExitError> {
+    // Subcommand: `forge-core guide <subcommand> [...]`.
+    let sub = args.get(1).map_or("--help", String::as_str);
+
+    match sub {
+        "describe" => run_guide_describe(&args[2..]),
+        "decide" => run_guide_decide(&args[2..]),
+        "status" => run_guide_status(&args[2..]),
+        "--help" | "-h" | "help" => {
+            println!("forge-core guide <subcommand> [options]");
+            println!("  describe [--catalog-dir <path>] [--no-json]");
+            println!("  decide --decision-file <path> [--catalog-dir <path>] [--gates-file <path>] [--no-json]");
+            println!("  status --phase <phase> [--catalog-dir <path>] [--no-json]");
+            Ok(())
+        }
+        other => Err(ExitError::usage(format!(
+            "forge-core guide: unknown subcommand '{other}'. Try: describe | decide"
+        ))),
+    }
+}
+
+pub fn guide_value(args: &[String], idx: usize) -> Option<&str> {
+    args.get(idx)
+        .filter(|value| !value.is_empty() && !value.starts_with("--"))
+        .map(String::as_str)
+}
+
+pub fn require_guide_value(
+    args: &[String],
+    idx: usize,
+    subcommand: &str,
+    flag: &str,
+) -> Result<String, ExitError> {
+    match guide_value(args, idx) {
+        Some(value) => Ok(value.to_owned()),
+        None => Err(ExitError::invalid_value(format!(
+            "guide {subcommand}: --{flag} requires a value"
+        ))),
+    }
+}
+
+#[must_use]
+pub fn reject_unknown_guide_arg(subcommand: &str, arg: &str) -> ExitError {
+    eprintln!("guide {subcommand}: unrecognized argument '{arg}'");
+    ExitError::invalid_value(format!("guide {subcommand}: unrecognized argument '{arg}'"))
+}
+
+pub fn run_guide_describe(args: &[String]) -> Result<(), ExitError> {
+    use forge_core_contracts::CliEnvelope;
+
+    let mut catalog_dir: Option<std::path::PathBuf> = None;
+    let mut want_json = true;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--catalog-dir" => {
+                idx += 1;
+                catalog_dir = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    idx,
+                    "describe",
+                    "catalog-dir",
+                )?));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core guide describe [--catalog-dir <path>] [--no-json]");
+                return Ok(());
+            }
+            other => return Err(reject_unknown_guide_arg("describe", other)),
+        }
+        idx += 1;
+    }
+
+    let env: CliEnvelope<DescribePayload> = run_describe(catalog_dir.as_deref());
+    emit_guide(env, want_json)
+}
+
+pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
+    use forge_core_contracts::CliEnvelope;
+
+    let mut decision_file: Option<std::path::PathBuf> = None;
+    let mut catalog_dir: Option<std::path::PathBuf> = None;
+    let mut gates_file: Option<std::path::PathBuf> = None;
+    let mut want_json = true;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--decision-file" => {
+                idx += 1;
+                decision_file = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    idx,
+                    "decide",
+                    "decision-file",
+                )?));
+            }
+            "--catalog-dir" => {
+                idx += 1;
+                catalog_dir = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    idx,
+                    "decide",
+                    "catalog-dir",
+                )?));
+            }
+            "--gates-file" => {
+                idx += 1;
+                gates_file = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    idx,
+                    "decide",
+                    "gates-file",
+                )?));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!("forge-core guide decide --decision-file <path> [--catalog-dir <path>] [--gates-file <path>] [--no-json]");
+                return Ok(());
+            }
+            other => return Err(reject_unknown_guide_arg("decide", other)),
+        }
+        idx += 1;
+    }
+
+    let decision_file = decision_file.ok_or_else(|| {
+        eprintln!("guide decide: --decision-file is required");
+        ExitError::invalid_value("guide decide: --decision-file is required")
+    })?;
+
+    // Gates are optional (only needed for phase transitions). Loaded from a simple
+    // YAML file: [{gate_kind: system-design, status: pass}, ...].
+    let gates = load_gates(gates_file.as_deref());
+
+    let env: CliEnvelope<DecideAccepted> =
+        run_decide(&decision_file, catalog_dir.as_deref(), &gates);
+    emit_guide(env, want_json)
+}
+
+pub fn run_guide_status(args: &[String]) -> Result<(), ExitError> {
+    use forge_core_contracts::CliEnvelope;
+
+    let mut phase: Option<String> = None;
+    let mut catalog_dir: Option<std::path::PathBuf> = None;
+    let mut want_json = true;
+    let mut idx = 0usize;
+    while idx < args.len() {
+        match args[idx].as_str() {
+            "--phase" => {
+                idx += 1;
+                phase = Some(require_guide_value(args, idx, "status", "phase")?);
+            }
+            "--catalog-dir" => {
+                idx += 1;
+                catalog_dir = Some(std::path::PathBuf::from(require_guide_value(
+                    args,
+                    idx,
+                    "status",
+                    "catalog-dir",
+                )?));
+            }
+            "--no-json" | "--text" => want_json = false,
+            "--help" | "-h" => {
+                println!(
+                    "forge-core guide status --phase <phase> [--catalog-dir <path>] [--no-json]"
+                );
+                return Ok(());
+            }
+            other => return Err(reject_unknown_guide_arg("status", other)),
+        }
+        idx += 1;
+    }
+
+    let phase = phase.ok_or_else(|| {
+        eprintln!("guide status: --phase is required");
+        ExitError::invalid_value("guide status: --phase is required")
+    })?;
+
+    let env: CliEnvelope<StatusPayload> = run_status(catalog_dir.as_deref(), &phase);
+    emit_guide(env, want_json)
+}
+
+/// Parse the gates-file into `ProvidedGateResult` rows. Empty/absent = no gates provided.
+#[must_use]
+pub fn load_gates(path: Option<&std::path::Path>) -> Vec<forge_core_engine::ProvidedGateResult> {
+    use forge_core_contracts::gate::GateStatus;
+    use forge_core_engine::GateKind;
+    let Some(path) = path else {
+        return Vec::new();
+    };
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    #[derive(serde::Deserialize)]
+    struct GateRow {
+        gate_kind: String,
+        status: String,
+    }
+    let rows: Vec<GateRow> = yaml_serde::from_str(&text).unwrap_or_default();
+    rows.into_iter()
+        .filter_map(|r| {
+            let gk = match r.gate_kind.as_str() {
+                "system-design" => Some(GateKind::SystemDesign),
+                "grill" | "grill-gate" => Some(GateKind::Grill),
+                _ => None,
+            }?;
+            let status = match r.status.as_str() {
+                "pass" => GateStatus::Pass,
+                "fail" => GateStatus::Fail,
+                "concerns" => GateStatus::Concerns,
+                "missing" => GateStatus::Missing,
+                _ => GateStatus::NotApplicable,
+            };
+            Some(forge_core_engine::ProvidedGateResult {
+                gate_kind: gk,
+                status,
+            })
+        })
+        .collect()
+}
+
+/// Emit a guide envelope to stdout (JSON) or stderr (text) and propagate
+/// the envelope's exit code as an `ExitError` when non-zero.
+pub fn emit_guide<T: serde::Serialize>(
+    env: forge_core_contracts::CliEnvelope<T>,
+    want_json: bool,
+) -> Result<(), ExitError> {
+    let code = env.exit_code();
+    if want_json {
+        println!("{}", serde_json::to_string_pretty(&env).unwrap());
+    } else if !env.ok {
+        eprintln!(
+            "guide failed: {}",
+            env.error.as_ref().map_or("unknown", |e| e.message.as_str())
+        );
+    }
+    if code == 0 {
+        Ok(())
+    } else {
+        Err(ExitError::with_code(code, String::new()))
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -585,248 +827,5 @@ mod tests {
             .map(ToString::to_string)
             .collect();
         assert_eq!(guide_value(&next_flag, 1), None);
-    }
-}
-pub fn run_guide_command(args: &[String]) -> Result<(), ExitError> {
-    // Subcommand: `forge-core guide <subcommand> [...]`.
-    let sub = args.get(1).map(String::as_str).unwrap_or("--help");
-
-    match sub {
-        "describe" => run_guide_describe(&args[2..]),
-        "decide" => run_guide_decide(&args[2..]),
-        "status" => run_guide_status(&args[2..]),
-        "--help" | "-h" | "help" => {
-            println!("forge-core guide <subcommand> [options]");
-            println!("  describe [--catalog-dir <path>] [--no-json]");
-            println!("  decide --decision-file <path> [--catalog-dir <path>] [--gates-file <path>] [--no-json]");
-            println!("  status --phase <phase> [--catalog-dir <path>] [--no-json]");
-            Ok(())
-        }
-        other => Err(ExitError::usage(format!(
-            "forge-core guide: unknown subcommand '{other}'. Try: describe | decide"
-        ))),
-    }
-}
-
-pub fn guide_value(args: &[String], idx: usize) -> Option<&str> {
-    args.get(idx)
-        .filter(|value| !value.is_empty() && !value.starts_with("--"))
-        .map(String::as_str)
-}
-
-pub fn require_guide_value(
-    args: &[String],
-    idx: usize,
-    subcommand: &str,
-    flag: &str,
-) -> Result<String, ExitError> {
-    match guide_value(args, idx) {
-        Some(value) => Ok(value.to_owned()),
-        None => Err(ExitError::invalid_value(format!(
-            "guide {subcommand}: --{flag} requires a value"
-        ))),
-    }
-}
-
-pub fn reject_unknown_guide_arg(subcommand: &str, arg: &str) -> ExitError {
-    eprintln!("guide {subcommand}: unrecognized argument '{arg}'");
-    ExitError::invalid_value(format!("guide {subcommand}: unrecognized argument '{arg}'"))
-}
-
-pub fn run_guide_describe(args: &[String]) -> Result<(), ExitError> {
-    use forge_core_contracts::CliEnvelope;
-
-    let mut catalog_dir: Option<std::path::PathBuf> = None;
-    let mut want_json = true;
-    let mut idx = 0usize;
-    while idx < args.len() {
-        match args[idx].as_str() {
-            "--catalog-dir" => {
-                idx += 1;
-                catalog_dir = Some(std::path::PathBuf::from(require_guide_value(
-                    args,
-                    idx,
-                    "describe",
-                    "catalog-dir",
-                )?));
-            }
-            "--no-json" | "--text" => want_json = false,
-            "--help" | "-h" => {
-                println!("forge-core guide describe [--catalog-dir <path>] [--no-json]");
-                return Ok(());
-            }
-            other => return Err(reject_unknown_guide_arg("describe", other)),
-        }
-        idx += 1;
-    }
-
-    let env: CliEnvelope<DescribePayload> = run_describe(catalog_dir.as_deref());
-    emit_guide(env, want_json)
-}
-
-pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
-    use forge_core_contracts::CliEnvelope;
-
-    let mut decision_file: Option<std::path::PathBuf> = None;
-    let mut catalog_dir: Option<std::path::PathBuf> = None;
-    let mut gates_file: Option<std::path::PathBuf> = None;
-    let mut want_json = true;
-    let mut idx = 0usize;
-    while idx < args.len() {
-        match args[idx].as_str() {
-            "--decision-file" => {
-                idx += 1;
-                decision_file = Some(std::path::PathBuf::from(require_guide_value(
-                    args,
-                    idx,
-                    "decide",
-                    "decision-file",
-                )?));
-            }
-            "--catalog-dir" => {
-                idx += 1;
-                catalog_dir = Some(std::path::PathBuf::from(require_guide_value(
-                    args,
-                    idx,
-                    "decide",
-                    "catalog-dir",
-                )?));
-            }
-            "--gates-file" => {
-                idx += 1;
-                gates_file = Some(std::path::PathBuf::from(require_guide_value(
-                    args,
-                    idx,
-                    "decide",
-                    "gates-file",
-                )?));
-            }
-            "--no-json" | "--text" => want_json = false,
-            "--help" | "-h" => {
-                println!("forge-core guide decide --decision-file <path> [--catalog-dir <path>] [--gates-file <path>] [--no-json]");
-                return Ok(());
-            }
-            other => return Err(reject_unknown_guide_arg("decide", other)),
-        }
-        idx += 1;
-    }
-
-    let decision_file = decision_file.ok_or_else(|| {
-        eprintln!("guide decide: --decision-file is required");
-        ExitError::invalid_value("guide decide: --decision-file is required")
-    })?;
-
-    // Gates are optional (only needed for phase transitions). Loaded from a simple
-    // YAML file: [{gate_kind: system-design, status: pass}, ...].
-    let gates = load_gates(gates_file.as_deref());
-
-    let env: CliEnvelope<DecideAccepted> =
-        run_decide(&decision_file, catalog_dir.as_deref(), &gates);
-    emit_guide(env, want_json)
-}
-
-pub fn run_guide_status(args: &[String]) -> Result<(), ExitError> {
-    use forge_core_contracts::CliEnvelope;
-
-    let mut phase: Option<String> = None;
-    let mut catalog_dir: Option<std::path::PathBuf> = None;
-    let mut want_json = true;
-    let mut idx = 0usize;
-    while idx < args.len() {
-        match args[idx].as_str() {
-            "--phase" => {
-                idx += 1;
-                phase = Some(require_guide_value(args, idx, "status", "phase")?);
-            }
-            "--catalog-dir" => {
-                idx += 1;
-                catalog_dir = Some(std::path::PathBuf::from(require_guide_value(
-                    args,
-                    idx,
-                    "status",
-                    "catalog-dir",
-                )?));
-            }
-            "--no-json" | "--text" => want_json = false,
-            "--help" | "-h" => {
-                println!(
-                    "forge-core guide status --phase <phase> [--catalog-dir <path>] [--no-json]"
-                );
-                return Ok(());
-            }
-            other => return Err(reject_unknown_guide_arg("status", other)),
-        }
-        idx += 1;
-    }
-
-    let phase = phase.ok_or_else(|| {
-        eprintln!("guide status: --phase is required");
-        ExitError::invalid_value("guide status: --phase is required")
-    })?;
-
-    let env: CliEnvelope<StatusPayload> = run_status(catalog_dir.as_deref(), &phase);
-    emit_guide(env, want_json)
-}
-
-/// Parse the gates-file into ProvidedGateResult rows. Empty/absent = no gates provided.
-pub fn load_gates(path: Option<&std::path::Path>) -> Vec<forge_core_engine::ProvidedGateResult> {
-    use forge_core_contracts::gate::GateStatus;
-    use forge_core_engine::GateKind;
-    let Some(path) = path else {
-        return Vec::new();
-    };
-    let Ok(text) = std::fs::read_to_string(path) else {
-        return Vec::new();
-    };
-    #[derive(serde::Deserialize)]
-    struct GateRow {
-        gate_kind: String,
-        status: String,
-    }
-    let rows: Vec<GateRow> = yaml_serde::from_str(&text).unwrap_or_default();
-    rows.into_iter()
-        .filter_map(|r| {
-            let gk = match r.gate_kind.as_str() {
-                "system-design" => Some(GateKind::SystemDesign),
-                "grill" | "grill-gate" => Some(GateKind::Grill),
-                _ => None,
-            }?;
-            let status = match r.status.as_str() {
-                "pass" => GateStatus::Pass,
-                "fail" => GateStatus::Fail,
-                "concerns" => GateStatus::Concerns,
-                "missing" => GateStatus::Missing,
-                _ => GateStatus::NotApplicable,
-            };
-            Some(forge_core_engine::ProvidedGateResult {
-                gate_kind: gk,
-                status,
-            })
-        })
-        .collect()
-}
-
-/// Emit a guide envelope to stdout (JSON) or stderr (text) and propagate
-/// the envelope's exit code as an ExitError when non-zero.
-pub fn emit_guide<T: serde::Serialize>(
-    env: forge_core_contracts::CliEnvelope<T>,
-    want_json: bool,
-) -> Result<(), ExitError> {
-    let code = env.exit_code();
-    if want_json {
-        println!("{}", serde_json::to_string_pretty(&env).unwrap());
-    } else if !env.ok {
-        eprintln!(
-            "guide failed: {}",
-            env.error
-                .as_ref()
-                .map(|e| e.message.as_str())
-                .unwrap_or("unknown")
-        );
-    }
-    if code == 0 {
-        Ok(())
-    } else {
-        Err(ExitError::with_code(code, String::new()))
     }
 }

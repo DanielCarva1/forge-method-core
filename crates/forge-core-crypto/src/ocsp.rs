@@ -180,7 +180,7 @@ pub(crate) fn find_matching_ocsp_single_response<'a>(
     let mut saw_supported_hash = false;
     let mut saw_issuer_hash_match = false;
 
-    for single_response in basic_response.tbs_response_data.responses.iter() {
+    for single_response in &basic_response.tbs_response_data.responses {
         let serial_matches =
             single_response.cert_id.serial_number.to_string() == certificate_serial_decimal;
         if serial_matches {
@@ -361,7 +361,7 @@ pub(crate) fn normalize_expected_ocsp_nonce_hex(
             return None;
         }
     }
-    if normalized.is_empty() || normalized.len() % 2 != 0 {
+    if normalized.is_empty() || !normalized.len().is_multiple_of(2) {
         reasons.push("ocsp_status_expected_nonce_hex_invalid".to_string());
         None
     } else {

@@ -55,10 +55,12 @@ pub struct ReferenceIndexBuilder {
 }
 
 impl ReferenceIndexBuilder {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
+    #[must_use]
     pub fn with_options(options: ReferenceIndexOptions) -> Self {
         Self { options }
     }
@@ -253,8 +255,7 @@ impl fmt::Display for EffectTargetResolveError {
                 source,
             } => write!(
                 formatter,
-                "resolve effect target {:?} {} failed: {source}",
-                target_kind, reference
+                "resolve effect target {target_kind:?} {reference} failed: {source}"
             ),
         }
     }
@@ -262,7 +263,7 @@ impl fmt::Display for EffectTargetResolveError {
 
 impl std::error::Error for EffectTargetResolveError {}
 
-/// Resolve a ToolEffect target to the repo-relative physical path used by the
+/// Resolve a `ToolEffect` target to the repo-relative physical path used by the
 /// effect store when applying file-backed writes.
 ///
 /// # Errors
@@ -401,23 +402,12 @@ pub fn query_trace_events_at(
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct TraceEventQuery {
     pub run_id: Option<String>,
     pub trace_id: Option<String>,
     pub latest_run: bool,
     pub limit: Option<usize>,
-}
-
-impl Default for TraceEventQuery {
-    fn default() -> Self {
-        Self {
-            run_id: None,
-            trace_id: None,
-            latest_run: false,
-            limit: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -838,6 +828,7 @@ pub struct EffectStoreLock {
 }
 
 impl EffectStoreLock {
+    #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
     }
@@ -900,6 +891,7 @@ struct EffectWalCompactionManifest {
     incomplete_transactions: Vec<String>,
 }
 
+#[must_use]
 pub fn sha256_content_hash(content: &[u8]) -> String {
     let digest = Sha256::digest(content);
     format!("sha256:{digest:x}")
@@ -1342,10 +1334,10 @@ pub fn recover_effect_wal(
             .collect();
         if rollback_wal_before_images(root, &before_images, &mut diagnostics) {
             recovered_transactions.push(tx_id.clone());
-            let effect_id = before_images
-                .first()
-                .map(|record| record.effect_id.clone())
-                .unwrap_or_else(|| StableId("unknown_effect".to_string()));
+            let effect_id = before_images.first().map_or_else(
+                || StableId("unknown_effect".to_string()),
+                |record| record.effect_id.clone(),
+            );
             let _ = append_effect_wal_record(
                 root,
                 wal_relative_path,
@@ -1632,6 +1624,7 @@ pub fn query_effect_target_metadata_index(
     }
 }
 
+#[must_use]
 pub fn build_effect_metadata_context(
     query_result: &EffectTargetMetadataIndexQueryResult,
     options: &EffectMetadataContextBuildOptions,
@@ -2811,26 +2804,25 @@ fn prepare_file_writes(
                 }
             };
 
-        let (target, physical_reference) =
-            match resolve_effect_target(root, write.target_kind, &write.reference) {
-                Ok(resolved) => resolved,
-                Err(_) => {
-                    reasons.push(EffectApplicationReason::InvalidTargetPath);
-                    diagnostics.push(format!("invalid write target path {}", write.reference));
-                    continue;
-                }
-            };
+        let (target, physical_reference) = if let Ok(resolved) =
+            resolve_effect_target(root, write.target_kind, &write.reference)
+        {
+            resolved
+        } else {
+            reasons.push(EffectApplicationReason::InvalidTargetPath);
+            diagnostics.push(format!("invalid write target path {}", write.reference));
+            continue;
+        };
 
         let payload = if access_mode.requires_payload() {
-            match payload_for(payloads, &write.reference) {
-                Some(payload) => Some(payload),
-                None => {
-                    PrepareFileWriteError::MissingPayloadForWrite {
-                        reference: write.reference.clone(),
-                    }
-                    .push_diagnostic(reasons, diagnostics);
-                    continue;
+            if let Some(payload) = payload_for(payloads, &write.reference) {
+                Some(payload)
+            } else {
+                PrepareFileWriteError::MissingPayloadForWrite {
+                    reference: write.reference.clone(),
                 }
+                .push_diagnostic(reasons, diagnostics);
+                continue;
             }
         } else {
             None
@@ -3642,22 +3634,21 @@ fn rollback_wal_before_images(
             continue;
         };
         let physical_target_ref = record.physical_target_ref.as_ref().unwrap_or(target_ref);
-        let target = match resolve_safe_repo_relative(root, physical_target_ref) {
-            Ok(target) => target,
-            Err(_) => {
-                diagnostics.push(format!("invalid WAL target path {physical_target_ref}"));
-                ok = false;
-                continue;
-            }
+        let target = if let Ok(target) = resolve_safe_repo_relative(root, physical_target_ref) {
+            target
+        } else {
+            diagnostics.push(format!("invalid WAL target path {physical_target_ref}"));
+            ok = false;
+            continue;
         };
         let result = if original.existed {
-            if sha256_content_hash(&original.content) != original.content_hash {
+            if sha256_content_hash(&original.content) == original.content_hash {
+                atomic_replace_file(&target, &original.content)
+            } else {
                 Err(io::Error::new(
                     io::ErrorKind::InvalidData,
                     "WAL before image hash mismatch",
                 ))
-            } else {
-                atomic_replace_file(&target, &original.content)
             }
         } else if target.exists() {
             fs::remove_file(&target).and_then(|()| {

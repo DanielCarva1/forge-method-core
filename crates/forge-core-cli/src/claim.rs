@@ -1526,7 +1526,7 @@ mod tests {
     }
 }
 pub fn run_claim_command(args: &[String]) -> Result<(), ExitError> {
-    let sub = args.get(1).map(String::as_str).unwrap_or("--help");
+    let sub = args.get(1).map_or("--help", String::as_str);
     match sub {
         "acquire" => run_claim_acquire(&args[2..]),
         "heartbeat" => run_claim_heartbeat(&args[2..]),

@@ -283,6 +283,7 @@ pub fn run_host_adapter_provenance_verification(
     }
 }
 
+#[must_use]
 pub fn run_host_adapter_rekor_verification(
     input: HostAdapterRekorVerificationInput,
 ) -> HostAdapterRekorVerification {
@@ -356,6 +357,7 @@ pub fn run_host_adapter_rekor_verification(
     }
 }
 
+#[must_use]
 pub fn run_host_adapter_sigstore_trust_policy_verification(
     input: HostAdapterSigstoreTrustPolicyVerificationInput,
 ) -> HostAdapterSigstoreTrustPolicyVerification {
@@ -585,6 +587,7 @@ pub fn run_host_adapter_fulcio_certificate_identity_verification(
     }
 }
 
+#[must_use]
 pub fn run_host_adapter_sigstore_bundle_subject_verification(
     input: HostAdapterSigstoreBundleSubjectVerificationInput,
 ) -> HostAdapterSigstoreBundleSubjectVerification {
@@ -637,7 +640,7 @@ pub fn run_host_adapter_sigstore_bundle_subject_verification(
             reasons.push(format!(
                 "bundle_rekor_log_entry_read_failed:{:?}",
                 err.kind()
-            ))
+            ));
         })
         .ok()
         .and_then(|text| match rekor::parse_rekor_log_entry(&text) {
@@ -1034,6 +1037,7 @@ pub fn run_host_adapter_sigstore_dsse_in_toto_subject_verification(
     }
 }
 
+#[must_use]
 pub fn run_host_adapter_sigstore_timestamp_authority_verification(
     input: HostAdapterSigstoreTimestampAuthorityVerificationInput,
 ) -> HostAdapterSigstoreTimestampAuthorityVerification {
@@ -1208,6 +1212,7 @@ pub fn run_host_adapter_sigstore_timestamp_authority_verification(
     }
 }
 
+#[must_use]
 pub fn run_host_adapter_certificate_transparency_sct_verification(
     input: HostAdapterCertificateTransparencySctVerificationInput,
 ) -> HostAdapterCertificateTransparencySctVerification {
@@ -1352,6 +1357,7 @@ pub fn run_host_adapter_certificate_transparency_sct_verification(
     }
 }
 
+#[must_use]
 pub fn run_host_adapter_certificate_revocation_policy_verification(
     input: HostAdapterCertificateRevocationPolicyVerificationInput,
 ) -> HostAdapterCertificateRevocationPolicyVerification {
@@ -1499,6 +1505,7 @@ pub fn run_host_adapter_certificate_revocation_policy_verification(
     }
 }
 
+#[must_use]
 pub fn run_host_adapter_tuf_trusted_root_freshness_verification(
     input: HostAdapterTufTrustedRootFreshnessVerificationInput,
 ) -> HostAdapterTufTrustedRootFreshnessVerification {
@@ -1613,6 +1620,7 @@ pub fn run_host_adapter_tuf_trusted_root_freshness_verification(
     }
 }
 
+#[must_use]
 pub fn run_host_adapter_certificate_crl_status_verification(
     input: HostAdapterCertificateCrlStatusVerificationInput,
 ) -> HostAdapterCertificateCrlStatusVerification {
@@ -1732,7 +1740,7 @@ pub fn run_host_adapter_certificate_crl_status_verification(
             }
             match certificate.verify_signature(Some(issuer.public_key())) {
                 Ok(()) => {
-                    verified_evidence.push("crl_status_certificate_signature_verified".to_string())
+                    verified_evidence.push("crl_status_certificate_signature_verified".to_string());
                 }
                 Err(err) => reasons.push(format!("crl_status_certificate_signature_failed:{err}")),
             }
@@ -1920,7 +1928,8 @@ pub fn run_host_adapter_certificate_ocsp_status_verification(
             }
             match certificate.verify_signature(Some(issuer.public_key())) {
                 Ok(()) => {
-                    verified_evidence.push("ocsp_status_certificate_signature_verified".to_string())
+                    verified_evidence
+                        .push("ocsp_status_certificate_signature_verified".to_string());
                 }
                 Err(err) => reasons.push(format!("ocsp_status_certificate_signature_failed:{err}")),
             }
@@ -2035,8 +2044,7 @@ pub fn run_host_adapter_certificate_ocsp_status_verification(
                             if verification_had_reasons_before_status
                                 && matches!(
                                     revocation_status.as_deref(),
-                                    Some("revoked_by_supplied_ocsp")
-                                        | Some("unknown_by_supplied_ocsp")
+                                    Some("revoked_by_supplied_ocsp" | "unknown_by_supplied_ocsp")
                                 )
                             {
                                 revocation_status =

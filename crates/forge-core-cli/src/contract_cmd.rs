@@ -60,7 +60,7 @@ impl std::fmt::Display for ContractValidateError {
 
 /// Parse and run `forge-core contract <subcommand>`.
 pub fn run_contract_command(args: &[String]) -> Result<(), ExitError> {
-    let sub = args.get(1).map(String::as_str).unwrap_or("--help");
+    let sub = args.get(1).map_or("--help", String::as_str);
     match sub {
         "validate" => run_validate(&args[2..]),
         "--help" | "-h" | "help" => {
@@ -248,10 +248,7 @@ fn emit_err(command: &str, message: &str, want_json: bool) -> ExitError {
     } else {
         eprintln!(
             "{command} failed: {}",
-            env.error
-                .as_ref()
-                .map(|e| e.message.as_str())
-                .unwrap_or("unknown")
+            env.error.as_ref().map_or("unknown", |e| e.message.as_str())
         );
     }
     ExitError::with_code(env.exit_code(), String::new())
@@ -269,10 +266,7 @@ fn emit<T: serde::Serialize>(env: CliEnvelope<T>, want_json: bool) -> Result<(),
     } else {
         eprintln!(
             "contract validate failed: {}",
-            env.error
-                .as_ref()
-                .map(|e| e.message.as_str())
-                .unwrap_or("unknown")
+            env.error.as_ref().map_or("unknown", |e| e.message.as_str())
         );
     }
     if code == 0 {

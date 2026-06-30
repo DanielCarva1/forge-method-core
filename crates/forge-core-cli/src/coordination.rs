@@ -119,7 +119,7 @@ pub fn run_validate(
 /// Parse and run `forge-core coordination <subcommand>`. Returns the envelope
 /// as a pretty-printed JSON string + the process exit code (DD10).
 pub fn dispatch(args: &[String]) -> (String, i32) {
-    let sub = args.get(1).map(String::as_str).unwrap_or("--help");
+    let sub = args.get(1).map_or("--help", String::as_str);
     match sub {
         "validate" => {
             let mut suite = PathBuf::from("contracts/evals/minimal-coordination-eval-suite.yaml");
@@ -195,28 +195,24 @@ fn print_validate_help() {
 }
 
 fn print_validate_human(env: &CliEnvelope<CoordinationValidatePayload>) {
-    match &env.data {
-        Some(d) => {
-            println!("suite: {}", d.suite_path);
-            println!("dimensions: {}", d.dimension_count);
-            println!("structural errors: {}", d.structural_errors.len());
-            for e in &d.structural_errors {
-                println!("  - {e:?}");
-            }
-            println!("dangling refs: {}", d.dangling_refs.len());
-            for r in &d.dangling_refs {
-                println!("  - {r}");
-            }
-            println!("is_real: {}", d.is_real);
+    if let Some(d) = &env.data {
+        println!("suite: {}", d.suite_path);
+        println!("dimensions: {}", d.dimension_count);
+        println!("structural errors: {}", d.structural_errors.len());
+        for e in &d.structural_errors {
+            println!("  - {e:?}");
         }
-        None => {
-            let msg = env
-                .error
-                .as_ref()
-                .map(|e| e.message.as_str())
-                .unwrap_or("(no error detail)");
-            println!("{msg}");
+        println!("dangling refs: {}", d.dangling_refs.len());
+        for r in &d.dangling_refs {
+            println!("  - {r}");
         }
+        println!("is_real: {}", d.is_real);
+    } else {
+        let msg = env
+            .error
+            .as_ref()
+            .map_or("(no error detail)", |e| e.message.as_str());
+        println!("{msg}");
     }
 }
 

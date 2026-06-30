@@ -15,9 +15,9 @@
 //! - [`sigstore`] — sigstore trust policy, fulcio chain, bundle/DSSE verify.
 //! - [`slsa_transparency`] — SLSA statement and transparency log proofs.
 //! - [`tuf`] — TUF metadata freshness role verification.
-//! - [`file_io`] — shared file I/O helpers (read_required_file, etc.).
-//! - [`host_command`] — admission safety predicates (source_ref_is_immutable,
-//!   version_like).
+//! - [`file_io`] — shared file I/O helpers (`read_required_file`, etc.).
+//! - [`host_command`] — admission safety predicates (`source_ref_is_immutable`,
+//!   `version_like`).
 //! - [`host_adapter_types`] — public types for host-adapter verification
 //!   (inputs and statuses).
 //! - [`host_adapter_verification`] — the `run_host_adapter_*_verification`

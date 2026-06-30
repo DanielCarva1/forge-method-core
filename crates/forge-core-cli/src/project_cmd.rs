@@ -485,14 +485,13 @@ fn build_init_plan(
         None => default_project_id(project_root)?,
     };
     let default_sidecar = format!("../forge-{project_id}");
-    let sidecar_link = sidecar_root
-        .map(path_arg_to_link_value)
-        .unwrap_or(default_sidecar);
+    let sidecar_link = sidecar_root.map_or(default_sidecar, path_arg_to_link_value);
     validate_link_path_value(&sidecar_link, "sidecar-root")?;
 
-    let state_link = state_root
-        .map(path_arg_to_link_value)
-        .unwrap_or_else(|| default_state_root_for_sidecar(&sidecar_link));
+    let state_link = state_root.map_or_else(
+        || default_state_root_for_sidecar(&sidecar_link),
+        path_arg_to_link_value,
+    );
     validate_link_path_value(&state_link, "state-root")?;
 
     let link_path = project_root.join(PROJECT_LINK_FILE_NAME);
@@ -576,7 +575,7 @@ fn validate_link_path_value(raw: &str, field: &'static str) -> Result<(), Projec
 }
 
 fn default_state_root_for_sidecar(sidecar_link: &str) -> String {
-    let sidecar = sidecar_link.trim_end_matches(|character| character == '/' || character == '\\');
+    let sidecar = sidecar_link.trim_end_matches(['/', '\\']);
     if sidecar.is_empty() {
         ".forge-method".to_string()
     } else {
@@ -838,13 +837,13 @@ pub fn resolve_project(
 ) -> Result<ProjectResolvePayload, ProjectResolveError> {
     if !root.exists() {
         return Err(ProjectResolveError::RootNotFound {
-            root: display_path(&root),
+            root: display_path(root),
         });
     }
     let root = root
         .canonicalize()
         .map_err(|source| ProjectResolveError::RootCanonicalize {
-            root: display_path(&root),
+            root: display_path(root),
             source: source.to_string(),
         })?;
     let link_path = root.join(PROJECT_LINK_FILE_NAME);
@@ -994,7 +993,7 @@ fn is_bootstrap_core_root(root: &Path) -> bool {
 }
 
 pub fn dispatch(args: &[String]) -> (String, i32) {
-    let sub = args.get(1).map(String::as_str).unwrap_or("--help");
+    let sub = args.get(1).map_or("--help", String::as_str);
     match sub {
         "init" => dispatch_init(&args[2..]),
         "resolve" => dispatch_resolve(&args[2..]),
@@ -1081,11 +1080,10 @@ fn dispatch_init(args: &[String]) -> (String, i32) {
         )
     } else {
         (
-            envelope
-                .error
-                .as_ref()
-                .map(|err| err.message.clone())
-                .unwrap_or_else(|| "project init failed".to_string()),
+            envelope.error.as_ref().map_or_else(
+                || "project init failed".to_string(),
+                |err| err.message.clone(),
+            ),
             exit_code,
         )
     }
@@ -1136,11 +1134,10 @@ fn dispatch_resolve(args: &[String]) -> (String, i32) {
         )
     } else {
         (
-            envelope
-                .error
-                .as_ref()
-                .map(|err| err.message.clone())
-                .unwrap_or_else(|| "project resolve failed".to_string()),
+            envelope.error.as_ref().map_or_else(
+                || "project resolve failed".to_string(),
+                |err| err.message.clone(),
+            ),
             exit_code,
         )
     }

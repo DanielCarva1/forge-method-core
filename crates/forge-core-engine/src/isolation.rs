@@ -94,16 +94,13 @@ pub fn transition_status(
     from: IsolationStatus,
     to: IsolationStatus,
 ) -> Result<IsolationStatus, IsolationError> {
-    use IsolationStatus::*;
+    use IsolationStatus::{Abandoned, Active, Merged, Merging, Proposed};
     let legal = matches!(
         (from, to),
-        (Proposed, Active)
-            | (Proposed, Abandoned)
+        (Proposed | Merging, Active)
+            | (Proposed | Active | Merging, Abandoned)
             | (Active, Merging)
-            | (Active, Abandoned)
             | (Merging, Merged)
-            | (Merging, Abandoned)
-            | (Merging, Active)
     );
     if legal {
         Ok(to)
@@ -298,7 +295,7 @@ fn validate_worktree_path(path: &str) -> Result<(), IsolationError> {
 }
 
 /// Normalize a path for collision comparison: ASCII-lowercase + segment split
-/// (mirrors conflict_detection's DD30 casing decision, so `Worktrees/x` and
+/// (mirrors `conflict_detection`'s DD30 casing decision, so `Worktrees/x` and
 /// `worktrees/x` collide on case-insensitive filesystems).
 fn normalize_path(path: &str) -> Vec<String> {
     // DD29 (echo of S4.5): lexical canonicalization — drop `.` and COLLAPSE

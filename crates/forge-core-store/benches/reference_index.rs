@@ -3,7 +3,7 @@
 //! `forge validate` and `forge guide` call this once per invocation to map
 //! the workspace's contract/policy/fixture graph. The cost is dominated by:
 //! - filesystem walk of `contracts/` and `docs/fixtures/operation-contract-v0/`
-//! - yaml_serde parsing of every YAML file found
+//! - `yaml_serde` parsing of every YAML file found
 //! - building the reference index (`ReferenceIndex`)
 //!
 //! We measure against the workspace itself (the realistic upper bound for a
@@ -22,8 +22,7 @@ fn workspace_root() -> PathBuf {
     PathBuf::from(manifest_dir)
         .parent()
         .and_then(|p| p.parent())
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| PathBuf::from("."))
+        .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
 }
 
 /// A minimal root with just a `contracts/` containing a single empty file.

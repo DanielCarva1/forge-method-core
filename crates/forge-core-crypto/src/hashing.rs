@@ -13,6 +13,7 @@
 use sha2::{Digest, Sha256};
 
 /// Lowercase hex SHA-256 of `content`.
+#[must_use]
 pub fn hex_sha256(content: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(content);
@@ -20,12 +21,14 @@ pub fn hex_sha256(content: &[u8]) -> String {
 }
 
 /// Lowercase hex encoding of an arbitrary byte slice.
+#[must_use]
 pub fn hex_bytes(content: &[u8]) -> String {
     content.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// `true` if `value` looks like a canonical `sha256:<64 hex>` or bare
 /// 64-hex digest.
+#[must_use]
 pub fn valid_sha256_digest(value: &str) -> bool {
     normalize_sha256_digest(value).is_some()
 }
@@ -33,6 +36,7 @@ pub fn valid_sha256_digest(value: &str) -> bool {
 /// Normalise a `sha256:<hex>` / bare-`<hex>` digest to a canonical 64-char
 /// lowercase hex form (without prefix), returning `None` if the input is
 /// malformed.
+#[must_use]
 pub fn normalize_sha256_digest(value: &str) -> Option<String> {
     let trimmed = value.trim();
     let digest = trimmed.strip_prefix("sha256:").unwrap_or(trimmed);
@@ -43,6 +47,7 @@ pub fn normalize_sha256_digest(value: &str) -> Option<String> {
 /// Best-effort lowercase display form for a digest. Strips an optional
 /// `sha256:` prefix but, unlike [`normalize_sha256_digest`], does not
 /// validate the hex content.
+#[must_use]
 pub fn normalize_sha256_display(value: &str) -> String {
     let trimmed = value.trim();
     trimmed

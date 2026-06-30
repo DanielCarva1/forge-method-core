@@ -46,6 +46,7 @@ impl CatalogLoadReport {
 /// Deterministic and non-short-circuiting: a malformed file is recorded in
 /// `report.errors` and skipped; the rest still load. The caller checks
 /// [`CatalogLoadReport::is_clean`].
+#[must_use]
 pub fn load_catalog(dir: &Path) -> CatalogLoadReport {
     let mut report = CatalogLoadReport::default();
     let Ok(entries) = fs::read_dir(dir) else {

@@ -35,6 +35,7 @@ pub struct RuntimeReadSnapshot<'a> {
 }
 
 impl<'a> RuntimeReadSnapshot<'a> {
+    #[must_use]
     pub fn new(reference_index: &'a ReferenceIndex) -> Self {
         Self { reference_index }
     }
@@ -258,6 +259,7 @@ pub struct CommandExecutionContext<'a> {
 }
 
 impl<'a> CommandExecutionContext<'a> {
+    #[must_use]
     pub fn single_root(root: &'a Path) -> Self {
         Self {
             repo_root: root,
@@ -407,6 +409,7 @@ pub struct RuntimeOperationExecutionContext<'a> {
 }
 
 impl<'a> RuntimeOperationExecutionContext<'a> {
+    #[must_use]
     pub fn single_root(root: &'a Path) -> Self {
         Self {
             command_context: CommandExecutionContext::single_root(root),
@@ -730,10 +733,12 @@ pub fn execute_operation(
     }
 }
 
+#[must_use]
 pub fn plan_operation(document: &OperationContractDocument) -> RuntimePlan {
     plan_operation_inner(document, None)
 }
 
+#[must_use]
 pub fn plan_operation_with_snapshot(
     document: &OperationContractDocument,
     snapshot: RuntimeReadSnapshot<'_>,
@@ -741,10 +746,12 @@ pub fn plan_operation_with_snapshot(
     plan_operation_inner(document, Some(snapshot))
 }
 
+#[must_use]
 pub fn preview_operation(document: &OperationContractDocument) -> RuntimePreviewReport {
     preview_operation_inner(document, None)
 }
 
+#[must_use]
 pub fn preview_operation_with_snapshot(
     document: &OperationContractDocument,
     snapshot: RuntimeReadSnapshot<'_>,
@@ -823,10 +830,12 @@ fn preview_operation_inner(
     preview_operation_from_plan(document, &plan)
 }
 
+#[must_use]
 pub fn ready_operation(document: &OperationContractDocument) -> RuntimeReadyReport {
     ready_operation_inner(document, None)
 }
 
+#[must_use]
 pub fn ready_operation_with_snapshot(
     document: &OperationContractDocument,
     snapshot: RuntimeReadSnapshot<'_>,
@@ -923,26 +932,20 @@ fn plan_operation_inner(
 
     let reference_validation = snapshot
         .map(|snapshot| validate_operation_cross_references(document, snapshot.reference_index));
-    let reference_error_count = reference_validation
-        .as_ref()
-        .map(|report| {
-            report
-                .diagnostics()
-                .iter()
-                .filter(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
-                .count()
-        })
-        .unwrap_or(0);
-    let reference_warning_count = reference_validation
-        .as_ref()
-        .map(|report| {
-            report
-                .diagnostics()
-                .iter()
-                .filter(|diagnostic| diagnostic.severity == DiagnosticSeverity::Warning)
-                .count()
-        })
-        .unwrap_or(0);
+    let reference_error_count = reference_validation.as_ref().map_or(0, |report| {
+        report
+            .diagnostics()
+            .iter()
+            .filter(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
+            .count()
+    });
+    let reference_warning_count = reference_validation.as_ref().map_or(0, |report| {
+        report
+            .diagnostics()
+            .iter()
+            .filter(|diagnostic| diagnostic.severity == DiagnosticSeverity::Warning)
+            .count()
+    });
 
     let operation = &document.operation_contract;
     let mut reasons = Vec::new();
@@ -1032,6 +1035,7 @@ fn meaningful_prompt(prompt: &HumanPrompt) -> Option<HumanPrompt> {
     }
 }
 
+#[must_use]
 pub fn stage_operation_effects(plan: &RuntimePlan) -> RuntimeEffectStagingPlan {
     let mut reasons = Vec::new();
 
@@ -1355,6 +1359,7 @@ fn runtime_ready_evidence(
     evidence
 }
 
+#[must_use]
 pub fn run_staged_read_only_command(
     staging: &RuntimeEffectStagingPlan,
     command: &CommandContractDocument,
@@ -1570,6 +1575,7 @@ pub fn command_execution_evidence_record(
     }
 }
 
+#[must_use]
 pub fn prepare_effect_transaction(
     staging: &RuntimeEffectStagingPlan,
     effect_ref: &RepoPath,

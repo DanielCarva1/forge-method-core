@@ -29,6 +29,7 @@ use crate::host_command::{host_command, HostCommandMetadata};
 /// Hosts (Codex, Cursor, Claude, Opencode, VS Code, `PiDev`, Forge Standalone,
 /// custom) consume it to render capability metadata and to decide which
 /// commands may be auto-invoked without explicit workflow authority.
+#[must_use]
 pub fn run_host_adapter_manifest() -> HostAdapterManifest {
     HostAdapterManifest {
         schema_version: "0.1".to_string(),

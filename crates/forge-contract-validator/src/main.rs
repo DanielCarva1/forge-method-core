@@ -7,8 +7,7 @@ use yaml_serde::Value;
 fn main() {
     let root = env::args()
         .nth(1)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
+        .map_or_else(|| PathBuf::from("."), PathBuf::from);
 
     let summary = run_validate(&root);
     if summary.passed() {

@@ -298,7 +298,7 @@ pub fn coordination_fixture_gaps(
 ///   non-required dimension is missing evidence.
 /// - **Failed**: at least one `must_pass` dimension failed (including a MISSING
 ///   outcome — fail-closed).
-/// - **ManualReviewRequired**: no hard failure, but an open manual-review item
+/// - **`ManualReviewRequired`**: no hard failure, but an open manual-review item
 ///   exists AND `manual_review_blocks_release` is true.
 ///
 /// # Governance invariants
@@ -475,7 +475,7 @@ where
     }
 }
 
-/// Lowercase snake_case name for a [`CoordinationVerdict`], mirroring its
+/// Lowercase `snake_case` name for a [`CoordinationVerdict`], mirroring its
 /// serde `rename_all = "snake_case"` so the human summary matches the
 /// serialized JSON form (review S4.7 L3).
 fn verdict_snake(v: CoordinationVerdict) -> &'static str {

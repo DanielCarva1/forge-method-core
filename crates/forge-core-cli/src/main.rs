@@ -1,5 +1,5 @@
 use forge_core_cli::cli_error::ExitError;
-use forge_core_cli::cli_util::*;
+use forge_core_cli::cli_util::usage;
 use forge_core_cli::host_adapter_policy_cmd;
 use forge_core_cli::host_adapter_verify_cmd;
 use forge_core_cli::m1_cmd::M1CommandKind;
@@ -14,7 +14,7 @@ fn main() {
     tracing_init::init_subscriber();
 
     let args: Vec<String> = env::args().skip(1).collect();
-    let command = args.first().map(String::as_str).unwrap_or("validate");
+    let command = args.first().map_or("validate", String::as_str);
 
     // Root session span. When FORGE_AGENT_ID is set, every nested span carries
     // `agent_id`, which lets a trace store correlate multi-agent runs (host +

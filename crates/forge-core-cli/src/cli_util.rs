@@ -5,7 +5,7 @@
 //! main.rs decomposition (see
 //! `docs/dev-docs/forge-method-core-dev-docs-v2/09_system_design_roadmap.md`).
 //!
-//! ## R8 (process::exit removal)
+//! ## R8 (`process::exit` removal)
 //!
 //! Before R8 every helper here called `std::process::exit(N)` on a malformed
 //! argv. As part of R8, the legacy helpers were replaced by their
@@ -63,6 +63,7 @@ pub fn resolve_stateful_command_roots(
     })
 }
 
+#[must_use]
 pub fn usage() -> &'static str {
     concat!(
         "usage: forge-core validate [--root <path>] [--json]\n",
@@ -107,6 +108,7 @@ pub fn usage() -> &'static str {
     )
 }
 
+#[must_use]
 pub fn graph_usage() -> &'static str {
     concat!(
         "usage: forge-core graph validate --root <project> --graph <path> [--allow-bootstrap-core] [--json]\n",
@@ -114,6 +116,7 @@ pub fn graph_usage() -> &'static str {
     )
 }
 
+#[must_use]
 pub fn eval_usage() -> &'static str {
     concat!(
         "usage: forge-core eval compare [--root <project>] [--suite <path>] ",
@@ -125,6 +128,7 @@ pub fn eval_usage() -> &'static str {
     )
 }
 
+#[must_use]
 pub fn telemetry_usage() -> &'static str {
     concat!(
         "usage: forge-core telemetry export [--root <project>] ",
@@ -347,10 +351,7 @@ pub fn emit_envelope_or_err<T: serde::Serialize>(
         eprintln!(
             "{} failed: {}",
             family,
-            env.error
-                .as_ref()
-                .map(|e| e.message.as_str())
-                .unwrap_or("unknown")
+            env.error.as_ref().map_or("unknown", |e| e.message.as_str())
         );
     }
     if code == 0 {
