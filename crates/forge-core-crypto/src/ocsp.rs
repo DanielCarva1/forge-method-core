@@ -23,6 +23,7 @@ use sha1::Sha1;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use x509_parser::certificate::X509Certificate;
 use x509_parser::x509::AlgorithmIdentifier as X509AlgorithmIdentifier;
+use zeroize::Zeroizing;
 
 use crate::hashing::hex_bytes;
 
@@ -70,14 +71,14 @@ pub(crate) fn verify_basic_ocsp_signature_with_issuer(
     reasons: &mut Vec<String>,
 ) -> bool {
     let tbs_der = match rasn::der::encode(&basic_response.tbs_response_data) {
-        Ok(value) => value,
+        Ok(value) => Zeroizing::new(value),
         Err(err) => {
             reasons.push(format!("ocsp_status_tbs_response_encode_failed:{err}"));
             return false;
         }
     };
     let algorithm_der = match rasn::der::encode(&basic_response.signature_algorithm) {
-        Ok(value) => value,
+        Ok(value) => Zeroizing::new(value),
         Err(err) => {
             reasons.push(format!(
                 "ocsp_status_signature_algorithm_encode_failed:{err}"
@@ -86,7 +87,7 @@ pub(crate) fn verify_basic_ocsp_signature_with_issuer(
         }
     };
     let signature_der = match rasn::der::encode(&basic_response.signature) {
-        Ok(value) => value,
+        Ok(value) => Zeroizing::new(value),
         Err(err) => {
             reasons.push(format!("ocsp_status_signature_encode_failed:{err}"));
             return false;
@@ -367,32 +368,35 @@ pub(crate) fn normalize_expected_ocsp_nonce_hex(
 }
 
 /// Compute a digest using the algorithm identified by the OID.
-fn ocsp_digest_for_algorithm(algorithm: &RasnObjectIdentifier, content: &[u8]) -> Option<Vec<u8>> {
+fn ocsp_digest_for_algorithm(
+    algorithm: &RasnObjectIdentifier,
+    content: &[u8],
+) -> Option<Zeroizing<Vec<u8>>> {
     match algorithm.as_ref() {
         [1, 3, 14, 3, 2, 26] => Some(sha1_digest(content)),
         [2, 16, 840, 1, 101, 3, 4, 2, 1] => {
             let mut hasher = Sha256::new();
             hasher.update(content);
-            Some(hasher.finalize().to_vec())
+            Some(Zeroizing::new(hasher.finalize().to_vec()))
         }
         [2, 16, 840, 1, 101, 3, 4, 2, 2] => {
             let mut hasher = Sha384::new();
             hasher.update(content);
-            Some(hasher.finalize().to_vec())
+            Some(Zeroizing::new(hasher.finalize().to_vec()))
         }
         [2, 16, 840, 1, 101, 3, 4, 2, 3] => {
             let mut hasher = Sha512::new();
             hasher.update(content);
-            Some(hasher.finalize().to_vec())
+            Some(Zeroizing::new(hasher.finalize().to_vec()))
         }
         _ => None,
     }
 }
 
-fn sha1_digest(content: &[u8]) -> Vec<u8> {
+fn sha1_digest(content: &[u8]) -> Zeroizing<Vec<u8>> {
     let mut hasher = Sha1::new();
     hasher.update(content);
-    hasher.finalize().to_vec()
+    Zeroizing::new(hasher.finalize().to_vec())
 }
 
 /// Check whether a RASN OID matches the expected OID arc.
