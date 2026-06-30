@@ -768,6 +768,7 @@ version = "0.1.0"
 dependencies = [
  "asn1-rs",
  "base64",
+ "criterion",
  "ed25519-dalek",
  "forge-core-contracts",
  "p256",

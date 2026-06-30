@@ -81,14 +81,36 @@ que `fsync` seja bem mais rápido (5–15ms típico em SSD).
 A flag `--no-sync` é um ganho de ergonomia real (Trilha B / F15-ish) e deve ser
 implementada antes do final de F15. Não otimizar o fsync em si — é custo de SO.
 
-## R6.2 (pendente)
+## R6.2 (✅ completo)
 
-Crypto hot paths em `crates/forge-core-crypto/benches/`:
-- `verify_rekor_checkpoint`
-- `verify_merkle_inclusion`
-- `parse_rekor_log_entry` (parse + verify combinados)
+Crypto hot paths em `crates/forge-core-crypto/benches/rekor.rs`:
+- `parse_signed_checkpoint` (parse puro, ~2-3µs)
+- `parse_rekor_log_entry` (JSON+base64 duplo, ~6-7µs)
+- `verify_rekor_full_path/aux_{0,10,100}` (caminho público completo
+  `run_host_adapter_rekor_verification`, parametrizado por profundidade
+  do inclusion proof: ~420µs / ~450µs / ~655µs)
 
-Depende de nada crítico; pode ser feito em paralelo com R7/R5/R4.
+Decisão de design (aplicada via `improve-codebase-architecture`):
+- Os helpers internos `verify_rekor_checkpoint` e `verify_merkle_inclusion`
+  permanecem `pub(crate)` porque nenhum caller externo os usa isoladamente.
+- São medidos indiretamente via o entrypoint público
+  `run_host_adapter_rekor_verification`, que reflete o uso real.
+- Deletion test: expor `verify_*` como `pub` só pra benchmark seria shallow.
+
+Achado de performance: o custo dominante (~400µs) é a verificação p256
+ECDSA no signed checkpoint. O Merkle walk scales O(log n) com cada hash
+auxiliar adicionando ~2µs. parse é quase grátis (~6µs).
+
+## R6.3 (pendente)
+
+Benchmarks `serde_yaml::from_str` vs `serde_yml::from_str` (pós-R7 — agora
+`yaml_serde`). Como a migração R7 já foi feita, este benchmark perdeu
+valor; considerar cancelar ou repurpose pra comparar versões de yaml_serde.
+
+## R6.4 (pendente)
+
+CI: bench em PR com label `perf` compara com main. Adicionar step no
+`ci.yml` ou `fuzz.yml`-style workflow separado.
 
 ## Como rodar
 
