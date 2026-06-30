@@ -1,0 +1,115 @@
+# F11 Risk Audit Gate — security slop anti-patterns.
+#
+# Detects code patterns that introduce security weaknesses or shortcut
+# verification. These are high-signal patterns: when present, the code is
+# almost certainly wrong and reviewers must reject.
+#
+# Schema: risk-audit-v0
+# See: crates/forge-core-validate/src/risk_audit.rs
+#
+# References:
+# - OWASP Top 10 (2021): A02 Cryptographic Failures, A05 Security
+#   Misconfiguration, A07 Identification and Authentication Failures.
+# - CWE-798: Use of Hard-coded Credentials.
+# - CWE-295: Improper Certificate Validation.
+
+schema_version: risk-audit-v0
+
+rules:
+  # ── Hardcoded secrets (any language) ────────────────────────────────────
+  # `password = "..."`, `api_key = "..."`, etc. assigned to a string literal.
+  - id: any-no-hardcoded-password
+    description: |
+      Hardcoded passwords and API keys are the most common leak vector.
+      Even when the value is a placeholder, the pattern teaches bad habits
+      and trips secret-scanning tooling. Load from env or a secrets manager.
+    severity: error
+    detector:
+      kind: regex
+      pattern: '(?i)(password|passwd|pwd|api[_-]?key|secret|token)\s*[:=]\s*["'']'
+    evidence_required: false
+    fix_hint: Load secrets from env (`std::env::var`) or a secrets manager.
+    applies_to:
+      - "**/*.rs"
+      - "**/*.py"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.go"
+      - "**/*.java"
+
+  # AWS access key id shape (`AKIA...`).
+  - id: any-no-hardcoded-aws-key
+    description: |
+      AWS access key IDs match `AKIA` followed by 16 alphanumeric chars.
+      Hardcoding one in source is a leak; rotate and move to env/IAM role.
+      Reference: CWE-798.
+    severity: error
+    detector:
+      kind: regex
+      pattern: 'AKIA[0-9A-Z]{16}'
+    evidence_required: false
+    fix_hint: Rotate the key; load from env or instance metadata.
+    applies_to:
+      - "**/*"
+
+  # ── Disabled TLS verification ───────────────────────────────────────────
+  # `verify = False`, `rejectUnauthorized: false`, `InsecureSkipVerify: true`.
+  - id: any-no-disabled-tls-verify
+    description: |
+      Disabling TLS certificate verification defeats the purpose of HTTPS.
+      It is acceptable in tests with self-signed certs, never in product
+      code. Reference: CWE-295.
+    severity: error
+    detector:
+      kind: regex
+      # Covers Python requests, Node.js, Go, Rust reqwest.
+      pattern: '(verify\s*=\s*False|rejectUnauthorized\s*:\s*false|InsecureSkipVerify\s*:\s*true|danger_accept_invalid_certs\s*:\s*true)'
+    evidence_required: false
+    fix_hint: Restore verification; pin a CA bundle if needed.
+    applies_to:
+      - "**/*.rs"
+      - "**/*.py"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.js"
+      - "**/*.jsx"
+      - "**/*.go"
+
+  # ── Rust-specific: `expect("...")` with no reason ──────────────────────
+  # `expect("")` is a panic with an empty message — worse than unwrap.
+  - id: rust-no-empty-expect
+    description: |
+      `.expect("")` panics with an empty message, giving no signal at the
+      failure site. Always provide a load-bearing reason.
+    severity: error
+    detector:
+      kind: regex
+      pattern: '\.expect\(\s*""\s*\)'
+    evidence_required: false
+    fix_hint: Provide a reason that explains the invariant.
+    applies_to:
+      - "**/*.rs"
+
+  # ── TODO/FIXME in security-sensitive paths ──────────────────────────────
+  # A TODO in `auth`, `crypto`, `password`, `verify`, `sign` paths is a
+  # strong signal of unfinished security work.
+  - id: any-no-todo-in-security-path
+    description: |
+      `TODO` or `FIXME` in a security-sensitive path (auth, crypto, verify,
+      sign, password) signals unfinished security work that must not ship.
+    severity: warning
+    detector:
+      kind: regex
+      # Match TODO/FIXME anywhere; the applies_to glob narrows the path.
+      pattern: '\b(TODO|FIXME)\b'
+    evidence_required: false
+    fix_hint: Resolve the TODO or document the accepted residual risk.
+    applies_to:
+      - "**/auth/**"
+      - "**/crypto/**"
+      - "**/verify/**"
+      - "**/sign/**"
+      - "**/password/**"
+      - "**/tls/**"

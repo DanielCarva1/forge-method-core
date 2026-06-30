@@ -1,0 +1,98 @@
+# F11 Risk Audit Gate — false-test anti-patterns.
+#
+# Detects tests that do not actually test anything. These are particularly
+# common in AI-generated test scaffolds: the function exists, the test
+# compiles, but the assertion is trivial or absent.
+#
+# Schema: risk-audit-v0
+# See: crates/forge-core-validate/src/risk_audit.rs
+
+schema_version: risk-audit-v0
+
+rules:
+  # ── Trivial assertions (any language) ───────────────────────────────────
+  # `assert!(true)` proves nothing; it's a placeholder that looks like a test.
+  - id: any-no-assert-true
+    description: |
+      `assert!(true)`, `assert True`, or `expect(true).toBe(true)` are
+      placeholders that pass without exercising any code. Remove them or
+      replace with a real assertion.
+    severity: error
+    detector:
+      kind: regex
+      # Covers Rust, Python, JS/TS. Case-insensitive.
+      pattern: '(?i)\bassert[!\s_(]*true\b|expect\(true\)\.toBe\(true\)'
+    evidence_required: false
+    fix_hint: Replace with an assertion that exercises real behaviour.
+    applies_to:
+      - "**/*.rs"
+      - "**/*.py"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - "**/*.js"
+      - "**/*.jsx"
+
+  # `assert_eq!(1, 1)` and friends — tautological comparisons.
+  #
+  # NOTE: the Rust `regex` crate is RE2-based and does not support
+  # backreferences, so we cannot match arbitrary `assert_eq!(X, X)` in
+  # full generality. We list the common literal cases explicitly. This
+  # catches the placeholder patterns AI generators ship most often.
+  - id: any-no-tautological-assert
+    description: |
+      Tautological assertions (`assert_eq!(1, 1)`, `assert_eq!(true, true)`,
+      `assert_eq!("x", "x")`) pass trivially and exercise nothing. Replace
+      with a real expectation.
+    severity: error
+    detector:
+      kind: regex
+      pattern: 'assert_eq!\(\s*(0|1|2|true|false|None|Some\(\d+\)|"[^"]{0,8}")\s*,\s*(0|1|2|true|false|None|Some\(\d+\)|"[^"]{0,8}")\s*\)'
+    evidence_required: false
+    fix_hint: Replace with an assertion that checks real output.
+    applies_to:
+      - "**/*.rs"
+
+  # ── Empty test bodies ───────────────────────────────────────────────────
+  # A test function with an empty body proves nothing.
+  - id: rust-no-empty-test-body
+    description: |
+      A `#[test]` function whose body is `{}` or contains only `let _ = ...;`
+      proves nothing. Either add assertions or remove the test.
+    severity: warning
+    detector:
+      kind: regex
+      pattern: '#\[test\][^{}]*\{[^\n{}]*\}'
+    evidence_required: false
+    fix_hint: Add real assertions; remove if the test is not needed.
+    applies_to:
+      - "**/*.rs"
+
+  # ── Disabled / skipped tests ────────────────────────────────────────────
+  # `#[ignore]` without a reason comment is a common way to disable a
+  # failing test silently.
+  - id: rust-no-ignored-test-without-reason
+    description: |
+      `#[ignore]` without a reason comment lets a failing test be forgotten.
+      Either add a `// reason: ...` comment or remove the test.
+    severity: warning
+    detector:
+      kind: regex
+      pattern: '#\[ignore\]'
+    evidence_required: false
+    fix_hint: Remove, fix, or document why it is ignored.
+    applies_to:
+      - "**/*.rs"
+
+  # ── Python: `assert True`, `pass`-only test bodies ─────────────────────
+  - id: python-no-pass-only-test
+    description: |
+      A test function whose body is only `pass` proves nothing. Either add
+      assertions or remove the test.
+    severity: warning
+    detector:
+      kind: regex
+      pattern: 'def test_\w+.*:\s*\n\s*pass'
+    evidence_required: false
+    fix_hint: Add real assertions; remove if the test is not needed.
+    applies_to:
+      - "**/*.py"
