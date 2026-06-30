@@ -915,3 +915,79 @@ fn preview_operation_with_effect_documents_overrides_rollback_placeholder() {
     assert_eq!(resolved.risk_level, placeholder.risk_level);
     assert_eq!(resolved.blockers, placeholder.blockers);
 }
+
+#[test]
+fn preview_operation_with_effect_documents_unions_touched_refs_from_write_sets() {
+    // preview_operation_with_snapshot returns touched_refs from
+    // CoordinationScope.target.paths only. When effect documents are supplied,
+    // touched_refs must additionally include every file-backed write target
+    // declared in the ToolEffect write_set, deduped against the existing list.
+    let document = fixture("mechanical-story-execute.yaml");
+    let index = build_reference_index(repo_root()).expect("reference index");
+    let snapshot = RuntimeReadSnapshot::new(&index);
+    let placeholder = preview_operation_with_snapshot(&document, snapshot);
+
+    let effect = effect_fixture("story-artifact-write-effect.yaml");
+    let resolved = forge_core_runtime::preview_operation_with_effect_documents(
+        &document,
+        snapshot,
+        &[effect],
+    );
+
+    // The shipped story effect declares writes to .forge-method/artifacts and
+    // .forge-method/evidence — both ArtifactId/EvidenceId (file-backed).
+    assert!(
+        resolved.touched_refs.iter().any(|reference| reference
+            .0
+            .contains(".forge-method/artifacts/story-current-result.yaml")),
+        "expected artifact write in touched_refs; got {:?}",
+        resolved.touched_refs
+    );
+    assert!(
+        resolved.touched_refs.iter().any(|reference| reference
+            .0
+            .contains(".forge-method/evidence/story-validation.json")),
+        "expected evidence write in touched_refs; got {:?}",
+        resolved.touched_refs
+    );
+    // Original CoordinationScope paths must still be present.
+    assert!(
+        resolved.touched_refs.len() > placeholder.touched_refs.len(),
+        "union must add refs; placeholder = {:?}, resolved = {:?}",
+        placeholder.touched_refs,
+        resolved.touched_refs
+    );
+}
+
+#[test]
+fn collect_effect_touched_refs_skips_non_file_backed_targets() {
+    // Logical targets (StateKey, Glob, CompletionId) must not appear in
+    // touched_refs: they do not resolve to a single repo path.
+    use forge_core_contracts::tool_effect::EffectTargetKind;
+
+    let mut effect = effect_fixture("story-artifact-write-effect.yaml");
+    effect.tool_effect_contract.write_set.clear();
+    effect.tool_effect_contract.write_set.push(forge_core_contracts::tool_effect::EffectWrite {
+        target_kind: EffectTargetKind::StateKey,
+        reference: ".forge-method/state.yaml#phase".to_string(),
+        access_mode: forge_core_contracts::tool_effect::AccessMode::Write,
+        expected_hash: None,
+        expected_version: None,
+        destructive: false,
+    });
+    effect.tool_effect_contract.write_set.push(forge_core_contracts::tool_effect::EffectWrite {
+        target_kind: EffectTargetKind::FilePath,
+        reference: "docs/CHANGELOG.md".to_string(),
+        access_mode: forge_core_contracts::tool_effect::AccessMode::Write,
+        expected_hash: None,
+        expected_version: None,
+        destructive: false,
+    });
+
+    let refs = forge_core_runtime::collect_effect_touched_refs(&[effect]);
+    assert_eq!(
+        refs.iter().map(|reference| reference.0.as_str()).collect::<Vec<_>>(),
+        vec!["docs/CHANGELOG.md"],
+        "StateKey must be excluded; got {refs:?}"
+    );
+}

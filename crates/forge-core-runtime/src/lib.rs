@@ -866,10 +866,12 @@ pub fn compute_rollback_available(effects: &[ToolEffectContractDocument]) -> boo
 }
 
 /// Like [`preview_operation_with_snapshot`], but also computes the real
-/// `rollback_available` value from the provided `ToolEffect` contract documents.
-/// The documents should correspond to `plan.effect_contract_refs`; callers
-/// that cannot supply them should fall back to `preview_operation_with_snapshot`
-/// and accept the conservative `rollback_available = false` placeholder.
+/// `rollback_available` value and unions `touched_refs` with the write-sets
+/// declared in the provided `ToolEffect` contract documents. The documents
+/// should correspond to `plan.effect_contract_refs`; callers that cannot
+/// supply them should fall back to [`preview_operation_with_snapshot`] and
+/// accept the conservative `rollback_available = false` placeholder and the
+/// shallow `touched_refs` derived only from `CoordinationScope.target.paths`.
 #[must_use]
 pub fn preview_operation_with_effect_documents(
     document: &OperationContractDocument,
@@ -878,7 +880,52 @@ pub fn preview_operation_with_effect_documents(
 ) -> RuntimePreviewReport {
     let mut report = preview_operation_with_snapshot(document, snapshot);
     report.rollback_available = compute_rollback_available(effects);
+    let mut touched = report.touched_refs.clone();
+    for added in collect_effect_touched_refs(effects) {
+        if !touched.iter().any(|existing| existing == &added) {
+            touched.push(added);
+        }
+    }
+    report.touched_refs = touched;
     report
+}
+
+/// Collect repo paths that the provided `ToolEffect` contracts would write.
+/// Includes only file-backed target kinds (matching the effect-store
+/// definition); logical targets like `StateKey` and `Glob` are excluded because
+/// they do not resolve to a single repo path.
+///
+/// Order is stable: writes are emitted in document order, then in `write_set`
+/// order within each document. Duplicates within a single call are preserved;
+/// deduplication is the caller's responsibility ([`preview_operation_with_effect_documents`]
+/// dedupes against the existing `touched_refs`).
+#[must_use]
+pub fn collect_effect_touched_refs(effects: &[ToolEffectContractDocument]) -> Vec<RepoPath> {
+    let mut refs = Vec::new();
+    for document in effects {
+        for write in &document.tool_effect_contract.write_set {
+            if !file_backed_effect_target(write.target_kind) {
+                continue;
+            }
+            refs.push(RepoPath(write.reference.clone()));
+        }
+    }
+    refs
+}
+
+/// Mirror of [`forge_core_store::file_backed_target`] that the runtime can call
+/// without taking a dependency on the store crate for a single predicate. The
+/// set must stay in sync with the store's definition.
+fn file_backed_effect_target(target_kind: forge_core_contracts::tool_effect::EffectTargetKind) -> bool {
+    use forge_core_contracts::tool_effect::EffectTargetKind;
+    matches!(
+        target_kind,
+        EffectTargetKind::FilePath
+            | EffectTargetKind::ArtifactId
+            | EffectTargetKind::EvidenceId
+            | EffectTargetKind::LedgerStream
+            | EffectTargetKind::RequestStream
+    )
 }
 
 #[must_use]
