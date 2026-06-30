@@ -15,11 +15,11 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Rápido | 5 | 10 | Sem benchmarks mensuráveis |
 | Robusto | 8 | 10 | Tracing parcial, `Result<_,String>` residuais, sem zeroize |
 | Performativo | 4 | 10 | Sem criterion, sem profile, sem hot-path baselines |
-| Protocolo guia | 8 | 10 | Catálogo real, mas preview/ready não operacional |
+| Protocolo guia | 9 | 10 | F04 validate+run --dry-run completos; F01 bugs críticos fechados |
 | Workflows | 7 | 10 | WAL/claim ok, mas F11/F13 não existem |
-| Agente guia humano | 8 | 10 | Política tipada, mas UX de "preview→human" ausente |
+| Agente guia humano | 9 | 10 | F01 bugs de integridade fechados; rollback_available real |
 | Não-script-de-novela | 9 | 10 | Já é framework paramétrico; faltam fixtures que provem |
-| Features comunidade | 6 | 10 | F03/F04/F05 parciais; F01/F02/F15 P0 não iniciados |
+| Features comunidade | 8 | 10 | F03/F04 operacionais; F01 plumbing+semântica completos; falta F02/F15 |
 | Rust best practices | 9 | 10 | clippy pedantic em 0 warnings (comecou ~245); E1 fechado |
 | Segurança supply chain | 6 | 10 | serde_yaml deprecated (R7), sem zeroize (R5), sem fuzz (R4) |
 | Docs/rastreabilidade | 6 | 10 | Bootstrap Exception pendente; papers sem status doc |
@@ -110,16 +110,16 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
       - DoD original: `forge graph validate` + `forge graph run --dry-run`
         funcionam — **substantivamente atendido**
       - Gaps remanescentes (commits pequenos):
-        - [ ] **F04.1** Per-node `touched_refs` no dry-run output
-              (hoje `evaluate_graph_operation` descarta o campo do preview)
-        - [ ] **F04.2** Validar referências secundárias: `verifies`,
-              `GraphBudget.node_id`, `required_authority_refs` — hoje silent
-              dangling refs passam
-        - [ ] **F04.3** Edge-kind semantics: `RequiresSuccess` /
-              `RequiresCompletion` / `BlocksUntilPassed` hoje são decorativos;
-              decidir entre enforces ou marcar como warning documentado
+        - [x] **F04.1** Per-node `touched_refs` no dry-run output
+              (commit `1c9a7dd`)
+        - [x] **F04.2** Validar referências secundárias: `verifies`,
+              `GraphBudget.node_id` (commit `e9eb579`)
+        - [x] **F04.3** Edge-kind semantics documentadas + warning para
+              `blocks_until_passed` de non-Verifier (commit `58ef7d8`)
         - [ ] **F04.4** Tests E2E: `validate` (Passed + Blocked + cycle),
-              `run --dry-run` (Planned + Blocked + Invalid) com fixtures
+              `run --dry-run` (Planned + Blocked + Invalid) via CLI
+              (`run_validate`, `run_dry_run`). Lib-level tests já cobrem o
+              behavior (10/10 em `crates/forge-core-graph/tests/`).
       - Depende: F03 (tracing) pra narrar execução do grafo
 - [ ] **F01** — `forge preview` (plumbing completo, gaps semânticos)
       - **Achado da auditoria 2026-06-30:** CLI plumbing é completo. JSON
@@ -131,21 +131,23 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
         `risk_level: Blocked`. Os dois sinais discordam. `next_human_action`
         retorna `None` pra Ready, então o humano não é orientado.
       - Gaps remanescentes (commits pequenos):
-        - [ ] **F01.1** Fix bug: `preview_status` deve consultar `blockers`
-              e desqualificar Ready→Blocked quando non-empty
-        - [ ] **F01.2** Fix bug: `ready_gate_blockers` ignora `_required_gates`
-              (Pass com required gate contract faltante passa batido)
-        - [ ] **F01.3** Implementar `rollback_available` de verdade:
-              ler `EffectRepair.inverse.kind` dos staged effects
-              (hoje hardcoded `false`)
-        - [ ] **F01.4** Union `touched_refs`: `CoordinationScope.target.paths`
-              + write-sets dos `ToolEffectContractDocument`. Path plan-only
-              hoje retorna `Vec::new()`
-        - [ ] **F01.5** Garantir `next_human_action` sempre `Some` quando
-              bloqueado (vira `String` após F01.1 fechar o caso Ready+blockers)
-        - [ ] **F01.6** Tests: `ReviewRequired`, `ReadOnly`, `Publish` (High
-              risk) — variantes sem fixture hoje
-        - [ ] **F01.7** (opcional) Separar `PreviewJsonPayload` do envelope
+        - [x] **F01.1** Fix bug: `preview_status` consulta `blockers` e desqualifica
+              Ready→Blocked quando non-empty (commit `4330d31`)
+        - [x] **F01.2** Fix bug: `ready_gate_blockers` consulta `_required_gates`:
+              Pass + required gates não-verificados → `RequiredGateStatusUnknown`
+              (commit `f4158d9`)
+        - [x] **F01.3** Implementar `rollback_available` de verdade:
+              `compute_rollback_available` helper + `preview_operation_with_effect_documents`
+              (commit `64ac22d`)
+        - [x] **F01.4** Union `touched_refs`: `collect_effect_touched_refs` helper
+              faz union de `CoordinationScope.target.paths` + write-sets dos
+              `ToolEffectContractDocument`. Path plan-only mantém `Vec::new()`
+              (commit `ef163d3`)
+        - [x] **F01.5** Garantir `next_human_action` sempre `Some` quando bloqueado
+              (coberto por F01.1: Ready+blockers retorna "resolve blockers")
+        - [x] **F01.6** Tests: `ReviewRequired`, `ReadOnly`, `Publish` (High
+              risk) — todos cobertos agora (commit `a3cfce6`)
+        - [ ] **F01.7** (opcional, deferido) Separar `PreviewJsonPayload` do envelope
               CLI (hoje mistura com `project_root`, `state_root`, `trace_id`)
       - É o coração do "agente guia humano"
       - Depende: F03 (tracing explica decisão), F04 (graph preview)
