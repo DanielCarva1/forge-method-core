@@ -1,3 +1,4 @@
+use crate::cli_error::ExitError;
 use crate::cli_util::eval_usage;
 use crate::project_cmd::{resolve_project, ProjectResolveError};
 use forge_core_contracts::{EvalRunContractDocument, RepoPath};
@@ -421,24 +422,28 @@ fn validate_evidence_ref(
         Err(EvidenceRefValidationError::EscapesProject)
     }
 }
-pub fn run_eval_command(args: &[String]) {
+pub fn run_eval_command(args: &[String]) -> Result<(), ExitError> {
     let subcommand = args.get(1).map_or("--help", String::as_str);
     match subcommand {
         "compare" => {
-            let (input, json) = parse_eval_compare_args(args);
-            run_eval_compare(&input, json);
+            if args.iter().any(|a| matches!(a.as_str(), "--help" | "-h")) {
+                println!("{}", eval_usage());
+                return Ok(());
+            }
+            let (input, json) = parse_eval_compare_args(args)?;
+            run_eval_compare(&input, json)
         }
         "--help" | "-h" | "help" => {
             println!("{}", eval_usage());
+            Ok(())
         }
-        _ => {
-            eprintln!("{}", eval_usage());
-            std::process::exit(2);
-        }
+        _ => Err(ExitError::usage(eval_usage())),
     }
 }
 
-pub fn parse_eval_compare_args(args: &[String]) -> (EvalCompareCommandInput, bool) {
+pub fn parse_eval_compare_args(
+    args: &[String],
+) -> Result<(EvalCompareCommandInput, bool), ExitError> {
     let mut root = PathBuf::from(".");
     let mut suite_path: Option<PathBuf> = None;
     let mut baseline: Option<EvalArmLabel> = None;
@@ -450,50 +455,48 @@ pub fn parse_eval_compare_args(args: &[String]) -> (EvalCompareCommandInput, boo
         match args[index].as_str() {
             "--root" => {
                 index += 1;
-                root = PathBuf::from(next_eval_value(args, index, "root"));
+                root = PathBuf::from(next_eval_value_or_err(args, index, "root")?);
             }
             "--suite" => {
                 index += 1;
-                suite_path = Some(PathBuf::from(next_eval_value(args, index, "suite")));
+                suite_path = Some(PathBuf::from(next_eval_value_or_err(args, index, "suite")?));
             }
             "--baseline" => {
                 index += 1;
-                baseline = Some(parse_eval_arm(
-                    next_eval_value(args, index, "baseline"),
+                baseline = Some(parse_eval_arm_or_err(
+                    next_eval_value_or_err(args, index, "baseline")?,
                     "baseline",
-                ));
+                )?);
             }
             "--candidate" => {
                 index += 1;
-                candidate = Some(parse_eval_arm(
-                    next_eval_value(args, index, "candidate"),
+                candidate = Some(parse_eval_arm_or_err(
+                    next_eval_value_or_err(args, index, "candidate")?,
                     "candidate",
-                ));
+                )?);
             }
             "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--json" => json = true,
             "--no-json" => json = false,
-            "--help" | "-h" => {
-                println!("{}", eval_usage());
-                std::process::exit(0);
-            }
+            "--help" | "-h" => break,
             _ => {
-                eprintln!("{}", eval_usage());
-                std::process::exit(2);
+                return Err(ExitError::usage(eval_usage()));
             }
         }
         index += 1;
     }
-    let baseline = baseline.unwrap_or_else(|| {
-        eprintln!("eval compare requires --baseline <single-agent|graph|mas|manual>");
-        std::process::exit(3);
-    });
-    let candidate = candidate.unwrap_or_else(|| {
-        eprintln!("eval compare requires --candidate <single-agent|graph|mas|manual>");
-        std::process::exit(3);
-    });
+    let baseline = baseline.ok_or_else(|| {
+        ExitError::invalid_value(
+            "eval compare requires --baseline <single-agent|graph|mas|manual>",
+        )
+    })?;
+    let candidate = candidate.ok_or_else(|| {
+        ExitError::invalid_value(
+            "eval compare requires --candidate <single-agent|graph|mas|manual>",
+        )
+    })?;
 
-    (
+    Ok((
         EvalCompareCommandInput {
             root,
             suite_path,
@@ -502,32 +505,35 @@ pub fn parse_eval_compare_args(args: &[String]) -> (EvalCompareCommandInput, boo
             allow_bootstrap_core,
         },
         json,
-    )
+    ))
 }
 
-pub fn next_eval_value<'a>(args: &'a [String], index: usize, flag: &str) -> &'a str {
-    let value = args.get(index).map_or_else(
-        || {
-            eprintln!("eval compare: missing value for --{flag}");
-            std::process::exit(3);
-        },
-        String::as_str,
-    );
+pub fn next_eval_value_or_err<'a>(
+    args: &'a [String],
+    index: usize,
+    flag: &str,
+) -> Result<&'a str, ExitError> {
+    let value = args.get(index).ok_or_else(|| {
+        ExitError::invalid_value(format!("eval compare: missing value for --{flag}"))
+    })?;
     if value.starts_with('-') {
-        eprintln!("eval compare: missing value for --{flag}");
-        std::process::exit(3);
+        return Err(ExitError::invalid_value(format!(
+            "eval compare: missing value for --{flag}"
+        )));
     }
-    value
+    Ok(value.as_str())
 }
 
-pub fn parse_eval_arm(value: &str, flag: &str) -> EvalArmLabel {
-    value.parse::<EvalArmLabel>().unwrap_or_else(|error| {
-        eprintln!("eval compare: invalid value for --{flag}: {error}");
-        std::process::exit(3);
+pub fn parse_eval_arm_or_err(value: &str, flag: &str) -> Result<EvalArmLabel, ExitError> {
+    value.parse::<EvalArmLabel>().map_err(|error| {
+        ExitError::invalid_value(format!("eval compare: invalid value for --{flag}: {error}"))
     })
 }
 
-pub fn run_eval_compare(input: &EvalCompareCommandInput, json: bool) {
+pub fn run_eval_compare(
+    input: &EvalCompareCommandInput,
+    json: bool,
+) -> Result<(), ExitError> {
     match run_compare(input) {
         Ok(output) => {
             if json {
@@ -552,12 +558,10 @@ pub fn run_eval_compare(input: &EvalCompareCommandInput, json: bool) {
                 }
             }
             if output.status == EvalCompareStatus::Blocked {
-                std::process::exit(1);
+                return Err(ExitError::failed("eval compare status blocked"));
             }
+            Ok(())
         }
-        Err(error) => {
-            eprintln!("eval compare failed: {error}");
-            std::process::exit(5);
-        }
+        Err(error) => Err(ExitError::env_config(format!("eval compare failed: {error}"))),
     }
 }
