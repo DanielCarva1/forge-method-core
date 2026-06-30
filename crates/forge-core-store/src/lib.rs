@@ -344,6 +344,11 @@ pub fn append_effect_target_metadata_records(
 
 /// [`append_effect_target_metadata_records`] with an explicit [`WalDurability`] knob.
 /// See ADR-0009.
+///
+/// # Errors
+///
+/// Forwards [`AppendJsonLineError`] from [`append_json_line_with_durability`] on
+/// the first record that fails.
 pub fn append_effect_target_metadata_records_with_durability(
     root: impl AsRef<Path>,
     index_relative_path: &str,

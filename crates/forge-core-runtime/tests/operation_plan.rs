@@ -12,17 +12,16 @@ use forge_core_runtime::{
     command_execution_evidence_record, plan_operation, plan_operation_with_snapshot,
     prepare_effect_transaction, preview_operation_with_snapshot, preview_runtime_plan,
     ready_operation_with_snapshot, ready_runtime_plan, run_staged_read_only_command,
-    stage_operation_effects,
-    CommandExecutionContext, RuntimeCommandExecutionReason, RuntimeCommandExecutionStatus,
-    RuntimeEffectPayload, RuntimeEffectPayloadKind, RuntimeEffectStagingReason,
-    RuntimeEffectStagingStatus, RuntimeEffectTransactionReason, RuntimeEffectTransactionStatus,
-    RuntimeEvidenceKind, RuntimeOperationCommandInput, RuntimeOperationEffectInput,
-    RuntimeOperationEffectPayload, RuntimeOperationExecutionContext,
+    stage_operation_effects, CommandExecutionContext, RuntimeCommandExecutionReason,
+    RuntimeCommandExecutionStatus, RuntimeEffectPayload, RuntimeEffectPayloadKind,
+    RuntimeEffectStagingReason, RuntimeEffectStagingStatus, RuntimeEffectTransactionReason,
+    RuntimeEffectTransactionStatus, RuntimeEvidenceKind, RuntimeOperationCommandInput,
+    RuntimeOperationEffectInput, RuntimeOperationEffectPayload, RuntimeOperationExecutionContext,
     RuntimeOperationExecutionReason, RuntimeOperationExecutionStatus, RuntimePlanReason,
     RuntimePlanStatus, RuntimePreviewStatus, RuntimeReadSnapshot, RuntimeReadyBlocker,
     RuntimeReadyEvidenceKind, RuntimeReadyStatus, RuntimeRiskLevel,
 };
-use forge_core_store::build_reference_index;
+use forge_core_store::{build_reference_index, WalDurability};
 use forge_core_validate::ReferenceIndex;
 use sha2::{Digest, Sha256};
 use std::cell::RefCell;
@@ -468,9 +467,7 @@ fn ready_report_fails_closed_for_passing_current_gate_with_unverified_required_g
         .required_before_mutation
         .push(forge_core_contracts::operation::RequiredGate {
             scope: forge_core_contracts::operation::OperationGateScope::Release,
-            gate_contract_ref: RepoPath(
-                "contracts/gates/release-missing-gate.yaml".to_string(),
-            ),
+            gate_contract_ref: RepoPath("contracts/gates/release-missing-gate.yaml".to_string()),
             reason: Some("release requires gate before advance".to_string()),
         });
     document
@@ -809,6 +806,7 @@ fn execute_operation_records_command_evidence_and_applies_effect_with_wal_lock()
         effect_metadata_index_relative_path: ".forge-method/index/effect-targets.ndjson",
         recorded_at: "2026-06-25T00:00:00Z",
         tx_id_prefix: "test-execute-operation",
+        durability: WalDurability::NoSync,
     };
 
     let execution = forge_core_runtime::execute_operation(
@@ -870,14 +868,14 @@ fn compute_rollback_available_returns_false_when_any_effect_has_inverse_none() {
 
     let no_inverse = effect_fixture("story-artifact-write-effect.yaml");
     let mut with_inverse = no_inverse.clone();
-    with_inverse
-        .tool_effect_contract
-        .repair
-        .inverse
-        .kind = InverseKind::ExactRollback;
+    with_inverse.tool_effect_contract.repair.inverse.kind = InverseKind::ExactRollback;
 
-    assert!(!forge_core_runtime::compute_rollback_available(&[no_inverse.clone()]));
-    assert!(forge_core_runtime::compute_rollback_available(&[with_inverse.clone()]));
+    assert!(!forge_core_runtime::compute_rollback_available(&[
+        no_inverse.clone()
+    ]));
+    assert!(forge_core_runtime::compute_rollback_available(&[
+        with_inverse.clone()
+    ]));
     assert!(!forge_core_runtime::compute_rollback_available(&[
         with_inverse.clone(),
         no_inverse,
@@ -904,11 +902,8 @@ fn preview_operation_with_effect_documents_overrides_rollback_placeholder() {
 
     let mut effect = effect_fixture("story-artifact-write-effect.yaml");
     effect.tool_effect_contract.repair.inverse.kind = InverseKind::ExactRollback;
-    let resolved = forge_core_runtime::preview_operation_with_effect_documents(
-        &document,
-        snapshot,
-        &[effect],
-    );
+    let resolved =
+        forge_core_runtime::preview_operation_with_effect_documents(&document, snapshot, &[effect]);
     assert!(resolved.rollback_available);
     // Everything else in the report must be unchanged.
     assert_eq!(resolved.status, placeholder.status);
@@ -928,11 +923,8 @@ fn preview_operation_with_effect_documents_unions_touched_refs_from_write_sets()
     let placeholder = preview_operation_with_snapshot(&document, snapshot);
 
     let effect = effect_fixture("story-artifact-write-effect.yaml");
-    let resolved = forge_core_runtime::preview_operation_with_effect_documents(
-        &document,
-        snapshot,
-        &[effect],
-    );
+    let resolved =
+        forge_core_runtime::preview_operation_with_effect_documents(&document, snapshot, &[effect]);
 
     // The shipped story effect declares writes to .forge-method/artifacts and
     // .forge-method/evidence — both ArtifactId/EvidenceId (file-backed).
@@ -967,26 +959,34 @@ fn collect_effect_touched_refs_skips_non_file_backed_targets() {
 
     let mut effect = effect_fixture("story-artifact-write-effect.yaml");
     effect.tool_effect_contract.write_set.clear();
-    effect.tool_effect_contract.write_set.push(forge_core_contracts::tool_effect::EffectWrite {
-        target_kind: EffectTargetKind::StateKey,
-        reference: ".forge-method/state.yaml#phase".to_string(),
-        access_mode: forge_core_contracts::tool_effect::AccessMode::Write,
-        expected_hash: None,
-        expected_version: None,
-        destructive: false,
-    });
-    effect.tool_effect_contract.write_set.push(forge_core_contracts::tool_effect::EffectWrite {
-        target_kind: EffectTargetKind::FilePath,
-        reference: "docs/CHANGELOG.md".to_string(),
-        access_mode: forge_core_contracts::tool_effect::AccessMode::Write,
-        expected_hash: None,
-        expected_version: None,
-        destructive: false,
-    });
+    effect
+        .tool_effect_contract
+        .write_set
+        .push(forge_core_contracts::tool_effect::EffectWrite {
+            target_kind: EffectTargetKind::StateKey,
+            reference: ".forge-method/state.yaml#phase".to_string(),
+            access_mode: forge_core_contracts::tool_effect::AccessMode::Write,
+            expected_hash: None,
+            expected_version: None,
+            destructive: false,
+        });
+    effect
+        .tool_effect_contract
+        .write_set
+        .push(forge_core_contracts::tool_effect::EffectWrite {
+            target_kind: EffectTargetKind::FilePath,
+            reference: "docs/CHANGELOG.md".to_string(),
+            access_mode: forge_core_contracts::tool_effect::AccessMode::Write,
+            expected_hash: None,
+            expected_version: None,
+            destructive: false,
+        });
 
     let refs = forge_core_runtime::collect_effect_touched_refs(&[effect]);
     assert_eq!(
-        refs.iter().map(|reference| reference.0.as_str()).collect::<Vec<_>>(),
+        refs.iter()
+            .map(|reference| reference.0.as_str())
+            .collect::<Vec<_>>(),
         vec!["docs/CHANGELOG.md"],
         "StateKey must be excluded; got {refs:?}"
     );
@@ -999,10 +999,7 @@ fn preview_report_review_required_when_mutation_policy_requires_review() {
     use forge_core_contracts::operation::MutationPolicy;
 
     let mut document = fixture("mechanical-story-execute.yaml");
-    document
-        .operation_contract
-        .authority
-        .mutation_policy = MutationPolicy::RequiresReview;
+    document.operation_contract.authority.mutation_policy = MutationPolicy::RequiresReview;
     let index = build_reference_index(repo_root()).expect("reference index");
 
     let plan = plan_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
@@ -1012,10 +1009,14 @@ fn preview_report_review_required_when_mutation_policy_requires_review() {
     assert_eq!(preview.status, RuntimePreviewStatus::ReviewRequired);
     // risk_level is not Blocked: the host simply must review. MutationRequiresReview
     // shows up as an informational blocker matching the plan reason.
-    assert!(preview.blockers.iter().any(|blocker| {
-        matches!(blocker, RuntimeReadyBlocker::MutationRequiresReview)
-    }));
-    assert_eq!(preview.next_human_action.as_deref(), Some("review and approve the operation boundary"));
+    assert!(preview
+        .blockers
+        .iter()
+        .any(|blocker| { matches!(blocker, RuntimeReadyBlocker::MutationRequiresReview) }));
+    assert_eq!(
+        preview.next_human_action.as_deref(),
+        Some("review and approve the operation boundary")
+    );
 }
 
 #[test]
@@ -1025,10 +1026,7 @@ fn preview_report_read_only_when_execution_mode_is_observe_only() {
     use forge_core_contracts::operation::ExecutionMode;
 
     let mut document = fixture("mechanical-story-execute.yaml");
-    document
-        .operation_contract
-        .execution_policy
-        .mode = ExecutionMode::ObserveOnly;
+    document.operation_contract.execution_policy.mode = ExecutionMode::ObserveOnly;
     let index = build_reference_index(repo_root()).expect("reference index");
 
     let plan = plan_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
@@ -1037,9 +1035,10 @@ fn preview_report_read_only_when_execution_mode_is_observe_only() {
     assert_eq!(plan.status, RuntimePlanStatus::ReadOnlyStatus);
     assert_eq!(preview.status, RuntimePreviewStatus::ReadOnly);
     // ObserveOnly shows up as an informational blocker matching the plan reason.
-    assert!(preview.blockers.iter().any(|blocker| {
-        matches!(blocker, RuntimeReadyBlocker::ObserveOnly)
-    }));
+    assert!(preview
+        .blockers
+        .iter()
+        .any(|blocker| { matches!(blocker, RuntimeReadyBlocker::ObserveOnly) }));
     assert_eq!(
         preview.next_human_action.as_deref(),
         Some("show read-only status; no mutation is authorized")
@@ -1053,10 +1052,7 @@ fn preview_report_publish_side_effect_classified_as_high_risk() {
     use forge_core_contracts::operation::OperationSideEffectPolicy;
 
     let mut document = fixture("mechanical-story-execute.yaml");
-    document
-        .operation_contract
-        .authority
-        .side_effect_policy = OperationSideEffectPolicy::Publish;
+    document.operation_contract.authority.side_effect_policy = OperationSideEffectPolicy::Publish;
     let index = build_reference_index(repo_root()).expect("reference index");
 
     let preview = preview_operation_with_snapshot(&document, RuntimeReadSnapshot::new(&index));
