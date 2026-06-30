@@ -22,6 +22,8 @@ sigstore-tsa.workspace = true
 rustls-pki-types.workspace = true
 x509-parser.workspace = true
 tracing.workspace = true
+zeroize.workspace = true
+subtle.workspace = true
 
 [dev-dependencies]
 rcgen.workspace = true
