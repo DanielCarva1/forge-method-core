@@ -242,6 +242,13 @@ pub enum GraphDiagnosticCode {
     OperationNotReady,
     OperationMutationDeclarationMismatch,
     ClaimPreflightBlocked,
+    /// A `verifies` entry on a Verifier node points at a `node_id` that does
+    /// not exist in the graph. Verifier edges must be resolvable so downstream
+    /// blocking logic (`unpassed_upstream_verifiers`) is sound.
+    DanglingVerifiesRef,
+    /// A `GraphBudget.node_id` points at a `node_id` that does not exist in
+    /// the graph. Budgets that cannot be attributed silently no-op.
+    DanglingBudgetNodeRef,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -455,6 +462,7 @@ pub fn validate_graph(graph: &WorkflowGraph) -> GraphValidationReport {
     validate_nodes(&mut report, graph);
     validate_edges(&mut report, graph);
     validate_cycles(&mut report, graph);
+    validate_node_references(&mut report, graph);
     report
 }
 
@@ -887,6 +895,60 @@ fn validate_cycles(report: &mut GraphValidationReport, graph: &WorkflowGraph) {
             "edges",
             "workflow graph edges must be acyclic",
         ));
+    }
+}
+
+/// Validate secondary references that the basic node/edge passes do not cover:
+/// `GraphNode.verifies` and `GraphBudget.node_id`. Both must point at existing
+/// node ids; otherwise verifier-blocking logic and budget attribution become
+/// silently ineffective.
+///
+/// `GraphNode.operation_ref` and `GraphAuthorityBoundary.required_authority_refs`
+/// are intentionally NOT validated here: the former requires filesystem access
+/// (handled by `forge graph run --dry-run` via `evaluate_graph_operations`),
+/// and the latter requires the project's authority store.
+fn validate_node_references(report: &mut GraphValidationReport, graph: &WorkflowGraph) {
+    let node_ids: HashSet<&str> = graph
+        .nodes
+        .iter()
+        .map(|node| node.node_id.0.as_str())
+        .collect();
+
+    for (index, node) in graph.nodes.iter().enumerate() {
+        for (slot, verified) in node.verifies.iter().enumerate() {
+            if verified.0.trim().is_empty() {
+                continue;
+            }
+            if !node_ids.contains(verified.0.as_str()) {
+                report.push(GraphDiagnostic::error(
+                    GraphDiagnosticCode::DanglingVerifiesRef,
+                    format!("nodes.{index}.verifies.{slot}"),
+                    format!(
+                        "verifies entry {verified} does not reference a node",
+                        verified = verified.0
+                    ),
+                ));
+            }
+        }
+    }
+
+    for (index, budget) in graph.budgets.iter().enumerate() {
+        let Some(node_ref) = budget.node_id.as_ref() else {
+            continue;
+        };
+        if node_ref.0.trim().is_empty() {
+            continue;
+        }
+        if !node_ids.contains(node_ref.0.as_str()) {
+            report.push(GraphDiagnostic::error(
+                GraphDiagnosticCode::DanglingBudgetNodeRef,
+                format!("budgets.{index}.node_id"),
+                format!(
+                    "budget node_id {node_ref} does not reference a node",
+                    node_ref = node_ref.0
+                ),
+            ));
+        }
     }
 }
 
