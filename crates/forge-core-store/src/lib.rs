@@ -334,10 +334,31 @@ pub fn append_effect_target_metadata_records(
     index_relative_path: &str,
     records: &[EffectTargetMetadataRecord],
 ) -> Result<Vec<PathBuf>, AppendJsonLineError> {
+    append_effect_target_metadata_records_with_durability(
+        root,
+        index_relative_path,
+        records,
+        WalDurability::default(),
+    )
+}
+
+/// [`append_effect_target_metadata_records`] with an explicit [`WalDurability`] knob.
+/// See ADR-0009.
+pub fn append_effect_target_metadata_records_with_durability(
+    root: impl AsRef<Path>,
+    index_relative_path: &str,
+    records: &[EffectTargetMetadataRecord],
+    durability: WalDurability,
+) -> Result<Vec<PathBuf>, AppendJsonLineError> {
     let root = root.as_ref();
     let mut paths = Vec::with_capacity(records.len());
     for record in records {
-        paths.push(append_json_line(root, index_relative_path, record)?);
+        paths.push(append_json_line_with_durability(
+            root,
+            index_relative_path,
+            record,
+            durability,
+        )?);
     }
     Ok(paths)
 }
@@ -1151,11 +1172,38 @@ pub fn apply_file_effect_transaction_with_wal_lock(
     lock_relative_path: &str,
     tx_id: impl Into<String>,
 ) -> EffectApplicationResult {
+    apply_file_effect_transaction_with_wal_lock_with_durability(
+        root,
+        effect,
+        payloads,
+        wal_relative_path,
+        lock_relative_path,
+        tx_id,
+        WalDurability::default(),
+    )
+}
+
+/// [`apply_file_effect_transaction_with_wal_lock`] with an explicit
+/// [`WalDurability`] knob. See ADR-0009.
+pub fn apply_file_effect_transaction_with_wal_lock_with_durability(
+    root: impl AsRef<Path>,
+    effect: &ToolEffectContractDocument,
+    payloads: &[EffectApplicationPayload],
+    wal_relative_path: &str,
+    lock_relative_path: &str,
+    tx_id: impl Into<String>,
+    durability: WalDurability,
+) -> EffectApplicationResult {
     let root = root.as_ref();
     match acquire_effect_store_lock(root, lock_relative_path) {
-        Ok(_lock) => {
-            apply_file_effect_transaction_with_wal(root, effect, payloads, wal_relative_path, tx_id)
-        }
+        Ok(_lock) => apply_file_effect_transaction_with_wal_with_durability(
+            root,
+            effect,
+            payloads,
+            wal_relative_path,
+            tx_id,
+            durability,
+        ),
         Err(error) => EffectApplicationResult {
             status: EffectApplicationStatus::Blocked,
             effect_id: effect.tool_effect_contract.id.clone(),
@@ -1177,6 +1225,32 @@ pub fn apply_file_effect_transaction_with_wal(
     payloads: &[EffectApplicationPayload],
     wal_relative_path: &str,
     tx_id: impl Into<String>,
+) -> EffectApplicationResult {
+    apply_file_effect_transaction_with_wal_with_durability(
+        root,
+        effect,
+        payloads,
+        wal_relative_path,
+        tx_id,
+        WalDurability::default(),
+    )
+}
+
+/// [`apply_file_effect_transaction_with_wal`] with an explicit [`WalDurability`] knob.
+///
+/// `durability` threads through to [`append_effect_wal_record`] for the four
+/// WAL appends this function performs (begin, before-image, write-applied,
+/// commit). Rollback paths inside this function hard-code [`WalDurability::SyncOnAppend`]
+/// because losing a rollback marker would corrupt the next recovery pass.
+/// See ADR-0009.
+#[instrument(skip_all, fields(effect_id = %effect.tool_effect_contract.id.0, tx_id = tracing::field::Empty), level = "info")]
+pub fn apply_file_effect_transaction_with_wal_with_durability(
+    root: impl AsRef<Path>,
+    effect: &ToolEffectContractDocument,
+    payloads: &[EffectApplicationPayload],
+    wal_relative_path: &str,
+    tx_id: impl Into<String>,
+    durability: WalDurability,
 ) -> EffectApplicationResult {
     let root = root.as_ref();
     let tx_id = tx_id.into();
@@ -1245,6 +1319,7 @@ pub fn apply_file_effect_transaction_with_wal(
         root,
         wal_relative_path,
         EffectWalRecord::begin(&tx_id, effect_contract.id.clone()),
+        durability,
     )
     .is_err()
     {
@@ -1265,6 +1340,7 @@ pub fn apply_file_effect_transaction_with_wal(
             root,
             wal_relative_path,
             EffectWalRecord::before_image(&tx_id, effect_contract.id.clone(), write, original),
+            durability,
         )
         .is_err()
         {
@@ -1312,6 +1388,7 @@ pub fn apply_file_effect_transaction_with_wal(
             root,
             wal_relative_path,
             EffectWalRecord::write_applied(&tx_id, effect, write),
+            durability,
         ) {
             reasons.push(EffectApplicationReason::WalAppendFailed);
             diagnostics.push(format!(
@@ -1338,6 +1415,7 @@ pub fn apply_file_effect_transaction_with_wal(
         root,
         wal_relative_path,
         EffectWalRecord::stage(&tx_id, effect_contract.id.clone(), EffectWalStage::Commit),
+        durability,
     )
     .is_err()
     {
@@ -1462,6 +1540,10 @@ pub fn recover_effect_wal(
                 root,
                 wal_relative_path,
                 EffectWalRecord::stage(&tx_id, effect_id, EffectWalStage::RecoveredRollback),
+                // Recovery writes MUST be durable: a crash mid-recovery that
+                // loses the RecoveredRollback marker would re-do work on the
+                // next reboot. See ADR-0009.
+                WalDurability::SyncOnAppend,
             );
         } else {
             recovery_ok = false;
@@ -3311,6 +3393,10 @@ fn rollback_wal_transaction_result(
             transaction.effect_id.clone(),
             EffectWalStage::RollbackComplete,
         ),
+        // Rollback writes MUST be durable: losing the RollbackComplete marker
+        // would cause the next recovery pass to undo work that was already
+        // committed. See ADR-0009.
+        WalDurability::SyncOnAppend,
     )
     .map_or_else(
         |error| {
@@ -3660,13 +3746,19 @@ impl EffectWalRecord {
 // Callers pass freshly-built `EffectWalRecord` values, so taking ownership
 // keeps the call sites concise without forcing a binding just to take a
 // reference.
+//
+// `durability` threads ADR-0009 through the WAL append path. Recovery and
+// rollback callers hard-code `WalDurability::SyncOnAppend` (durability is
+// load-bearing there); the apply path threads the caller's choice so
+// benchmarks and tests can opt into `NoSync`.
 #[allow(clippy::needless_pass_by_value)]
 fn append_effect_wal_record(
     root: &Path,
     wal_relative_path: &str,
     record: EffectWalRecord,
+    durability: WalDurability,
 ) -> Result<PathBuf, AppendJsonLineError> {
-    append_json_line(root, wal_relative_path, &record)
+    append_json_line_with_durability(root, wal_relative_path, &record, durability)
 }
 
 fn incomplete_wal_transactions(records: &[EffectWalRecord]) -> Vec<String> {
@@ -4138,7 +4230,10 @@ mod tests {
         let a = fs::read_to_string(&path_sync).expect("read sync file");
         let b = fs::read_to_string(&path_nosync).expect("read nosync file");
         assert_eq!(a, b, "NoSync and SyncOnAppend must write identical bytes");
-        assert!(a.ends_with('\n'), "append_json_line terminates with newline");
+        assert!(
+            a.ends_with('\n'),
+            "append_json_line terminates with newline"
+        );
         fs::remove_dir_all(root).expect("cleanup temp root");
     }
 
