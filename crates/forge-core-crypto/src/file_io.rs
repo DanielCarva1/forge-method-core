@@ -16,10 +16,15 @@
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use std::fs;
 use std::path::Path;
+use zeroize::Zeroizing;
 
-pub fn read_required_file(path: &Path, label: &str, reasons: &mut Vec<String>) -> Option<Vec<u8>> {
+pub fn read_required_file(
+    path: &Path,
+    label: &str,
+    reasons: &mut Vec<String>,
+) -> Option<Zeroizing<Vec<u8>>> {
     match fs::read(path) {
-        Ok(bytes) => Some(bytes),
+        Ok(bytes) => Some(Zeroizing::new(bytes)),
         Err(err) => {
             reasons.push(format!("{label}_read_failed:{:?}", err.kind()));
             None
@@ -27,29 +32,35 @@ pub fn read_required_file(path: &Path, label: &str, reasons: &mut Vec<String>) -
     }
 }
 
-pub fn read_signature_file(path: &Path, reasons: &mut Vec<String>) -> Option<Vec<u8>> {
+pub fn read_signature_file(
+    path: &Path,
+    reasons: &mut Vec<String>,
+) -> Option<Zeroizing<Vec<u8>>> {
     read_required_file(path, "signature", reasons)
         .and_then(|bytes| decode_base64_or_raw(bytes, 64, "signature", reasons))
 }
 
-pub fn read_public_key_file(path: &Path, reasons: &mut Vec<String>) -> Option<Vec<u8>> {
+pub fn read_public_key_file(
+    path: &Path,
+    reasons: &mut Vec<String>,
+) -> Option<Zeroizing<Vec<u8>>> {
     read_required_file(path, "public_key", reasons)
         .and_then(|bytes| decode_base64_or_raw(bytes, 32, "public_key", reasons))
 }
 
 fn decode_base64_or_raw(
-    bytes: Vec<u8>,
+    bytes: Zeroizing<Vec<u8>>,
     raw_len: usize,
     label: &str,
     reasons: &mut Vec<String>,
-) -> Option<Vec<u8>> {
+) -> Option<Zeroizing<Vec<u8>>> {
     if bytes.len() == raw_len {
         return Some(bytes);
     }
     let text = String::from_utf8_lossy(&bytes);
     let compact = text.split_whitespace().collect::<String>();
     match BASE64.decode(compact.as_bytes()) {
-        Ok(decoded) if decoded.len() == raw_len => Some(decoded),
+        Ok(decoded) if decoded.len() == raw_len => Some(Zeroizing::new(decoded)),
         Ok(decoded) => {
             reasons.push(format!("{label}_length_invalid:{}", decoded.len()));
             None
