@@ -30,7 +30,13 @@ fn main() {
                 std::process::exit(error.exit_code());
             }
         },
-        "isolation" => forge_core_cli::isolation::run_isolation_command(&args),
+        "isolation" => match forge_core_cli::isolation::run_isolation_command(&args) {
+            Ok(()) => {}
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(error.exit_code());
+            }
+        },
         "coordination" => match forge_core_cli::coordination::run_coordination_command(&args) {
             Ok(()) => {}
             Err(error) => {
