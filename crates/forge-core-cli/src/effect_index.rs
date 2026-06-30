@@ -124,6 +124,19 @@ pub fn run_query_effect_index_context(
     let query_result = run_query_effect_index(input);
     build_effect_metadata_context(&query_result, &context_options)
 }
+/// Runs the `forge-core rebuild-effect-index` command.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when an unknown flag is present or a value
+/// helper reports a missing/malformed argument, `ExitError::failed` when
+/// project resolution or the rebuild itself reports a failure.
+///
+/// # Panics
+///
+/// Panics in JSON mode if the rebuild result cannot be serialized. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError> {
     let mut input = RebuildEffectIndexInput::default();
     let mut allow_bootstrap_core = false;
@@ -188,6 +201,14 @@ pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError
     Ok(())
 }
 
+/// Runs the `forge-core query-effect-index` command (with optional
+/// `--context` flag for grouped context queries).
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when an unknown flag is present or a value
+/// helper reports a missing/malformed argument, `ExitError::failed` when
+/// project resolution or the underlying query reports a failure.
 pub fn run_query_effect_index_command(args: &[String]) -> Result<(), ExitError> {
     let mut input = QueryEffectIndexInput::default();
     let mut allow_bootstrap_core = false;
@@ -263,6 +284,19 @@ pub fn run_query_effect_index_command(args: &[String]) -> Result<(), ExitError> 
     emit_query_effect_index_result(input, context, json)
 }
 
+/// Executes the resolved query (plain or context mode) and prints the
+/// result, propagating non-zero exit codes through [`ExitError`].
+///
+/// # Errors
+///
+/// Returns `ExitError::failed` when the underlying query reports a
+/// `Failed` status.
+///
+/// # Panics
+///
+/// Panics in JSON mode if the query result cannot be serialized. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn emit_query_effect_index_result(
     input: QueryEffectIndexInput,
     context: bool,
