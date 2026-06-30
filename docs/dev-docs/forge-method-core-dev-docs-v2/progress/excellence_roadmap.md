@@ -1,8 +1,9 @@
 # Excellence Roadmap — Forge Method Core até 10/10
 
 **Data**: 2026-06-30
-**Status**: plano ativo (última atualização: 2026-06-30 — **F15 fechado** (commits `7d0934b`→`7474139`); R4 completo via CI Linux;
-E1/E2/E3/R2 completos; F04/F01/F02/F03 completos; R5.1-R5.9 completos)
+**Status**: plano ativo (última atualização: 2026-06-30 — **R9 fechado** (Bootstrap Core Exception); G1/G2 fechados;
+**F15 fechado** (commits `7d0934b`→`7474139`); R4 completo via CI Linux;
+E1/E2/E3/R2 completos; F04/F01/F02/F03 completos; R5.1-R5.9 completos; R6.3 benches)
 **Dono**: Daniel (codebase owner) + agente executor
 **Norte estratégico**: rápido, robusto, performativo, protocolo-guia que escala com a
 capacidade dos agentes, nunca script de novela, sempre Rust ou compatível, sempre
@@ -22,7 +23,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Features comunidade | 9.5 | 10 | F03/F04/F01/F02/F15 operacionais; falta F05-F14 |
 | Rust best practices | 10 | 10 | E1 fechado (0 warnings lib); **F15 fechado** (2 edit points) |
 | Segurança supply chain | 8 | 10 | serde_yaml migrado; zeroize feito; fuzz (R4) completo via ADR-0008 |
-| Docs/rastreabilidade | 8 | 10 | R13 alinhado; R14 paper status criado; ADR-0008; falta R9 Bootstrap |
+| Docs/rastreabilidade | 10 | 10 | R13 alinhado; R14 paper status criado; ADR-0008; **R9 ✅** fechado: Bootstrap Core Exception explícita, opt-in (`--allow-bootstrap-core`), 22 tests E2E comprovam consumer repo limpo opera clean sem ela |
 
 ## Princípios (não negociáveis)
 
@@ -165,9 +166,25 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
       - Cobertura oriental marcada como gap pra R15/R16 (política geográfica
         existe em field-evidence-20260625 mas não há paper puramente oriental)
       - Arquivo: `paper_implementation_status.md`
-- [ ] **R9** — Remover Bootstrap Exception
-      - Quaisquer docs/contratos que assumem "humano lê" precisam migrar pra
-        "agente lê e explica"
+- [x] **R9** — Fechar Bootstrap Core Exception ✅
+      - Exceção temporária que permite `D: Forge-method-core` manter `.forge-method/` local
+        enquanto Forge desenvolve a si mesmo. Definida formalmente em `CONTEXT.md`
+        (linhas 21-23) e referenciada por `09_system_design_roadmap.md:70` e
+        `08_priority_recommendations_plan.md:51` (R9 ↔ F12 Guided Start).
+      - Gate opt-in `--allow-bootstrap-core` em `resolve_project()` (project_cmd.rs:880):
+        só retorna `BootstrapCoreLocal` se `allow_bootstrap_core` AND
+        `is_bootstrap_core_root()` forem ambos verdadeiros.
+      - 22 tests E2E distribuídos em 4 arquivos (`project_init_e2e.rs`,
+        `project_resolve_e2e.rs`, `project_link_hardening_e2e.rs`,
+        `operation_sidecar_e2e.rs`) comprovam: (a) exceção é isolada e opt-in,
+        (b) consumer repo fresh-init opera clean end-to-end sem o flag,
+        (c) state-bearing writes (execute-operation) + reads (claim status,
+        query-effect-index) + rebuild-effect-index todos via sidecar,
+        (d) fail-closed paths preservados.
+      - Sharpen (grill-with-docs): descrição anterior do item era ambígua
+        (título "Remover Bootstrap Exception" mas descrição sobre "docs humanos
+        → agentes", que é coberto por G1). Alinhado com `CONTEXT.md`.
+      - Ver `progress/r9_bootstrap_exception.md`
 
 ### Trilha B — Features P0 da comunidade
 
