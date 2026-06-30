@@ -41,7 +41,14 @@ fn main() {
             }
         },
         "execute-operation" => {
-            forge_core_cli::execute_operation::run_execute_operation_command(&args)
+            match forge_core_cli::execute_operation::run_execute_operation_command(&args)
+            {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "rebuild-effect-index" => {
             forge_core_cli::effect_index::run_rebuild_effect_index_command(&args)
