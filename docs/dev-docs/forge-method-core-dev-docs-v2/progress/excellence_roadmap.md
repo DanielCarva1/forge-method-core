@@ -12,17 +12,11 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 
 | Frente | Hoje | Meta | Lacuna principal |
 |---|---|---|---|
-| Rápido | 5 | 10 | Sem benchmarks mensuráveis |
-| Robusto | 9 | 10 | Tracing completo; zero Result<_,String>; sem zeroize ainda |
-| Performativo | 4 | 10 | Sem criterion, sem profile, sem hot-path baselines |
-| Protocolo guia | 9 | 10 | F04 validate+run --dry-run completos; F01 bugs críticos fechados |
-| Workflows | 7 | 10 | WAL/claim ok, mas F11/F13 não existem |
-| Agente guia humano | 9 | 10 | F01 bugs de integridade fechados; rollback_available real |
-| Não-script-de-novela | 9 | 10 | Já é framework paramétrico; faltam fixtures que provem |
-| Features comunidade | 9 | 10 | F03/F04/F01 operacionais; F02 preflight implementado; falta F15/F05-F14 |
-| Rust best practices | 9 | 10 | clippy pedantic em 0 warnings (comecou ~245); E1 fechado |
-| Segurança supply chain | 7 | 10 | serde_yaml já migrado (R7); zeroize R5.1-R5.9 feitos; fuzz (R4) completo via ADR-0008 |
-| Docs/rastreabilidade | 6 | 10 | Bootstrap Exception pendente; papers sem status doc |
+| Rápido | 7 | 10 | Benchmarks crypto R6.2 completos (~420µs verify, ~6µs parse) |
+| Robusto | 9 | 10 | Tracing completo; zero Result<_,String>; zeroize R5.1-R5.9 |
+| Performativo | 6 | 10 | Crypto + store benchmarks baselines medidos; falta profile release bench |
+| Segurança supply chain | 8 | 10 | serde_yaml migrado; zeroize feito; fuzz (R4) completo via ADR-0008 |
+| Docs/rastreabilidade | 7 | 10 | ADR-0008 criado; R4/R6 docs atualizados; falta R13/R14/R9 |
 
 ## Princípios (não negociáveis)
 
@@ -87,9 +81,16 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
       - `reference_index.rs`: workspace (~1.5ms) + minimal (~205µs)
       - Achado: fsync Windows é durability-bound (25–50ms), não bug
       - Ver `progress/r6_benchmarks.md`
-- [ ] **R6.2** — Benchmarks crypto hot paths
-      - `verify_rekor_checkpoint`, `verify_merkle_inclusion`, parse+verify combinados
-      - Em `crates/forge-core-crypto/benches/`
+- [x] **R6.2** — Benchmarks crypto hot paths ✅
+      - `crates/forge-core-crypto/benches/rekor.rs` com 5 cenários:
+        `parse_signed_checkpoint`, `parse_rekor_log_entry`,
+        `verify_rekor_full_path/aux_{0,10,100}`
+      - Decisão de design (skill `improve-codebase-architecture`): helpers
+        internos `verify_*` mantidos `pub(crate)`, medidos via entrypoint
+        público `run_host_adapter_rekor_verification`. Deletion test aprova.
+      - Baselines (dev, Windows 11 / WSL): parse 2-7µs, verify full path
+        420-655µs (p256 verify domina; Merkle walk scales O(log n))
+      - Ver `progress/r6_benchmarks.md`
 - [ ] **R6.3** — Benchmarks `serde_yaml::from_str` vs `serde_yml::from_str` (pós-R7)
 - [ ] **R6.4** — CI: bench em PR com label `perf` compara com main
 - [ ] **R5** — `zeroize` em material cripto — inventariado 2026-06-30
