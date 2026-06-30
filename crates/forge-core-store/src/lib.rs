@@ -65,6 +65,12 @@ impl ReferenceIndexBuilder {
         Self { options }
     }
 
+    /// Build a [`ReferenceIndex`] by scanning the repository at `root`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ReferenceIndexBuildError`] if any policy file, operation
+    /// fixture, contract instance, or command contract cannot be parsed.
     pub fn build(
         &self,
         root: impl AsRef<Path>,
@@ -84,6 +90,13 @@ impl ReferenceIndexBuilder {
     }
 }
 
+/// Build a [`ReferenceIndex`] using default options. See
+/// [`ReferenceIndexBuilder::build`] for details.
+///
+/// # Errors
+///
+/// Returns [`ReferenceIndexBuildError`] if any policy file, operation
+/// fixture, contract instance, or command contract cannot be parsed.
 pub fn build_reference_index(
     root: impl AsRef<Path>,
 ) -> Result<ReferenceIndex, ReferenceIndexBuildError> {
@@ -141,6 +154,16 @@ pub fn collect_known_repo_paths_with_diagnostics(
     collection
 }
 
+/// Append a single JSON record followed by a newline to a repo-relative
+/// append-only log. Acquires the shared effect-store lock for the log to
+/// serialize concurrent appenders, then `fsync`s the file so the record is
+/// durable on return.
+///
+/// # Errors
+///
+/// Returns [`AppendJsonLineError`] if the relative path is invalid, the
+/// record cannot be serialized to JSON, the directory cannot be created, the
+/// lock cannot be acquired, or any I/O write/flush/sync fails.
 pub fn append_json_line<T>(
     root: impl AsRef<Path>,
     relative_path: &str,
@@ -224,6 +247,13 @@ where
     Ok(target)
 }
 
+/// Append every record in `records` to a repo-relative append-only log,
+/// returning the on-disk paths of the appended entries.
+///
+/// # Errors
+///
+/// Forwards [`AppendJsonLineError`] from [`append_json_line`] on the first
+/// record that fails.
 pub fn append_effect_target_metadata_records(
     root: impl AsRef<Path>,
     index_relative_path: &str,
@@ -287,6 +317,12 @@ pub fn resolve_effect_physical_ref(
 
 pub const DEFAULT_TRACE_LOG_RELATIVE_PATH: &str = "traces/events.ndjson";
 
+/// Append a single [`TraceEvent`] to the default trace log
+/// ([`DEFAULT_TRACE_LOG_RELATIVE_PATH`]) and `fsync` it for durability.
+///
+/// # Errors
+///
+/// Forwards [`AppendJsonLineError`] from the underlying append routine.
 pub fn append_trace_event(
     state_root: impl AsRef<Path>,
     event: &TraceEvent,
@@ -897,6 +933,13 @@ pub fn sha256_content_hash(content: &[u8]) -> String {
     format!("sha256:{digest:x}")
 }
 
+/// Block until an exclusive [`EffectStoreLock`] is acquired on
+/// `lock_relative_path` under `root`.
+///
+/// # Errors
+///
+/// Returns [`EffectStoreLockError`] if the lock path is invalid, its parent
+/// directory cannot be created, or the lock file cannot be opened.
 pub fn acquire_effect_store_lock(
     root: impl AsRef<Path>,
     lock_relative_path: &str,
@@ -904,6 +947,14 @@ pub fn acquire_effect_store_lock(
     acquire_effect_store_lock_inner(root.as_ref(), lock_relative_path, false)
 }
 
+/// Try to acquire an exclusive [`EffectStoreLock`] on `lock_relative_path`
+/// under `root` without blocking.
+///
+/// # Errors
+///
+/// Returns [`EffectStoreLockError`] (typically `LockHeld`) if the lock is
+/// currently held by another process, or for the same reasons as
+/// [`acquire_effect_store_lock`].
 pub fn try_acquire_effect_store_lock(
     root: impl AsRef<Path>,
     lock_relative_path: &str,
