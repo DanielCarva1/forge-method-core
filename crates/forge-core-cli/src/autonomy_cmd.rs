@@ -17,11 +17,13 @@ use forge_core_contracts::verification_goal::{
 use forge_core_contracts::{CliEnvelope, ExitReason};
 use forge_core_engine::autonomy_router::{route_lane, route_lane_for_tool_classes, LaneDecision};
 
+use crate::cli_error::ExitError;
+
 const AUTONOMY_COMMAND: &str = "autonomy";
 const ROUTE_COMMAND: &str = "autonomy route";
 
 /// Parse and run `forge-core autonomy <subcommand>`.
-pub fn run_autonomy_command(args: &[String]) {
+pub fn run_autonomy_command(args: &[String]) -> Result<(), ExitError> {
     let sub = args.get(1).map_or("--help", String::as_str);
     match sub {
         "route" => run_route(&args[2..]),
@@ -30,30 +32,33 @@ pub fn run_autonomy_command(args: &[String]) {
             println!(
                 "  route --policy-file <path> [--goal-file <path>] [--tool-class <snake_case>]... [--failure-streak <n>] [--no-json]"
             );
+            Ok(())
         }
         other => {
             let error = unknown_subcommand_error(other, &args[2..]);
-            emit_err(error.command(), &error.message(), error.want_json());
+            emit_err(error.command(), &error.message(), error.want_json())
         }
     }
 }
 
 /// Handler for `forge-core autonomy route`.
-pub fn run_route(args: &[String]) {
+pub fn run_route(args: &[String]) -> Result<(), ExitError> {
     let options = match parse_route_args(args) {
         Ok(RouteParseOutcome::Help) => {
             println!(
                 "forge-core autonomy route --policy-file <path> [--goal-file <path>] [--tool-class <snake_case>]... [--failure-streak <n>] [--no-json]"
             );
-            return;
+            return Ok(());
         }
         Ok(RouteParseOutcome::Run(options)) => options,
-        Err(error) => emit_err(ROUTE_COMMAND, &error.message(), error.want_json()),
+        Err(error) => return emit_err(ROUTE_COMMAND, &error.message(), error.want_json()),
     };
 
     let contracts = match load_route_contracts(&options) {
         Ok(contracts) => contracts,
-        Err(error) => emit_err(ROUTE_COMMAND, &error.message(), options.want_json),
+        Err(error) => {
+            return emit_err(ROUTE_COMMAND, &error.message(), options.want_json);
+        }
     };
 
     let decision: LaneDecision = if options.tool_classes.is_empty() {
@@ -71,7 +76,7 @@ pub fn run_route(args: &[String]) {
         )
     };
     let env = CliEnvelope::ok(ROUTE_COMMAND, decision);
-    emit(env, options.want_json);
+    emit(env, options.want_json)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -388,42 +393,48 @@ fn error_envelope(command: &str, message: &str) -> CliEnvelope<()> {
     CliEnvelope::err(command, ExitReason::InvalidDecisionShape, message)
 }
 
-fn emit_err(command: &str, message: &str, want_json: bool) -> ! {
+fn emit_err(command: &str, message: &str, want_json: bool) -> Result<(), ExitError> {
     let env = error_envelope(command, message);
-    emit(env, want_json);
+    emit(env, want_json)
 }
 
 #[allow(clippy::needless_pass_by_value)]
-fn emit<T: serde::Serialize>(env: CliEnvelope<T>, want_json: bool) -> ! {
+fn emit<T: serde::Serialize>(env: CliEnvelope<T>, want_json: bool) -> Result<(), ExitError> {
     let code = env.exit_code();
     if want_json {
         println!(
             "{}",
             serde_json::to_string_pretty(&env).expect("serialize envelope")
         );
-        std::process::exit(code);
-    }
-    // Text mode: surface the lane for the accepted case.
-    let command = env.command.0.as_str();
-    if env.ok {
-        let data_value = env.data.as_ref().and_then(|d| serde_json::to_value(d).ok());
-        let lane = data_value
-            .as_ref()
-            .and_then(|v| v.get("lane"))
-            .and_then(|l| l.as_str());
-        match lane {
-            Some(l) => println!("lane: {l}"),
-            None => println!("{command}: ok"),
-        }
     } else {
-        eprintln!(
-            "{command} failed: {}",
-            env.error
+        // Text mode: surface the lane for the accepted case.
+        let command = env.command.0.as_str();
+        if env.ok {
+            let data_value = env.data.as_ref().and_then(|d| serde_json::to_value(d).ok());
+            let lane = data_value
                 .as_ref()
-                .map_or("unknown", |error| error.message.as_str())
-        );
+                .and_then(|v| v.get("lane"))
+                .and_then(|l| l.as_str());
+            match lane {
+                Some(l) => println!("lane: {l}"),
+                None => println!("{command}: ok"),
+            }
+        } else {
+            eprintln!(
+                "{command} failed: {}",
+                env.error
+                    .as_ref()
+                    .map_or("unknown", |error| error.message.as_str())
+            );
+        }
     }
-    std::process::exit(code);
+    if code == 0 {
+        Ok(())
+    } else {
+        // The envelope already carried the human-readable failure message
+        // to stderr/stdout; the ExitError only carries the exit code.
+        Err(ExitError::with_code(code, String::new()))
+    }
 }
 
 #[cfg(test)]
