@@ -1,7 +1,7 @@
 # Excellence Roadmap — Forge Method Core até 10/10
 
 **Data**: 2026-06-30
-**Status**: plano ativo
+**Status**: plano ativo (última atualização: 2026-06-30 — E1.1/E1.2/E1.3 progress)
 **Dono**: Daniel (codebase owner) + agente executor
 **Norte estratégico**: rápido, robusto, performativo, protocolo-guia que escala com a
 capacidade dos agentes, nunca script de novela, sempre Rust ou compatível, sempre
@@ -19,7 +19,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Agente guia humano | 8 | 10 | Política tipada, mas UX de "preview→human" ausente |
 | Não-script-de-novela | 9 | 10 | Já é framework paramétrico; faltam fixtures que provem |
 | Features comunidade | 6 | 10 | F03/F04/F05 parciais; F01/F02/F15 P0 não iniciados |
-| Rust best practices | 7 | 10 | clippy pedantic com ~436 warnings; sem thiserror/clap (bom) |
+| Rust best practices | 7.5 | 10 | clippy pedantic ~213 (comecou ~245); 3 commits E1 ja fechados |
 | Segurança supply chain | 6 | 10 | serde_yaml deprecated (R7), sem zeroize (R5), sem fuzz (R4) |
 | Docs/rastreabilidade | 6 | 10 | Bootstrap Exception pendente; papers sem status doc |
 
@@ -91,10 +91,15 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 
 ### Trilha B — Features P0 da comunidade
 
-- [ ] **F03** — TraceEvent canonico + `forge explain` (PARCIAL)
-      - `forge-core-trace` existe (287 linhas), mas `forge explain` não é comando
-      - DoD: `forge explain <run_id>` lê NDJSON e narra cronologicamente
-      - Depende: R3.3 (`agent_id`) pra filtrar por agente
+- [x] **F03** — TraceEvent canonico + `forge explain` ✅
+      - Commit `7c96a37` (2026-06-30)
+      - `forge explain --last-run | --run-id <id>` narra cronologicamente
+      - Narrativa: header (run/trace/agent) + eventos ordenados por `recorded_at`
+        + totais (events, outputs, model_calls, tool_calls, tokens) + peak risk
+      - 10 testes cobrem: ordem cronológica, agregação, peak risk, parser,
+        mutuamente exclusivo, empty events, non-matched
+      - Helpers quebrados (`narrate_header`, `narrate_event`, `narrate_summary`,
+        `narrate_non_matched`) — clippy pedantic limpo no trabalho novo
 - [ ] **F04** — WorkflowGraph v0 (PARCIAL)
       - `forge-core-graph` existe (1014 linhas), mas `forge graph run` não executa
       - DoD: `forge graph validate` + `forge graph run --dry-run` funcionam
@@ -140,10 +145,29 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 
 ### Trilha E — Rust best practices
 
-- [ ] **E1** — Zerar warnings clippy pedantic (~436 hoje)
-      - Não corrigir warnings pré-existentes que não sejam do trabalho atual
-      - Critério: cada commit novo não adiciona warnings novos
-      - Meta: baseline cai pra <100 ao fim de R2/R3/R5/R7
+- [ ] **E1** — Zerar warnings clippy pedantic (baseline ~245, agora ~213)
+      - Estrategia hibrida: fechar lints mecanicos + escrever `# Errors`/`# Panics`
+        em todo workspace; `#![allow]` documentado so pro cosmético que sobrar
+      - [x] E1.1 large_enum_variant em `ProjectInitError` (commit `a05188d`)
+      - [x] E1.1b `pub(crate) ClaimReconcileLoopConfig` p/ `private_interfaces`
+            (commit `669ea28`)
+      - [x] E1.2 assigning_clones em crypto via `clone_from` (commit `2a56d16`,
+            21 warnings)
+      - [x] E1.3 `host_adapter_verify_cmd.rs` docs `# Errors`/`# Panics`
+            nas 13 funcoes (commit `2664fc3`, 26 warnings)
+      - [ ] E1.3 demais arquivos `forge-core-cli` (docs):
+            cli_util (19), host_adapter_policy_cmd (12), isolation (11),
+            claim (10), graph_cmd (9), *_cmd (8), guide (7), telemetry_cmd (6),
+            eval_cmd (6), effect_index (5), project_cmd (3), contract_cmd (3),
+            validate/execute_operation/autonomy_cmd (2 cada), coordination (1)
+      - [ ] E1.3 forge-core-engine (2 warnings) - unico fora do cli
+      - [ ] E1.4 lints mecanicos restantes: manual_let_else (7),
+            match_same_arms (4), redundant_* (5)
+      - [ ] E1.5 needless_pass_by_value (18) - analise caso a caso
+      - [ ] E1.6 struct_excessive_bools (6) - refactor em tipos ou allow
+      - [ ] E1.7 `#![allow]` documentado em crate root para cosméticos
+            (too_many_lines, must_use_candidate)
+      - Meta: baseline cai pra <100 ao fim destes sub-itens
 - [ ] **E2** — Profile release documentado em `Cargo.toml`
       - LTO thin, codegen-units 1, panic abort, opt-level 3
       - DoD: `cargo build --release` produz binário otimizado
