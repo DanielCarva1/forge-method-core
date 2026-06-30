@@ -5,11 +5,13 @@
 //! main.rs decomposition (see
 //! `docs/dev-docs/forge-method-core-dev-docs-v2/09_system_design_roadmap.md`).
 //!
-//! Every dispatcher in a `*_cmd.rs` module imports from here via
-//! `use crate::cli_util::*;`. The two `pub` items (`StatefulCommandRoots`
-//! and `emit_envelope`) are also re-exported at the crate root so the
-//! binary entrypoint in `main.rs` keeps resolving them through
-//! `crate::cli_util::*`.
+//! ## R8 (process::exit removal)
+//!
+//! Before R8 every helper here called `std::process::exit(N)` on a malformed
+//! argv. As part of R8, the legacy helpers were replaced by their
+//! `*_or_err` counterparts that return `Result<T, ExitError>`. The legacy
+//! helpers were deleted once every dispatcher had migrated. The single
+//! remaining `std::process::exit` lives at the top of `main.rs`.
 
 use crate::cli_error::ExitError;
 use crate::{
@@ -25,20 +27,6 @@ use std::path::{Path, PathBuf};
 pub struct StatefulCommandRoots {
     pub project_root: PathBuf,
     pub effect_store_root: PathBuf,
-}
-
-pub fn resolve_stateful_roots_or_exit(
-    command: &str,
-    root: &Path,
-    allow_bootstrap_core: bool,
-) -> StatefulCommandRoots {
-    match resolve_stateful_command_roots(root, allow_bootstrap_core) {
-        Ok(roots) => roots,
-        Err(message) => {
-            eprintln!("{command} failed: {message}");
-            std::process::exit(1);
-        }
-    }
 }
 
 pub fn resolve_stateful_command_roots(
@@ -75,189 +63,6 @@ pub fn resolve_stateful_command_roots(
     })
 }
 
-pub fn next_arg(args: &[String], index: usize) -> &str {
-    args.get(index).map(String::as_str).unwrap_or_else(|| {
-        eprintln!("{}", usage());
-        std::process::exit(2);
-    })
-}
-
-pub fn next_path(args: &[String], index: usize) -> PathBuf {
-    PathBuf::from(next_arg(args, index))
-}
-
-pub fn parse_payload_arg(value: &str) -> PayloadFileSpec {
-    let Some((target_ref, path)) = value.split_once('=') else {
-        eprintln!("{}", usage());
-        std::process::exit(2);
-    };
-    PayloadFileSpec {
-        target_ref: target_ref.to_string(),
-        path: PathBuf::from(path),
-    }
-}
-
-pub fn parse_u64(value: &str) -> u64 {
-    value.parse::<u64>().unwrap_or_else(|_| {
-        eprintln!("{}", usage());
-        std::process::exit(2);
-    })
-}
-
-pub fn parse_i64(value: &str) -> i64 {
-    value.parse::<i64>().unwrap_or_else(|_| {
-        eprintln!("{}", usage());
-        std::process::exit(2);
-    })
-}
-
-pub fn parse_usize(value: &str) -> usize {
-    value.parse::<usize>().unwrap_or_else(|_| {
-        eprintln!("{}", usage());
-        std::process::exit(2);
-    })
-}
-
-pub fn parse_target_kind(value: &str) -> EffectTargetKind {
-    match value {
-        "file_path" => EffectTargetKind::FilePath,
-        "glob" => EffectTargetKind::Glob,
-        "state_key" => EffectTargetKind::StateKey,
-        "artifact_id" => EffectTargetKind::ArtifactId,
-        "evidence_id" => EffectTargetKind::EvidenceId,
-        "ledger_stream" => EffectTargetKind::LedgerStream,
-        "request_stream" => EffectTargetKind::RequestStream,
-        "completion_id" => EffectTargetKind::CompletionId,
-        _ => {
-            eprintln!("{}", usage());
-            std::process::exit(2);
-        }
-    }
-}
-
-pub fn parse_runtime_kind(value: &str) -> RuntimeKind {
-    match value {
-        "codex" => RuntimeKind::Codex,
-        "cursor" => RuntimeKind::Cursor,
-        "claude" => RuntimeKind::Claude,
-        "opencode" => RuntimeKind::Opencode,
-        "vscode" => RuntimeKind::Vscode,
-        "pidev" => RuntimeKind::Pidev,
-        "forge_standalone" => RuntimeKind::ForgeStandalone,
-        "custom" => RuntimeKind::Custom,
-        _ => {
-            eprintln!("{}", usage());
-            std::process::exit(2);
-        }
-    }
-}
-
-pub fn parse_metadata_consumer_use(value: &str) -> EffectMetadataConsumerUse {
-    match value {
-        "discovery" => EffectMetadataConsumerUse::Discovery,
-        "diagnostics" => EffectMetadataConsumerUse::Diagnostics,
-        "handoff_context" => EffectMetadataConsumerUse::HandoffContext,
-        _ => {
-            eprintln!("{}", usage());
-            std::process::exit(2);
-        }
-    }
-}
-
-pub fn parse_metadata_adapter_trigger(value: &str) -> EffectMetadataAdapterTrigger {
-    match value {
-        "evidence_discovery" => EffectMetadataAdapterTrigger::EvidenceDiscovery,
-        "diagnostics" => EffectMetadataAdapterTrigger::Diagnostics,
-        "handoff_preparation" => EffectMetadataAdapterTrigger::HandoffPreparation,
-        "manual_inspection" => EffectMetadataAdapterTrigger::ManualInspection,
-        _ => {
-            eprintln!("{}", usage());
-            std::process::exit(2);
-        }
-    }
-}
-
-pub fn parse_host_adapter_projection_target(value: &str) -> HostAdapterProjectionTarget {
-    match value {
-        "mcp_tools" => HostAdapterProjectionTarget::McpTools,
-        "borrowed_shell" => HostAdapterProjectionTarget::BorrowedShell,
-        "app_ui" => HostAdapterProjectionTarget::AppUi,
-        _ => {
-            eprintln!("{}", usage());
-            std::process::exit(2);
-        }
-    }
-}
-
-pub fn parse_host_adapter_process_target(value: &str) -> HostAdapterProcessTarget {
-    match value {
-        "mcp_stdio" => HostAdapterProcessTarget::McpStdio,
-        "borrowed_shell" => HostAdapterProcessTarget::BorrowedShell,
-        "app_bridge" => HostAdapterProcessTarget::AppBridge,
-        _ => {
-            eprintln!("{}", usage());
-            std::process::exit(2);
-        }
-    }
-}
-
-pub fn parse_update_channel(value: &str) -> HostAdapterUpdateChannel {
-    match value {
-        "stable" => HostAdapterUpdateChannel::Stable,
-        "canary" => HostAdapterUpdateChannel::Canary,
-        "dev" => HostAdapterUpdateChannel::Dev,
-        _ => {
-            eprintln!("{}", usage());
-            std::process::exit(2);
-        }
-    }
-}
-
-pub fn emit_envelope<T: serde::Serialize>(
-    _family: &str,
-    env: forge_core_contracts::CliEnvelope<T>,
-    want_json: bool,
-) {
-    let code = env.exit_code();
-    if want_json {
-        println!("{}", serde_json::to_string_pretty(&env).unwrap());
-    } else if !env.ok {
-        eprintln!(
-            "{} failed: {}",
-            _family,
-            env.error
-                .as_ref()
-                .map(|e| e.message.as_str())
-                .unwrap_or("unknown")
-        );
-    }
-    std::process::exit(code);
-}
-
-/// Strict value: exit 3 (invalid-input, DD10) if a flag is missing its value
-/// or the value looks like another flag. Governance commands must not silently
-/// coerce a missing/typo'd value into a default (review S4.4 medium).
-pub fn require_value(args: &[String], idx: usize, flag: &str) -> String {
-    match args.get(idx) {
-        Some(v) if !v.is_empty() && !v.starts_with("--") => v.clone(),
-        _ => {
-            eprintln!("claim: --{flag} requires a value");
-            std::process::exit(3);
-        }
-    }
-}
-
-/// Strict numeric parse: exit 3 (invalid-input, DD10) on a malformed number.
-/// `--now-unix garbage` must NOT silently become epoch 0 (review S4.4 bug #4).
-pub fn parse_strict<T: std::str::FromStr>(s: &str, flag: &str) -> T {
-    match s.parse::<T>() {
-        Ok(v) => v,
-        Err(_) => {
-            eprintln!("claim: invalid value for --{flag}: '{s}'");
-            std::process::exit(3);
-        }
-    }
-}
 pub fn usage() -> &'static str {
     concat!(
         "usage: forge-core validate [--root <path>] [--json]\n",
