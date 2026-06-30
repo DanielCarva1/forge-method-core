@@ -783,7 +783,7 @@ pub fn preview_operation_from_plan(
         runtime_ready_blockers(plan, &staging, &operation.gates.required_before_mutation);
 
     RuntimePreviewReport {
-        status: preview_status(plan.status),
+        status: preview_status(plan.status, &blockers),
         operation_id: plan.contract_id.clone(),
         preview_mutates_state: false,
         operation_mutates_state,
@@ -798,7 +798,7 @@ pub fn preview_operation_from_plan(
         destructive: operation_mutates_state,
         risk_level: runtime_risk_level(plan.status, plan.side_effect_policy, &blockers),
         rollback_available: false,
-        next_human_action: next_human_action(plan),
+        next_human_action: next_human_action(plan, &blockers),
         plan: plan.clone(),
         staging,
     }
@@ -811,7 +811,7 @@ pub fn preview_runtime_plan(plan: &RuntimePlan) -> RuntimePreviewReport {
     let blockers = runtime_ready_blockers(plan, &staging, &[]);
 
     RuntimePreviewReport {
-        status: preview_status(plan.status),
+        status: preview_status(plan.status, &blockers),
         operation_id: plan.contract_id.clone(),
         preview_mutates_state: false,
         operation_mutates_state,
@@ -826,7 +826,7 @@ pub fn preview_runtime_plan(plan: &RuntimePlan) -> RuntimePreviewReport {
         destructive: operation_mutates_state,
         risk_level: runtime_risk_level(plan.status, plan.side_effect_policy, &blockers),
         rollback_available: false,
-        next_human_action: next_human_action(plan),
+        next_human_action: next_human_action(plan, &blockers),
         plan: plan.clone(),
         staging,
     }
@@ -1094,13 +1094,23 @@ fn mutating_side_effect(policy: OperationSideEffectPolicy) -> bool {
     )
 }
 
-fn preview_status(status: RuntimePlanStatus) -> RuntimePreviewStatus {
+fn preview_status(
+    status: RuntimePlanStatus,
+    blockers: &[RuntimeReadyBlocker],
+) -> RuntimePreviewStatus {
     match status {
         RuntimePlanStatus::Blocked => RuntimePreviewStatus::Blocked,
         RuntimePlanStatus::AwaitingHuman => RuntimePreviewStatus::AwaitingHuman,
         RuntimePlanStatus::GateRequired => RuntimePreviewStatus::GateRequired,
         RuntimePlanStatus::ReviewRequired => RuntimePreviewStatus::ReviewRequired,
         RuntimePlanStatus::ReadOnlyStatus => RuntimePreviewStatus::ReadOnly,
+        // A plan that is nominally Ready but still carries ready-blockers (e.g.
+        // GatePending, RequiredGateStatusUnknown, MissingHostCallEvidence) is
+        // not actually executable. Downgrade to Blocked so `preview.status`
+        // and `preview.risk_level` agree and `next_human_action` is populated.
+        RuntimePlanStatus::ReadyToCallOperation if !blockers.is_empty() => {
+            RuntimePreviewStatus::Blocked
+        }
         RuntimePlanStatus::ReadyToCallOperation => RuntimePreviewStatus::Ready,
     }
 }
@@ -1122,9 +1132,15 @@ fn runtime_risk_level(
     }
 }
 
-fn next_human_action(plan: &RuntimePlan) -> Option<String> {
+fn next_human_action(plan: &RuntimePlan, blockers: &[RuntimeReadyBlocker]) -> Option<String> {
+    // A nominally-Ready plan with blockers is surfaced as preview.status = Blocked.
+    // Provide the same guidance as the explicit Blocked path so consumers do not
+    // receive an empty `next_human_action` for an effectively blocked operation.
     let action = match plan.status {
         RuntimePlanStatus::Blocked => "inspect blockers before retrying",
+        RuntimePlanStatus::ReadyToCallOperation if !blockers.is_empty() => {
+            "resolve blockers before executing"
+        }
         RuntimePlanStatus::AwaitingHuman => {
             if let Some(prompt) = &plan.prompt {
                 if !prompt.text.trim().is_empty() {
