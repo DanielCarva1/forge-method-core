@@ -25,8 +25,20 @@ fn main() {
             }
         },
         "isolation" => forge_core_cli::isolation::run_isolation_command(&args),
-        "coordination" => forge_core_cli::coordination::run_coordination_command(&args),
-        "project" => forge_core_cli::project_cmd::run_project_command(&args),
+        "coordination" => match forge_core_cli::coordination::run_coordination_command(&args) {
+            Ok(()) => {}
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(error.exit_code());
+            }
+        },
+        "project" => match forge_core_cli::project_cmd::run_project_command(&args) {
+            Ok(()) => {}
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(error.exit_code());
+            }
+        },
         "graph" => forge_core_cli::graph_cmd::run_graph_command(&args),
         "eval" => forge_core_cli::eval_cmd::run_eval_command(&args),
         "telemetry" => forge_core_cli::telemetry_cmd::run_telemetry_command(&args),

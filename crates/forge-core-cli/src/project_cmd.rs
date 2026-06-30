@@ -14,6 +14,8 @@ use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::{Component, Path, PathBuf};
 
+use crate::cli_error::ExitError;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectLayoutKind {
@@ -1148,12 +1150,16 @@ fn project_usage() -> &'static str {
     "forge-core project <subcommand> [options]\n  init [--root <path>] [--project-id <id>] [--sidecar-root <path>] [--state-root <path>] [--json|--no-json]\n  resolve [--root <path>] [--allow-bootstrap-core] [--json|--no-json]"
 }
 
-pub fn run_project_command(args: &[String]) {
+pub fn run_project_command(args: &[String]) -> Result<(), ExitError> {
     let (output, exit) = dispatch(args);
     if !output.is_empty() {
         println!("{output}");
     }
-    std::process::exit(exit);
+    if exit == 0 {
+        Ok(())
+    } else {
+        Err(ExitError::with_code(exit, String::new()))
+    }
 }
 #[cfg(test)]
 mod tests {
