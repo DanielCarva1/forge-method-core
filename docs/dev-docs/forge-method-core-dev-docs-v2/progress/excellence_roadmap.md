@@ -1,8 +1,8 @@
 # Excellence Roadmap — Forge Method Core até 10/10
 
 **Data**: 2026-06-30
-**Status**: plano ativo (última atualização: 2026-06-30 — E1 completo; auditoria F04/F01
-feita, breakdown em sub-tasks adicionado)
+**Status**: plano ativo (última atualização: 2026-06-30 — R5+R4 inventariados e
+quebrados em sub-tasks; E1/E2/E3/R2 completos; F04/F01/F02 completos)
 **Dono**: Daniel (codebase owner) + agente executor
 **Norte estratégico**: rápido, robusto, performativo, protocolo-guia que escala com a
 capacidade dos agentes, nunca script de novela, sempre Rust ou compatível, sempre
@@ -21,7 +21,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Não-script-de-novela | 9 | 10 | Já é framework paramétrico; faltam fixtures que provem |
 | Features comunidade | 9 | 10 | F03/F04/F01 operacionais; F02 preflight implementado; falta F15/F05-F14 |
 | Rust best practices | 9 | 10 | clippy pedantic em 0 warnings (comecou ~245); E1 fechado |
-| Segurança supply chain | 6 | 10 | serde_yaml deprecated (R7), sem zeroize (R5), sem fuzz (R4) |
+| Segurança supply chain | 6 | 10 | serde_yaml já migrado (R7); sem zeroize ainda (R5), sem fuzz (R4) |
 | Docs/rastreabilidade | 6 | 10 | Bootstrap Exception pendente; papers sem status doc |
 
 ## Princípios (não negociáveis)
@@ -60,10 +60,27 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
       - [x] R3.3 correlação multi-agente via `agent_id`
       - [x] R3.4 analisado: todos `eprintln!` em `_cmd.rs` são
             user-facing contract output, não logging. No-op legítimo.
-- [ ] **R4** — Fuzz harness (`cargo-fuzz`)
-      - Alvos: `parse_rekor_log_entry`, `parse_signed_checkpoint`,
-        `claim_wal_decode`, `ocsp_response_decode`
-      - DoD: `cargo fuzz run <target> -- -max_total_time=60` sem panic
+- [ ] **R4** — Fuzz harness (`cargo-fuzz`) — inventariado 2026-06-30
+      - Inventário completo em `progress/r4_fuzz_inventory.md`
+      - Alvos reais confirmados (nomes do roadmap eram aproximados):
+        `parse_rekor_log_entry` (rekor.rs:114), `parse_signed_checkpoint`
+        (rekor.rs:263), `decode_ocsp_response` (ocsp.rs:30, era
+        `ocsp_response_decode`), `decode_prefix` (claim_wal.rs:1818, era
+        `claim_wal_decode`)
+      - Todos os 4 alvos são `pub(crate)` ou privado — exige feature `fuzz`
+        expondo via `#[cfg(feature = "fuzz")] pub use`
+      - Seed corpus: gerado a partir de `crates/forge-core-cli/tests/validate.rs`
+        e `crates/forge-core-store/tests/claim_wal.rs` (não há fixtures estáticos)
+      - Toolchain OK (rustc 1.94 stable); `cargo-fuzz` e `fuzz/` ainda ausentes
+      - Sub-tasks:
+      - [ ] R4.1 Setup: `cargo install cargo-fuzz` + `cargo fuzz init` + feature
+            `fuzz` em `forge-core-crypto`/`forge-core-store` expondo os 4 alvos
+      - [ ] R4.2 Harness `parse_signed_checkpoint` (mais isolado, valida infra)
+      - [ ] R4.3 Harness `parse_rekor_log_entry` (JSON+base64 duplo)
+      - [ ] R4.4 Harness `decode_ocsp_response` (DER/ASN.1 via rasn)
+      - [ ] R4.5 Harness `decode_prefix` (WAL binário com CRC32C)
+      - [ ] R4.6 DoD: `cargo fuzz run <target> -- -max_total_time=60` sem panic
+            em cada um dos 4 alvos
 - [x] **R6.1** — Benchmarks (`criterion`) store hot paths ✅
       - `claim_wal.rs`: append 1/100/1000 entries (32ms / 37ms / 41ms)
       - `claim_wal.rs`: replay 1/100/1000 (157µs / 719µs / 7.2ms)
@@ -75,11 +92,55 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
       - Em `crates/forge-core-crypto/benches/`
 - [ ] **R6.3** — Benchmarks `serde_yaml::from_str` vs `serde_yml::from_str` (pós-R7)
 - [ ] **R6.4** — CI: bench em PR com label `perf` compara com main
-- [ ] **R5** — `zeroize` em material cripto
-      - Inventariar `VerifyingKey`, `ed25519_dalek::VerifyingKey`, sig brutas, nonces
-        OCSP, payload pré-hash
-      - Wrap em `Zeroizing<Vec<u8>>` ou `Zeroizing<Box<[u8]>>`
-      - Constant-time compare via `subtle::ConstantTimeEq`
+- [ ] **R5** — `zeroize` em material cripto — inventariado 2026-06-30
+      - Inventário completo em `progress/r5_crypto_inventory.md`
+      - Estado deps: `zeroize`/`subtle` ausentes do workspace (mas já transitivos
+        via curve25519-dalek/elliptic-curve). `ed25519-dalek` e `p256` precisam
+        da feature `zeroize` habilitada explicitamente.
+      - Prioridades (alta → baixa):
+        1. Nonces OCSP `expected_nonce_hex`/`observed_nonce_hex` (único segredo
+           de cliente do fluxo, fields de `HostAdapterCertificateOcspStatusVerification`)
+        2. `signature_bytes`, `bundle.signature`, `sct_bytes`, `ocsp_der`
+        3. `public_key_bytes`, `rekor_key: P256VerifyingKey`, DERs de cert
+        4. Prehash payloads (baixa — conteúdo público)
+      - Comparações em tempo constant (R5.5): `rekor.rs:358` (Merkle root),
+        `ocsp.rs:327` (nonce OCSP), `ocsp.rs:185` (serial — bug de corretude
+        também, não só timing)
+      - Tipos third-party sem `Zeroize`: `rasn_ocsp::{OcspResponse,
+        BasicOcspResponse}`, `asn1_rs::BitString` — mitigação: descartar cedo
+        e copiar campos sensíveis para `Zeroizing<>` no caller
+      - Sub-tasks em 3 fases:
+      - FASE A (não-breaking):
+      - [ ] R5.1 Workspace deps: adicionar `zeroize = { version = "1.9",
+            features = ["derive"] }`, `subtle = "2.6"`; habilitar feature
+            `zeroize` em `ed25519-dalek` e `p256`
+      - [ ] R5.2 Wrap locals em `rekor.rs` (prehash/signature opcional,
+            preparar `ParsedCheckpoint.signatures` field type sem quebrar API)
+      - [ ] R5.3 Wrap locals em `ocsp.rs` (`signature_der`, `sha1_digest`,
+            `ocsp_digest_for_algorithm` retornos → `Zeroizing<Vec<u8>>`)
+      - [ ] R5.4 Wrap locals em `host_adapter_verification.rs`
+            (`signature_bytes`, `public_key_bytes`, `bundle_bytes`,
+            `sct_bytes`, `ocsp_der`)
+      - [ ] R5.5 Constant-time compares em `rekor.rs:358`, `ocsp.rs:327`,
+            `ocsp.rs:185` (decodificar hex/decimal → bytes → `ConstantTimeEq`)
+      - FASE B (`pub(crate)` breaking, sem bump externo):
+      - [ ] R5.6 `ParsedCheckpoint.signatures` → `Vec<Zeroizing<Vec<u8>>>`;
+            `read_certificate_der` em sigstore.rs → `Option<Zeroizing<Vec<u8>>>`;
+            `CertificateTransparencyLogMaterial` deriva `Zeroize, ZeroizeOnDrop`
+      - FASE C (API pública breaking, requer bump minor — pre-1.0 OK):
+      - [ ] R5.7 `file_io::read_signature_file`/`read_public_key_file`/
+            `read_required_file` → `Option<Zeroizing<Vec<u8>>>` (re-exportidos
+            em lib.rs:71, callers: forge-core-cli, tests)
+      - [ ] R5.8 `HostAdapterCertificateOcspStatusVerification` fields
+            `expected_nonce_hex`/`observed_nonce_hex` → `Option<Zeroizing<String>>`
+            (exige impl Serialize manual ou wrapper com serde passthrough)
+      - [ ] R5.9 Sanity test: zeroize drop chamado (verificar ZeroizeOnDrop
+            acionado via drop semantics)
+      - FOLLOW-UP (inventariar antes de expandir):
+      - [ ] R5.10 Inventariar `sigstore.rs` (`ParsedBundle.signature`,
+            `verify_ed25519_signature` internals, `parse_certificate`)
+      - [ ] R5.11 Inventariar `file_io.rs`/`hashing.rs`/`slsa_transparency.rs`/
+            `tuf.rs`
 - [x] **R7** — `serde_yaml` → `yaml_serde` ✅
       - Descoberta: `serde_yml` também está deprecated (shim)
       - Migrado para `yaml_serde 0.10.4` (The YAML Organization, API 1:1)
