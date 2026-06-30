@@ -2098,3 +2098,12 @@ impl Drop for ClaimWalLock {
         let _ = FileExt::unlock(&self.file);
     }
 }
+
+/// Fuzz-only entrypoint that reuses [`decode_prefix`] against a synthetic
+/// in-memory buffer without touching the filesystem. The `wal_path` argument
+/// exists only to populate diagnostic messages; the fuzzer supplies a
+/// placeholder. Not part of the stable API surface.
+#[cfg(feature = "fuzz")]
+pub fn recover_claim_wal_from_bytes(bytes: &[u8]) -> ClaimWalRecovery {
+    decode_prefix(std::path::Path::new("<fuzz>"), bytes)
+}

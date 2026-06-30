@@ -1,0 +1,67 @@
+[package]
+name = "forge-method-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+# `cargo-fuzz` requires the fuzz package to live in its own workspace so
+# its `libfuzzer-sys` dependency and panic=unwind profile overrides do not
+# leak into the main workspace. Empty `[workspace]` table achieves this.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.forge-core-crypto]
+path = "../crates/forge-core-crypto"
+
+[dependencies.forge-core-store]
+path = "../crates/forge-core-store"
+features = ["fuzz"]
+
+# cargo-fuzz needs unwind; the workspace release profile uses panic=abort
+# which would break fuzzer symbolization. Override here.
+[profile.release]
+panic = "unwind"
+overflow-checks = false
+opt-level = 3
+debug = 1
+
+[profile.dev]
+panic = "unwind"
+overflow-checks = false
+opt-level = 3
+
+# Each fuzz target is a small `[[bin]]` that calls a `fuzz_target!` macro.
+# Definitions live in `fuzz_targets/<name>.rs`.
+
+[[bin]]
+name = "parse_signed_checkpoint"
+path = "fuzz_targets/parse_signed_checkpoint.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parse_rekor_log_entry"
+path = "fuzz_targets/parse_rekor_log_entry.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_ocsp_response"
+path = "fuzz_targets/decode_ocsp_response.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "decode_prefix"
+path = "fuzz_targets/decode_prefix.rs"
+test = false
+doc = false
+bench = false

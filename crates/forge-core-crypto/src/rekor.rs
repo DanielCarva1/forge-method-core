@@ -18,7 +18,7 @@ use crate::hashing::{hex_bytes, hex_sha256, normalize_sha256_display};
 /// signatures. Use [`RekorParseError::display`] to recover the exact message
 /// emitted by the legacy implementation at the diagnostic-push boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum RekorParseError {
+pub enum RekorParseError {
     /// Top-level JSON of the rekor log entry failed to parse.
     LogEntryJsonInvalid { source: String },
     /// A required field was missing or had the wrong type.
@@ -89,7 +89,7 @@ impl RekorParseError {
     }
 }
 
-pub(crate) struct ParsedRekorEntry {
+pub struct ParsedRekorEntry {
     pub(crate) body: Value,
     pub(crate) log_id: String,
     pub(crate) log_index: i64,
@@ -97,7 +97,7 @@ pub(crate) struct ParsedRekorEntry {
     pub(crate) proof: ParsedRekorInclusionProof,
 }
 
-pub(crate) struct ParsedRekorInclusionProof {
+pub struct ParsedRekorInclusionProof {
     pub(crate) hashes: Vec<String>,
     pub(crate) log_index: i64,
     pub(crate) root_hash: String,
@@ -105,14 +105,14 @@ pub(crate) struct ParsedRekorInclusionProof {
     pub(crate) checkpoint: String,
 }
 
-pub(crate) struct ParsedCheckpoint {
+pub struct ParsedCheckpoint {
     pub(crate) signed_body: String,
     pub(crate) tree_size: u64,
     pub(crate) root_hash: String,
     pub(crate) signatures: Vec<Zeroizing<Vec<u8>>>,
 }
 
-pub(crate) fn parse_rekor_log_entry(text: &str) -> Result<ParsedRekorEntry, RekorParseError> {
+pub fn parse_rekor_log_entry(text: &str) -> Result<ParsedRekorEntry, RekorParseError> {
     let value = serde_json::from_str::<Value>(text).map_err(|err| {
         RekorParseError::LogEntryJsonInvalid {
             source: err.to_string(),
@@ -261,7 +261,7 @@ pub(crate) fn verify_rekor_checkpoint(
     Err(RekorParseError::CheckpointSignatureInvalid)
 }
 
-pub(crate) fn parse_signed_checkpoint(
+pub fn parse_signed_checkpoint(
     checkpoint: &str,
 ) -> Result<ParsedCheckpoint, RekorParseError> {
     let checkpoint = checkpoint.trim_matches('"');

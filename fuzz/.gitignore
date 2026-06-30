@@ -1,0 +1,10 @@
+target
+artifacts
+coverage
+# `corpus/` holds committed seed inputs that keep fuzz runs reproducible.
+# `cargo fuzz` will write discovered inputs back here too, but we want at
+# least the seeds to ship with the repo.
+!corpus/
+corpus/*/*
+!corpus/*/seed_*.txt
+!corpus/*/*.seed

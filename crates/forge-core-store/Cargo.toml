@@ -19,6 +19,12 @@ tracing.workspace = true
 proptest.workspace = true
 criterion.workspace = true
 
+[features]
+# Exposes internal WAL parsers for the fuzz/ workspace. NOT enabled by
+# default and NOT part of the stable API surface.
+default = []
+fuzz = []
+
 [[bench]]
 name = "claim_wal"
 harness = false
