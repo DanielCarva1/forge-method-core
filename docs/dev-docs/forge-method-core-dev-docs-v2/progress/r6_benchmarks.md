@@ -107,10 +107,16 @@ Benchmarks `serde_yaml::from_str` vs `serde_yml::from_str` (pós-R7 — agora
 `yaml_serde`). Como a migração R7 já foi feita, este benchmark perdeu
 valor; considerar cancelar ou repurpose pra comparar versões de yaml_serde.
 
-## R6.4 (pendente)
+## R6.4 (✅ completo)
 
-CI: bench em PR com label `perf` compara com main. Adicionar step no
-`ci.yml` ou `fuzz.yml`-style workflow separado.
+CI workflow `.github/workflows/perf.yml`:
+- cron diário 06:00 UTC + `workflow_dispatch` + PRs com label `perf`
+- Roda `cargo bench -p forge-core-store` (claim_wal + reference_index) e
+  `cargo bench -p forge-core-crypto --bench rekor` com `--save-baseline ci-perf`
+- Output `.txt` + `target/criterion/` upados como artifact (30 dias)
+- Comparação automática contra main via criterion-compare action é possível
+  mas deferida — diff manual via artifact é suficiente pra detectar regressões
+  óbvias (>20% em qualquer direção).
 
 ## Como rodar
 

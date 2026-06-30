@@ -14,7 +14,13 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 |---|---|---|---|
 | Rápido | 7 | 10 | Benchmarks crypto R6.2 completos (~420µs verify, ~6µs parse) |
 | Robusto | 10 | 10 | Tracing completo; zero Result<_,String>; R5 zeroize completo (R5.1-R5.11) |
-| Performativo | 6 | 10 | Crypto + store benchmarks baselines medidos; falta profile release bench |
+| Performativo | 7 | 10 | Crypto + store benchmarks medidos; CI perf workflow adicionado (R6.4) |
+| Protocolo guia | 9 | 10 | F04 validate+run --dry-run completos; F01 bugs críticos fechados |
+| Workflows | 7 | 10 | WAL/claim ok, mas F11/F13 não existem |
+| Agente guia humano | 9 | 10 | F01 bugs de integridade fechados; rollback_available real |
+| Não-script-de-novela | 9 | 10 | Já é framework paramétrico; faltam fixtures que provem |
+| Features comunidade | 9 | 10 | F03/F04/F01/F02 operacionais; falta F15 e F05-F14 |
+| Rust best practices | 9 | 10 | clippy pedantic em 0 warnings (comecou ~245); E1 fechado |
 | Segurança supply chain | 8 | 10 | serde_yaml migrado; zeroize feito; fuzz (R4) completo via ADR-0008 |
 | Docs/rastreabilidade | 8 | 10 | R13 alinhado; R14 paper status criado; ADR-0008; falta R9 Bootstrap |
 
@@ -92,7 +98,15 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
         420-655µs (p256 verify domina; Merkle walk scales O(log n))
       - Ver `progress/r6_benchmarks.md`
 - [ ] **R6.3** — Benchmarks `serde_yaml::from_str` vs `serde_yml::from_str` (pós-R7)
-- [ ] **R6.4** — CI: bench em PR com label `perf` compara com main
+- [x] **R6.4** — CI: bench em PR com label `perf` ✅
+      - `.github/workflows/perf.yml`: cron diário + `workflow_dispatch` +
+        label `perf` em PRs
+      - Roda `cargo bench -p forge-core-store` e `-p forge-core-crypto --bench rekor`
+        com `--save-baseline ci-perf`
+      - Output `.txt` + `target/criterion/` upados como artifact (30 dias retention)
+      - Comparação automática contra main requer infra extra (criterion-compare
+        action); deferido. Diff manual via artifact é suficiente pra detectar
+        regressões óbvias.
 - [x] **R5** — `zeroize` em material cripto ✅ COMPLETO
       - Inventário completo em `progress/r5_crypto_inventory.md`
       - FASE A, B, C (R5.1-R5.9) completas em commits `9c3c5f3`, `5171cee`,
