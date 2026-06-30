@@ -101,11 +101,63 @@ Achado de performance: o custo dominante (~400µs) é a verificação p256
 ECDSA no signed checkpoint. O Merkle walk scales O(log n) com cada hash
 auxiliar adicionando ~2µs. parse é quase grátis (~6µs).
 
-## R6.3 (pendente)
+## R6.3 (✅ completo)
 
-Benchmarks `serde_yaml::from_str` vs `serde_yml::from_str` (pós-R7 — agora
-`yaml_serde`). Como a migração R7 já foi feita, este benchmark perdeu
-valor; considerar cancelar ou repurpose pra comparar versões de yaml_serde.
+Benchmarks `serde_yaml::from_str` vs `serde_yml::from_str` vs
+`yaml_serde::from_str` no tipo de produção `OperationContractDocument`,
+sobre o fixture `docs/fixtures/operation-contract-v0/facilitate-first-product-idea.yaml`
+(3.025 bytes, 94 linhas, contratos com structs aninhadas, optionals,
+`deny_unknown_fields`, enums e arrays — o payload que Forge parseia em
+cada `validate` / `execute-operation` / `claim`).
+
+Local: `crates/forge-core-validate/benches/yaml_deserialize.rs`.
+`serde_yaml` e `serde_yml` são dev-deps apenas deste bench; não fazem parte
+de código de produção.
+
+### Resultados (Windows release build, sample_size=150)
+
+| Crate                  | Tempo (mediana) | Throughput    |
+|------------------------|-----------------|---------------|
+| `serde_yaml` 0.9 (legacy) | 92.9 µs         | 23.3 MiB/s    |
+| `serde_yml` 0.0.12 (fork) | 93.4 µs         | 23.2 MiB/s    |
+| `yaml_serde` 0.10.4 (Forge usa) | 99.7 µs         | 21.7 MiB/s    |
+
+`yaml_serde` fica ~7% mais lento que as duas alternativas neste fixture.
+Intervalos se sobrepõem levemente no limite inferior do `yaml_serde` com o
+limite superior dos outros dois, mas a mediana é consistentemente mais alta
+across runs.
+
+### Decisão
+
+A migração R7 para `yaml_serde` **não é revertida**. Justificativa:
+
+1. **Não é hot path.** Parse de contrato de ~3KB em ~100µs é uma operação
+   por chamada CLI. Workloads reais do Forge validam 1-N contratos por
+   comando, não milhões; o custo absoluto é dominado por I/O de arquivo e
+   crypto (ver R6.1 e R6.2), não por parse YAML.
+2. **Diferença dentro do ruído operacional.** 7% em ~100µs = ~7µs por
+   contrato. Mesmo validando 1000 contratos, isso adiciona ~7ms — abaixo
+   do threshold onde usuários percebem latência.
+3. **Manutenção e segurança ganhas com R7 superam o custo.** `serde_yaml`
+   está em modo de manutenção desde 2024; `serde_yml` introduziu regressões
+   de segurança (RUSTSEC) no passado. `yaml_serde` é a aposta ativamente
+   mantida que motivou R7. Reverter colocaria dependências sem mantenedor.
+4. **Resultado documenta trade-off, não regressão escondida.** Se no futuro
+   `yaml_serde` regredir mais (>30%), há baseline pra acionar reavaliação.
+
+### Reavaliação futura
+
+Reabrir R6.3 se:
+- `yaml_serde` passar a custar >2x o baseline do `serde_yml`, ou
+- Workflow de validação em lote (>100 contratos/comando) virar caso de uso
+  principal, ou
+- `serde_yml` publicar release estável sem advisories e reativar manutenção.
+
+### Como rodar
+
+```bash
+cargo bench -p forge-core-validate --bench yaml_deserialize
+```
 
 ## R6.4 (✅ completo)
 

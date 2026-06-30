@@ -12,9 +12,9 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 
 | Frente | Hoje | Meta | Lacuna principal |
 |---|---|---|---|
-| Rápido | 7 | 10 | Benchmarks crypto R6.2 completos (~420µs verify, ~6µs parse) |
+| Rápido | 7.5 | 10 | Benchmarks crypto R6.2 (~420µs verify, ~6µs parse) + store R6.1 + serde R6.3 (yaml_serde ~99.7µs vs 92-93µs alternativas — dentro do ruído operacional, não reverte R7) |
 | Robusto | 10 | 10 | Tracing completo; zero Result<_,String>; R5 zeroize completo (R5.1-R5.11) |
-| Performativo | 7.5 | 10 | `--no-sync` cobre claim + execute-operation + rebuild-effect-index (F15.7b-extend); crypto + store benchmarks medidos (R6.1, R6.2); CI perf workflow (R6.4). Falta R6.3 (serde bench) e medição em regression suite |
+| Performativo | 8 | 10 | `--no-sync` cobre claim + execute-operation + rebuild-effect-index (F15.7b-extend); crypto + store + serde benchmarks medidos (R6.1, R6.2, **R6.3 ✅**); CI perf workflow (R6.4). Falta medição em regression suite |
 | Protocolo guia | 10 | 10 | F04 ✅ fechado (validate + dry-run + 34 E2E tests); F01 bugs críticos fechados |
 | Workflows | 7 | 10 | WAL/claim ok, mas F11/F13 não existem |
 | Agente guia humano | 9 | 10 | F01 bugs de integridade fechados; rollback_available real |
@@ -97,7 +97,24 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
       - Baselines (dev, Windows 11 / WSL): parse 2-7µs, verify full path
         420-655µs (p256 verify domina; Merkle walk scales O(log n))
       - Ver `progress/r6_benchmarks.md`
-- [ ] **R6.3** — Benchmarks `serde_yaml::from_str` vs `serde_yml::from_str` (pós-R7)
+- [x] **R6.3** — Benchmarks `serde_yaml::from_str` vs `serde_yml::from_str` vs `yaml_serde::from_str` ✅
+      - `crates/forge-core-validate/benches/yaml_deserialize.rs` mede
+        `from_str::<OperationContractDocument>` no fixture de produção
+        `docs/fixtures/operation-contract-v0/facilitate-first-product-idea.yaml`
+        (3.025 bytes, structs aninhadas, `deny_unknown_fields`, optionals,
+        enums, arrays).
+      - **Resultado**: `yaml_serde` 99.7µs (~21.7 MiB/s) vs `serde_yaml`
+        92.9µs (~23.3 MiB/s) vs `serde_yml` 93.4µs (~23.2 MiB/s).
+        `yaml_serde` é ~7% mais lento mas **R7 não é revertida**: não é hot
+        path, diferença é ~7µs/contrato (abaixo de I/O + crypto dominantes),
+        e ganhos de governança/manutenção superam o custo. Baseline salva
+        para acionar reavaliação se regredir >30% ou workload mudar.
+      - **Decisão de design** (`improve-codebase-architecture`): bench vive
+        em `forge-core-validate` (já tem `yaml_serde` em deps de produção e
+        faz parsing de contratos — locality + leverage). `serde_yaml` e
+        `serde_yml` ficam como dev-deps apenas deste bench; não há caminho
+        de produção com eles.
+      - Ver `progress/r6_benchmarks.md` (R6.3) e `progress/r7_yaml_serde.md`
 - [x] **R6.4** — CI: bench em PR com label `perf` ✅
       - `.github/workflows/perf.yml`: cron diário + `workflow_dispatch` +
         label `perf` em PRs
