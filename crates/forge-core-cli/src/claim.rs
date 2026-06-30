@@ -1525,6 +1525,17 @@ mod tests {
         assert!(payload.blocks.is_empty());
     }
 }
+/// Dispatch entrypoint for the `forge-core claim` subcommand tree.
+///
+/// Routes to `acquire`, `heartbeat`, `release`, `handoff`, `status`,
+/// `reconcile`, or `check-write` based on `args[1]`, and prints usage on
+/// `--help` / unknown subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when the subcommand is unknown. Sub-command
+/// dispatchers may surface their own `ExitError::usage`,
+/// `ExitError::invalid_value`, or `ExitError::with_code` variants.
 pub fn run_claim_command(args: &[String]) -> Result<(), ExitError> {
     let sub = args.get(1).map_or("--help", String::as_str);
     match sub {
@@ -1553,9 +1564,14 @@ pub fn run_claim_command(args: &[String]) -> Result<(), ExitError> {
     }
 }
 
-/// Resolve --now-unix to epoch seconds, defaulting to real system time (DD23).
-
-#[must_use]
+/// Resolves `--claims-dir` to a [`PathBuf`], defaulting to
+/// `<state_root>/claims-active` resolved from `--root`.
+///
+/// # Errors
+///
+/// Returns `ExitError::env_config` (via [`emit_envelope_or_err`]) when
+/// `--claims-dir` is unset and project resolution fails or the resolved
+/// `state_root` does not exist.
 pub fn resolve_claims_dir_or_err(
     command: &str,
     claims_dir: Option<PathBuf>,
@@ -1602,6 +1618,14 @@ pub fn resolve_claims_dir_or_err(
     }
 }
 
+/// Runs the `forge-core claim acquire` subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when required flags
+/// (`--scope`, `--id`, `--agent`) are missing or carry unknown aliases,
+/// and `ExitError::with_code` (via [`emit_envelope_or_err`]) when the
+/// acquire operation surfaces a non-zero exit code.
 pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::{parse_role, parse_scope_kind, run_acquire};
     use forge_core_contracts::{RepoPath, ScopeId, StableId};
@@ -1726,6 +1750,13 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
     crate::cli_util::emit_envelope_or_err("claim", env, want_json)
 }
 
+/// Runs the `forge-core claim heartbeat` subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `--id` or `--agent` are missing,
+/// and `ExitError::with_code` (via [`emit_envelope_or_err`]) when the
+/// heartbeat operation surfaces a non-zero exit code.
 pub fn run_claim_heartbeat(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_heartbeat;
     run_claim_single_target(args, "heartbeat", |claims_dir, claim_id, agent_id, now| {
@@ -1733,6 +1764,13 @@ pub fn run_claim_heartbeat(args: &[String]) -> Result<(), ExitError> {
     })
 }
 
+/// Runs the `forge-core claim release` subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `--id` or `--agent` are missing,
+/// and `ExitError::with_code` (via [`emit_envelope_or_err`]) when the
+/// release operation surfaces a non-zero exit code.
 pub fn run_claim_release(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_release;
     run_claim_single_target(args, "release", |claims_dir, claim_id, agent_id, now| {
@@ -1741,6 +1779,12 @@ pub fn run_claim_release(args: &[String]) -> Result<(), ExitError> {
 }
 
 /// Shared arg parsing for heartbeat/release (both take --id + --agent + optional dirs/time).
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `--id` or `--agent` are missing,
+/// and `ExitError::with_code` (via [`emit_envelope_or_err`]) when the
+/// underlying claim operation surfaces a non-zero exit code.
 pub fn run_claim_single_target(
     args: &[String],
     sub: &str,
@@ -1822,6 +1866,13 @@ pub fn run_claim_single_target(
     crate::cli_util::emit_envelope_or_err("claim", env, want_json)
 }
 
+/// Runs the `forge-core claim handoff` subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `--id`, `--agent`, or `--summary`
+/// are missing, and `ExitError::with_code` (via [`emit_envelope_or_err`])
+/// when the handoff operation surfaces a non-zero exit code.
 pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_handoff;
     use forge_core_contracts::StableId;
@@ -1909,6 +1960,13 @@ pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
     crate::cli_util::emit_envelope_or_err("claim", env, want_json)
 }
 
+/// Runs the `forge-core claim status` subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::with_code` (via [`emit_envelope_or_err`]) when the
+/// status read surfaces a non-zero exit code, and `ExitError::env_config`
+/// (via [`resolve_claims_dir_or_err`]) when project resolution fails.
 pub fn run_claim_status(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_status;
     let mut claims_dir: Option<PathBuf> = None;
@@ -1960,6 +2018,16 @@ pub fn run_claim_status(args: &[String]) -> Result<(), ExitError> {
     crate::cli_util::emit_envelope_or_err("claim", env, want_json)
 }
 
+/// Runs the `forge-core claim reconcile` subcommand.
+///
+/// In one-shot mode (default) it materializes stale/expired claim statuses
+/// once; in `--loop` mode it runs a foreground Tokio interval reconciler.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `--interval-ms` is zero, and
+/// `ExitError::with_code` (via [`emit_envelope_or_err`] or the loop driver)
+/// when a reconciliation pass surfaces a non-zero exit code.
 pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_reconcile_once;
 
@@ -2119,6 +2187,14 @@ pub(crate) fn run_claim_reconcile_loop_or_err(
     }
 }
 
+/// Runs the `forge-core claim check-write` subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `--agent` is missing or no
+/// `--target` is provided, and `ExitError::with_code` (via
+/// [`emit_envelope_or_err`]) when the write-check surfaces a non-zero
+/// exit code.
 pub fn run_claim_check_write(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_check_write;
     use forge_core_contracts::StableId;
