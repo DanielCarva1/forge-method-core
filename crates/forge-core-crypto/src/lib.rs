@@ -70,3 +70,11 @@ pub use host_adapter_verification::*;
 // rewrite.
 pub use file_io::{read_public_key_file, read_required_file, read_signature_file};
 pub use hashing::{hex_bytes, hex_sha256, normalize_sha256_display, valid_sha256_digest};
+
+// Fuzz exposure strategy (decided via `improve-codebase-architecture` skill,
+// alternative B): the four parsers we fuzz are `pub` directly on their
+// source modules (`rekor::parse_signed_checkpoint`,
+// `rekor::parse_rekor_log_entry`, `ocsp::decode_ocsp_response`). This avoids
+// the shallow-module smell of a `pub mod fuzz { ... }` namespace whose only
+// job is to forward to `pub(crate)` items. Leverage flows from the real
+// parser interface; nothing is re-wrapped here.

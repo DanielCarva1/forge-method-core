@@ -28,7 +28,10 @@ use zeroize::Zeroizing;
 use crate::hashing::hex_bytes;
 
 /// Decode a DER-encoded OCSP response.
-pub(crate) fn decode_ocsp_response(
+///
+/// Public so the `fuzz/` workspace can drive the parser with attacker-controlled
+/// DER bytes; all other OCSP helpers stay `pub(crate)`.
+pub fn decode_ocsp_response(
     der: &[u8],
     verified_evidence: &mut Vec<String>,
     reasons: &mut Vec<String>,
