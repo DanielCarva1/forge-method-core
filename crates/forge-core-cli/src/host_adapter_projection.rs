@@ -641,11 +641,6 @@ fn command_input_schema(name: &str) -> Value {
                 "env_key": { "type": "array", "items": { "type": "string" } }
             }
         }),
-        "host-adapter-distribution-policy" => json!({
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {}
-        }),
         "host-adapter-admit-distribution" => json!({
             "type": "object",
             "additionalProperties": false,

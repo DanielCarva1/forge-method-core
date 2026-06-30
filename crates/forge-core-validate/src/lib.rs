@@ -322,7 +322,6 @@ fn validate_ref_like_value(
         Value::Mapping(_) => {
             validate_known_refs_in_value(report, document_path, value, known_paths);
         }
-        Value::Null => {}
         _ => {}
     }
 }
