@@ -32,7 +32,7 @@ use forge_core_runtime::{
     RuntimeOperationCommandInput, RuntimeOperationEffectInput, RuntimeOperationEffectPayload,
     RuntimeOperationExecution, RuntimeOperationExecutionContext, RuntimeReadSnapshot,
 };
-use forge_core_store::build_reference_index;
+use forge_core_store::{build_reference_index, WalDurability};
 
 use crate::cli_error::ExitError;
 use crate::cli_util::{
@@ -56,6 +56,9 @@ pub struct ExecuteOperationInput {
     pub payload_policy: PayloadLoadPolicy,
     pub recorded_at: String,
     pub tx_id_prefix: String,
+    /// WAL durability for this run (ADR-0009). Default `SyncOnAppend`;
+    /// CLI sets `NoSync` when the user passes `--no-sync`.
+    pub durability: WalDurability,
 }
 
 /// One payload bound for one `target_ref` inside the operation.
@@ -264,6 +267,7 @@ pub fn run_execute_operation(
         effect_metadata_index_relative_path: ".forge-method/index/effect-targets.ndjson",
         recorded_at: &input.recorded_at,
         tx_id_prefix: &input.tx_id_prefix,
+        durability: input.durability,
     };
 
     Ok(execute_operation(
@@ -418,6 +422,7 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
     let mut recorded_at = "unknown".to_string();
     let mut tx_id_prefix = "cli-execute-operation".to_string();
     let mut json = false;
+    let mut no_sync = false;
     let mut index = 1usize;
     while index < args.len() {
         match args[index].as_str() {
@@ -459,6 +464,9 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
                 index += 1;
                 tx_id_prefix = next_arg_or_err(args, index)?.to_string();
             }
+            "--no-sync" => {
+                no_sync = true;
+            }
             "--json" => json = true,
             "--help" | "-h" => {
                 println!("{}", usage());
@@ -475,6 +483,14 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
         return Err(ExitError::usage(usage()));
     };
     let roots = resolve_stateful_roots_or_err("execute-operation", &root, allow_bootstrap_core)?;
+    let durability = if no_sync {
+        // ADR-0009: emit a one-line stderr warning the first time the flag is
+        // honoured, so a CI log makes the durability trade-off visible.
+        eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        WalDurability::NoSync
+    } else {
+        WalDurability::default()
+    };
     let input = ExecuteOperationInput {
         root: roots.project_root,
         effect_store_root: Some(roots.effect_store_root),
@@ -485,6 +501,7 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
         payload_policy,
         recorded_at,
         tx_id_prefix,
+        durability,
     };
     let execution = match run_execute_operation(input) {
         Ok(execution) => execution,

@@ -25,10 +25,10 @@ use crate::cli_util::{
 use forge_core_contracts::{tool_effect::EffectTargetKind, StableId};
 use forge_core_store::{
     build_effect_metadata_context, query_effect_target_metadata_index,
-    rebuild_effect_target_metadata_index_with_lock, EffectMetadataConsumerUse,
+    rebuild_effect_target_metadata_index_with_lock_with_durability, EffectMetadataConsumerUse,
     EffectMetadataContextBuildOptions, EffectMetadataContextBuildResult,
     EffectTargetMetadataIndexQuery, EffectTargetMetadataIndexQueryResult,
-    EffectTargetMetadataIndexRebuildResult,
+    EffectTargetMetadataIndexRebuildResult, WalDurability,
 };
 
 /// Inputs for [`run_rebuild_effect_index`].
@@ -39,6 +39,9 @@ pub struct RebuildEffectIndexInput {
     pub index_relative_path: String,
     pub lock_relative_path: String,
     pub recorded_at: Option<String>,
+    /// WAL durability for the rebuild append (ADR-0009). Default
+    /// `SyncOnAppend`; CLI sets `NoSync` when the user passes `--no-sync`.
+    pub durability: WalDurability,
 }
 
 impl Default for RebuildEffectIndexInput {
@@ -49,6 +52,7 @@ impl Default for RebuildEffectIndexInput {
             index_relative_path: ".forge-method/index/effect-targets.ndjson".to_string(),
             lock_relative_path: ".forge-method/locks/effects.lock".to_string(),
             recorded_at: None,
+            durability: WalDurability::default(),
         }
     }
 }
@@ -58,12 +62,13 @@ impl Default for RebuildEffectIndexInput {
 pub fn run_rebuild_effect_index(
     input: RebuildEffectIndexInput,
 ) -> EffectTargetMetadataIndexRebuildResult {
-    rebuild_effect_target_metadata_index_with_lock(
+    rebuild_effect_target_metadata_index_with_lock_with_durability(
         &input.root,
         &input.wal_relative_path,
         &input.index_relative_path,
         &input.lock_relative_path,
         input.recorded_at.as_deref(),
+        input.durability,
     )
 }
 
@@ -141,6 +146,7 @@ pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError
     let mut input = RebuildEffectIndexInput::default();
     let mut allow_bootstrap_core = false;
     let mut json = false;
+    let mut no_sync = false;
     let mut index = 1usize;
     while index < args.len() {
         match args[index].as_str() {
@@ -167,6 +173,9 @@ pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError
                 index += 1;
                 input.recorded_at = Some(next_arg_or_err(args, index)?.to_string());
             }
+            "--no-sync" => {
+                no_sync = true;
+            }
             "--json" => json = true,
             "--help" | "-h" => {
                 println!("{}", usage());
@@ -182,6 +191,14 @@ pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError
     let roots =
         resolve_stateful_roots_or_err("rebuild-effect-index", &input.root, allow_bootstrap_core)?;
     input.root = roots.effect_store_root;
+    if no_sync {
+        // ADR-0009: emit a one-line stderr warning the first time the flag is
+        // honoured, so a CI log makes the durability trade-off visible.
+        eprintln!(
+            "forge-core: --no-sync active; index rebuild append is not durable for this process"
+        );
+        input.durability = WalDurability::NoSync;
+    }
 
     let result = run_rebuild_effect_index(input);
     if json {

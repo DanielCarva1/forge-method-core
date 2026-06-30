@@ -41,8 +41,8 @@ use forge_core_cli::{
     HostAdapterSigstoreTrustPolicyVerificationInput,
     HostAdapterSigstoreTrustPolicyVerificationStatus,
     HostAdapterTufTrustedRootFreshnessVerificationInput,
-    HostAdapterTufTrustedRootFreshnessVerificationStatus, HostAdapterUpdateChannel,
-    OcspNonceHex, PayloadFileSpec, PayloadLoadPolicy, QueryEffectIndexInput, RebuildEffectIndexInput,
+    HostAdapterTufTrustedRootFreshnessVerificationStatus, HostAdapterUpdateChannel, OcspNonceHex,
+    PayloadFileSpec, PayloadLoadPolicy, QueryEffectIndexInput, RebuildEffectIndexInput,
     ValidationStatus,
 };
 use forge_core_contracts::claim::ActorRole;
@@ -53,7 +53,7 @@ use forge_core_store::{
     append_json_line, sha256_content_hash, EffectMetadataConsumerUse,
     EffectTargetMetadataIndexQueryStatus, EffectTargetMetadataIndexRebuildStatus,
     EffectTargetMetadataRecord, EffectTargetMetadataRecordKind, EffectWalRecord, EffectWalStage,
-    EffectWalTargetMetadata,
+    EffectWalTargetMetadata, WalDurability,
 };
 use p256::ecdsa::SigningKey as P256SigningKey;
 use p256::pkcs8::{EncodePublicKey, LineEnding};
@@ -4820,6 +4820,7 @@ fn execute_operation_rejects_payload_outside_root_by_default() {
         payload_policy: PayloadLoadPolicy::default(),
         recorded_at: "2026-06-25T00:00:00Z".to_string(),
         tx_id_prefix: "test".to_string(),
+        durability: WalDurability::default(),
     })
     .expect_err("outside-root payload should fail");
 
@@ -4847,6 +4848,7 @@ fn execute_operation_rejects_payload_larger_than_policy() {
         },
         recorded_at: "2026-06-25T00:00:00Z".to_string(),
         tx_id_prefix: "test".to_string(),
+        durability: WalDurability::default(),
     })
     .expect_err("oversized payload should fail");
 
@@ -4864,6 +4866,7 @@ fn rebuild_effect_index_library_rebuilds_from_committed_wal() {
         index_relative_path: ".forge-method/index/effect-targets.ndjson".to_string(),
         lock_relative_path: ".forge-method/locks/effects.lock".to_string(),
         recorded_at: Some("2026-06-25T00:00:00Z".to_string()),
+        durability: WalDurability::NoSync,
     });
 
     assert_eq!(
@@ -4919,6 +4922,82 @@ fn rebuild_effect_index_binary_outputs_json() {
             .join("effect-targets.ndjson")
             .exists(),
         "rebuild-effect-index should write the resolved sidecar index"
+    );
+    let _ = fs::remove_dir_all(
+        fixture
+            .app
+            .parent()
+            .expect("fixture app has parent directory"),
+    );
+}
+
+#[test]
+fn rebuild_effect_index_binary_no_sync_emits_warning_and_succeeds() {
+    // ADR-0009: --no-sync must (1) parse, (2) print a one-line stderr
+    // warning naming the durability trade-off, and (3) produce the same
+    // envelope as the default path. The fixture sets up a committed WAL
+    // record so the rebuild has actual work to do.
+    let fixture = temp_sidecar_cli_fixture("rebuild-no-sync");
+    write_committed_metadata_wal(&fixture.sidecar, "payload-secret");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_forge-core"))
+        .args(["rebuild-effect-index", "--root"])
+        .arg(&fixture.app)
+        .args([
+            "--no-sync",
+            "--recorded-at",
+            "2026-06-25T00:00:00Z",
+            "--json",
+        ])
+        .output()
+        .expect("run forge-core rebuild-effect-index --no-sync");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("--no-sync active"),
+        "stderr must warn about --no-sync; got: {stderr}"
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: Value = serde_json::from_str(&stdout).expect("json output");
+    assert_eq!(json["status"], "rebuilt");
+    assert_eq!(json["rebuilt_records"], 1);
+    assert_eq!(json["appended_records"], 1);
+    let _ = fs::remove_dir_all(
+        fixture
+            .app
+            .parent()
+            .expect("fixture app has parent directory"),
+    );
+}
+
+#[test]
+fn rebuild_effect_index_binary_default_does_not_warn() {
+    // Symmetric counterpart: the default path (no --no-sync) must NOT
+    // emit the durability warning. Guards against accidental inversion.
+    let fixture = temp_sidecar_cli_fixture("rebuild-default-no-warn");
+    write_committed_metadata_wal(&fixture.sidecar, "payload-secret");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_forge-core"))
+        .args(["rebuild-effect-index", "--root"])
+        .arg(&fixture.app)
+        .args(["--recorded-at", "2026-06-25T00:00:00Z", "--json"])
+        .output()
+        .expect("run forge-core rebuild-effect-index");
+
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("--no-sync active"),
+        "default path must not emit the --no-sync warning; got: {stderr}"
     );
     let _ = fs::remove_dir_all(
         fixture
