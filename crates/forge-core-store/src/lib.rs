@@ -17,6 +17,7 @@ use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
+use tracing::instrument;
 
 pub mod claim_wal;
 
@@ -1054,6 +1055,7 @@ pub fn apply_file_effect_transaction_with_wal_lock(
     }
 }
 
+#[instrument(skip_all, fields(effect_id = %effect.tool_effect_contract.id.0, tx_id = tracing::field::Empty), level = "info")]
 pub fn apply_file_effect_transaction_with_wal(
     root: impl AsRef<Path>,
     effect: &ToolEffectContractDocument,
@@ -1063,6 +1065,9 @@ pub fn apply_file_effect_transaction_with_wal(
 ) -> EffectApplicationResult {
     let root = root.as_ref();
     let tx_id = tx_id.into();
+    // Record the resolved tx_id in the parent span so callers filtering by
+    // transaction id can find this operation in the trace.
+    tracing::Span::current().record("tx_id", tx_id.as_str());
     let effect_contract = &effect.tool_effect_contract;
     let validation = validate_tool_effect(effect);
     let validation_error_count = validation
@@ -1268,6 +1273,7 @@ pub fn recover_effect_wal_with_lock(
     }
 }
 
+#[instrument(skip_all, fields(wal_path = %wal_relative_path), level = "info")]
 pub fn recover_effect_wal(
     root: impl AsRef<Path>,
     wal_relative_path: &str,
