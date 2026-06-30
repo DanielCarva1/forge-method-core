@@ -390,6 +390,23 @@ fn repo_relative_checked(root: &Path, path: &Path) -> Result<String, ExecuteOper
             path: path.to_path_buf(),
         })
 }
+/// Runs the `forge-core execute-operation` command.
+///
+/// Loads an operation contract plus command/effect/payload inputs and
+/// drives the runtime to apply the declared effects.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when an unknown flag is present or a value
+/// helper reports a missing/malformed argument, `ExitError::failed` when
+/// project resolution, the operation load, or the runtime execution
+/// reports a non-`Completed` status.
+///
+/// # Panics
+///
+/// Panics in JSON mode if the execution result cannot be serialized. The
+/// result type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
     let mut root = PathBuf::from(".");
     let mut operation_path: Option<PathBuf> = None;

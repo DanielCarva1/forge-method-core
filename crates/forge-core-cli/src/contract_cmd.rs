@@ -59,6 +59,15 @@ impl std::fmt::Display for ContractValidateError {
 }
 
 /// Parse and run `forge-core contract <subcommand>`.
+/// Dispatch entrypoint for the `forge-core contract` subcommand tree.
+///
+/// Routes to `validate` based on `args[1]`, and prints usage on `--help`
+/// / unknown subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when the subcommand is unknown or argument
+/// parsing fails.
 pub fn run_contract_command(args: &[String]) -> Result<(), ExitError> {
     let sub = args.get(1).map_or("--help", String::as_str);
     match sub {
@@ -76,6 +85,12 @@ pub fn run_contract_command(args: &[String]) -> Result<(), ExitError> {
 }
 
 /// Handler for `forge-core contract validate`.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when an unknown flag is present or required
+/// arguments are missing, and `ExitError::with_code` (via envelope
+/// emission) when the underlying validation surfaces a non-zero exit code.
 pub fn run_validate(args: &[String]) -> Result<(), ExitError> {
     let mut kind: Option<String> = None;
     let mut file: Option<std::path::PathBuf> = None;
@@ -139,6 +154,13 @@ pub fn run_validate(args: &[String]) -> Result<(), ExitError> {
 ///
 /// This deliberately matches on the explicit kind string because the document
 /// wrappers are concrete Rust types rather than a shared trait object.
+/// Validates a contract document of `kind` against its typed schema.
+///
+/// # Errors
+///
+/// Returns [`ContractValidateError::UnsupportedKind`] when `kind` is not
+/// in [`SUPPORTED_KINDS`], and parse/contract-validation variants when the
+/// document is malformed or violates the schema.
 pub fn validate_kind(
     kind: &str,
     text: &str,
