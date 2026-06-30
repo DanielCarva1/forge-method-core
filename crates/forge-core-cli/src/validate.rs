@@ -76,7 +76,13 @@ pub struct ValidateSummary {
 }
 
 /// Top-level pass/fail status for a workspace validation run.
+///
+/// Serializes as lowercase (`"passed"` / `"failed"`) to match the rest of
+/// the workspace's JSON contract (`gate_status`, `coordination` verdicts,
+/// trace `gate` events). The original PascalCase emit was inconsistent
+/// with every other status field in the binary.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
 pub enum ValidationStatus {
     Passed,
     Failed,
