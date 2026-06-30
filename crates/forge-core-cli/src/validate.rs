@@ -15,6 +15,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
+use tracing::instrument;
+
 use forge_core_contracts::{
     ClaimContractDocument, CommandContractDocument, CompletionContractDocument,
     ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
@@ -621,6 +623,7 @@ fn repo_relative(root: &Path, path: &Path) -> String {
         .to_string_lossy()
         .replace('\\', "/")
 }
+#[instrument(skip_all, fields(root = tracing::field::Empty, json = tracing::field::Empty, diagnostic_count = tracing::field::Empty), level = "info")]
 pub fn run_validate_command(args: &[String]) -> Result<(), ExitError> {
     let mut root = PathBuf::from(".");
     let mut json = false;
@@ -646,7 +649,11 @@ pub fn run_validate_command(args: &[String]) -> Result<(), ExitError> {
         index += 1;
     }
 
+    let span = tracing::Span::current();
+    span.record("root", root.to_string_lossy().to_string().as_str());
+    span.record("json", json);
     let summary = run_validate(&root);
+    span.record("diagnostic_count", summary.diagnostics.len());
     if json {
         println!(
             "{}",
