@@ -135,22 +135,58 @@ fn main() {
             }
         }
         "host-adapter-manifest" => {
-            host_adapter_policy_cmd::run_host_adapter_manifest_command(&args)
+            match host_adapter_policy_cmd::run_host_adapter_manifest_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-projection" => {
-            host_adapter_policy_cmd::run_host_adapter_projection_command(&args)
+            match host_adapter_policy_cmd::run_host_adapter_projection_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-process-policy" => {
-            host_adapter_policy_cmd::run_host_adapter_process_policy_command(&args)
+            match host_adapter_policy_cmd::run_host_adapter_process_policy_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-admit-invocation" => {
-            host_adapter_policy_cmd::run_host_adapter_admit_invocation_command(&args)
+            match host_adapter_policy_cmd::run_host_adapter_admit_invocation_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-distribution-policy" => {
-            host_adapter_policy_cmd::run_host_adapter_distribution_policy_command(&args)
+            match host_adapter_policy_cmd::run_host_adapter_distribution_policy_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-admit-distribution" => {
-            host_adapter_policy_cmd::run_host_adapter_admit_distribution_command(&args)
+            match host_adapter_policy_cmd::run_host_adapter_admit_distribution_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
         "host-adapter-verify-artifact" => {
             host_adapter_verify_cmd::run_host_adapter_verify_artifact_command(&args)
