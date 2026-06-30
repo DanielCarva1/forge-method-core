@@ -10,6 +10,8 @@ use forge_core_contracts::{
     TelemetryContractDocument, VerificationGoalContractDocument,
 };
 
+use crate::cli_error::ExitError;
+
 const SUPPORTED_KINDS: &[&str] = &[
     "autonomy_policy",
     "verification_goal",
@@ -57,7 +59,7 @@ impl std::fmt::Display for ContractValidateError {
 }
 
 /// Parse and run `forge-core contract <subcommand>`.
-pub fn run_contract_command(args: &[String]) {
+pub fn run_contract_command(args: &[String]) -> Result<(), ExitError> {
     let sub = args.get(1).map(String::as_str).unwrap_or("--help");
     match sub {
         "validate" => run_validate(&args[2..]),
@@ -65,16 +67,16 @@ pub fn run_contract_command(args: &[String]) {
             println!("forge-core contract <subcommand> [options]");
             println!("  validate --kind <kind> --file <path> [--no-json]");
             println!("  supported kinds: {}", SUPPORTED_KINDS.join(", "));
+            Ok(())
         }
-        other => {
-            eprintln!("forge-core contract: unknown subcommand '{other}'. Try: validate");
-            std::process::exit(2);
-        }
+        other => Err(ExitError::usage(format!(
+            "forge-core contract: unknown subcommand '{other}'. Try: validate"
+        ))),
     }
 }
 
 /// Handler for `forge-core contract validate`.
-pub fn run_validate(args: &[String]) {
+pub fn run_validate(args: &[String]) -> Result<(), ExitError> {
     let mut kind: Option<String> = None;
     let mut file: Option<std::path::PathBuf> = None;
     let mut want_json = true;
@@ -84,47 +86,50 @@ pub fn run_validate(args: &[String]) {
         match args[idx].as_str() {
             "--kind" => {
                 idx += 1;
-                kind = Some(require_value(args, idx, "validate", "kind"));
+                kind = Some(require_value(args, idx, "validate", "kind")?);
             }
             "--file" => {
                 idx += 1;
                 file = Some(std::path::PathBuf::from(require_value(
                     args, idx, "validate", "file",
-                )));
+                )?));
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
                 println!("forge-core contract validate --kind <kind> --file <path> [--no-json]");
                 println!("supported kinds: {}", SUPPORTED_KINDS.join(", "));
-                return;
+                return Ok(());
             }
             other => {
-                eprintln!("forge-core contract validate: unknown argument '{other}'");
-                std::process::exit(3);
+                return Err(ExitError::invalid_value(format!(
+                    "forge-core contract validate: unknown argument '{other}'"
+                )));
             }
         }
         idx += 1;
     }
 
-    let Some(kind) = kind else {
-        emit_err("contract validate", "--kind is required", want_json);
-    };
-    let Some(file) = file else {
-        emit_err("contract validate", "--file is required", want_json);
-    };
+    let kind = kind.ok_or_else(|| {
+        emit_err("contract validate", "--kind is required", want_json)
+    })?;
+    let file = file.ok_or_else(|| {
+        emit_err("contract validate", "--file is required", want_json)
+    })?;
 
     let text = match std::fs::read_to_string(&file) {
         Ok(text) => text,
-        Err(e) => emit_err(
-            "contract validate",
-            &format!("cannot read contract file '{}': {e}", file.display()),
-            want_json,
-        ),
+        Err(e) => {
+            return Err(emit_err(
+                "contract validate",
+                &format!("cannot read contract file '{}': {e}", file.display()),
+                want_json,
+            ));
+        }
     };
 
     match validate_kind(&kind, &text) {
         Ok(payload) => emit(CliEnvelope::ok("contract validate", payload), want_json),
-        Err(message) => emit_err("contract validate", &message.to_string(), want_json),
+        Err(message) => Err(emit_err("contract validate", &message.to_string(), want_json)),
     }
 }
 
@@ -215,22 +220,43 @@ impl HasSchemaVersion for TelemetryContractDocument {
     }
 }
 
-fn require_value(args: &[String], idx: usize, subcommand: &str, flag: &str) -> String {
+fn require_value(
+    args: &[String],
+    idx: usize,
+    subcommand: &str,
+    flag: &str,
+) -> Result<String, ExitError> {
     match args.get(idx) {
-        Some(v) => v.clone(),
-        None => {
-            eprintln!("forge-core contract {subcommand}: --{flag} requires a value");
-            std::process::exit(3);
-        }
+        Some(v) => Ok(v.clone()),
+        None => Err(ExitError::invalid_value(format!(
+            "forge-core contract {subcommand}: --{flag} requires a value"
+        ))),
     }
 }
 
-fn emit_err(command: &str, message: &str, want_json: bool) -> ! {
-    let env: CliEnvelope<()> = CliEnvelope::err(command, ExitReason::InvalidDecisionShape, message);
-    emit(env, want_json);
+fn emit_err(command: &str, message: &str, want_json: bool) -> ExitError {
+    let env: CliEnvelope<()> =
+        CliEnvelope::err(command, ExitReason::InvalidDecisionShape, message);
+    // Print the envelope in the same shape as `emit` so behavior is
+    // byte-identical to the legacy exit-on-error path.
+    if want_json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&env).expect("serialize envelope")
+        );
+    } else {
+        eprintln!(
+            "{command} failed: {}",
+            env.error
+                .as_ref()
+                .map(|e| e.message.as_str())
+                .unwrap_or("unknown")
+        );
+    }
+    ExitError::with_code(env.exit_code(), String::new())
 }
 
-fn emit<T: serde::Serialize>(env: CliEnvelope<T>, want_json: bool) -> ! {
+fn emit<T: serde::Serialize>(env: CliEnvelope<T>, want_json: bool) -> Result<(), ExitError> {
     let code = env.exit_code();
     if want_json {
         println!(
@@ -248,7 +274,11 @@ fn emit<T: serde::Serialize>(env: CliEnvelope<T>, want_json: bool) -> ! {
                 .unwrap_or("unknown")
         );
     }
-    std::process::exit(code);
+    if code == 0 {
+        Ok(())
+    } else {
+        Err(ExitError::with_code(code, String::new()))
+    }
 }
 
 #[cfg(test)]
