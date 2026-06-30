@@ -1110,6 +1110,8 @@ pub fn run_telemetry_command(args: &[String]) -> Result<(), ExitError> {
 pub fn parse_telemetry_export_args(
     args: &[String],
 ) -> Result<(TelemetryExportCommandInput, bool), ExitError> {
+    use crate::cli_util::ArgvCursor;
+
     let mut root = PathBuf::from(".");
     let mut contract_path: Option<PathBuf> = None;
     let mut output_path: Option<PathBuf> = None;
@@ -1119,53 +1121,44 @@ pub fn parse_telemetry_export_args(
     let mut latest_run = false;
     let mut allow_bootstrap_core = false;
     let mut json = false;
-    let mut index = 2usize;
-    while index < args.len() {
-        match args[index].as_str() {
-            "--root" => {
-                index += 1;
-                root = PathBuf::from(next_telemetry_value_or_err(args, index, "root")?);
-            }
+    let mut cursor = ArgvCursor::new(args, 2, "telemetry export");
+    while let Some(flag) = cursor.peek_flag() {
+        match flag {
+            "--root" => root = PathBuf::from(cursor.expect_value("root")?),
             "--contract" => {
-                index += 1;
-                contract_path = Some(PathBuf::from(next_telemetry_value_or_err(
-                    args, index, "contract",
-                )?));
+                contract_path = Some(PathBuf::from(cursor.expect_value("contract")?));
             }
             "--output" => {
-                index += 1;
-                output_path = Some(PathBuf::from(next_telemetry_value_or_err(
-                    args, index, "output",
-                )?));
+                output_path = Some(PathBuf::from(cursor.expect_value("output")?));
             }
             "--format" => {
-                index += 1;
-                format = parse_telemetry_format_or_err(next_telemetry_value_or_err(
-                    args, index, "format",
-                )?)?;
+                format = parse_telemetry_format_or_err(cursor.expect_value("format")?)?;
             }
-            "--trace-id" => {
-                index += 1;
-                trace_id = Some(next_telemetry_value_or_err(args, index, "trace-id")?.to_string());
+            "--trace-id" => trace_id = Some(cursor.expect_value("trace-id")?.to_string()),
+            "--run-id" => run_id = Some(cursor.expect_value("run-id")?.to_string()),
+            "--latest-run" => {
+                latest_run = true;
+                cursor.advance();
             }
-            "--run-id" => {
-                index += 1;
-                run_id = Some(next_telemetry_value_or_err(args, index, "run-id")?.to_string());
+            "--allow-bootstrap-core" => {
+                allow_bootstrap_core = true;
+                cursor.advance();
             }
-            "--latest-run" => latest_run = true,
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
-            "--json" => json = true,
-            "--no-json" => json = false,
+            "--json" => {
+                json = true;
+                cursor.advance();
+            }
+            "--no-json" => {
+                json = false;
+                cursor.advance();
+            }
             "--help" | "-h" => {
                 // Already handled by run_telemetry_command; if we somehow reach
                 // here, treat as success.
                 break;
             }
-            _ => {
-                return Err(ExitError::usage(telemetry_usage()));
-            }
+            _ => return Err(ExitError::usage(telemetry_usage())),
         }
-        index += 1;
     }
 
     let selected_filters =
@@ -1189,29 +1182,6 @@ pub fn parse_telemetry_export_args(
         },
         json,
     ))
-}
-
-/// Reads the value at `args[index]`, rejecting missing slots and values
-/// that look like the next flag.
-///
-/// # Errors
-///
-/// Returns `ExitError::invalid_value` when `index` is out of bounds or the
-/// value at `index` starts with `-`.
-pub fn next_telemetry_value_or_err<'a>(
-    args: &'a [String],
-    index: usize,
-    flag: &str,
-) -> Result<&'a str, ExitError> {
-    let value = args.get(index).ok_or_else(|| {
-        ExitError::invalid_value(format!("telemetry export: missing value for --{flag}"))
-    })?;
-    if value.starts_with('-') {
-        return Err(ExitError::invalid_value(format!(
-            "telemetry export: missing value for --{flag}"
-        )));
-    }
-    Ok(value.as_str())
 }
 
 /// Parses a CLI string into a [`TelemetryExportFormat`].
