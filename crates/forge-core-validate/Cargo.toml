@@ -8,6 +8,7 @@ forge-core-contracts = { path = "../forge-core-contracts" }
 serde.workspace = true
 yaml_serde.workspace = true
 tracing.workspace = true
+regex.workspace = true
 
 [dev-dependencies]
 serde.workspace = true

@@ -22,6 +22,26 @@ The init command is expected to be idempotent for the same resolved link and to 
 
 The temporary exception that allows `<repo-root>` to keep local `.forge-method/` state while the Forge core is still being developed by Forge itself. Commands that resolve this local state must opt in with `--allow-bootstrap-core`. This exception is explicit and must not be copied to consumer projects.
 
+## Risk Audit
+
+A fail-closed inspection pass over source code that detects AI-induced
+anti-patterns (fail-soft, exception swallowing, security slop, false tests)
+and accumulates typed `Diagnostic`s into a `ValidationReport`. Rules are
+parametric YAML contracts (`risk-audit-v0`), never hardcoded imperative
+sequences. The gate can run standalone (`forge-core risk-audit`) or be
+attached as a precondition to a mutable operation (`RuntimeOperationExecutionContext`).
+Findings carry per-file evidence so agents and humans can act on them.
+
+## Anti-pattern (AI Code)
+
+A named, parametrizable pattern in source code or test artifacts that is
+forbidden because it correlates with AI-induced failure modes (fail-soft,
+exception swallowing, security slop, false tests). Each anti-pattern is
+declared in a `risk-audit-v0` contract with a `detector` (regex, glob,
+AST node, external linter, or required file existence), a severity
+(Error/Warning), an evidence requirement, and a fix hint. Anti-patterns
+are data, not code: adding one must not require a Rust change.
+
 ## Project Link Hardening Rules
 
 - `forge-core project init --root <repo>` is the normal first-use path for Consumer Project Repos.

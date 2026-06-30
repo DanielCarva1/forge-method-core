@@ -1,0 +1,70 @@
+# F11 Risk Audit Gate — canonical Rust anti-pattern rule set.
+#
+# This fixture exercises every detector kind that is pure (Regex, PathGlob,
+# FileGlobMustExist). `ExternalLinter` is intentionally omitted because it
+# shells out and is not deterministic in unit tests.
+#
+# Schema: risk-audit-v0  (see crates/forge-core-validate/src/risk_audit.rs)
+
+schema_version: risk-audit-v0
+
+rules:
+  # Detector: Regex — forbids `.unwrap()` in product source. `.unwrap()` panics
+  # on `None`/`Err` and is the single most common AI-induced crash pattern.
+  - id: no-unwrap
+    description: |
+      `.unwrap()` panics on None/Err and is forbidden in product source. Use
+      `?`, `expect("...")` with a load-bearing reason, or pattern match.
+    severity: error
+    detector:
+      kind: regex
+      pattern: '\.unwrap\(\)'
+    evidence_required: false
+    fix_hint: Replace with `?`, `expect("reason")`, or pattern match.
+    applies_to:
+      - "**/*.rs"
+
+  # Detector: Regex — forbids `.expect()` without a load-bearing reason. We
+  # flag every call site; reviewers can allow specific ones via the rule id.
+  - id: no-expect
+    description: |
+      `.expect()` panics with a message; require an explicit reviewer allowance
+      per call site. Discouraged in product code.
+    severity: warning
+    detector:
+      kind: regex
+      pattern: '\.expect\('
+    evidence_required: false
+    fix_hint: Replace with `?` or pattern match. If unavoidable, document why.
+    applies_to:
+      - "**/*.rs"
+
+  # Detector: Regex — empty catch (swallowed error). Catches `let _ = ...`
+  # assignments that silently drop a `Result`.
+  - id: no-empty-catch
+    description: |
+      `let _ = result` silently drops a `Result` and hides failures. Use
+      `if let Err(e) = ... { ... }` or propagate with `?`.
+    severity: error
+    detector:
+      kind: regex
+      pattern: 'let _ = .+\('
+    evidence_required: false
+    fix_hint: Handle the error explicitly or propagate it with `?`.
+    applies_to:
+      - "**/*.rs"
+
+  # Detector: FileGlobMustExist — every consumer repo must ship a README so
+  # agents and humans can onboard. Emits one error when zero files match.
+  - id: must-have-readme
+    description: |
+      Consumer repo must contain at least one README file at the root or in a
+      `docs/` directory.
+    severity: error
+    detector:
+      kind: file_glob_must_exist
+      pattern: "**/README*"
+    evidence_required: false
+    fix_hint: Add a README.md at the repo root describing the project.
+    applies_to:
+      - "**/*"

@@ -881,6 +881,7 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "forge-core-contracts",
+ "regex",
  "serde",
  "serde_yaml",
  "serde_yml",
