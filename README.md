@@ -133,6 +133,10 @@ the command exits non-zero when any error-severity finding lands, while
 still returning the full summary so agents can self-correct without
 re-running.
 
+The same gate is available as `--require-risk-audit <policy.yaml>` on
+`execute-operation`, running before any WAL write so a failed audit
+leaves the repository untouched.
+
 **Supply-chain surface (host-adapter)** — a set of commands for projecting the
 protocol onto host environments (MCP tools, borrowed shells, app UI) and for
 verifying distribution artifacts (provenance, signatures, transparency logs).

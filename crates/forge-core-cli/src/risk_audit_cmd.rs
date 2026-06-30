@@ -365,7 +365,7 @@ fn run_risk_audit(root: &Path, rules_path: Option<&Path>) -> CliEnvelope<RiskAud
 }
 
 #[derive(Debug)]
-enum CollectTargetsError {
+pub(crate) enum CollectTargetsError {
     Walk { source: String },
 }
 
@@ -377,7 +377,7 @@ impl std::fmt::Display for CollectTargetsError {
     }
 }
 
-fn collect_targets(root: &Path) -> Result<Vec<RiskAuditTarget>, CollectTargetsError> {
+pub(crate) fn collect_targets(root: &Path) -> Result<Vec<RiskAuditTarget>, CollectTargetsError> {
     let mut targets = Vec::new();
     walk_dir(root, root, &mut targets).map_err(|source| CollectTargetsError::Walk {
         source: source.to_string(),

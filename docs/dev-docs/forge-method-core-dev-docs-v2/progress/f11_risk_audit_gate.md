@@ -155,15 +155,45 @@ o summary completo com todos os findings sem re-rodar o gate.
 - `cargo clippy -p forge-core-cli` ✅ 0 warnings no trabalho novo
 - `cargo fmt -p forge-core-cli` ✅ limpo
 
+## F11.3 — Enforcement no `execute-operation` (FECHADO)
+
+O gate roda em `run_execute_operation` como **primeiro passo** após a
+canonicalização do root — antes de qualquer parse de contract ou WAL write.
+Auditar é pré-condição para mutar, não um post-check, então o gate nunca
+depende dos contracts de operação/comando/efeito serem válidos.
+
+Entregues:
+
+- `ExecuteOperationInput.risk_audit_rules: Option<PathBuf>` — quando `Some`,
+  aponta para um `risk-audit-v0` YAML.
+- `ExecuteOperationError::RiskAuditFailed { error_count, first_error }` —
+  fail-closed com resumo (contagem de errors + path/message do primeiro).
+- `run_execute_operation`: gate ANTES do parse; reusa
+  `crate::risk_audit_cmd::collect_targets` (agora `pub(crate)`) para varrer
+  o project root, `validate_risk_audit_rule_set` para validar a estrutura do
+  YAML, e `evaluate_risk_audit` para aplicar as regras. Se qualquer report
+  tem errors, retorna `RiskAuditFailed` — nada é escrito no WAL.
+- `run_execute_operation_command`: flag `--require-risk-audit <path>`.
+- `command_registry` + `global_usage`: `[--require-risk-audit <path>]`.
+- E2E: `crates/forge-core-cli/tests/execute_operation_risk_audit_e2e.rs`
+  (4 casos: blocked, passes-when-clean, without-flag-skips, invalid-yaml).
+
+Decisão de design (vs plano original): o campo vive em `ExecuteOperationInput`
+(camada CLI), não em `RuntimeOperationExecutionContext` (camada runtime).
+Motivo: o gate é policy de entrada do CLI, não invariant do runtime. Manter
+na CLI mantém o runtime puro e o gate testável sem montar contexto runtime.
+O gate também roda antes do parse (não depois), porque auditar é pré-condição
+e nunca deve depender de contracts válidos.
+
+Validação:
+
+- `cargo check -p forge-core-cli` ✅
+- `cargo clippy -p forge-core-cli --all-targets -- -W clippy::pedantic` ✅ 0 warnings no trabalho novo
+- `cargo test -p forge-core-cli --test execute_operation_risk_audit_e2e` ✅ 4/4
+- Regressão: `risk_audit_policies_e2e` (F11.2) ✅, `operation_sidecar_e2e` ✅, `validate` ✅
+- Anchor 122 ✅
+
 ## Próximos passos
-
-### F11.3 — Enforcement real
-
-- Campo `risk_audit_required: bool` em `RuntimeOperationExecutionContext`
-- Quando mutável + required: chama `evaluate_risk_audit` antes do WAL
-- Se report tem errors: `ExecuteOperationError::RiskAuditFailed` rejeita
-- CLI flag `--require-risk-audit <policy>` em `execute-operation`
-- E2E em `crates/forge-core-cli/tests/operation_sidecar_e2e.rs`
 
 ### F11.4 — TraceEvent integration
 
