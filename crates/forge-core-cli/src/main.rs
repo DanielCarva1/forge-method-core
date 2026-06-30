@@ -17,7 +17,13 @@ fn main() {
                 std::process::exit(error.exit_code());
             }
         },
-        "contract" => forge_core_cli::contract_cmd::run_contract_command(&args),
+        "contract" => match forge_core_cli::contract_cmd::run_contract_command(&args) {
+            Ok(()) => {}
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(error.exit_code());
+            }
+        },
         "isolation" => forge_core_cli::isolation::run_isolation_command(&args),
         "coordination" => forge_core_cli::coordination::run_coordination_command(&args),
         "project" => forge_core_cli::project_cmd::run_project_command(&args),
