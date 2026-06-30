@@ -328,9 +328,22 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
         representativas (`human-agent-interface.yaml`,
         `rust-workspace-architecture.yaml`, `rust-validation-authority.yaml`).
       - Ver `progress/g1_policies_script_novela_audit.md`
-- [ ] **G2** — Fixtures que provam framework (não script)
+- [x] **G2** — Fixtures que provam framework (não script) ✅
       - Para cada policy, fixture testando múltiplos inputs no mesmo policy
-      - DoD: `cargo test policies_framework` passa
+      - **DoD atingido**: `cargo test -p forge-core-engine --test policies_framework`
+        passa (8 tests, 0 failures). 4 fixtures de `AutonomyPolicyContract` em
+        `docs/fixtures/autonomy-policy-v0/` (manual-default / yolo-default /
+        mixed-with-manual-secret / yolo-disabled-escalation) × 3 fixtures de
+        `VerificationGoalContract` em `docs/fixtures/verification-goal-v0/`
+        (satisfied / pending / failed) exercitam todos os 6 branches do
+        `route_lane_for_tool_classes`. Cada fixture cobre um eixo paramétrico
+        distinto (`default_mode`, per-tool override, escalation flag,
+        goal status); remover qualquer um quebra pelo menos um teste — prova
+        que o router é framework (N inputs → N outputs coerentes via mesmo
+        código), não script (1 input hardcoded → 1 output esperado).
+      - Schema-drift guard: último teste carrega todos os 7 fixtures de uma
+        vez pra quebrar cedo e com nome claro em vez de N panics cascateados.
+      - Ver `crates/forge-core-engine/tests/policies_framework.rs`
 - [ ] **G3** — Runtimeização do autonomy router
       - Hoje é estático (ler YAML, decidir). Capacidade de mudar thresholds em
         runtime sem re-deploy

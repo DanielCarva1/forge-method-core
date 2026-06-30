@@ -1,0 +1,26 @@
+schema_version: "0.1"
+verification_goal_contract:
+  id: verification.fixture.goal_pending
+  scope:
+    phase: 4-build-verify
+    story_ref: story.fixture.pending
+    changed_paths:
+      - docs/fixtures/autonomy-policy-v0/policy-mixed-with-manual-secret.yaml
+  goals:
+    - kind: unit_tests_pass
+      target: cargo test -p forge-core-engine
+      status: pending
+      adapter: cargo
+      detail: "Run has not started yet."
+    - kind: lint_clean
+      target: cargo clippy -p forge-core-engine --all-targets
+      status: pending
+      adapter: cargo
+      detail: null
+  overall:
+    value: not_evaluated
+    evaluated_at: "2026-06-30T12:00:00Z"
+    satisfied: 0
+    total: 2
+    notes: "Goals declared but not yet evaluated."
+  evidence_refs: []

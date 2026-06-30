@@ -1,0 +1,27 @@
+schema_version: "0.1"
+autonomy_policy_contract:
+  id: autonomy.fixture.policy_manual_default
+  applies_to:
+    kind: repo
+    ids:
+      - forge-method-core
+  # Parametric axis covered: default_mode = Manual forces the rigorous lane
+  # for every tool class regardless of risk_score or verification status.
+  # Proves the router does not depend on tool_class overrides to be safe.
+  default_mode: manual
+  tool_classes:
+    - class: file_edit
+      mode: manual
+      risk_score: 10
+      requires_approval_above: 0
+    - class: terminal_command
+      mode: manual
+      risk_score: 50
+      requires_approval_above: 0
+  escalation:
+    on_repeated_failure: 1
+    on_high_risk_path: true
+    on_semantic_uncertainty: true
+    max_retries_before_human: 2
+    cooldown_seconds: 60
+  evidence_basis: null

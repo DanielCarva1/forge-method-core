@@ -1,0 +1,26 @@
+schema_version: "0.1"
+verification_goal_contract:
+  id: verification.fixture.goal_failed
+  scope:
+    phase: 4-build-verify
+    story_ref: story.fixture.failed
+    changed_paths:
+      - docs/fixtures/autonomy-policy-v0/policy-yolo-disabled-escalation.yaml
+  goals:
+    - kind: unit_tests_pass
+      target: cargo test -p forge-core-engine
+      status: failed
+      adapter: cargo
+      detail: "1 test failed: route_lane_for_tool_classes_must_respect_fixture."
+    - kind: lint_clean
+      target: cargo clippy -p forge-core-engine --all-targets
+      status: passed
+      adapter: cargo
+      detail: "clippy clean."
+  overall:
+    value: not_satisfied
+    evaluated_at: "2026-06-30T12:00:00Z"
+    satisfied: 1
+    total: 2
+    notes: "One goal failed; the fast lane must be denied."
+  evidence_refs: []
