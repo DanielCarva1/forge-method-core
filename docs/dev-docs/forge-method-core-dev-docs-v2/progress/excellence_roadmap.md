@@ -115,8 +115,15 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
         `08_priority_recommendations_plan.md` alinhados com AGENTS.md
         (argv manual sem clap; error enums sem thiserror/anyhow). Todas as
         menções agora são em negação ou descrição de decisão.
-- [ ] **R14** — Criar `paper_implementation_status.md`
-      - Cada paper em `contracts/research/` mapeado pra implementação
+- [x] **R14** — Criar `paper_implementation_status.md` ✅
+      - 15 papers mapeados (6 ✅ Implemented, 9 🟡 Partial, 0 ❌ Pending)
+      - Cobertura regional auditada: 8 Western, 0 Oriental-led, 5 Mixed (orientais
+        vivem dentro destes como sub-findings), 2 unspecified
+      - 3 convergências cross-cutting documentadas: "hard gates + freedom",
+        "R8 id-coupling bug class unifies 4 papers", "pending findings → F05-F14"
+      - Cobertura oriental marcada como gap pra R15/R16 (política geográfica
+        existe em field-evidence-20260625 mas não há paper puramente oriental)
+      - Arquivo: `paper_implementation_status.md`
 - [ ] **R9** — Remover Bootstrap Exception
       - Quaisquer docs/contratos que assumem "humano lê" precisam migrar pra
         "agente lê e explica"
