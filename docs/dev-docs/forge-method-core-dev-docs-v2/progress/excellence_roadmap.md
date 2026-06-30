@@ -1,7 +1,7 @@
 # Excellence Roadmap — Forge Method Core até 10/10
 
 **Data**: 2026-06-30
-**Status**: plano ativo (última atualização: 2026-06-30 — E1.3 COMPLETO)
+**Status**: plano ativo (última atualização: 2026-06-30 — E1 COMPLETO, clippy pedantic em 0 warnings)
 **Dono**: Daniel (codebase owner) + agente executor
 **Norte estratégico**: rápido, robusto, performativo, protocolo-guia que escala com a
 capacidade dos agentes, nunca script de novela, sempre Rust ou compatível, sempre
@@ -19,7 +19,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Agente guia humano | 8 | 10 | Política tipada, mas UX de "preview→human" ausente |
 | Não-script-de-novela | 9 | 10 | Já é framework paramétrico; faltam fixtures que provem |
 | Features comunidade | 6 | 10 | F03/F04/F05 parciais; F01/F02/F15 P0 não iniciados |
-| Rust best practices | 8 | 10 | clippy pedantic ~89 (comecou ~245); E1.3 fechado, faltam E1.4-E1.7 |
+| Rust best practices | 9 | 10 | clippy pedantic em 0 warnings (comecou ~245); E1 fechado |
 | Segurança supply chain | 6 | 10 | serde_yaml deprecated (R7), sem zeroize (R5), sem fuzz (R4) |
 | Docs/rastreabilidade | 6 | 10 | Bootstrap Exception pendente; papers sem status doc |
 
@@ -145,39 +145,24 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 
 ### Trilha E — Rust best practices
 
-- [ ] **E1** — Zerar warnings clippy pedantic (baseline ~245, agora ~213)
-      - Estrategia hibrida: fechar lints mecanicos + escrever `# Errors`/`# Panics`
-        em todo workspace; `#![allow]` documentado so pro cosmético que sobrar
-      - [x] E1.1 large_enum_variant em `ProjectInitError` (commit `a05188d`)
-      - [x] E1.1b `pub(crate) ClaimReconcileLoopConfig` p/ `private_interfaces`
-            (commit `669ea28`)
-      - [x] E1.2 assigning_clones em crypto via `clone_from` (commit `2a56d16`,
-            21 warnings)
-      - [x] E1.3 docs `# Errors`/`# Panics` em todo workspace (132 warnings → 0)
-            - host_adapter_verify_cmd.rs (commit `2664fc3`, 13 fns)
-            - cli_util.rs (commit `b63beb3`)
-            - host_adapter_policy_cmd.rs (commit `b65742a`)
-            - isolation.rs cli (commits `a1f1f50`, `9d6fdc1`)
-            - claim.rs (commit `27d0fbe`)
-            - graph_cmd.rs (commit `d99f629`)
-            - guide.rs (commit `0230d88`)
-            - telemetry_cmd.rs (commit `83a8a0a`)
-            - eval_cmd.rs (commit `0c1c570`)
-            - effect_index.rs (commit `6b307a4`)
-            - autonomy_cmd.rs (commit `6a9ee24`)
-            - validate.rs / execute_operation.rs / project_cmd.rs / contract_cmd.rs
-              (commit `598fa3a`)
-            - m1_cmd.rs (commit `5237105`)
-            - coordination.rs + project_cmd.rs dispatcher (commit `a4652d5`)
-            - forge-core-engine isolation.rs (commit `521571d`)
-      - [ ] E1.4 lints mecanicos restantes (~20 warnings): manual_let_else (7),
-            match_same_arms (4), redundant_continue (3), redundant_guard (2),
-            redundant_closure (2), doc_markdown backticks (2)
-      - [ ] E1.5 needless_pass_by_value (18) - analise caso a caso
-      - [ ] E1.6 struct_excessive_bools (6) - refactor em tipos ou allow
-      - [ ] E1.7 `#![allow]` documentado em crate root para cosméticos
-            (too_many_lines, must_use_candidate)
-      - Meta: baseline cai pra <100 ao fim destes sub-itens
+- [x] **E1** — Zerar warnings clippy pedantic (baseline ~245, **agora 0**)
+- Estrategia hibrida: fechar lints mecanicos + escrever `# Errors`/`# Panics`
+  em todo workspace; `#![allow]` documentado so pro cosmético que sobrar
+- [x] E1.1 large_enum_variant em `ProjectInitError` (commit `a05188d`)
+- [x] E1.1b `pub(crate) ClaimReconcileLoopConfig` p/ `private_interfaces`
+      (commit `669ea28`)
+- [x] E1.2 assigning_clones em crypto via `clone_from` (commit `2a56d16`,
+      21 warnings)
+- [x] E1.3 docs `# Errors`/`# Panics` em todo workspace (132 warnings → 0)
+- [x] E1.4 lints mecanicos (~20 warnings): manual_let_else, match_same_arms,
+      redundant_continue, redundant_guard, doc_markdown backticks
+- [x] E1.5 needless_pass_by_value: allow documentado onde breaking-change,
+      corrigido onde seguro
+- [x] E1.6 struct_excessive_bools: allow documentado nos 6 policy checklists
+- [x] E1.7 `#![allow]` documentado em crate roots para too_many_lines,
+      redundant_closure_for_method_calls
+- Resultado final: 0 warnings em `cargo clippy --workspace --lib
+  -- -W clippy::pedantic` (comecou com ~245)
 - [ ] **E2** — Profile release documentado em `Cargo.toml`
       - LTO thin, codegen-units 1, panic abort, opt-level 3
       - DoD: `cargo build --release` produz binário otimizado
