@@ -1599,13 +1599,37 @@ pub fn rebuild_effect_target_metadata_index_with_lock(
     lock_relative_path: &str,
     recorded_at: Option<&str>,
 ) -> EffectTargetMetadataIndexRebuildResult {
+    rebuild_effect_target_metadata_index_with_lock_with_durability(
+        root,
+        wal_relative_path,
+        index_relative_path,
+        lock_relative_path,
+        recorded_at,
+        WalDurability::default(),
+    )
+}
+
+/// [`rebuild_effect_target_metadata_index_with_lock`] with an explicit
+/// [`WalDurability`] knob. The index file is derived from the WAL, so a
+/// crash mid-rebuild loses only rebuild work (the next rebuild call
+/// regenerates it from the same WAL). `--no-sync` is therefore semantically
+/// safe here. See ADR-0009.
+pub fn rebuild_effect_target_metadata_index_with_lock_with_durability(
+    root: impl AsRef<Path>,
+    wal_relative_path: &str,
+    index_relative_path: &str,
+    lock_relative_path: &str,
+    recorded_at: Option<&str>,
+    durability: WalDurability,
+) -> EffectTargetMetadataIndexRebuildResult {
     let root = root.as_ref();
     match acquire_effect_store_lock(root, lock_relative_path) {
-        Ok(_lock) => rebuild_effect_target_metadata_index(
+        Ok(_lock) => rebuild_effect_target_metadata_index_with_durability(
             root,
             wal_relative_path,
             index_relative_path,
             recorded_at,
+            durability,
         ),
         Err(error) => EffectTargetMetadataIndexRebuildResult {
             status: EffectTargetMetadataIndexRebuildStatus::Failed,
@@ -1623,6 +1647,23 @@ pub fn rebuild_effect_target_metadata_index(
     wal_relative_path: &str,
     index_relative_path: &str,
     recorded_at: Option<&str>,
+) -> EffectTargetMetadataIndexRebuildResult {
+    rebuild_effect_target_metadata_index_with_durability(
+        root,
+        wal_relative_path,
+        index_relative_path,
+        recorded_at,
+        WalDurability::default(),
+    )
+}
+
+/// [`rebuild_effect_target_metadata_index`] with an explicit [`WalDurability`] knob.
+pub fn rebuild_effect_target_metadata_index_with_durability(
+    root: impl AsRef<Path>,
+    wal_relative_path: &str,
+    index_relative_path: &str,
+    recorded_at: Option<&str>,
+    durability: WalDurability,
 ) -> EffectTargetMetadataIndexRebuildResult {
     let root = root.as_ref();
     let Ok(wal_path) = resolve_safe_repo_relative(root, wal_relative_path) else {
@@ -1688,7 +1729,12 @@ pub fn rebuild_effect_target_metadata_index(
         };
     }
 
-    if let Err(error) = append_effect_target_metadata_records(root, index_relative_path, &records) {
+    if let Err(error) = append_effect_target_metadata_records_with_durability(
+        root,
+        index_relative_path,
+        &records,
+        durability,
+    ) {
         return EffectTargetMetadataIndexRebuildResult {
             status: EffectTargetMetadataIndexRebuildStatus::Failed,
             rebuilt_records: records.len(),

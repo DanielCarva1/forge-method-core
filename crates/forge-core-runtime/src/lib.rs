@@ -19,9 +19,9 @@ use forge_core_contracts::{
     CommandContractDocument, OperationContractDocument, RepoPath, StableId,
 };
 use forge_core_store::{
-    append_effect_target_metadata_records, append_json_line,
-    apply_file_effect_transaction_with_wal_lock, EffectApplicationPayload, EffectApplicationResult,
-    EffectApplicationStatus,
+    append_effect_target_metadata_records_with_durability, append_json_line_with_durability,
+    apply_file_effect_transaction_with_wal_lock_with_durability, EffectApplicationPayload,
+    EffectApplicationResult, EffectApplicationStatus, WalDurability,
 };
 use forge_core_validate::{
     validate_command, validate_operation, validate_operation_cross_references,
@@ -417,6 +417,10 @@ pub struct RuntimeOperationExecutionContext<'a> {
     pub effect_metadata_index_relative_path: &'a str,
     pub recorded_at: &'a str,
     pub tx_id_prefix: &'a str,
+    /// WAL append durability for this operation (ADR-0009). Default
+    /// `SyncOnAppend` preserves the historical contract; CLI commands
+    /// may pass `NoSync` when the user opts in via `--no-sync`.
+    pub durability: WalDurability,
 }
 
 impl<'a> RuntimeOperationExecutionContext<'a> {
@@ -431,6 +435,7 @@ impl<'a> RuntimeOperationExecutionContext<'a> {
             effect_metadata_index_relative_path: ".forge-method/index/effect-targets.ndjson",
             recorded_at: "unknown",
             tx_id_prefix: "runtime-operation",
+            durability: WalDurability::default(),
         }
     }
 }
@@ -596,10 +601,11 @@ pub fn execute_operation(
         let execution =
             run_staged_read_only_command(&staging, &command.document, &context.command_context);
         let evidence = command_execution_evidence_record(&staging, &execution, context.recorded_at);
-        if append_json_line(
+        if append_json_line_with_durability(
             context.effect_store_root,
             context.evidence_log_relative_path,
             &evidence,
+            context.durability,
         )
         .is_err()
         {
@@ -675,7 +681,7 @@ pub fn execute_operation(
             };
         }
 
-        let mut application = apply_file_effect_transaction_with_wal_lock(
+        let mut application = apply_file_effect_transaction_with_wal_lock_with_durability(
             context.effect_store_root,
             &effect.document,
             &store_payloads,
@@ -685,6 +691,7 @@ pub fn execute_operation(
                 context.tx_id_prefix,
                 &effect.document.tool_effect_contract.id,
             ),
+            context.durability,
         );
         let applied = application.status == EffectApplicationStatus::Applied;
         if !applied {
@@ -705,10 +712,11 @@ pub fn execute_operation(
         for record in &mut application.metadata_records {
             record.recorded_at = Some(context.recorded_at.to_string());
         }
-        if append_effect_target_metadata_records(
+        if append_effect_target_metadata_records_with_durability(
             context.effect_store_root,
             context.effect_metadata_index_relative_path,
             &application.metadata_records,
+            context.durability,
         )
         .is_err()
         {
@@ -855,14 +863,9 @@ fn preview_operation_inner(
 /// documents (e.g. plan-only previews) keep the legacy `false` placeholder.
 #[must_use]
 pub fn compute_rollback_available(effects: &[ToolEffectContractDocument]) -> bool {
-    effects.iter().all(|document| {
-        document
-            .tool_effect_contract
-            .repair
-            .inverse
-            .kind
-            != InverseKind::None
-    })
+    effects
+        .iter()
+        .all(|document| document.tool_effect_contract.repair.inverse.kind != InverseKind::None)
 }
 
 /// Like [`preview_operation_with_snapshot`], but also computes the real
@@ -916,7 +919,9 @@ pub fn collect_effect_touched_refs(effects: &[ToolEffectContractDocument]) -> Ve
 /// Mirror of [`forge_core_store::file_backed_target`] that the runtime can call
 /// without taking a dependency on the store crate for a single predicate. The
 /// set must stay in sync with the store's definition.
-fn file_backed_effect_target(target_kind: forge_core_contracts::tool_effect::EffectTargetKind) -> bool {
+fn file_backed_effect_target(
+    target_kind: forge_core_contracts::tool_effect::EffectTargetKind,
+) -> bool {
     use forge_core_contracts::tool_effect::EffectTargetKind;
     matches!(
         target_kind,
@@ -2060,6 +2065,7 @@ mod tests {
             effect_metadata_index_relative_path: ".forge-method/index/effect-targets.ndjson",
             recorded_at: "2026-06-25T00:00:00Z",
             tx_id_prefix: "test-execute-operation",
+            durability: WalDurability::default(),
         };
 
         let execution = execute_operation(
