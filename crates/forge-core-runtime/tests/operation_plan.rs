@@ -38,7 +38,7 @@ fn fixture(name: &str) -> OperationContractDocument {
         .join(name);
     let input = fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-    serde_yaml::from_str(&input)
+    yaml_serde::from_str(&input)
         .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()))
 }
 
@@ -46,7 +46,7 @@ fn effect_fixture(name: &str) -> ToolEffectContractDocument {
     let path = repo_root().join("contracts").join("effects").join(name);
     let input = fs::read_to_string(&path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
-    serde_yaml::from_str(&input)
+    yaml_serde::from_str(&input)
         .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()))
 }
 
@@ -285,7 +285,7 @@ fn preview_report_is_deterministic_and_does_not_mutate() {
     assert!(preview.next_human_action.is_none());
     assert_eq!(preview.plan.status, RuntimePlanStatus::ReadyToCallOperation);
     assert_eq!(preview.staging.status, RuntimeEffectStagingStatus::Staged);
-    let serialized = serde_yaml::to_string(&preview).expect("serialize preview report");
+    let serialized = yaml_serde::to_string(&preview).expect("serialize preview report");
     assert!(serialized.contains("operation_id: op_fixture_mechanical_story_execute"));
 }
 

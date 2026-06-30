@@ -420,8 +420,8 @@ impl fmt::Display for ParseWorkflowGraphError {
 
 impl std::error::Error for ParseWorkflowGraphError {}
 
-impl From<serde_yaml::Error> for ParseWorkflowGraphError {
-    fn from(error: serde_yaml::Error) -> Self {
+impl From<yaml_serde::Error> for ParseWorkflowGraphError {
+    fn from(error: yaml_serde::Error) -> Self {
         Self::YamlParseFailed {
             message: error.to_string(),
         }
@@ -435,7 +435,7 @@ impl From<serde_yaml::Error> for ParseWorkflowGraphError {
 /// Returns [`ParseWorkflowGraphError::YamlParseFailed`] when the document is not
 /// valid YAML or does not match the strict graph contract shape.
 pub fn parse_workflow_graph_yaml(input: &str) -> Result<WorkflowGraph, ParseWorkflowGraphError> {
-    serde_yaml::from_str(input).map_err(ParseWorkflowGraphError::from)
+    yaml_serde::from_str(input).map_err(ParseWorkflowGraphError::from)
 }
 
 #[must_use]

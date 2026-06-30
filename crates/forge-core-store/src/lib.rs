@@ -8,7 +8,6 @@ use forge_core_validate::{
     ReferenceIndex, ReferenceKind,
 };
 use serde::{Deserialize, Serialize};
-use serde_yaml::Value;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsString;
@@ -18,6 +17,7 @@ use std::io::{self, Write};
 use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::instrument;
+use yaml_serde::Value;
 
 pub mod claim_wal;
 
@@ -1882,7 +1882,7 @@ pub enum ReferenceIndexBuildError {
     },
     ParseYaml {
         path: PathBuf,
-        source: serde_yaml::Error,
+        source: yaml_serde::Error,
     },
 }
 
@@ -2379,7 +2379,7 @@ fn read_yaml_value(path: &Path) -> Result<Value, ReferenceIndexBuildError> {
         path: path.to_path_buf(),
         source,
     })?;
-    serde_yaml::from_str(&text).map_err(|source| ReferenceIndexBuildError::ParseYaml {
+    yaml_serde::from_str(&text).map_err(|source| ReferenceIndexBuildError::ParseYaml {
         path: path.to_path_buf(),
         source,
     })

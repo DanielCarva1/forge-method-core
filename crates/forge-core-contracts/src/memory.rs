@@ -195,9 +195,9 @@ mod tests {
     #[test]
     fn round_trips_memory_contract() {
         let doc = contract();
-        let yaml = serde_yaml::to_string(&doc).expect("serialize memory contract");
+        let yaml = yaml_serde::to_string(&doc).expect("serialize memory contract");
         let parsed: MemoryContractDocument =
-            serde_yaml::from_str(&yaml).expect("deserialize memory contract");
+            yaml_serde::from_str(&yaml).expect("deserialize memory contract");
 
         assert_eq!(doc, parsed);
         assert!(yaml.contains("playbook_rule"));
@@ -208,10 +208,10 @@ mod tests {
     fn example_memory_yaml_round_trips() {
         let yaml = include_str!("../../../contracts/examples/memory.yaml");
         let doc: MemoryContractDocument =
-            serde_yaml::from_str(yaml).expect("deserialize memory example");
-        let serialized = serde_yaml::to_string(&doc).expect("serialize memory example");
+            yaml_serde::from_str(yaml).expect("deserialize memory example");
+        let serialized = yaml_serde::to_string(&doc).expect("serialize memory example");
         let parsed: MemoryContractDocument =
-            serde_yaml::from_str(&serialized).expect("deserialize serialized example");
+            yaml_serde::from_str(&serialized).expect("deserialize serialized example");
 
         assert_eq!(doc, parsed);
     }
@@ -229,7 +229,7 @@ memory_contract:
   unknown: nope
 "#;
 
-        let err = serde_yaml::from_str::<MemoryContractDocument>(yaml).unwrap_err();
+        let err = yaml_serde::from_str::<MemoryContractDocument>(yaml).unwrap_err();
         assert!(err.to_string().contains("unknown"));
     }
 
@@ -241,7 +241,7 @@ memory_contract:
             1,
         );
 
-        let err = serde_yaml::from_str::<MemoryContractDocument>(&yaml).unwrap_err();
+        let err = yaml_serde::from_str::<MemoryContractDocument>(&yaml).unwrap_err();
 
         assert!(err.to_string().contains("confidence"));
     }
@@ -373,7 +373,7 @@ memory_contract:
     - memory.contract.old
 "#;
 
-        let doc: MemoryContractDocument = serde_yaml::from_str(yaml).expect("deserialize memory");
+        let doc: MemoryContractDocument = yaml_serde::from_str(yaml).expect("deserialize memory");
         assert_eq!(
             doc.memory_contract.entries[0].supersedes,
             Some(StableId("memory.entry.old".into()))

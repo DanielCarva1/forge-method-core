@@ -165,7 +165,7 @@ fn parse_document<T>(
 where
     T: serde::de::DeserializeOwned + HasSchemaVersion,
 {
-    let doc: T = serde_yaml::from_str(text).map_err(|e| ContractValidateError::YamlInvalid {
+    let doc: T = yaml_serde::from_str(text).map_err(|e| ContractValidateError::YamlInvalid {
         kind: kind.to_string(),
         source: e.to_string(),
     })?;

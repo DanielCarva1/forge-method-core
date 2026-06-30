@@ -75,8 +75,11 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
         OCSP, payload pré-hash
       - Wrap em `Zeroizing<Vec<u8>>` ou `Zeroizing<Box<[u8]>>`
       - Constant-time compare via `subtle::ConstantTimeEq`
-- [ ] **R7** — `serde_yaml` → `serde_yml` (deprecated)
-      - Inventariar usos, trocar dep, fuzz + bench validam equivalência
+- [x] **R7** — `serde_yaml` → `yaml_serde` ✅
+      - Descoberta: `serde_yml` também está deprecated (shim)
+      - Migrado para `yaml_serde 0.10.4` (The YAML Organization, API 1:1)
+      - 124 refs em 42 arquivos, anchor 122 preservado
+      - Ver `progress/r7_yaml_serde.md`
 - [ ] **R13** — Alinhar docs com realidade
       - `04_rust_refactor_guide.md`: remover `thiserror`/`clap` menções
       - Auditar todos dev-docs por conflito com `AGENTS.md`

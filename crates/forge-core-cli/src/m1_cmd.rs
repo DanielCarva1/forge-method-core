@@ -271,7 +271,7 @@ fn read_operation(path: &Path) -> Result<OperationContractDocument, M1CommandErr
         path: path.to_path_buf(),
         source: source.to_string(),
     })?;
-    serde_yaml::from_str(&text).map_err(|source| M1CommandError::ParseOperation {
+    yaml_serde::from_str(&text).map_err(|source| M1CommandError::ParseOperation {
         path: path.to_path_buf(),
         source: source.to_string(),
     })

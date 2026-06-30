@@ -113,7 +113,7 @@ pub enum ExecuteOperationError {
     },
     ParseYaml {
         path: PathBuf,
-        source: serde_yaml::Error,
+        source: yaml_serde::Error,
     },
     InvalidEffectPath {
         root: PathBuf,
@@ -289,7 +289,7 @@ fn read_yaml_result<T: serde::de::DeserializeOwned>(
         path: path.to_path_buf(),
         source,
     })?;
-    serde_yaml::from_str(&text).map_err(|source| ExecuteOperationError::ParseYaml {
+    yaml_serde::from_str(&text).map_err(|source| ExecuteOperationError::ParseYaml {
         path: path.to_path_buf(),
         source,
     })

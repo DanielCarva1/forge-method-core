@@ -690,7 +690,7 @@ mod tests {
             .expect("suite must exist");
         let text = std::fs::read_to_string(&path).expect("read suite");
         let doc: forge_core_contracts::coordination_eval::CoordinationEvalContractDocument =
-            serde_yaml::from_str(&text).expect("deserialize suite");
+            yaml_serde::from_str(&text).expect("deserialize suite");
         doc.coordination_eval_contract
     }
 

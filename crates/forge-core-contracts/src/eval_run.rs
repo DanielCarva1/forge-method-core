@@ -199,9 +199,9 @@ mod tests {
     fn serde_round_trip_populated_eval_run_contract() {
         let document = passing_document();
 
-        let serialized = serde_yaml::to_string(&document).expect("serializes");
+        let serialized = yaml_serde::to_string(&document).expect("serializes");
         let deserialized: EvalRunContractDocument =
-            serde_yaml::from_str(&serialized).expect("deserializes");
+            yaml_serde::from_str(&serialized).expect("deserializes");
 
         assert_eq!(deserialized, document);
     }
@@ -210,10 +210,10 @@ mod tests {
     fn example_eval_run_yaml_round_trips() {
         let yaml = include_str!("../../../contracts/examples/eval-run.yaml");
         let document: EvalRunContractDocument =
-            serde_yaml::from_str(yaml).expect("deserialize eval-run example");
-        let serialized = serde_yaml::to_string(&document).expect("serialize eval-run example");
+            yaml_serde::from_str(yaml).expect("deserialize eval-run example");
+        let serialized = yaml_serde::to_string(&document).expect("serialize eval-run example");
         let reparsed: EvalRunContractDocument =
-            serde_yaml::from_str(&serialized).expect("deserialize serialized eval-run example");
+            yaml_serde::from_str(&serialized).expect("deserialize serialized eval-run example");
 
         assert_eq!(document, reparsed);
     }
@@ -249,7 +249,7 @@ eval_run_contract:
   unexpected_key: nope
 "#;
 
-        let result = serde_yaml::from_str::<EvalRunContractDocument>(yaml);
+        let result = yaml_serde::from_str::<EvalRunContractDocument>(yaml);
 
         assert!(result.is_err());
     }
@@ -262,7 +262,7 @@ eval_run_contract:
             1,
         );
 
-        let err = serde_yaml::from_str::<EvalRunContractDocument>(&yaml).unwrap_err();
+        let err = yaml_serde::from_str::<EvalRunContractDocument>(&yaml).unwrap_err();
 
         assert!(err.to_string().contains("confidence"));
     }

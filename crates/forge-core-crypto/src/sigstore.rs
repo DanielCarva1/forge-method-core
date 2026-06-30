@@ -497,7 +497,7 @@ pub(crate) fn read_sigstore_trust_policy_document(
         }
     };
 
-    match serde_yaml::from_str::<SigstoreTrustedRootPolicyDocument>(&policy_text) {
+    match yaml_serde::from_str::<SigstoreTrustedRootPolicyDocument>(&policy_text) {
         Ok(value) => {
             verified_evidence.push(format!("{evidence_prefix}_parsed"));
             Some(value)

@@ -31,7 +31,7 @@ pub struct CoordinationValidatePayload {
     /// Number of dimensions in the suite (expect 9).
     pub dimension_count: usize,
     /// Structural validation errors (empty == well-formed).
-    pub structural_errors: Vec<serde_yaml::Value>,
+    pub structural_errors: Vec<yaml_serde::Value>,
     /// Dangling fixture/evidence refs (empty == every ref resolves = REAL suite).
     pub dangling_refs: Vec<String>,
     /// True when the suite is structurally valid AND has no dangling refs.
@@ -58,7 +58,7 @@ pub fn run_validate(
             );
         }
     };
-    let doc: CoordinationEvalContractDocument = match serde_yaml::from_str(&text) {
+    let doc: CoordinationEvalContractDocument = match yaml_serde::from_str(&text) {
         Ok(d) => d,
         Err(e) => {
             return CliEnvelope::err(
@@ -74,9 +74,9 @@ pub fn run_validate(
     let gaps = coordination_fixture_gaps(contract, repo_root);
 
     // Serialize the typed errors losslessly (they carry enum dimension tags).
-    let structural_ser: Vec<serde_yaml::Value> = structural
+    let structural_ser: Vec<yaml_serde::Value> = structural
         .iter()
-        .map(|e| serde_yaml::to_value(e).unwrap_or(serde_yaml::Value::Null))
+        .map(|e| yaml_serde::to_value(e).unwrap_or(yaml_serde::Value::Null))
         .collect();
 
     let is_real = structural.is_empty() && gaps.is_empty();

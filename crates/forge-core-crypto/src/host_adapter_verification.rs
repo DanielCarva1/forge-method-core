@@ -375,7 +375,7 @@ pub fn run_host_adapter_sigstore_trust_policy_verification(
     };
 
     let policy_document = policy_text.as_deref().and_then(|text| {
-        match serde_yaml::from_str::<SigstoreTrustedRootPolicyDocument>(text) {
+        match yaml_serde::from_str::<SigstoreTrustedRootPolicyDocument>(text) {
             Ok(value) => {
                 verified_evidence.push("sigstore_trust_policy_parsed".to_string());
                 Some(value)

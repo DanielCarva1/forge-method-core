@@ -202,9 +202,9 @@ mod tests {
     fn serde_round_trip_preserves_populated_contract() {
         let document = example_contract();
 
-        let serialized = serde_yaml::to_string(&document).expect("serialize autonomy policy");
+        let serialized = yaml_serde::to_string(&document).expect("serialize autonomy policy");
         let deserialized: AutonomyPolicyContractDocument =
-            serde_yaml::from_str(&serialized).expect("deserialize autonomy policy");
+            yaml_serde::from_str(&serialized).expect("deserialize autonomy policy");
 
         assert_eq!(document, deserialized);
     }
@@ -213,11 +213,11 @@ mod tests {
     fn example_autonomy_policy_yaml_round_trips() {
         let yaml = include_str!("../../../contracts/examples/autonomy-policy.yaml");
         let document: AutonomyPolicyContractDocument =
-            serde_yaml::from_str(yaml).expect("deserialize autonomy policy example");
+            yaml_serde::from_str(yaml).expect("deserialize autonomy policy example");
         let serialized =
-            serde_yaml::to_string(&document).expect("serialize autonomy policy example");
+            yaml_serde::to_string(&document).expect("serialize autonomy policy example");
         let reparsed: AutonomyPolicyContractDocument =
-            serde_yaml::from_str(&serialized).expect("deserialize serialized autonomy example");
+            yaml_serde::from_str(&serialized).expect("deserialize serialized autonomy example");
 
         assert_eq!(document, reparsed);
     }
@@ -243,7 +243,7 @@ autonomy_policy_contract:
   unexpected_key: "must fail"
 "#;
 
-        let result = serde_yaml::from_str::<AutonomyPolicyContractDocument>(yaml);
+        let result = yaml_serde::from_str::<AutonomyPolicyContractDocument>(yaml);
 
         assert!(result.is_err());
     }
@@ -256,7 +256,7 @@ autonomy_policy_contract:
             1,
         );
 
-        let err = serde_yaml::from_str::<AutonomyPolicyContractDocument>(&yaml).unwrap_err();
+        let err = yaml_serde::from_str::<AutonomyPolicyContractDocument>(&yaml).unwrap_err();
 
         assert!(err.to_string().contains("risk_score"));
     }
@@ -269,7 +269,7 @@ autonomy_policy_contract:
             1,
         );
 
-        let err = serde_yaml::from_str::<AutonomyPolicyContractDocument>(&yaml).unwrap_err();
+        let err = yaml_serde::from_str::<AutonomyPolicyContractDocument>(&yaml).unwrap_err();
 
         assert!(err.to_string().contains("requires_approval_above"));
     }

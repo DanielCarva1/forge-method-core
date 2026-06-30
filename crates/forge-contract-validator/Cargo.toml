@@ -5,4 +5,4 @@ edition.workspace = true
 
 [dependencies]
 forge-core-cli = { path = "../forge-core-cli" }
-serde_yaml.workspace = true
+yaml_serde.workspace = true

@@ -339,7 +339,7 @@ pub fn load_isolations(dir: &Path) -> (Vec<IsolationContract>, Vec<String>) {
             errors.push(format!("{}: unreadable", path.display()));
             continue;
         };
-        match serde_yaml::from_str::<IsolationContractDocument>(&text) {
+        match yaml_serde::from_str::<IsolationContractDocument>(&text) {
             Ok(doc) => out.push(doc.isolation_contract),
             Err(e) => errors.push(format!("{}: {e}", path.display())),
         }
@@ -355,7 +355,7 @@ pub fn save_isolation(dir: &Path, c: &IsolationContract) -> std::io::Result<Path
         schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
         isolation_contract: c.clone(),
     };
-    let yaml = serde_yaml::to_string(&doc)
+    let yaml = yaml_serde::to_string(&doc)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     let path = dir.join(format!("{}.yaml", slug_for_file(&c.id.0)));
     atomic_write(&path, &yaml)?;
@@ -817,18 +817,18 @@ mod tests {
     #[test]
     fn isolation_status_serializes_snake_case() {
         // M2: on-disk YAML must use lowercase to match status_str/parse_status.
-        let yaml = serde_yaml::to_string(&IsolationStatus::Active).unwrap();
+        let yaml = yaml_serde::to_string(&IsolationStatus::Active).unwrap();
         assert!(yaml.contains("active"), "got: {yaml}");
         assert!(!yaml.contains("Active"));
-        let parsed: IsolationStatus = serde_yaml::from_str("active").unwrap();
+        let parsed: IsolationStatus = yaml_serde::from_str("active").unwrap();
         assert_eq!(parsed, IsolationStatus::Active);
     }
 
     #[test]
     fn merge_policy_serializes_snake_case() {
-        let yaml = serde_yaml::to_string(&MergePolicy::Squash).unwrap();
+        let yaml = yaml_serde::to_string(&MergePolicy::Squash).unwrap();
         assert!(yaml.contains("squash"));
-        let parsed: MergePolicy = serde_yaml::from_str("squash").unwrap();
+        let parsed: MergePolicy = yaml_serde::from_str("squash").unwrap();
         assert_eq!(parsed, MergePolicy::Squash);
     }
 }

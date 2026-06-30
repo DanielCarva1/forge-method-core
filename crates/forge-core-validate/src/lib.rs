@@ -8,9 +8,9 @@ use forge_core_contracts::{
     RuntimeRegistryEntryDocument, SourceId, ToolEffectContractDocument,
 };
 use serde::Serialize;
-use serde_yaml::Value;
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
+use yaml_serde::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ValidationReport {

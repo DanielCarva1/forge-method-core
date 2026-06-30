@@ -105,7 +105,7 @@ fn load_one(path: &Path, dir: &Path) -> Result<CatalogEntry, String> {
 /// so both paths produce identical [`CatalogEntry`]s.
 fn parse_workflow_yaml(workflow_ref: &str, text: &str) -> Result<CatalogEntry, String> {
     let doc: WorkflowDocument =
-        serde_yaml::from_str(text).map_err(|e| format!("deserialize error: {e}"))?;
+        yaml_serde::from_str(text).map_err(|e| format!("deserialize error: {e}"))?;
     let wf = doc.workflow;
     Ok(CatalogEntry {
         id: wf.id,

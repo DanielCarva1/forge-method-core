@@ -611,7 +611,7 @@ fn read_tool_effect(path: &Path) -> Result<ToolEffectContractDocument, ReadGraph
         path: path.to_path_buf(),
         source: source.to_string(),
     })?;
-    serde_yaml::from_str(&text).map_err(|source| ReadGraphOperationError::Parse {
+    yaml_serde::from_str(&text).map_err(|source| ReadGraphOperationError::Parse {
         path: path.to_path_buf(),
         source: source.to_string(),
     })
@@ -629,7 +629,7 @@ fn read_operation(path: &Path) -> Result<OperationContractDocument, ReadGraphOpe
         path: path.to_path_buf(),
         source: source.to_string(),
     })?;
-    serde_yaml::from_str(&text).map_err(|source| ReadGraphOperationError::Parse {
+    yaml_serde::from_str(&text).map_err(|source| ReadGraphOperationError::Parse {
         path: path.to_path_buf(),
         source: source.to_string(),
     })
@@ -714,7 +714,7 @@ fn read_graph(path: &Path) -> Result<WorkflowGraph, GraphCommandError> {
         path: path.to_path_buf(),
         source: source.to_string(),
     })?;
-    serde_yaml::from_str(&text).map_err(|source| GraphCommandError::ParseGraph {
+    yaml_serde::from_str(&text).map_err(|source| GraphCommandError::ParseGraph {
         path: path.to_path_buf(),
         source: source.to_string(),
     })

@@ -25,7 +25,7 @@ fn deserializes_field_evidence_registry() {
         .join("field-evidence-20260625.yaml");
     let text = fs::read_to_string(&path).expect("read field evidence registry");
     let registry: FieldEvidenceRegistry =
-        serde_yaml::from_str(&text).expect("deserialize registry");
+        yaml_serde::from_str(&text).expect("deserialize registry");
 
     assert!(registry.sources.len() >= 48);
     assert!(registry
@@ -48,7 +48,7 @@ fn deserializes_contract_family_inventory_lock() {
         .join("v0-contract-family-lock.yaml");
     let text = fs::read_to_string(&path).expect("read inventory lock");
     let inventory: ContractFamilyInventoryDocument =
-        serde_yaml::from_str(&text).expect("deserialize inventory lock");
+        yaml_serde::from_str(&text).expect("deserialize inventory lock");
 
     assert_eq!(
         inventory.contract_family_inventory.id.0,
@@ -70,7 +70,7 @@ fn deserializes_command_contract_instance() {
         .join("story-validation-fast.yaml");
     let text = fs::read_to_string(&path).expect("read command contract");
     let command: CommandContractDocument =
-        serde_yaml::from_str(&text).expect("deserialize command contract");
+        yaml_serde::from_str(&text).expect("deserialize command contract");
 
     assert_eq!(command.command_contract.id.0, "cmd.validate.story_fast");
     assert!(!command.command_contract.args.is_empty());
@@ -85,7 +85,7 @@ fn deserializes_operation_reference_policy() {
         .join("operation-reference-policy-v0.yaml");
     let text = fs::read_to_string(&path).expect("read operation reference policy");
     let policy: OperationReferencePolicyDocument =
-        serde_yaml::from_str(&text).expect("deserialize operation reference policy");
+        yaml_serde::from_str(&text).expect("deserialize operation reference policy");
 
     assert_eq!(policy.contract.0, "operation_reference_policy");
     assert!(policy
@@ -109,7 +109,7 @@ fn deserializes_all_operation_fixtures() {
         }
         let text = fs::read_to_string(&path).expect("read operation fixture");
         let operation: OperationContractDocument =
-            serde_yaml::from_str(&text).unwrap_or_else(|err| {
+            yaml_serde::from_str(&text).unwrap_or_else(|err| {
                 panic!("deserialize operation fixture {}: {err}", path.display())
             });
 
@@ -193,7 +193,7 @@ fn deserializes_coordination_eval_instances() {
 fn assert_named_yaml<T: serde::de::DeserializeOwned>(relative_path: &str) {
     let path = repo_root().join(relative_path);
     let text = fs::read_to_string(&path).expect("read named contract instance");
-    let _: T = serde_yaml::from_str(&text)
+    let _: T = yaml_serde::from_str(&text)
         .unwrap_or_else(|err| panic!("deserialize {}: {err}", path.display()));
 }
 
@@ -213,7 +213,7 @@ fn assert_yaml_instances<T: serde::de::DeserializeOwned>(
             continue;
         }
         let text = fs::read_to_string(&path).expect("read contract instance");
-        let _: T = serde_yaml::from_str(&text)
+        let _: T = yaml_serde::from_str(&text)
             .unwrap_or_else(|err| panic!("deserialize {}: {err}", path.display()));
         count += 1;
     }

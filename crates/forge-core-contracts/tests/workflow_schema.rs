@@ -42,15 +42,15 @@ workflow:
 #[test]
 fn workflow_round_trips_sample_plan_sprint() {
     let doc: WorkflowDocument =
-        serde_yaml::from_str(SAMPLE_PLAN_SPRINT_YAML).expect("deserialize plan-sprint");
+        yaml_serde::from_str(SAMPLE_PLAN_SPRINT_YAML).expect("deserialize plan-sprint");
     assert_eq!(doc.workflow.id, StableId("plan-sprint".into()));
     assert_eq!(doc.workflow.phases, vec![StableId("3-plan".into())]);
     assert_eq!(doc.workflow.steps.len(), 3);
     assert_eq!(doc.workflow.outputs.len(), 2);
 
     // serialize -> deserialize -> equal (acceptance criterion).
-    let again = serde_yaml::to_string(&doc).expect("serialize");
-    let doc2: WorkflowDocument = serde_yaml::from_str(&again).expect("deserialize again");
+    let again = yaml_serde::to_string(&doc).expect("serialize");
+    let doc2: WorkflowDocument = yaml_serde::from_str(&again).expect("deserialize again");
     assert_eq!(doc, doc2, "round-trip not stable");
 }
 
@@ -59,7 +59,7 @@ fn workflow_without_phases_deserializes_to_empty_default() {
     // Workflows may carry no phase tags yet. They must still deserialize
     // cleanly, with phases defaulting to an empty set.
     let doc: WorkflowDocument =
-        serde_yaml::from_str(WORKFLOW_MISSING_PHASE_YAML).expect("deserialize no-phase");
+        yaml_serde::from_str(WORKFLOW_MISSING_PHASE_YAML).expect("deserialize no-phase");
     assert_eq!(doc.workflow.id, StableId("unassigned-workflow".into()));
     assert!(doc.workflow.phases.is_empty());
     assert!(!doc.workflow.trigger.is_empty());
@@ -69,7 +69,7 @@ fn workflow_without_phases_deserializes_to_empty_default() {
 #[test]
 fn workflow_phase_tags_categorize_via_phase_parse() {
     let doc: WorkflowDocument =
-        serde_yaml::from_str(SAMPLE_PLAN_SPRINT_YAML).expect("deserialize plan-sprint");
+        yaml_serde::from_str(SAMPLE_PLAN_SPRINT_YAML).expect("deserialize plan-sprint");
     // Every phase tag should categorize to a known Phase.
     let parsed: Vec<Phase> = doc
         .workflow
@@ -97,7 +97,7 @@ catalog:
       outputs:
         - sprint plan artifact
 "#;
-    let doc: CatalogDocument = serde_yaml::from_str(cat_yaml).expect("deserialize catalog");
+    let doc: CatalogDocument = yaml_serde::from_str(cat_yaml).expect("deserialize catalog");
     assert_eq!(doc.catalog.len(), 1);
     let entry = doc.catalog.find("plan-sprint").expect("entry present");
     assert_eq!(
@@ -108,8 +108,8 @@ catalog:
     assert_eq!(entry.phases, vec![StableId("3-plan".into())]);
 
     // round-trip
-    let again = serde_yaml::to_string(&doc).expect("serialize catalog");
-    let doc2: CatalogDocument = serde_yaml::from_str(&again).expect("deserialize again");
+    let again = yaml_serde::to_string(&doc).expect("serialize catalog");
+    let doc2: CatalogDocument = yaml_serde::from_str(&again).expect("deserialize again");
     assert_eq!(doc, doc2);
 }
 
@@ -119,7 +119,7 @@ fn catalog_entry_derives_from_workflow_fields() {
     // routing-flattened view of a workflow. This is the shape slice 2's
     // orchestrator will consume.
     let wf_doc: WorkflowDocument =
-        serde_yaml::from_str(SAMPLE_PLAN_SPRINT_YAML).expect("deserialize plan-sprint");
+        yaml_serde::from_str(SAMPLE_PLAN_SPRINT_YAML).expect("deserialize plan-sprint");
     let wf = &wf_doc.workflow;
     let entry = CatalogEntry {
         id: wf.id.clone(),
