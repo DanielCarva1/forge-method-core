@@ -42,6 +42,29 @@ const CONTRACT_DEFINITIONS: &[&str] = &[
     "contracts/runtimes/runtime-handoff-contract-v0.yaml",
 ];
 
+/// Durability tier for WAL and JSONL append paths.
+///
+/// See ADR-0009 (`opt-in-no-sync-wal-append`) for the full rationale. The
+/// default [`WalDurability::SyncOnAppend`] preserves the historical contract:
+/// every append calls `sync_all` / `sync_data` before returning, so the record
+/// is durable on disk by the time the caller sees `Ok`.
+///
+/// [`WalDurability::NoSync`] skips that `fsync`. It is intended for
+/// benchmarks, integration tests, and local dev loops where the 25–50ms
+/// Windows `fsync` cost per append is prohibitive and crash durability is not
+/// being asserted. Using `NoSync` in production loses the un-`fsync`ed tail of
+/// the WAL on power loss.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WalDurability {
+    /// Call `sync_all` / `sync_data` on every append (the default, historical
+    /// behaviour). Required for production durability.
+    #[default]
+    SyncOnAppend,
+    /// Skip `sync_all` / `sync_data` on append. Faster (no `fsync` per
+    /// record) but NOT durable on power loss. Opt-in only; see ADR-0009.
+    NoSync,
+}
+
 #[derive(Debug, Clone)]
 pub struct ReferenceIndexOptions {
     pub include_standard_runtime_projections: bool,
@@ -186,11 +209,55 @@ where
     )
 }
 
+/// Like [`append_json_line`] but lets the caller pick the [`WalDurability`]
+/// tier. See ADR-0009 for when `NoSync` is appropriate (benchmarks, tests,
+/// dev) and when it is not (production).
+///
+/// # Errors
+///
+/// Forwards [`AppendJsonLineError`] from [`append_json_line_with_lock_durability`].
+pub fn append_json_line_with_durability<T>(
+    root: impl AsRef<Path>,
+    relative_path: &str,
+    record: &T,
+    durability: WalDurability,
+) -> Result<PathBuf, AppendJsonLineError>
+where
+    T: Serialize,
+{
+    append_json_line_with_lock_durability(
+        root,
+        relative_path,
+        &append_json_line_lock_relative_path(relative_path),
+        record,
+        durability,
+    )
+}
+
 fn append_json_line_with_lock<T>(
     root: impl AsRef<Path>,
     relative_path: &str,
     lock_relative_path: &str,
     record: &T,
+) -> Result<PathBuf, AppendJsonLineError>
+where
+    T: Serialize,
+{
+    append_json_line_with_lock_durability(
+        root,
+        relative_path,
+        lock_relative_path,
+        record,
+        WalDurability::SyncOnAppend,
+    )
+}
+
+fn append_json_line_with_lock_durability<T>(
+    root: impl AsRef<Path>,
+    relative_path: &str,
+    lock_relative_path: &str,
+    record: &T,
+    durability: WalDurability,
 ) -> Result<PathBuf, AppendJsonLineError>
 where
     T: Serialize,
@@ -244,11 +311,13 @@ where
         path: target.clone(),
         source,
     })?;
-    file.sync_all()
-        .map_err(|source| AppendJsonLineError::Write {
-            path: target.clone(),
-            source,
-        })?;
+    if let WalDurability::SyncOnAppend = durability {
+        file.sync_all()
+            .map_err(|source| AppendJsonLineError::Write {
+                path: target.clone(),
+                source,
+            })?;
+    }
 
     Ok(target)
 }
