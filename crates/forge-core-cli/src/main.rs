@@ -15,7 +15,13 @@ fn main() {
                 std::process::exit(error.exit_code());
             }
         },
-        "claim" => forge_core_cli::claim::run_claim_command(&args),
+        "claim" => match forge_core_cli::claim::run_claim_command(&args) {
+            Ok(()) => {}
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(error.exit_code());
+            }
+        },
         "autonomy" => match forge_core_cli::autonomy_cmd::run_autonomy_command(&args) {
             Ok(()) => {}
             Err(error) => {
