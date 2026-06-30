@@ -722,6 +722,16 @@ fn display_path(path: &Path) -> String {
     raw.strip_prefix(r"\\?\")
         .map_or(raw.clone(), std::string::ToString::to_string)
 }
+/// Dispatch entrypoint for the `forge-core preview|ready|explain` commands.
+///
+/// Short-circuits on `--help`, otherwise parses argv and routes to the
+/// matching `run_m1_<kind>` body based on `kind`.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when argument parsing fails, and propagates
+/// the dispatcher's `ExitError::failed` when the underlying command reports
+/// a `Blocked` or otherwise non-success status.
 pub fn run_m1_command(args: &[String], kind: M1CommandKind) -> Result<(), ExitError> {
     // --help short-circuits before parsing so the parser can return a
     // fully-formed M1CommandInput on the success path.
@@ -738,6 +748,13 @@ pub fn run_m1_command(args: &[String], kind: M1CommandKind) -> Result<(), ExitEr
     }
 }
 
+/// Parses argv into a typed [`M1CommandInput`] plus a JSON flag for the
+/// `preview|ready|explain` family.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when an unknown flag is present or a value
+/// helper reports a missing/malformed argument.
 pub fn parse_m1_command_args(
     args: &[String],
     kind: M1CommandKind,
@@ -819,6 +836,18 @@ pub fn parse_m1_command_args(
     ))
 }
 
+/// Runs the `forge-core preview` command body.
+///
+/// # Errors
+///
+/// Returns `ExitError::failed` when the underlying preview returns an
+/// error or its status is `Blocked`.
+///
+/// # Panics
+///
+/// Panics in JSON mode if the preview output cannot be serialized. The
+/// output type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_m1_preview(input: &M1CommandInput, json: bool) -> Result<(), ExitError> {
     match run_preview(input) {
         Ok(output) => {
@@ -842,6 +871,18 @@ pub fn run_m1_preview(input: &M1CommandInput, json: bool) -> Result<(), ExitErro
     }
 }
 
+/// Runs the `forge-core ready` command body.
+///
+/// # Errors
+///
+/// Returns `ExitError::failed` when the underlying ready check returns an
+/// error or reports `ready == false`.
+///
+/// # Panics
+///
+/// Panics in JSON mode if the ready output cannot be serialized. The
+/// output type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_m1_ready(input: &M1CommandInput, json: bool) -> Result<(), ExitError> {
     match run_ready(input) {
         Ok(output) => {
@@ -865,6 +906,18 @@ pub fn run_m1_ready(input: &M1CommandInput, json: bool) -> Result<(), ExitError>
     }
 }
 
+/// Runs the `forge-core explain` command body.
+///
+/// # Errors
+///
+/// Returns `ExitError::failed` when the underlying explain returns an
+/// error or the trace query yields no events.
+///
+/// # Panics
+///
+/// Panics in JSON mode if the explain output cannot be serialized. The
+/// output type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_m1_explain(input: &M1CommandInput, json: bool) -> Result<(), ExitError> {
     match run_explain(input) {
         Ok(output) => {
