@@ -632,6 +632,21 @@ fn repo_relative(root: &Path, path: &Path) -> String {
         .replace('\\', "/")
 }
 #[instrument(skip_all, fields(root = tracing::field::Empty, json = tracing::field::Empty, diagnostic_count = tracing::field::Empty), level = "info")]
+/// Dispatch entrypoint for the `forge-core validate` command.
+///
+/// Loads the project at `--root` (default `.`) and prints the resulting
+/// [`ValidateSummary`] as JSON (`--json`) or human-readable text.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when an unknown flag is present or `--root`
+/// is missing a value.
+///
+/// # Panics
+///
+/// Panics in JSON mode if the validation summary cannot be serialized. The
+/// summary type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_validate_command(args: &[String]) -> Result<(), ExitError> {
     let mut root = PathBuf::from(".");
     let mut json = false;

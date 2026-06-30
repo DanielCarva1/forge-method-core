@@ -446,6 +446,15 @@ struct ProjectInitPlan {
     state_root: PathBuf,
 }
 
+/// Initializes a Forge project at `root`, creating the sidecar state tree
+/// and writing the project link file atomically.
+///
+/// # Errors
+///
+/// Returns [`ProjectInitError::RootNotFound`] when `root` does not exist,
+/// [`ProjectInitError::RootCanonicalize`] when the canonical path cannot be
+/// resolved, and variants describing an existing project link, sidecar state
+/// conflict, or atomic write failure when applicable.
 pub fn init_project(
     root: &Path,
     project_id: Option<&str>,
@@ -840,6 +849,15 @@ fn temp_project_link_path(link_path: &Path) -> PathBuf {
     link_path.with_file_name(temp_name)
 }
 
+/// Resolves a Forge project from `root`, following the `.forge-method.yaml`
+/// link file (or falling back to bootstrap-core when allowed).
+///
+/// # Errors
+///
+/// Returns [`ProjectResolveError::RootNotFound`] when `root` is missing,
+/// [`ProjectResolveError::RootCanonicalize`] when canonicalization fails,
+/// and link/state-related variants when the project link points at a
+/// non-existent or malformed state root.
 pub fn resolve_project(
     root: &Path,
     allow_bootstrap_core: bool,
