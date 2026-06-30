@@ -12,3 +12,11 @@ tracing.workspace = true
 [dev-dependencies]
 serde.workspace = true
 yaml_serde.workspace = true
+serde_yaml.workspace = true
+serde_yml.workspace = true
+criterion.workspace = true
+forge-core-contracts = { path = "../forge-core-contracts" }
+
+[[bench]]
+name = "yaml_deserialize"
+harness = false

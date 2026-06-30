@@ -66,6 +66,18 @@ do forge. Migração zero-risk confirmada empiricamente.
 - Não há mudança na serialização on-disk. Todos os `.yaml` em `contracts/`
   continuam lendo/gravando idênticos.
 
+## R6.3 — Validação empírica pós-migração (2026-06-30)
+
+Bench `criterion` em `crates/forge-core-validate/benches/yaml_deserialize.rs`
+comparou `from_str::<OperationContractDocument>` nos 3 crates candidatos
+sobre um fixture de produção de 3.025 bytes. Resultado: `yaml_serde` fica
+~7% mais lento que `serde_yaml`/`serde_yml` (~99.7µs vs ~92-93µs).
+
+Isso **não motiva reversão**: parsing de contrato não é hot path (custo
+dominante de Forge é I/O + crypto, ver R6.1/R6.2), e os ganhos de governança
+e manutenção documentados acima superam ~7µs/contrato. Detalhes e baseline
+para reavaliação futura em `r6_benchmarks.md` (R6.3).
+
 ## Lição
 
 Verificar `cargo search <crate>` para mensagens `# DEPRECATED` antes de adotar
