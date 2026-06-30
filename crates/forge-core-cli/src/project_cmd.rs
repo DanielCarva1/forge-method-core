@@ -108,6 +108,22 @@ pub enum ProjectResolveError {
     },
 }
 
+/// Payload for [`ProjectInitError::ExistingProjectLinkMismatch`].
+///
+/// Boxed at the variant to keep `ProjectInitError` small: this payload alone
+/// would dominate the enum layout (7 `String`s ~ 168 B), forcing every other
+/// variant to carry the same weight on every `Result` return.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectLinkMismatch {
+    pub path: String,
+    pub expected_project_id: String,
+    pub found_project_id: String,
+    pub expected_sidecar_root: String,
+    pub found_sidecar_root: String,
+    pub expected_state_root: String,
+    pub found_state_root: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectInitError {
     RootNotFound {
@@ -152,15 +168,7 @@ pub enum ProjectInitError {
         source: String,
         exit_reason: ExitReason,
     },
-    ExistingProjectLinkMismatch {
-        path: String,
-        expected_project_id: String,
-        found_project_id: String,
-        expected_sidecar_root: String,
-        found_sidecar_root: String,
-        expected_state_root: String,
-        found_state_root: String,
-    },
+    ExistingProjectLinkMismatch(Box<ProjectLinkMismatch>),
     ProjectLinkSerialize {
         source: String,
     },
@@ -346,17 +354,16 @@ impl fmt::Display for ProjectInitError {
                 f,
                 "existing Forge Project Link '{path}' is invalid; refusing to overwrite: {source}"
             ),
-            Self::ExistingProjectLinkMismatch {
-                path,
-                expected_project_id,
-                found_project_id,
-                expected_sidecar_root,
-                found_sidecar_root,
-                expected_state_root,
-                found_state_root,
-            } => write!(
+            Self::ExistingProjectLinkMismatch(mismatch) => write!(
                 f,
-                "existing Forge Project Link '{path}' differs; refusing to overwrite: expected project_id='{expected_project_id}', sidecar_root='{expected_sidecar_root}', state_root='{expected_state_root}' but found project_id='{found_project_id}', sidecar_root='{found_sidecar_root}', state_root='{found_state_root}'"
+                "existing Forge Project Link '{}' differs; refusing to overwrite: expected project_id='{}', sidecar_root='{}', state_root='{}' but found project_id='{}', sidecar_root='{}', state_root='{}'",
+                mismatch.path,
+                mismatch.expected_project_id,
+                mismatch.expected_sidecar_root,
+                mismatch.expected_state_root,
+                mismatch.found_project_id,
+                mismatch.found_sidecar_root,
+                mismatch.found_state_root,
             ),
             Self::ProjectLinkSerialize { source } => {
                 write!(f, "could not serialize Forge Project Link: {source}")
@@ -675,15 +682,17 @@ fn init_existing_project_link(
         || existing.sidecar_root != expected_sidecar_root
         || existing.state_root != expected_state_root
     {
-        return Err(ProjectInitError::ExistingProjectLinkMismatch {
-            path: display_path(&plan.link_path),
-            expected_project_id: plan.project_id.clone(),
-            found_project_id: existing.project_id,
-            expected_sidecar_root,
-            found_sidecar_root: existing.sidecar_root,
-            expected_state_root,
-            found_state_root: existing.state_root,
-        });
+        return Err(ProjectInitError::ExistingProjectLinkMismatch(Box::new(
+            ProjectLinkMismatch {
+                path: display_path(&plan.link_path),
+                expected_project_id: plan.project_id.clone(),
+                found_project_id: existing.project_id,
+                expected_sidecar_root,
+                found_sidecar_root: existing.sidecar_root,
+                expected_state_root,
+                found_state_root: existing.state_root,
+            },
+        )));
     }
 
     create_state_tree(&plan.state_root)?;
