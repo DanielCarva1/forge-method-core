@@ -8,7 +8,13 @@ fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     let command = args.first().map(String::as_str).unwrap_or("validate");
     match command {
-        "guide" => forge_core_cli::guide::run_guide_command(&args),
+        "guide" => match forge_core_cli::guide::run_guide_command(&args) {
+            Ok(()) => {}
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(error.exit_code());
+            }
+        },
         "claim" => forge_core_cli::claim::run_claim_command(&args),
         "autonomy" => match forge_core_cli::autonomy_cmd::run_autonomy_command(&args) {
             Ok(()) => {}

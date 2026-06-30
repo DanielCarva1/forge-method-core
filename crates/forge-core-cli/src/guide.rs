@@ -14,6 +14,8 @@ use forge_core_engine::{
 };
 use std::path::Path;
 
+use crate::cli_error::ExitError;
+
 // ============================================================================
 // guide describe — the compact routing surface (R3 token cliff, DD13).
 // ============================================================================
@@ -585,7 +587,7 @@ mod tests {
         assert_eq!(guide_value(&next_flag, 1), None);
     }
 }
-pub fn run_guide_command(args: &[String]) {
+pub fn run_guide_command(args: &[String]) -> Result<(), ExitError> {
     // Subcommand: `forge-core guide <subcommand> [...]`.
     let sub = args.get(1).map(String::as_str).unwrap_or("--help");
 
@@ -598,11 +600,11 @@ pub fn run_guide_command(args: &[String]) {
             println!("  describe [--catalog-dir <path>] [--no-json]");
             println!("  decide --decision-file <path> [--catalog-dir <path>] [--gates-file <path>] [--no-json]");
             println!("  status --phase <phase> [--catalog-dir <path>] [--no-json]");
+            Ok(())
         }
-        other => {
-            eprintln!("forge-core guide: unknown subcommand '{other}'. Try: describe | decide");
-            std::process::exit(2);
-        }
+        other => Err(ExitError::usage(format!(
+            "forge-core guide: unknown subcommand '{other}'. Try: describe | decide"
+        ))),
     }
 }
 
@@ -612,22 +614,26 @@ pub fn guide_value(args: &[String], idx: usize) -> Option<&str> {
         .map(String::as_str)
 }
 
-pub fn require_guide_value(args: &[String], idx: usize, subcommand: &str, flag: &str) -> String {
+pub fn require_guide_value(
+    args: &[String],
+    idx: usize,
+    subcommand: &str,
+    flag: &str,
+) -> Result<String, ExitError> {
     match guide_value(args, idx) {
-        Some(value) => value.to_owned(),
-        None => {
-            eprintln!("guide {subcommand}: --{flag} requires a value");
-            std::process::exit(3);
-        }
+        Some(value) => Ok(value.to_owned()),
+        None => Err(ExitError::invalid_value(format!(
+            "guide {subcommand}: --{flag} requires a value"
+        ))),
     }
 }
 
-pub fn reject_unknown_guide_arg(subcommand: &str, arg: &str) -> ! {
+pub fn reject_unknown_guide_arg(subcommand: &str, arg: &str) -> ExitError {
     eprintln!("guide {subcommand}: unrecognized argument '{arg}'");
-    std::process::exit(3);
+    ExitError::invalid_value(format!("guide {subcommand}: unrecognized argument '{arg}'"))
 }
 
-pub fn run_guide_describe(args: &[String]) {
+pub fn run_guide_describe(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::CliEnvelope;
 
     let mut catalog_dir: Option<std::path::PathBuf> = None;
@@ -642,23 +648,23 @@ pub fn run_guide_describe(args: &[String]) {
                     idx,
                     "describe",
                     "catalog-dir",
-                )));
+                )?));
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
                 println!("forge-core guide describe [--catalog-dir <path>] [--no-json]");
-                return;
+                return Ok(());
             }
-            other => reject_unknown_guide_arg("describe", other),
+            other => return Err(reject_unknown_guide_arg("describe", other)),
         }
         idx += 1;
     }
 
     let env: CliEnvelope<DescribePayload> = run_describe(catalog_dir.as_deref());
-    emit_guide(env, want_json);
+    emit_guide(env, want_json)
 }
 
-pub fn run_guide_decide(args: &[String]) {
+pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::CliEnvelope;
 
     let mut decision_file: Option<std::path::PathBuf> = None;
@@ -675,7 +681,7 @@ pub fn run_guide_decide(args: &[String]) {
                     idx,
                     "decide",
                     "decision-file",
-                )));
+                )?));
             }
             "--catalog-dir" => {
                 idx += 1;
@@ -684,7 +690,7 @@ pub fn run_guide_decide(args: &[String]) {
                     idx,
                     "decide",
                     "catalog-dir",
-                )));
+                )?));
             }
             "--gates-file" => {
                 idx += 1;
@@ -693,22 +699,22 @@ pub fn run_guide_decide(args: &[String]) {
                     idx,
                     "decide",
                     "gates-file",
-                )));
+                )?));
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
                 println!("forge-core guide decide --decision-file <path> [--catalog-dir <path>] [--gates-file <path>] [--no-json]");
-                return;
+                return Ok(());
             }
-            other => reject_unknown_guide_arg("decide", other),
+            other => return Err(reject_unknown_guide_arg("decide", other)),
         }
         idx += 1;
     }
 
-    let Some(decision_file) = decision_file else {
+    let decision_file = decision_file.ok_or_else(|| {
         eprintln!("guide decide: --decision-file is required");
-        std::process::exit(3);
-    };
+        ExitError::invalid_value("guide decide: --decision-file is required")
+    })?;
 
     // Gates are optional (only needed for phase transitions). Loaded from a simple
     // YAML file: [{gate_kind: system-design, status: pass}, ...].
@@ -716,10 +722,10 @@ pub fn run_guide_decide(args: &[String]) {
 
     let env: CliEnvelope<DecideAccepted> =
         run_decide(&decision_file, catalog_dir.as_deref(), &gates);
-    emit_guide(env, want_json);
+    emit_guide(env, want_json)
 }
 
-pub fn run_guide_status(args: &[String]) {
+pub fn run_guide_status(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::CliEnvelope;
 
     let mut phase: Option<String> = None;
@@ -730,7 +736,7 @@ pub fn run_guide_status(args: &[String]) {
         match args[idx].as_str() {
             "--phase" => {
                 idx += 1;
-                phase = Some(require_guide_value(args, idx, "status", "phase"));
+                phase = Some(require_guide_value(args, idx, "status", "phase")?);
             }
             "--catalog-dir" => {
                 idx += 1;
@@ -739,27 +745,27 @@ pub fn run_guide_status(args: &[String]) {
                     idx,
                     "status",
                     "catalog-dir",
-                )));
+                )?));
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
                 println!(
                     "forge-core guide status --phase <phase> [--catalog-dir <path>] [--no-json]"
                 );
-                return;
+                return Ok(());
             }
-            other => reject_unknown_guide_arg("status", other),
+            other => return Err(reject_unknown_guide_arg("status", other)),
         }
         idx += 1;
     }
 
-    let Some(phase) = phase else {
+    let phase = phase.ok_or_else(|| {
         eprintln!("guide status: --phase is required");
-        std::process::exit(3);
-    };
+        ExitError::invalid_value("guide status: --phase is required")
+    })?;
 
     let env: CliEnvelope<StatusPayload> = run_status(catalog_dir.as_deref(), &phase);
-    emit_guide(env, want_json);
+    emit_guide(env, want_json)
 }
 
 /// Parse the gates-file into ProvidedGateResult rows. Empty/absent = no gates provided.
@@ -800,8 +806,12 @@ pub fn load_gates(path: Option<&std::path::Path>) -> Vec<forge_core_engine::Prov
         .collect()
 }
 
-/// Emit a guide envelope to stdout (JSON) or stderr (text) and exit with the envelope's code.
-pub fn emit_guide<T: serde::Serialize>(env: forge_core_contracts::CliEnvelope<T>, want_json: bool) {
+/// Emit a guide envelope to stdout (JSON) or stderr (text) and propagate
+/// the envelope's exit code as an ExitError when non-zero.
+pub fn emit_guide<T: serde::Serialize>(
+    env: forge_core_contracts::CliEnvelope<T>,
+    want_json: bool,
+) -> Result<(), ExitError> {
     let code = env.exit_code();
     if want_json {
         println!("{}", serde_json::to_string_pretty(&env).unwrap());
@@ -814,5 +824,9 @@ pub fn emit_guide<T: serde::Serialize>(env: forge_core_contracts::CliEnvelope<T>
                 .unwrap_or("unknown")
         );
     }
-    std::process::exit(code);
+    if code == 0 {
+        Ok(())
+    } else {
+        Err(ExitError::with_code(code, String::new()))
+    }
 }
