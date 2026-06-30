@@ -10,8 +10,9 @@ use forge_core_contracts::{
 };
 use forge_core_runtime::{
     command_execution_evidence_record, plan_operation, plan_operation_with_snapshot,
-    prepare_effect_transaction, preview_operation_with_snapshot, ready_operation_with_snapshot,
-    ready_runtime_plan, run_staged_read_only_command, stage_operation_effects,
+    prepare_effect_transaction, preview_operation_with_snapshot, preview_runtime_plan,
+    ready_operation_with_snapshot, ready_runtime_plan, run_staged_read_only_command,
+    stage_operation_effects,
     CommandExecutionContext, RuntimeCommandExecutionReason, RuntimeCommandExecutionStatus,
     RuntimeEffectPayload, RuntimeEffectPayloadKind, RuntimeEffectStagingReason,
     RuntimeEffectStagingStatus, RuntimeEffectTransactionReason, RuntimeEffectTransactionStatus,
@@ -352,6 +353,12 @@ fn ready_report_fails_closed_for_pending_gate_even_without_required_gate() {
         .contains(&RuntimeReadyBlocker::GatePending));
     assert!(preview.blockers.contains(&RuntimeReadyBlocker::GatePending));
     assert_eq!(preview.risk_level, RuntimeRiskLevel::Blocked);
+    // Regression for the preview_status/blockers integrity bug (F01.1):
+    // a nominally-Ready plan with ready-blockers must surface as Blocked, and
+    // the human must receive guidance. Previously status was Ready while
+    // risk_level was Blocked and next_human_action was None.
+    assert_eq!(preview.status, RuntimePreviewStatus::Blocked);
+    assert!(preview.next_human_action.is_some());
 }
 
 #[test]
@@ -394,6 +401,9 @@ fn ready_report_fails_closed_for_unknown_gate_status_even_without_required_gate(
         .blockers
         .contains(&RuntimeReadyBlocker::RequiredGateStatusUnknown));
     assert_eq!(preview.risk_level, RuntimeRiskLevel::Blocked);
+    // Regression for the preview_status/blockers integrity bug (F01.1).
+    assert_eq!(preview.status, RuntimePreviewStatus::Blocked);
+    assert!(preview.next_human_action.is_some());
 }
 
 #[test]
@@ -413,6 +423,32 @@ fn ready_runtime_plan_fails_closed_without_host_call_evidence() {
         .evidence
         .iter()
         .any(|item| item.kind == RuntimeReadyEvidenceKind::PlanReason && item.detail == "none"));
+}
+
+#[test]
+fn preview_status_agrees_with_risk_when_plan_is_nominally_ready_but_blocked() {
+    // Regression test for the F01.1 integrity bug: preview_status previously
+    // ignored blockers, so a Ready plan with MissingHostCallEvidence surfaced
+    // as status=Ready while risk_level=Blocked. next_human_action was None.
+    // After F01.1, preview.status and risk_level must agree, and the human
+    // must receive guidance.
+    let document = fixture("mechanical-story-execute.yaml");
+    let mut plan = plan_operation(&document);
+    plan.reasons.clear(); // removes HostCallAllowed -> MissingHostCallEvidence blocker
+
+    let preview = preview_runtime_plan(&plan);
+
+    assert_eq!(plan.status, RuntimePlanStatus::ReadyToCallOperation);
+    assert!(preview
+        .blockers
+        .contains(&RuntimeReadyBlocker::MissingHostCallEvidence));
+    assert_eq!(preview.status, RuntimePreviewStatus::Blocked);
+    assert_eq!(preview.risk_level, RuntimeRiskLevel::Blocked);
+    assert!(
+        preview.next_human_action.is_some(),
+        "Blocked preview must guide the human; got {:?}",
+        preview.next_human_action
+    );
 }
 
 #[test]
