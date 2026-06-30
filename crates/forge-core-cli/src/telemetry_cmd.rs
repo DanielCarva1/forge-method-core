@@ -1069,6 +1069,15 @@ fn risk_level_name(kind: forge_core_trace::TraceRiskLevel) -> &'static str {
         forge_core_trace::TraceRiskLevel::Blocked => "blocked",
     }
 }
+/// Dispatch entrypoint for the `forge-core telemetry` subcommand tree.
+///
+/// Routes to `export` based on `args[1]`, and prints usage on `--help` /
+/// unknown subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when the subcommand is unknown or argument
+/// parsing fails.
 pub fn run_telemetry_command(args: &[String]) -> Result<(), ExitError> {
     let subcommand = args.get(1).map_or("--help", String::as_str);
     match subcommand {
@@ -1090,6 +1099,14 @@ pub fn run_telemetry_command(args: &[String]) -> Result<(), ExitError> {
     }
 }
 
+/// Parses argv into a typed [`TelemetryExportCommandInput`] plus a JSON flag.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when an unknown flag is present, or
+/// `ExitError::invalid_value` when more than one mutually exclusive filter
+/// (`--trace-id`, `--run-id`, `--latest-run`) is provided, or when any
+/// underlying value helper reports a missing or malformed value.
 pub fn parse_telemetry_export_args(
     args: &[String],
 ) -> Result<(TelemetryExportCommandInput, bool), ExitError> {
@@ -1174,6 +1191,13 @@ pub fn parse_telemetry_export_args(
     ))
 }
 
+/// Reads the value at `args[index]`, rejecting missing slots and values
+/// that look like the next flag.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `index` is out of bounds or the
+/// value at `index` starts with `-`.
 pub fn next_telemetry_value_or_err<'a>(
     args: &'a [String],
     index: usize,
@@ -1190,6 +1214,12 @@ pub fn next_telemetry_value_or_err<'a>(
     Ok(value.as_str())
 }
 
+/// Parses a CLI string into a [`TelemetryExportFormat`].
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `value` is not one of the
+/// recognised aliases (`jsonl`, `otel-json`).
 pub fn parse_telemetry_format_or_err(value: &str) -> Result<TelemetryExportFormat, ExitError> {
     match value {
         "jsonl" | "forge-jsonl" => Ok(TelemetryExportFormat::Jsonl),
@@ -1200,6 +1230,18 @@ pub fn parse_telemetry_format_or_err(value: &str) -> Result<TelemetryExportForma
     }
 }
 
+/// Runs the `forge-core telemetry export` subcommand body.
+///
+/// # Errors
+///
+/// Returns `ExitError::env_config` when the underlying export returns an
+/// error (e.g. cannot resolve the trace store).
+///
+/// # Panics
+///
+/// Panics in JSON mode if the export output cannot be serialized. The
+/// output type derives `Serialize`, so this is a programming error and
+/// never occurs on valid input.
 pub fn run_telemetry_export(
     input: &TelemetryExportCommandInput,
     json: bool,
