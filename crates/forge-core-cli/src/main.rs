@@ -51,9 +51,23 @@ fn main() {
             }
         }
         "rebuild-effect-index" => {
-            forge_core_cli::effect_index::run_rebuild_effect_index_command(&args)
+            match forge_core_cli::effect_index::run_rebuild_effect_index_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
         }
-        "query-effect-index" => forge_core_cli::effect_index::run_query_effect_index_command(&args),
+        "query-effect-index" => {
+            match forge_core_cli::effect_index::run_query_effect_index_command(&args) {
+                Ok(()) => {}
+                Err(error) => {
+                    eprintln!("{error}");
+                    std::process::exit(error.exit_code());
+                }
+            }
+        }
         "host-adapter-manifest" => {
             host_adapter_policy_cmd::run_host_adapter_manifest_command(&args)
         }
