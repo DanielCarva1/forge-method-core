@@ -59,12 +59,17 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
       - Alvos: `parse_rekor_log_entry`, `parse_signed_checkpoint`,
         `claim_wal_decode`, `ocsp_response_decode`
       - DoD: `cargo fuzz run <target> -- -max_total_time=60` sem panic
-- [ ] **R6** — Benchmarks (`criterion`)
-      - `claim_wal.rs`: append 1/100/1000 entries, replay, CRC verify
-      - `build_reference_index` em repo de tamanho variado
-      - `verify_rekor_checkpoint`, `verify_merkle_inclusion`
-      - `serde_yaml::from_str` vs `serde_yml::from_str` (pós-R7)
-      - CI: bench em PR com label `perf` compara com main
+- [x] **R6.1** — Benchmarks (`criterion`) store hot paths ✅
+      - `claim_wal.rs`: append 1/100/1000 entries (32ms / 37ms / 41ms)
+      - `claim_wal.rs`: replay 1/100/1000 (157µs / 719µs / 7.2ms)
+      - `reference_index.rs`: workspace (~1.5ms) + minimal (~205µs)
+      - Achado: fsync Windows é durability-bound (25–50ms), não bug
+      - Ver `progress/r6_benchmarks.md`
+- [ ] **R6.2** — Benchmarks crypto hot paths
+      - `verify_rekor_checkpoint`, `verify_merkle_inclusion`, parse+verify combinados
+      - Em `crates/forge-core-crypto/benches/`
+- [ ] **R6.3** — Benchmarks `serde_yaml::from_str` vs `serde_yml::from_str` (pós-R7)
+- [ ] **R6.4** — CI: bench em PR com label `perf` compara com main
 - [ ] **R5** — `zeroize` em material cripto
       - Inventariar `VerifyingKey`, `ed25519_dalek::VerifyingKey`, sig brutas, nonces
         OCSP, payload pré-hash
@@ -175,7 +180,7 @@ Fase 3 (R3) ─────────────────────► [
    ├── R3.4 eprintln migration
    │
    ▼
-Fase 4 (R6 + R4) ────────────────► [PRÓXIMA]
+Fase 4 (R6.1 ✅ + R4 + R6.2) ─────► [R6.1 DONE; R4 próximo]
    │  benchmarks + fuzz
    │  (valida "rápido" e "performativo")
    ▼
