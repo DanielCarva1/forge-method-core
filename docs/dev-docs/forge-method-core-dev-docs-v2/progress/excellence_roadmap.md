@@ -14,7 +14,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 |---|---|---|---|
 | Rápido | 7 | 10 | Benchmarks crypto R6.2 completos (~420µs verify, ~6µs parse) |
 | Robusto | 10 | 10 | Tracing completo; zero Result<_,String>; R5 zeroize completo (R5.1-R5.11) |
-| Performativo | 7 | 10 | Crypto + store benchmarks medidos; CI perf workflow adicionado (R6.4) |
+| Performativo | 7.5 | 10 | `--no-sync` cobre claim + execute-operation + rebuild-effect-index (F15.7b-extend); crypto + store benchmarks medidos (R6.1, R6.2); CI perf workflow (R6.4). Falta R6.3 (serde bench) e medição em regression suite |
 | Protocolo guia | 10 | 10 | F04 ✅ fechado (validate + dry-run + 34 E2E tests); F01 bugs críticos fechados |
 | Workflows | 7 | 10 | WAL/claim ok, mas F11/F13 não existem |
 | Agente guia humano | 9 | 10 | F01 bugs de integridade fechados; rollback_available real |
@@ -234,8 +234,9 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
       - [x] F15.6 — validar critério F15 (2 edit points) (`6ebba3e`)
       - [x] F15.7a — `WalDurability` enum + APIs `_with_durability` + ADR-0009 (`c2df8c4`)
       - [x] F15.7b — CLI threading `--no-sync` no claim surface (`7474139`)
-      - Follow-up (não bloqueia F15): F15.7b-extend — replicar `--no-sync` em
-        `execute-operation`, `rebuild-effect-index`, `query-effect-index`
+      - [x] F15.7b-extend — Replicar `--no-sync` em `execute-operation` +
+            `rebuild-effect-index` (commits `c2d2571`, `ba049f3`, `a21666d`).
+            `query-effect-index` excluído (read-only). ADR-0009 amended.
 
 ### Trilha C — Features P1 da comunidade
 
