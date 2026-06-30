@@ -54,9 +54,27 @@ fn main() {
         "graph" => forge_core_cli::graph_cmd::run_graph_command(&args),
         "eval" => forge_core_cli::eval_cmd::run_eval_command(&args),
         "telemetry" => forge_core_cli::telemetry_cmd::run_telemetry_command(&args),
-        "preview" => forge_core_cli::m1_cmd::run_m1_command(&args, M1CommandKind::Preview),
-        "ready" => forge_core_cli::m1_cmd::run_m1_command(&args, M1CommandKind::Ready),
-        "explain" => forge_core_cli::m1_cmd::run_m1_command(&args, M1CommandKind::Explain),
+        "preview" => match forge_core_cli::m1_cmd::run_m1_command(&args, M1CommandKind::Preview) {
+            Ok(()) => {}
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(error.exit_code());
+            }
+        },
+        "ready" => match forge_core_cli::m1_cmd::run_m1_command(&args, M1CommandKind::Ready) {
+            Ok(()) => {}
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(error.exit_code());
+            }
+        },
+        "explain" => match forge_core_cli::m1_cmd::run_m1_command(&args, M1CommandKind::Explain) {
+            Ok(()) => {}
+            Err(error) => {
+                eprintln!("{error}");
+                std::process::exit(error.exit_code());
+            }
+        },
         "validate" => match forge_core_cli::validate::run_validate_command(&args) {
             Ok(()) => {}
             Err(error) => {
