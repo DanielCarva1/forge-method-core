@@ -23,6 +23,12 @@ const AUTONOMY_COMMAND: &str = "autonomy";
 const ROUTE_COMMAND: &str = "autonomy route";
 
 /// Parse and run `forge-core autonomy <subcommand>`.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when the subcommand is unknown or argument
+/// parsing fails. Sub-command dispatchers may surface their own
+/// `ExitError::with_code` variants via envelope emission.
 pub fn run_autonomy_command(args: &[String]) -> Result<(), ExitError> {
     let sub = args.get(1).map_or("--help", String::as_str);
     match sub {
@@ -42,6 +48,12 @@ pub fn run_autonomy_command(args: &[String]) -> Result<(), ExitError> {
 }
 
 /// Handler for `forge-core autonomy route`.
+///
+/// # Errors
+///
+/// Returns `ExitError::with_code` (via envelope emission) when argument
+/// parsing fails or when contract loading fails (missing/unreadable
+/// `--policy-file`, malformed YAML, etc.).
 pub fn run_route(args: &[String]) -> Result<(), ExitError> {
     let options = match parse_route_args(args) {
         Ok(RouteParseOutcome::Help) => {
