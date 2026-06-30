@@ -16,9 +16,11 @@
 
 use std::path::PathBuf;
 
+use crate::cli_error::ExitError;
 use crate::cli_util::{
-    next_arg, next_path, parse_metadata_adapter_trigger, parse_metadata_consumer_use,
-    parse_runtime_kind, parse_target_kind, parse_usize, resolve_stateful_roots_or_exit, usage,
+    next_arg_or_err, next_path_or_err, parse_metadata_adapter_trigger_or_err,
+    parse_metadata_consumer_use_or_err, parse_runtime_kind_or_err, parse_target_kind_or_err,
+    parse_usize_or_err, resolve_stateful_roots_or_err, usage,
 };
 use forge_core_contracts::{tool_effect::EffectTargetKind, StableId};
 use forge_core_store::{
@@ -120,7 +122,7 @@ pub fn run_query_effect_index_context(
     let query_result = run_query_effect_index(input);
     build_effect_metadata_context(&query_result, &context_options)
 }
-pub fn run_rebuild_effect_index_command(args: &[String]) {
+pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError> {
     let mut input = RebuildEffectIndexInput::default();
     let mut allow_bootstrap_core = false;
     let mut json = false;
@@ -129,42 +131,44 @@ pub fn run_rebuild_effect_index_command(args: &[String]) {
         match args[index].as_str() {
             "--root" => {
                 index += 1;
-                input.root = next_path(args, index);
+                input.root = next_path_or_err(args, index)?;
             }
             "--wal" => {
                 index += 1;
-                input.wal_relative_path = next_arg(args, index).to_string();
+                input.wal_relative_path = next_arg_or_err(args, index)?.to_string();
             }
             "--index" => {
                 index += 1;
-                input.index_relative_path = next_arg(args, index).to_string();
+                input.index_relative_path = next_arg_or_err(args, index)?.to_string();
             }
             "--lock" => {
                 index += 1;
-                input.lock_relative_path = next_arg(args, index).to_string();
+                input.lock_relative_path = next_arg_or_err(args, index)?.to_string();
             }
             "--allow-bootstrap-core" => {
                 allow_bootstrap_core = true;
             }
             "--recorded-at" => {
                 index += 1;
-                input.recorded_at = Some(next_arg(args, index).to_string());
+                input.recorded_at = Some(next_arg_or_err(args, index)?.to_string());
             }
             "--json" => json = true,
             "--help" | "-h" => {
                 println!("{}", usage());
-                return;
+                return Ok(());
             }
             _ => {
-                eprintln!("{}", usage());
-                std::process::exit(2);
+                return Err(ExitError::usage(usage()));
             }
         }
         index += 1;
     }
 
-    let roots =
-        resolve_stateful_roots_or_exit("rebuild-effect-index", &input.root, allow_bootstrap_core);
+    let roots = resolve_stateful_roots_or_err(
+        "rebuild-effect-index",
+        &input.root,
+        allow_bootstrap_core,
+    )?;
     input.root = roots.effect_store_root;
 
     let result = run_rebuild_effect_index(input);
@@ -180,11 +184,12 @@ pub fn run_rebuild_effect_index_command(args: &[String]) {
         );
     }
     if result.status == forge_core_store::EffectTargetMetadataIndexRebuildStatus::Failed {
-        std::process::exit(1);
+        return Err(ExitError::failed("effect index rebuild failed"));
     }
+    Ok(())
 }
 
-pub fn run_query_effect_index_command(args: &[String]) {
+pub fn run_query_effect_index_command(args: &[String]) -> Result<(), ExitError> {
     let mut input = QueryEffectIndexInput::default();
     let mut allow_bootstrap_core = false;
     let mut json = false;
@@ -194,31 +199,32 @@ pub fn run_query_effect_index_command(args: &[String]) {
         match args[index].as_str() {
             "--root" => {
                 index += 1;
-                input.root = next_path(args, index);
+                input.root = next_path_or_err(args, index)?;
             }
             "--index" => {
                 index += 1;
-                input.index_relative_path = next_arg(args, index).to_string();
+                input.index_relative_path = next_arg_or_err(args, index)?.to_string();
             }
             "--logical-ref" => {
                 index += 1;
-                input.logical_ref = Some(next_arg(args, index).to_string());
+                input.logical_ref = Some(next_arg_or_err(args, index)?.to_string());
             }
             "--effect-id" => {
                 index += 1;
-                input.effect_id = Some(next_arg(args, index).to_string());
+                input.effect_id = Some(next_arg_or_err(args, index)?.to_string());
             }
             "--operation-id" => {
                 index += 1;
-                input.operation_id = Some(next_arg(args, index).to_string());
+                input.operation_id = Some(next_arg_or_err(args, index)?.to_string());
             }
             "--target-kind" => {
                 index += 1;
-                input.target_kind = Some(parse_target_kind(next_arg(args, index)));
+                input.target_kind = Some(parse_target_kind_or_err(next_arg_or_err(args, index)?)?);
             }
             "--consumer-use" => {
                 index += 1;
-                input.consumer_use = parse_metadata_consumer_use(next_arg(args, index));
+                input.consumer_use =
+                    parse_metadata_consumer_use_or_err(next_arg_or_err(args, index)?)?;
             }
             "--context" => context = true,
             "--allow-bootstrap-core" => {
@@ -226,39 +232,46 @@ pub fn run_query_effect_index_command(args: &[String]) {
             }
             "--max-context-groups" => {
                 index += 1;
-                input.context_options.max_groups = parse_usize(next_arg(args, index));
+                input.context_options.max_groups =
+                    parse_usize_or_err(next_arg_or_err(args, index)?)?;
             }
             "--adapter-kind" => {
                 index += 1;
                 input.context_options.adapter_kind =
-                    Some(parse_runtime_kind(next_arg(args, index)));
+                    Some(parse_runtime_kind_or_err(next_arg_or_err(args, index)?)?);
             }
             "--adapter-trigger" => {
                 index += 1;
                 input.context_options.adapter_trigger =
-                    parse_metadata_adapter_trigger(next_arg(args, index));
+                    parse_metadata_adapter_trigger_or_err(next_arg_or_err(args, index)?)?;
             }
             "--latest" => input.latest_per_target = true,
             "--json" => json = true,
             "--help" | "-h" => {
                 println!("{}", usage());
-                return;
+                return Ok(());
             }
             _ => {
-                eprintln!("{}", usage());
-                std::process::exit(2);
+                return Err(ExitError::usage(usage()));
             }
         }
         index += 1;
     }
 
-    let roots =
-        resolve_stateful_roots_or_exit("query-effect-index", &input.root, allow_bootstrap_core);
+    let roots = resolve_stateful_roots_or_err(
+        "query-effect-index",
+        &input.root,
+        allow_bootstrap_core,
+    )?;
     input.root = roots.effect_store_root;
-    emit_query_effect_index_result(input, context, json);
+    emit_query_effect_index_result(input, context, json)
 }
 
-pub fn emit_query_effect_index_result(input: QueryEffectIndexInput, context: bool, json: bool) {
+pub fn emit_query_effect_index_result(
+    input: QueryEffectIndexInput,
+    context: bool,
+    json: bool,
+) -> Result<(), ExitError> {
     if context {
         let result = run_query_effect_index_context(input);
         if json {
@@ -273,9 +286,9 @@ pub fn emit_query_effect_index_result(input: QueryEffectIndexInput, context: boo
             );
         }
         if result.source_status == forge_core_store::EffectTargetMetadataIndexQueryStatus::Failed {
-            std::process::exit(1);
+            return Err(ExitError::failed("effect index context query failed"));
         }
-        return;
+        return Ok(());
     }
 
     let result = run_query_effect_index(input);
@@ -295,6 +308,7 @@ pub fn emit_query_effect_index_result(input: QueryEffectIndexInput, context: boo
         );
     }
     if result.status == forge_core_store::EffectTargetMetadataIndexQueryStatus::Failed {
-        std::process::exit(1);
+        return Err(ExitError::failed("effect index query failed"));
     }
+    Ok(())
 }
