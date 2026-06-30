@@ -34,8 +34,10 @@ use forge_core_runtime::{
 };
 use forge_core_store::build_reference_index;
 
+use crate::cli_error::ExitError;
 use crate::cli_util::{
-    next_arg, next_path, parse_payload_arg, parse_u64, resolve_stateful_roots_or_exit, usage,
+    next_arg_or_err, next_path_or_err, parse_payload_arg_or_err, parse_u64_or_err,
+    resolve_stateful_roots_or_err, usage,
 };
 use crate::hex_sha256;
 
@@ -388,7 +390,7 @@ fn repo_relative_checked(root: &Path, path: &Path) -> Result<String, ExecuteOper
             path: path.to_path_buf(),
         })
 }
-pub fn run_execute_operation_command(args: &[String]) {
+pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
     let mut root = PathBuf::from(".");
     let mut operation_path: Option<PathBuf> = None;
     let mut command_paths = Vec::new();
@@ -404,27 +406,27 @@ pub fn run_execute_operation_command(args: &[String]) {
         match args[index].as_str() {
             "--root" => {
                 index += 1;
-                root = next_path(args, index);
+                root = next_path_or_err(args, index)?;
             }
             "--operation" => {
                 index += 1;
-                operation_path = Some(next_path(args, index));
+                operation_path = Some(next_path_or_err(args, index)?);
             }
             "--command" => {
                 index += 1;
-                command_paths.push(next_path(args, index));
+                command_paths.push(next_path_or_err(args, index)?);
             }
             "--effect" => {
                 index += 1;
-                effect_paths.push(next_path(args, index));
+                effect_paths.push(next_path_or_err(args, index)?);
             }
             "--payload" => {
                 index += 1;
-                payloads.push(parse_payload_arg(next_arg(args, index)));
+                payloads.push(parse_payload_arg_or_err(next_arg_or_err(args, index)?)?);
             }
             "--max-payload-bytes" => {
                 index += 1;
-                payload_policy.max_payload_bytes = parse_u64(next_arg(args, index));
+                payload_policy.max_payload_bytes = parse_u64_or_err(next_arg_or_err(args, index)?)?;
             }
             "--allow-payload-outside-root" => {
                 payload_policy.allow_outside_root = true;
@@ -434,30 +436,28 @@ pub fn run_execute_operation_command(args: &[String]) {
             }
             "--recorded-at" => {
                 index += 1;
-                recorded_at = next_arg(args, index).to_string();
+                recorded_at = next_arg_or_err(args, index)?.to_string();
             }
             "--tx-id-prefix" => {
                 index += 1;
-                tx_id_prefix = next_arg(args, index).to_string();
+                tx_id_prefix = next_arg_or_err(args, index)?.to_string();
             }
             "--json" => json = true,
             "--help" | "-h" => {
                 println!("{}", usage());
-                return;
+                return Ok(());
             }
             _ => {
-                eprintln!("{}", usage());
-                std::process::exit(2);
+                return Err(ExitError::usage(usage()));
             }
         }
         index += 1;
     }
 
     let Some(operation_path) = operation_path else {
-        eprintln!("{}", usage());
-        std::process::exit(2);
+        return Err(ExitError::usage(usage()));
     };
-    let roots = resolve_stateful_roots_or_exit("execute-operation", &root, allow_bootstrap_core);
+    let roots = resolve_stateful_roots_or_err("execute-operation", &root, allow_bootstrap_core)?;
     let input = ExecuteOperationInput {
         root: roots.project_root,
         effect_store_root: Some(roots.effect_store_root),
@@ -472,8 +472,7 @@ pub fn run_execute_operation_command(args: &[String]) {
     let execution = match run_execute_operation(input) {
         Ok(execution) => execution,
         Err(error) => {
-            eprintln!("execute-operation failed: {error}");
-            std::process::exit(1);
+            return Err(ExitError::failed(format!("execute-operation failed: {error}")));
         }
     };
     if json {
@@ -488,6 +487,7 @@ pub fn run_execute_operation_command(args: &[String]) {
         );
     }
     if execution.status != forge_core_runtime::RuntimeOperationExecutionStatus::Completed {
-        std::process::exit(1);
+        return Err(ExitError::failed("execution did not complete"));
     }
+    Ok(())
 }
