@@ -16,6 +16,7 @@ use forge_core_contracts::{
     RepoPath, ScopeId, StableId,
 };
 use forge_core_engine::AcquireRequest;
+use forge_core_store::WalDurability;
 use std::path::PathBuf;
 
 fn tmp_claims_dir(label: &str) -> PathBuf {
@@ -49,7 +50,7 @@ const NOW: i64 = 1_800_000_000;
 fn owner_write_into_own_claimed_path_is_allowed() {
     let dir = tmp_claims_dir("owner");
     let req = acquire_req("alice", &["contracts/stories/S5.0.yaml"]);
-    let acquired = run_acquire(&dir, &req, NOW);
+    let acquired = run_acquire(&dir, &req, NOW, WalDurability::NoSync);
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
 
     let check = run_check_write(
@@ -67,7 +68,7 @@ fn owner_write_into_own_claimed_path_is_allowed() {
 fn peer_write_into_claimed_path_is_blocked() {
     let dir = tmp_claims_dir("peer");
     let req = acquire_req("alice", &["contracts/stories/S5.0.yaml"]);
-    let _ = run_acquire(&dir, &req, NOW);
+    let _ = run_acquire(&dir, &req, NOW, WalDurability::NoSync);
 
     // Bob is NOT alice and did not acquire anything.
     let check = run_check_write(
@@ -103,7 +104,7 @@ fn peer_write_into_claimed_path_is_blocked() {
 fn write_into_unclaimed_path_is_blocked_until_claimed() {
     let dir = tmp_claims_dir("ungov");
     let req = acquire_req("alice", &["contracts/stories/S5.0.yaml"]);
-    let _ = run_acquire(&dir, &req, NOW);
+    let _ = run_acquire(&dir, &req, NOW, WalDurability::NoSync);
 
     // A totally different path is governed by no claim.
     let check = run_check_write(
@@ -135,8 +136,8 @@ fn two_agents_non_overlapping_claims_both_write_freely() {
         scope_id: ScopeId("S5.1".to_string()),
         ..acquire_req("bob", &["src/feature_b.rs"])
     };
-    let a = run_acquire(&dir, &alice_req, NOW);
-    let b = run_acquire(&dir, &bob_req, NOW);
+    let a = run_acquire(&dir, &alice_req, NOW, WalDurability::NoSync);
+    let b = run_acquire(&dir, &bob_req, NOW, WalDurability::NoSync);
     assert!(a.ok && b.ok, "both disjoint acquires must succeed");
 
     // Each agent writes its own file — neither is blocked by the other.
@@ -171,7 +172,7 @@ fn released_claim_no_longer_blocks_peer_but_write_still_requires_claim() {
     // blocked by alice, but still must acquire his own claim before writing.
     let dir = tmp_claims_dir("released");
     let req = acquire_req("alice", &["contracts/stories/S5.0.yaml"]);
-    let acquired = run_acquire(&dir, &req, NOW);
+    let acquired = run_acquire(&dir, &req, NOW, WalDurability::NoSync);
     let claim_id = match acquired.data {
         Some(d) => d.claim_id,
         None => panic!("expected claim id"),
@@ -181,6 +182,7 @@ fn released_claim_no_longer_blocks_peer_but_write_still_requires_claim() {
         &StableId(claim_id),
         &StableId("alice".to_string()),
         NOW,
+        WalDurability::NoSync,
     );
 
     let check = run_check_write(
@@ -204,7 +206,7 @@ fn released_claim_no_longer_blocks_peer_but_write_still_requires_claim() {
         scope_id: ScopeId("S5.1".to_string()),
         ..acquire_req("bob", &["contracts/stories/S5.0.yaml"])
     };
-    let bob_claim = run_acquire(&dir, &bob_req, NOW + 1);
+    let bob_claim = run_acquire(&dir, &bob_req, NOW + 1, WalDurability::NoSync);
     assert!(
         bob_claim.ok,
         "bob should be able to claim released path: {:?}",
