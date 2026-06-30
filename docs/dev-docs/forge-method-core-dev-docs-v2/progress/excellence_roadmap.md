@@ -111,26 +111,37 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
         e copiar campos sensíveis para `Zeroizing<>` no caller
       - Sub-tasks em 3 fases:
       - FASE A (não-breaking):
-      - [ ] R5.1 Workspace deps: adicionar `zeroize = { version = "1.9",
+      - [x] R5.1 Workspace deps: adicionar `zeroize = { version = "1.8",
             features = ["derive"] }`, `subtle = "2.6"`; habilitar feature
-            `zeroize` em `ed25519-dalek` e `p256`
-      - [ ] R5.2 Wrap locals em `rekor.rs` (prehash/signature opcional,
-            preparar `ParsedCheckpoint.signatures` field type sem quebrar API)
-      - [ ] R5.3 Wrap locals em `ocsp.rs` (`signature_der`, `sha1_digest`,
-            `ocsp_digest_for_algorithm` retornos → `Zeroizing<Vec<u8>>`)
-      - [ ] R5.4 Wrap locals em `host_adapter_verification.rs`
-            (`signature_bytes`, `public_key_bytes`, `bundle_bytes`,
-            `sct_bytes`, `ocsp_der`)
-      - [ ] R5.5 Constant-time compares em `rekor.rs:358`, `ocsp.rs:327`,
-            `ocsp.rs:185` (decodificar hex/decimal → bytes → `ConstantTimeEq`)
+            `zeroize` em `ed25519-dalek` (commit `9c3c5f3`); `p256` já
+            zeroiza via elliptic-curve unconditional
+      - [x] R5.2 Wrap locals em `rekor.rs` (prehash/signature opcional,
+            preparar `ParsedCheckpoint.signatures` field type sem quebrar
+            API) — subsumido por R5.6 (commit `5171cee`)
+      - [x] R5.3 Wrap locals em `ocsp.rs` (`signature_der`, `tbs_der`,
+            `algorithm_der`, `sha1_digest`, `ocsp_digest_for_algorithm`
+            retornos → `Zeroizing<Vec<u8>>`) (commit `39a7dc3`)
+      - [x] R5.4 Wrap locals em `host_adapter_verification.rs` (commit `c63765b`):
+            `signature_bytes`, `public_key_bytes`, `bundle_bytes`,
+            `sct_bytes`, `ocsp_der`, `certificate_der`, `artifact_bytes`,
+            `provenance_bytes`, `transparency_log_bytes`, `issuer_der`,
+            `crl_der` — todos como `Option<Zeroizing<Vec<u8>>>` via
+            `.map(Zeroizing::new)` no call site (R5.7 vai mover pra fonte)
+      - [x] R5.5 Constant-time compares em `rekor.rs:358`, `rekor.rs:339`,
+            `rekor.rs:243`, `ocsp.rs:327` (commit `087d843`); `ocsp.rs:185`
+            skipped (serials são públicos, não secret-dependent)
       - FASE B (`pub(crate)` breaking, sem bump externo):
-      - [ ] R5.6 `ParsedCheckpoint.signatures` → `Vec<Zeroizing<Vec<u8>>>`;
-            `read_certificate_der` em sigstore.rs → `Option<Zeroizing<Vec<u8>>>`;
-            `CertificateTransparencyLogMaterial` deriva `Zeroize, ZeroizeOnDrop`
+      - [x] R5.6 `ParsedCheckpoint.signatures` → `Vec<Zeroizing<Vec<u8>>>`
+            (commit `5171cee`); `CertificateTransparencyLogMaterial` deriva
+            `Zeroize, ZeroizeOnDrop` com `key: Zeroizing<Vec<u8>>` (commit
+            `41edd21`); `read_certificate_der` ainda retorna `Vec<u8>` — vai
+            mudar em R5.7-cleanup
       - FASE C (API pública breaking, requer bump minor — pre-1.0 OK):
-      - [ ] R5.7 `file_io::read_signature_file`/`read_public_key_file`/
-            `read_required_file` → `Option<Zeroizing<Vec<u8>>>` (re-exportidos
-            em lib.rs:71, callers: forge-core-cli, tests)
+      - [x] R5.7 `file_io::read_signature_file`/`read_public_key_file`/
+            `read_required_file` → `Option<Zeroizing<Vec<u8>>>` (commit
+            `710ec74`). Re-exportidos em lib.rs:71. Callers em
+            `host_adapter_verification.rs` com `.map(Zeroizing::new)` agora
+            REDUNDANTES — limpeza pendente em commit separado
       - [ ] R5.8 `HostAdapterCertificateOcspStatusVerification` fields
             `expected_nonce_hex`/`observed_nonce_hex` → `Option<Zeroizing<String>>`
             (exige impl Serialize manual ou wrapper com serde passthrough)
