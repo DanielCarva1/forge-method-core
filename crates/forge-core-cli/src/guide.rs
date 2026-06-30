@@ -375,6 +375,16 @@ fn gate_str(g: GateKind) -> String {
         GateKind::Release => "release".into(),
     }
 }
+/// Dispatch entrypoint for the `forge-core guide` subcommand tree.
+///
+/// Routes to `describe`, `decide`, or `status` based on `args[1]`, and
+/// prints usage on `--help` / unknown subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::usage` when the subcommand is unknown. Sub-command
+/// dispatchers may surface their own `ExitError::usage`,
+/// `ExitError::invalid_value`, or `ExitError::with_code` variants.
 pub fn run_guide_command(args: &[String]) -> Result<(), ExitError> {
     // Subcommand: `forge-core guide <subcommand> [...]`.
     let sub = args.get(1).map_or("--help", String::as_str);
@@ -402,6 +412,13 @@ pub fn guide_value(args: &[String], idx: usize) -> Option<&str> {
         .map(String::as_str)
 }
 
+/// Reads the value at `args[idx]`, returning `None` when missing, empty,
+/// or starting with `--` (i.e. looks like the next flag).
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when [`guide_value`] returns `None`,
+/// i.e. the slot at `idx` is missing, empty, or starts with `--`.
 pub fn require_guide_value(
     args: &[String],
     idx: usize,
@@ -422,6 +439,13 @@ pub fn reject_unknown_guide_arg(subcommand: &str, arg: &str) -> ExitError {
     ExitError::invalid_value(format!("guide {subcommand}: unrecognized argument '{arg}'"))
 }
 
+/// Runs the `forge-core guide describe` subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when an argument is missing or
+/// unrecognized, and `ExitError::with_code` (via [`emit_guide`]) when the
+/// describe envelope carries a non-zero exit code.
 pub fn run_guide_describe(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::CliEnvelope;
 
@@ -453,6 +477,13 @@ pub fn run_guide_describe(args: &[String]) -> Result<(), ExitError> {
     emit_guide(env, want_json)
 }
 
+/// Runs the `forge-core guide decide` subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `--decision-file` is missing
+/// or an argument is unrecognized, and `ExitError::with_code` (via
+/// [`emit_guide`]) when the decide envelope carries a non-zero exit code.
 pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::CliEnvelope;
 
@@ -514,6 +545,13 @@ pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
     emit_guide(env, want_json)
 }
 
+/// Runs the `forge-core guide status` subcommand.
+///
+/// # Errors
+///
+/// Returns `ExitError::invalid_value` when `--phase` is missing or an
+/// argument is unrecognized, and `ExitError::with_code` (via [`emit_guide`])
+/// when the status envelope carries a non-zero exit code.
 pub fn run_guide_status(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::CliEnvelope;
 
@@ -598,6 +636,17 @@ pub fn load_gates(path: Option<&std::path::Path>) -> Vec<forge_core_engine::Prov
 
 /// Emit a guide envelope to stdout (JSON) or stderr (text) and propagate
 /// the envelope's exit code as an `ExitError` when non-zero.
+///
+/// # Errors
+///
+/// Returns `ExitError::with_code` carrying the envelope's non-zero exit
+/// code so the entrypoint can translate it into `process::exit(code)`.
+///
+/// # Panics
+///
+/// Panics in JSON mode if `env` cannot be serialized by `serde_json`. `T:
+/// Serialize` is bound on the function, so this is a programming error and
+/// never occurs on well-formed envelope types.
 pub fn emit_guide<T: serde::Serialize>(
     env: forge_core_contracts::CliEnvelope<T>,
     want_json: bool,
