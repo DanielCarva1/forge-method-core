@@ -173,12 +173,20 @@ You need a Rust toolchain (1.85+, edition 2021) and `cargo`.
 ### Option A — build from source (recommended)
 
 ```bash
-git clone <your-repo-url> forge-method-rust
+git clone https://github.com/Stable-Studio/forge-method-rust.git forge-method-rust
 cd forge-method-rust
 
 # install the forge-core binary into ~/.cargo/bin
 cargo install --path crates/forge-core-cli
 ```
+
+Or, once a release is published, install directly without cloning:
+
+```bash
+cargo install forge-core-cli --locked
+```
+(This works as soon as the crate is published to crates.io; until then use
+Option A or Option B.)
 
 Verify it landed on your PATH:
 
