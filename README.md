@@ -470,7 +470,7 @@ call them.
   verified clean install -> init -> resolve -> claim/operation flow from a
   consumer repo. Until that evidence exists, do not describe Forge as fully
   done.
-- **License** — not yet chosen; set one before public release.
+
 
 ### Patch notes — evolve phase
 
@@ -533,6 +533,16 @@ forensic-reference/       migrated legacy reference (NOT runtime authority)
 
 `forensic-reference/` is historical context only. The authority is always the
 `contracts/` tree plus the running `forge-core` binary.
+
+## License
+
+Forge Method Core is licensed under the [Apache License, Version 2.0](LICENSE).
+
+This license was chosen (over MIT) for its explicit patent grant
+(Section 3), which protects both contributors and users from patent
+litigation. See [NOTICE](NOTICE) for any third-party notices, and the
+[Apache 2.0 summary](https://choosealicense.com/licenses/apache-2.0/)
+for a plain-language overview.
 
 ---
 
