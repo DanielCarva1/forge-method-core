@@ -188,6 +188,12 @@ pub enum DiagnosticCode {
     RiskAuditEvidenceMissing,
     RiskAuditExternalLinterFailed,
     RiskAuditRequiredFileMissing,
+    // F07 — Multi-principal governance.
+    GovernanceIntentAlreadyExpired,
+    GovernanceIntentExpiryBeforeDeclared,
+    GovernanceConflictPartiesNotDistinct,
+    GovernanceConflictMissingParty,
+    GovernanceConflictPolicySilentLastWriterWins,
 }
 
 #[derive(Debug, Clone)]
@@ -1876,5 +1882,218 @@ fn check_source_ref(
             path,
             format!("unknown evidence source id {}", source_id.0),
         ));
+    }
+}
+
+// --- F07 — Multi-principal governance validators ------------------------------
+//
+// Accumulating diagnostics per the repo convention (do not short-circuit on the
+// first error). Each check pushes a typed Diagnostic; the caller decides via
+// `report.has_errors()`.
+
+/// Validate an [`IntentContract`] (F07). Checks the load-bearing expiry
+/// invariant: `expires_at` must be strictly greater than `declared_at` (an
+/// already-expired intent is a deadlock/liveness footgun — Gray 2PL, Spanner).
+#[must_use]
+pub fn validate_intent_contract(intent: &forge_core_contracts::IntentContract) -> ValidationReport {
+    let mut report = ValidationReport::new();
+    let path = format!("intent.{}", intent.intent_id.0);
+
+    if intent.expires_at <= intent.declared_at {
+        report.push(Diagnostic::error(
+            DiagnosticCode::GovernanceIntentExpiryBeforeDeclared,
+            path.clone(),
+            format!(
+                "intent expires_at ({}) must be strictly greater than declared_at ({}) — an expiry at or before declaration is a permanent lock (deadlock/liveness failure)",
+                intent.expires_at, intent.declared_at
+            ),
+        ));
+    }
+
+    if intent.principal.0.trim().is_empty() {
+        report.push(Diagnostic::error(
+            DiagnosticCode::GovernanceConflictMissingParty,
+            path,
+            "intent principal must be a non-empty PrincipalId",
+        ));
+    }
+
+    report
+}
+
+/// Validate a [`ConflictContract`] (F07). The two parties must be present and
+/// distinct (a principal cannot conflict with itself — that is a
+/// self-overlap, a different concern). The contested scope target must be
+/// non-empty.
+#[must_use]
+pub fn validate_conflict_contract(
+    conflict: &forge_core_contracts::ConflictContract,
+) -> ValidationReport {
+    let mut report = ValidationReport::new();
+    let path = format!("conflict.{}", conflict.conflict_id.0);
+
+    if conflict.principal_a.0.trim().is_empty() || conflict.principal_b.0.trim().is_empty() {
+        report.push(Diagnostic::error(
+            DiagnosticCode::GovernanceConflictMissingParty,
+            path.clone(),
+            "conflict parties (principal_a, principal_b) must both be non-empty PrincipalIds",
+        ));
+    }
+    if conflict.principal_a == conflict.principal_b {
+        report.push(Diagnostic::error(
+            DiagnosticCode::GovernanceConflictPartiesNotDistinct,
+            path.clone(),
+            "conflict parties must be distinct principals — a principal cannot conflict with itself",
+        ));
+    }
+    if conflict.contested_scope.target.0.trim().is_empty() {
+        report.push(Diagnostic::error(
+            DiagnosticCode::GovernanceConflictMissingParty,
+            path,
+            "conflict contested_scope.target must be a non-empty resource id",
+        ));
+    }
+
+    report
+}
+
+/// Validate a [`GovernancePolicy`] (F07). Warns (does not error) on
+/// `SilentLastWriterWins` — it is the documented anti-pattern F07 exists to
+/// forbid, but it is structurally permitted for completeness (a deployment
+/// that opts into silent merge should do so loudly, with a warning on record).
+#[must_use]
+pub fn validate_governance_policy(
+    policy: &forge_core_contracts::GovernancePolicy,
+) -> ValidationReport {
+    let mut report = ValidationReport::new();
+    let path = format!("governance_policy.{}", policy.policy_id.0);
+
+    if matches!(
+        policy.conflict_policy,
+        forge_core_contracts::ConflictPolicy::SilentLastWriterWins
+    ) {
+        report.push(Diagnostic::warning(
+            DiagnosticCode::GovernanceConflictPolicySilentLastWriterWins,
+            path,
+            "conflict_policy is silent_last_writer_wins — this destroys the conflict signal (CRDT/XACML posture). F07's purpose is structured conflict (emit_contract); enable this only with explicit intent.",
+        ));
+    }
+
+    report
+}
+
+#[cfg(test)]
+mod governance_tests {
+    use super::*;
+    use forge_core_contracts::{
+        ConflictContract, ConflictDetectionReason, ConflictPolicy, ConflictResolutionState,
+        GovernancePolicy, IntentContract, IntentScope, IntentScopeKind, PrincipalId, StableId,
+    };
+
+    fn intent(id: &str, principal: &str, expires_at: u64, declared_at: u64) -> IntentContract {
+        IntentContract {
+            intent_id: StableId(id.into()),
+            principal: PrincipalId(principal.into()),
+            goal: "ship F07".into(),
+            authority_scope: IntentScope {
+                kind: IntentScopeKind::PathPrefix,
+                target: StableId("contracts/stories".into()),
+            },
+            expires_at,
+            declared_at,
+        }
+    }
+
+    #[test]
+    fn valid_intent_has_no_diagnostics() {
+        let report = validate_intent_contract(&intent("i.1", "alice", 200, 100));
+        assert!(!report.has_errors(), "{:?}", report.diagnostics());
+        assert!(report.diagnostics().is_empty());
+    }
+
+    #[test]
+    fn intent_with_expiry_at_or_before_declared_is_rejected() {
+        // expiry == declared.
+        let report = validate_intent_contract(&intent("i.1", "alice", 100, 100));
+        assert!(report.has_errors());
+        assert!(report
+            .diagnostics()
+            .iter()
+            .any(|d| d.code == DiagnosticCode::GovernanceIntentExpiryBeforeDeclared));
+        // expiry < declared.
+        let report = validate_intent_contract(&intent("i.1", "alice", 50, 100));
+        assert!(report.has_errors());
+    }
+
+    #[test]
+    fn conflict_with_distinct_parties_is_valid() {
+        let conflict = ConflictContract {
+            conflict_id: StableId("c.1".into()),
+            intent_a: StableId("i.1".into()),
+            intent_b: StableId("i.2".into()),
+            principal_a: PrincipalId("alice".into()),
+            principal_b: PrincipalId("bob".into()),
+            contested_scope: IntentScope {
+                kind: IntentScopeKind::PathPrefix,
+                target: StableId("contracts/stories".into()),
+            },
+            detection_reason: ConflictDetectionReason::PathOverlap,
+            detected_at: 150,
+            resolution: ConflictResolutionState::Pending,
+        };
+        let report = validate_conflict_contract(&conflict);
+        assert!(!report.has_errors(), "{:?}", report.diagnostics());
+    }
+
+    #[test]
+    fn conflict_with_identical_parties_is_rejected() {
+        let conflict = ConflictContract {
+            conflict_id: StableId("c.self".into()),
+            intent_a: StableId("i.1".into()),
+            intent_b: StableId("i.2".into()),
+            principal_a: PrincipalId("alice".into()),
+            principal_b: PrincipalId("alice".into()),
+            contested_scope: IntentScope {
+                kind: IntentScopeKind::PathPrefix,
+                target: StableId("contracts/stories".into()),
+            },
+            detection_reason: ConflictDetectionReason::PathOverlap,
+            detected_at: 150,
+            resolution: ConflictResolutionState::Pending,
+        };
+        let report = validate_conflict_contract(&conflict);
+        assert!(report
+            .diagnostics()
+            .iter()
+            .any(|d| d.code == DiagnosticCode::GovernanceConflictPartiesNotDistinct));
+    }
+
+    #[test]
+    fn governance_policy_warns_on_silent_last_writer_wins() {
+        let policy = GovernancePolicy {
+            policy_id: StableId("g.1".into()),
+            permitted_principals: vec![PrincipalId("alice".into())],
+            authorized_reviewers: vec![PrincipalId("daniel".into())],
+            conflict_policy: ConflictPolicy::SilentLastWriterWins,
+        };
+        let report = validate_governance_policy(&policy);
+        // Warning, NOT error — the posture is permitted but flagged.
+        assert!(!report.has_errors());
+        assert!(report.diagnostics().iter().any(|d| {
+            d.code == DiagnosticCode::GovernanceConflictPolicySilentLastWriterWins
+                && d.severity == DiagnosticSeverity::Warning
+        }));
+    }
+
+    #[test]
+    fn governance_policy_emit_contract_is_clean() {
+        let policy = GovernancePolicy {
+            policy_id: StableId("g.1".into()),
+            permitted_principals: vec![PrincipalId("alice".into())],
+            authorized_reviewers: vec![PrincipalId("daniel".into())],
+            conflict_policy: ConflictPolicy::EmitContract,
+        };
+        let report = validate_governance_policy(&policy);
+        assert!(report.diagnostics().is_empty());
     }
 }

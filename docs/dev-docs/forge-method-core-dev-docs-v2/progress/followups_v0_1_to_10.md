@@ -273,20 +273,35 @@ promote exige policy + evidência raw.
 não merge silencioso.
 **Papers**: communication-centric MAS (China-origin), multi-agent failure modes
 
-#### F07.1 — [grill + improve] Design do governance
-- Sharpen: "Principal" (humano OU agente), "IntentContract",
-  "ConflictContract", "GovernancePolicy", "ArbitrationLedger"
-- Seam: onde conflito é detectado? (runtime, antes do WAL write)
-- ADR sobre arbitration model (manual vs auto-resolve)
+#### F07.1 — [grill + improve] Design do governance ✅ **DONE**
+- ✅ Sharpen via 3 frentes de pesquisa (RBAC/ReBAC/Cedar/Zanzibar; seam no
+  codebase; R8 PrincipalId-vs-StableId). Modelo de **3 camadas** (GaaS-shaped):
+  autorizacao (ReBAC/Cedar) + coordenacao (intent-locks de Gray) + conflito
+  (objeto first-class, Git/Apel/Berenson lineage — NUNCA merge silencioso).
+- ✅ Seam mapeado: deteccao no `claim_engine.rs:317` (acquire), NAO no WAL.
+- ✅ ADR `docs/dev-docs/forge-method-core-dev-docs-v2/adrs/ADR-0007-multi-principal-governance.md`
+  expandido de stub 18-linhas → Accepted completo, supersede da previsao do
+  ADR 0002 sobre PrincipalId.
 
-#### F07.2 — Adicionar `PrincipalId` tipado aos contracts
-- Hoje: strings implícitas. Depois: `PrincipalId` (typed, validated)
-- Migration: additive (vazio = legacy single-principal)
+#### F07.2 — Adicionar `PrincipalId` tipado aos contracts ✅ **DONE**
+- ✅ `PrincipalId(pub String)` newtype em `common.rs`, `#[serde(transparent)]`,
+  mesmos derives que `ScopeId`/`ClaimId` (R8: principal↔resource swap vira
+  compile error). Custo de migracao zero (serde-transparent).
+- ✅ `reviewed_by: Option<StableId>` → `Option<PrincipalId>` (one-concept-
+  one-type; legacy YAML ainda parseia). Supersede formal da previsao do ADR 0002.
+- ⏳ Migracao dos outros ~17 campos principal + 6 CLI `String` fields: tracked
+  follow-up mecanico (fora desta story).
 
-#### F07.3 — Definir `IntentContract` + `ConflictContract` schemas
-- `IntentContract`: principal, goal, authority_scope, expires_at
-- `ConflictContract`: principals em conflito, ref disputado, detection_reason
-- Validator com diagnostics tipados
+#### F07.3 — Definir `IntentContract` + `ConflictContract` schemas ✅ **DONE**
+- ✅ `governance.rs`: `GovernancePolicy`, `IntentContract` (com `expires_at`
+  load-bearing), `ConflictContract` (first-class, `ConflictResolutionState`,
+  `ResolutionDecision`, `ConflictDetectionReason`), `IntentScope`/`IntentScopeKind`,
+  `ConflictPolicy` (default `EmitContract`; `SilentLastWriterWins` = anti-pattern).
+- ✅ Validator em `forge-core-validate`: `validate_intent_contract`,
+  `validate_conflict_contract`, `validate_governance_policy` com diagnostics
+  tipados (5 codigos F07). 6 testes.
+- ✅ Fixtures em `contracts/examples/`: `governance-policy.yaml`,
+  `intent-contract.yaml`, `conflict-contract.yaml` (round-trip testado).
 
 #### F07.4 — Conflict detection no runtime
 - Antes do WAL write: checar se ref é disputado entre principals

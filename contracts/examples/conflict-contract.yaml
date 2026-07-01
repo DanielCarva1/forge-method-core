@@ -1,0 +1,17 @@
+# F07 fixture — a ConflictContract (the first-class conflict object).
+# Alice and Bob both declared intents over contracts/stories; the system
+# EMITTED this structured conflict (PathOverlap) instead of silently merging.
+# Resolution is Pending — awaiting an arbiter authorized by the GovernancePolicy.
+# This is the Git/Apel/Berenson lineage: conflict is a named, halting object,
+# NOT a CRDT/XACML silent merge.
+conflict_id: conflict.alice-bob.stories
+intent_a: intent.alice.f07
+intent_b: intent.bob.f07
+principal_a: principal.alice
+principal_b: principal.bob
+contested_scope:
+  kind: path_prefix
+  target: contracts/stories
+detection_reason: path_overlap
+detected_at: 1780000500
+resolution: pending

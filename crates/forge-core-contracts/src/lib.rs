@@ -13,6 +13,7 @@ pub mod decision;
 pub mod eval_run;
 pub mod evidence;
 pub mod gate;
+pub mod governance;
 pub mod guide_decision;
 pub mod inventory;
 pub mod isolation;
@@ -34,7 +35,7 @@ pub use autonomy_policy::{AutonomyPolicyContract, AutonomyPolicyContractDocument
 pub use checkpoint::{CheckpointContract, CheckpointContractDocument};
 pub use claim::{ClaimContract, ClaimContractDocument};
 pub use command::{CommandContract, CommandContractDocument};
-pub use common::{ClaimId, RepoPath, ScopeId, SourceId, StableId};
+pub use common::{ClaimId, PrincipalId, RepoPath, ScopeId, SourceId, StableId};
 pub use completion::{CompletionContract, CompletionContractDocument};
 pub use coordination_eval::{
     CoordinationDimension, CoordinationEvalContract, CoordinationEvalContractDocument,
@@ -47,13 +48,17 @@ pub use decision::{
 pub use eval_run::{EvalRunContract, EvalRunContractDocument};
 pub use evidence::{EvidenceSource, FieldEvidenceRegistry};
 pub use gate::{GateContract, GateContractDocument};
+pub use governance::{
+    ConflictContract, ConflictDetectionReason, ConflictPolicy, ConflictResolutionState,
+    GovernancePolicy, IntentContract, IntentScope, IntentScopeKind, ResolutionDecision,
+};
 pub use inventory::{ContractFamily, ContractFamilyInventory, ContractFamilyInventoryDocument};
 pub use isolation::{
     GitAction, IsolationContract, IsolationContractDocument, IsolationError, IsolationStatus,
     MergePlan, MergePolicy, MergeStep,
 };
 pub use memory::{
-    AdmissionDecision, AdmissionDenialReason, AdmissionEvidence, AuthorityLevel, ApprovalState,
+    AdmissionDecision, AdmissionDenialReason, AdmissionEvidence, ApprovalState, AuthorityLevel,
     EvidenceField, Freshness, MemoryContract, MemoryContractDocument, MemoryEntry, MemoryKind,
     MemoryPolicy, MemoryProvenance, MemoryScope, MemoryScopeKind, ReviewState,
 };
