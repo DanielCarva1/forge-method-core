@@ -40,22 +40,27 @@ jobs:
             runner: ubuntu-latest
             artifact: forge-core
             archive: forge-core-x86_64-linux.tar.gz
+            can_smoke: true
           - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
             artifact: forge-core
             archive: forge-core-aarch64-linux.tar.gz
+            can_smoke: false # cross-compiled aarch64 binary cannot run on x86_64 runner
           - target: x86_64-apple-darwin
             runner: macos-13
             artifact: forge-core
             archive: forge-core-x86_64-macos.tar.gz
+            can_smoke: true
           - target: aarch64-apple-darwin
             runner: macos-14
             artifact: forge-core
             archive: forge-core-aarch64-macos.tar.gz
+            can_smoke: true
           - target: x86_64-pc-windows-msvc
             runner: windows-latest
             artifact: forge-core.exe
             archive: forge-core-x86_64-windows.zip
+            can_smoke: true
 
     steps:
       - name: Checkout
@@ -87,23 +92,28 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }} -p forge-core-cli
 
       - name: Smoke test the freshly built binary (POSIX)
-        if: runner.os != 'Windows'
+        # Only smoke-test when the binary can actually run on the runner.
+        # Cross-compiled targets (e.g. aarch64-linux built on an x86_64 runner)
+        # cannot execute without QEMU, which is out of scope for the release
+        # pipeline. The build itself succeeding is sufficient evidence for
+        # those targets.
+        if: runner.os != 'Windows' && matrix.can_smoke
         run: |
           ./target/${{ matrix.target }}/release/${{ matrix.artifact }} --help > /dev/null
           ./target/${{ matrix.target }}/release/${{ matrix.artifact }} validate --root .
 
       - name: Smoke test the freshly built binary (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.can_smoke
         run: |
           .\target\${{ matrix.target }}\release\${{ matrix.artifact }} --help | Out-Null
           .\target\${{ matrix.target }}\release\${{ matrix.artifact }} validate --root .
 
       - name: Package (POSIX)
         if: runner.os != 'Windows'
+        working-directory: target/${{ matrix.target }}/release
         run: |
-          cd target/${{ matrix.target }}/release
           tar czf ../../../${{ matrix.archive }} ${{ matrix.artifact }}
-          cd ../..
+          cd ../../..
           sha256sum ${{ matrix.archive }} > ${{ matrix.archive }}.sha256
 
       - name: Package (Windows)
