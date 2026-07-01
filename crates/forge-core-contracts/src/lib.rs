@@ -52,7 +52,10 @@ pub use isolation::{
     GitAction, IsolationContract, IsolationContractDocument, IsolationError, IsolationStatus,
     MergePlan, MergePolicy, MergeStep,
 };
-pub use memory::{MemoryContract, MemoryContractDocument};
+pub use memory::{
+    AdmissionDecision, AdmissionDenialReason, AdmissionEvidence, EvidenceField, MemoryContract,
+    MemoryContractDocument, MemoryPolicy,
+};
 pub use operation::{OperationContract, OperationContractDocument};
 pub use operation_reference::OperationReferencePolicyDocument;
 pub use project_link::{ProjectLinkDocument, PROJECT_LINK_FILE_NAME, PROJECT_LINK_SCHEMA_VERSION};
