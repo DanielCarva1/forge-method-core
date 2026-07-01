@@ -250,8 +250,7 @@ authority_boundary:
   adapters_may_suggest: true
   adapters_may_mutate: false
 "#;
-    let graph =
-        parse_workflow_graph_yaml(graph_yaml).expect("edge-mismatch graph parses");
+    let graph = parse_workflow_graph_yaml(graph_yaml).expect("edge-mismatch graph parses");
     let validation = validate_graph(&graph);
 
     assert!(
@@ -261,16 +260,16 @@ authority_boundary:
     );
     assert!(validation.diagnostics().iter().any(|diagnostic| {
         diagnostic.code == GraphDiagnosticCode::EdgeKindSourceKindMismatch
-            && diagnostic.severity
-                == forge_core_graph::GraphDiagnosticSeverity::Warning
+            && diagnostic.severity == forge_core_graph::GraphDiagnosticSeverity::Warning
     }));
     assert_eq!(validation.warning_count(), 1);
 
     // The graph must still dry-run: the warning is advisory, not blocking.
     let dry_run = dry_run_graph(&graph);
-    assert!(dry_run.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == GraphDiagnosticCode::EdgeKindSourceKindMismatch
-    }));
+    assert!(dry_run
+        .diagnostics
+        .iter()
+        .any(|diagnostic| { diagnostic.code == GraphDiagnosticCode::EdgeKindSourceKindMismatch }));
     assert_eq!(dry_run.status, GraphDryRunStatus::Planned);
 }
 

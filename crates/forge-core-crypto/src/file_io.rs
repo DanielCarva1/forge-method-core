@@ -32,18 +32,12 @@ pub fn read_required_file(
     }
 }
 
-pub fn read_signature_file(
-    path: &Path,
-    reasons: &mut Vec<String>,
-) -> Option<Zeroizing<Vec<u8>>> {
+pub fn read_signature_file(path: &Path, reasons: &mut Vec<String>) -> Option<Zeroizing<Vec<u8>>> {
     read_required_file(path, "signature", reasons)
         .and_then(|bytes| decode_base64_or_raw(bytes, 64, "signature", reasons))
 }
 
-pub fn read_public_key_file(
-    path: &Path,
-    reasons: &mut Vec<String>,
-) -> Option<Zeroizing<Vec<u8>>> {
+pub fn read_public_key_file(path: &Path, reasons: &mut Vec<String>) -> Option<Zeroizing<Vec<u8>>> {
     read_required_file(path, "public_key", reasons)
         .and_then(|bytes| decode_base64_or_raw(bytes, 32, "public_key", reasons))
 }

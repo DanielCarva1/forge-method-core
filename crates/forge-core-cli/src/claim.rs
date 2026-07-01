@@ -34,8 +34,8 @@ use forge_core_engine::{
     ClaimLifecycleDecision, ClaimReconcileTransition, ClaimRejection, RecordHandoffRequest,
 };
 use forge_core_store::claim_wal::{
-    append_claim_wal_record_with_durability, claim_wal_path, replay_claim_wal,
-    ClaimWalOperation, ClaimWalStopReason,
+    append_claim_wal_record_with_durability, claim_wal_path, replay_claim_wal, ClaimWalOperation,
+    ClaimWalStopReason,
 };
 use forge_core_store::WalDurability;
 use std::fmt::Write as _;
@@ -1279,7 +1279,13 @@ mod tests {
         let dir = tempfile_dir();
         let acquired = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         let claim_id = StableId(acquired.data.as_ref().unwrap().claim_id.clone());
-        let env = run_heartbeat(&dir, &claim_id, &StableId("agentA".into()), T0 + 300, WalDurability::NoSync);
+        let env = run_heartbeat(
+            &dir,
+            &claim_id,
+            &StableId("agentA".into()),
+            T0 + 300,
+            WalDurability::NoSync,
+        );
         assert!(env.ok, "{:?}", env.error);
         assert_eq!(env.data.as_ref().unwrap().status, "active");
     }
@@ -1289,7 +1295,13 @@ mod tests {
         let dir = tempfile_dir();
         let acquired = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         let claim_id = StableId(acquired.data.as_ref().unwrap().claim_id.clone());
-        let env = run_heartbeat(&dir, &claim_id, &StableId("agentB".into()), T0, WalDurability::NoSync);
+        let env = run_heartbeat(
+            &dir,
+            &claim_id,
+            &StableId("agentB".into()),
+            T0,
+            WalDurability::NoSync,
+        );
         assert!(!env.ok);
         assert_eq!(env.exit_code(), 2);
         assert!(env
@@ -1321,7 +1333,13 @@ mod tests {
         let dir = tempfile_dir();
         let acquired = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         let claim_id = StableId(acquired.data.as_ref().unwrap().claim_id.clone());
-        let rel = run_release(&dir, &claim_id, &StableId("agentA".into()), T0, WalDurability::NoSync);
+        let rel = run_release(
+            &dir,
+            &claim_id,
+            &StableId("agentA".into()),
+            T0,
+            WalDurability::NoSync,
+        );
         assert!(rel.ok, "{:?}", rel.error);
         assert_eq!(rel.data.as_ref().unwrap().status, "released");
         // scope is now free -> another agent can acquire
@@ -1334,7 +1352,13 @@ mod tests {
         let dir = tempfile_dir();
         let acquired = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         let claim_id = StableId(acquired.data.as_ref().unwrap().claim_id.clone());
-        let env = run_release(&dir, &claim_id, &StableId("agentB".into()), T0, WalDurability::NoSync);
+        let env = run_release(
+            &dir,
+            &claim_id,
+            &StableId("agentB".into()),
+            T0,
+            WalDurability::NoSync,
+        );
         assert!(!env.ok);
         assert_eq!(env.exit_code(), 2);
     }
@@ -1387,14 +1411,26 @@ mod tests {
             scope_id.0,
             "test setup: scope id must differ from full claim id to exercise R8"
         );
-        let rel = run_release(&dir, &scope_id, &StableId("agentA".into()), T0, WalDurability::NoSync);
+        let rel = run_release(
+            &dir,
+            &scope_id,
+            &StableId("agentA".into()),
+            T0,
+            WalDurability::NoSync,
+        );
         assert!(rel.ok, "release by scope id must work: {:?}", rel.error);
         assert_eq!(rel.data.as_ref().unwrap().status, "released");
         // Full-id form STILL works (backwards compatible with e2e tests).
         let dir2 = tempfile_dir();
         let acquired2 = run_acquire(&dir2, &req("s1", "agentA"), T0, WalDurability::NoSync);
         let full_id = StableId(acquired2.data.as_ref().unwrap().claim_id.clone());
-        let rel2 = run_release(&dir2, &full_id, &StableId("agentA".into()), T0, WalDurability::NoSync);
+        let rel2 = run_release(
+            &dir2,
+            &full_id,
+            &StableId("agentA".into()),
+            T0,
+            WalDurability::NoSync,
+        );
         assert!(
             rel2.ok,
             "release by full id must still work: {:?}",
@@ -1408,7 +1444,13 @@ mod tests {
         let dir = tempfile_dir();
         let _ = run_acquire(&dir, &req("s1", "agentA"), T0, WalDurability::NoSync);
         let scope_id = StableId("s1".into());
-        let hb = run_heartbeat(&dir, &scope_id, &StableId("agentA".into()), T0, WalDurability::NoSync);
+        let hb = run_heartbeat(
+            &dir,
+            &scope_id,
+            &StableId("agentA".into()),
+            T0,
+            WalDurability::NoSync,
+        );
         assert!(hb.ok, "heartbeat by scope id must work: {:?}", hb.error);
     }
 
@@ -1516,7 +1558,12 @@ mod tests {
         // prefix would be misclassified as Full on every later release/
         // heartbeat. Acquire must reject it (parse-don't-validate).
         let dir = tempfile_dir();
-        let env = run_acquire(&dir, &req("claim.evil", "agentA"), T0, WalDurability::NoSync);
+        let env = run_acquire(
+            &dir,
+            &req("claim.evil", "agentA"),
+            T0,
+            WalDurability::NoSync,
+        );
         assert!(!env.ok, "reserved-prefix scope id must be rejected");
         assert_eq!(env.exit_code(), 3, "must be InvalidDecisionShape (3)");
         // and the bus must stay empty (no claim written)
@@ -1783,9 +1830,13 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
 /// heartbeat operation surfaces a non-zero exit code.
 pub fn run_claim_heartbeat(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_heartbeat;
-    run_claim_single_target(args, "heartbeat", |claims_dir, claim_id, agent_id, now, durability| {
-        run_heartbeat(claims_dir, claim_id, agent_id, now, durability)
-    })
+    run_claim_single_target(
+        args,
+        "heartbeat",
+        |claims_dir, claim_id, agent_id, now, durability| {
+            run_heartbeat(claims_dir, claim_id, agent_id, now, durability)
+        },
+    )
 }
 
 /// Runs the `forge-core claim release` subcommand.
@@ -1797,9 +1848,13 @@ pub fn run_claim_heartbeat(args: &[String]) -> Result<(), ExitError> {
 /// release operation surfaces a non-zero exit code.
 pub fn run_claim_release(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_release;
-    run_claim_single_target(args, "release", |claims_dir, claim_id, agent_id, now, durability| {
-        run_release(claims_dir, claim_id, agent_id, now, durability)
-    })
+    run_claim_single_target(
+        args,
+        "release",
+        |claims_dir, claim_id, agent_id, now, durability| {
+            run_release(claims_dir, claim_id, agent_id, now, durability)
+        },
+    )
 }
 
 /// Shared arg parsing for heartbeat/release (both take --id + --agent + optional dirs/time).

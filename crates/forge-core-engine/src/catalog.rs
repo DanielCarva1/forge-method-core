@@ -131,11 +131,10 @@ impl std::error::Error for CatalogLoadError {}
 /// loader ([`load_one`]) and the embedded loader ([`load_embedded_catalog`])
 /// so both paths produce identical [`CatalogEntry`]s.
 fn parse_workflow_yaml(workflow_ref: &str, text: &str) -> Result<CatalogEntry, CatalogLoadError> {
-    let doc: WorkflowDocument = yaml_serde::from_str(text).map_err(|source| {
-        CatalogLoadError::Deserialize {
+    let doc: WorkflowDocument =
+        yaml_serde::from_str(text).map_err(|source| CatalogLoadError::Deserialize {
             source: source.to_string(),
-        }
-    })?;
+        })?;
     let wf = doc.workflow;
     Ok(CatalogEntry {
         id: wf.id,

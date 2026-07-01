@@ -510,7 +510,9 @@ pub fn dry_run_graph_with_context(
     // Warnings (e.g. EdgeKindSourceKindMismatch) survive into the dry-run report
     // so consumers can surface them. Errors already short-circuited above.
     let mut diagnostics = validation.into_diagnostics();
-    diagnostics.extend(operation_evaluation_diagnostics(context.operation_evaluations));
+    diagnostics.extend(operation_evaluation_diagnostics(
+        context.operation_evaluations,
+    ));
     let operation_evaluations = operation_evaluations_by_ref(context.operation_evaluations);
 
     for (step_index, node_id) in topological_order(graph).into_iter().enumerate() {

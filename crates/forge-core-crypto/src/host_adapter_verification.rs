@@ -179,11 +179,9 @@ pub fn run_host_adapter_provenance_verification(
     }
 
     let artifact_bytes = read_required_file(&input.artifact_path, "artifact", &mut reasons);
-    let provenance_bytes =
-        read_required_file(&input.provenance_path, "provenance", &mut reasons);
+    let provenance_bytes = read_required_file(&input.provenance_path, "provenance", &mut reasons);
     let signature_bytes = read_signature_file(&input.signature_path, &mut reasons);
-    let public_key_bytes =
-        read_public_key_file(&input.public_key_path, &mut reasons);
+    let public_key_bytes = read_public_key_file(&input.public_key_path, &mut reasons);
     let transparency_log_bytes = read_required_file(
         &input.transparency_log_path,
         "transparency_log",
@@ -616,14 +614,12 @@ pub fn run_host_adapter_sigstore_bundle_subject_verification(
     let mut rekor_integrated_time = None;
     let mut fulcio_status = None;
 
-    let artifact_bytes =
-        read_required_file(&input.artifact_path, "artifact", &mut reasons);
+    let artifact_bytes = read_required_file(&input.artifact_path, "artifact", &mut reasons);
     let computed_artifact_sha256 = artifact_bytes
         .as_deref()
         .map(|bytes| format!("sha256:{}", hex_sha256(bytes)));
 
-    let bundle_bytes =
-        read_required_file(&input.bundle_path, "sigstore_bundle", &mut reasons);
+    let bundle_bytes = read_required_file(&input.bundle_path, "sigstore_bundle", &mut reasons);
     let bundle = bundle_bytes
         .as_deref()
         .and_then(|bytes| parse_sigstore_message_signature_bundle(bytes, &mut reasons));
@@ -821,15 +817,13 @@ pub fn run_host_adapter_sigstore_dsse_in_toto_subject_verification(
     let mut rekor_integrated_time = None;
     let mut fulcio_status = None;
 
-    let artifact_bytes =
-        read_required_file(&input.artifact_path, "artifact", &mut reasons);
+    let artifact_bytes = read_required_file(&input.artifact_path, "artifact", &mut reasons);
     let computed_artifact_hex = artifact_bytes.as_deref().map(|bytes| hex_sha256(bytes));
     let computed_artifact_sha256 = computed_artifact_hex
         .as_ref()
         .map(|digest| format!("sha256:{digest}"));
 
-    let bundle_bytes =
-        read_required_file(&input.bundle_path, "sigstore_dsse_bundle", &mut reasons);
+    let bundle_bytes = read_required_file(&input.bundle_path, "sigstore_dsse_bundle", &mut reasons);
     let bundle = bundle_bytes
         .as_deref()
         .and_then(|bytes| parse_sigstore_dsse_bundle(bytes, &mut reasons));
