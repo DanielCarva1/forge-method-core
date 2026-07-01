@@ -242,10 +242,26 @@ promote exige policy + evidência raw.
 - Registro em `command_registry::COMMANDS`
 - JSON output + humano
 
-#### F06.8 — Fixtures + E2E tests
-- Fixture: memória admitida, expirada, promoted, rejected (sem evidence)
-- E2E: ingest → list → promote → list (autoridade muda)
-- Anchor preservada
+#### F06.8 — Fixtures + E2E tests ✅ **DONE** (fecha o epic F06)
+- ✅ Fixtures em `contracts/examples/`: `memory-policy.yaml` + 4 entradas
+  (`memory-entry-admitted.yaml`, `memory-entry-expired.yaml`,
+  `memory-entry-promoted.yaml`, `memory-entry-rejected.yaml`) cobrindo os 4
+  estados do spec (admitida, expirada, promoted, rejected sem evidence).
+- ✅ E2E CLI (`crates/forge-core-cli/tests/memory_cli_e2e.rs`, 6 testes): o
+  ciclo completo `ingest → list → promote → list → forget → list` via
+  `assert_cmd` contra o binário real + fixtures permanentes. Afirma que
+  autoridade muda (raw→authority), review fica em `unreviewed` (NFR
+  ortogonalidade), denied-by-gate appenda nada, lazy-TTL sweep, review
+  deferred, text mode, unknown-subcommand usage error.
+- ✅ E2E PEP (`crates/forge-core-memory/tests/lifecycle.rs`, 8 testes):
+  denied-appends-nothing, denial-carries-typed-reason, idempotent-forget,
+  before-image-hash (tamper-evident), promote-leaves-review-untouched,
+  promote-without-evidence-denied, sweep-idempotent-across-reads,
+  projection-replays-deterministically (Fowler replay guarantee).
+- ✅ Anchor 122 preservada (fix: fixtures com `evidence_ref` apontando para
+  paths que existem no índice de known-repo-refs — `docs/adr/*` não é indexado).
+- 🎉 **Epic F06 FECHADO.** F06.1-F06.8 todos ✅. Próximo: F07 (governance),
+  que destrava o verb `memory review` (atualmente deferred).
 
 ---
 

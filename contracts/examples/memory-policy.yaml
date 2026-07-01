@@ -1,0 +1,10 @@
+# F06.8 fixture — a MemoryPolicy used by the E2E suite.
+# Admits preference + decision + lesson_learned kinds; requires the raw
+# evidence_ref field on provenance; one distinct ref buys Authority.
+permitted_kinds:
+  - preference
+  - decision
+  - lesson_learned
+required_evidence_fields:
+  - provenance_evidence_ref
+min_evidence_refs_for_authority: 1

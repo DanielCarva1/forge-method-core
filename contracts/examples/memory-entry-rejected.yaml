@@ -1,0 +1,21 @@
+# F06.8 fixture — an entry that the admission gate REJECTS (missing required
+# evidence). provenance.evidence_ref is null; the policy
+# (memory-policy.yaml) requires provenance_evidence_ref, so `can_admit` denies.
+# E2E: ingest must return exit_reason "rejected_by_gate" with
+# MissingRequiredEvidence in the data, and append NOTHING to the log.
+entry_id: memory.entry.rejected
+kind: preference
+content: "An entry with no raw evidence must not be admitted."
+provenance:
+  source_run_id: run.f06-reject
+  source_agent: agent.f06
+  evidence_ref: null
+  captured_at: "1780000000"
+freshness:
+  ttl_seconds: null
+  last_confirmed_at: "1780000000"
+  stale: false
+confidence: 50
+approval: proposed
+supersedes: null
+invalidation_reason: null

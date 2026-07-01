@@ -1,0 +1,20 @@
+# F06.8 fixture — an EXPIRED memory entry (TTL elapsed at list time).
+# captured_at = 1780000000, ttl_seconds = 3600 ⇒ expires at 1780003600.
+# E2E: ingest, then `list --now-unix 1780003601` ⇒ entry is stale, excluded,
+# flipped=1. Demonstrates the lazy TTL sweep (Redis passive-expiry model).
+entry_id: memory.entry.expired
+kind: decision
+content: "Adopt the two-axis trust model for memory (ADR 0002)."
+provenance:
+  source_run_id: run.f06-ttl
+  source_agent: agent.f06
+  evidence_ref: contracts/examples/memory.yaml
+  captured_at: "1780000000"
+freshness:
+  ttl_seconds: 3600
+  last_confirmed_at: "1780000000"
+  stale: false
+confidence: 90
+approval: proposed
+supersedes: null
+invalidation_reason: null
