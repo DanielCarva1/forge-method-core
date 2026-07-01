@@ -204,6 +204,54 @@ cp target/release/forge-core* /usr/local/bin/   # Linux/macOS
 # on Windows/WSL the artifact is forge-core.exe
 ```
 
+### Option C — download from GitHub Releases
+
+Prebuilt binaries for Linux (x86_64, aarch64), macOS (Intel, Apple Silicon),
+and Windows are published on every tagged release at
+<https://github.com/Stable-Studio/forge-method-rust/releases>.
+
+```bash
+# Linux / macOS
+tar xzf forge-core-<arch>-<os>.tar.gz
+install -m 0755 forge-core ~/.local/bin/
+
+# Windows (PowerShell)
+Expand-Archive forge-core-x86_64-windows.zip $env:LOCALAPPDATA\Programs\forge-core
+```
+
+Every release asset ships with three siblings so the supply chain is auditable
+end-to-end:
+
+- `.sha256` — SHA-256 checksum (integrity)
+- `.sigstore` — sigstore bundle: signature + Fulcio certificate + Rekor
+  transparency-log entry (proves the asset was built by Stable Studio's CI)
+- `forge-core-<version>.cdx.json` — CycloneDX SBOM (transitive dependency
+  inventory for CVE scanning)
+
+**Verify integrity** (proves the bytes were not tampered in transit):
+
+```bash
+sha256sum -c forge-core-<arch>-<os>.tar.gz.sha256
+```
+
+**Verify identity** (proves the asset was built by Stable Studio's CI and is
+recorded in the public Rekor transparency log):
+
+```bash
+cosign verify-blob \
+  --bundle forge-core-<arch>-<os>.tar.gz.sigstore \
+  --certificate-identity-regexp 'https://github.com/Stable-Studio/forge-method-rust/.github/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  forge-core-<arch>-<os>.tar.gz
+```
+
+**Audit dependencies** (CVE scan via [grype](https://github.com/anchore/grype)
+or Trivy against the SBOM):
+
+```bash
+grype sbom:./forge-core-<version>.cdx.json
+```
+
 ### What you get
 
 A single binary, `forge-core`, plus the `contracts/` tree (the catalog, schemas,

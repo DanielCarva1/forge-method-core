@@ -10,10 +10,14 @@ name: Release
 # macOS we use the native macOS runner because cross-compiling from linux to
 # darwin requires non-free SDKs. Windows MSVC likewise runs natively.
 #
-# Signing: out of scope for v0.1. The supply-chain track (Seguranca supply
-# chain 8 -> 10) will add sigstore signing + SBOM (cargo-cyclonedx) in a
-# follow-up; this workflow is the prerequisite that produces the artifacts
-# those steps would sign.
+# Supply chain (R-SCM, 2026-07-01):
+# - Each archive is signed with cosign keyless (sigstore via GitHub OIDC).
+#   The signature + certificate + Rekor entry are bundled into a `.sigstore`
+#   file uploaded alongside the asset. Users verify identity via
+#   `cosign verify-blob --certificate-identity <runner> ...`.
+# - An SBOM (CycloneDX) is generated from Cargo.lock in the release job and
+#   uploaded as `forge-core-<version>.cdx.json`. Enables CVE auditing of the
+#   crypto-heavy transitive deps (ed25519-dalek, p256, sigstore-tsa, ...).
 
 on:
   push:
@@ -27,6 +31,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write # required for cosign keyless signing via GitHub OIDC
 
 jobs:
   build:
@@ -84,6 +89,11 @@ jobs:
         if: runner.os == 'Linux'
         run: cargo install cross --locked --quiet || true
 
+      # R-SCM.2: cosign is used to sign each archive keyless via GitHub OIDC.
+      # Installed once per job; the signing step runs after packaging.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
       # Linux targets are cross-compiled from the linux runner to keep the
       # matrix uniform; cross handles the sysroot differences between
       # x86_64 (host) and aarch64 (foreign).
@@ -133,6 +143,17 @@ jobs:
           $hash = (Get-FileHash "${{ matrix.archive }}" -Algorithm SHA256).Hash.ToLower()
           "$hash  ${{ matrix.archive }}" | Out-File -Encoding ascii "${{ matrix.archive }}.sha256"
 
+      # R-SCM.2: sign each archive with cosign keyless via GitHub OIDC.
+      # Produces a .sigstore bundle (signature + cert + Rekor entry) that
+      # users verify offline with `cosign verify-blob --bundle ...`.
+      - name: Sign archive (sigstore keyless)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign sign-blob --yes \
+            --bundle ${{ matrix.archive }}.sigstore \
+            ${{ matrix.archive }}
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -140,6 +161,7 @@ jobs:
           path: |
             ${{ matrix.archive }}
             ${{ matrix.archive }}.sha256
+            ${{ matrix.archive }}.sigstore
 
   release:
     name: Publish GitHub Release
@@ -170,6 +192,21 @@ jobs:
       - name: List release assets
         run: ls -la release-assets/
 
+      # R-SCM.1: generate a CycloneDX SBOM from Cargo.lock. cargo-cyclonedx
+      # resolves the transitive dependency tree and emits a JSON BOM that
+      # downstream auditors can feed to dependency/vulnerability scanners
+      # (e.g. OWASP Dep-Check, Trivy, grype). One BOM covers all targets
+      # because all share the same Cargo.lock dependency set.
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked --quiet || true
+
+      - name: Generate CycloneDX SBOM
+        run: |
+          cargo cyclonedx -p forge-core-cli --format json --output-pattern package
+          # cargo-cyclonedx writes to target/<package>.cdx.json; surface it
+          # in release-assets with a stable name.
+          mv target/forge-core-cli-*.cdx.json release-assets/forge-core-${{ steps.tag.outputs.name }}.cdx.json
+
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -181,6 +218,8 @@ jobs:
             release-assets/*.tar.gz
             release-assets/*.zip
             release-assets/*.sha256
+            release-assets/*.sigstore
+            release-assets/*.cdx.json
           body: |
             ## Forge Method Core ${{ steps.tag.outputs.name }}
 
@@ -217,9 +256,31 @@ jobs:
 
             ### Verification
 
-            Each asset ships with a sibling `.sha256` file. Verify integrity
-            with:
+            Each asset ships with three siblings:
+
+            - `.sha256` — SHA-256 checksum (integrity)
+            - `.sigstore` — sigstore bundle (signature + certificate + Rekor entry)
+            - `forge-core-<version>.cdx.json` — CycloneDX SBOM (dependency inventory)
+
+            **Verify integrity** (proves the bytes were not tampered in transit):
 
             ```bash
             sha256sum -c forge-core-<arch>-<os>.tar.gz.sha256
+            ```
+
+            **Verify identity** (proves the asset was built by Stable Studio's CI
+            and recorded in the public Rekor transparency log):
+
+            ```bash
+            cosign verify-blob \
+              --bundle forge-core-<arch>-<os>.tar.gz.sigstore \
+              --certificate-identity-regexp 'https://github.com/Stable-Studio/forge-method-rust/.github/' \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              forge-core-<arch>-<os>.tar.gz
+            ```
+
+            **Audit dependencies** (CVE scan via grype/Trivy against the SBOM):
+
+            ```bash
+            grype sbom:./forge-core-<version>.cdx.json
             ```
