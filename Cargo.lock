@@ -735,6 +735,7 @@ dependencies = [
  "forge-core-eval",
  "forge-core-eval-harness",
  "forge-core-graph",
+ "forge-core-memory",
  "forge-core-runtime",
  "forge-core-store",
  "forge-core-trace",

@@ -100,6 +100,17 @@ pub const COMMANDS: &[CommandSpec] = &[
         handler: crate::isolation::run_isolation_command,
     },
     CommandSpec {
+        name: "memory",
+        usage_lines: &[
+            "       forge-core memory ingest  --entry-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--no-json]",
+            "       forge-core memory list    [--root <path>] [--allow-bootstrap-core] [--now-unix <epoch>] [--memory-dir <path>] [--no-json]",
+            "       forge-core memory forget  --entry-id <id> [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--no-json]",
+            "       forge-core memory promote --entry-id <id> --policy-file <path> --evidence <ref>... [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--no-json]",
+            "       forge-core memory review  (deferred — requires F07 governance)",
+        ],
+        handler: crate::memory_cmd::run_memory_command,
+    },
+    CommandSpec {
         name: "coordination",
         usage_lines: &["       forge-core coordination [--root <path>] [--allow-bootstrap-core] [--json]"],
         handler: crate::coordination::run_coordination_command,
