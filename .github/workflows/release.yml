@@ -46,8 +46,12 @@ jobs:
             artifact: forge-core
             archive: forge-core-aarch64-linux.tar.gz
             can_smoke: false # cross-compiled aarch64 binary cannot run on x86_64 runner
+          # Run on macos-14 (Apple Silicon) and cross-compile to x86_64.
+          # The macos-13 (Intel) runner is being phased out and is extremely
+          # slow for crypto-heavy release builds. Apple Silicon runners are
+          # 3-5x faster, and x86_64 binaries run via Rosetta 2 for smoke tests.
           - target: x86_64-apple-darwin
-            runner: macos-13
+            runner: macos-14
             artifact: forge-core
             archive: forge-core-x86_64-macos.tar.gz
             can_smoke: true
