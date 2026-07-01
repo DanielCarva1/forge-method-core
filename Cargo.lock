@@ -733,6 +733,7 @@ dependencies = [
  "forge-core-crypto",
  "forge-core-engine",
  "forge-core-eval",
+ "forge-core-eval-harness",
  "forge-core-graph",
  "forge-core-runtime",
  "forge-core-store",

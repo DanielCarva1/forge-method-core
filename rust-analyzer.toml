@@ -1,16 +1,25 @@
 # rust-analyzer configuration for the Forge Method Core workspace.
 #
 # WHY THIS EXISTS: `target/debug` accumulates ~130k+ files from incremental
-# builds. Without an explicit exclude, the Zed/rust-analyzer indexer walks
-# every one of them on startup, which OOMs the host process
+# builds, and `target/` keeps reaccumulating leaked test tempdirs
+# (`<name>-<digits>`). Without an explicit exclude, rust-analyzer walks every
+# one of them on startup, which OOMs the host editor process
 # ("memory allocation of 8388608 bytes failed" / 0xC0000409 =
 # STATUS_STACK_BUFFER_OVERRUN). The `.gitignore` already excludes `target/`
-# from git, but rust-analyzer does NOT read .gitignore for its file scan by
-# default -- it must be told explicitly via `files.excludeDirs`.
+# from git, but rust-analyzer does NOT read .gitignore for its file scan --
+# it must be told explicitly via `files.exclude`.
+#
+# SCHEMA NOTE (do not regress): the keys are top-level dotted paths
+# (`files.exclude`, `checkOnSave`, `cargo.targetDir`), NOT nested under a
+# `[files]`/`[cargo]` table and NOT named `excludeDirs`. The previous
+# version of this file used `cargo.checkOnSave` and `files.excludeDirs`,
+# which rust-analyzer 0.3.2955+ rejects with "unexpected field" -- meaning
+# the exclusion silently did nothing and r-a kept indexing `target/`.
+# Verified via `rust-analyzer.exe --print-config-schema`.
 
-# Exclude the heavy dirs from the r-a file scan. This is the single biggest
-# fix: without it r-a indexes ~130k build artifacts under target/debug.
-files.excludeDirs = [
+# Exclude heavy dirs from r-a's file scan. Paths are relative to workspace
+# root; globs are NOT supported here (per schema).
+files.exclude = [
     "target",
     "target-test",
     ".forge-method",
@@ -22,13 +31,12 @@ files.excludeDirs = [
     "contracts/risk-audits/fixtures",
 ]
 
-# Do NOT run `cargo check` on every keystroke inside the editor. Combined
-# with r-a's own analysis pass, two Rust toolchains run in parallel and the
-# Windows commit-charge explodes. r-a still does its own in-process analysis
-# (diagnostics, completions, go-to-definition) -- you only lose the separate
-# `cargo check` pass, which you can run on demand in a terminal.
-cargo.checkOnSave = false
+# Do NOT run `cargo check` on save. r-a's own in-process analysis still gives
+# diagnostics/completions/go-to-definition; this just prevents a second cargo
+# from racing r-a and exploding the Windows commit-charge.
+checkOnSave = false
 
-# Faster startup: don't build all features for the in-editor check pass when
-# it is re-enabled. Harmless when checkOnSave is false.
-cargo.features = []
+# Use a separate target dir for r-a's own cargo invocations so it doesn't
+# lock the workspace Cargo.lock and doesn't trip over the 130k-file main
+# target/debug tree during its own build-script/proc-macro runs.
+cargo.targetDir = true

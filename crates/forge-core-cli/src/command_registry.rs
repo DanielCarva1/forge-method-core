@@ -126,6 +126,11 @@ pub const COMMANDS: &[CommandSpec] = &[
         handler: crate::eval_cmd::run_eval_command,
     },
     CommandSpec {
+        name: "eval-harness",
+        usage_lines: &["       forge-core eval-harness --config <yaml> [--root <path>] [--corpus <yaml>] [--allow-bootstrap-core] [--json|--no-json]"],
+        handler: crate::eval_harness_cmd::run_eval_harness_command,
+    },
+    CommandSpec {
         name: "telemetry",
         usage_lines: &["       forge-core telemetry export [--root <project>] [--contract <path>] [--output <path>] [--format jsonl|otel-json] [--trace-id <id>|--run-id <id>|--latest-run] [--allow-bootstrap-core] [--json|--no-json]"],
         handler: crate::telemetry_cmd::run_telemetry_command,
