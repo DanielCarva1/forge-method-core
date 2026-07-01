@@ -1,0 +1,206 @@
+name: Release
+
+# Produces cross-compiled `forge-core` binaries for Linux, macOS (Intel +
+# Apple Silicon), and Windows on every tag push `v*`, then attaches them to a
+# GitHub Release. This is what makes "Option B — prebuilt binary" in the
+# README real: users download the asset for their platform and put it on PATH.
+#
+# Why cross-compile on linux runners (not native): cheaper, faster, single
+# job matrix. The `cross` tool handles the glibc/musl/linux-gnu split; for
+# macOS we use the native macOS runner because cross-compiling from linux to
+# darwin requires non-free SDKs. Windows MSVC likewise runs natively.
+#
+# Signing: out of scope for v0.1. The supply-chain track (Seguranca supply
+# chain 8 -> 10) will add sigstore signing + SBOM (cargo-cyclonedx) in a
+# follow-up; this workflow is the prerequisite that produces the artifacts
+# those steps would sign.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (must already exist)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            artifact: forge-core
+            archive: forge-core-x86_64-linux.tar.gz
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest
+            artifact: forge-core
+            archive: forge-core-aarch64-linux.tar.gz
+          - target: x86_64-apple-darwin
+            runner: macos-13
+            artifact: forge-core
+            archive: forge-core-x86_64-macos.tar.gz
+          - target: aarch64-apple-darwin
+            runner: macos-14
+            artifact: forge-core
+            archive: forge-core-aarch64-macos.tar.gz
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+            artifact: forge-core.exe
+            archive: forge-core-x86_64-windows.zip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Install cross
+        if: runner.os == 'Linux'
+        run: cargo install cross --locked --quiet || true
+
+      # Linux targets are cross-compiled from the linux runner to keep the
+      # matrix uniform; cross handles the sysroot differences between
+      # x86_64 (host) and aarch64 (foreign).
+      - name: Build (Linux cross)
+        if: runner.os == 'Linux'
+        run: cross build --release --target ${{ matrix.target }} -p forge-core-cli
+
+      - name: Build (native)
+        if: runner.os != 'Linux'
+        run: cargo build --release --target ${{ matrix.target }} -p forge-core-cli
+
+      - name: Smoke test the freshly built binary (POSIX)
+        if: runner.os != 'Windows'
+        run: |
+          ./target/${{ matrix.target }}/release/${{ matrix.artifact }} --help > /dev/null
+          ./target/${{ matrix.target }}/release/${{ matrix.artifact }} validate --root .
+
+      - name: Smoke test the freshly built binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          .\target\${{ matrix.target }}\release\${{ matrix.artifact }} --help | Out-Null
+          .\target\${{ matrix.target }}\release\${{ matrix.artifact }} validate --root .
+
+      - name: Package (POSIX)
+        if: runner.os != 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../${{ matrix.archive }} ${{ matrix.artifact }}
+          cd ../..
+          sha256sum ${{ matrix.archive }} > ${{ matrix.archive }}.sha256
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "target\${{ matrix.target }}\release\${{ matrix.artifact }}" -DestinationPath "${{ matrix.archive }}"
+          $hash = (Get-FileHash "${{ matrix.archive }}" -Algorithm SHA256).Hash.ToLower()
+          "$hash  ${{ matrix.archive }}" | Out-File -Encoding ascii "${{ matrix.archive }}.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: |
+            ${{ matrix.archive }}
+            ${{ matrix.archive }}.sha256
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            echo "name=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List release assets
+        run: ls -la release-assets/
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.name }}
+          name: ${{ steps.tag.outputs.name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/*.tar.gz
+            release-assets/*.zip
+            release-assets/*.sha256
+          body: |
+            ## Forge Method Core ${{ steps.tag.outputs.name }}
+
+            ### Install
+
+            Download the asset for your platform, extract, and put the binary
+            on your `PATH`:
+
+            ```bash
+            # Linux / macOS
+            tar xzf forge-core-<arch>-<os>.tar.gz
+            install -m 0755 forge-core ~/.local/bin/
+
+            # Windows (PowerShell)
+            Expand-Archive forge-core-x86_64-windows.zip $env:LOCALAPPDATA\Programs\forge-core
+            # then add $env:LOCALAPPDATA\Programs\forge-core to your PATH
+            ```
+
+            Verify it landed on your PATH:
+
+            ```bash
+            forge-core validate --root .
+            ```
+
+            See the [Quick Start](https://github.com/Stable-Studio/forge-method-rust#quick-start)
+            section of the README for the first project init.
+
+            ### Supported hosts
+
+            `codex`, `cursor`, `claude`, `opencode`, `vscode`, `pidev`,
+            `forge_standalone`, `custom`. Run
+            `forge-core host-adapter-manifest --json` for the full per-command
+            authority boundary.
+
+            ### Verification
+
+            Each asset ships with a sibling `.sha256` file. Verify integrity
+            with:
+
+            ```bash
+            sha256sum -c forge-core-<arch>-<os>.tar.gz.sha256
+            ```
