@@ -120,6 +120,9 @@ fn payload(reference: &str, content: &[u8]) -> EffectApplicationPayload {
 
 /// Snapshot the WAL: its sha256 over bytes (empty file hashes the empty string)
 /// plus its line count. Two equal snapshots mean the WAL was not mutated.
+#[allow(clippy::naive_bytecount)]
+// Counting newlines via filter+count is fine for a test snapshot; pulling in
+// `bytecount`/`memchr` just for this helper is not worth it.
 fn wal_snapshot(root: &Path) -> (String, usize) {
     let wal = root.join(WAL_RELATIVE_PATH);
     let bytes = fs::read(&wal).unwrap_or_default();

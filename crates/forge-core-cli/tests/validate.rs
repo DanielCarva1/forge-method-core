@@ -1,3 +1,13 @@
+#![allow(clippy::struct_field_names)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::format_collect)]
+#![allow(clippy::doc_markdown)]
+// Test fixtures legitimately reuse the `_path` suffix across fields for
+// readability (e.g. `bundle_path`, `artifact_path`), and a few integration
+// tests walk the full CLI surface which makes them long. Renaming fields or
+// splitting end-to-end tests would hurt fixture/test clarity for no real
+// benefit.
+
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use ed25519_dalek::{Signer as _, SigningKey};
 use forge_core_cli::{

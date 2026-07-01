@@ -1375,6 +1375,7 @@ where
     );
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn assert_report_ok(label: &str, report: forge_core_validate::ValidationReport) {
     assert!(!report.has_errors(), "{label}: {:?}", report.diagnostics());
 }

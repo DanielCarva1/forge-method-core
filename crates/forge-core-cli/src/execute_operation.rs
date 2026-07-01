@@ -315,13 +315,16 @@ pub fn run_execute_operation(
         let trace_id = format!("{}.risk-audit", input.tx_id_prefix);
         let run_id = format!("{}.risk-audit.{}", input.tx_id_prefix, input.recorded_at);
         let rule_set_ref = rules_path.to_string_lossy().to_string();
+        let ctx = crate::risk_audit_trace::RiskAuditTraceContext {
+            trace_id: &trace_id,
+            run_id: &run_id,
+            recorded_at: &input.recorded_at,
+            principal_id: "forge-core",
+            agent_id: "execute-operation",
+            rule_set_ref: &rule_set_ref,
+        };
         let events = crate::risk_audit_trace::build_risk_audit_events(
-            &trace_id,
-            &run_id,
-            &input.recorded_at,
-            "forge-core",
-            "execute-operation",
-            &rule_set_ref,
+            &ctx,
             error_count,
             warning_count,
             target_count,

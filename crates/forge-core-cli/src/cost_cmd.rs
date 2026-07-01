@@ -7,12 +7,12 @@
 //!
 //! Scope flags select which events feed the report:
 //!
-//! - `--run-id <id>`     → `CostScope::Run`    (all events for that run)
-//! - `--graph-id <id>`   → `CostScope::Graph`  (post-filter; trace query is
-//!                         run-scoped, so `graph_id` is applied client-side)
-//! - `--principal <id>`  → `CostScope::Principal` (post-filter by actor field)
-//! - `--last-run`        → `CostScope::Run` for the most recent run
-//! - (none)              → `CostScope::All`    (every scanned event)
+//! - `--run-id <id>`     -> `CostScope::Run`    (all events for that run)
+//! - `--graph-id <id>`   -> `CostScope::Graph`  (post-filter; trace query is
+//!   run-scoped, so `graph_id` is applied client-side)
+//! - `--principal <id>`  -> `CostScope::Principal` (post-filter by actor field)
+//! - `--last-run`        -> `CostScope::Run` for the most recent run
+//! - (none)              -> `CostScope::All`    (every scanned event)
 
 use crate::cli_error::ExitError;
 use crate::cli_util::usage;
@@ -32,6 +32,12 @@ pub const COST_USAGE_LINE: &str =
 ///
 /// Returns `ExitError::usage` on a malformed argv and `ExitError::env_config`
 /// when project resolution fails or the sidecar state root is missing.
+///
+/// # Panics
+///
+/// Panics if the cost report cannot be serialized to JSON. This is a
+/// programming error (the report is `serde`-derived) and never expected in
+/// practice.
 pub fn run_cost_command(args: &[String]) -> Result<(), ExitError> {
     let mut root = PathBuf::from(".");
     let mut run_id: Option<String> = None;
