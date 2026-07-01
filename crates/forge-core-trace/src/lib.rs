@@ -123,6 +123,12 @@ pub enum TraceEventKind {
     RiskAuditPassed,
     /// F11.4: risk-audit failed closed (structural errors or findings).
     RiskAuditFailed,
+    /// F05.6: eval-harness comparison started (config loaded, arms spawning).
+    EvalCompareStarted,
+    /// F05.6: eval-harness comparison completed with status Passed.
+    EvalComparePassed,
+    /// F05.6: eval-harness comparison blocked (diagnostics blocked a decision).
+    EvalCompareFailed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

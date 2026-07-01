@@ -2,7 +2,7 @@
 
 **Data**: 2026-07-01
 **Branch**: `master`
-**Status**: design (F05.1) — grill resolvido, pronto para F05.2
+**Status**: FECHADO (F05.1–F05.7 entregues)
 
 ## Objetivo
 
@@ -87,15 +87,30 @@ com EvalHarness.
 
 ## Stories (roadmap)
 
-| Story | Entrega |
-|---|---|
-| F05.1 | Este design doc + termos no CONTEXT.md |
-| F05.2 | `EvalHarnessConfig` YAML schema + validator tipado (seguir `forge-core-validate`) |
-| F05.3 | Arm executor: spawn subprocess por arm, grader, canonicalização |
-| F05.4 | Report generator (reusa `compare_eval_runs`) |
-| F05.5 | CLI `forge-core eval-compare --config <yaml>` (F15 pattern, 2 edit points) |
-| F05.6 | Trace integration (`EvalCompareStarted/Passed/Failed`) |
-| F05.7 | Fixtures válida + inválida + E2E + anchor 122 |
+| Story | Entrega | Status |
+|---|---|---|
+| F05.1 | Este design doc + termos no CONTEXT.md | ✅ |
+| F05.2 | `EvalHarnessConfig` YAML schema + validator tipado | ✅ |
+| F05.3 | Arm executor: spawn subprocess por arm, grader, canonicalização | ✅ |
+| F05.4 | Report generator (reusa `compare_eval_runs`) | ✅ |
+| F05.5 | CLI `forge-core eval-harness --config <yaml>` (F15 pattern, 2 edit points) | ✅ |
+| F05.6 | Trace integration (`EvalCompareStarted/Passed/Failed`) | ✅ |
+| F05.7 | Fixtures válida + inválida + E2E + anchor 122 | ✅ |
+
+### Divergências do followup (resolvidas na implementação)
+
+- **Nome do comando**: `forge-core eval-harness` (não `eval-compare`). O
+  `forge-core eval compare` já existe e compara runs pré-computados; o novo
+  comando EXECUTA arms, então `eval-harness` é unambíguo. Sem colisão técnica
+  (tokens argv distintos), mas o nome clarifica o papel.
+- **Grader**: `FixturePass` e `Manual` renderizam verdict `Error` (não
+  auto-passam). Só `ExactMatch` (router corpus) está completo em F05; os outros
+  aguardam a estrutura de corpus correspondente.
+- **`build_eval_harness_events`**: usa struct `EvalHarnessOutcome` (8 campos)
+  em vez de 9 args posicionais (AGENTS.md pitfall #4). Blocked → risco `Medium`
+  (eval é advisory, não gate de mutação como risk-audit → nunca `Blocked`).
+- **Path handling**: executor usa `Path::join` (paths nativos). `cmd /c copy`
+  no Windows exige backslashes; o E2E escapa `\` → `\\` no YAML.
 
 ## Validação (a cumprir ao fim de F05)
 

@@ -20,6 +20,10 @@ use forge_core_eval::EvalArmLabel;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+pub mod executor;
+
+pub use executor::execute_run;
+
 pub const EVAL_HARNESS_SCHEMA_VERSION: &str = "eval-harness-v0";
 
 /// Substituted in an arm's `command` with the absolute path to a per-task YAML
@@ -557,6 +561,147 @@ fn path_to_evidence_ref(path: &str) -> String {
     format!("raw:{path}")
 }
 
+/// Builds a contract for a run the harness could not complete (spawn failure,
+/// nonzero exit, missing/invalid output file, timeout). The verdict is always
+/// `Error` so the run is counted but never silently dropped -- the comparison
+/// needs one document per (arm, task).
+#[must_use]
+pub fn build_error_contract(
+    arm_label: EvalArmLabel,
+    task: &EvalTask,
+    failure_cluster: EvalFailureCluster,
+    notes: impl Into<String>,
+    evaluated_at: &str,
+) -> EvalRunContractDocument {
+    EvalRunContractDocument {
+        // EvalRunContractDocument schema version is "0.1" (see
+        // forge-core-contracts/src/eval_run.rs); no public const is exported.
+        schema_version: "0.1".to_string(),
+        eval_run_contract: forge_core_contracts::eval_run::EvalRunContract {
+            run_id: StableId(format!("eval.run.{}.{}", task.task_id.0, arm_label)),
+            task_id: StableId(task.task_id.0.clone()),
+            model_ref: format!("harness-arm:{arm_label}"),
+            router_decision: None,
+            outcome: forge_core_contracts::eval_run::EvalOutcome {
+                value: EvalVerdict::Error,
+                evaluated_at: evaluated_at.to_string(),
+                failure_cluster: Some(failure_cluster),
+                notes: Some(notes.into()),
+            },
+            cost: forge_core_contracts::eval_run::EvalCost {
+                prompt_tokens: 0,
+                completion_tokens: 0,
+                total_tokens: 0,
+                estimated_cost_usd_micros: 0,
+                wall_time_ms: 0,
+                num_tool_calls: 0,
+                num_turns: 0,
+            },
+            quality_signals: forge_core_contracts::eval_run::QualitySignals {
+                correct_location: None,
+                semantic_correct: None,
+                overfit_suspected: None,
+                confidence: None,
+            },
+            evidence_refs: Vec::new(),
+        },
+    }
+}
+
+// ===========================================================================
+// Report generator (F05.4): bridges harness config -> comparison suite
+// ===========================================================================
+
+use forge_core_eval::{
+    compare_eval_runs, EvalArmSpec, EvalComparePolicy, EvalCompareSuite,
+    EvalComparisonReport, EvalRunInput,
+};
+
+/// Builds the `EvalCompareSuite` consumed by `compare_eval_runs` from a harness
+/// config. The first arm is the baseline (ADR-0002 anchor), the second is the
+/// candidate. `require_evidence_refs` defaults true because the harness emits a
+/// raw-report evidence ref for every run; `require_trace_refs` defaults false
+/// until F05.6 wires trace into the contracts.
+#[must_use]
+pub fn build_compare_suite(config: &EvalHarnessConfig) -> EvalCompareSuite {
+    let baseline = &config.arms[0];
+    let candidate = &config.arms[1];
+    EvalCompareSuite {
+        id: StableId(config.id.0.clone()),
+        comparison_id: StableId(config.id.0.clone()),
+        baseline: EvalArmSpec {
+            label: baseline.label,
+            run_refs: vec![RepoPath(format!(
+                "{}/{}",
+                config.run_dir.0, baseline.label
+            ))],
+        },
+        candidate: EvalArmSpec {
+            label: candidate.label,
+            run_refs: vec![RepoPath(format!(
+                "{}/{}",
+                config.run_dir.0, candidate.label
+            ))],
+        },
+        policy: EvalComparePolicy {
+            require_matching_tasks: config.policy.require_matching_tasks,
+            require_evidence_refs: true,
+            require_trace_refs: false,
+            minimum_task_count: config.policy.minimum_task_count,
+        },
+    }
+}
+
+/// Wraps each canonical contract document in the `EvalRunInput` shape
+/// `compare_eval_runs` expects, pointing `source_ref` at the per-arm run
+/// directory under `run_dir`.
+#[must_use]
+pub fn to_run_inputs(
+    documents: &[EvalRunContractDocument],
+    arm_label: EvalArmLabel,
+    run_dir: &str,
+) -> Vec<EvalRunInput> {
+    let source_ref = RepoPath(format!("{run_dir}/{arm_label}"));
+    documents
+        .iter()
+        .map(|document| EvalRunInput {
+            source_ref: source_ref.clone(),
+            document: document.clone(),
+        })
+        .collect()
+}
+
+/// Runs the full comparison: builds the suite from the config, wraps the
+/// per-arm canonical contracts as run inputs, and delegates to
+/// `compare_eval_runs`. The harness is the sole caller of this entry point --
+/// it produced every document it passes in, so the comparison is over
+/// consistently graded, uniformly canonicalised runs.
+#[must_use]
+pub fn generate_comparison_report(
+    config: &EvalHarnessConfig,
+    baseline_documents: &[EvalRunContractDocument],
+    candidate_documents: &[EvalRunContractDocument],
+) -> EvalComparisonReport {
+    let suite = build_compare_suite(config);
+    let baseline_runs = to_run_inputs(
+        baseline_documents,
+        suite.baseline.label,
+        &config.run_dir.0,
+    );
+    let candidate_runs = to_run_inputs(
+        candidate_documents,
+        suite.candidate.label,
+        &config.run_dir.0,
+    );
+    compare_eval_runs(
+        &suite,
+        suite.baseline.label,
+        suite.candidate.label,
+        &baseline_runs,
+        &candidate_runs,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::pedantic)]
@@ -863,5 +1008,82 @@ eval_corpus:
         // Fallback model_ref when the arm did not self-report one.
         assert_eq!(document.eval_run_contract.model_ref, "harness-arm:mas");
         assert!(document.eval_run_contract.evidence_refs.is_empty());
+    }
+
+    fn two_arm_config() -> EvalHarnessConfig {
+        parse_harness_config(include_str!("../fixtures/valid-router-compare.yaml"))
+            .expect("valid fixture parses")
+            .eval_harness_config
+    }
+
+    fn contract(arm: EvalArmLabel, task_id: &str, verdict: EvalVerdict) -> EvalRunContractDocument {
+        EvalRunContractDocument {
+            schema_version: "0.1".to_string(),
+            eval_run_contract: forge_core_contracts::eval_run::EvalRunContract {
+                run_id: StableId(format!("eval.run.{}.{}", task_id, arm)),
+                task_id: StableId(task_id.to_string()),
+                model_ref: format!("harness-arm:{}", arm),
+                router_decision: None,
+                outcome: forge_core_contracts::eval_run::EvalOutcome {
+                    value: verdict,
+                    evaluated_at: "2026-07-01T00:00:00Z".to_string(),
+                    failure_cluster: None,
+                    notes: None,
+                },
+                cost: forge_core_contracts::eval_run::EvalCost {
+                    prompt_tokens: 100,
+                    completion_tokens: 50,
+                    total_tokens: 150,
+                    estimated_cost_usd_micros: 1_000,
+                    wall_time_ms: 5_000,
+                    num_tool_calls: 2,
+                    num_turns: 1,
+                },
+                quality_signals: forge_core_contracts::eval_run::QualitySignals {
+                    correct_location: None,
+                    semantic_correct: None,
+                    overfit_suspected: None,
+                    confidence: None,
+                },
+                evidence_refs: vec!["raw:/tmp/x".to_string()],
+            },
+        }
+    }
+
+    #[test]
+    fn report_keeps_baseline_when_candidate_does_not_beat_it() {
+        let config = two_arm_config();
+        // Baseline passes both tasks; candidate passes one, fails one.
+        let baseline = vec![
+            contract(EvalArmLabel::SingleAgent, "router-eval-000", EvalVerdict::Passed),
+            contract(EvalArmLabel::SingleAgent, "router-eval-001", EvalVerdict::Passed),
+        ];
+        let candidate = vec![
+            contract(EvalArmLabel::Mas, "router-eval-000", EvalVerdict::Passed),
+            contract(EvalArmLabel::Mas, "router-eval-001", EvalVerdict::Failed),
+        ];
+        let report = generate_comparison_report(&config, &baseline, &candidate);
+        assert_eq!(report.baseline, EvalArmLabel::SingleAgent);
+        assert_eq!(report.candidate, EvalArmLabel::Mas);
+        assert_eq!(report.baseline_summary.successes, 2);
+        assert_eq!(report.candidate_summary.successes, 1);
+    }
+
+    #[test]
+    fn to_run_inputs_sets_per_arm_source_ref() {
+        let docs = vec![contract(EvalArmLabel::SingleAgent, "router-eval-000", EvalVerdict::Passed)];
+        let inputs = to_run_inputs(&docs, EvalArmLabel::SingleAgent, "target/eval-runs/x");
+        assert_eq!(inputs.len(), 1);
+        assert_eq!(inputs[0].source_ref.0, "target/eval-runs/x/single-agent");
+    }
+
+    #[test]
+    fn build_suite_marks_baseline_and_candidate_from_first_two_arms() {
+        let config = two_arm_config();
+        let suite = build_compare_suite(&config);
+        assert_eq!(suite.baseline.label, EvalArmLabel::SingleAgent);
+        assert_eq!(suite.candidate.label, EvalArmLabel::Mas);
+        assert!(suite.policy.require_evidence_refs);
+        assert!(!suite.policy.require_trace_refs);
     }
 }

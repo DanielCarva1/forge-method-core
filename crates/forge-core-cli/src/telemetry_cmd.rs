@@ -599,12 +599,14 @@ fn export_record_from_event(
 
 fn map_trace_event_kind(kind: TraceEventKind) -> TelemetryEventKind {
     match kind {
-        TraceEventKind::GatePassed | TraceEventKind::GateBlocked => {
-            TelemetryEventKind::GateEvaluated
-        }
-        TraceEventKind::RiskAuditStarted
+        TraceEventKind::GatePassed
+        | TraceEventKind::GateBlocked
+        | TraceEventKind::RiskAuditStarted
         | TraceEventKind::RiskAuditPassed
-        | TraceEventKind::RiskAuditFailed => TelemetryEventKind::GateEvaluated,
+        | TraceEventKind::RiskAuditFailed
+        | TraceEventKind::EvalCompareStarted
+        | TraceEventKind::EvalComparePassed
+        | TraceEventKind::EvalCompareFailed => TelemetryEventKind::GateEvaluated,
         TraceEventKind::PreviewCompleted | TraceEventKind::ReadyCompleted => {
             TelemetryEventKind::VerificationRun
         }
@@ -822,6 +824,9 @@ fn phase_to(kind: TraceEventKind) -> &'static str {
         TraceEventKind::RiskAuditStarted => "risk_audit_started",
         TraceEventKind::RiskAuditPassed => "risk_audit_passed",
         TraceEventKind::RiskAuditFailed => "risk_audit_failed",
+        TraceEventKind::EvalCompareStarted => "eval_compare_started",
+        TraceEventKind::EvalComparePassed => "eval_compare_passed",
+        TraceEventKind::EvalCompareFailed => "eval_compare_failed",
         TraceEventKind::EffectStaged => "effect_staged",
         TraceEventKind::EffectApplied => "effect_applied",
         TraceEventKind::RunCompleted => "completed",
@@ -1052,6 +1057,9 @@ fn trace_event_kind_name(kind: TraceEventKind) -> &'static str {
         TraceEventKind::RiskAuditStarted => "risk_audit_started",
         TraceEventKind::RiskAuditPassed => "risk_audit_passed",
         TraceEventKind::RiskAuditFailed => "risk_audit_failed",
+        TraceEventKind::EvalCompareStarted => "eval_compare_started",
+        TraceEventKind::EvalComparePassed => "eval_compare_passed",
+        TraceEventKind::EvalCompareFailed => "eval_compare_failed",
     }
 }
 

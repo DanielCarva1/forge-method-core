@@ -31,6 +31,8 @@ pub mod coordination;
 pub mod cost_cmd;
 pub mod effect_index;
 pub mod eval_cmd;
+pub mod eval_harness_cmd;
+pub mod eval_harness_trace;
 pub mod execute_operation;
 pub mod graph_cmd;
 pub mod guide;
