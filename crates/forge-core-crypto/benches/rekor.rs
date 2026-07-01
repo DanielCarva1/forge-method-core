@@ -33,8 +33,10 @@ use forge_core_crypto::host_adapter_verification::run_host_adapter_rekor_verific
 use forge_core_crypto::rekor::{parse_rekor_log_entry, parse_signed_checkpoint};
 use p256::ecdsa::{Signature as P256Signature, SigningKey as P256SigningKey};
 use p256::pkcs8::{EncodePublicKey, LineEnding};
+// `write!` into a `String` requires `fmt::Write` in scope (distinct from `io::Write`).
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard, OnceLock};
@@ -63,15 +65,18 @@ fn cache() -> &'static Mutex<HashMap<usize, RekorFixture>> {
 }
 
 /// Synthetic rekor leaf hash: 32 bytes of pseudo-random, hex-encoded.
+/// `seed` is mixed with the byte index; both fit in `u8` (array is fixed 32,
+/// so the index is always 0..32 and never truncates).
 fn synthetic_leaf_hash(seed: u8) -> String {
-    let bytes: [u8; 32] = std::array::from_fn(|i| seed.wrapping_add(i as u8));
+    let bytes: [u8; 32] =
+        std::array::from_fn(|i| seed.wrapping_add(u8::try_from(i).expect("array index fits u8")));
     hex_encode(&bytes)
 }
 
 fn hex_encode(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
-        out.push_str(&format!("{byte:02x}"));
+        let _ = write!(out, "{byte:02x}");
     }
     out
 }
@@ -150,7 +155,9 @@ fn build_fixture(aux_hashes: usize) -> RekorFixture {
         let mut current = leaf_hash.clone();
         let mut composed = Vec::with_capacity(aux_hashes);
         for i in 0..aux_hashes {
-            let aux = synthetic_leaf_hash(i as u8);
+            // `aux_hashes` is bounded by the benchmark matrix (0/10/100), so the
+            // index always fits `u8` for the depths we measure.
+            let aux = synthetic_leaf_hash(u8::try_from(i).expect("aux index fits u8"));
             current = merkle_parent(&current, &aux);
             composed.push(aux);
         }
@@ -207,10 +214,9 @@ fn build_fixture(aux_hashes: usize) -> RekorFixture {
 
 fn fixture_for_guard(aux_hashes: usize) -> MutexGuard<'static, HashMap<usize, RekorFixture>> {
     let mut guard = cache().lock().expect("fixture cache poisoned");
-    guard.entry(aux_hashes).or_insert_with(|| {
-        let fixture = build_fixture(aux_hashes);
-        fixture
-    });
+    guard
+        .entry(aux_hashes)
+        .or_insert_with(|| build_fixture(aux_hashes));
     guard
 }
 
