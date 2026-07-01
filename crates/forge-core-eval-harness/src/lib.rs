@@ -14,7 +14,8 @@
 //! equivalent across arms is the operator's convention, enforced by review of
 //! the config, not by a schema field.
 
-use forge_core_contracts::{RepoPath, StableId};
+use forge_core_contracts::eval_run::{EvalFailureCluster, EvalVerdict};
+use forge_core_contracts::{EvalRunContractDocument, RepoPath, StableId};
 use forge_core_eval::EvalArmLabel;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -284,6 +285,278 @@ pub fn validate_harness_config_document(
     diagnostics
 }
 
+// ===========================================================================
+// Corpus + grader (pure half of the executor)
+// ===========================================================================
+
+/// How a task's verdict is computed. Inferred from the corpus shape, not
+/// declared as a config field: router corpora map to `ExactMatch`,
+/// coordination suites to `FixturePass`, and anything without an automatic
+/// grader to `Manual`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GraderKind {
+    ExactMatch,
+    FixturePass,
+    Manual,
+}
+
+/// Computes a verdict by comparing the arm's raw output against the expected
+/// answer. Whitespace is trimmed; the comparison is otherwise exact so that
+/// kebab-case workflow ids are not silently coerced.
+#[must_use]
+pub fn grade_output(grader: GraderKind, actual: &str, expected: &str) -> EvalVerdict {
+    match grader {
+        GraderKind::ExactMatch => {
+            if actual.trim() == expected.trim() {
+                EvalVerdict::Passed
+            } else {
+                EvalVerdict::Failed
+            }
+        }
+        GraderKind::FixturePass | GraderKind::Manual => EvalVerdict::Error,
+    }
+}
+
+/// One normalised task drawn from any supported corpus. The harness runs every
+/// arm against the same set of tasks.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvalTask {
+    pub task_id: StableId,
+    pub input: String,
+    pub expected: String,
+    pub grader_kind: GraderKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoadCorpusError {
+    pub message: String,
+}
+
+impl fmt::Display for LoadCorpusError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "failed to load eval corpus: {}", self.message)
+    }
+}
+
+impl std::error::Error for LoadCorpusError {}
+
+impl LoadCorpusError {
+    #[must_use]
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct RouterCorpusDocument {
+    eval_corpus: Vec<RouterCase>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct RouterCase {
+    utterance: String,
+    expected_workflow: String,
+    #[allow(dead_code)]
+    phase: String,
+}
+
+/// Loads a router eval corpus (`utterance -> expected_workflow` cases) into
+/// normalised tasks with the `ExactMatch` grader. Task ids are derived from the
+/// phase and zero-padded index so they are stable across runs.
+///
+/// # Errors
+///
+/// Returns `LoadCorpusError` when the YAML is malformed or lacks the
+/// `eval_corpus` array.
+pub fn load_router_corpus(yaml: &str) -> Result<Vec<EvalTask>, LoadCorpusError> {
+    let document = yaml_serde::from_str::<RouterCorpusDocument>(yaml)
+        .map_err(|error| LoadCorpusError::new(error.to_string()))?;
+    let tasks = document
+        .eval_corpus
+        .into_iter()
+        .enumerate()
+        .map(|(index, case)| EvalTask {
+            task_id: StableId(format!("router-eval-{index:03}")),
+            input: case.utterance,
+            expected: case.expected_workflow,
+            grader_kind: GraderKind::ExactMatch,
+        })
+        .collect();
+    Ok(tasks)
+}
+
+/// Self-reported usage an arm writes alongside its raw output. `wall_time_ms`
+/// is intentionally absent: the harness measures wall time externally, since
+/// the arm cannot see its own spawn overhead.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawUsage {
+    #[serde(default)]
+    pub prompt_tokens: u64,
+    #[serde(default)]
+    pub completion_tokens: u64,
+    #[serde(default)]
+    pub total_tokens: u64,
+    #[serde(default)]
+    pub estimated_cost_usd_micros: u64,
+    #[serde(default)]
+    pub num_tool_calls: u32,
+    #[serde(default)]
+    pub num_turns: u32,
+}
+
+/// The raw JSON report an arm writes at `{output_file}`. The harness reads it,
+/// applies the grader, and canonicalises the `EvalRunContractDocument`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawArmReport {
+    pub output: String,
+    #[serde(default)]
+    pub model_ref: Option<String>,
+    #[serde(default)]
+    pub usage: RawUsage,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseRawReportError {
+    pub message: String,
+}
+
+impl fmt::Display for ParseRawReportError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "failed to parse arm raw report: {}", self.message)
+    }
+}
+
+impl std::error::Error for ParseRawReportError {}
+
+impl ParseRawReportError {
+    #[must_use]
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+/// Parses the JSON an arm wrote at `{output_file}`.
+///
+/// # Errors
+///
+/// Returns `ParseRawReportError` when the file is missing or is not valid JSON
+/// matching `RawArmReport`.
+pub fn parse_raw_report(json: &str) -> Result<RawArmReport, ParseRawReportError> {
+    serde_json::from_str::<RawArmReport>(json)
+        .map_err(|error| ParseRawReportError::new(error.to_string()))
+}
+
+// ===========================================================================
+// Canonicalisation + argv preparation (pure, spawn-free)
+// ===========================================================================
+
+/// Substitutes `{task_file}`, `{task_id}`, `{output_file}` placeholders in an
+/// arm's command argv. Tokens that contain no placeholder are returned
+/// unchanged. The resulting argv is what the subprocess executor spawns.
+#[must_use]
+pub fn substitute_placeholders(
+    command: &[String],
+    task_file: &str,
+    task_id: &str,
+    output_file: &str,
+) -> Vec<String> {
+    command
+        .iter()
+        .map(|token| {
+            token
+                .replace(TASK_FILE_PLACEHOLDER, task_file)
+                .replace(TASK_ID_PLACEHOLDER, task_id)
+                .replace(OUTPUT_FILE_PLACEHOLDER, output_file)
+        })
+        .collect()
+}
+
+/// Builds the canonical `EvalRunContractDocument` for one (arm, task) run. The
+/// harness — not the arm — is the sole producer of this document: the verdict
+/// comes from [`grade_output`], cost comes from the arm's self-reported usage
+/// plus the harness-measured wall time. Run id is stable because the design is
+/// one run per (arm, task) ([`f05_eval_harness_design`], decision 4).
+///
+/// [`f05_eval_harness_design`]: ../../../docs/dev-docs/forge-method-core-dev-docs-v2/progress/f05_eval_harness_design.md
+#[must_use]
+#[allow(clippy::too_many_arguments)]
+pub fn build_run_contract(
+    arm_label: EvalArmLabel,
+    task: &EvalTask,
+    report: &RawArmReport,
+    wall_time_ms: u64,
+    evaluated_at: &str,
+    raw_report_path: Option<&str>,
+) -> EvalRunContractDocument {
+    let verdict = grade_output(task.grader_kind, &report.output, &task.expected);
+    let failure_cluster = match verdict {
+        EvalVerdict::Failed => Some(EvalFailureCluster::SemanticMismatch),
+        _ => None,
+    };
+    let notes = match task.grader_kind {
+        GraderKind::ExactMatch => None,
+        GraderKind::FixturePass => {
+            Some("fixture-pass grader not yet implemented; verdict deferred".to_string())
+        }
+        GraderKind::Manual => {
+            Some("manual grader: verdict deferred until human review".to_string())
+        }
+    };
+    let model_ref = report
+        .model_ref
+        .clone()
+        .unwrap_or_else(|| format!("harness-arm:{arm_label}"));
+    let evidence_refs = raw_report_path
+        .map(path_to_evidence_ref)
+        .into_iter()
+        .collect();
+    let usage = &report.usage;
+    EvalRunContractDocument {
+        // EvalRunContractDocument schema version is "0.1" (see
+        // forge-core-contracts/src/eval_run.rs); no public const is exported.
+        schema_version: "0.1".to_string(),
+        eval_run_contract: forge_core_contracts::eval_run::EvalRunContract {
+            run_id: StableId(format!("eval.run.{}.{}", task.task_id.0, arm_label)),
+            task_id: StableId(task.task_id.0.clone()),
+            model_ref,
+            router_decision: None,
+            outcome: forge_core_contracts::eval_run::EvalOutcome {
+                value: verdict,
+                evaluated_at: evaluated_at.to_string(),
+                failure_cluster,
+                notes,
+            },
+            cost: forge_core_contracts::eval_run::EvalCost {
+                prompt_tokens: usage.prompt_tokens,
+                completion_tokens: usage.completion_tokens,
+                total_tokens: usage.total_tokens,
+                estimated_cost_usd_micros: usage.estimated_cost_usd_micros,
+                wall_time_ms,
+                num_tool_calls: usage.num_tool_calls,
+                num_turns: usage.num_turns,
+            },
+            quality_signals: forge_core_contracts::eval_run::QualitySignals {
+                correct_location: None,
+                semantic_correct: None,
+                overfit_suspected: None,
+                confidence: None,
+            },
+            evidence_refs,
+        },
+    }
+}
+
+fn path_to_evidence_ref(path: &str) -> String {
+    format!("raw:{path}")
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::pedantic)]
@@ -419,5 +692,176 @@ eval_harness_config:
             has,
             "on-disk invalid fixture must flag DuplicateArmLabel, got {diagnostics:?}"
         );
+    }
+
+    #[test]
+    fn grader_exact_match_passes_on_equal_output() {
+        assert_eq!(
+            grade_output(GraderKind::ExactMatch, "discover-intent", "discover-intent"),
+            EvalVerdict::Passed
+        );
+    }
+
+    #[test]
+    fn grader_exact_match_trims_whitespace() {
+        assert_eq!(
+            grade_output(GraderKind::ExactMatch, "  discover-intent\n", "discover-intent"),
+            EvalVerdict::Passed
+        );
+    }
+
+    #[test]
+    fn grader_exact_match_fails_on_mismatch() {
+        assert_eq!(
+            grade_output(GraderKind::ExactMatch, "brainstorming", "discover-intent"),
+            EvalVerdict::Failed
+        );
+    }
+
+    #[test]
+    fn grader_manual_and_fixture_yield_error_until_human_review() {
+        assert_eq!(grade_output(GraderKind::Manual, "x", "y"), EvalVerdict::Error);
+        assert_eq!(grade_output(GraderKind::FixturePass, "x", "y"), EvalVerdict::Error);
+    }
+
+    #[test]
+    fn router_corpus_loads_into_exact_match_tasks() {
+        let yaml = "\
+eval_corpus:
+  - utterance: \"help me brainstorm\"
+    expected_workflow: brainstorming
+    phase: 1-discovery
+  - utterance: \"write the prd\"
+    expected_workflow: write-spec
+    phase: 2-specification
+";
+        let tasks = load_router_corpus(yaml).expect("router corpus should load");
+        assert_eq!(tasks.len(), 2);
+        assert_eq!(tasks[0].task_id.0, "router-eval-000");
+        assert_eq!(tasks[0].expected, "brainstorming");
+        assert_eq!(tasks[0].grader_kind, GraderKind::ExactMatch);
+        assert_eq!(tasks[1].task_id.0, "router-eval-001");
+    }
+
+    #[test]
+    fn router_corpus_rejects_malformed_yaml() {
+        let result = load_router_corpus("eval_corpus: [this is broken");
+        assert!(result.is_err(), "expected load error for malformed corpus");
+    }
+
+    #[test]
+    fn raw_report_parses_full_json() {
+        let json = r#"{"output":"discover-intent","usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"estimated_cost_usd_micros":200,"num_tool_calls":2,"num_turns":1}}"#;
+        let report = parse_raw_report(json).expect("valid report should parse");
+        assert_eq!(report.output, "discover-intent");
+        assert_eq!(report.usage.total_tokens, 15);
+        assert_eq!(report.usage.num_tool_calls, 2);
+    }
+
+    #[test]
+    fn raw_report_parses_with_default_usage() {
+        let json = r#"{"output":"brainstorming"}"#;
+        let report = parse_raw_report(json).expect("report without usage should parse");
+        assert_eq!(report.output, "brainstorming");
+        assert_eq!(report.usage.total_tokens, 0);
+    }
+
+    #[test]
+    fn raw_report_rejects_unknown_fields() {
+        let json = r#"{"output":"x","surprise":true}"#;
+        assert!(parse_raw_report(json).is_err());
+    }
+
+    #[test]
+    fn substitute_replaces_all_placeholders() {
+        let command = vec![
+            "agent".to_string(),
+            "--input".to_string(),
+            "{task_file}".to_string(),
+            "--tag".to_string(),
+            "{task_id}".to_string(),
+            "--out".to_string(),
+            "{output_file}".to_string(),
+        ];
+        let out = substitute_placeholders(&command, "/tmp/task.yaml", "router-eval-000", "/tmp/out.json");
+        assert_eq!(out[2], "/tmp/task.yaml");
+        assert_eq!(out[4], "router-eval-000");
+        assert_eq!(out[6], "/tmp/out.json");
+        assert_eq!(out[0], "agent");
+    }
+
+    #[test]
+    fn substitute_passes_through_tokens_without_placeholders() {
+        let command = vec!["static-bin".to_string(), "--flag".to_string()];
+        let out = substitute_placeholders(&command, "a", "b", "c");
+        assert_eq!(out, vec!["static-bin".to_string(), "--flag".to_string()]);
+    }
+
+    fn router_task(expected: &str) -> EvalTask {
+        EvalTask {
+            task_id: StableId("router-eval-000".to_string()),
+            input: "help me brainstorm".to_string(),
+            expected: expected.to_string(),
+            grader_kind: GraderKind::ExactMatch,
+        }
+    }
+
+    #[test]
+    fn build_contract_marks_passed_run_with_matching_output() {
+        let task = router_task("brainstorming");
+        let report = RawArmReport {
+            output: "brainstorming".to_string(),
+            model_ref: Some("openai/gpt-5.5".to_string()),
+            usage: RawUsage {
+                prompt_tokens: 8_000,
+                completion_tokens: 2_000,
+                total_tokens: 10_000,
+                estimated_cost_usd_micros: 125_000,
+                num_tool_calls: 12,
+                num_turns: 3,
+            },
+        };
+        let document = build_run_contract(
+            EvalArmLabel::SingleAgent,
+            &task,
+            &report,
+            95_000,
+            "2026-07-01T00:00:00Z",
+            Some("/tmp/out.json"),
+        );
+        let contract = &document.eval_run_contract;
+        assert_eq!(contract.outcome.value, EvalVerdict::Passed);
+        assert_eq!(contract.outcome.failure_cluster, None);
+        assert_eq!(contract.model_ref, "openai/gpt-5.5");
+        assert_eq!(contract.cost.wall_time_ms, 95_000);
+        assert_eq!(contract.cost.total_tokens, 10_000);
+        assert_eq!(contract.evidence_refs, vec!["raw:/tmp/out.json".to_string()]);
+        assert_eq!(contract.run_id.0, "eval.run.router-eval-000.single-agent");
+    }
+
+    #[test]
+    fn build_contract_marks_failed_run_with_semantic_mismatch() {
+        let task = router_task("brainstorming");
+        let report = RawArmReport {
+            output: "write-spec".to_string(),
+            model_ref: None,
+            usage: RawUsage::default(),
+        };
+        let document = build_run_contract(
+            EvalArmLabel::Mas,
+            &task,
+            &report,
+            1_000,
+            "2026-07-01T00:00:00Z",
+            None,
+        );
+        assert_eq!(document.eval_run_contract.outcome.value, EvalVerdict::Failed);
+        assert_eq!(
+            document.eval_run_contract.outcome.failure_cluster,
+            Some(EvalFailureCluster::SemanticMismatch)
+        );
+        // Fallback model_ref when the arm did not self-report one.
+        assert_eq!(document.eval_run_contract.model_ref, "harness-arm:mas");
+        assert!(document.eval_run_contract.evidence_refs.is_empty());
     }
 }
