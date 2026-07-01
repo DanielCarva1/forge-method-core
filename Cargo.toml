@@ -18,6 +18,14 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+authors = ["Stable Studio"]
+description = "Agent-native protocol core that lets many people and many AI agents build the same product together."
+repository = "https://github.com/Stable-Studio/forge-method-rust"
+homepage = "https://github.com/Stable-Studio/forge-method-rust"
+keywords = ["agent", "protocol", "llm", "workflow", "governance"]
+categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
 asn1-rs = "0.7.2"
