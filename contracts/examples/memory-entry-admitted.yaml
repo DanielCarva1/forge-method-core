@@ -1,0 +1,18 @@
+# F06.8 fixture — an ADMITTED memory entry (fresh, not stale, at the trust floor).
+# E2E: ingest this, then list it; it should appear at authority=raw, review=unreviewed.
+entry_id: memory.entry.admitted
+kind: preference
+content: "Prefer typed YAML contracts with explicit provenance over prose."
+provenance:
+  source_run_id: run.f06-admit
+  source_agent: agent.f06
+  evidence_ref: contracts/examples/memory-entry-admitted.yaml
+  captured_at: "1780000000"
+freshness:
+  ttl_seconds: null
+  last_confirmed_at: "1780000000"
+  stale: false
+confidence: 82
+approval: proposed
+supersedes: null
+invalidation_reason: null

@@ -1,0 +1,20 @@
+# F06.8 fixture — an entry that will be PROMOTED by the E2E.
+# Authored at the trust floor (no authority_level); the E2E promotes it with
+# `promote --evidence run.f06-promote` and asserts authority goes raw→authority
+# while review STAYS unreviewed (the orthogonality NFR).
+entry_id: memory.entry.promoted
+kind: lesson_learned
+content: "Compose forge-core-store primitives rather than reinventing them (ADR 0003)."
+provenance:
+  source_run_id: run.f06-promote
+  source_agent: agent.f06
+  evidence_ref: contracts/examples/memory.yaml
+  captured_at: "1780000000"
+freshness:
+  ttl_seconds: null
+  last_confirmed_at: "1780000000"
+  stale: false
+confidence: 88
+approval: proposed
+supersedes: null
+invalidation_reason: null
