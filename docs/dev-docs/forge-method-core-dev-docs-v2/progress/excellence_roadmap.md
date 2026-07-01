@@ -3,7 +3,9 @@
 **Data**: 2026-06-30
 **Status**: plano ativo (última atualização: 2026-06-30 — **R9 fechado** (Bootstrap Core Exception); G1/G2 fechados;
 **F15 fechado** (commits `7d0934b`→`7474139`); R4 completo via CI Linux;
-E1/E2/E3/R2 completos; F04/F01/F02/F03 completos; R5.1-R5.9 completos; R6.3 benches)
+E1/E2/E3/R2 completos; F04/F01/F02/F03 completos; R5.1-R5.9 completos; R6.3 benches;
+**R6.4 ✅** regression gate ativo no CI (cache criterion baseline + awk parser, fail-on-alert >15%, commit `84c730e`);
+**F11 ✅** completo (1-4) e **F13 ✅** (`forge-core cost`) — commits `d4b338b`, `2185277`, `f82f792`)
 **Dono**: Daniel (codebase owner) + agente executor
 **Norte estratégico**: rápido, robusto, performativo, protocolo-guia que escala com a
 capacidade dos agentes, nunca script de novela, sempre Rust ou compatível, sempre
@@ -15,9 +17,9 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 |---|---|---|---|
 | Rápido | 7.5 | 10 | Benchmarks crypto R6.2 (~420µs verify, ~6µs parse) + store R6.1 + serde R6.3 (yaml_serde ~99.7µs vs 92-93µs alternativas — dentro do ruído operacional, não reverte R7) |
 | Robusto | 10 | 10 | Tracing completo; zero Result<_,String>; R5 zeroize completo (R5.1-R5.11) |
-| Performativo | 8 | 10 | `--no-sync` cobre claim + execute-operation + rebuild-effect-index (F15.7b-extend); crypto + store + serde benchmarks medidos (R6.1, R6.2, **R6.3 ✅**); CI perf workflow (R6.4). Falta medição em regression suite |
+| Performativo | 9 | 10 | `--no-sync` cobre claim + execute-operation + rebuild-effect-index (F15.7b-extend); crypto + store + serde benchmarks medidos (R6.1, R6.2, **R6.3 ✅**); **R6.4 ✅** regression gate no CI (cache criterion baseline + awk parser, fail-on-alert >15%). Restam: integração de bench results em relatório acessível fora do CI |
 | Protocolo guia | 10 | 10 | F04 ✅ fechado (validate + dry-run + 34 E2E tests); F01 bugs críticos fechados |
-| Workflows | 9 | 10 | WAL/claim ok; **F11.1 ✅** CLI standalone + **F11.2 ✅** 4 policies + **F11.3 ✅** enforcement no `execute-operation` + **F11.4 ✅** TraceEvent (started/passed/failed emitidos no gate e standalone); falta F13 |
+| Workflows | 9 | 10 | WAL/claim ok; **F11.1 ✅** CLI standalone + **F11.2 ✅** 4 policies + **F11.3 ✅** enforcement no `execute-operation` + **F11.4 ✅** TraceEvent (started/passed/failed emitidos no gate e standalone). Restam: consolidar workflows em guia unificado |
 | Agente guia humano | 9 | 10 | F01 bugs de integridade fechados; rollback_available real |
 | Não-script-de-novela | 10 | 10 | **G1 ✅** fechado: 62/62 policies em `contracts/policies/` são framework paramétrico (0/62 script). Auditoria em `progress/g1_policies_script_novela_audit.md`. Bússola `human-agent-interface.yaml` honrada |
 | Features comunidade | 9.7 | 10 | F03/F04/F01/F02/F15 operacionais; **F11.1+F11.2+F11.3+F11.4 ✅**; **F13 ✅** `forge-core cost` (agregação por run/graph/agent/principal); falta F05-F08, F12, F14 |
@@ -116,15 +118,21 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
         `serde_yml` ficam como dev-deps apenas deste bench; não há caminho
         de produção com eles.
       - Ver `progress/r6_benchmarks.md` (R6.3) e `progress/r7_yaml_serde.md`
-- [x] **R6.4** — CI: bench em PR com label `perf` ✅
+- [x] **R6.4** — CI: regression gate em PR com label `perf` ✅ (commit `84c730e`)
       - `.github/workflows/perf.yml`: cron diário + `workflow_dispatch` +
-        label `perf` em PRs
+        label `perf` em PRs (opt-in)
       - Roda `cargo bench -p forge-core-store` e `-p forge-core-crypto --bench rekor`
-        com `--save-baseline ci-perf`
-      - Output `.txt` + `target/criterion/` upados como artifact (30 dias retention)
-      - Comparação automática contra main requer infra extra (criterion-compare
-        action); deferido. Diff manual via artifact é suficiente pra detectar
-        regressões óbvias.
+        sem `--save-baseline` (criterion compara automaticamente contra o baseline
+        restaurado do cache)
+      - **Cache de baseline**: `target/criterion` keyed por `criterion-${OS}-${branch}`
+        (restore-keys fallback pra `main`), persistido entre runs via `actions/cache@v4`
+      - **Regression gate (>15%)**: step `Detect performance regressions (>15%)` parseia
+        linhas `change: [a% b% c%]` do output do criterion via `awk`, falha o PR se o
+        `b` (mediana) exceder 15%. Primeira run (sem baseline cached) trivialmente
+        passa e estabelece o baseline pra próxima run.
+      - Output `.txt` upado como artifact (30 dias retention) pra inspeção manual
+      - Threshold de 15% escolhido como meio-termo: baixo o suficiente pra capturar
+        regressões reais, alto o suficiente pra não flaggear ruído de CI runner.
 - [x] **R5** — `zeroize` em material cripto ✅ COMPLETO
       - Inventário completo em `progress/r5_crypto_inventory.md`
       - FASE A, B, C (R5.1-R5.9) completas em commits `9c3c5f3`, `5171cee`,
