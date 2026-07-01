@@ -9,7 +9,7 @@
 //!
 //! - `--run-id <id>`     → `CostScope::Run`    (all events for that run)
 //! - `--graph-id <id>`   → `CostScope::Graph`  (post-filter; trace query is
-//!                         run-scoped, so graph_id is applied client-side)
+//!                         run-scoped, so `graph_id` is applied client-side)
 //! - `--principal <id>`  → `CostScope::Principal` (post-filter by actor field)
 //! - `--last-run`        → `CostScope::Run` for the most recent run
 //! - (none)              → `CostScope::All`    (every scanned event)

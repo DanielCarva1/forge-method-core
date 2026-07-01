@@ -84,19 +84,19 @@ fn bench_deserialize(c: &mut Criterion) {
     group.throughput(Throughput::Bytes(text.len() as u64));
     group.sample_size(150);
 
-    group.bench_with_input(BenchmarkId::from_parameter("serde_yaml"), &(), |b, _| {
+    group.bench_with_input(BenchmarkId::from_parameter("serde_yaml"), &(), |b, ()| {
         b.iter(|| {
             let _ = serde_yaml::from_str::<OperationContractDocument>(text);
         });
     });
 
-    group.bench_with_input(BenchmarkId::from_parameter("serde_yml"), &(), |b, _| {
+    group.bench_with_input(BenchmarkId::from_parameter("serde_yml"), &(), |b, ()| {
         b.iter(|| {
             let _ = serde_yml::from_str::<OperationContractDocument>(text);
         });
     });
 
-    group.bench_with_input(BenchmarkId::from_parameter("yaml_serde"), &(), |b, _| {
+    group.bench_with_input(BenchmarkId::from_parameter("yaml_serde"), &(), |b, ()| {
         b.iter(|| {
             let _ = yaml_serde::from_str::<OperationContractDocument>(text);
         });

@@ -1,4 +1,4 @@
-//! F11.4: TraceEvent construction for the risk-audit surface.
+//! F11.4: `TraceEvent` construction for the risk-audit surface.
 //!
 //! Pure helpers that build `TraceEvent`s for the three risk-audit lifecycle
 //! states (started/passed/failed). Used by two callers:

@@ -179,17 +179,14 @@ pub fn run_risk_audit_command(args: &[String]) -> Result<(), ExitError> {
             .as_deref()
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_default();
-        let (error_count, warning_count, target_count) = envelope
-            .data
-            .as_ref()
-            .map(|summary| {
+        let (error_count, warning_count, target_count) =
+            envelope.data.as_ref().map_or((0, 0, 0), |summary| {
                 (
                     summary.error_count,
                     summary.warning_count,
                     summary.target_count,
                 )
-            })
-            .unwrap_or((0, 0, 0));
+            });
         let structural_error = if envelope.data.is_none() {
             envelope
                 .error

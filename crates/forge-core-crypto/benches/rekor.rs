@@ -207,10 +207,10 @@ fn build_fixture(aux_hashes: usize) -> RekorFixture {
 
 fn fixture_for_guard(aux_hashes: usize) -> MutexGuard<'static, HashMap<usize, RekorFixture>> {
     let mut guard = cache().lock().expect("fixture cache poisoned");
-    if !guard.contains_key(&aux_hashes) {
+    guard.entry(aux_hashes).or_insert_with(|| {
         let fixture = build_fixture(aux_hashes);
-        guard.insert(aux_hashes, fixture);
-    }
+        fixture
+    });
     guard
 }
 

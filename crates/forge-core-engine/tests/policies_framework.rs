@@ -12,7 +12,7 @@
 //! policy shape — these tests would fail loudly because the fixtures below
 //! deliberately vary every parametric axis the policy exposes:
 //!
-//! - `default_mode` across {Manual, Yolo, SandboxAuto, ConfidenceThreshold}
+//! - `default_mode` across {Manual, Yolo, `SandboxAuto`, `ConfidenceThreshold`}
 //! - per-tool `mode` overrides that must beat the default
 //! - `escalation.on_high_risk_path` enabled vs disabled
 //! - verification goals across {satisfied, pending, failed}
@@ -22,7 +22,7 @@
 //! A framework accepts N inputs and produces N coherent outputs through the
 //! same code path. A script accepts exactly one input and reproduces one
 //! canned output. The matrix below asserts the framework property: each row
-//! is a (policy, goal, failure_streak) triple; each cell expects a specific
+//! is a (policy, goal, `failure_streak`) triple; each cell expects a specific
 //! decision. Removing any axis must break at least one assertion.
 //!
 //! ## Fixtures live on disk
