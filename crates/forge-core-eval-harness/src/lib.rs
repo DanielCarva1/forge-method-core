@@ -431,7 +431,11 @@ pub struct ParseRawReportError {
 
 impl fmt::Display for ParseRawReportError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "failed to parse arm raw report: {}", self.message)
+        write!(
+            formatter,
+            "failed to parse arm raw report: {}",
+            self.message
+        )
     }
 }
 
@@ -613,8 +617,8 @@ pub fn build_error_contract(
 // ===========================================================================
 
 use forge_core_eval::{
-    compare_eval_runs, EvalArmSpec, EvalComparePolicy, EvalCompareSuite,
-    EvalComparisonReport, EvalRunInput,
+    compare_eval_runs, EvalArmSpec, EvalComparePolicy, EvalCompareSuite, EvalComparisonReport,
+    EvalRunInput,
 };
 
 /// Builds the `EvalCompareSuite` consumed by `compare_eval_runs` from a harness
@@ -631,10 +635,7 @@ pub fn build_compare_suite(config: &EvalHarnessConfig) -> EvalCompareSuite {
         comparison_id: StableId(config.id.0.clone()),
         baseline: EvalArmSpec {
             label: baseline.label,
-            run_refs: vec![RepoPath(format!(
-                "{}/{}",
-                config.run_dir.0, baseline.label
-            ))],
+            run_refs: vec![RepoPath(format!("{}/{}", config.run_dir.0, baseline.label))],
         },
         candidate: EvalArmSpec {
             label: candidate.label,
@@ -683,11 +684,7 @@ pub fn generate_comparison_report(
     candidate_documents: &[EvalRunContractDocument],
 ) -> EvalComparisonReport {
     let suite = build_compare_suite(config);
-    let baseline_runs = to_run_inputs(
-        baseline_documents,
-        suite.baseline.label,
-        &config.run_dir.0,
-    );
+    let baseline_runs = to_run_inputs(baseline_documents, suite.baseline.label, &config.run_dir.0);
     let candidate_runs = to_run_inputs(
         candidate_documents,
         suite.candidate.label,
@@ -747,10 +744,13 @@ eval_harness_config:
         let mut document = parse_harness_config(VALID_YAML).expect("valid yaml should parse");
         document.schema_version = "eval-harness-v999".to_string();
         let diagnostics = validate_harness_config_document(&document);
-        let has = diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == HarnessDiagnosticCode::UnsupportedHarnessSchemaVersion);
-        assert!(has, "expected UnsupportedHarnessSchemaVersion, got {diagnostics:?}");
+        let has = diagnostics.iter().any(|diagnostic| {
+            diagnostic.code == HarnessDiagnosticCode::UnsupportedHarnessSchemaVersion
+        });
+        assert!(
+            has,
+            "expected UnsupportedHarnessSchemaVersion, got {diagnostics:?}"
+        );
     }
 
     #[test]
@@ -783,7 +783,10 @@ eval_harness_config:
         let has = diagnostics
             .iter()
             .any(|diagnostic| diagnostic.code == HarnessDiagnosticCode::PlaceholderMissing);
-        assert!(has, "expected PlaceholderMissing warning, got {diagnostics:?}");
+        assert!(
+            has,
+            "expected PlaceholderMissing warning, got {diagnostics:?}"
+        );
     }
 
     #[test]
@@ -850,7 +853,11 @@ eval_harness_config:
     #[test]
     fn grader_exact_match_trims_whitespace() {
         assert_eq!(
-            grade_output(GraderKind::ExactMatch, "  discover-intent\n", "discover-intent"),
+            grade_output(
+                GraderKind::ExactMatch,
+                "  discover-intent\n",
+                "discover-intent"
+            ),
             EvalVerdict::Passed
         );
     }
@@ -865,8 +872,14 @@ eval_harness_config:
 
     #[test]
     fn grader_manual_and_fixture_yield_error_until_human_review() {
-        assert_eq!(grade_output(GraderKind::Manual, "x", "y"), EvalVerdict::Error);
-        assert_eq!(grade_output(GraderKind::FixturePass, "x", "y"), EvalVerdict::Error);
+        assert_eq!(
+            grade_output(GraderKind::Manual, "x", "y"),
+            EvalVerdict::Error
+        );
+        assert_eq!(
+            grade_output(GraderKind::FixturePass, "x", "y"),
+            EvalVerdict::Error
+        );
     }
 
     #[test]
@@ -928,7 +941,12 @@ eval_corpus:
             "--out".to_string(),
             "{output_file}".to_string(),
         ];
-        let out = substitute_placeholders(&command, "/tmp/task.yaml", "router-eval-000", "/tmp/out.json");
+        let out = substitute_placeholders(
+            &command,
+            "/tmp/task.yaml",
+            "router-eval-000",
+            "/tmp/out.json",
+        );
         assert_eq!(out[2], "/tmp/task.yaml");
         assert_eq!(out[4], "router-eval-000");
         assert_eq!(out[6], "/tmp/out.json");
@@ -980,7 +998,10 @@ eval_corpus:
         assert_eq!(contract.model_ref, "openai/gpt-5.5");
         assert_eq!(contract.cost.wall_time_ms, 95_000);
         assert_eq!(contract.cost.total_tokens, 10_000);
-        assert_eq!(contract.evidence_refs, vec!["raw:/tmp/out.json".to_string()]);
+        assert_eq!(
+            contract.evidence_refs,
+            vec!["raw:/tmp/out.json".to_string()]
+        );
         assert_eq!(contract.run_id.0, "eval.run.router-eval-000.single-agent");
     }
 
@@ -1000,7 +1021,10 @@ eval_corpus:
             "2026-07-01T00:00:00Z",
             None,
         );
-        assert_eq!(document.eval_run_contract.outcome.value, EvalVerdict::Failed);
+        assert_eq!(
+            document.eval_run_contract.outcome.value,
+            EvalVerdict::Failed
+        );
         assert_eq!(
             document.eval_run_contract.outcome.failure_cluster,
             Some(EvalFailureCluster::SemanticMismatch)
@@ -1055,8 +1079,16 @@ eval_corpus:
         let config = two_arm_config();
         // Baseline passes both tasks; candidate passes one, fails one.
         let baseline = vec![
-            contract(EvalArmLabel::SingleAgent, "router-eval-000", EvalVerdict::Passed),
-            contract(EvalArmLabel::SingleAgent, "router-eval-001", EvalVerdict::Passed),
+            contract(
+                EvalArmLabel::SingleAgent,
+                "router-eval-000",
+                EvalVerdict::Passed,
+            ),
+            contract(
+                EvalArmLabel::SingleAgent,
+                "router-eval-001",
+                EvalVerdict::Passed,
+            ),
         ];
         let candidate = vec![
             contract(EvalArmLabel::Mas, "router-eval-000", EvalVerdict::Passed),
@@ -1071,7 +1103,11 @@ eval_corpus:
 
     #[test]
     fn to_run_inputs_sets_per_arm_source_ref() {
-        let docs = vec![contract(EvalArmLabel::SingleAgent, "router-eval-000", EvalVerdict::Passed)];
+        let docs = vec![contract(
+            EvalArmLabel::SingleAgent,
+            "router-eval-000",
+            EvalVerdict::Passed,
+        )];
         let inputs = to_run_inputs(&docs, EvalArmLabel::SingleAgent, "target/eval-runs/x");
         assert_eq!(inputs.len(), 1);
         assert_eq!(inputs[0].source_ref.0, "target/eval-runs/x/single-agent");

@@ -124,13 +124,7 @@ pub fn execute_run(
                     evaluated_at,
                 );
             }
-            read_and_canonicalize(
-                arm,
-                task,
-                &output_file_str,
-                elapsed_ms,
-                evaluated_at,
-            )
+            read_and_canonicalize(arm, task, &output_file_str, elapsed_ms, evaluated_at)
         }
     }
 }
@@ -266,7 +260,12 @@ mod tests {
             ],
             timeout_ms: Some(2_000),
         };
-        let document = execute_run(&arm, &task(), Path::new("/tmp/eval-harness-exec-missing"), "2026-07-01");
+        let document = execute_run(
+            &arm,
+            &task(),
+            Path::new("/tmp/eval-harness-exec-missing"),
+            "2026-07-01",
+        );
         assert_eq!(
             document.eval_run_contract.outcome.value,
             forge_core_contracts::eval_run::EvalVerdict::Error
