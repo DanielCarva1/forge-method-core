@@ -7,4 +7,5 @@ edition.workspace = true
 forge-core-contracts = { path = "../forge-core-contracts" }
 forge-core-eval = { path = "../forge-core-eval" }
 serde.workspace = true
+serde_json.workspace = true
 yaml_serde.workspace = true

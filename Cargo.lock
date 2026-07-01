@@ -824,6 +824,7 @@ dependencies = [
  "forge-core-contracts",
  "forge-core-eval",
  "serde",
+ "serde_json",
  "yaml_serde",
 ]
 
