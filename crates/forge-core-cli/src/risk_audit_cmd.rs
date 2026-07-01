@@ -13,8 +13,9 @@
 //! awareness, symlinks, etc.) without touching the rule engine.
 
 use crate::cli_error::ExitError;
-use crate::cli_util::usage;
+use crate::cli_util::{resolve_now_unix, usage};
 use forge_core_contracts::{CliEnvelope, ExitReason};
+use forge_core_store::append_trace_event;
 use forge_core_validate::risk_audit::{
     evaluate_risk_audit, validate_risk_audit_rule_set, RiskAuditRuleSet, RiskAuditTarget,
     RISK_AUDIT_MAX_FILE_BYTES,
@@ -163,6 +164,59 @@ pub fn run_risk_audit_command(args: &[String]) -> Result<(), ExitError> {
     span.record("json", json);
 
     let envelope = run_risk_audit(&root, rules_path.as_deref());
+
+    // F11.4: best-effort TraceEvent emission for the standalone CLI. The
+    // trace log lives under `<root>/.forge-method`; when the root is not a
+    // Forge project (no `.forge-method` dir), skip persistence so the command
+    // never pollutes an unrelated tree. This keeps the standalone usable as
+    // a generic auditor while still leaving a trail inside Forge projects.
+    let trace_state_root = root.join(".forge-method");
+    if trace_state_root.is_dir() {
+        let now_unix = resolve_now_unix(None);
+        let trace_id = format!("risk-audit-standalone-{now_unix}");
+        let recorded_at = format!("{now_unix}");
+        let rule_set_ref = rules_path
+            .as_deref()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let (error_count, warning_count, target_count) = envelope
+            .data
+            .as_ref()
+            .map(|summary| {
+                (
+                    summary.error_count,
+                    summary.warning_count,
+                    summary.target_count,
+                )
+            })
+            .unwrap_or((0, 0, 0));
+        let structural_error = if envelope.data.is_none() {
+            envelope
+                .error
+                .as_ref()
+                .map(|e| e.message.clone())
+                .or_else(|| Some("risk-audit could not produce a summary".to_string()))
+        } else {
+            None
+        };
+        let events = crate::risk_audit_trace::build_risk_audit_events(
+            &trace_id,
+            &trace_id,
+            &recorded_at,
+            "forge-core",
+            "risk-audit",
+            &rule_set_ref,
+            error_count,
+            warning_count,
+            target_count,
+            structural_error.as_deref(),
+        );
+        for event in &events {
+            if let Err(source) = append_trace_event(&trace_state_root, event) {
+                eprintln!("forge-core: risk-audit trace append failed (non-fatal): {source}");
+            }
+        }
+    }
 
     span.record(
         "target_count",

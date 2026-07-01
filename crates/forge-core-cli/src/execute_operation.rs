@@ -32,7 +32,7 @@ use forge_core_runtime::{
     RuntimeOperationCommandInput, RuntimeOperationEffectInput, RuntimeOperationEffectPayload,
     RuntimeOperationExecution, RuntimeOperationExecutionContext, RuntimeReadSnapshot,
 };
-use forge_core_store::{build_reference_index, WalDurability};
+use forge_core_store::{append_trace_event, build_reference_index, WalDurability};
 use forge_core_validate::risk_audit::{
     evaluate_risk_audit, validate_risk_audit_rule_set, RiskAuditRuleSet,
 };
@@ -227,8 +227,14 @@ pub fn run_execute_operation(
     // before any contract parse or WAL write. Auditing is a precondition for
     // mutation, not a post-parse check, so the gate never depends on the
     // operation/command/effect contracts being valid. Fail-closed: nothing is
-    // persisted if the rule set is structurally invalid or any Error-severity
-    // finding is reported against the project tree.
+    // persisted to the WAL if the rule set is structurally invalid or any
+    // Error-severity finding is reported against the project tree.
+    //
+    // F11.4: the gate also emits TraceEvents (started + passed/failed) to the
+    // project's trace log so `forge explain` can narrate the audit. Trace
+    // persistence is best-effort: it must never mask the gate's fail-closed
+    // contract, so a trace write failure is logged to stderr but does not
+    // change the gate outcome.
     if let Some(rules_path) = &input.risk_audit_rules {
         let rules_yaml =
             fs::read_to_string(rules_path).map_err(|source| ExecuteOperationError::ReadFile {
@@ -242,44 +248,94 @@ pub fn run_execute_operation(
             }
         })?;
         let structure_report = validate_risk_audit_rule_set(&ruleset);
-        if structure_report.has_errors() {
-            let first_error = structure_report
-                .diagnostics()
-                .iter()
-                .find(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
-                .map_or_else(
-                    || "unknown structural error".to_string(),
-                    |d| format!("{}: {}", d.path, d.message),
-                );
-            return Err(ExecuteOperationError::RiskAuditFailed {
-                error_count: structure_report.diagnostics().len(),
-                first_error,
-            });
+        let (gate_error, error_count, warning_count, target_count, structural_error) =
+            if structure_report.has_errors() {
+                let first_error = structure_report
+                    .diagnostics()
+                    .iter()
+                    .find(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
+                    .map_or_else(
+                        || "unknown structural error".to_string(),
+                        |d| format!("{}: {}", d.path, d.message),
+                    );
+                (
+                    Some(ExecuteOperationError::RiskAuditFailed {
+                        error_count: structure_report.diagnostics().len(),
+                        first_error: first_error.clone(),
+                    }),
+                    structure_report.diagnostics().len(),
+                    0,
+                    0,
+                    Some(first_error),
+                )
+            } else {
+                let targets = crate::risk_audit_cmd::collect_targets(&root).map_err(|source| {
+                    ExecuteOperationError::ReferenceIndexBuild(format!(
+                        "risk-audit collect_targets: {source}"
+                    ))
+                })?;
+                let findings = evaluate_risk_audit(&ruleset, &targets);
+                let error_count = findings
+                    .diagnostics()
+                    .iter()
+                    .filter(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
+                    .count();
+                let warning_count = findings
+                    .diagnostics()
+                    .iter()
+                    .filter(|d| d.severity == forge_core_validate::DiagnosticSeverity::Warning)
+                    .count();
+                if findings.has_errors() {
+                    let first_error = findings
+                        .diagnostics()
+                        .iter()
+                        .find(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
+                        .map_or_else(
+                            || "unknown error".to_string(),
+                            |d| format!("{}: {}", d.path, d.message),
+                        );
+                    (
+                        Some(ExecuteOperationError::RiskAuditFailed {
+                            error_count,
+                            first_error,
+                        }),
+                        error_count,
+                        warning_count,
+                        targets.len(),
+                        None,
+                    )
+                } else {
+                    (None, error_count, warning_count, targets.len(), None)
+                }
+            };
+        // F11.4: emit TraceEvents (started + outcome) before returning. The
+        // trace log lives under the same `.forge-method` state root as the
+        // WAL; create the dir best-effort and ignore persistence failures so
+        // observability never overrides the gate decision.
+        let trace_id = format!("{}.risk-audit", input.tx_id_prefix);
+        let run_id = format!("{}.risk-audit.{}", input.tx_id_prefix, input.recorded_at);
+        let rule_set_ref = rules_path.to_string_lossy().to_string();
+        let events = crate::risk_audit_trace::build_risk_audit_events(
+            &trace_id,
+            &run_id,
+            &input.recorded_at,
+            "forge-core",
+            "execute-operation",
+            &rule_set_ref,
+            error_count,
+            warning_count,
+            target_count,
+            structural_error.as_deref(),
+        );
+        let trace_state_root = effect_store_root.join(".forge-method");
+        let _ = fs::create_dir_all(&trace_state_root);
+        for event in &events {
+            if let Err(source) = append_trace_event(&trace_state_root, event) {
+                eprintln!("forge-core: risk-audit trace append failed (non-fatal): {source}");
+            }
         }
-        let targets = crate::risk_audit_cmd::collect_targets(&root).map_err(|source| {
-            ExecuteOperationError::ReferenceIndexBuild(format!(
-                "risk-audit collect_targets: {source}"
-            ))
-        })?;
-        let findings = evaluate_risk_audit(&ruleset, &targets);
-        if findings.has_errors() {
-            let error_count = findings
-                .diagnostics()
-                .iter()
-                .filter(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
-                .count();
-            let first_error = findings
-                .diagnostics()
-                .iter()
-                .find(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
-                .map_or_else(
-                    || "unknown error".to_string(),
-                    |d| format!("{}: {}", d.path, d.message),
-                );
-            return Err(ExecuteOperationError::RiskAuditFailed {
-                error_count,
-                first_error,
-            });
+        if let Some(error) = gate_error {
+            return Err(error);
         }
     }
     let operation_path = resolve_contract_input_path(

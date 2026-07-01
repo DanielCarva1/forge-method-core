@@ -17,7 +17,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Robusto | 10 | 10 | Tracing completo; zero Result<_,String>; R5 zeroize completo (R5.1-R5.11) |
 | Performativo | 8 | 10 | `--no-sync` cobre claim + execute-operation + rebuild-effect-index (F15.7b-extend); crypto + store + serde benchmarks medidos (R6.1, R6.2, **R6.3 ✅**); CI perf workflow (R6.4). Falta medição em regression suite |
 | Protocolo guia | 10 | 10 | F04 ✅ fechado (validate + dry-run + 34 E2E tests); F01 bugs críticos fechados |
-| Workflows | 9 | 10 | WAL/claim ok; **F11.1 ✅** CLI standalone + **F11.2 ✅** 4 policies + **F11.3 ✅** enforcement no `execute-operation` com `--require-risk-audit` (gate fail-closed pré-WAL, 4 E2E); falta F11.4 (TraceEvent), F13 |
+| Workflows | 9 | 10 | WAL/claim ok; **F11.1 ✅** CLI standalone + **F11.2 ✅** 4 policies + **F11.3 ✅** enforcement no `execute-operation` + **F11.4 ✅** TraceEvent (started/passed/failed emitidos no gate e standalone); falta F13 |
 | Agente guia humano | 9 | 10 | F01 bugs de integridade fechados; rollback_available real |
 | Não-script-de-novela | 10 | 10 | **G1 ✅** fechado: 62/62 policies em `contracts/policies/` são framework paramétrico (0/62 script). Auditoria em `progress/g1_policies_script_novela_audit.md`. Bússola `human-agent-interface.yaml` honrada |
 | Features comunidade | 9.5 | 10 | F03/F04/F01/F02/F15 operacionais; **F11.1+F11.2 ✅** (CLI + 4 policies); falta F05-F14 (exceto F11) |
@@ -301,7 +301,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
             fechado); 8 E2E tests em `risk_audit_policies_e2e.rs`
       - [x] **F11.3** — Enforcement real no `execute-operation`
             (gate antes do WAL; flag `--require-risk-audit`)
-      - [ ] **F11.4** — Integração com `TraceEvent` (rastreabilidade F03)
+      - [x] **F11.4** — Integração com `TraceEvent` (rastreabilidade F03)
 
 ### Trilha D — Features P2/P3 da comunidade
 

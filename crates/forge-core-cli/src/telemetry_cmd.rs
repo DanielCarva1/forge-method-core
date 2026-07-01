@@ -602,6 +602,9 @@ fn map_trace_event_kind(kind: TraceEventKind) -> TelemetryEventKind {
         TraceEventKind::GatePassed | TraceEventKind::GateBlocked => {
             TelemetryEventKind::GateEvaluated
         }
+        TraceEventKind::RiskAuditStarted
+        | TraceEventKind::RiskAuditPassed
+        | TraceEventKind::RiskAuditFailed => TelemetryEventKind::GateEvaluated,
         TraceEventKind::PreviewCompleted | TraceEventKind::ReadyCompleted => {
             TelemetryEventKind::VerificationRun
         }
@@ -816,6 +819,9 @@ fn phase_to(kind: TraceEventKind) -> &'static str {
         TraceEventKind::PreviewCompleted => "preview_completed",
         TraceEventKind::ReadyCompleted => "ready_completed",
         TraceEventKind::GatePassed | TraceEventKind::GateBlocked => "gate_evaluated",
+        TraceEventKind::RiskAuditStarted => "risk_audit_started",
+        TraceEventKind::RiskAuditPassed => "risk_audit_passed",
+        TraceEventKind::RiskAuditFailed => "risk_audit_failed",
         TraceEventKind::EffectStaged => "effect_staged",
         TraceEventKind::EffectApplied => "effect_applied",
         TraceEventKind::RunCompleted => "completed",
@@ -1043,6 +1049,9 @@ fn trace_event_kind_name(kind: TraceEventKind) -> &'static str {
         TraceEventKind::EffectApplied => "effect_applied",
         TraceEventKind::RunCompleted => "run_completed",
         TraceEventKind::RunFailed => "run_failed",
+        TraceEventKind::RiskAuditStarted => "risk_audit_started",
+        TraceEventKind::RiskAuditPassed => "risk_audit_passed",
+        TraceEventKind::RiskAuditFailed => "risk_audit_failed",
     }
 }
 
