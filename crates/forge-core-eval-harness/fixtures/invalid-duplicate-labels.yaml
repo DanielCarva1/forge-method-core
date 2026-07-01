@@ -1,0 +1,16 @@
+# Invalid eval harness config: two arms carry the same label, which breaks the
+# ADR-0002 control (the comparison cannot tell baseline from candidate). The
+# validator must collect DuplicateArmLabel cumulatively rather than short-circuit.
+schema_version: "eval-harness-v0"
+eval_harness_config:
+  id: "eval.harness.broken"
+  corpus_ref: "contracts/eval/router-eval-corpus.yaml"
+  run_dir: "target/eval-runs/broken"
+  arms:
+    - label: "single-agent"
+      command: ["agent", "--input", "{task_file}", "--output", "{output_file}"]
+    - label: "single-agent"
+      command: ["other-agent", "--task", "{task_id}"]
+  policy:
+    minimum_task_count: 3
+    require_matching_tasks: true

@@ -818,6 +818,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "forge-core-eval-harness"
+version = "0.1.0"
+dependencies = [
+ "forge-core-contracts",
+ "forge-core-eval",
+ "serde",
+ "yaml_serde",
+]
+
+[[package]]
 name = "forge-core-graph"
 version = "0.1.0"
 dependencies = [

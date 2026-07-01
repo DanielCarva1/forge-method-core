@@ -1,0 +1,10 @@
+[package]
+name = "forge-core-eval-harness"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+forge-core-contracts = { path = "../forge-core-contracts" }
+forge-core-eval = { path = "../forge-core-eval" }
+serde.workspace = true
+yaml_serde.workspace = true
