@@ -26,14 +26,12 @@ jobs:
       - name: Type-check workspace
         run: cargo check --workspace --all-targets
 
-      # NOTE: clippy pedantic runs as `-W` (warn) rather than `-D` (deny) at
-      # v0.1.0 because the codebase carries ~40 pre-existing pedantic lints
-      # (mostly in test/bench code and in conflict_detection.rs, where several
-      # warnings encode deliberate design tradeoffs). Tracked for cleanup in
-      # follow-up; see docs/dev-docs/.../progress/excellence_roadmap.md.
-      # Promoting back to `-D warnings` is gated on that cleanup landing.
-      - name: Clippy (pedantic, warn)
-        run: cargo clippy --workspace --all-targets -- -W clippy::pedantic
+      # clippy pedantic runs as `-D` (deny) — the codebase is lint-clean as of
+      # R-LINT.2 (2026-07-01). Adding new pedantic warnings will fail CI,
+      # which is intentional: each new lint must be either fixed or accompanied
+      # by a documented #[allow] with a justification comment.
+      - name: Clippy (pedantic, deny)
+        run: cargo clippy --workspace --all-targets -- -D clippy::pedantic
 
       - name: Test workspace
         run: cargo test --workspace
