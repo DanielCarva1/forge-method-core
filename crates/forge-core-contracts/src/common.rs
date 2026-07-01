@@ -32,6 +32,26 @@ pub struct ScopeId(pub String);
 #[serde(transparent)]
 pub struct ClaimId(pub String);
 
+/// The id of a PRINCIPAL — a human or an agent (F07 multi-principal governance).
+///
+/// R8 type-discipline: F07's authorization structures (`IntentContract { principal,
+/// authority_scope }`, `ConflictContract { principal_a, principal_b }`, governance
+/// `is_authorized(principal, resource)`) put a principal id and a resource id in the
+/// same comparison, where a field/argument swap is a silent, security-relevant bug
+/// — exactly the class the [`ScopeId`]/[`ClaimId`] split made unrepresentable. A
+/// distinct `PrincipalId` makes that swap a compile error.
+///
+/// This **formally supersedes ADR 0002's F07-prediction** ("F07 does not introduce a
+/// rival `PrincipalId` type"), recorded in the expanded ADR-0007. The industrial
+/// precedent ADR 0002 itself cites (AWS Cedar, Google Zanzibar) enforces typed
+/// `Principal`/`Resource` separation for the same reason. `#[serde(transparent)]`
+/// keeps the wire format identical to the legacy string (`"principal.daniel"`), so
+/// existing YAML (including F06's `reviewed_by`) deserializes unchanged — zero
+/// migration cost, the proven `ScopeId` pattern.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(transparent)]
+pub struct PrincipalId(pub String);
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(transparent)]
 pub struct SourceId(pub String);

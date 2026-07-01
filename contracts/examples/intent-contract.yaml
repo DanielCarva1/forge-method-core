@@ -1,0 +1,12 @@
+# F07 fixture — an IntentContract (the coordination layer, Gray intent-lock analog).
+# Alice declares intent over the contracts/stories path prefix, expiring at
+# 1780010000 (declared at 1780000000 — a 10000-second lease). The expiry is
+# load-bearing (Gray 2PL / Spanner): an intent without a bound is a permanent lock.
+intent_id: intent.alice.f07
+principal: principal.alice
+goal: "Implement F07 governance contracts and conflict detection."
+authority_scope:
+  kind: path_prefix
+  target: contracts/stories
+expires_at: 1780010000
+declared_at: 1780000000

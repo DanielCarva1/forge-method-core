@@ -1,0 +1,11 @@
+# F07 fixture — a GovernancePolicy (the authorization layer).
+# Permits alice + bob to operate; authorizes daniel to attest memory reviews
+# (unblocking F06's deferred `memory review` verb). Default conflict posture
+# is emit_contract (structured conflict, never silent merge — F07's purpose).
+policy_id: governance.policy.forge
+permitted_principals:
+  - principal.alice
+  - principal.bob
+authorized_reviewers:
+  - principal.daniel
+conflict_policy: emit_contract

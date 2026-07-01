@@ -1,4 +1,4 @@
-use crate::common::StableId;
+use crate::common::{PrincipalId, StableId};
 use schemars::JsonSchema;
 use serde::de::{Deserializer, Error as DeError};
 use serde::{Deserialize, Serialize};
@@ -335,10 +335,14 @@ pub struct MemoryEntry {
     #[serde(default)]
     pub review_state: Option<ReviewState>,
     /// Who attested to the record (F07 principal attestation). `None` unless
-    /// `review_state == Reviewed`. Reuses `StableId`, never a `PrincipalId`
-    /// (which does not exist in this codebase — R8 discipline, ADR 0002).
+    /// `review_state == Reviewed`. Now a `PrincipalId` (R8: the attester is a
+    /// principal, distinct from resource ids; ADR-0007 supersedes ADR 0002's
+    /// earlier "use `StableId`" prediction — see the expanded ADR-0007). The
+    /// field is `#[serde(default)]` + `PrincipalId` is `#[serde(transparent)]`,
+    /// so legacy `reviewed_by: principal.daniel` YAML still parses (zero
+    /// migration cost).
     #[serde(default)]
-    pub reviewed_by: Option<StableId>,
+    pub reviewed_by: Option<PrincipalId>,
     /// When the review attestation was recorded (unix seconds string, matches
     /// the house `captured_at` convention). `None` unless `review_state ==
     /// Reviewed`.
@@ -776,7 +780,7 @@ memory_contract:
         let mut e = entry("e", ApprovalState::Approved, "100");
         e.authority_level = Some(AuthorityLevel::Authority);
         e.review_state = Some(ReviewState::Reviewed);
-        e.reviewed_by = Some(StableId("principal.daniel".into()));
+        e.reviewed_by = Some(PrincipalId("principal.daniel".into()));
         e.reviewed_at = Some("1700000100".into());
         let yaml = yaml_serde::to_string(&e).expect("serialize entry");
         let parsed: MemoryEntry = yaml_serde::from_str(&yaml).expect("deserialize entry");
@@ -965,7 +969,7 @@ memory_contract:
         let mut e = entry("e", ApprovalState::Proposed, "100");
         e.authority_level = Some(AuthorityLevel::Authority);
         e.review_state = Some(ReviewState::Reviewed);
-        e.reviewed_by = Some(StableId("principal.daniel".into()));
+        e.reviewed_by = Some(PrincipalId("principal.daniel".into()));
         e.reviewed_at = Some("1700000100".into());
         assert!(MemoryContract::can_admit(&e, &policy()).is_allowed());
         // And a floor record is also admitted — admission ignores axes.
