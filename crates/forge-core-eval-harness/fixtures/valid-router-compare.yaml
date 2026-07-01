@@ -1,0 +1,16 @@
+# Canonical valid eval harness config: single-agent baseline vs MAS candidate
+# on the router eval corpus. Drives F05.3+ executor and F05.7 E2E.
+schema_version: "eval-harness-v0"
+eval_harness_config:
+  id: "eval.harness.router_compare"
+  corpus_ref: "contracts/eval/router-eval-corpus.yaml"
+  run_dir: "target/eval-runs/router_compare"
+  arms:
+    - label: "single-agent"
+      command: ["agent", "--input", "{task_file}", "--output", "{output_file}"]
+      timeout_ms: 60000
+    - label: "mas"
+      command: ["mas-runner", "--task", "{task_id}", "--out", "{output_file}"]
+  policy:
+    minimum_task_count: 3
+    require_matching_tasks: true

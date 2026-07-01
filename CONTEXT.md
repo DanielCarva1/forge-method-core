@@ -53,6 +53,14 @@ are data, not code: adding one must not require a Rust change.
 - `--claims-dir` remains an explicit advanced override for tests, migrations, and emergency repair.
 - The goal is isolation: projects, users, and agents must not contaminate each other's Forge data.
 
+## EvalArm
+
+A labelled experimental condition that runs the same corpus of tasks. Today the labels are single-agent, graph, mas, and manual. Each arm is one variable in a comparison experiment: to claim that a multi-agent or graph architecture beats a single-agent baseline, the arms must differ only in the routing/coordination strategy while sharing the same task loader, the same tools, the same answer contract, and the same usage accounting. Arms are subprocesses; they do not evaluate themselves and they do not produce Forge contracts directly.
+
+## EvalHarness
+
+The executor that runs arms under control. It spawns each arm as a subprocess against the shared corpus, times the run externally, collects the raw output the arm produces, applies a uniform grader to compute the verdict, and is the sole producer of the canonical `EvalRunContractDocument` per run. Because the harness — not the arm — canonicalises and grades, the answer contract stays uniform across arms, which is the control mechanism that makes the comparison meaningful.
+
 ## Remaining Bootstrap Gaps
 
 - The global Forge skill/start script now calls `forge-core project init --root <repo>` when a first-use consumer repo lacks a Project Link, unless `-NoInit` is passed.

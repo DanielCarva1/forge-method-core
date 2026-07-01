@@ -11,6 +11,7 @@ members = [
   "crates/forge-core-trace",
   "crates/forge-core-graph",
   "crates/forge-core-eval",
+  "crates/forge-core-eval-harness",
   "crates/forge-core-engine",
 ]
 resolver = "2"
