@@ -185,24 +185,26 @@ promote exige policy + evidência raw.
 - ADR sobre admission policy (hard-to-reverse)
 
 #### F06.2 — Definir schemas (`MemoryDocument`, `MemoryPolicy`)
-- **Trust model**: ADR `docs/adr/0002-memory-trust-model.md` (status: Proposed,
-  input ao F06.1). Decisão: **dois eixos ortogonais** — authority (eixo 1,
+- **Trust model**: ADR `docs/adr/0002-memory-trust-model.md` (status: **Accepted**,
+  com addendum Candidato 1). Decisão: **dois eixos ortogonais** — authority (eixo 1,
   já existente) e review (eixo 2, novo, modelado como principal-attestation
   de F07). Promote de authority NÃO implica review; review NÃO implica
   promote de authority. Seis células de estado, todas expressáveis.
-- `MemoryDocument`: id, principal, kind, content, evidence_refs,
-  admitted_at, ttl,
-  authority_level (sempre `Raw` até promote explícito),
-  review_state (`Unreviewed` default),
-  reviewed_by (`Option<PrincipalId>`), reviewed_at (`Option<DateTime>`) —
-  ver ADR 0002 para a lista completa de invariants
-- `MemoryPolicy`: admission rules, retention rules, promote rules,
-  review rules (quais principals podem attestar `Reviewed`, via F07
-  GovernancePolicy)
+- `MemoryDocument` (implementado em `memory.rs` como `MemoryEntry`): id, kind,
+  content, provenance (evidence_ref), freshness (ttl), confidence, approval
+  (legacy), + 4 campos F06.2 aditivos com `#[serde(default)]`:
+  `authority_level`, `review_state`, `reviewed_by` (`Option<StableId>`, **não**
+  `PrincipalId` — corrigido no ADR), `reviewed_at`.
+- `MemoryPolicy` (✅ **Candidato 1 feito**, ver addendum ADR 0002): struct
+  tipada `{ permitted_kinds, required_evidence_fields, min_evidence_refs_for_authority }`.
+  Gates `can_admit`/`can_promote` são **predicados puros** (PDP/PEP: Cedar, OPA,
+  K8s validating webhooks, XACML) — decidem, não mutam. A mutação TOCTOU-safe é
+  F06.3 (Candidato 2, crate `forge-core-memory`). `MemoryPolicy` **não tem
+  `Default`** (uma default permissiva seria o bug AutoPromoted de outro nome).
 - Validator com diagnostics tipados — deve rejeitar combinações ilegais
   (`Reviewed` sem `reviewed_by`/`reviewed_at`; `Authority` sem
   `evidence_refs` ou promote policy satisfeita; `reviewed_by` não
-  autorizado pela GovernancePolicy)
+  autorizado pela GovernancePolicy) — **pendente** (F06.4/validator).
 
 #### F06.3 — Criar crate `forge-core-memory`
 - `src/lib.rs`: tipos + validator

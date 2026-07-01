@@ -289,13 +289,145 @@ Negative / risks:
 4. Should `forget` require a reviewed attestation, or is it purely the
    owner-principal's right?
 
+## Addendum — Candidato 1: trust gates as pure PDP predicates (2026-07-01)
+
+F06.2 Candidato 1 implements the gates the model above promised. Two low-level
+design questions were resolved by **external research, not intuition**, because
+they are exactly the kind of decision that should follow precedent.
+
+### Decision 1 — the gates are pure predicates (PDP/PEP separation)
+
+`can_admit(entry, policy)` and `can_promote(entry, policy, evidence)` return a
+typed `AdmissionDecision` and **mutate nothing**. The actual store write — the
+TOCTOU-safe admit/promote/forget — is the Policy Enforcement Point and lives in
+the `forge-core-memory` crate (Candidato 2 / F06.3+).
+
+This is the convergent design of every system that has solved "(policy,
+evidence) → allow/deny":
+
+- **Kubernetes admission control** splits validating webhooks (pure, return
+  Allow/Deny + reason, fail-closed) from mutating webhooks, and orders them
+  deliberately (mutate → validate) so validators reason over final state.
+- **Open Policy Agent / Gatekeeper**: Rego is side-effect-free by design —
+  evaluation produces a decision; a separate controller enforces. Quoted in
+  their docs as "decouple policy decision-making from policy enforcement"
+  (determinism, auditability, enforcement-location independence).
+- **AWS Cedar** (Rust-implemented, same language, same problem):
+  `is_authorized()` is a pure `(Request, Entities) → Response{Decision, reasons}`,
+  and Cedar treats **order-independence of evaluation as a correctness
+  invariant** that any mutation-during-evaluation would destroy.
+- **XACML / Zero-Trust** names the pattern: Policy Decision Point (PDP)
+  evaluates, Policy Enforcement Point (PEP) acts; "these functions are normally
+  separated" (NIST Policy Machine).
+
+The only counter-argument is TOCTOU (the gap between decide and write). It is
+real but resolved by **atomicity at the write site** (transaction / lock / CAS
+in Candidato 2), not by fusing policy into the mutator — which would couple
+policy to storage internals, kill testability/replayability, and still not be
+atomic without the same locking.
+
+The Rust idiom confirms it: `tower::Service` separates `poll_ready` (decide)
+from `call` (act); returning `enum AdmissionDecision { Allowed,
+Blocked(Vec<Reason>) }` forces the caller to pattern-match and handle the
+blocked case before the mutation — a free exhaustiveness check.
+
+### Decision 2 — `policy` is a typed `MemoryPolicy` struct (not primitives, not hardcoded)
+
+The `policy` parameter is one typed object, not scattered primitives, not
+hardcoded rules. Same convergent evidence:
+
+- **Google Zanzibar** (the foundation of Auth0 FGA / SpiceDB / OpenFGA):
+  "a uniform data model and configuration language for expressing a wide range
+  of access control policies" across hundreds of services — policy as
+  first-class data.
+- **AWS Cedar**: a policy must be backed by a **typed schema** so it can be
+  "validated… to ensure… no type errors" and subjected to "automated reasoning"
+  (performance, correctness, safety, analyzability).
+- **OPA**: "policy is often a hard-coded feature of the software service…
+  decouple policy" — declarative, updateable without recompile/redeploy.
+- **Kubernetes CEL** (`x-kubernetes-validations`): validation rules are
+  **co-located with the resource schema**, not scattered across controllers.
+- **Microsoft Agent Control Specification (2026)**: "controls scattered across
+  prompts, code, gateways, and frameworks make it risky" → "standard policy
+  YAML, portable, versionable, auditable".
+
+And the software-design principle: `can_admit(&[MemoryKind], &[String], usize)`
+is Ousterhout's **shallow-module / wide-interface** anti-pattern
+(*A Philosophy of Software Design*, ch. 4); `can_admit(&MemoryPolicy, &Evidence)`
+is a **deep module** (small interface, hides growing policy complexity).
+
+### Convention note — `Vec`, not `Set` (a deliberate divergence from Cedar)
+
+Cedar deliberately uses **sets, not lists** and rejects **stringly-typed
+attributes** to keep automated analysis tractable. This codebase **cannot**
+apply that refinement without diverging from convention: the contracts crate
+derives only `PartialEq, Eq` (never `Ord, Hash`) and uses **zero**
+`BTreeSet`/`HashSet` anywhere. So:
+
+- `MemoryPolicy.permitted_kinds: Vec<MemoryKind>` (not a set) — order is
+  irrelevant because the gate **membership-checks** (not position-matches); the
+  order-independence property Cedar needs is honoured by the gate's logic, not
+  by the collection type.
+- `required_evidence_fields: Vec<EvidenceField>` where `EvidenceField` is an
+  **enum** (not `Vec<String>`) — a typo is a compile error, keeping the
+  "no stringly-typed" spirit within the codebase's derive discipline.
+
+### Gate semantics
+
+- `can_admit`: fail-closed; an empty `permitted_kinds` denies all (the deny-all
+  default, not a permissive one — `MemoryPolicy` deliberately has **no
+  `Default`**); each absent required `EvidenceField` adds a denial; denials
+  **accumulate** (matches the repo's no-short-circuit validation convention);
+  it never consults the authority/review axes (admission decides ENTRY, at the
+  `Raw`/`Unreviewed` floor — orthogonality NFR).
+- `can_promote`: authority-axis **only**; never auto-promotes (a zero threshold
+  still demands ≥1 distinct non-empty raw evidence ref — the F06 NFR); counts
+  distinct non-empty refs (order-independent; empty/whitespace/duplicates
+  collapse); never touches the review axis. The
+  `AdmissionDenialReason::PromoteTargetsReviewAxis` variant is a **structural
+  guard**: it cannot fire from today's pure API, but it exists so any future
+  caller that conflates the axes has a named denial to emit (the
+  Model-B-back-door guard).
+
+### Scope (this story vs. the next)
+
+Candidato 1 delivers the **decision functions** and their supporting contract
+types in `forge-core-contracts`. The **mutating** admit/promote/forget, the new
+crate `forge-core-memory`, the CLI verbs, and fixtures/E2E are Candidato 2 /
+F06.3–F06.8 (separate stories, separate sessions). This keeps the
+"complexity of deciding trust" concentrated in one deep module (deletion-test
+unit) and the mutation in another.
+
+### Novelty (extended threat model, 2026)
+
+Confirmed by a 2026 prior-art sweep: **no** production agent-memory framework
+(Letta/MemGPT, Zep/Graphiti, Cognee, LangGraph, Mem0, Memobase, A-MEM) ships a
+graded authority tier gated on policy + raw evidence, and the field's first
+unified taxonomy (arXiv:2512.13564, Dec 2025) has **no authority axis**. The
+design is ahead of shipping systems but aligned with a 2026 emergent direction
+(Moltbook "provenance class = trust tier"; Daly "promotion gate"; Huang "raw
+traces are evidence, promoted memory is operational context") and
+security-justified by the poisoning literature already cited in this ADR
+(AgentPoison 2407.12784, PoisonedRAG 2402.07867 / USENIX Security 2025, MINJA
+2503.03704). Gating promotion on **raw, independently-checkable** evidence
+(logs/test output/diffs) rather than LLM-inferred summaries is the
+poisoning-resistant substrate: an attacker can forge a plausible memory summary
+but not a passing test run.
+
 ## References
 
 - F06 spec: `docs/dev-docs/forge-method-core-dev-docs-v2/01_feature_specs.md`
 - F06 epic: `docs/dev-docs/forge-method-core-dev-docs-v2/progress/followups_v0_1_to_10.md`
 - F07 spec: same dir, `01_feature_specs.md` F07
-- Threat evidence: arXiv 2302.12173, 2402.07867, 2407.12784, 2503.03704,
-  2502.13172
-- Prior-art survey: arXiv 2506.06326, 2512.13564
+- Threat evidence: arXiv 2302.12173, 2402.07867 (USENIX Security 2025),
+  2407.12784, 2503.03704, 2502.13172; FilterRAG defense arXiv 2508.02835
+- Prior-art survey: arXiv 2506.06326, 2512.13564 (Dec 2025 unified taxonomy,
+  no authority axis); MemTrust 2601.07004 (cryptographic, orthogonal)
 - Cross-field theory: Berenson SIGMOD'95; Bell-LaPadula MITRE'73;
   Sandhu RBAC96 IEEE'96; Buneman ICDT'01
+- PDP/PEP & policy-as-data (Candidato 1): Zanzibar USENIX ATC'19;
+  AWS Cedar (arXiv 2403.04651; docs.cedarpolicy.com); OPA philosophy;
+  Kubernetes admission controllers & CEL (`x-kubernetes-validations`); Microsoft
+  Agent Control Specification 2026; Ousterhout *A Philosophy of Software
+  Design* ch. 4 (deep modules); XACML PDP/PEP (NIST Policy Machine)
+- TOCTOU resolution: CWE-367 (atomicity at the write site, not check-fusion)
