@@ -345,6 +345,11 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 - [x] **E3** — CI: gates automáticos em PR (commit `d3af5c4`)
       - `cargo check --workspace`, `cargo clippy --pedantic -D warnings`,
         `cargo test`, `cargo fmt --check`, anchor `validate --json | grep -c 122`
+- [x] **E4** — R-LINT: zero pedantic warnings em `--all-targets` (2026-07-01)
+      - Categoria A (lib, 7) corrigida ou refatorada (RiskAuditTraceContext)
+      - Categoria B (testes, 28) com `#[allow]` documentado onde idiomático
+      - Categoria C (benches, 6) com fixes mecânicos
+      - CI flipado para `-D clippy::pedantic` em R-LINT.6
 
 ### Trilha F — Papers e evidência científica
 
@@ -436,8 +441,8 @@ Fase 6 (R13 + R14 + R9) ─────────► docs + rastreabilidade fi
 - [ ] `cargo bench` roda sem erro, hot paths medidos
 - [x] **cargo fuzz run** em cada target por ≥1 min sem panic (via CI Linux;
       ver ADR-0008). Não roda em Windows-MSVC local por limitações do toolchain.
-- [ ] `cargo clippy --workspace --all-targets -- -W clippy::pedantic` com
-      <100 warnings (baseline ~436)
+- [x] `cargo clippy --workspace --all-targets -- -D clippy::pedantic`
+      com **0 warnings** (R-LINT completo, CI flipado para `-D` em R-LINT.6)
 - [ ] Zero `process::exit` em lib code (mantém R8)
 - [ ] Zero `Result<_, String>` novo (R2)
 - [ ] Zero `serde_yaml` (R7)
