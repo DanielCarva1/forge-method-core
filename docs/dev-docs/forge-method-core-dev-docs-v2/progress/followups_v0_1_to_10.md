@@ -206,26 +206,37 @@ promote exige policy + evidência raw.
   `evidence_refs` ou promote policy satisfeita; `reviewed_by` não
   autorizado pela GovernancePolicy) — **pendente** (F06.4/validator).
 
-#### F06.3 — Criar crate `forge-core-memory`
-- `src/lib.rs`: tipos + validator
-- `src/admission.rs`: admission gate
-- `src/retention.rs`: TTL + explicit forget
-- `src/promote.rs`: promote com evidence gate
-- Hand-rolled error enums (`MemoryAdmissionError`, etc.)
+#### F06.3 — Criar crate `forge-core-memory` ✅ **DONE**
+- ✅ `src/lib.rs`: tipos (`MemoryEvent`, `MemoryProjection`, `MemoryProjectionDiagnostic`),
+  `replay`, `project`/`project_locked`, `next_sequence`, `now_unix`.
+- ✅ `src/admission.rs`: PEP `admit` (lock → `can_admit` → append `Admitted` → projection).
+- ✅ `src/retention.rs`: `list_now` (lazy TTL sweep on read) + `forget` (before-image).
+- ✅ `src/promote.rs`: PEP `promote` (lock → find → `can_promote` → append `Promoted`).
+- ✅ `src/error.rs`: per-op enums (`AdmitError`, `PromoteError`, `ForgetError`,
+  `MemoryProjectionError`) mirroring `ClaimWal*Error`.
+- ✅ ADR `docs/adr/0003-memory-pep-store.md` (Accepted) — composition over
+  invention; reusa `forge-core-store` (`acquire_effect_store_lock`,
+  `append_json_line_with_durability`, `WalDurability`); mirror `claim_wal.rs`
+  (event-sourcing projection, torn-write recovery, per-op errors). CWE-367
+  atomicidade no write site. 29 testes (27 unit + 2 proptest replay-determinism).
+- **Decisão de scope**: o crate é o PEP puro; CLI (F06.7) e fixtures/E2E (F06.8)
+  são stories separadas (a API pública retorna result-structs shaped para o
+  `CliEnvelope`).
 
-#### F06.4 — Admission gate
-- Policy check on ingest: tipo permitido? evidência presente?
-- Falha fechado se faltar evidence ou policy
+#### F06.4 — Admission gate ✅ **efetivamente DONE** (via Candidato 1 + F06.3)
+- ✅ Policy check on ingest (`can_admit` PDP + `admit` PEP).
+- ✅ Falha fechado se faltar evidence ou policy (`DeniedByGate`, nada appended).
 
-#### F06.5 — Retention + forget
-- TTL expiry (lazy sweep on read)
-- Explicit `forget --memory-id <id>`
-- Append-only log de forgets (auditable)
+#### F06.5 — Retention + forget ✅ **parcialmente DONE** (PEP existe; CLI pendente)
+- ✅ TTL expiry (lazy sweep on read via `list_now` → `mark_stale`).
+- ✅ Explicit forget (PEP `forget` com before-image append-only, auditable).
+- ⏳ CLI `forget` verb (F06.7).
 
-#### F06.6 — Promote (com evidence gate)
-- `promote --memory-id <id> --evidence <ref>`
-- Requer evidence raw (não inferência)
-- Authority level: `Raw` → `Provisional` (nunca `Authority` automático)
+#### F06.6 — Promote (com evidence gate) ✅ **efetivamente DONE** (via Candidato 1 + F06.3)
+- ✅ PEP `promote` com evidence gate (`can_promote` exige raw evidence).
+- ✅ Requer evidence raw (não inferência) — `InsufficientEvidenceForAuthority`.
+- ✅ Never auto-promotes (zero threshold still needs ≥1 ref — NFR).
+- ⏳ CLI `promote` verb (F06.7).
 
 #### F06.7 — CLI `forge-core memory ingest/list/forget/promote`
 - Registro em `command_registry::COMMANDS`

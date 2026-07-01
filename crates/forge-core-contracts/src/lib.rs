@@ -53,8 +53,9 @@ pub use isolation::{
     MergePlan, MergePolicy, MergeStep,
 };
 pub use memory::{
-    AdmissionDecision, AdmissionDenialReason, AdmissionEvidence, EvidenceField, MemoryContract,
-    MemoryContractDocument, MemoryPolicy,
+    AdmissionDecision, AdmissionDenialReason, AdmissionEvidence, AuthorityLevel, ApprovalState,
+    EvidenceField, Freshness, MemoryContract, MemoryContractDocument, MemoryEntry, MemoryKind,
+    MemoryPolicy, MemoryProvenance, MemoryScope, MemoryScopeKind, ReviewState,
 };
 pub use operation::{OperationContract, OperationContractDocument};
 pub use operation_reference::OperationReferencePolicyDocument;
