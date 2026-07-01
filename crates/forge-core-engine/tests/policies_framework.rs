@@ -86,21 +86,22 @@ fn case_label(policy: &str, goal: Option<&str>, streak: u8) -> String {
 fn load_policy(name: &str) -> AutonomyPolicyContract {
     let path = policy_fixture(name);
     let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read policy fixture {path:?}: {e}"));
+        .unwrap_or_else(|e| panic!("read policy fixture {}: {e}", path.display()));
     let doc: AutonomyPolicyContractDocument = yaml_serde::from_str(&text)
-        .unwrap_or_else(|e| panic!("parse policy fixture {path:?}: {e}"));
+        .unwrap_or_else(|e| panic!("parse policy fixture {}: {e}", path.display()));
     doc.autonomy_policy_contract
 }
 
 fn load_goal(name: &str) -> VerificationGoalContract {
     let path = goal_fixture(name);
     let text = std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("read goal fixture {path:?}: {e}"));
-    let doc: VerificationGoalContractDocument =
-        yaml_serde::from_str(&text).unwrap_or_else(|e| panic!("parse goal fixture {path:?}: {e}"));
+        .unwrap_or_else(|e| panic!("read goal fixture {}: {e}", path.display()));
+    let doc: VerificationGoalContractDocument = yaml_serde::from_str(&text)
+        .unwrap_or_else(|e| panic!("parse goal fixture {}: {e}", path.display()));
     doc.verification_goal_contract
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn expect_rigorous(decision: LaneDecision, expected_reason: LaneRouteReason, label: &str) {
     assert_eq!(
         decision.lane,
@@ -113,6 +114,7 @@ fn expect_rigorous(decision: LaneDecision, expected_reason: LaneRouteReason, lab
     );
 }
 
+#[allow(clippy::needless_pass_by_value)]
 fn expect_fast(decision: LaneDecision, label: &str) {
     assert_eq!(decision.lane, LaneKind::Fast, "{label}: expected fast lane");
     assert_eq!(

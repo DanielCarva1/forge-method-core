@@ -373,6 +373,10 @@ fn normalize_segments(raw: &str) -> Vec<String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::match_wildcard_for_single_variants)]
+// Test code uses `_ => unreachable!()` (or `_ => panic!(...)`) to fail fast if
+// the enum gains a new variant; the wildcard is intentional and not a
+// missed-case smell.
 mod tests {
     use super::*;
     use forge_core_contracts::claim::{

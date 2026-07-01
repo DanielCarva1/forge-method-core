@@ -1,3 +1,8 @@
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::doc_markdown)]
+// End-to-end test that drives the full sidecar lifecycle (claim → heartbeat
+// → release) in one function; splitting it would obscure the sequence.
+
 use assert_cmd::Command;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};

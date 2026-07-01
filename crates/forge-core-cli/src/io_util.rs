@@ -9,7 +9,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-const DIR_LOCK_STALE_AFTER: Duration = Duration::from_mins(1);
+const DIR_LOCK_STALE_AFTER: Duration = Duration::from_secs(60);
 const DIR_LOCK_RETRY_ATTEMPTS: u32 = 40;
 const ATOMIC_WRITE_TEMP_ATTEMPTS: u32 = 16;
 

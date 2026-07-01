@@ -196,13 +196,16 @@ pub fn run_risk_audit_command(args: &[String]) -> Result<(), ExitError> {
         } else {
             None
         };
+        let ctx = crate::risk_audit_trace::RiskAuditTraceContext {
+            trace_id: &trace_id,
+            run_id: &trace_id,
+            recorded_at: &recorded_at,
+            principal_id: "forge-core",
+            agent_id: "risk-audit",
+            rule_set_ref: &rule_set_ref,
+        };
         let events = crate::risk_audit_trace::build_risk_audit_events(
-            &trace_id,
-            &trace_id,
-            &recorded_at,
-            "forge-core",
-            "risk-audit",
-            &rule_set_ref,
+            &ctx,
             error_count,
             warning_count,
             target_count,

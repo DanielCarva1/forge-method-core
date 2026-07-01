@@ -60,7 +60,7 @@ fn fixture_text() -> &'static str {
     TEXT.get_or_init(|| {
         let path = fixture_path();
         std::fs::read_to_string(&path)
-            .unwrap_or_else(|e| panic!("failed to read fixture {path:?}: {e}"))
+            .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()))
     })
 }
 
