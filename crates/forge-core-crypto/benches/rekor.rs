@@ -250,8 +250,7 @@ fn bench_verify_rekor_full_path(c: &mut Criterion) {
         drop(guard);
 
         group.throughput(Throughput::Elements(1));
-        let input_template: (PathBuf, PathBuf) =
-            (log_entry_path.clone(), public_key_path.clone());
+        let input_template: (PathBuf, PathBuf) = (log_entry_path.clone(), public_key_path.clone());
         group.bench_with_input(
             BenchmarkId::from_parameter(format!("aux_{aux_hashes}")),
             &input_template,

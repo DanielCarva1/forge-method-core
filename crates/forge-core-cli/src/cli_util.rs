@@ -80,9 +80,11 @@ pub fn resolve_stateful_command_roots(
     root: &Path,
     allow_bootstrap_core: bool,
 ) -> Result<StatefulCommandRoots, StatefulRootsError> {
-    let resolved = crate::project_cmd::resolve_project(root, allow_bootstrap_core)
-        .map_err(|error| StatefulRootsError::ProjectResolve {
-            source: error.to_string(),
+    let resolved =
+        crate::project_cmd::resolve_project(root, allow_bootstrap_core).map_err(|error| {
+            StatefulRootsError::ProjectResolve {
+                source: error.to_string(),
+            }
         })?;
     let state_root = PathBuf::from(&resolved.state_root);
     if !state_root.exists() {
@@ -420,9 +422,8 @@ pub fn resolve_stateful_roots_or_err(
     root: &Path,
     allow_bootstrap_core: bool,
 ) -> Result<StatefulCommandRoots, ExitError> {
-    resolve_stateful_command_roots(root, allow_bootstrap_core).map_err(|error| {
-        ExitError::failed(format!("{command} failed: {error}"))
-    })
+    resolve_stateful_command_roots(root, allow_bootstrap_core)
+        .map_err(|error| ExitError::failed(format!("{command} failed: {error}")))
 }
 
 /// Result variant of [`emit_envelope`].
@@ -546,10 +547,7 @@ impl<'a> ArgvCursor<'a> {
     pub fn expect_value(&mut self, flag: &str) -> Result<&'a str, ExitError> {
         let value_index = self.index + 1;
         let value = self.args.get(value_index).ok_or_else(|| {
-            ExitError::invalid_value(format!(
-                "{}: missing value for --{flag}",
-                self.command
-            ))
+            ExitError::invalid_value(format!("{}: missing value for --{flag}", self.command))
         })?;
         if value.starts_with('-') {
             return Err(ExitError::invalid_value(format!(

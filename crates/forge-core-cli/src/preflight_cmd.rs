@@ -210,16 +210,12 @@ const LOG_TAIL_MAX_LINES: usize = 25;
 pub fn run_preflight_command(args: &[String]) -> Result<(), ExitError> {
     // `args[0]` is the command name ("preflight"); skip it for parsing.
     let tail = args.iter().skip(1).cloned().collect::<Vec<_>>();
-    let input = parse_preflight_args(&tail).map_err(|error| {
-        ExitError::usage(format!(
-            "{}: {error}",
-            preflight_usage()
-        ))
-    })?;
+    let input = parse_preflight_args(&tail)
+        .map_err(|error| ExitError::usage(format!("{}: {error}", preflight_usage())))?;
     let report = run_preflight(&input);
     if input.json {
-        let serialized = serde_json::to_string_pretty(&report)
-            .expect("preflight report is always serializable");
+        let serialized =
+            serde_json::to_string_pretty(&report).expect("preflight report is always serializable");
         println!("{serialized}");
     } else {
         print_human_summary(&report);
@@ -279,9 +275,8 @@ pub fn parse_preflight_args(args: &[String]) -> Result<PreflightInput, Preflight
                         argument: "--expected-anchor <missing value>".to_string(),
                     });
                 };
-                input.expected_anchor = value
-                    .parse()
-                    .map_err(|_| PreflightArgError::InvalidGate {
+                input.expected_anchor =
+                    value.parse().map_err(|_| PreflightArgError::InvalidGate {
                         value: format!("--expected-anchor {value}"),
                     })?;
             }
@@ -336,11 +331,7 @@ pub fn run_preflight(input: &PreflightInput) -> PreflightReport {
 }
 
 #[instrument(skip_all, fields(gate = gate.wire_name()), level = "info")]
-fn run_gate(
-    gate: GateKind,
-    requirement: GateRequirement,
-    input: &PreflightInput,
-) -> GateResult {
+fn run_gate(gate: GateKind, requirement: GateRequirement, input: &PreflightInput) -> GateResult {
     let started = Instant::now();
     let outcome = execute_gate(gate, input);
     let duration_ms = started.elapsed().as_millis().try_into().unwrap_or(u64::MAX);
@@ -368,11 +359,7 @@ enum GateOutcome {
 
 fn execute_gate(gate: GateKind, input: &PreflightInput) -> GateOutcome {
     match gate {
-        GateKind::TypeCheck => run_cargo_gate(&[
-            "check",
-            "--workspace",
-            "--all-targets",
-        ]),
+        GateKind::TypeCheck => run_cargo_gate(&["check", "--workspace", "--all-targets"]),
         GateKind::ClippyPedantic => run_cargo_gate(&[
             "clippy",
             "--workspace",
@@ -584,11 +571,8 @@ mod tests {
 
     #[test]
     fn parse_preflight_args_rejects_invalid_gate() {
-        let error = parse_preflight_args(&[
-            "--gate".to_string(),
-            "lint".to_string(),
-        ])
-        .expect_err("invalid gate should error");
+        let error = parse_preflight_args(&["--gate".to_string(), "lint".to_string()])
+            .expect_err("invalid gate should error");
         assert!(matches!(
             error,
             PreflightArgError::InvalidGate { value }
@@ -605,10 +589,7 @@ mod tests {
             "format".to_string(),
         ])
         .expect_err("duplicate gate should error");
-        assert!(matches!(
-            error,
-            PreflightArgError::ConflictingFlags { .. }
-        ));
+        assert!(matches!(error, PreflightArgError::ConflictingFlags { .. }));
     }
 
     #[test]

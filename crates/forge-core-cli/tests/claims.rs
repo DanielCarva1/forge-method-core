@@ -66,7 +66,12 @@ fn claim_id_from_acquire(
     scope_id: &str,
     path: &str,
 ) -> StableId {
-    let acquired = run_acquire(dir, &acquire_req(agent, scope_id, &[path]), NOW, WalDurability::NoSync);
+    let acquired = run_acquire(
+        dir,
+        &acquire_req(agent, scope_id, &[path]),
+        NOW,
+        WalDurability::NoSync,
+    );
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     let claim_id = acquired
         .data
@@ -119,10 +124,20 @@ fn acquire_success_persists_active_live_claim() {
 fn conflicting_acquire_same_path_and_scope_is_rejected() {
     let dir = tmp_claims_dir("conflict");
     let path = "contracts/stories/S6.2.yaml";
-    let first = run_acquire(&dir, &acquire_req("alice", "S6.2", &[path]), NOW, WalDurability::NoSync);
+    let first = run_acquire(
+        &dir,
+        &acquire_req("alice", "S6.2", &[path]),
+        NOW,
+        WalDurability::NoSync,
+    );
     assert!(first.ok, "first acquire should succeed: {:?}", first.error);
 
-    let second = run_acquire(&dir, &acquire_req("bob", "S6.2", &[path]), NOW + 1, WalDurability::NoSync);
+    let second = run_acquire(
+        &dir,
+        &acquire_req("bob", "S6.2", &[path]),
+        NOW + 1,
+        WalDurability::NoSync,
+    );
 
     assert!(!second.ok, "second acquire must be rejected");
     assert_eq!(second.exit_code(), ExitReason::RejectedByGate.as_code());
@@ -174,7 +189,13 @@ fn release_transitions_claim_out_of_live_bus() {
     let dir = tmp_claims_dir("release");
     let claim_id = claim_id_from_acquire("alice", &dir, "S6.4", "contracts/stories/S6.4.yaml");
 
-    let released = run_release(&dir, &claim_id, &StableId("alice".to_string()), NOW + 10, WalDurability::NoSync);
+    let released = run_release(
+        &dir,
+        &claim_id,
+        &StableId("alice".to_string()),
+        NOW + 10,
+        WalDurability::NoSync,
+    );
 
     assert!(released.ok, "release should succeed: {:?}", released.error);
     assert_eq!(released.data.expect("release data").status, "released");
@@ -331,7 +352,13 @@ fn claim_status_reports_only_unresolved_handoff_blocker_statuses() {
         "S6.5-handoff-recorded",
         "contracts/stories/S6.5-handoff-recorded.yaml",
     );
-    let released = run_release(&dir, &released_id, &StableId("cara".to_string()), NOW + 1, WalDurability::NoSync);
+    let released = run_release(
+        &dir,
+        &released_id,
+        &StableId("cara".to_string()),
+        NOW + 1,
+        WalDurability::NoSync,
+    );
     assert!(released.ok, "release should succeed: {:?}", released.error);
     let handoff = run_handoff(
         &dir,
@@ -569,7 +596,12 @@ fn reconcile_once_materializes_handoff_required_and_preserves_recovery_path() {
         WalDurability::NoSync,
     );
     assert!(handoff.ok, "handoff should recover: {:?}", handoff.error);
-    let reacquire = run_acquire(&dir, &acquire_req("bob", "P2.3-handoff", &[path]), NOW + 12, WalDurability::NoSync);
+    let reacquire = run_acquire(
+        &dir,
+        &acquire_req("bob", "P2.3-handoff", &[path]),
+        NOW + 12,
+        WalDurability::NoSync,
+    );
     assert!(
         reacquire.ok,
         "handoff_recorded claim must not block reacquire: {:?}",
@@ -626,7 +658,12 @@ fn reconcile_once_cache_only_without_wal_fails_closed() {
 fn check_write_denies_peer_claimed_path_and_allows_unclaimed_path() {
     let dir = tmp_claims_dir("check-write");
     let path = "contracts/stories/S6.6.yaml";
-    let acquired = run_acquire(&dir, &acquire_req("alice", "S6.6", &[path]), NOW, WalDurability::NoSync);
+    let acquired = run_acquire(
+        &dir,
+        &acquire_req("alice", "S6.6", &[path]),
+        NOW,
+        WalDurability::NoSync,
+    );
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     let (claims, errors) = load_claims(&dir);
     assert!(
@@ -671,7 +708,12 @@ fn check_write_denies_peer_claimed_path_and_allows_unclaimed_path() {
 fn wal_authority_survives_missing_yaml_cache() {
     let dir = tmp_claims_dir("wal-authority-missing-cache");
     let path = "contracts/stories/S6.7.yaml";
-    let acquired = run_acquire(&dir, &acquire_req("alice", "S6.7", &[path]), NOW, WalDurability::NoSync);
+    let acquired = run_acquire(
+        &dir,
+        &acquire_req("alice", "S6.7", &[path]),
+        NOW,
+        WalDurability::NoSync,
+    );
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     for entry in fs::read_dir(&dir).expect("read cache dir") {
         let entry = entry.expect("cache dir entry");
@@ -700,11 +742,22 @@ fn wal_authority_survives_missing_yaml_cache() {
 fn wal_authority_ignores_stale_yaml_cache_after_release() {
     let dir = tmp_claims_dir("wal-authority-stale-cache");
     let path = "contracts/stories/S6.8.yaml";
-    let acquired = run_acquire(&dir, &acquire_req("alice", "S6.8", &[path]), NOW, WalDurability::NoSync);
+    let acquired = run_acquire(
+        &dir,
+        &acquire_req("alice", "S6.8", &[path]),
+        NOW,
+        WalDurability::NoSync,
+    );
     assert!(acquired.ok, "acquire should succeed: {:?}", acquired.error);
     let stale_active_claim = load_one_claim(&dir);
     let claim_id = StableId(acquired.data.expect("acquire data").claim_id);
-    let released = run_release(&dir, &claim_id, &StableId("alice".to_string()), NOW + 1, WalDurability::NoSync);
+    let released = run_release(
+        &dir,
+        &claim_id,
+        &StableId("alice".to_string()),
+        NOW + 1,
+        WalDurability::NoSync,
+    );
     assert!(released.ok, "release should succeed: {:?}", released.error);
     save_claim(&dir, &stale_active_claim).expect("overwrite cache with stale active claim");
 
@@ -717,7 +770,12 @@ fn wal_authority_ignores_stale_yaml_cache_after_release() {
     );
     let view = status.data.expect("status data");
     assert!(view.active.is_empty(), "released WAL state must win");
-    let reacquired = run_acquire(&dir, &acquire_req("bob", "S6.8", &[path]), NOW + 2, WalDurability::NoSync);
+    let reacquired = run_acquire(
+        &dir,
+        &acquire_req("bob", "S6.8", &[path]),
+        NOW + 2,
+        WalDurability::NoSync,
+    );
     assert!(
         reacquired.ok,
         "released WAL state must not resurrect stale cache blocker: {:?}",

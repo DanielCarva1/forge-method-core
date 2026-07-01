@@ -275,9 +275,7 @@ pub(crate) fn verify_rekor_checkpoint(
 /// Returns [`RekorParseError`] when the checkpoint is malformed (missing note
 /// / signature separator, wrong line count, empty origin, non-numeric tree
 /// size, or undecodable signatures).
-pub fn parse_signed_checkpoint(
-    checkpoint: &str,
-) -> Result<ParsedCheckpoint, RekorParseError> {
+pub fn parse_signed_checkpoint(checkpoint: &str) -> Result<ParsedCheckpoint, RekorParseError> {
     let checkpoint = checkpoint.trim_matches('"');
     let (note, signatures) = checkpoint
         .split_once("\n\n")
