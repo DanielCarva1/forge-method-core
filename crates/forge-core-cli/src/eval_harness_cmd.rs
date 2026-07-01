@@ -117,8 +117,7 @@ pub fn run_eval_harness_command(args: &[String]) -> Result<(), ExitError> {
     }
 
     let config = &document.eval_harness_config;
-    let corpus_path = corpus_override
-        .unwrap_or_else(|| root.join(&config.corpus_ref.0));
+    let corpus_path = corpus_override.unwrap_or_else(|| root.join(&config.corpus_ref.0));
     let corpus_yaml = std::fs::read_to_string(&corpus_path).map_err(|source| {
         ExitError::usage(format!(
             "eval-harness: read corpus {}: {source}",
@@ -150,7 +149,12 @@ pub fn run_eval_harness_command(args: &[String]) -> Result<(), ExitError> {
 
     let report = generate_comparison_report(config, &baseline_documents, &candidate_documents);
 
-    emit_trace_events(root.as_path(), config_path.as_path(), config.id.0.as_str(), &report);
+    emit_trace_events(
+        root.as_path(),
+        config_path.as_path(),
+        config.id.0.as_str(),
+        &report,
+    );
 
     if want_json {
         let envelope = CliEnvelope::ok("eval-harness", &report);
@@ -267,6 +271,8 @@ fn next_path_or_err(args: &[String], index: usize) -> Result<PathBuf, ExitError>
 
 fn next_arg_or_err(args: &[String], index: usize) -> Result<&str, ExitError> {
     args.get(index).map(String::as_str).ok_or_else(|| {
-        ExitError::usage(format!("eval-harness: missing value for flag at position {index}"))
+        ExitError::usage(format!(
+            "eval-harness: missing value for flag at position {index}"
+        ))
     })
 }

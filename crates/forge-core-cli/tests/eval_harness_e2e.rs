@@ -74,9 +74,7 @@ fn fresh_harness(label: &str, pass_two_arms_with_same_mock: bool) -> HarnessScaf
     // unescapes back to a single (Windows paths need this in YAML).
     let mock_src = mock_report.to_string_lossy().replace('\\', "\\\\");
     let copy_command = if cfg!(windows) {
-        format!(
-            "[\"cmd\", \"/c\", \"copy\", \"/Y\", \"{mock_src}\", \"{{output_file}}\"]"
-        )
+        format!("[\"cmd\", \"/c\", \"copy\", \"/Y\", \"{mock_src}\", \"{{output_file}}\"]")
     } else {
         format!("[\"cp\", \"{mock_src}\", \"{{output_file}}\"]")
     };
@@ -162,10 +160,7 @@ fn eval_harness_rejects_invalid_config() {
         .output()
         .expect("run forge-core eval-harness");
 
-    assert!(
-        !output.status.success(),
-        "invalid config must exit nonzero"
-    );
+    assert!(!output.status.success(), "invalid config must exit nonzero");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("DuplicateArmLabel") || stderr.contains("not unique"),

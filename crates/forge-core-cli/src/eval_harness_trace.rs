@@ -105,7 +105,11 @@ fn eval_harness_event(
         ctx.recorded_at,
         message,
     )
-    .with_actor(TraceActor::new(ctx.principal_id, ctx.agent_id, "eval-harness"))
+    .with_actor(TraceActor::new(
+        ctx.principal_id,
+        ctx.agent_id,
+        "eval-harness",
+    ))
     .with_authority(TraceAuthority::for_operation("eval-harness"))
     .with_risk(TraceRisk::new(risk_level, false))
     .with_cost(TraceCost::zero())
