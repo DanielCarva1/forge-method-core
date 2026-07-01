@@ -13,6 +13,7 @@
 //!   propagated clearly.
 
 use assert_cmd::Command;
+use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -112,6 +113,22 @@ fn execute_operation_blocked_by_risk_audit() {
         !wal.exists(),
         "WAL must not be written when the risk-audit gate fails"
     );
+    // F11.4: the gate emits TraceEvents to the project trace log even on
+    // failure, so `forge explain` can narrate the audit later.
+    let trace = state_root.join("traces/events.ndjson");
+    assert!(
+        trace.exists(),
+        "trace log must be written so the audit is visible to forge explain"
+    );
+    let trace_body = fs::read_to_string(&trace).expect("read trace log");
+    assert!(
+        trace_body.contains("risk_audit_failed"),
+        "trace should record risk_audit_failed, got: {trace_body}"
+    );
+    assert!(
+        trace_body.contains("risk_audit_started"),
+        "trace should record risk_audit_started, got: {trace_body}"
+    );
 }
 
 #[test]
@@ -184,4 +201,56 @@ fn execute_operation_risk_audit_invalid_rules_yaml_fails_clearly() {
         !wal.exists(),
         "WAL must not be written when the rules YAML is invalid"
     );
+}
+
+#[test]
+fn standalone_risk_audit_emits_trace_in_forge_project() {
+    // The standalone CLI emits trace events only when the audited root
+    // already carries a `.forge-method` dir (so it never pollutes a
+    // non-Forge tree). Unlike the sidecar layout used by execute-operation,
+    // the standalone resolves the trace root as `<root>/.forge-method`
+    // directly, so this scaffold plants `.forge-method` under the audit root.
+    static SEQ: AtomicUsize = AtomicUsize::new(0);
+    let n = SEQ.fetch_add(1, Ordering::SeqCst);
+    let root = repo_root()
+        .join("target")
+        .join(format!("standalone-risk-audit-trace-{n}"));
+    let _ = fs::remove_dir_all(&root);
+    let state_root = root.join(".forge-method");
+    fs::create_dir_all(&state_root).expect("create .forge-method");
+    fs::write(root.join("README.md"), "# app\n").expect("write readme");
+    write_source(
+        &root,
+        "pub fn risky() -> u32 {\n    let x: Option<u32> = None;\n    x.unwrap()\n}\n",
+    );
+    let output = bin()
+        .args(["risk-audit", "--root"])
+        .arg(&root)
+        .args(["--rules"])
+        .arg(fail_soft_rules())
+        .arg("--json")
+        .output()
+        .expect("run risk-audit");
+    assert!(
+        !output.status.success(),
+        "standalone must fail-closed on anti-patterns"
+    );
+    let trace = state_root.join("traces/events.ndjson");
+    assert!(
+        trace.exists(),
+        "standalone trace must be written under .forge-method in a Forge project"
+    );
+    let trace_body = fs::read_to_string(&trace).expect("read trace log");
+    assert!(
+        trace_body.contains("risk_audit_failed"),
+        "standalone trace should record risk_audit_failed, got: {trace_body}"
+    );
+    // Sanity: each line is a JSON object with an event_kind field.
+    for line in trace_body.lines() {
+        let parsed: Value = serde_json::from_str(line).expect("trace line is valid JSON");
+        assert!(
+            parsed.get("event_kind").is_some(),
+            "trace event must carry event_kind"
+        );
+    }
 }

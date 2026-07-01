@@ -115,6 +115,14 @@ pub enum TraceEventKind {
     EffectApplied,
     RunCompleted,
     RunFailed,
+    /// F11.4: risk-audit pass started (rule set loaded, walk beginning).
+    /// Emitted by both the standalone `risk-audit` CLI and the
+    /// `execute-operation --require-risk-audit` gate.
+    RiskAuditStarted,
+    /// F11.4: risk-audit completed with zero Error-severity findings.
+    RiskAuditPassed,
+    /// F11.4: risk-audit failed closed (structural errors or findings).
+    RiskAuditFailed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

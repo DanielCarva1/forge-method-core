@@ -193,13 +193,48 @@ Validação:
 - Regressão: `risk_audit_policies_e2e` (F11.2) ✅, `operation_sidecar_e2e` ✅, `validate` ✅
 - Anchor 122 ✅
 
+## F11.4 — Integração com TraceEvent (FECHADO)
+
+O risk audit agora deixa rastro no trace log do projeto, para que
+`forge explain` possa narrar que um audit ocorreu (e seu resultado).
+
+Entregues:
+
+- `TraceEventKind` ganha 3 variants: `RiskAuditStarted`, `RiskAuditPassed`,
+  `RiskAuditFailed` (snake_case no wire: `risk_audit_started` etc.).
+- `telemetry_cmd.rs`: 3 matches exaustivos cobertos — risk-audit events
+  mapeiam para `GateEvaluated` em telemetria agregada (são gates).
+- Novo módulo `risk_audit_trace.rs` (pub, com 4 unit tests) centraliza a
+  construção dos eventos (deletion test: shape do evento definido uma vez,
+  reusado por gate e standalone).
+- Gate F11.3 (`run_execute_operation`): emite started + outcome antes do
+  return, persistindo via `append_trace_event` em `<effect_store_root>/.forge-method`.
+  Best-effort: falha de trace é logada em stderr mas nunca muda a decisão
+  fail-closed do gate.
+- Standalone (`run_risk_audit_command`): emite trace apenas quando o root
+  já tem `.forge-method` (não polui árvores não-Forge).
+- `forge explain` já narra via `format!("{:?}", event_kind)` — os novos
+  variants aparecem automaticamente, sem code change no narrate.
+- E2E: `execute_operation_risk_audit_e2e.rs` agora verifica que o trace
+  contém `risk_audit_started` + `risk_audit_failed` (gate), e novo caso
+  `standalone_risk_audit_emits_trace_in_forge_project` (standalone).
+
+Decisão de design: não adicionei `RiskAuditFindingRecorded` (um evento por
+finding seria ruído). Started + Passed/Failed com `message` carregando o
+summary (error/warning/target counts) é suficiente para `forge explain`.
+
+Validação:
+
+- `cargo check -p forge-core-trace -p forge-core-cli` ✅
+- `cargo clippy ... -- -W clippy::pedantic` ✅ 0 warnings no trabalho novo
+- `cargo test -p forge-core-cli --lib risk_audit_trace` ✅ 4/4
+- `cargo test -p forge-core-cli --test execute_operation_risk_audit_e2e` ✅ 5/5
+- Regressão: `telemetry_cli_e2e` (6), `trace_events` (3) ✅
+- Anchor 122 ✅
+
 ## Próximos passos
 
-### F11.4 — TraceEvent integration
-
-- Variants: `RiskAuditStarted`, `RiskAuditFindingRecorded`,
-  `RiskAuditPassed`, `RiskAuditFailed`
-- `forge explain` já narra — só adicionar variantes
+Nenhum epic F11 pendente. Workflows agora em 9/10 (resta F13).
 
 ## Lições aprendidas
 
