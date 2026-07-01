@@ -43,7 +43,7 @@ pub use error::{AdmitError, ForgetError, MemoryProjectionError, PromoteError};
 pub use promote::{promote, promote_with_durability, PromoteResult, PromoteStatus};
 pub use retention::{
     forget, forget_with_durability, list_now, list_now_with_durability, ForgetResult, ForgetStatus,
-    ListResult,
+    ListResult, ListStatus,
 };
 
 /// State-root-relative path of the append-only memory event log.
