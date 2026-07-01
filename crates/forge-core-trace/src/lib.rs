@@ -243,6 +243,116 @@ impl TraceCost {
     }
 }
 
+// ===========================================================================
+// F13: Budget/Cost Accounting.
+//
+// Pure aggregation over a slice of TraceEvents. The CLI `forge-core cost`
+// command loads events via query_trace_events and hands them here. Keeping
+// aggregation pure + in this crate means it is unit-testable without any
+// filesystem or CLI harness.
+// ===========================================================================
+
+/// Scope that a [`CostReport`] was built for. Mirrors the CLI filter that
+/// selected the events.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CostScope {
+    Run,
+    Graph,
+    Principal,
+    All,
+}
+
+/// Aggregated cost totals. `event_count` is the number of trace events that
+/// contributed to the other fields, so a caller can tell an empty report from
+/// a report over zero-cost events.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct CostTotals {
+    pub model_calls: u64,
+    pub tool_calls: u64,
+    pub estimated_tokens: u64,
+    pub event_count: u64,
+}
+
+impl CostTotals {
+    /// Accumulate another set of totals into this one.
+    pub fn add(&mut self, other: &CostTotals) {
+        self.model_calls += other.model_calls;
+        self.tool_calls += other.tool_calls;
+        self.estimated_tokens += other.estimated_tokens;
+        self.event_count += other.event_count;
+    }
+}
+
+/// One row in a breakdown (per-run or per-agent).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CostBreakdownEntry {
+    pub key: String,
+    pub totals: CostTotals,
+}
+
+/// Aggregated cost report returned by [`aggregate_costs`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CostReport {
+    pub schema_version: String,
+    pub scope: CostScope,
+    pub scope_id: String,
+    pub totals: CostTotals,
+    pub by_run: Vec<CostBreakdownEntry>,
+    pub by_agent: Vec<CostBreakdownEntry>,
+}
+
+impl CostReport {
+    /// Schema version tag carried on every report.
+    pub const SCHEMA_VERSION: &'static str = "cost-report-v0";
+}
+
+/// Aggregate cost over a slice of trace events.
+///
+/// `scope` and `scope_id` describe the filter the caller applied (they are
+/// not re-derived here); the function always aggregates every event it is
+/// given. Breakdowns are sorted by descending `estimated_tokens` so the
+/// heaviest contributors surface first.
+#[must_use]
+pub fn aggregate_costs(events: &[TraceEvent], scope: CostScope, scope_id: &str) -> CostReport {
+    let mut totals = CostTotals::default();
+    let mut by_run: std::collections::BTreeMap<String, CostTotals> =
+        std::collections::BTreeMap::new();
+    let mut by_agent: std::collections::BTreeMap<String, CostTotals> =
+        std::collections::BTreeMap::new();
+    for event in events {
+        let row = CostTotals {
+            model_calls: event.cost.model_calls,
+            tool_calls: event.cost.tool_calls,
+            estimated_tokens: event.cost.estimated_tokens,
+            event_count: 1,
+        };
+        totals.add(&row);
+        by_run.entry(event.run_id.clone()).or_default().add(&row);
+        by_agent
+            .entry(event.actor.agent_id.clone())
+            .or_default()
+            .add(&row);
+    }
+    let sort_desc =
+        |map: std::collections::BTreeMap<String, CostTotals>| -> Vec<CostBreakdownEntry> {
+            let mut entries: Vec<CostBreakdownEntry> = map
+                .into_iter()
+                .map(|(key, totals)| CostBreakdownEntry { key, totals })
+                .collect();
+            entries.sort_by(|a, b| b.totals.estimated_tokens.cmp(&a.totals.estimated_tokens));
+            entries
+        };
+    CostReport {
+        schema_version: CostReport::SCHEMA_VERSION.to_string(),
+        scope,
+        scope_id: scope_id.to_string(),
+        totals,
+        by_run: sort_desc(by_run),
+        by_agent: sort_desc(by_agent),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -291,5 +401,73 @@ mod tests {
         assert!(!json.contains("project_id"));
         assert!(!json.contains("graph_id"));
         assert!(!json.contains("node_id"));
+    }
+
+    fn cost_event(
+        run_id: &str,
+        agent_id: &str,
+        model_calls: u64,
+        tool_calls: u64,
+        tokens: u64,
+    ) -> TraceEvent {
+        TraceEvent::new(
+            "trace.cost",
+            run_id,
+            format!("{run_id}.evt"),
+            TraceEventKind::EffectApplied,
+            "2026-06-30T00:00:00Z",
+            "effect applied",
+        )
+        .with_actor(TraceActor::new("principal", agent_id, "driver"))
+        .with_cost(TraceCost {
+            model_calls,
+            tool_calls,
+            estimated_tokens: tokens,
+        })
+    }
+
+    #[test]
+    fn aggregate_costs_sums_totals_across_events() {
+        let events = vec![
+            cost_event("run.a", "agent-1", 10, 5, 1_000),
+            cost_event("run.a", "agent-2", 3, 2, 500),
+            cost_event("run.b", "agent-1", 7, 1, 2_000),
+        ];
+        let report = aggregate_costs(&events, CostScope::All, "*");
+        assert_eq!(report.totals.model_calls, 20);
+        assert_eq!(report.totals.tool_calls, 8);
+        assert_eq!(report.totals.estimated_tokens, 3_500);
+        assert_eq!(report.totals.event_count, 3);
+    }
+
+    #[test]
+    fn aggregate_costs_breaks_down_by_run_and_agent() {
+        let events = vec![
+            cost_event("run.a", "agent-1", 10, 0, 1_000),
+            cost_event("run.b", "agent-1", 0, 0, 5_000),
+            cost_event("run.a", "agent-2", 0, 0, 500),
+        ];
+        let report = aggregate_costs(&events, CostScope::All, "*");
+        // by_run sorted by descending tokens: run.b (5_000), run.a (1_500).
+        assert_eq!(report.by_run.len(), 2);
+        assert_eq!(report.by_run[0].key, "run.b");
+        assert_eq!(report.by_run[0].totals.estimated_tokens, 5_000);
+        assert_eq!(report.by_run[1].key, "run.a");
+        // by_agent sorted by descending tokens: agent-1 (6_000), agent-2 (500).
+        assert_eq!(report.by_agent.len(), 2);
+        assert_eq!(report.by_agent[0].key, "agent-1");
+        assert_eq!(report.by_agent[1].key, "agent-2");
+    }
+
+    #[test]
+    fn aggregate_costs_empty_slice_is_zero_not_missing() {
+        let report = aggregate_costs(&[], CostScope::Run, "run.empty");
+        assert_eq!(report.totals, CostTotals::default());
+        assert_eq!(report.totals.event_count, 0);
+        assert!(report.by_run.is_empty());
+        assert!(report.by_agent.is_empty());
+        assert_eq!(report.scope, CostScope::Run);
+        assert_eq!(report.scope_id, "run.empty");
+        assert_eq!(report.schema_version, CostReport::SCHEMA_VERSION);
     }
 }

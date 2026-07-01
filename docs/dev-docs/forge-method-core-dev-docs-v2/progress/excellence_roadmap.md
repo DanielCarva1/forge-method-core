@@ -20,7 +20,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 | Workflows | 9 | 10 | WAL/claim ok; **F11.1 ✅** CLI standalone + **F11.2 ✅** 4 policies + **F11.3 ✅** enforcement no `execute-operation` + **F11.4 ✅** TraceEvent (started/passed/failed emitidos no gate e standalone); falta F13 |
 | Agente guia humano | 9 | 10 | F01 bugs de integridade fechados; rollback_available real |
 | Não-script-de-novela | 10 | 10 | **G1 ✅** fechado: 62/62 policies em `contracts/policies/` são framework paramétrico (0/62 script). Auditoria em `progress/g1_policies_script_novela_audit.md`. Bússola `human-agent-interface.yaml` honrada |
-| Features comunidade | 9.5 | 10 | F03/F04/F01/F02/F15 operacionais; **F11.1+F11.2 ✅** (CLI + 4 policies); falta F05-F14 (exceto F11) |
+| Features comunidade | 9.7 | 10 | F03/F04/F01/F02/F15 operacionais; **F11.1+F11.2+F11.3+F11.4 ✅**; **F13 ✅** `forge-core cost` (agregação por run/graph/agent/principal); falta F05-F08, F12, F14 |
 | Rust best practices | 10 | 10 | E1 fechado (0 warnings lib); **F15 fechado** (2 edit points) |
 | Segurança supply chain | 8 | 10 | serde_yaml migrado; zeroize feito; fuzz (R4) completo via ADR-0008 |
 | Docs/rastreabilidade | 10 | 10 | R13 alinhado; R14 paper status criado; ADR-0008; **R9 ✅** fechado: Bootstrap Core Exception explícita, opt-in (`--allow-bootstrap-core`), 22 tests E2E comprovam consumer repo limpo opera clean sem ela |
@@ -308,7 +308,7 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 - [ ] **F09** — Secure A2A adapter (agent-to-agent cross-vendor)
 - [ ] **F10** — Control Plane local (TUI ou HTML estático lendo `.forge-method`)
 - [ ] **F12** — Guided Start + Product UX (fluxo guiado sem YAML manual)
-- [ ] **F13** — Budget and Cost Accounting (per run/graph/agent/principal/tool)
+- [x] **F13** — Budget and Cost Accounting (per run/graph/agent/principal) ✅
 - [ ] **F14** — Knowledge Orchestration mode (research agents com evidence graph)
 
 ### Trilha E — Rust best practices

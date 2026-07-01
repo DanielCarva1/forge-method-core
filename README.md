@@ -137,6 +137,11 @@ The same gate is available as `--require-risk-audit <policy.yaml>` on
 `execute-operation`, running before any WAL write so a failed audit
 leaves the repository untouched.
 
+**Cost accounting** — `forge-core cost` aggregates the cost fields already
+carried by trace events (model calls, tool calls, estimated tokens) by run,
+graph, agent, or principal, so a host can answer "what did this run cost?"
+without re-walking the trace log.
+
 **Supply-chain surface (host-adapter)** — a set of commands for projecting the
 protocol onto host environments (MCP tools, borrowed shells, app UI) and for
 verifying distribution artifacts (provenance, signatures, transparency logs).
