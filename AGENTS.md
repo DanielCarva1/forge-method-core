@@ -55,3 +55,32 @@ both `cargo` and `cargo.exe` work — prefer `cargo`.
 -W clippy::pedantic`, `cargo test --workspace`, and `cargo fmt --all --
 --check`. You normally do not need to run these manually. `/green` runs them
 now; `/green on|off` toggles the auto-fix loop.
+
+## Editor stability (WSL + Windows + rust-analyzer)
+
+**Symptom**: the host editor process (Zed, VS Code, Codex) dies with
+`memory allocation of 8388608 bytes failed` / `0xC0000409`
+(STATUS_STACK_BUFFER_OVERRUN) when this workspace is open.
+
+**Root cause (measured)**: `target/debug` accumulates ~130k files from
+incremental builds. Without an explicit exclude, the rust-analyzer indexer
+walks every one of them on startup, which (over WSL-on-NTFS, where each
+syscall is expensive) explodes the Windows commit-charge and OOMs the host
+process. The `.gitignore` already excludes `target/` from git, but
+rust-analyzer does NOT read `.gitignore` for its file scan by default.
+
+**Mitigation** (already in place):
+
+- `rust-analyzer.toml` at the repo root sets `files.excludeDirs` to skip
+  `target`, `target-test`, `.forge-method`, `fuzz/corpus`, `docs/fixtures`,
+  and `contracts/risk-audits/fixtures`, plus `cargo.checkOnSave = false` so
+  a second `cargo` does not run in parallel with r-a's own analysis.
+- Periodically purge accumulated test tempdirs that leak under `target/`
+  (they match the pattern `*-[0-9]+$`). Use:
+  ```
+  ls target | grep -E -- '-[0-9]+$' | (cd target && xargs -r rm -rf)
+  ```
+- When `target/debug` itself becomes too large to `du`, run `cargo clean`
+  and rebuild.
+- Never run two Rust toolchains in parallel (e.g. `cargo check` in one
+  terminal while the editor's r-a is also checking). One cargo at a time.

@@ -1,0 +1,34 @@
+# rust-analyzer configuration for the Forge Method Core workspace.
+#
+# WHY THIS EXISTS: `target/debug` accumulates ~130k+ files from incremental
+# builds. Without an explicit exclude, the Zed/rust-analyzer indexer walks
+# every one of them on startup, which OOMs the host process
+# ("memory allocation of 8388608 bytes failed" / 0xC0000409 =
+# STATUS_STACK_BUFFER_OVERRUN). The `.gitignore` already excludes `target/`
+# from git, but rust-analyzer does NOT read .gitignore for its file scan by
+# default -- it must be told explicitly via `files.excludeDirs`.
+
+# Exclude the heavy dirs from the r-a file scan. This is the single biggest
+# fix: without it r-a indexes ~130k build artifacts under target/debug.
+files.excludeDirs = [
+    "target",
+    "target-test",
+    ".forge-method",
+    "node_modules",
+    ".git",
+    "fuzz/corpus",
+    "fuzz/target",
+    "docs/fixtures",
+    "contracts/risk-audits/fixtures",
+]
+
+# Do NOT run `cargo check` on every keystroke inside the editor. Combined
+# with r-a's own analysis pass, two Rust toolchains run in parallel and the
+# Windows commit-charge explodes. r-a still does its own in-process analysis
+# (diagnostics, completions, go-to-definition) -- you only lose the separate
+# `cargo check` pass, which you can run on demand in a terminal.
+cargo.checkOnSave = false
+
+# Faster startup: don't build all features for the in-editor check pass when
+# it is re-enabled. Harmless when checkOnSave is false.
+cargo.features = []
