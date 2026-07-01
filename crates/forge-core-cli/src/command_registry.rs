@@ -146,6 +146,11 @@ pub const COMMANDS: &[CommandSpec] = &[
         handler: run_explain,
     },
     CommandSpec {
+        name: "cost",
+        usage_lines: &["       forge-core cost [--root <path>] [--run-id <id> | --last-run] [--graph-id <id>] [--principal <id>] [--allow-bootstrap-core] [--json|--no-json]"],
+        handler: crate::cost_cmd::run_cost_command,
+    },
+    CommandSpec {
         name: "risk-audit",
         usage_lines: &["       forge-core risk-audit [--root <path>] --rules <path> [--json]"],
         handler: crate::risk_audit_cmd::run_risk_audit_command,
