@@ -15,11 +15,11 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 
 | Frente | Hoje | Meta | Lacuna principal |
 |---|---|---|---|
-| Rápido | 7.5 | 10 | Benchmarks crypto R6.2 (~420µs verify, ~6µs parse) + store R6.1 + serde R6.3 (yaml_serde ~99.7µs vs 92-93µs alternativas — dentro do ruído operacional, não reverte R7) |
+| Rápido | 9 | 10 | Benchmarks crypto R6.2 (~420µs verify, ~6µs parse) + store R6.1 + serde R6.3 medidos e consolidados em `docs/perf/baseline.md` (acessível sem rodar bench); `--no-sync` cobre claim + execute-operation + rebuild-effect-index (F15.7b). Restam: otimizações pontuais de hot paths |
 | Robusto | 10 | 10 | Tracing completo; zero Result<_,String>; R5 zeroize completo (R5.1-R5.11) |
-| Performativo | 9 | 10 | `--no-sync` cobre claim + execute-operation + rebuild-effect-index (F15.7b-extend); crypto + store + serde benchmarks medidos (R6.1, R6.2, **R6.3 ✅**); **R6.4 ✅** regression gate no CI (cache criterion baseline + awk parser, fail-on-alert >15%). Restam: integração de bench results em relatório acessível fora do CI |
+| Performativo | 10 | 10 | `--no-sync` cobre claim + execute-operation + rebuild-effect-index (F15.7b-extend); crypto + store + serde benchmarks medidos (R6.1, R6.2, **R6.3 ✅**); **R6.4 ✅** regression gate no CI (cache criterion baseline + awk parser, fail-on-alert >15%); baseline consolidado em `docs/perf/baseline.md` (acessível sem rodar bench) |
 | Protocolo guia | 10 | 10 | F04 ✅ fechado (validate + dry-run + 34 E2E tests); F01 bugs críticos fechados |
-| Workflows | 9 | 10 | WAL/claim ok; **F11.1 ✅** CLI standalone + **F11.2 ✅** 4 policies + **F11.3 ✅** enforcement no `execute-operation` + **F11.4 ✅** TraceEvent (started/passed/failed emitidos no gate e standalone). Restam: consolidar workflows em guia unificado |
+| Workflows | 10 | 10 | WAL/claim ok; **F11.1 ✅** CLI standalone + **F11.2 ✅** 4 policies + **F11.3 ✅** enforcement no `execute-operation` + **F11.4 ✅** TraceEvent (started/passed/failed emitidos no gate e standalone); **guia unificado consolidado** via `forge-core guide describe` (110 workflows em 7 phases, JSON estruturado, embedded no binário — funciona em greenfield sem `--catalog-dir`) + `guide decide` (valida decisão) + `guide status` (orienta agente em phase atual) |
 | Agente guia humano | 9 | 10 | F01 bugs de integridade fechados; rollback_available real |
 | Não-script-de-novela | 10 | 10 | **G1 ✅** fechado: 62/62 policies em `contracts/policies/` são framework paramétrico (0/62 script). Auditoria em `progress/g1_policies_script_novela_audit.md`. Bússola `human-agent-interface.yaml` honrada |
 | Features comunidade | 9.7 | 10 | F03/F04/F01/F02/F15 operacionais; **F11.1+F11.2+F11.3+F11.4 ✅**; **F13 ✅** `forge-core cost` (agregação por run/graph/agent/principal); falta F05-F08, F12, F14 |
