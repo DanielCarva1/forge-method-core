@@ -104,6 +104,66 @@ pub struct MemoryEntry {
     pub approval: ApprovalState,
     pub supersedes: Option<StableId>,
     pub invalidation_reason: Option<String>,
+    // --- F06 Trust Axes (ADR 0002). Additive, non-breaking: `None` = legacy
+    // document written before F06.2. Both default to the trust floor so a
+    // legacy record is never silently authoritative. ---
+    /// Trust Axis 1 — authority. `None` = legacy; resolved via
+    /// [`authority_level_effective`](Self::authority_level_effective).
+    #[serde(default)]
+    pub authority_level: Option<AuthorityLevel>,
+    /// Trust Axis 2 — review. `None` = legacy; treated as `Unreviewed`.
+    #[serde(default)]
+    pub review_state: Option<ReviewState>,
+    /// Who attested to the record (F07 principal attestation). `None` unless
+    /// `review_state == Reviewed`. Reuses `StableId`, never a `PrincipalId`
+    /// (which does not exist in this codebase — R8 discipline, ADR 0002).
+    #[serde(default)]
+    pub reviewed_by: Option<StableId>,
+    /// When the review attestation was recorded (unix seconds string, matches
+    /// the house `captured_at` convention). `None` unless `review_state ==
+    /// Reviewed`.
+    #[serde(default)]
+    pub reviewed_at: Option<String>,
+}
+
+impl MemoryEntry {
+    /// Bridge from the legacy single-axis [`ApprovalState`] to the F06
+    /// [`AuthorityLevel`] (Trust Axis 1). Co-localised with the enum so the
+    /// coexistence rule lives in one place, not in N callers.
+    ///
+    /// # Mapping (Opção A, ADR 0002)
+    ///
+    /// | legacy `approval`     | `authority_level` field | effective result      |
+    /// |-----------------------|-------------------------|-----------------------|
+    /// | (none set, `None`)    | —                       | `Raw` (legacy floor)  |
+    /// | `Proposed`/`InReview` | —                       | `Raw`                 |
+    /// | `Approved`            | —                       | `Provisional`         |
+    /// | `Rejected`            | —                       | `Raw`                 |
+    /// | `AutoPromoted`        | —                       | `Raw` + deprecated    |
+    /// | (any)                 | `Some(x)`               | `x` (explicit wins)   |
+    ///
+    /// An explicit `authority_level` field always wins over the legacy
+    /// `approval` mapping — this is how a migrated record opts into the new
+    /// axis. `AutoPromoted` collapses to `Raw` (never `Authority`), honouring
+    /// the F06 NFR that promote exige policy e evidência raw.
+    pub fn authority_level_effective(&self) -> AuthorityLevel {
+        if let Some(explicit) = self.authority_level {
+            return explicit;
+        }
+        match self.approval {
+            ApprovalState::Approved => AuthorityLevel::Provisional,
+            ApprovalState::Proposed
+            | ApprovalState::InReview
+            | ApprovalState::Rejected
+            | ApprovalState::AutoPromoted => AuthorityLevel::Raw,
+        }
+    }
+
+    /// Effective review state (Trust Axis 2). `None` on the field is treated
+    /// as `Unreviewed` (legacy floor).
+    pub fn review_state_effective(&self) -> ReviewState {
+        self.review_state.unwrap_or(ReviewState::Unreviewed)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -134,6 +194,47 @@ pub struct Freshness {
     pub stale: bool,
 }
 
+/// F06 Trust Axis 1 — authority. Whether the agent may treat a Memory
+/// Document as ground truth for autonomous action. See `CONTEXT.md`
+/// "Authority Axis". Gated by policy + raw evidence; **never auto-promoted**
+/// (the F06 NFR).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthorityLevel {
+    /// Freshly ingested, no evidence endorsement. Admitted for retrieval as
+    /// context, never actionable as fact. Default on ingest.
+    Raw,
+    /// Evidence-backed candidate, pending stronger proof or review. May inform
+    /// action but is not the final word.
+    Provisional,
+    /// The agent may act on it as ground truth. Requires non-empty
+    /// `evidence_refs` AND a satisfied promote policy (F06.6).
+    Authority,
+}
+
+/// F06 Trust Axis 2 — review. Orthogonal to authority: has a principal
+/// attested to this record's curation? See `CONTEXT.md` "Review Axis".
+/// Modelled as a principal attestation (`StableId`), not a magic boolean.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewState {
+    /// No principal has curated the record (default).
+    Unreviewed,
+    /// A principal attested to the record via `reviewed_by` + `reviewed_at`.
+    Reviewed,
+}
+
+/// Legacy single-axis approval state. Superseded by the two-axis model
+/// ([`AuthorityLevel`] + [`ReviewState`]) in ADR 0002. Retained for
+/// zero-migration-cost backwards compatibility (Opção A); bridged to the
+/// new axes by [`MemoryEntry::authority_level_effective`].
+///
+/// `AutoPromoted` is a **deprecated anti-pattern**: it violates the F06 NFR
+/// ("nenhuma memória vira authority automaticamente"). It is NOT marked with
+/// `#[deprecated]` because the six derives on this enum would trip clippy
+/// (rust-lang/rust#92313); enforcement is instead via the
+/// `deny_auto_promoted` risk-audit rule, which fails closed on the YAML
+/// token `approval: auto_promoted` — a stronger gate than a compile warning.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ApprovalState {
@@ -141,6 +242,9 @@ pub enum ApprovalState {
     InReview,
     Approved,
     Rejected,
+    /// Deprecated anti-pattern (F06 NFR violation). Detected by the
+    /// `deny_auto_promoted` risk-audit rule. The bridge resolves it to
+    /// [`AuthorityLevel::Raw`] if it ever reaches runtime.
     AutoPromoted,
 }
 
@@ -170,6 +274,11 @@ mod tests {
             approval,
             supersedes: None,
             invalidation_reason: None,
+            // Legacy helper: no explicit F06 axes — exercises the bridge.
+            authority_level: None,
+            review_state: None,
+            reviewed_by: None,
+            reviewed_at: None,
         }
     }
 
@@ -382,5 +491,116 @@ memory_contract:
             doc.memory_contract.superseded,
             vec![StableId("memory.contract.old".into())]
         );
+    }
+
+    // --- F06 trust-axis bridge tests (ADR 0002, Opção A) ---
+
+    #[test]
+    fn bridge_legacy_approved_maps_to_provisional() {
+        // Approved is the only legacy rung that earns any authority — but only
+        // Provisional, never Authority (NFR: promote exige evidence).
+        let e = entry("e", ApprovalState::Approved, "100");
+        assert_eq!(e.authority_level_effective(), AuthorityLevel::Provisional);
+    }
+
+    #[test]
+    fn bridge_legacy_floor_states_map_to_raw() {
+        for approval in [
+            ApprovalState::Proposed,
+            ApprovalState::InReview,
+            ApprovalState::Rejected,
+            ApprovalState::AutoPromoted,
+        ] {
+            let e = entry("e", approval, "100");
+            assert_eq!(
+                e.authority_level_effective(),
+                AuthorityLevel::Raw,
+                "approval {approval:?} must bridge to Raw"
+            );
+        }
+    }
+
+    #[test]
+    fn bridge_explicit_authority_field_wins_over_legacy_approval() {
+        // A migrated record opts into the new axis by setting the field; the
+        // legacy `approval` is ignored for authority resolution.
+        let mut e = entry("e", ApprovalState::Approved, "100");
+        e.authority_level = Some(AuthorityLevel::Authority);
+        assert_eq!(e.authority_level_effective(), AuthorityLevel::Authority);
+    }
+
+    #[test]
+    fn bridge_auto_promoted_never_reaches_authority() {
+        // The deprecated anti-pattern must collapse to Raw even though its
+        // name suggests promotion.
+        let mut e = entry("e", ApprovalState::AutoPromoted, "100");
+        e.authority_level = None;
+        assert_eq!(e.authority_level_effective(), AuthorityLevel::Raw);
+        // And an explicit Authority field on an AutoPromoted record still wins
+        // (explicit always wins) — the deprecation is textual (risk-audit),
+        // not a runtime downgrade of legitimate fields.
+        e.authority_level = Some(AuthorityLevel::Authority);
+        assert_eq!(e.authority_level_effective(), AuthorityLevel::Authority);
+    }
+
+    #[test]
+    fn bridge_legacy_review_defaults_to_unreviewed() {
+        // Legacy records have review_state: None → effective Unreviewed.
+        let e = entry("e", ApprovalState::Approved, "100");
+        assert_eq!(e.review_state_effective(), ReviewState::Unreviewed);
+    }
+
+    #[test]
+    fn explicit_review_state_round_trips() {
+        // A record written under F06.2 with explicit axes round-trips.
+        let mut e = entry("e", ApprovalState::Approved, "100");
+        e.authority_level = Some(AuthorityLevel::Authority);
+        e.review_state = Some(ReviewState::Reviewed);
+        e.reviewed_by = Some(StableId("principal.daniel".into()));
+        e.reviewed_at = Some("1700000100".into());
+        let yaml = yaml_serde::to_string(&e).expect("serialize entry");
+        let parsed: MemoryEntry = yaml_serde::from_str(&yaml).expect("deserialize entry");
+        assert_eq!(e, parsed);
+        assert_eq!(parsed.authority_level_effective(), AuthorityLevel::Authority);
+        assert_eq!(parsed.review_state_effective(), ReviewState::Reviewed);
+    }
+
+    #[test]
+    fn legacy_yaml_without_axes_still_deserializes() {
+        // A pre-F06.2 YAML (no authority_level/review_state fields) must still
+        // parse under deny_unknown_fields + serde(default). This is the
+        // zero-migration-cost guarantee (Opção A).
+        let yaml = r#"schema_version: "0.1"
+memory_contract:
+  id: memory.project.forge
+  scope:
+    kind: project
+    target: forge-method-core
+  entries:
+    - entry_id: memory.entry.legacy
+      kind: preference
+      content: "legacy record with no trust axes"
+      provenance:
+        source_run_id: null
+        source_agent: worker.memory
+        evidence_ref: null
+        captured_at: "1700000000"
+      freshness:
+        ttl_seconds: null
+        last_confirmed_at: "1700000000"
+        stale: false
+      confidence: 50
+      approval: proposed
+      supersedes: null
+      invalidation_reason: null
+  superseded: []
+"#;
+        let doc: MemoryContractDocument =
+            yaml_serde::from_str(yaml).expect("legacy YAML must parse");
+        let entry = &doc.memory_contract.entries[0];
+        assert_eq!(entry.authority_level, None);
+        assert_eq!(entry.review_state, None);
+        assert_eq!(entry.authority_level_effective(), AuthorityLevel::Raw);
+        assert_eq!(entry.review_state_effective(), ReviewState::Unreviewed);
     }
 }

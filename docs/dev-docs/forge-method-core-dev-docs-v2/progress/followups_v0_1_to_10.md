@@ -1,7 +1,7 @@
 # Follow-ups Roadmap — v0.1.0 → 10/10
 
 **Data**: 2026-07-01
-**Status**: plano ativo (criado após release v0.1.0 pública)
+**Status**: plano ativo (atualizado 2026-07-01 — R-LINT ✅, R-SCM ✅, F05 ✅ fechados; F06 em andamento por outro agente)
 **Dono**: Daniel (codebase owner) + agente executor
 **Norte estratégico**: rápido, robusto, performativo, protocolo-guia que escala
 com a capacidade dos agentes, nunca script de novela, sempre Rust ou compatível,
@@ -11,15 +11,18 @@ ocidentais).
 ## Contexto
 
 O v0.1.0 foi lançado publicamente (Apache-2.0, 5 binários cross-compilados,
-CI verde, release em 2 remotes). Este documento cobre o trabalho restante
-para chegar a 10/10 nas 4 frentes que ainda têm lacuna:
+CI verde, release em 2 remotes). Progresso desde então:
 
-1. **Rápido 9→10** — otimizações pontuais de hot paths
-2. **Features comunidade 9.7→10** — F05/F06/F07/F08/F12/F14
-3. **Rust best practices** — formalizar CI com `-D warnings` (41 lints pendentes)
-4. **Segurança supply chain 8→10** — SBOM + sigstore
+- ✅ **Rust best practices** — formalizado com CI `-D warnings` (R-LINT: 41 pedantic → 0)
+- ✅ **Segurança supply chain 8→10** — SBOM (CycloneDX) + sigstore keyless no `release.yml` (R-SCM)
+- ✅ **F05 eval harness** — fechado (design, schema, executor, grader, CLI, trace, E2E)
 
-As outras 7 frentes já estão em 10/10.
+Resta chegar a 10/10 em **2 frentes**:
+
+1. **Rápido 9→10** — otimizações pontuais de hot paths (Epic R-FAST, último na fila)
+2. **Features comunidade 9.8→10** — F06/F07/F08/F12/F14
+
+As outras 9 frentes já estão em 10/10.
 
 ## Metodologia (aplicada a cada epic)
 
@@ -38,10 +41,16 @@ Cada feature P1 (F05-F08) segue este fluxo antes de codar:
 
 ## Épicos e Stories
 
-### Epic R-LINT — Lint cleanup (41 pedantic → 0, CI `-D warnings`)
+### Epic R-LINT — Lint cleanup (41 pedantic → 0, CI `-D warnings`) ✅ FECHADO
 
 **Frente**: Rust best practices (formalizar 10/10 com CI deny)
 **Esforço**: médio **Risco**: baixo **Impacto**: formaliza 10/10
+**Status**: COMPLETO (2026-07-01). 41 pedantic lints zerados em `--all-targets`;
+CI flipado de `-W` para `-D clippy::pedantic` (R-LINT.6, commit `e1439c6`).
+Auditoria por categoria em `progress/r_lint_audit.md`. R-LINT.1 (auditoria),
+R-LINT.2 (fixes mecânicos + refatoro), R-LINT.5 (testes/benches), R-LINT.6 (CI flip)
+executados; R-LINT.3/R-LINT.4 absorvidos nos fixes de R-LINT.2 (funções longas e
+`too_many_arguments` resolvidos junto aos lints mecânicos).
 
 #### R-LINT.1 — Auditar e categorizar os 41 lints
 - Listar todos os 41 warnings com arquivo + linha + categoria
@@ -76,11 +85,15 @@ Cada feature P1 (F05-F08) segue este fluxo antes de codar:
 
 ---
 
-### Epic R-SCM — Supply chain hardening (SBOM + sigstore)
+### Epic R-SCM — Supply chain hardening (SBOM + sigstore) ✅ FECHADO
 
 **Frente**: Segurança supply chain 8→10
-**Esforço**: médio **Risco**: baixo **Impacto**: sobe de 8 para 10
+**Esforço**: médio **Risco**: baixo **Impacto**: sobe de 8 para 10 ✅ (agora 10)
 **Papers**: SLSA, sigstore (CT log transparency)
+**Status**: COMPLETO (2026-07-01, commit `060a5a9`). `release.yml` agora:
+cosign keyless signing via GitHub OIDC (cada archive assinado, bundle `.sigstore`
+com signature + cert + Rekor entry); CycloneDX SBOM gerada do `Cargo.lock` por
+target. R-SCM.1-R-SCM.5 entregues num único commit consolidado.
 
 #### R-SCM.1 — Adicionar cargo-cyclonedx + gerar SBOM em CI
 - `[workspace.dev-dependencies]`: `cyclonedx-bom` (Rust-native) ou
@@ -108,12 +121,17 @@ Cada feature P1 (F05-F08) segue este fluxo antes de codar:
 
 ---
 
-### Epic F05 — Eval Compare single-agent baseline (harness)
+### Epic F05 — Eval Compare single-agent baseline (harness) ✅ FECHADO
 
 **Frente**: Features comunidade (fecha P1)
-**Esforço**: médio **Risco**: médio **Impacto**: completa feature P1
+**Esforço**: médio **Risco**: médio **Impacto**: completa feature P1 ✅
 **Pré-existente**: `forge-core-eval` (934 linhas, lib de comparação madura)
 **Papers**: SWE-agent, OpenDev, CoAgent (harness engineering)
+**Status**: COMPLETO (2026-07-01, commits `2d56f33a`→`e42b1609`). Nova crate
+`forge-core-eval-harness` adiciona o executor (subprocess por arm), grader,
+corpus loader e canonicalização sobre a lib existente. CLI `forge-core
+eval-harness --config <yaml>`. Trace integration (3 novos TraceEventKind).
+Fixtures + E2E. Ver `progress/f05_eval_harness_design.md`.
 
 #### F05.1 — [grill + improve] Design do harness
 - Pergunta central: o que EXECUTA os eval arms? Subprocess? In-process?
@@ -167,10 +185,24 @@ promote exige policy + evidência raw.
 - ADR sobre admission policy (hard-to-reverse)
 
 #### F06.2 — Definir schemas (`MemoryDocument`, `MemoryPolicy`)
+- **Trust model**: ADR `docs/adr/0002-memory-trust-model.md` (status: Proposed,
+  input ao F06.1). Decisão: **dois eixos ortogonais** — authority (eixo 1,
+  já existente) e review (eixo 2, novo, modelado como principal-attestation
+  de F07). Promote de authority NÃO implica review; review NÃO implica
+  promote de authority. Seis células de estado, todas expressáveis.
 - `MemoryDocument`: id, principal, kind, content, evidence_refs,
-  admitted_at, ttl, authority_level (sempre `Raw` até promote explícito)
-- `MemoryPolicy`: admission rules, retention rules, promote rules
-- Validator com diagnostics tipados
+  admitted_at, ttl,
+  authority_level (sempre `Raw` até promote explícito),
+  review_state (`Unreviewed` default),
+  reviewed_by (`Option<PrincipalId>`), reviewed_at (`Option<DateTime>`) —
+  ver ADR 0002 para a lista completa de invariants
+- `MemoryPolicy`: admission rules, retention rules, promote rules,
+  review rules (quais principals podem attestar `Reviewed`, via F07
+  GovernancePolicy)
+- Validator com diagnostics tipados — deve rejeitar combinações ilegais
+  (`Reviewed` sem `reviewed_by`/`reviewed_at`; `Authority` sem
+  `evidence_refs` ou promote policy satisfeita; `reviewed_by` não
+  autorizado pela GovernancePolicy)
 
 #### F06.3 — Criar crate `forge-core-memory`
 - `src/lib.rs`: tipos + validator
@@ -339,16 +371,16 @@ authority validada.
 ## Ordem de execução (dependências + valor + risco)
 
 ```
-R-LINT ─────────────────────────────► [PRIMEIRO: low risk, formaliza 10/10]
+R-LINT ─────────────────────────────► [PRIMEIRO: low risk, formaliza 10/10] ✅ FECHADO
    │
    ▼
-R-SCM ───────────────────────────────► [sobe Segurança 8→10]
+R-SCM ───────────────────────────────► [sobe Segurança 8→10] ✅ FECHADO
    │
    ▼
-F05 (eval harness) ─────────────────► [lib existe, só harness]
+F05 (eval harness) ─────────────────► [lib existe, só harness] ✅ FECHADO
    │
    ▼
-F06 (memory) ────────────────────────► [novo subsistema, foundation]
+F06 (memory) ────────────────────────► [novo subsistema, foundation] ⏳ EM ANDAMENTO
    │
    ▼
 F07 (governance) ────────────────────► [toca runtime/store]
@@ -369,9 +401,9 @@ R-FAST ────────────────────────�
 ## Definition of Done — projeto 10/10
 
 - [ ] Todas as 11 frentes com nota 10 (audit re-executado)
-- [ ] `cargo clippy --workspace --all-targets -- -D clippy::pedantic` verde
-- [ ] SBOM anexada a cada release + sigstore signing
-- [ ] F05/F06/F07/F08 operacionais com fixtures + E2E tests
+- [x] `cargo clippy --workspace --all-targets -- -D clippy::pedantic` verde (R-LINT completo, CI flipado)
+- [x] SBOM anexada a cada release + sigstore signing (R-SCM completo, commit `060a5a9`)
+- [x] **F05 ✅** operacional com fixtures + E2E; F06 em andamento (outro agente); F07/F08 pendentes
 - [ ] Anchor `validate --json` preservada: 122 diagnostics 0
 - [ ] Papers citados em `contracts/research/` (orientais + ocidentais)
 - [ ] Sem script de novela (todas as policies paramétricas)
