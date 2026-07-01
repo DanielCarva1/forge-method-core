@@ -3,10 +3,9 @@ name: Perf
 on:
   schedule:
     # 06:00 UTC daily — captures performance regressions in store and crypto
-    # hot paths. Runs the criterion benchmarks and uploads the JSON output
-    # plus the per-bench estimates as a build artifact so regressions can
-    # be diffed by hand against the previous day.
-    - cron: '0 6 * * *'
+    # hot paths. Compares against a cached criterion baseline; PRs with the
+    # `perf` label get the same comparison and fail on regressions > 15%.
+    - cron: "0 6 * * *"
   workflow_dispatch:
   pull_request:
     types: [labeled, synchronize]
@@ -14,8 +13,7 @@ on:
 jobs:
   bench:
     # Opt-in via the `perf` label on PRs; the cron and workflow_dispatch
-    # paths always run. Uses --save-baseline so successive runs in the
-    # same branch produce a comparable criterion estimate directory.
+    # paths always run.
     if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'perf')
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -29,13 +27,68 @@ jobs:
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
 
+      # Cache criterion's baseline estimates between runs. On the first run
+      # there is no baseline, so criterion just records. On subsequent runs
+      # criterion prints a `change: [...]` line per benchmark comparing the
+      # new run against the cached baseline, and the detect-regressions step
+      # below fails the job if the median change exceeds the threshold.
+      - name: Cache criterion baselines
+        uses: actions/cache@v4
+        with:
+          path: target/criterion
+          key: criterion-${{ runner.os }}-${{ github.base_ref || github.ref_name }}
+          restore-keys: |
+            criterion-${{ runner.os }}-main
+
       - name: Bench forge-core-store (claim_wal, reference_index)
         run: |
-          cargo bench -p forge-core-store -- --save-baseline ci-perf | tee store_bench.txt
+          cargo bench -p forge-core-store | tee store_bench.txt
 
       - name: Bench forge-core-crypto (rekor parse + verify)
         run: |
-          cargo bench -p forge-core-crypto --bench rekor -- --save-baseline ci-perf | tee crypto_bench.txt
+          cargo bench -p forge-core-crypto --bench rekor | tee crypto_bench.txt
+
+      # R6.4 regression gate: parse criterion's `change: [a% b% c%]` lines,
+      # where `b` is the median percentage change vs the cached baseline.
+      # `+N%` means N% slower (regression); `-N%` means faster. We fail if
+      # the median exceeds the threshold. On the first run (no baseline
+      # cached) there are no `change:` lines and the step trivially passes,
+      # establishing the baseline for the next run.
+      - name: Detect performance regressions (>15%)
+        if: github.event_name == 'pull_request'
+        run: |
+          set -uo pipefail
+          THRESHOLD=15
+          FAILED=0
+          for f in store_bench.txt crypto_bench.txt; do
+            echo "::group::Scanning $f"
+            # Each criterion bench prints one `change: [...]` block. The
+            # middle of the three values is the median. Strip `+` and `%`,
+            # compare as a real number, emit an error annotation on breach.
+            awk -v t="$THRESHOLD" -v file="$f" '
+              /change: \[/ {
+                line = $0
+                sub(/.*change: \[/, "", line)
+                sub(/\].*/, "", line)
+                n = split(line, v, / +/)
+                if (n >= 2) {
+                  median = v[2]
+                  gsub(/[+%]/, "", median)
+                  if (median + 0 > t) {
+                    printf "::error file=%s::regression of %.2f%% exceeds %d%% threshold\n", file, median + 0, t
+                    printf "  raw change line: %s\n", $0
+                    exit 1
+                  }
+                }
+              }
+            ' "$f" || FAILED=1
+            echo "::endgroup::"
+          done
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::Performance regressions above ${THRESHOLD}% threshold detected (see annotations above)"
+            exit 1
+          fi
+          echo "No regressions above ${THRESHOLD}% threshold"
 
       - name: Upload bench output
         if: always()
