@@ -1,11 +1,12 @@
 # Excellence Roadmap — Forge Method Core até 10/10
 
-**Data**: 2026-06-30
-**Status**: plano ativo (última atualização: 2026-06-30 — **R9 fechado** (Bootstrap Core Exception); G1/G2 fechados;
+**Data**: 2026-07-01
+**Status**: plano ativo (última atualização: 2026-07-01 — **R-LINT ✅** completo (41 pedantic → 0, CI flipado para `-D clippy::pedantic`, commits `247107a`/`f95cd54`/`e1439c6`); **R-SCM ✅** completo (sigstore keyless + CycloneDX SBOM no `release.yml`, commit `060a5a9`); **F05 ✅** fechado (eval harness F05.1-F05.7: design, schema, executor, grader, CLI, trace, E2E, commits `2d56f33a`→`e42b1609`); R9/G1/G2 fechados;
 **F15 fechado** (commits `7d0934b`→`7474139`); R4 completo via CI Linux;
 E1/E2/E3/R2 completos; F04/F01/F02/F03 completos; R5.1-R5.9 completos; R6.3 benches;
 **R6.4 ✅** regression gate ativo no CI (cache criterion baseline + awk parser, fail-on-alert >15%, commit `84c730e`);
 **F11 ✅** completo (1-4) e **F13 ✅** (`forge-core cost`) — commits `d4b338b`, `2185277`, `f82f792`)
+**Próximo**: F06 — Memory Policy (crate `forge-core-memory`); F06.1 (grill + improve-codebase) em andamento por outro agente
 **Dono**: Daniel (codebase owner) + agente executor
 **Norte estratégico**: rápido, robusto, performativo, protocolo-guia que escala com a
 capacidade dos agentes, nunca script de novela, sempre Rust ou compatível, sempre
@@ -15,16 +16,16 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 
 | Frente | Hoje | Meta | Lacuna principal |
 |---|---|---|---|
-| Rápido | 9 | 10 | Benchmarks crypto R6.2 (~420µs verify, ~6µs parse) + store R6.1 + serde R6.3 medidos e consolidados em `docs/perf/baseline.md` (acessível sem rodar bench); `--no-sync` cobre claim + execute-operation + rebuild-effect-index (F15.7b). Restam: otimizações pontuais de hot paths |
+| Rápido | 9 | 10 | Benchmarks crypto R6.2 (~420µs verify, ~6µs parse) + store R6.1 + serde R6.3 medidos e consolidados em `docs/perf/baseline.md` (acessível sem rodar bench); `--no-sync` cobre claim + execute-operation + rebuild-effect-index (F15.7b). Restam: otimizações pontuais de hot paths (Epic R-FAST, último na fila) |
 | Robusto | 10 | 10 | Tracing completo; zero Result<_,String>; R5 zeroize completo (R5.1-R5.11) |
 | Performativo | 10 | 10 | `--no-sync` cobre claim + execute-operation + rebuild-effect-index (F15.7b-extend); crypto + store + serde benchmarks medidos (R6.1, R6.2, **R6.3 ✅**); **R6.4 ✅** regression gate no CI (cache criterion baseline + awk parser, fail-on-alert >15%); baseline consolidado em `docs/perf/baseline.md` (acessível sem rodar bench) |
 | Protocolo guia | 10 | 10 | F04 ✅ fechado (validate + dry-run + 34 E2E tests); F01 bugs críticos fechados |
 | Workflows | 10 | 10 | WAL/claim ok; **F11.1 ✅** CLI standalone + **F11.2 ✅** 4 policies + **F11.3 ✅** enforcement no `execute-operation` + **F11.4 ✅** TraceEvent (started/passed/failed emitidos no gate e standalone); **guia unificado consolidado** via `forge-core guide describe` (110 workflows em 7 phases, JSON estruturado, embedded no binário — funciona em greenfield sem `--catalog-dir`) + `guide decide` (valida decisão) + `guide status` (orienta agente em phase atual) |
 | Agente guia humano | 10 | 10 | F01 bugs de integridade fechados (F01.1-F01.6); `rollback_available` real (F01.3); `next_human_action: Option<String>` populado em todos os estados não-Ready do `RuntimePreviewReport` (Blocked → "inspect blockers", AwaitingHuman → prompt ou "provide required human input", GateRequired → "provide required gate evidence", ReviewRequired → "review and approve the operation boundary", ReadOnlyStatus → "show read-only status", ReadyToCallOperation+blockers → "resolve blockers"); `forge explain` narra cronologicamente (F03); `forge guide describe/status/decide` fornece routing surface de 110 workflows |
 | Não-script-de-novela | 10 | 10 | **G1 ✅** fechado: 62/62 policies em `contracts/policies/` são framework paramétrico (0/62 script). Auditoria em `progress/g1_policies_script_novela_audit.md`. Bússola `human-agent-interface.yaml` honrada |
-| Features comunidade | 9.7 | 10 | F03/F04/F01/F02/F15 operacionais; **F11.1+F11.2+F11.3+F11.4 ✅**; **F13 ✅** `forge-core cost` (agregação por run/graph/agent/principal); falta F05-F08, F12, F14 |
-| Rust best practices | 10 | 10 | E1 fechado (0 warnings lib); **F15 fechado** (2 edit points) |
-| Segurança supply chain | 8 | 10 | serde_yaml migrado; zeroize feito; fuzz (R4) completo via ADR-0008 |
+| Features comunidade | 9.8 | 10 | F03/F04/F01/F02/F15 operacionais; **F11.1+F11.2+F11.3+F11.4 ✅**; **F13 ✅** `forge-core cost` (agregação por run/graph/agent/principal); **F05 ✅** fechado (eval harness completo: design, schema, executor, grader, CLI, trace, E2E); falta F06-F08, F12, F14 |
+| Rust best practices | 10 | 10 | E1 fechado (0 warnings lib); **F15 fechado** (2 edit points); **R-LINT ✅** completo: 41 pedantic → 0 em `--all-targets`, CI flipado para `-D clippy::pedantic` (R-LINT.6) |
+| Segurança supply chain | 10 | 10 | serde_yaml migrado; zeroize feito; fuzz (R4) completo via ADR-0008; **R-SCM ✅** completo: sigstore keyless signing (cosign via GitHub OIDC) + CycloneDX SBOM no `release.yml` |
 | Docs/rastreabilidade | 10 | 10 | R13 alinhado; R14 paper status criado; ADR-0008; **R9 ✅** fechado: Bootstrap Core Exception explícita, opt-in (`--allow-bootstrap-core`), 22 tests E2E comprovam consumer repo limpo opera clean sem ela |
 
 ## Princípios (não negociáveis)
@@ -282,8 +283,26 @@ lastreado em melhores práticas e papers científicos (orientais e ocidentais).
 
 ### Trilha C — Features P1 da comunidade
 
-- [ ] **F05** — Eval Compare single-agent baseline (PARCIAL)
-      - `forge-core-eval` existe (934 linhas); falta harness comparativo
+- [x] **F05** — Eval Compare single-agent baseline (harness) ✅ FECHADO (2026-07-01)
+      - `forge-core-eval` (lib de comparação) + nova crate `forge-core-eval-harness`
+        (executor subprocess, grader, corpus loader, canonicalização)
+      - Sub-passes (commits `2d56f33a`→`e42b1609`):
+        - [x] **F05.1** — design do harness (`progress/f05_eval_harness_design.md`):
+              subprocess por arm (isolamento, mesma CLI que produção)
+        - [x] **F05.2** — `EvalHarnessConfig` YAML schema (arms, loader, tools,
+              output_contract, usage_accounting, policy) + validator cumulativo
+        - [x] **F05.3** — grader + corpus loader + canonicalização (pure half,
+              commit `1b04da9`) e executor subprocess impuro (F05.3b, commit
+              `d78085f`): `execute_run` por (arm, task), timeout via try_wait poll,
+              stdout/stderr → null (child chatter não polui harness JSON), sempre
+              retorna um contract por run (Error-verdict em falha, nada droppado)
+        - [x] **F05.4** — report generator (`build_compare_suite` →
+              `generate_comparison_report` reusando `compare_eval_runs`)
+        - [x] **F05.5** — CLI `forge-core eval-harness --config <yaml>` (argv
+              manual sem clap, registrado em `command_registry::COMMANDS`)
+        - [x] **F05.6** — trace: 3 novos `TraceEventKind`
+              (`EvalCompareStarted/Passed/Failed`) + `telemetry_cmd` cobertura
+        - [x] **F05.7** — fixtures + E2E (run completo, report JSON estável)
       - DoD: relatório com accuracy, cost, latency, trajectory, failures, delta
 - [ ] **F06** — Memory Policy
       - Admission, retention, forget, promote, raw evidence, authority boundary

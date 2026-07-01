@@ -56,6 +56,31 @@ both `cargo` and `cargo.exe` work — prefer `cargo`.
 --check`. You normally do not need to run these manually. `/green` runs them
 now; `/green on|off` toggles the auto-fix loop.
 
+## Context hygiene (avoid context-window degradation)
+
+Model quality degrades past ~150k tokens of accumulated context, but the
+window runs to 1M. There is no auto-compaction knob in ZCode. Mitigate by
+working in short, comittable sessions and offloading state to disk.
+
+- **Work per-story, not per-epic.** One story (e.g. F06.2) per session:
+  work → commit → `/clear`. Sessions are cheap; context degradation is not.
+- **Self-monitor context load.** The agent cannot read the live token counter,
+  but it tracks the volume of large reads (big files, dense `git log`/commit
+  dumps, long tool outputs). When the agent estimates it has accumulated
+  ~150-200k tokens in a session, it MUST pause and warn:
+  *"Contexto pesado (~Nk estimado). Hora de handoff + /clear."* Then stop and
+  await the user. Do not push past this into degradation.
+- **Write handoffs before degrading.** When the session is about to end (or
+  the user signals "handoff"), write a self-contained handoff document to
+  `docs/dev-docs/forge-method-core-dev-docs-v2/progress/handoff_<task>.md`
+  following the existing handoff format (sections: done, critical findings,
+  pending decision, next steps, key files). State survives sessions; context
+  does not.
+- **`/clear` between unrelated tasks.** New task = clean context.
+- **If the user notices degradation** (repetition, slowness, missed detail),
+  they say *"handoff"* — the agent writes the handoff and stops. No number
+  needed.
+
 ## Editor stability (WSL + Windows + rust-analyzer)
 
 **Symptom**: the host editor process (Zed, VS Code, Codex) dies with

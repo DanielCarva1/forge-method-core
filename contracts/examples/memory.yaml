@@ -19,6 +19,10 @@ memory_contract:
         stale: false
       confidence: 96
       approval: approved
+      authority_level: authority
+      review_state: reviewed
+      reviewed_by: principal.daniel
+      reviewed_at: "1782548100"
       supersedes: memory.entry.serial-build-loop
       invalidation_reason: null
     - entry_id: memory.entry.fast-lane-evidence
@@ -34,7 +38,9 @@ memory_contract:
         last_confirmed_at: "1782547200"
         stale: false
       confidence: 93
-      approval: auto_promoted
+      approval: approved
+      authority_level: provisional
+      review_state: unreviewed
       supersedes: null
       invalidation_reason: null
   superseded:
