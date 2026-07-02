@@ -191,6 +191,34 @@ impl Default for ConflictPolicy {
     }
 }
 
+impl GovernancePolicy {
+    /// The pure authorization PDP for arbitration: may `principal` move a
+    /// [`ConflictContract`] out of [`Pending`](ConflictResolutionState::Pending)?
+    ///
+    /// This is the single-principal question ("is P an authorized arbiter?"),
+    /// parallel in shape to [`crate::MemoryContract::can_admit`] (the F06 PDP):
+    /// a pure predicate the PEP consults under the write lock (ADR-0007 layer 1
+    /// — authorization — answering "may P act?"). It does NOT decide the
+    /// *merit* of the resolution (that is `ResolutionDecision`); it authorizes
+    /// the *actor*.
+    ///
+    /// Today this reuses [`Self::authorized_reviewers`] as the arbiter set: the
+    /// reviewer role and the arbiter role coincide (a reviewer is trusted to
+    /// adjudicate conflicts over what they can already attest). When the two
+    /// powers diverge — a principal may review memory but not arbitrate, or
+    /// vice-versa — this becomes a distinct `authorized_arbiters` field and a
+    /// reviewer↔arbiter migration; that refinement is deferred until a policy
+    /// actually needs it (YAGNI; no fixture today separates them).
+    ///
+    /// Fail-closed: an empty `authorized_reviewers` denies everyone, matching
+    /// the F06 `MemoryPolicy` empty-`permitted_kinds` convention and the
+    /// ReBAC/Cedar default-deny posture.
+    #[must_use]
+    pub fn can_arbitrate(&self, principal: &PrincipalId) -> bool {
+        self.authorized_reviewers.iter().any(|p| p == principal)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

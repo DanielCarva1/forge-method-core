@@ -14,6 +14,7 @@ members = [
   "crates/forge-core-eval",
   "crates/forge-core-eval-harness",
   "crates/forge-core-engine",
+  "crates/forge-core-governance",
 ]
 resolver = "2"
 
