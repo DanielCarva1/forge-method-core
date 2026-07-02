@@ -25,17 +25,21 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use forge_core_contracts::{
-    CommandContractDocument, OperationContractDocument, RepoPath, ToolEffectContractDocument,
+    CommandContractDocument, FieldEvidenceRegistry, OperationContractDocument, RepoPath,
+    ToolEffectContractDocument,
 };
 use forge_core_runtime::{
     execute_operation, CommandExecutionContext, RuntimeEffectPayloadKind,
     RuntimeOperationCommandInput, RuntimeOperationEffectInput, RuntimeOperationEffectPayload,
     RuntimeOperationExecution, RuntimeOperationExecutionContext, RuntimeReadSnapshot,
 };
-use forge_core_store::{append_trace_event, build_reference_index, WalDurability};
+use forge_core_store::{
+    append_trace_event, build_reference_index, collect_validation_yaml_documents, WalDurability,
+};
 use forge_core_validate::risk_audit::{
     evaluate_risk_audit, validate_risk_audit_rule_set, RiskAuditRuleSet,
 };
+use forge_core_validate::validate_yaml_citation_references;
 
 use crate::cli_error::ExitError;
 use crate::cli_util::{
@@ -66,6 +70,13 @@ pub struct ExecuteOperationInput {
     /// loaded and evaluated against the project tree BEFORE any WAL write.
     /// Fail-closed via `ExecuteOperationError::RiskAuditFailed` on errors.
     pub risk_audit_rules: Option<PathBuf>,
+    /// F14.6: optional citation gate. When `true`, the Citation Check
+    /// (`validate_yaml_citation_references`) runs over the workspace YAML
+    /// BEFORE any WAL write, resolving `source_id`s against the curated
+    /// Field Evidence Registry ∪ the runtime Source Ledger. Fail-closed via
+    /// `ExecuteOperationError::CitationCheckFailed`. Opt-in: the default
+    /// (`false`) preserves existing execute-operation behaviour.
+    pub require_citation: bool,
 }
 
 /// One payload bound for one `target_ref` inside the operation.
@@ -150,6 +161,15 @@ pub enum ExecuteOperationError {
         error_count: usize,
         first_error: String,
     },
+    /// F14.6: citation gate failed closed. The Citation Check
+    /// (`validate_yaml_citation_references`) reported `error_count`
+    /// `UnresolvedSourceId` diagnostics; `first_error` is path+message of the
+    /// first. Nothing is persisted to the WAL when this fires — citing an
+    /// unregistered source is a precondition failure, not a post-hoc finding.
+    CitationCheckFailed {
+        error_count: usize,
+        first_error: String,
+    },
 }
 
 impl fmt::Display for ExecuteOperationError {
@@ -198,6 +218,13 @@ impl fmt::Display for ExecuteOperationError {
             } => write!(
                 formatter,
                 "risk-audit gate failed with {error_count} error(s); first: {first_error}"
+            ),
+            ExecuteOperationError::CitationCheckFailed {
+                error_count,
+                first_error,
+            } => write!(
+                formatter,
+                "citation gate failed with {error_count} unresolved source_id(s); first: {first_error}"
             ),
         }
     }
@@ -341,6 +368,25 @@ pub fn run_execute_operation(
             return Err(error);
         }
     }
+    // F14.6: Citation Gate. When `require_citation` is set, run the Citation
+    // Check over the workspace YAML BEFORE any contract parse or WAL write,
+    // resolving `source_id`s against the curated Field Evidence Registry ∪
+    // the runtime Source Ledger. Fail-closed via
+    // `ExecuteOperationError::CitationCheckFailed`: citing an unregistered
+    // source is a precondition failure, not a post-hoc finding. Opt-in — the
+    // default (false) preserves existing execute-operation behaviour.
+    //
+    // The runtime ledger is read best-effort: if the sidecar/state root is not
+    // resolvable, the runtime half of the union is empty and the gate checks
+    // curated citations only. The curated registry is read from the canonical
+    // repo path; if absent, it too is empty (the gate then passes iff no
+    // `source_id` occurs in the workspace, which is the correct degenerate
+    // behaviour for a repo with no citations to check).
+    if input.require_citation {
+        if let Some(error) = run_citation_gate(&root, &effect_store_root) {
+            return Err(error);
+        }
+    }
     let operation_path = resolve_contract_input_path(
         &root,
         &canonical_root,
@@ -417,6 +463,55 @@ pub fn run_execute_operation(
         &payloads,
         &context,
     ))
+}
+
+/// F14.6: run the Citation Check gate. Returns `Some(CitationCheckFailed)` when
+/// the check reports any `UnresolvedSourceId` error, `None` when it passes (or
+/// when neither backing is readable — the degenerate "no citations to check"
+/// case). Best-effort on both backings: a missing curated registry or an
+/// unresolvable runtime ledger does not itself fail the gate (the union is
+/// simply emptier); only an unresolved `source_id` fails it.
+fn run_citation_gate(root: &Path, effect_store_root: &Path) -> Option<ExecuteOperationError> {
+    let documents = collect_validation_yaml_documents(root);
+    // Curated half: canonical repo path, best-effort.
+    let evidence_path = root.join("contracts/research/field-evidence-20260625.yaml");
+    let evidence = fs::read_to_string(&evidence_path)
+        .ok()
+        .and_then(|text| yaml_serde::from_str::<FieldEvidenceRegistry>(&text).ok())
+        .unwrap_or_else(crate::research_cmd::empty_evidence);
+    // Runtime half: the Source Ledger under the state root. Best-effort — if
+    // the state root does not resolve, the runtime union is empty.
+    let runtime_ids = forge_core_research::project(effect_store_root)
+        .map(|projection| {
+            projection
+                .sources
+                .keys()
+                .cloned()
+                .collect::<std::collections::HashSet<String>>()
+        })
+        .unwrap_or_default();
+    let report = validate_yaml_citation_references(&documents.documents, &evidence, &runtime_ids);
+    if report.has_errors() {
+        let error_count = report
+            .diagnostics()
+            .iter()
+            .filter(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
+            .count();
+        let first_error = report
+            .diagnostics()
+            .iter()
+            .find(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
+            .map_or_else(
+                || "unknown error".to_string(),
+                |d| format!("{}: {}", d.path, d.message),
+            );
+        Some(ExecuteOperationError::CitationCheckFailed {
+            error_count,
+            first_error,
+        })
+    } else {
+        None
+    }
 }
 
 /// Read and parse one YAML contract, mapping IO and parse errors into
@@ -563,6 +658,7 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
     let mut json = false;
     let mut no_sync = false;
     let mut risk_audit_rules: Option<PathBuf> = None;
+    let mut require_citation = false;
     let mut index = 1usize;
     while index < args.len() {
         match args[index].as_str() {
@@ -611,6 +707,9 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
                 index += 1;
                 risk_audit_rules = Some(next_path_or_err(args, index)?);
             }
+            "--require-citation" => {
+                require_citation = true;
+            }
             "--json" => json = true,
             "--help" | "-h" => {
                 println!("{}", usage());
@@ -647,6 +746,7 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
         tx_id_prefix,
         durability,
         risk_audit_rules,
+        require_citation,
     };
     let execution = match run_execute_operation(input) {
         Ok(execution) => execution,

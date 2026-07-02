@@ -4832,6 +4832,7 @@ fn execute_operation_rejects_payload_outside_root_by_default() {
         tx_id_prefix: "test".to_string(),
         durability: WalDurability::default(),
         risk_audit_rules: None,
+        require_citation: false,
     })
     .expect_err("outside-root payload should fail");
 
@@ -4861,6 +4862,7 @@ fn execute_operation_rejects_payload_larger_than_policy() {
         tx_id_prefix: "test".to_string(),
         durability: WalDurability::default(),
         risk_audit_rules: None,
+        require_citation: false,
     })
     .expect_err("oversized payload should fail");
 
