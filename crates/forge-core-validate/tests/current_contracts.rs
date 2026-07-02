@@ -17,8 +17,9 @@ use forge_core_validate::{
     validate_request_cross_references, validate_runtime_capability, validate_runtime_handoff,
     validate_runtime_handoff_cross_references, validate_runtime_registry_cross_references,
     validate_runtime_registry_entry, validate_tool_effect, validate_tool_effect_cross_references,
-    validate_yaml_known_repo_references, validate_yaml_source_id_references, DiagnosticCode,
-    ParsedYamlDocument, ReferenceIndex, ReferenceKind,
+    validate_yaml_citation_references, validate_yaml_known_repo_references,
+    validate_yaml_source_id_references, DiagnosticCode, ParsedYamlDocument, ReferenceIndex,
+    ReferenceKind,
 };
 use std::collections::HashSet;
 use std::fs;
@@ -367,6 +368,129 @@ evidence_basis:
             .iter()
             .any(|item| item.code == DiagnosticCode::UnknownEvidenceSourceRef),
         "source id diagnostics: {:?}",
+        report.diagnostics()
+    );
+}
+
+#[test]
+fn citation_check_resolves_curated_and_runtime_and_reports_unresolved() {
+    // Curated side: a minimal field evidence registry with one known source.
+    let evidence = FieldEvidenceRegistry {
+        schema_version: "0.1".into(),
+        research: "test".into(),
+        created_at: "2026-01-01".into(),
+        status: "active".into(),
+        policy: forge_core_contracts::evidence::EvidencePolicy {
+            purpose: "test".into(),
+            evidence_tiers: vec![forge_core_contracts::evidence::EvidenceTier {
+                id: forge_core_contracts::StableId("t.a".into()),
+                description: "tier a".into(),
+                decision_weight: "high".into(),
+            }],
+            rule: "test rule".into(),
+            geographic_coverage: forge_core_contracts::evidence::GeographicCoverage {
+                rule: "global".into(),
+                rationale: "test".into(),
+                minimum_behavior: vec![],
+            },
+        },
+        sources: vec![forge_core_contracts::EvidenceSource {
+            id: forge_core_contracts::SourceId("curated.one".into()),
+            tier: forge_core_contracts::StableId("t.a".into()),
+            title: "Curated source".into(),
+            url: "https://example.org/curated".into(),
+            confirmed_origin: None,
+            observed_claims: vec![],
+            forge_implications: vec![],
+        }],
+        plan_level_implications: vec![],
+        open_research_gaps: vec![],
+    };
+
+    // Runtime side: one live source id from the (rebuilt) Source Ledger.
+    let mut runtime_ids = HashSet::new();
+    runtime_ids.insert("runtime.two".to_string());
+
+    // A document that cites: a curated id (ok), a runtime id (ok), and an
+    // unresolved id (must be flagged).
+    let document = ParsedYamlDocument {
+        path: "contracts/policies/synthetic-cite.yaml".to_string(),
+        value: yaml_serde::from_str(
+            r#"
+schema_version: "0.1"
+evidence_basis:
+  direct_patterns:
+    - source_id: "curated.one"
+    - source_id: "runtime.two"
+    - source_id: "ghost.neither"
+"#,
+        )
+        .expect("synthetic yaml"),
+    };
+
+    let report = validate_yaml_citation_references(&[document], &evidence, &runtime_ids);
+    let unresolved: Vec<_> = report
+        .diagnostics()
+        .iter()
+        .filter(|item| item.code == DiagnosticCode::UnresolvedSourceId)
+        .collect();
+    assert_eq!(
+        unresolved.len(),
+        1,
+        "exactly the ghost id must be unresolved; diagnostics: {:?}",
+        report.diagnostics()
+    );
+    assert!(unresolved[0].message.contains("ghost.neither"));
+}
+
+#[test]
+fn citation_check_clean_when_all_ids_resolve() {
+    let evidence = FieldEvidenceRegistry {
+        schema_version: "0.1".into(),
+        research: "test".into(),
+        created_at: "2026-01-01".into(),
+        status: "active".into(),
+        policy: forge_core_contracts::evidence::EvidencePolicy {
+            purpose: "test".into(),
+            evidence_tiers: vec![],
+            rule: "test rule".into(),
+            geographic_coverage: forge_core_contracts::evidence::GeographicCoverage {
+                rule: "global".into(),
+                rationale: "test".into(),
+                minimum_behavior: vec![],
+            },
+        },
+        sources: vec![forge_core_contracts::EvidenceSource {
+            id: forge_core_contracts::SourceId("curated.only".into()),
+            tier: forge_core_contracts::StableId("t.a".into()),
+            title: "Curated source".into(),
+            url: "https://example.org/curated".into(),
+            confirmed_origin: None,
+            observed_claims: vec![],
+            forge_implications: vec![],
+        }],
+        plan_level_implications: vec![],
+        open_research_gaps: vec![],
+    };
+
+    let document = ParsedYamlDocument {
+        path: "contracts/policies/synthetic-clean.yaml".to_string(),
+        value: yaml_serde::from_str(
+            r#"
+schema_version: "0.1"
+evidence_basis:
+  direct_patterns:
+    - source_id: "curated.only"
+"#,
+        )
+        .expect("synthetic yaml"),
+    };
+
+    // Empty runtime set — the curated id still resolves.
+    let report = validate_yaml_citation_references(&[document], &evidence, &HashSet::new());
+    assert!(
+        !report.has_errors(),
+        "diagnostics: {:?}",
         report.diagnostics()
     );
 }

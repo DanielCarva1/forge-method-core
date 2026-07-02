@@ -203,6 +203,8 @@ pub enum DiagnosticCode {
     McpMutateGateMissingOperationContract,
     McpAttestationRequiredMissing,
     McpAttestationInvalid,
+    // F14 — Knowledge Orchestration (citation check).
+    UnresolvedSourceId,
 }
 
 #[derive(Debug, Clone)]
@@ -314,6 +316,56 @@ pub fn validate_yaml_known_repo_references(
         validate_known_refs_in_value(&mut report, &document.path, &document.value, known_paths);
     }
 
+    report
+}
+
+/// The F14 Citation Check (ADR-0010). Validates every `source_id` occurrence
+/// in the parsed YAML documents against the **joint backing**: the curated
+/// [`FieldEvidenceRegistry`] ∪ the runtime Source Ledger ids (`runtime_ids`).
+/// A `source_id` that resolves in neither is an unresolved citation —
+/// fail-closed, [`DiagnosticCode::UnresolvedSourceId`].
+///
+/// This is the F14 analog of [`validate_yaml_source_id_references`] (which
+/// attests to resolution against the curated registry only, with
+/// [`DiagnosticCode::UnknownEvidenceSourceRef`]). The citation check is broader:
+/// it treats curated and runtime sources as one id namespace (ADR-0010 §1 —
+/// the shared reuse boundary) and rejects any id that is registered nowhere.
+///
+/// `runtime_ids` is the set of *live* Source Ledger ids — i.e. the keys of a
+/// `ResearchProjection::sources`, NOT the retired/superseded set. The caller
+/// (CLI `research check`, runtime gate) builds this from the projection; the
+/// validate crate stays decoupled from `forge-core-research` (which depends, via
+/// `forge-core-store`, back on this crate — importing it here would form a
+/// cycle). Passing data, not a projection type, is the same seam
+/// [`validate_yaml_known_repo_references`] uses (`&HashSet<String>`).
+///
+/// In the MVP the check attests only to **resolution**, not to quality/tier
+/// (ADR-0010 §5) — mirroring the admission gate, which also never attests to
+/// truthfulness. A retired runtime source does NOT resolve: a citation to a
+/// retired source is stale and must be re-issued.
+///
+/// Accumulating diagnostics per the repo convention (no short-circuit); the
+/// caller decides via `report.has_errors()`.
+// Mirrors `validate_yaml_known_repo_references`: the default `RandomState` keeps
+// the API simple and matches the existing seam; downstream callers do not need
+// to inject a custom hasher.
+#[allow(clippy::implicit_hasher)]
+#[must_use]
+pub fn validate_yaml_citation_references(
+    documents: &[ParsedYamlDocument],
+    evidence: &FieldEvidenceRegistry,
+    runtime_ids: &HashSet<String>,
+) -> ValidationReport {
+    // The joint id namespace: curated ∪ live-runtime.
+    let mut resolvable: HashSet<&str> = evidence_source_ids(evidence);
+    for id in runtime_ids {
+        resolvable.insert(id.as_str());
+    }
+
+    let mut report = ValidationReport::new();
+    for document in documents {
+        validate_citation_ids_in_value(&mut report, &document.path, &document.value, &resolvable);
+    }
     report
 }
 
@@ -479,6 +531,48 @@ fn validate_source_ids_in_value(
         Value::Sequence(items) => {
             for item in items {
                 validate_source_ids_in_value(report, document_path, item, known_sources);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Walk a YAML value and report every `source_id` that does not resolve against
+/// the joint curated ∪ runtime id namespace as
+/// [`DiagnosticCode::UnresolvedSourceId`]. Structurally identical to
+/// [`validate_source_ids_in_value`] but uses the citation-specific code so the
+/// two populations of diagnostic stay distinguishable (a curated-only miss is
+/// `UnknownEvidenceSourceRef`; a joint miss is `UnresolvedSourceId`).
+fn validate_citation_ids_in_value(
+    report: &mut ValidationReport,
+    document_path: &str,
+    value: &Value,
+    resolvable: &HashSet<&str>,
+) {
+    match value {
+        Value::Mapping(mapping) => {
+            for (key, child) in mapping {
+                if key.as_str() == Some("source_id") {
+                    match child.as_str() {
+                        Some(source_id) if resolvable.contains(source_id) => {}
+                        Some(source_id) => report.push(Diagnostic::error(
+                            DiagnosticCode::UnresolvedSourceId,
+                            document_path,
+                            format!("unresolved source_id {source_id} — not in field evidence registry or source ledger"),
+                        )),
+                        None => report.push(Diagnostic::error(
+                            DiagnosticCode::SourceIdMustBeString,
+                            document_path,
+                            "source_id must be string",
+                        )),
+                    }
+                }
+                validate_citation_ids_in_value(report, document_path, child, resolvable);
+            }
+        }
+        Value::Sequence(items) => {
+            for item in items {
+                validate_citation_ids_in_value(report, document_path, item, resolvable);
             }
         }
         _ => {}
