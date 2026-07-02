@@ -344,7 +344,7 @@ fn evidence_ref_diagnostic(
     match validate_evidence_ref(project_root, canonical_project_root, reference) {
         Ok(()) => None,
         Err(EvidenceRefValidationError::Invalid) => Some(EvalDiagnostic::error(
-            EvalDiagnosticCode::InvalidEvidenceRef,
+            EvalDiagnosticCode::EvalInvalidEvidenceRef,
             evidence_ref_path(arm_path, run, index),
             format!(
                 "eval run {} has invalid evidence ref '{}'; refs must be relative file paths under the project root",
@@ -352,7 +352,7 @@ fn evidence_ref_diagnostic(
             ),
         )),
         Err(EvidenceRefValidationError::Missing) => Some(EvalDiagnostic::error(
-            EvalDiagnosticCode::MissingEvidenceFile,
+            EvalDiagnosticCode::EvalMissingEvidenceFile,
             evidence_ref_path(arm_path, run, index),
             format!(
                 "eval run {} evidence ref '{}' does not exist",
@@ -360,7 +360,7 @@ fn evidence_ref_diagnostic(
             ),
         )),
         Err(EvidenceRefValidationError::NotFile) => Some(EvalDiagnostic::error(
-            EvalDiagnosticCode::EvidenceRefNotFile,
+            EvalDiagnosticCode::EvalEvidenceRefNotFile,
             evidence_ref_path(arm_path, run, index),
             format!(
                 "eval run {} evidence ref '{}' is not a file",
@@ -368,7 +368,7 @@ fn evidence_ref_diagnostic(
             ),
         )),
         Err(EvidenceRefValidationError::EscapesProject) => Some(EvalDiagnostic::error(
-            EvalDiagnosticCode::EvidenceRefEscapesProject,
+            EvalDiagnosticCode::EvalEvidenceRefEscapesProject,
             evidence_ref_path(arm_path, run, index),
             format!(
                 "eval run {} evidence ref '{}' resolves outside the project root",

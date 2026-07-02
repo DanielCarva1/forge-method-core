@@ -22,6 +22,21 @@ use forge_core_contracts::isolation::{
 /// Cross-contract checks (duplicate branch/path across siblings, claim-agent
 /// consistency) live in [`detect_isolation_conflict`].
 ///
+/// # Why this short-circuits (AGENTS.md carve-out)
+///
+/// This is an intentional exception to the repo's "validation accumulates
+/// diagnostics, never short-circuits" rule. It is a **structural gate**, not a
+/// diagnostic-accumulating pass: the caller (`isolation propose`) uses the
+/// `Result` for control flow — a structurally invalid contract is rejected
+/// before it reaches collision detection or persistence, and each
+/// [`IsolationError`] variant maps to a distinct, user-facing rejection reason.
+/// AGENTS.md explicitly permits bailing "only `?`-bail out of a validation
+/// pass if an input is structurally unusable", which is exactly this case.
+/// Migrating it onto the canonical `forge_core_validate::ValidationReport`
+/// would also pull `forge-core-validate` into `forge-core-decisions` (a
+/// different layer) and flatten ~10 distinct rejection reasons into generic
+/// diagnostics — a net loss for the operator UX. Left as `Result` on purpose.
+///
 /// # Errors
 ///
 /// Returns [`IsolationError::EmptyAgentId`] when `agent_id` is blank,

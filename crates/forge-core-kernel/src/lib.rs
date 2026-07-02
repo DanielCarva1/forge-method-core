@@ -28,6 +28,9 @@
 //! - [`wal_orchestration`] — `execute_operation`, the single public mutation
 //!   entrypoint, plus `prepare_effect_transaction` and the execution-result
 //!   types.
+//! - [`gate`] — the `OperationGate` trait and `GateRejection` type: mutation
+//!   preconditions the kernel runs before any WAL append. V2.C builds the seam
+//!   (the trait + typestate context); V3.A fills it with real gates.
 //!
 //! Every previously-top-level `pub` item is re-exported at the crate root
 //! below, so downstream crates see an unchanged public interface
@@ -73,6 +76,7 @@ use std::time::{Duration, Instant};
 use tracing::instrument;
 
 mod evidence;
+pub mod gate;
 mod planning;
 mod staging;
 mod wal_orchestration;
@@ -80,6 +84,7 @@ mod wal_orchestration;
 // Re-export the entire public API at the crate root. This preserves every
 // historical path 1:1 — downstream crates need no import changes.
 pub use evidence::*;
+pub use gate::*;
 pub use planning::*;
 pub use staging::*;
 pub use wal_orchestration::*;
@@ -174,17 +179,10 @@ mod tests {
         let temp_root = fresh_temp_root("metadata-append-failure");
         let index_path = temp_root.join(".forge-method/index/effect-targets.ndjson");
         fs::create_dir_all(&index_path).expect("create directory where metadata file should be");
-        let context = RuntimeOperationExecutionContext {
-            command_context: CommandExecutionContext::single_root(&temp_root),
-            effect_store_root: &temp_root,
-            evidence_log_relative_path: ".forge-method/evidence/command-execution.ndjson",
-            wal_relative_path: ".forge-method/wal/effects.ndjson",
-            lock_relative_path: ".forge-method/locks/effects.lock",
-            effect_metadata_index_relative_path: ".forge-method/index/effect-targets.ndjson",
-            recorded_at: "2026-06-25T00:00:00Z",
-            tx_id_prefix: "test-execute-operation",
-            durability: WalDurability::default(),
-        };
+        let mut context = RuntimeOperationExecutionContext::single_root(&temp_root);
+        context.recorded_at = "2026-06-25T00:00:00Z";
+        context.tx_id_prefix = "test-execute-operation";
+        let context = context.audited();
 
         let execution = execute_operation(
             &document,
@@ -193,7 +191,8 @@ mod tests {
             &[effect_input],
             &[artifact_payload, evidence_payload],
             &context,
-        );
+        )
+        .expect("execute_operation should not be rejected by gates");
 
         assert_eq!(
             execution.status,

@@ -3,6 +3,7 @@ pub mod claim;
 pub mod command;
 pub mod common;
 pub mod envelope;
+pub mod typed_failure;
 
 pub mod agent_run;
 pub mod autonomy_policy;
@@ -87,4 +88,5 @@ pub use research::{
     ResearchAdmissionDecision, ResearchAdmissionDenialReason, ResearchContract, ResearchPolicy,
     ResearchSource, ResearchSourceKind,
 };
+pub use typed_failure::TypedFailure;
 pub use workflow::{Workflow, WorkflowDocument};

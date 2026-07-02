@@ -18,10 +18,11 @@ use forge_core_contracts::{
     AdmissionDecision, AdmissionDenialReason, AdmissionEvidence, AuthorityLevel, MemoryContract,
     MemoryPolicy, StableId,
 };
-use forge_core_store::{append_json_line_with_durability, WalDurability};
+use forge_core_eventlog::{append_event, next_sequence, now_unix, project_locked, EventLogLock};
+use forge_core_store::WalDurability;
 
 use crate::{
-    next_sequence, now_unix, project_locked, MemoryEvent, PromoteError, MEMORY_LOCK_RELATIVE_PATH,
+    MemoryDomain, MemoryEvent, MemoryProjectionDiagnostic, PromoteError, MEMORY_LOCK_RELATIVE_PATH,
     MEMORY_LOG_RELATIVE_PATH,
 };
 
@@ -82,28 +83,25 @@ pub fn promote_with_durability(
     let root = root.as_ref();
 
     // 1. Acquire the lock for the whole find-then-decide-then-write section.
-    let _lock = match forge_core_store::acquire_effect_store_lock(root, MEMORY_LOCK_RELATIVE_PATH) {
+    let lock = match EventLogLock::acquire::<MemoryProjectionDiagnostic>(
+        root,
+        MEMORY_LOCK_RELATIVE_PATH,
+    ) {
         Ok(lock) => lock,
         Err(source) => {
             return PromoteResult {
-                status: PromoteStatus::StoreError(PromoteError::Lock {
-                    path: root.join(MEMORY_LOCK_RELATIVE_PATH),
-                    source: source.to_string(),
-                }),
+                status: PromoteStatus::StoreError(source),
                 entry_id,
             };
         }
     };
 
     // 2. Read the projection (under the lock) to find the entry.
-    let projection = match project_locked(root) {
+    let projection = match project_locked::<MemoryDomain>(root, MEMORY_LOG_RELATIVE_PATH) {
         Ok(projection) => projection,
         Err(source) => {
             return PromoteResult {
-                status: PromoteStatus::StoreError(PromoteError::Read {
-                    path: root.join(MEMORY_LOG_RELATIVE_PATH),
-                    source: source.to_string(),
-                }),
+                status: PromoteStatus::StoreError(source),
                 entry_id,
             };
         }
@@ -139,7 +137,7 @@ pub fn promote_with_durability(
     //    "cleared for Authority".)
     let before = entry.authority_level_effective();
     let after = AuthorityLevel::Authority;
-    let sequence = next_sequence(&projection);
+    let sequence = next_sequence::<MemoryDomain>(&projection);
 
     // 5. Append the Promoted event. Only authority-axis fields are recorded;
     //    review state is deliberately absent (orthogonality NFR).
@@ -151,19 +149,8 @@ pub fn promote_with_durability(
         after,
         evidence_refs: distinct_non_empty(&evidence.evidence_refs),
     };
-    let serialized = match serde_json::to_vec(&event) {
-        Ok(serialized) => serialized,
-        Err(source) => {
-            return PromoteResult {
-                status: PromoteStatus::StoreError(PromoteError::Serialize {
-                    source: source.to_string(),
-                }),
-                entry_id,
-            };
-        }
-    };
-    match append_bytes(root, &serialized, durability) {
-        Ok(()) => PromoteResult {
+    match append_event::<MemoryDomain>(root, MEMORY_LOG_RELATIVE_PATH, &event, durability, &lock) {
+        Ok(_) => PromoteResult {
             status: PromoteStatus::Promoted {
                 sequence,
                 before,
@@ -194,24 +181,6 @@ fn distinct_non_empty(refs: &[String]) -> Vec<String> {
         }
     }
     seen
-}
-
-fn append_bytes(
-    root: &Path,
-    serialized: &[u8],
-    durability: WalDurability,
-) -> Result<(), PromoteError> {
-    let value: serde_json::Value =
-        serde_json::from_slice(serialized).map_err(|source| PromoteError::Serialize {
-            source: source.to_string(),
-        })?;
-    append_json_line_with_durability(root, MEMORY_LOG_RELATIVE_PATH, &value, durability).map_err(
-        |source| PromoteError::Append {
-            path: root.join(MEMORY_LOG_RELATIVE_PATH),
-            source: source.to_string(),
-        },
-    )?;
-    Ok(())
 }
 
 #[cfg(test)]

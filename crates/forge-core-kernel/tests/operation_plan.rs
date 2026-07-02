@@ -718,7 +718,7 @@ fn execute_operation_waits_without_side_effects_when_plan_needs_human() {
     let document = fixture("facilitate-first-product-idea.yaml");
     let index = build_reference_index(repo_root()).expect("reference index");
     let temp_root = fresh_temp_root("awaiting-human");
-    let context = RuntimeOperationExecutionContext::single_root(&temp_root);
+    let context = RuntimeOperationExecutionContext::single_root(&temp_root).audited();
 
     let execution = forge_core_kernel::execute_operation(
         &document,
@@ -727,7 +727,8 @@ fn execute_operation_waits_without_side_effects_when_plan_needs_human() {
         &[],
         &[],
         &context,
-    );
+    )
+    .expect("execute_operation should not be rejected by gates");
 
     assert_eq!(
         execution.status,
@@ -748,7 +749,7 @@ fn execute_operation_blocks_missing_required_command_before_effects() {
     let document = fixture("mechanical-story-execute.yaml");
     let index = build_reference_index(repo_root()).expect("reference index");
     let temp_root = fresh_temp_root("missing-command");
-    let context = RuntimeOperationExecutionContext::single_root(&temp_root);
+    let context = RuntimeOperationExecutionContext::single_root(&temp_root).audited();
 
     let execution = forge_core_kernel::execute_operation(
         &document,
@@ -757,7 +758,8 @@ fn execute_operation_blocks_missing_required_command_before_effects() {
         &[],
         &[],
         &context,
-    );
+    )
+    .expect("execute_operation should not be rejected by gates");
 
     assert_eq!(execution.status, RuntimeOperationExecutionStatus::Blocked);
     assert_eq!(
@@ -797,17 +799,11 @@ fn execute_operation_records_command_evidence_and_applies_effect_with_wal_lock()
         br#"{"status":"passed"}"#,
     );
     let temp_root = fresh_temp_root("execute-success");
-    let context = RuntimeOperationExecutionContext {
-        command_context: CommandExecutionContext::single_root(&temp_root),
-        effect_store_root: &temp_root,
-        evidence_log_relative_path: ".forge-method/evidence/command-execution.ndjson",
-        wal_relative_path: ".forge-method/wal/effects.ndjson",
-        lock_relative_path: ".forge-method/locks/effects.lock",
-        effect_metadata_index_relative_path: ".forge-method/index/effect-targets.ndjson",
-        recorded_at: "2026-06-25T00:00:00Z",
-        tx_id_prefix: "test-execute-operation",
-        durability: WalDurability::NoSync,
-    };
+    let mut context = RuntimeOperationExecutionContext::single_root(&temp_root);
+    context.recorded_at = "2026-06-25T00:00:00Z";
+    context.tx_id_prefix = "test-execute-operation";
+    context.durability = WalDurability::NoSync;
+    let context = context.audited();
 
     let execution = forge_core_kernel::execute_operation(
         &document,
@@ -816,7 +812,8 @@ fn execute_operation_records_command_evidence_and_applies_effect_with_wal_lock()
         &[effect_input],
         &[artifact_payload, evidence_payload],
         &context,
-    );
+    )
+    .expect("execute_operation should not be rejected by gates");
 
     assert_eq!(
         execution.status,

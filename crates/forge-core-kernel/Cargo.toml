@@ -3,6 +3,14 @@ name = "forge-core-kernel"
 version.workspace = true
 edition.workspace = true
 
+[features]
+# `dangerous-bypass` enables [`RuntimeOperationExecutionContext::dangerous_unchecked`],
+# the rustls-style explicit gate-bypass. It must NEVER be enabled in a release
+# binary; it exists for tests/legacy callers that genuinely do not run gates.
+# Keeping it a distinct feature makes any bypass visible in the diff AND the
+# feature config, never silent. See V2.C.
+dangerous-bypass = []
+
 [dependencies]
 forge-core-contracts = { path = "../forge-core-contracts" }
 forge-core-store = { path = "../forge-core-store" }

@@ -317,29 +317,34 @@ fn run_execute_fixture(fixture: &ConsumerFixture) -> Value {
 }
 
 fn assert_outside_root_contract_failure(output: &std::process::Output, expected_kind: &str) {
+    // V2.D: in --json mode, execute-operation now emits a real CliEnvelope to
+    // stdout (with typed_failure + DD10 exit code) instead of a stderr string.
+    // The exit code is `InvalidDecisionShape` (3) per the DD10 taxonomy, not
+    // the generic 1, and the human message rides in `error.message`.
     assert_eq!(
         output.status.code(),
-        Some(1),
-        "outside-root contract paths should fail with the runtime/config boundary exit code\nstdout:\n{}\nstderr:\n{}",
+        Some(3),
+        "outside-root contract paths should fail with the invalid-decision-shape exit code (DD10)\nstdout:\n{}\nstderr:\n{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains(expected_kind),
-        "failure should identify the contract path kind\nstderr:\n{stderr}"
+        stdout.contains(expected_kind),
+        "failure should identify the contract path kind in the envelope\nstdout:\n{stdout}"
     );
     assert!(
-        stderr.contains("outside project root"),
-        "failure should explain the project-root boundary\nstderr:\n{stderr}"
+        stdout.contains("outside project root"),
+        "failure should explain the project-root boundary in the envelope\nstdout:\n{stdout}"
     );
     assert!(
-        stderr.contains("--root"),
-        "failure should be actionable for callers\nstderr:\n{stderr}"
+        stdout.contains("--root"),
+        "failure should be actionable for callers (envelope message)\nstdout:\n{stdout}"
     );
     assert!(
-        !stderr.contains("parse "),
-        "outside-root contract rejection should happen before YAML parsing\nstderr:\n{stderr}"
+        !stdout.contains("parse ") && !stderr.contains("parse "),
+        "outside-root contract rejection should happen before YAML parsing\nstdout:\n{stdout}\nstderr:\n{stderr}"
     );
 }
 

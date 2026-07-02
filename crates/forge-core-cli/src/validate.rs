@@ -40,7 +40,7 @@ use forge_core_validate::{
     validate_runtime_handoff_cross_references, validate_runtime_registry_cross_references,
     validate_runtime_registry_entry, validate_tool_effect, validate_tool_effect_cross_references,
     validate_yaml_known_repo_references, validate_yaml_source_id_references, Diagnostic,
-    DiagnosticSeverity, ReferenceIndex, ValidationReport,
+    DiagnosticCode, DiagnosticSeverity, ReferenceIndex, ValidationReport,
 };
 
 /// Outcome of a single named validation check (passed/failed + counts).
@@ -52,16 +52,18 @@ pub struct ValidateCheck {
     pub errors: usize,
 }
 
-/// One diagnostic emitted while validating the workspace. The `severity`
-/// string is `"error"` or `"warning"` (matches the JSON output shape that
-/// external consumers depend on).
-#[derive(Debug, Clone, Serialize)]
-pub struct ValidateDiagnostic {
-    pub severity: String,
-    pub code: String,
-    pub path: String,
-    pub message: String,
-}
+/// One diagnostic emitted while validating the workspace.
+///
+/// Migrated in V2.B: this is now an alias for the canonical
+/// `forge_core_validate::Diagnostic`, which keeps `DiagnosticSeverity` and
+/// `DiagnosticCode` as the **strong enums** end-to-end instead of degrading
+/// them to `String` at this boundary. The serialized JSON shape
+/// (`{ severity, code, path, message }`) is unchanged — `severity` is still
+/// `"error"`/`"warning"` and `code` is still a stable `snake_case` identifier,
+/// but now produced by `DiagnosticCode`'s serde rename rather than the lossy
+/// `format!("{:?}", diagnostic.code)` that previously emitted `PascalCase`
+/// `Debug` strings (e.g. `YamlReadFailed`) and discarded the enum typing.
+pub type ValidateDiagnostic = forge_core_validate::Diagnostic;
 
 /// Aggregated result of validating a Forge workspace. Fields are public so
 /// callers (`forge-contract-validator`, integration tests, `main.rs`) can
@@ -114,18 +116,14 @@ impl ValidateSummary {
     }
 
     fn add_report(&mut self, name: &str, report: ValidationReport) {
-        let errors = report
-            .diagnostics()
-            .iter()
-            .filter(|item| item.severity == DiagnosticSeverity::Error)
-            .count();
+        let errors = report.error_count();
         let diagnostics = report.diagnostics().len();
-        self.diagnostics.extend(
-            report
-                .diagnostics()
-                .iter()
-                .map(ValidateDiagnostic::from_validation),
-        );
+        // V2.B: store the typed `Diagnostic` directly. Previously this demoted
+        // the strong `DiagnosticCode` enum to a `format!("{:?}")` `Debug` string
+        // via `ValidateDiagnostic::from_validation`, losing type information at
+        // the boundary. Now the canonical enum flows straight into the summary.
+        self.diagnostics
+            .extend(report.diagnostics().iter().cloned());
         self.checks.push(ValidateCheck {
             name: name.to_string(),
             status: if errors == 0 {
@@ -143,8 +141,8 @@ impl ValidateSummary {
             .iter()
             .filter(|item| item.severity == DiagnosticSeverity::Error)
             .count();
-        self.diagnostics
-            .extend(diagnostics.iter().map(ValidateDiagnostic::from_validation));
+        // V2.B: clone the typed diagnostics in directly (no lossy conversion).
+        self.diagnostics.extend(diagnostics.iter().cloned());
         self.checks.push(ValidateCheck {
             name: name.to_string(),
             status: if errors == 0 {
@@ -162,35 +160,17 @@ impl ValidateSummary {
     }
 
     fn finish(&mut self) {
-        self.status = if self.diagnostics.iter().any(|item| item.severity == "error") {
+        // V2.B: diagnostics are now typed `Diagnostic`, so compare against the
+        // strong `DiagnosticSeverity::Error` enum rather than a `"error"` string.
+        self.status = if self
+            .diagnostics
+            .iter()
+            .any(|item| item.severity == DiagnosticSeverity::Error)
+        {
             ValidationStatus::Failed
         } else {
             ValidationStatus::Passed
         };
-    }
-}
-
-impl ValidateDiagnostic {
-    fn error(code: impl Into<String>, path: impl Into<String>, message: impl Into<String>) -> Self {
-        Self {
-            severity: "error".to_string(),
-            code: code.into(),
-            path: path.into(),
-            message: message.into(),
-        }
-    }
-
-    fn from_validation(diagnostic: &forge_core_validate::Diagnostic) -> Self {
-        Self {
-            severity: match diagnostic.severity {
-                DiagnosticSeverity::Error => "error",
-                DiagnosticSeverity::Warning => "warning",
-            }
-            .to_string(),
-            code: format!("{:?}", diagnostic.code),
-            path: diagnostic.path.clone(),
-            message: diagnostic.message.clone(),
-        }
     }
 }
 
@@ -210,8 +190,8 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
     let index = match build_reference_index(root) {
         Ok(index) => index,
         Err(err) => {
-            summary.push_diagnostic(ValidateDiagnostic::error(
-                "reference_index_build_failed",
+            summary.push_diagnostic(Diagnostic::error(
+                DiagnosticCode::ReferenceIndexBuildFailed,
                 "reference_index",
                 err.to_string(),
             ));
@@ -572,8 +552,8 @@ fn read_yaml<T: serde::de::DeserializeOwned>(
     let text = match fs::read_to_string(path) {
         Ok(text) => text,
         Err(err) => {
-            summary.push_diagnostic(ValidateDiagnostic::error(
-                "read_file_failed",
+            summary.push_diagnostic(Diagnostic::error(
+                DiagnosticCode::ReadFileFailed,
                 path.to_string_lossy(),
                 err.to_string(),
             ));
@@ -583,8 +563,8 @@ fn read_yaml<T: serde::de::DeserializeOwned>(
     match yaml_serde::from_str(&text) {
         Ok(value) => Some(value),
         Err(err) => {
-            summary.push_diagnostic(ValidateDiagnostic::error(
-                "parse_yaml_failed",
+            summary.push_diagnostic(Diagnostic::error(
+                DiagnosticCode::ParseYamlFailed,
                 path.to_string_lossy(),
                 err.to_string(),
             ));
@@ -597,8 +577,8 @@ fn yaml_files(dir: &Path, summary: &mut ValidateSummary) -> Vec<PathBuf> {
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(err) => {
-            summary.push_diagnostic(ValidateDiagnostic::error(
-                "read_dir_failed",
+            summary.push_diagnostic(Diagnostic::error(
+                DiagnosticCode::ReadDirFailed,
                 dir.to_string_lossy(),
                 err.to_string(),
             ));
@@ -614,8 +594,8 @@ fn yaml_files(dir: &Path, summary: &mut ValidateSummary) -> Vec<PathBuf> {
                     files.push(path);
                 }
             }
-            Err(err) => summary.push_diagnostic(ValidateDiagnostic::error(
-                "read_dir_entry_failed",
+            Err(err) => summary.push_diagnostic(Diagnostic::error(
+                DiagnosticCode::ReadDirEntryFailed,
                 dir.to_string_lossy(),
                 err.to_string(),
             )),
@@ -685,9 +665,23 @@ pub fn run_validate_command(args: &[String]) -> Result<(), ExitError> {
     } else {
         println!("{}", summary.human_summary());
         for diagnostic in &summary.diagnostics {
+            // V2.B: diagnostics are now the typed `Diagnostic`. Print their
+            // stable wire-format fields (snake_case `severity`/`code`) by
+            // reading them back from the JSON serialization, so the
+            // human-readable output matches the `--json` code identifiers
+            // rather than the lossy `Debug` form.
+            let wire = serde_json::to_value(diagnostic).expect("serialize diagnostic");
+            let severity = wire
+                .get("severity")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("error");
+            let code = wire
+                .get("code")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("unknown");
             eprintln!(
-                "{} {} {}: {}",
-                diagnostic.severity, diagnostic.code, diagnostic.path, diagnostic.message
+                "{severity} {code} {}: {}",
+                diagnostic.path, diagnostic.message
             );
         }
     }

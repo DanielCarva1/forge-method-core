@@ -16,6 +16,7 @@
 //!
 //! The mapping is deterministic and documented in `guide describe`.
 
+use crate::typed_failure::TypedFailure;
 use crate::StableId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -91,6 +92,15 @@ pub struct CliEnvelope<T> {
     /// Typed error. Present iff `ok == false`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<CliError>,
+    /// Typed failure reason (V2.D). Present only when a command can supply a
+    /// machine-readable failure variant alongside `error.message` (e.g. the
+    /// mutate path's `ExecuteOperationError`). `None` on success and on
+    /// failure paths that have no typed mapping, so this field is omitted from
+    /// the JSON entirely in those cases — existing OK envelopes are
+    /// byte-identical (backward compatible). A programmatic consumer branches
+    /// on `typed_failure.type` instead of re-parsing `error.message`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub typed_failure: Option<TypedFailure>,
 }
 
 impl<T> CliEnvelope<T> {
@@ -104,6 +114,7 @@ impl<T> CliEnvelope<T> {
             exit_reason: StableId(ExitReason::Ok.as_str().into()),
             data: Some(data),
             error: None,
+            typed_failure: None,
         }
     }
 
@@ -121,6 +132,36 @@ impl<T> CliEnvelope<T> {
                 code: StableId(exit.as_str().into()),
                 message: message.into(),
             }),
+            typed_failure: None,
+        }
+    }
+
+    /// Build a failure envelope that ALSO carries a typed failure reason
+    /// (V2.D). Like [`CliEnvelope::err`], but `typed` rides in the envelope
+    /// JSON so a programmatic consumer can branch on *why* the operation
+    /// failed instead of re-parsing `message`. `message` is still the
+    /// human-readable diagnostic (stderr quality); `typed` is the
+    /// machine-readable mirror.
+    ///
+    /// Exit code = `exit.as_code()`.
+    #[must_use]
+    pub fn err_typed(
+        command: &str,
+        exit: ExitReason,
+        message: impl Into<String>,
+        typed: TypedFailure,
+    ) -> Self {
+        Self {
+            schema_version: StableId(ENVELOPE_SCHEMA_VERSION.into()),
+            command: StableId(command.into()),
+            ok: false,
+            exit_reason: StableId(exit.as_str().into()),
+            data: None,
+            error: Some(CliError {
+                code: StableId(exit.as_str().into()),
+                message: message.into(),
+            }),
+            typed_failure: Some(typed),
         }
     }
 
@@ -145,6 +186,7 @@ impl<T> CliEnvelope<T> {
                 code: StableId(exit.as_str().into()),
                 message: message.into(),
             }),
+            typed_failure: None,
         }
     }
 
@@ -276,8 +318,50 @@ mod tests {
             exit_reason: StableId("nonsense".into()),
             data: None,
             error: None,
+            typed_failure: None,
         };
         // A bogus reason must not silently exit 0 — it surfaces as env/config (5).
         assert_eq!(env.exit_code(), 5);
+    }
+
+    #[test]
+    fn err_typed_carries_variant_and_message() {
+        // V2.D: err_typed rides the typed failure alongside the message, so a
+        // consumer can branch on `typed_failure.type` and still read the
+        // human message.
+        let env: CliEnvelope<Payload> = CliEnvelope::err_typed(
+            "execute-operation",
+            ExitReason::RejectedByGate,
+            "risk-audit gate failed",
+            crate::TypedFailure::RiskAuditFailed {
+                error_count: 2,
+                finding_paths: vec!["op.yaml: missing".into()],
+            },
+        );
+        assert!(!env.ok);
+        assert!(env.typed_failure.is_some());
+        assert!(env.error.is_some());
+        let json = serde_json::to_string(&env).unwrap();
+        assert!(json.contains(r#""typed_failure""#));
+        assert!(json.contains(r#""type":"risk_audit_failed""#));
+        assert!(json.contains("risk-audit gate failed"));
+        let back: CliEnvelope<Payload> = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, env);
+    }
+
+    #[test]
+    fn ok_and_plain_err_envelopes_omit_typed_failure_byte_identical() {
+        // Backward compatibility: typed_failure is Option + skip_serializing_if,
+        // so success envelopes and plain err() envelopes are byte-identical to
+        // the pre-V2.D shape (no "typed_failure" key at all).
+        let ok: CliEnvelope<Payload> = CliEnvelope::ok("x", Payload { phase: "p".into() });
+        assert!(ok.typed_failure.is_none());
+        let ok_json = serde_json::to_string(&ok).unwrap();
+        assert!(!ok_json.contains("typed_failure"));
+
+        let err: CliEnvelope<Payload> = CliEnvelope::err("x", ExitReason::Conflict, "boom");
+        assert!(err.typed_failure.is_none());
+        let err_json = serde_json::to_string(&err).unwrap();
+        assert!(!err_json.contains("typed_failure"));
     }
 }

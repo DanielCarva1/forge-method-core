@@ -130,11 +130,36 @@ pub struct GraphAuthorityBoundary {
     pub required_authority_refs: Vec<RepoPath>,
 }
 
+// ---------------------------------------------------------------------------
+// Diagnostics — migrated to the canonical `forge_core_validate` types (V2.B).
+//
+// `GraphDiagnostic`, `GraphDiagnosticSeverity`, and `GraphDiagnosticCode` were
+// near-identical clones of `Diagnostic` / `DiagnosticSeverity` / `DiagnosticCode`.
+// They are now aliases for the canonical types: the graph-specific code variants
+// live in `forge_core_validate::DiagnosticCode` (prefixed `Graph*`), and the
+// snake_case wire format is unchanged.
+//
+// `GraphValidationReport` is retained as a thin NEWTYPE-style wrapper because
+// it carries a `graph_id` alongside the diagnostics (the canonical
+// `ValidationReport` is a pure diagnostic bag with no identity). Every method
+// delegates to the wrapped canonical report; the serialization shape (with
+// `graph_id` and `diagnostics` fields) is preserved.
+// ---------------------------------------------------------------------------
+
+/// Canonical diagnostic, re-exported so graph callers keep their existing
+/// import path (`GraphDiagnostic`) without touching call sites.
+pub type GraphDiagnostic = forge_core_validate::Diagnostic;
+/// Canonical diagnostic severity.
+pub type GraphDiagnosticSeverity = forge_core_validate::DiagnosticSeverity;
+/// Canonical diagnostic code (the graph-specific variants are `Graph*`-prefixed
+/// members of the canonical enum).
+pub type GraphDiagnosticCode = forge_core_validate::DiagnosticCode;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(deny_unknown_fields)]
 pub struct GraphValidationReport {
     pub graph_id: StableId,
-    pub diagnostics: Vec<GraphDiagnostic>,
+    #[serde(flatten)]
+    pub report: forge_core_validate::ValidationReport,
 }
 
 impl GraphValidationReport {
@@ -142,130 +167,44 @@ impl GraphValidationReport {
     pub fn new(graph_id: StableId) -> Self {
         Self {
             graph_id,
-            diagnostics: Vec::new(),
+            report: forge_core_validate::ValidationReport::new(),
         }
     }
 
     pub fn push(&mut self, diagnostic: GraphDiagnostic) {
-        self.diagnostics.push(diagnostic);
+        self.report.push(diagnostic);
     }
 
     pub fn extend(&mut self, other: Self) {
-        self.diagnostics.extend(other.diagnostics);
+        self.report.extend(other.report);
     }
 
     #[must_use]
     pub fn diagnostics(&self) -> &[GraphDiagnostic] {
-        &self.diagnostics
+        self.report.diagnostics()
     }
 
     #[must_use]
     pub fn into_diagnostics(self) -> Vec<GraphDiagnostic> {
-        self.diagnostics
+        // `ValidationReport` keeps its `diagnostics` vec private; `diagnostics()`
+        // borrows it, so clone out on conversion to preserve the public move API.
+        self.report.diagnostics().to_vec()
     }
 
     #[must_use]
     pub fn has_errors(&self) -> bool {
-        self.diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.severity == GraphDiagnosticSeverity::Error)
+        self.report.has_errors()
     }
 
     #[must_use]
     pub fn error_count(&self) -> usize {
-        self.diagnostics
-            .iter()
-            .filter(|diagnostic| diagnostic.severity == GraphDiagnosticSeverity::Error)
-            .count()
+        self.report.error_count()
     }
 
     #[must_use]
     pub fn warning_count(&self) -> usize {
-        self.diagnostics
-            .iter()
-            .filter(|diagnostic| diagnostic.severity == GraphDiagnosticSeverity::Warning)
-            .count()
+        self.report.warning_count()
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct GraphDiagnostic {
-    pub severity: GraphDiagnosticSeverity,
-    pub code: GraphDiagnosticCode,
-    pub path: String,
-    pub message: String,
-}
-
-impl GraphDiagnostic {
-    #[must_use]
-    pub fn error(
-        code: GraphDiagnosticCode,
-        path: impl Into<String>,
-        message: impl Into<String>,
-    ) -> Self {
-        Self {
-            severity: GraphDiagnosticSeverity::Error,
-            code,
-            path: path.into(),
-            message: message.into(),
-        }
-    }
-
-    #[must_use]
-    pub fn warning(
-        code: GraphDiagnosticCode,
-        path: impl Into<String>,
-        message: impl Into<String>,
-    ) -> Self {
-        Self {
-            severity: GraphDiagnosticSeverity::Warning,
-            code,
-            path: path.into(),
-            message: message.into(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum GraphDiagnosticSeverity {
-    Error,
-    Warning,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum GraphDiagnosticCode {
-    EmptyGraphId,
-    UnsupportedSchemaVersion,
-    InvalidGraphKind,
-    EmptyGraph,
-    EmptyNodeId,
-    DuplicateNodeId,
-    EmptyEdgeEndpoint,
-    MissingEdgeEndpoint,
-    CycleDetected,
-    EmptyOperationRef,
-    MissingOperationContract,
-    InvalidOperationContract,
-    DuplicateOperationEvaluation,
-    OperationNotReady,
-    OperationMutationDeclarationMismatch,
-    ClaimPreflightBlocked,
-    /// A `verifies` entry on a Verifier node points at a `node_id` that does
-    /// not exist in the graph. Verifier edges must be resolvable so downstream
-    /// blocking logic (`unpassed_upstream_verifiers`) is sound.
-    DanglingVerifiesRef,
-    /// A `GraphBudget.node_id` points at a `node_id` that does not exist in
-    /// the graph. Budgets that cannot be attributed silently no-op.
-    DanglingBudgetNodeRef,
-    /// A `BlocksUntilPassed` edge originates from a node whose `node_kind` is
-    /// not `Verifier`. Only Verifier nodes have a `verifier_result` field, so
-    /// the runtime cannot evaluate "passed" for the source. Emitted as a
-    /// warning: the graph still parses and dry-runs, but the edge is treated
-    /// as a generic upstream dependency.
-    EdgeKindSourceKindMismatch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -678,24 +617,24 @@ fn operation_evaluation_diagnostics(
         let reference = evaluation.operation_ref.0.as_str();
         if !seen.insert(reference) {
             diagnostics.push(GraphDiagnostic::error(
-                GraphDiagnosticCode::DuplicateOperationEvaluation,
+                GraphDiagnosticCode::GraphDuplicateOperationEvaluation,
                 format!("operation_ref.{reference}"),
                 format!("operation_ref {reference} was evaluated more than once"),
             ));
         }
         match evaluation.status {
             GraphOperationStatus::Missing => diagnostics.push(GraphDiagnostic::error(
-                GraphDiagnosticCode::MissingOperationContract,
+                GraphDiagnosticCode::GraphMissingOperationContract,
                 format!("operation_ref.{reference}"),
                 format!("operation_ref {reference} could not be read"),
             )),
             GraphOperationStatus::Invalid => diagnostics.push(GraphDiagnostic::error(
-                GraphDiagnosticCode::InvalidOperationContract,
+                GraphDiagnosticCode::GraphInvalidOperationContract,
                 format!("operation_ref.{reference}"),
                 format!("operation_ref {reference} could not be parsed or evaluated"),
             )),
             GraphOperationStatus::NotReady => diagnostics.push(GraphDiagnostic::error(
-                GraphDiagnosticCode::OperationNotReady,
+                GraphDiagnosticCode::GraphOperationNotReady,
                 format!("operation_ref.{reference}"),
                 format!("operation_ref {reference} is not ready for graph planning"),
             )),
@@ -721,7 +660,7 @@ fn append_missing_operation_diagnostic(
         return;
     };
     diagnostics.push(GraphDiagnostic::error(
-        GraphDiagnosticCode::MissingOperationContract,
+        GraphDiagnosticCode::GraphMissingOperationContract,
         format!("nodes.{}.operation_ref", node.node_id.0),
         format!(
             "operation node {} requires operation_ref {} to be loaded before dry-run",
@@ -744,7 +683,7 @@ fn append_mutation_declaration_diagnostic(
         return;
     }
     diagnostics.push(GraphDiagnostic::warning(
-        GraphDiagnosticCode::OperationMutationDeclarationMismatch,
+        GraphDiagnosticCode::GraphOperationMutationDeclarationMismatch,
         format!("nodes.{}.mutation_capable", node.node_id.0),
         format!(
             "operation node {} declared mutation_capable={}, but OperationContract {} derives mutation_capable={}",
@@ -772,7 +711,7 @@ fn append_claim_preflight_diagnostic(
         return;
     }
     diagnostics.push(GraphDiagnostic::error(
-        GraphDiagnosticCode::ClaimPreflightBlocked,
+        GraphDiagnosticCode::GraphClaimPreflightBlocked,
         format!("nodes.{}.claim_preflight", node.node_id.0),
         format!(
             "operation node {} failed claim preflight for {} target(s)",
@@ -804,21 +743,21 @@ fn operation_block_reason(
 fn validate_graph_identity(report: &mut GraphValidationReport, graph: &WorkflowGraph) {
     if graph.graph_id.0.trim().is_empty() {
         report.push(GraphDiagnostic::error(
-            GraphDiagnosticCode::EmptyGraphId,
+            GraphDiagnosticCode::GraphEmptyGraphId,
             "graph_id",
             "graph_id must not be empty",
         ));
     }
     if graph.schema_version != WORKFLOW_GRAPH_SCHEMA_VERSION {
         report.push(GraphDiagnostic::error(
-            GraphDiagnosticCode::UnsupportedSchemaVersion,
+            GraphDiagnosticCode::GraphUnsupportedSchemaVersion,
             "schema_version",
             format!("workflow graph schema_version must be {WORKFLOW_GRAPH_SCHEMA_VERSION}"),
         ));
     }
     if graph.kind != WORKFLOW_GRAPH_KIND {
         report.push(GraphDiagnostic::error(
-            GraphDiagnosticCode::InvalidGraphKind,
+            GraphDiagnosticCode::GraphInvalidGraphKind,
             "kind",
             format!("workflow graph kind must be {WORKFLOW_GRAPH_KIND}"),
         ));
@@ -828,7 +767,7 @@ fn validate_graph_identity(report: &mut GraphValidationReport, graph: &WorkflowG
 fn validate_nodes(report: &mut GraphValidationReport, graph: &WorkflowGraph) {
     if graph.nodes.is_empty() {
         report.push(GraphDiagnostic::error(
-            GraphDiagnosticCode::EmptyGraph,
+            GraphDiagnosticCode::GraphEmptyGraph,
             "nodes",
             "workflow graph must contain at least one node",
         ));
@@ -839,14 +778,14 @@ fn validate_nodes(report: &mut GraphValidationReport, graph: &WorkflowGraph) {
         let node_path = format!("nodes.{index}.node_id");
         if node.node_id.0.trim().is_empty() {
             report.push(GraphDiagnostic::error(
-                GraphDiagnosticCode::EmptyNodeId,
+                GraphDiagnosticCode::GraphEmptyNodeId,
                 node_path.clone(),
                 "node_id must not be empty",
             ));
         }
         if !seen.insert(node.node_id.0.as_str()) {
             report.push(GraphDiagnostic::error(
-                GraphDiagnosticCode::DuplicateNodeId,
+                GraphDiagnosticCode::GraphDuplicateNodeId,
                 node_path,
                 format!("node_id {} must be unique", node.node_id.0),
             ));
@@ -858,7 +797,7 @@ fn validate_nodes(report: &mut GraphValidationReport, graph: &WorkflowGraph) {
                 .is_none_or(|reference| reference.0.trim().is_empty())
         {
             report.push(GraphDiagnostic::error(
-                GraphDiagnosticCode::EmptyOperationRef,
+                GraphDiagnosticCode::GraphEmptyOperationRef,
                 format!("nodes.{index}.operation_ref"),
                 "operation nodes require non-empty operation_ref",
             ));
@@ -876,13 +815,13 @@ fn validate_edges(report: &mut GraphValidationReport, graph: &WorkflowGraph) {
     for (index, edge) in graph.edges.iter().enumerate() {
         if edge.from.0.trim().is_empty() {
             report.push(GraphDiagnostic::error(
-                GraphDiagnosticCode::EmptyEdgeEndpoint,
+                GraphDiagnosticCode::GraphEmptyEdgeEndpoint,
                 format!("edges.{index}.from"),
                 "edge from endpoint must not be empty",
             ));
         } else if !node_ids.contains(edge.from.0.as_str()) {
             report.push(GraphDiagnostic::error(
-                GraphDiagnosticCode::MissingEdgeEndpoint,
+                GraphDiagnosticCode::GraphMissingEdgeEndpoint,
                 format!("edges.{index}.from"),
                 format!(
                     "edge from endpoint {} does not reference a node",
@@ -893,13 +832,13 @@ fn validate_edges(report: &mut GraphValidationReport, graph: &WorkflowGraph) {
 
         if edge.to.0.trim().is_empty() {
             report.push(GraphDiagnostic::error(
-                GraphDiagnosticCode::EmptyEdgeEndpoint,
+                GraphDiagnosticCode::GraphEmptyEdgeEndpoint,
                 format!("edges.{index}.to"),
                 "edge to endpoint must not be empty",
             ));
         } else if !node_ids.contains(edge.to.0.as_str()) {
             report.push(GraphDiagnostic::error(
-                GraphDiagnosticCode::MissingEdgeEndpoint,
+                GraphDiagnosticCode::GraphMissingEdgeEndpoint,
                 format!("edges.{index}.to"),
                 format!("edge to endpoint {} does not reference a node", edge.to.0),
             ));
@@ -913,7 +852,7 @@ fn validate_cycles(report: &mut GraphValidationReport, graph: &WorkflowGraph) {
     }
     if topological_order_if_acyclic(graph).is_none() {
         report.push(GraphDiagnostic::error(
-            GraphDiagnosticCode::CycleDetected,
+            GraphDiagnosticCode::GraphCycleDetected,
             "edges",
             "workflow graph edges must be acyclic",
         ));
@@ -952,7 +891,7 @@ fn validate_node_references(report: &mut GraphValidationReport, graph: &Workflow
             }
             if !node_ids.contains(verified.0.as_str()) {
                 report.push(GraphDiagnostic::error(
-                    GraphDiagnosticCode::DanglingVerifiesRef,
+                    GraphDiagnosticCode::GraphDanglingVerifiesRef,
                     format!("nodes.{index}.verifies.{slot}"),
                     format!(
                         "verifies entry {verified} does not reference a node",
@@ -972,7 +911,7 @@ fn validate_node_references(report: &mut GraphValidationReport, graph: &Workflow
         }
         if !node_ids.contains(node_ref.0.as_str()) {
             report.push(GraphDiagnostic::error(
-                GraphDiagnosticCode::DanglingBudgetNodeRef,
+                GraphDiagnosticCode::GraphDanglingBudgetNodeRef,
                 format!("budgets.{index}.node_id"),
                 format!(
                     "budget node_id {node_ref} does not reference a node",
@@ -992,7 +931,7 @@ fn validate_node_references(report: &mut GraphValidationReport, graph: &Workflow
         };
         if source.node_kind != GraphNodeKind::Verifier {
             report.push(GraphDiagnostic::warning(
-                GraphDiagnosticCode::EdgeKindSourceKindMismatch,
+                GraphDiagnosticCode::GraphEdgeKindSourceKindMismatch,
                 format!("edges.{index}.edge_kind"),
                 format!(
                     "blocks_until_passed edge originates from {kind} node {id}; \

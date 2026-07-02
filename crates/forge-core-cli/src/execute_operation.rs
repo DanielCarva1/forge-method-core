@@ -25,13 +25,13 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use forge_core_contracts::{
-    CommandContractDocument, FieldEvidenceRegistry, OperationContractDocument, RepoPath,
-    ToolEffectContractDocument,
+    CliEnvelope, CommandContractDocument, ExitReason, FieldEvidenceRegistry,
+    OperationContractDocument, RepoPath, ToolEffectContractDocument, TypedFailure,
 };
 use forge_core_kernel::{
-    execute_operation, CommandExecutionContext, RuntimeEffectPayloadKind,
-    RuntimeOperationCommandInput, RuntimeOperationEffectInput, RuntimeOperationEffectPayload,
-    RuntimeOperationExecution, RuntimeOperationExecutionContext, RuntimeReadSnapshot,
+    execute_operation, GateRejection, RuntimeEffectPayloadKind, RuntimeOperationCommandInput,
+    RuntimeOperationEffectInput, RuntimeOperationEffectPayload, RuntimeOperationExecution,
+    RuntimeOperationExecutionContext, RuntimeReadSnapshot,
 };
 use forge_core_store::{
     append_trace_event, build_reference_index, collect_validation_yaml_documents, WalDurability,
@@ -170,6 +170,15 @@ pub enum ExecuteOperationError {
         error_count: usize,
         first_error: String,
     },
+    /// V2.C: a kernel-internal [`OperationGate`] rejected the mutation before
+    /// any WAL append. Carries the typed kernel rejection verbatim. Nothing is
+    /// persisted when this fires. The CLI's own risk-audit/citation gates
+    /// (`RiskAuditFailed` / `CitationCheckFailed`) still run first in the CLI
+    /// flow; this variant covers gates that run inside the kernel
+    /// (V3.A will attach real gates there).
+    GateRejected {
+        rejection: GateRejection,
+    },
 }
 
 impl fmt::Display for ExecuteOperationError {
@@ -226,11 +235,128 @@ impl fmt::Display for ExecuteOperationError {
                 formatter,
                 "citation gate failed with {error_count} unresolved source_id(s); first: {first_error}"
             ),
+            ExecuteOperationError::GateRejected { rejection } => {
+                write!(formatter, "mutation gate rejected: {rejection}")
+            }
         }
     }
 }
 
 impl std::error::Error for ExecuteOperationError {}
+
+/// Fold an [`ExecuteOperationError`] into the envelope-level
+/// [`TypedFailure`] (V2.D).
+///
+/// This is a lossy-but-typed mapping: the kernel's typed `GateRejection`
+/// stays in the kernel; the envelope carries only the stringified rejection
+/// (or a more specific variant when the kernel variant is one we recognise).
+/// `&self` is used (not a consuming `From`) so the caller can still format the
+/// original error for the human `error.message`.
+impl From<&ExecuteOperationError> for TypedFailure {
+    fn from(error: &ExecuteOperationError) -> Self {
+        match error {
+            ExecuteOperationError::ReferenceIndexBuild(message) => Self::StoreError {
+                path: String::new(),
+                source: message.clone(),
+            },
+            ExecuteOperationError::ReadFile { path, source } => Self::StoreError {
+                path: path.to_string_lossy().into_owned(),
+                source: source.to_string(),
+            },
+            ExecuteOperationError::ParseYaml { path, source } => Self::InvalidContract {
+                reasons: vec![format!("{}: parse failed: {source}", path.display())],
+            },
+            ExecuteOperationError::InvalidEffectPath { path, .. } => {
+                Self::ContractPathOutsideRoot {
+                    path: format!("effect path {}", path.display()),
+                }
+            }
+            ExecuteOperationError::ContractPathOutsideRoot { kind, path, .. } => {
+                Self::ContractPathOutsideRoot {
+                    path: format!("{} {}", kind.label(), path.display()),
+                }
+            }
+            ExecuteOperationError::PayloadPathOutsideRoot { path, .. } => {
+                Self::PayloadOutsideRoot {
+                    path: path.to_string_lossy().into_owned(),
+                }
+            }
+            ExecuteOperationError::PayloadTooLarge {
+                path,
+                max_payload_bytes,
+                ..
+            } => Self::PayloadTooLarge {
+                path: path.to_string_lossy().into_owned(),
+                max_bytes: *max_payload_bytes,
+            },
+            ExecuteOperationError::RiskAuditFailed {
+                error_count,
+                first_error,
+            } => Self::RiskAuditFailed {
+                error_count: *error_count,
+                // The CLI error only carries the first error's text; surface it
+                // as the single finding path. (V3 may widen the source to a
+                // full report.)
+                finding_paths: vec![first_error.clone()],
+            },
+            ExecuteOperationError::CitationCheckFailed { first_error, .. } => {
+                Self::CitationCheckFailed {
+                    // The CLI error does not retain the unresolved source_id list,
+                    // only the first diagnostic text. Carry it so the consumer has
+                    // something to act on; a V3 widening can replace it with the
+                    // actual id set.
+                    unresolved_source_ids: vec![first_error.clone()],
+                }
+            }
+            ExecuteOperationError::GateRejected { rejection } => match rejection {
+                // Map recognised kernel gate variants to the envelope's more
+                // specific typed variants, so a consumer can branch without
+                // re-parsing the stringified rejection. Falls back to the
+                // generic GateRejected { rejection } string for Custom.
+                GateRejection::RiskAuditFailed {
+                    error_count,
+                    finding_paths,
+                } => Self::RiskAuditFailed {
+                    error_count: *error_count,
+                    finding_paths: finding_paths.clone(),
+                },
+                GateRejection::CitationCheckFailed {
+                    unresolved_source_ids,
+                } => Self::CitationCheckFailed {
+                    unresolved_source_ids: unresolved_source_ids.clone(),
+                },
+                GateRejection::Custom { .. } => Self::GateRejected {
+                    rejection: rejection.to_string(),
+                },
+            },
+        }
+    }
+}
+
+/// Map an [`ExecuteOperationError`] to the envelope [`ExitReason`] (V2.D).
+///
+/// Pre-V2.D the whole flow collapsed to exit code 1 (`ExitError::failed`). The
+/// typed mapping restores the DD10 taxonomy: gate failures (risk-audit /
+/// citation / kernel `GateRejected`) surface as `RejectedByGate` (2); input
+/// shape problems (paths outside root, malformed YAML) surface as
+/// `InvalidDecisionShape` (3); IO/store failures surface as `EnvConfig` (5).
+/// `Conflict` (4) is reserved for WAL/integrity conflicts, which this layer
+/// does not produce.
+fn exit_reason_for(error: &ExecuteOperationError) -> ExitReason {
+    match error {
+        ExecuteOperationError::RiskAuditFailed { .. }
+        | ExecuteOperationError::CitationCheckFailed { .. }
+        | ExecuteOperationError::GateRejected { .. } => ExitReason::RejectedByGate,
+        ExecuteOperationError::ContractPathOutsideRoot { .. }
+        | ExecuteOperationError::PayloadPathOutsideRoot { .. }
+        | ExecuteOperationError::PayloadTooLarge { .. }
+        | ExecuteOperationError::InvalidEffectPath { .. }
+        | ExecuteOperationError::ParseYaml { .. } => ExitReason::InvalidDecisionShape,
+        ExecuteOperationError::ReferenceIndexBuild(_) | ExecuteOperationError::ReadFile { .. } => {
+            ExitReason::EnvConfig
+        }
+    }
+}
 
 /// Drive one operation execution end-to-end.
 ///
@@ -443,26 +569,34 @@ pub fn run_execute_operation(
         .iter()
         .map(|payload| runtime_payload_from_file(&root, payload, input.payload_policy))
         .collect::<Result<Vec<_>, _>>()?;
-    let context = RuntimeOperationExecutionContext {
-        command_context: CommandExecutionContext::single_root(&root),
-        effect_store_root: &effect_store_root,
-        evidence_log_relative_path: ".forge-method/evidence/command-execution.ndjson",
-        wal_relative_path: ".forge-method/wal/effects.ndjson",
-        lock_relative_path: ".forge-method/locks/effects.lock",
-        effect_metadata_index_relative_path: ".forge-method/index/effect-targets.ndjson",
-        recorded_at: &input.recorded_at,
-        tx_id_prefix: &input.tx_id_prefix,
-        durability: input.durability,
-    };
+    // V2.C: the kernel's `RuntimeOperationExecutionContext` is now typestate'd.
+    // The CLI attaches NO real gates here yet — V3.A will add
+    // `.with_gate(Box::new(RiskAuditGate { ... }))`. For now `.audited()`
+    // transitions the context with an empty gate chain, preserving the
+    // historical execute-operation behaviour (the CLI's own risk-audit and
+    // citation gates already ran above, before this point).
+    let mut context = RuntimeOperationExecutionContext::single_root(&root);
+    context.effect_store_root = &effect_store_root;
+    context.evidence_log_relative_path = ".forge-method/evidence/command-execution.ndjson";
+    context.wal_relative_path = ".forge-method/wal/effects.ndjson";
+    context.lock_relative_path = ".forge-method/locks/effects.lock";
+    context.effect_metadata_index_relative_path = ".forge-method/index/effect-targets.ndjson";
+    context.recorded_at = &input.recorded_at;
+    context.tx_id_prefix = &input.tx_id_prefix;
+    context.durability = input.durability;
+    let context = context.audited();
 
-    Ok(execute_operation(
+    let execution = execute_operation(
         &operation,
         RuntimeReadSnapshot::new(&index),
         &commands,
         &effects,
         &payloads,
         &context,
-    ))
+    )
+    .map_err(|rejection| ExecuteOperationError::GateRejected { rejection })?;
+
+    Ok(execution)
 }
 
 /// F14.6: run the Citation Check gate. Returns `Some(CitationCheckFailed)` when
@@ -751,9 +885,26 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
     let execution = match run_execute_operation(input) {
         Ok(execution) => execution,
         Err(error) => {
-            return Err(ExitError::failed(format!(
-                "execute-operation failed: {error}"
-            )));
+            // V2.D: collapse site. The human message stays (stderr-quality),
+            // and a typed failure variant rides in the envelope JSON so a
+            // programmatic consumer (MCP/agent) can branch on WHY the
+            // operation failed instead of re-parsing the message. In `--json`
+            // mode the envelope is printed to stdout and the matching exit
+            // code is returned; in text mode the lossy stderr line is kept for
+            // operator parity with the pre-V2.D behaviour.
+            let message = format!("execute-operation failed: {error}");
+            let typed = TypedFailure::from(&error);
+            if json {
+                // JSON mode: print the typed failure envelope to stdout and
+                // return the matching exit code (the envelope's diagnostic
+                // already went to stdout; main.rs's empty-message guard keeps
+                // stderr clean for the MCP consumer).
+                let exit = exit_reason_for(&error);
+                let env: CliEnvelope<()> =
+                    CliEnvelope::err_typed("execute-operation", exit, message.clone(), typed);
+                return crate::cli_util::emit_envelope_or_err("execute-operation", env, json);
+            }
+            return Err(ExitError::failed(message));
         }
     };
     if json {

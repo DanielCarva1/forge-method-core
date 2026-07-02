@@ -55,6 +55,28 @@ impl ValidationReport {
             .any(|item| item.severity == DiagnosticSeverity::Error)
     }
 
+    /// Count of `Error`-severity diagnostics in this report. Generally useful
+    /// for summary/stat counters; added during V2.B so the graph crate's
+    /// `GraphValidationReport` (which carried its own `error_count`) could
+    /// migrate onto the canonical report without losing the counter.
+    #[must_use]
+    pub fn error_count(&self) -> usize {
+        self.diagnostics
+            .iter()
+            .filter(|item| item.severity == DiagnosticSeverity::Error)
+            .count()
+    }
+
+    /// Count of `Warning`-severity diagnostics in this report. Companion to
+    /// [`error_count`](Self::error_count); added alongside it in V2.B.
+    #[must_use]
+    pub fn warning_count(&self) -> usize {
+        self.diagnostics
+            .iter()
+            .filter(|item| item.severity == DiagnosticSeverity::Warning)
+            .count()
+    }
+
     /// Phase-gate: if this report carries any `Error`-severity diagnostics,
     /// return `Err(self)` so the caller can bail at a phase boundary — after
     /// accumulating *all* diagnostics in the phase. Modeled on rustc's
@@ -134,7 +156,7 @@ pub enum DiagnosticSeverity {
     Warning,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DiagnosticCode {
     YamlReadFailed,
@@ -236,6 +258,114 @@ pub enum DiagnosticCode {
     McpAttestationInvalid,
     // F14 — Knowledge Orchestration (citation check).
     UnresolvedSourceId,
+    // V2.B — Workflow-graph diagnostics (migrated from forge-core-graph's
+    // `GraphDiagnosticCode`). Each variant carries an explicit
+    // `#[serde(rename)]` so the wire-format `code` string is byte-for-byte
+    // identical to what the (now-deleted) `GraphDiagnosticCode` enum
+    // serialized via `#[serde(rename_all = "snake_case")]` — graph/eval/harness
+    // wire formats are regression anchors and MUST stay stable.
+    #[serde(rename = "empty_graph_id")]
+    GraphEmptyGraphId,
+    #[serde(rename = "unsupported_schema_version")]
+    GraphUnsupportedSchemaVersion,
+    #[serde(rename = "invalid_graph_kind")]
+    GraphInvalidGraphKind,
+    #[serde(rename = "empty_graph")]
+    GraphEmptyGraph,
+    #[serde(rename = "empty_node_id")]
+    GraphEmptyNodeId,
+    #[serde(rename = "duplicate_node_id")]
+    GraphDuplicateNodeId,
+    #[serde(rename = "empty_edge_endpoint")]
+    GraphEmptyEdgeEndpoint,
+    #[serde(rename = "missing_edge_endpoint")]
+    GraphMissingEdgeEndpoint,
+    #[serde(rename = "cycle_detected")]
+    GraphCycleDetected,
+    #[serde(rename = "empty_operation_ref")]
+    GraphEmptyOperationRef,
+    #[serde(rename = "missing_operation_contract")]
+    GraphMissingOperationContract,
+    #[serde(rename = "invalid_operation_contract")]
+    GraphInvalidOperationContract,
+    #[serde(rename = "duplicate_operation_evaluation")]
+    GraphDuplicateOperationEvaluation,
+    #[serde(rename = "operation_not_ready")]
+    GraphOperationNotReady,
+    #[serde(rename = "operation_mutation_declaration_mismatch")]
+    GraphOperationMutationDeclarationMismatch,
+    #[serde(rename = "claim_preflight_blocked")]
+    GraphClaimPreflightBlocked,
+    #[serde(rename = "dangling_verifies_ref")]
+    GraphDanglingVerifiesRef,
+    #[serde(rename = "dangling_budget_node_ref")]
+    GraphDanglingBudgetNodeRef,
+    #[serde(rename = "edge_kind_source_kind_mismatch")]
+    GraphEdgeKindSourceKindMismatch,
+    // V2.B — Eval-comparison diagnostics (migrated from forge-core-eval's
+    // `EvalDiagnosticCode`). Explicit `rename` preserves the original wire
+    // strings (e.g. `missing_evidence_file`), which `eval_cli_e2e.rs` asserts on.
+    #[serde(rename = "baseline_label_mismatch")]
+    EvalBaselineLabelMismatch,
+    #[serde(rename = "candidate_label_mismatch")]
+    EvalCandidateLabelMismatch,
+    #[serde(rename = "empty_run_set")]
+    EvalEmptyRunSet,
+    #[serde(rename = "task_count_below_minimum")]
+    EvalTaskCountBelowMinimum,
+    #[serde(rename = "task_set_mismatch")]
+    EvalTaskSetMismatch,
+    #[serde(rename = "missing_evidence_refs")]
+    EvalMissingEvidenceRefs,
+    #[serde(rename = "missing_trace_refs")]
+    EvalMissingTraceRefs,
+    #[serde(rename = "invalid_evidence_ref")]
+    EvalInvalidEvidenceRef,
+    #[serde(rename = "missing_evidence_file")]
+    EvalMissingEvidenceFile,
+    #[serde(rename = "evidence_ref_not_file")]
+    EvalEvidenceRefNotFile,
+    #[serde(rename = "evidence_ref_escapes_project")]
+    EvalEvidenceRefEscapesProject,
+    #[serde(rename = "duplicate_task_run")]
+    EvalDuplicateTaskRun,
+    #[serde(rename = "unsupported_run_schema_version")]
+    EvalUnsupportedRunSchemaVersion,
+    // V2.B — Eval-harness config diagnostics (migrated from
+    // forge-core-eval-harness's `HarnessDiagnosticCode`).
+    #[serde(rename = "unsupported_harness_schema_version")]
+    HarnessUnsupportedSchemaVersion,
+    #[serde(rename = "empty_arms")]
+    HarnessEmptyArms,
+    #[serde(rename = "fewer_than_two_arms")]
+    HarnessFewerThanTwoArms,
+    #[serde(rename = "duplicate_arm_label")]
+    HarnessDuplicateArmLabel,
+    #[serde(rename = "arm_command_empty")]
+    HarnessArmCommandEmpty,
+    #[serde(rename = "arm_timeout_zero")]
+    HarnessArmTimeoutZero,
+    #[serde(rename = "empty_corpus_ref")]
+    HarnessEmptyCorpusRef,
+    #[serde(rename = "empty_run_dir")]
+    HarnessEmptyRunDir,
+    #[serde(rename = "placeholder_missing")]
+    HarnessPlaceholderMissing,
+    // V2.B — Workspace-walk I/O diagnostics (migrated from
+    // forge-core-cli/validate.rs's ad-hoc `String` code literals). These cover
+    // filesystem/reference-index failures surfaced while walking a Forge
+    // workspace; previously these were untyped strings. The `rename` matches
+    // the exact literals validate.rs emitted before (e.g. `read_file_failed`).
+    #[serde(rename = "read_file_failed")]
+    ReadFileFailed,
+    #[serde(rename = "parse_yaml_failed")]
+    ParseYamlFailed,
+    #[serde(rename = "read_dir_failed")]
+    ReadDirFailed,
+    #[serde(rename = "read_dir_entry_failed")]
+    ReadDirEntryFailed,
+    #[serde(rename = "reference_index_build_failed")]
+    ReferenceIndexBuildFailed,
 }
 
 #[derive(Debug, Clone)]

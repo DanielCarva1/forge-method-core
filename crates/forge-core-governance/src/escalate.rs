@@ -15,10 +15,11 @@
 use std::path::Path;
 
 use forge_core_contracts::{ConflictResolutionState, GovernancePolicy, PrincipalId, StableId};
-use forge_core_store::{append_json_line_with_durability, WalDurability};
+use forge_core_eventlog::{append_event, next_sequence, now_unix, project_locked, EventLogLock};
+use forge_core_store::WalDurability;
 
 use crate::{
-    next_sequence, now_unix, project_locked, EscalateError, GovernanceEvent,
+    ArbitrationProjectionDiagnostic, EscalateError, GovernanceDomain, GovernanceEvent,
     GOVERNANCE_LOCK_RELATIVE_PATH, GOVERNANCE_LOG_RELATIVE_PATH,
 };
 
@@ -91,29 +92,25 @@ pub fn escalate_with_durability(
     }
 
     // 2. Acquire the exclusive lock.
-    let _lock =
-        match forge_core_store::acquire_effect_store_lock(root, GOVERNANCE_LOCK_RELATIVE_PATH) {
-            Ok(lock) => lock,
-            Err(source) => {
-                return EscalateResult {
-                    status: EscalateStatus::StoreError(EscalateError::Lock {
-                        path: root.join(GOVERNANCE_LOCK_RELATIVE_PATH),
-                        source: source.to_string(),
-                    }),
-                    conflict_id,
-                };
-            }
-        };
+    let lock = match EventLogLock::acquire::<ArbitrationProjectionDiagnostic>(
+        root,
+        GOVERNANCE_LOCK_RELATIVE_PATH,
+    ) {
+        Ok(lock) => lock,
+        Err(source) => {
+            return EscalateResult {
+                status: EscalateStatus::StoreError(source),
+                conflict_id,
+            };
+        }
+    };
 
     // 3. Read the projection (under the lock).
-    let projection = match project_locked(root) {
+    let projection = match project_locked::<GovernanceDomain>(root, GOVERNANCE_LOG_RELATIVE_PATH) {
         Ok(projection) => projection,
         Err(source) => {
             return EscalateResult {
-                status: EscalateStatus::StoreError(EscalateError::Read {
-                    path: root.join(GOVERNANCE_LOG_RELATIVE_PATH),
-                    source: source.to_string(),
-                }),
+                status: EscalateStatus::StoreError(source),
                 conflict_id,
             };
         }
@@ -131,27 +128,24 @@ pub fn escalate_with_durability(
         };
     }
 
-    let sequence = next_sequence(&projection);
+    let sequence = next_sequence::<GovernanceDomain>(&projection);
 
-    // 4. Append the Escalated event.
+    // 4. Append the Escalated event. The serialize→Value→append shim lives in
+    //    forge_core_eventlog::append_event; the store's internal per-path lock
+    //    handles torn-write safety.
     let event = GovernanceEvent::Escalated {
         sequence,
         at_unix: now_unix(),
         conflict_id: conflict_id.clone(),
     };
-    let serialized = match serde_json::to_vec(&event) {
-        Ok(serialized) => serialized,
-        Err(source) => {
-            return EscalateResult {
-                status: EscalateStatus::StoreError(EscalateError::Serialize {
-                    source: source.to_string(),
-                }),
-                conflict_id,
-            };
-        }
-    };
-    match append_bytes(root, &serialized, durability) {
-        Ok(()) => EscalateResult {
+    match append_event::<GovernanceDomain>(
+        root,
+        GOVERNANCE_LOG_RELATIVE_PATH,
+        &event,
+        durability,
+        &lock,
+    ) {
+        Ok(_) => EscalateResult {
             status: EscalateStatus::Escalated { sequence },
             conflict_id,
         },
@@ -160,23 +154,6 @@ pub fn escalate_with_durability(
             conflict_id,
         },
     }
-}
-
-fn append_bytes(
-    root: &Path,
-    serialized: &[u8],
-    durability: WalDurability,
-) -> Result<(), EscalateError> {
-    let value: serde_json::Value =
-        serde_json::from_slice(serialized).map_err(|source| EscalateError::Serialize {
-            source: source.to_string(),
-        })?;
-    append_json_line_with_durability(root, GOVERNANCE_LOG_RELATIVE_PATH, &value, durability)
-        .map_err(|source| EscalateError::Append {
-            path: root.join(GOVERNANCE_LOG_RELATIVE_PATH),
-            source: source.to_string(),
-        })?;
-    Ok(())
 }
 
 #[cfg(test)]

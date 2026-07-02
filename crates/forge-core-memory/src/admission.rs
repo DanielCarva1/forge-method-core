@@ -12,10 +12,11 @@
 use std::path::Path;
 
 use forge_core_contracts::{MemoryContract, MemoryEntry, MemoryPolicy};
-use forge_core_store::{append_json_line_with_durability, WalDurability};
+use forge_core_eventlog::{append_event, next_sequence, now_unix, project_locked, EventLogLock};
+use forge_core_store::WalDurability;
 
 use crate::{
-    next_sequence, now_unix, project_locked, AdmissionDenialReason, AdmitError, MemoryEvent,
+    AdmissionDenialReason, AdmitError, MemoryDomain, MemoryEvent, MemoryProjectionDiagnostic,
     MEMORY_LOCK_RELATIVE_PATH, MEMORY_LOG_RELATIVE_PATH,
 };
 
@@ -82,15 +83,15 @@ pub fn admit_with_durability(
     }
 
     // 2. Acquire the exclusive lock for the whole read-sequence-then-write
-    //    critical section. Held until this function returns (RAII _lock).
-    let _lock = match forge_core_store::acquire_effect_store_lock(root, MEMORY_LOCK_RELATIVE_PATH) {
+    //    critical section. Held until this function returns (RAII lock).
+    let lock = match EventLogLock::acquire::<MemoryProjectionDiagnostic>(
+        root,
+        MEMORY_LOCK_RELATIVE_PATH,
+    ) {
         Ok(lock) => lock,
         Err(source) => {
             return AdmissionResult {
-                status: AdmissionStatus::StoreError(AdmitError::Lock {
-                    path: root.join(MEMORY_LOCK_RELATIVE_PATH),
-                    source: source.to_string(),
-                }),
+                status: AdmissionStatus::StoreError(source),
                 entry_id,
             };
         }
@@ -99,44 +100,28 @@ pub fn admit_with_durability(
     // 3. Read the current projection (under the lock) to compute the next
     //    sequence number. Two concurrent admitters cannot both see seq=N
     //    because the lock serializes them.
-    let projection = match project_locked(root) {
+    let projection = match project_locked::<MemoryDomain>(root, MEMORY_LOG_RELATIVE_PATH) {
         Ok(projection) => projection,
         Err(source) => {
             return AdmissionResult {
-                status: AdmissionStatus::StoreError(AdmitError::Read {
-                    path: root.join(MEMORY_LOG_RELATIVE_PATH),
-                    source: source.to_string(),
-                }),
+                status: AdmissionStatus::StoreError(source),
                 entry_id,
             };
         }
     };
-    let sequence = next_sequence(&projection);
+    let sequence = next_sequence::<MemoryDomain>(&projection);
 
-    // 4. Append the event. append_json_line_with_durability takes its own
-    //    per-path lock internally; our MEMORY_LOCK_RELATIVE_PATH serializes the
-    //    read-sequence-then-write window so the two locks compose correctly.
+    // 4. Append the event. The serialize→Value→append shim lives in
+    //    forge_core_eventlog::append_event; the store's internal per-path lock
+    //    handles torn-write safety, and our MEMORY_LOCK_RELATIVE_PATH serializes
+    //    the read-sequence-then-write window so the two compose.
     let event = MemoryEvent::Admitted {
         sequence,
         at_unix: now_unix(),
         entry,
     };
-    let serialized = match serde_json::to_vec(&event) {
-        Ok(serialized) => serialized,
-        Err(source) => {
-            return AdmissionResult {
-                status: AdmissionStatus::StoreError(AdmitError::Serialize {
-                    source: source.to_string(),
-                }),
-                entry_id,
-            };
-        }
-    };
-    // Re-wrap as a JSON value to satisfy append_json_line's T: Serialize bound
-    // without re-serializing — we already have bytes. serde_json::Value::from
-    // would re-parse; instead we use the raw-vec path via a tiny shim.
-    match append_bytes(root, &serialized, durability) {
-        Ok(()) => AdmissionResult {
+    match append_event::<MemoryDomain>(root, MEMORY_LOG_RELATIVE_PATH, &event, durability, &lock) {
+        Ok(_) => AdmissionResult {
             status: AdmissionStatus::Admitted { sequence },
             entry_id,
         },
@@ -145,33 +130,6 @@ pub fn admit_with_durability(
             entry_id,
         },
     }
-}
-
-/// Append an already-serialized JSON line to the memory log under durability.
-/// Keeps the serialize step outside the lock-critical path while still routing
-/// through `append_json_line_with_durability`'s per-path lock for torn-write safety.
-///
-/// We deserialize back into a `serde_json::Value` and re-serialize through the
-/// store helper so the store owns all the framing/path/lock conventions and we
-/// do not reimplement them. The cost is one extra serialize pass; for a memory
-/// event log (low volume, human-scale) this is the right trade — correctness
-/// and convention-adherence over micro-optimization.
-fn append_bytes(
-    root: &Path,
-    serialized: &[u8],
-    durability: WalDurability,
-) -> Result<(), AdmitError> {
-    let value: serde_json::Value =
-        serde_json::from_slice(serialized).map_err(|source| AdmitError::Serialize {
-            source: source.to_string(),
-        })?;
-    append_json_line_with_durability(root, MEMORY_LOG_RELATIVE_PATH, &value, durability).map_err(
-        |source| AdmitError::Append {
-            path: root.join(MEMORY_LOG_RELATIVE_PATH),
-            source: source.to_string(),
-        },
-    )?;
-    Ok(())
 }
 
 #[cfg(test)]

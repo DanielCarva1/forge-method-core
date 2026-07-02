@@ -117,6 +117,18 @@ pub enum CoordinationValidationError {
 /// through every guard and return a false `Passed` on an empty or broken
 /// contract. `score_coordination` therefore calls this function at its top
 /// (review S4.7 fix M1) and short-circuits to `Failed` on any error.
+///
+/// # AGENTS.md alignment
+///
+/// This function already **accumulates** (it collects every problem into the
+/// returned `Vec` rather than bailing on the first), satisfying the repo's
+/// "validation accumulates diagnostics" rule. It is intentionally NOT migrated
+/// onto the canonical `forge_core_validate::ValidationReport`: it lives in a
+/// different layer (`forge-core-decisions`), returns its own
+/// [`CoordinationValidationError`] vocabulary that maps 1:1 onto scorer guard
+/// failures, and serves as a structural gate for [`score_coordination`].
+/// Flattening it into generic `Diagnostic`s would lose that mapping for no
+/// benefit. Left on its own domain error type on purpose.
 #[must_use]
 pub fn validate_coordination_contract(
     contract: &CoordinationEvalContract,

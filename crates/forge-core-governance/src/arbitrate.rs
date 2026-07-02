@@ -19,10 +19,11 @@ use std::path::Path;
 use forge_core_contracts::{
     ConflictResolutionState, GovernancePolicy, PrincipalId, ResolutionDecision, StableId,
 };
-use forge_core_store::{append_json_line_with_durability, WalDurability};
+use forge_core_eventlog::{append_event, next_sequence, now_unix, project_locked, EventLogLock};
+use forge_core_store::WalDurability;
 
 use crate::{
-    next_sequence, now_unix, project_locked, ArbitrateError, GovernanceEvent,
+    ArbitrateError, ArbitrationProjectionDiagnostic, GovernanceDomain, GovernanceEvent,
     GOVERNANCE_LOCK_RELATIVE_PATH, GOVERNANCE_LOG_RELATIVE_PATH,
 };
 
@@ -101,29 +102,25 @@ pub fn arbitrate_with_durability(
     }
 
     // 2. Acquire the exclusive lock for the whole read-then-write section.
-    let _lock =
-        match forge_core_store::acquire_effect_store_lock(root, GOVERNANCE_LOCK_RELATIVE_PATH) {
-            Ok(lock) => lock,
-            Err(source) => {
-                return ArbitrateResult {
-                    status: ArbitrateStatus::StoreError(ArbitrateError::Lock {
-                        path: root.join(GOVERNANCE_LOCK_RELATIVE_PATH),
-                        source: source.to_string(),
-                    }),
-                    conflict_id,
-                };
-            }
-        };
+    let lock = match EventLogLock::acquire::<ArbitrationProjectionDiagnostic>(
+        root,
+        GOVERNANCE_LOCK_RELATIVE_PATH,
+    ) {
+        Ok(lock) => lock,
+        Err(source) => {
+            return ArbitrateResult {
+                status: ArbitrateStatus::StoreError(source),
+                conflict_id,
+            };
+        }
+    };
 
     // 3. Read the projection (under the lock) to locate the conflict.
-    let projection = match project_locked(root) {
+    let projection = match project_locked::<GovernanceDomain>(root, GOVERNANCE_LOG_RELATIVE_PATH) {
         Ok(projection) => projection,
         Err(source) => {
             return ArbitrateResult {
-                status: ArbitrateStatus::StoreError(ArbitrateError::Read {
-                    path: root.join(GOVERNANCE_LOG_RELATIVE_PATH),
-                    source: source.to_string(),
-                }),
+                status: ArbitrateStatus::StoreError(source),
                 conflict_id,
             };
         }
@@ -141,9 +138,11 @@ pub fn arbitrate_with_durability(
         };
     }
 
-    let sequence = next_sequence(&projection);
+    let sequence = next_sequence::<GovernanceDomain>(&projection);
 
-    // 4. Append the Resolved event.
+    // 4. Append the Resolved event. The serialize→Value→append shim lives in
+    //    forge_core_eventlog::append_event; the store's internal per-path lock
+    //    handles torn-write safety.
     let event = GovernanceEvent::Resolved {
         sequence,
         at_unix: now_unix(),
@@ -151,19 +150,14 @@ pub fn arbitrate_with_durability(
         arbiter: arbiter.clone(),
         decision,
     };
-    let serialized = match serde_json::to_vec(&event) {
-        Ok(serialized) => serialized,
-        Err(source) => {
-            return ArbitrateResult {
-                status: ArbitrateStatus::StoreError(ArbitrateError::Serialize {
-                    source: source.to_string(),
-                }),
-                conflict_id,
-            };
-        }
-    };
-    match append_bytes(root, &serialized, durability) {
-        Ok(()) => ArbitrateResult {
+    match append_event::<GovernanceDomain>(
+        root,
+        GOVERNANCE_LOG_RELATIVE_PATH,
+        &event,
+        durability,
+        &lock,
+    ) {
+        Ok(_) => ArbitrateResult {
             status: ArbitrateStatus::Resolved { sequence },
             conflict_id,
         },
@@ -172,23 +166,6 @@ pub fn arbitrate_with_durability(
             conflict_id,
         },
     }
-}
-
-fn append_bytes(
-    root: &Path,
-    serialized: &[u8],
-    durability: WalDurability,
-) -> Result<(), ArbitrateError> {
-    let value: serde_json::Value =
-        serde_json::from_slice(serialized).map_err(|source| ArbitrateError::Serialize {
-            source: source.to_string(),
-        })?;
-    append_json_line_with_durability(root, GOVERNANCE_LOG_RELATIVE_PATH, &value, durability)
-        .map_err(|source| ArbitrateError::Append {
-            path: root.join(GOVERNANCE_LOG_RELATIVE_PATH),
-            source: source.to_string(),
-        })?;
-    Ok(())
 }
 
 #[cfg(test)]

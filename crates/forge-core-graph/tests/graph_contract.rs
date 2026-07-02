@@ -116,7 +116,7 @@ authority_boundary:
     assert!(validation
         .diagnostics()
         .iter()
-        .any(|diagnostic| diagnostic.code == GraphDiagnosticCode::EmptyGraph));
+        .any(|diagnostic| diagnostic.code == GraphDiagnosticCode::GraphEmptyGraph));
 }
 
 #[test]
@@ -154,9 +154,9 @@ authority_boundary:
         .collect::<Vec<_>>();
 
     assert!(validation.has_errors());
-    assert!(codes.contains(&GraphDiagnosticCode::DuplicateNodeId));
-    assert!(codes.contains(&GraphDiagnosticCode::MissingEdgeEndpoint));
-    assert!(codes.contains(&GraphDiagnosticCode::EmptyOperationRef));
+    assert!(codes.contains(&GraphDiagnosticCode::GraphDuplicateNodeId));
+    assert!(codes.contains(&GraphDiagnosticCode::GraphMissingEdgeEndpoint));
+    assert!(codes.contains(&GraphDiagnosticCode::GraphEmptyOperationRef));
     assert_eq!(validation.error_count(), 3);
 }
 
@@ -200,11 +200,11 @@ authority_boundary:
 
     assert!(validation.has_errors());
     assert!(
-        codes.contains(&GraphDiagnosticCode::DanglingVerifiesRef),
+        codes.contains(&GraphDiagnosticCode::GraphDanglingVerifiesRef),
         "expected DanglingVerifiesRef in {codes:?}"
     );
     assert!(
-        codes.contains(&GraphDiagnosticCode::DanglingBudgetNodeRef),
+        codes.contains(&GraphDiagnosticCode::GraphDanglingBudgetNodeRef),
         "expected DanglingBudgetNodeRef in {codes:?}"
     );
     // The existing `plan` verifies entry must NOT produce a diagnostic.
@@ -212,8 +212,8 @@ authority_boundary:
         .diagnostics()
         .iter()
         .filter(|diagnostic| {
-            diagnostic.code == GraphDiagnosticCode::DanglingVerifiesRef
-                || diagnostic.code == GraphDiagnosticCode::DanglingBudgetNodeRef
+            diagnostic.code == GraphDiagnosticCode::GraphDanglingVerifiesRef
+                || diagnostic.code == GraphDiagnosticCode::GraphDanglingBudgetNodeRef
         })
         .count();
     assert_eq!(
@@ -259,17 +259,16 @@ authority_boundary:
         validation.diagnostics()
     );
     assert!(validation.diagnostics().iter().any(|diagnostic| {
-        diagnostic.code == GraphDiagnosticCode::EdgeKindSourceKindMismatch
+        diagnostic.code == GraphDiagnosticCode::GraphEdgeKindSourceKindMismatch
             && diagnostic.severity == forge_core_graph::GraphDiagnosticSeverity::Warning
     }));
     assert_eq!(validation.warning_count(), 1);
 
     // The graph must still dry-run: the warning is advisory, not blocking.
     let dry_run = dry_run_graph(&graph);
-    assert!(dry_run
-        .diagnostics
-        .iter()
-        .any(|diagnostic| { diagnostic.code == GraphDiagnosticCode::EdgeKindSourceKindMismatch }));
+    assert!(dry_run.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == GraphDiagnosticCode::GraphEdgeKindSourceKindMismatch
+    }));
     assert_eq!(dry_run.status, GraphDryRunStatus::Planned);
 }
 
@@ -308,7 +307,7 @@ authority_boundary:
     assert!(validation
         .diagnostics()
         .iter()
-        .any(|diagnostic| diagnostic.code == GraphDiagnosticCode::CycleDetected));
+        .any(|diagnostic| diagnostic.code == GraphDiagnosticCode::GraphCycleDetected));
 }
 
 #[test]
@@ -399,7 +398,7 @@ authority_boundary:
     assert!(dry_run
         .diagnostics
         .iter()
-        .any(|diagnostic| diagnostic.code == GraphDiagnosticCode::MissingOperationContract));
+        .any(|diagnostic| diagnostic.code == GraphDiagnosticCode::GraphMissingOperationContract));
     let step = dry_run.steps.first().expect("one step");
     assert_eq!(step.status, GraphDryRunStepStatus::Blocked);
     assert_eq!(
@@ -468,7 +467,7 @@ authority_boundary:
     assert_eq!(dry_run.status, GraphDryRunStatus::Blocked);
     assert_eq!(dry_run.blocked_node_count, 1);
     assert!(dry_run.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == GraphDiagnosticCode::OperationMutationDeclarationMismatch
+        diagnostic.code == GraphDiagnosticCode::GraphOperationMutationDeclarationMismatch
     }));
     let write_step = dry_run
         .steps
@@ -535,7 +534,7 @@ authority_boundary:
     assert!(dry_run
         .diagnostics
         .iter()
-        .any(|diagnostic| diagnostic.code == GraphDiagnosticCode::ClaimPreflightBlocked));
+        .any(|diagnostic| diagnostic.code == GraphDiagnosticCode::GraphClaimPreflightBlocked));
     let write_step = dry_run.steps.first().expect("write step exists");
     assert_eq!(write_step.status, GraphDryRunStepStatus::Blocked);
     assert!(write_step

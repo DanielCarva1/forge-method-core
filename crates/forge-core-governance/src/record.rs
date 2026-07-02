@@ -20,10 +20,11 @@
 use std::path::Path;
 
 use forge_core_contracts::ConflictContract;
-use forge_core_store::{append_json_line_with_durability, WalDurability};
+use forge_core_eventlog::{append_event, next_sequence, now_unix, project_locked, EventLogLock};
+use forge_core_store::WalDurability;
 
 use crate::{
-    next_sequence, now_unix, project_locked, GovernanceEvent, RecordError,
+    ArbitrationProjectionDiagnostic, GovernanceDomain, GovernanceEvent, RecordError,
     GOVERNANCE_LOCK_RELATIVE_PATH, GOVERNANCE_LOG_RELATIVE_PATH,
 };
 
@@ -76,33 +77,29 @@ pub fn record_with_durability(
     let conflict_id = conflict.conflict_id.clone();
 
     // 1. Acquire the exclusive lock for the whole read-then-write critical
-    //    section. Held until this function returns (RAII _lock).
-    let _lock =
-        match forge_core_store::acquire_effect_store_lock(root, GOVERNANCE_LOCK_RELATIVE_PATH) {
-            Ok(lock) => lock,
-            Err(source) => {
-                return RecordResult {
-                    status: RecordStatus::StoreError(RecordError::Lock {
-                        path: root.join(GOVERNANCE_LOCK_RELATIVE_PATH),
-                        source: source.to_string(),
-                    }),
-                    conflict_id,
-                };
-            }
-        };
+    //    section. Held until this function returns (RAII lock).
+    let lock = match EventLogLock::acquire::<ArbitrationProjectionDiagnostic>(
+        root,
+        GOVERNANCE_LOCK_RELATIVE_PATH,
+    ) {
+        Ok(lock) => lock,
+        Err(source) => {
+            return RecordResult {
+                status: RecordStatus::StoreError(source),
+                conflict_id,
+            };
+        }
+    };
 
     // 2. Read the current projection (under the lock) to compute the next
     //    sequence number AND to enforce idempotency on conflict_id. Two
     //    concurrent recorders cannot both miss each other because the lock
     //    serializes them.
-    let projection = match project_locked(root) {
+    let projection = match project_locked::<GovernanceDomain>(root, GOVERNANCE_LOG_RELATIVE_PATH) {
         Ok(projection) => projection,
         Err(source) => {
             return RecordResult {
-                status: RecordStatus::StoreError(RecordError::Read {
-                    path: root.join(GOVERNANCE_LOG_RELATIVE_PATH),
-                    source: source.to_string(),
-                }),
+                status: RecordStatus::StoreError(source),
                 conflict_id,
             };
         }
@@ -116,30 +113,25 @@ pub fn record_with_durability(
         };
     }
 
-    let sequence = next_sequence(&projection);
+    let sequence = next_sequence::<GovernanceDomain>(&projection);
 
-    // 3. Append the Detected event. append_json_line_with_durability takes its
-    //    own per-path lock internally; our GOVERNANCE_LOCK_RELATIVE_PATH
-    //    serializes the read-sequence-then-write window so the two locks
-    //    compose correctly.
+    // 3. Append the Detected event. The serialize→Value→append shim lives in
+    //    forge_core_eventlog::append_event; the store's internal per-path lock
+    //    handles torn-write safety, and our GOVERNANCE_LOCK_RELATIVE_PATH
+    //    serializes the read-sequence-then-write window so the two compose.
     let event = GovernanceEvent::Detected {
         sequence,
         at_unix: now_unix(),
         conflict,
     };
-    let serialized = match serde_json::to_vec(&event) {
-        Ok(serialized) => serialized,
-        Err(source) => {
-            return RecordResult {
-                status: RecordStatus::StoreError(RecordError::Serialize {
-                    source: source.to_string(),
-                }),
-                conflict_id,
-            };
-        }
-    };
-    match append_bytes(root, &serialized, durability) {
-        Ok(()) => RecordResult {
+    match append_event::<GovernanceDomain>(
+        root,
+        GOVERNANCE_LOG_RELATIVE_PATH,
+        &event,
+        durability,
+        &lock,
+    ) {
+        Ok(_) => RecordResult {
             status: RecordStatus::Recorded { sequence },
             conflict_id,
         },
@@ -148,27 +140,6 @@ pub fn record_with_durability(
             conflict_id,
         },
     }
-}
-
-/// Append an already-serialized JSON line to the governance log under durability.
-/// Re-wraps the bytes as a `serde_json::Value` and routes through the store
-/// helper so the store owns all framing/path/lock conventions. See the memory
-/// PEP's `append_bytes` for the same trade (correctness over micro-optimization).
-fn append_bytes(
-    root: &Path,
-    serialized: &[u8],
-    durability: WalDurability,
-) -> Result<(), RecordError> {
-    let value: serde_json::Value =
-        serde_json::from_slice(serialized).map_err(|source| RecordError::Serialize {
-            source: source.to_string(),
-        })?;
-    append_json_line_with_durability(root, GOVERNANCE_LOG_RELATIVE_PATH, &value, durability)
-        .map_err(|source| RecordError::Append {
-            path: root.join(GOVERNANCE_LOG_RELATIVE_PATH),
-            source: source.to_string(),
-        })?;
-    Ok(())
 }
 
 #[cfg(test)]

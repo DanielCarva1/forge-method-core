@@ -116,69 +116,25 @@ pub enum EvalRecommendation {
     Inconclusive,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum EvalDiagnosticSeverity {
-    Error,
-    Warning,
-}
+// ---------------------------------------------------------------------------
+// Diagnostics — migrated to the canonical `forge_core_validate` types (V2.B).
+//
+// `EvalDiagnostic`, `EvalDiagnosticSeverity`, and `EvalDiagnosticCode` were
+// near-identical clones of `Diagnostic` / `DiagnosticSeverity` / `DiagnosticCode`.
+// They are now aliases for the canonical types: the eval-specific code variants
+// live in `forge_core_validate::DiagnosticCode` (prefixed `Eval*`), and each
+// carries an explicit `#[serde(rename)]` so the snake_case wire string (e.g.
+// `missing_evidence_file`) is byte-identical to the deleted enum's output.
+// ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum EvalDiagnosticCode {
-    BaselineLabelMismatch,
-    CandidateLabelMismatch,
-    EmptyRunSet,
-    TaskCountBelowMinimum,
-    TaskSetMismatch,
-    MissingEvidenceRefs,
-    MissingTraceRefs,
-    InvalidEvidenceRef,
-    MissingEvidenceFile,
-    EvidenceRefNotFile,
-    EvidenceRefEscapesProject,
-    DuplicateTaskRun,
-    UnsupportedRunSchemaVersion,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct EvalDiagnostic {
-    pub severity: EvalDiagnosticSeverity,
-    pub code: EvalDiagnosticCode,
-    pub path: String,
-    pub message: String,
-}
-
-impl EvalDiagnostic {
-    #[must_use]
-    pub fn error(
-        code: EvalDiagnosticCode,
-        path: impl Into<String>,
-        message: impl Into<String>,
-    ) -> Self {
-        Self {
-            severity: EvalDiagnosticSeverity::Error,
-            code,
-            path: path.into(),
-            message: message.into(),
-        }
-    }
-
-    #[must_use]
-    pub fn warning(
-        code: EvalDiagnosticCode,
-        path: impl Into<String>,
-        message: impl Into<String>,
-    ) -> Self {
-        Self {
-            severity: EvalDiagnosticSeverity::Warning,
-            code,
-            path: path.into(),
-            message: message.into(),
-        }
-    }
-}
+/// Canonical diagnostic, re-exported so eval callers keep their existing
+/// import path (`EvalDiagnostic`) without touching call sites.
+pub type EvalDiagnostic = forge_core_validate::Diagnostic;
+/// Canonical diagnostic severity.
+pub type EvalDiagnosticSeverity = forge_core_validate::DiagnosticSeverity;
+/// Canonical diagnostic code (the eval-specific variants are `Eval*`-prefixed
+/// members of the canonical enum, renamed to their original wire strings).
+pub type EvalDiagnosticCode = forge_core_validate::DiagnosticCode;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvalRunInput {
@@ -279,7 +235,7 @@ pub fn compare_eval_runs_with_diagnostics(
     let mut diagnostics = Vec::new();
     if suite.baseline.label != requested_baseline {
         diagnostics.push(EvalDiagnostic::error(
-            EvalDiagnosticCode::BaselineLabelMismatch,
+            EvalDiagnosticCode::EvalBaselineLabelMismatch,
             "eval_compare_suite.baseline.label",
             format!(
                 "suite baseline is {}, but command requested {}",
@@ -289,7 +245,7 @@ pub fn compare_eval_runs_with_diagnostics(
     }
     if suite.candidate.label != requested_candidate {
         diagnostics.push(EvalDiagnostic::error(
-            EvalDiagnosticCode::CandidateLabelMismatch,
+            EvalDiagnosticCode::EvalCandidateLabelMismatch,
             "eval_compare_suite.candidate.label",
             format!(
                 "suite candidate is {}, but command requested {}",
@@ -362,7 +318,7 @@ fn validate_run_set(
 ) {
     if runs.is_empty() {
         diagnostics.push(EvalDiagnostic::error(
-            EvalDiagnosticCode::EmptyRunSet,
+            EvalDiagnosticCode::EvalEmptyRunSet,
             format!("eval_compare_suite.{arm_path}.run_refs"),
             format!("{arm_path} has no eval run refs"),
         ));
@@ -370,7 +326,7 @@ fn validate_run_set(
     }
     if runs.len() < policy.minimum_task_count {
         diagnostics.push(EvalDiagnostic::error(
-            EvalDiagnosticCode::TaskCountBelowMinimum,
+            EvalDiagnosticCode::EvalTaskCountBelowMinimum,
             format!("eval_compare_suite.{arm_path}.run_refs"),
             format!(
                 "{arm_path} has {} run(s), below required minimum {}",
@@ -384,7 +340,7 @@ fn validate_run_set(
     for run in runs {
         if run.document.schema_version != EVAL_COMPARE_SCHEMA_VERSION {
             diagnostics.push(EvalDiagnostic::error(
-                EvalDiagnosticCode::UnsupportedRunSchemaVersion,
+                EvalDiagnosticCode::EvalUnsupportedRunSchemaVersion,
                 run.source_ref.0.clone(),
                 format!(
                     "eval run fixture has unsupported schema_version '{}', expected {EVAL_COMPARE_SCHEMA_VERSION}",
@@ -395,21 +351,21 @@ fn validate_run_set(
         let contract = &run.document.eval_run_contract;
         if !seen.insert(contract.task_id.0.clone()) {
             diagnostics.push(EvalDiagnostic::error(
-                EvalDiagnosticCode::DuplicateTaskRun,
+                EvalDiagnosticCode::EvalDuplicateTaskRun,
                 run.source_ref.0.clone(),
                 format!("duplicate eval run for task_id {}", contract.task_id.0),
             ));
         }
         if policy.require_evidence_refs && contract.evidence_refs.is_empty() {
             diagnostics.push(EvalDiagnostic::error(
-                EvalDiagnosticCode::MissingEvidenceRefs,
+                EvalDiagnosticCode::EvalMissingEvidenceRefs,
                 run.source_ref.0.clone(),
                 format!("eval run {} has no evidence_refs", contract.run_id.0),
             ));
         }
         if policy.require_trace_refs && trace_refs(&contract.evidence_refs).is_empty() {
             diagnostics.push(EvalDiagnostic::error(
-                EvalDiagnosticCode::MissingTraceRefs,
+                EvalDiagnosticCode::EvalMissingTraceRefs,
                 run.source_ref.0.clone(),
                 format!(
                     "eval run {} has no trace-like evidence ref",
@@ -435,7 +391,7 @@ fn validate_matching_tasks(
         .collect();
     if baseline_tasks != candidate_tasks {
         diagnostics.push(EvalDiagnostic::error(
-            EvalDiagnosticCode::TaskSetMismatch,
+            EvalDiagnosticCode::EvalTaskSetMismatch,
             "eval_compare_suite.policy.require_matching_tasks",
             format!("baseline tasks {baseline_tasks:?} do not match candidate tasks {candidate_tasks:?}"),
         ));
@@ -879,11 +835,11 @@ mod tests {
         assert!(report
             .diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == EvalDiagnosticCode::TaskSetMismatch));
+            .any(|diagnostic| diagnostic.code == EvalDiagnosticCode::EvalTaskSetMismatch));
         assert!(report
             .diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == EvalDiagnosticCode::MissingTraceRefs));
+            .any(|diagnostic| diagnostic.code == EvalDiagnosticCode::EvalMissingTraceRefs));
     }
 
     #[test]
@@ -928,7 +884,7 @@ mod tests {
         assert_eq!(report.status, EvalCompareStatus::Blocked);
         assert_eq!(report.recommendation, EvalRecommendation::BlockCandidate);
         assert!(report.diagnostics.iter().any(|diagnostic| {
-            diagnostic.code == EvalDiagnosticCode::UnsupportedRunSchemaVersion
+            diagnostic.code == EvalDiagnosticCode::EvalUnsupportedRunSchemaVersion
         }));
     }
 }

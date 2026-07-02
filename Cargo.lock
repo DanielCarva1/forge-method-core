@@ -881,6 +881,7 @@ name = "forge-core-eval"
 version = "0.1.0"
 dependencies = [
  "forge-core-contracts",
+ "forge-core-validate",
  "serde",
  "yaml_serde",
 ]
@@ -891,6 +892,7 @@ version = "0.1.0"
 dependencies = [
  "forge-core-contracts",
  "forge-core-eval",
+ "forge-core-validate",
  "serde",
  "serde_json",
  "yaml_serde",
@@ -910,6 +912,7 @@ name = "forge-core-governance"
 version = "0.1.0"
 dependencies = [
  "forge-core-contracts",
+ "forge-core-eventlog",
  "forge-core-store",
  "proptest",
  "schemars",
@@ -923,6 +926,7 @@ name = "forge-core-graph"
 version = "0.1.0"
 dependencies = [
  "forge-core-contracts",
+ "forge-core-validate",
  "serde",
  "yaml_serde",
 ]
@@ -945,6 +949,7 @@ name = "forge-core-memory"
 version = "0.1.0"
 dependencies = [
  "forge-core-contracts",
+ "forge-core-eventlog",
  "forge-core-store",
  "proptest",
  "schemars",
@@ -977,6 +982,7 @@ name = "forge-core-research"
 version = "0.1.0"
 dependencies = [
  "forge-core-contracts",
+ "forge-core-eventlog",
  "forge-core-store",
  "forge-core-validate",
  "proptest",

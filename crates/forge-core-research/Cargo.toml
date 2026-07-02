@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 forge-core-contracts = { path = "../forge-core-contracts" }
+forge-core-eventlog = { path = "../forge-core-eventlog" }
 forge-core-store = { path = "../forge-core-store" }
 forge-core-validate = { path = "../forge-core-validate" }
 serde.workspace = true

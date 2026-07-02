@@ -19,10 +19,11 @@ use forge_core_contracts::{
     ResearchAdmissionDecision, ResearchAdmissionDenialReason, ResearchContract, ResearchPolicy,
     ResearchSource, SourceId,
 };
-use forge_core_store::{append_json_line_with_durability, WalDurability};
+use forge_core_eventlog::{append_event, next_sequence, now_unix, project_locked, EventLogLock};
+use forge_core_store::WalDurability;
 
 use crate::{
-    next_sequence, now_unix, project_locked, ResearchAdmitError, ResearchEvent,
+    ResearchAdmitError, ResearchDomain, ResearchEvent, ResearchProjectionDiagnostic,
     RESEARCH_LOCK_RELATIVE_PATH, RESEARCH_LOG_RELATIVE_PATH,
 };
 
@@ -102,16 +103,15 @@ pub fn admit_source_with_durability(
     };
 
     // 2. Acquire the exclusive lock for the whole read-sequence-then-write
-    //    critical section. Held until this function returns (RAII _lock).
-    let _lock = match forge_core_store::acquire_effect_store_lock(root, RESEARCH_LOCK_RELATIVE_PATH)
-    {
+    //    critical section. Held until this function returns (RAII lock).
+    let lock = match EventLogLock::acquire::<ResearchProjectionDiagnostic>(
+        root,
+        RESEARCH_LOCK_RELATIVE_PATH,
+    ) {
         Ok(lock) => lock,
         Err(source) => {
             return AdmissionResult {
-                status: AdmissionStatus::StoreError(ResearchAdmitError::Lock {
-                    path: root.join(RESEARCH_LOCK_RELATIVE_PATH),
-                    source: source.to_string(),
-                }),
+                status: AdmissionStatus::StoreError(source),
                 source_id,
             };
         }
@@ -120,41 +120,34 @@ pub fn admit_source_with_durability(
     // 3. Read the current projection (under the lock) to compute the next
     //    sequence number. Two concurrent admitters cannot both see seq=N
     //    because the lock serializes them.
-    let projection = match project_locked(root) {
+    let projection = match project_locked::<ResearchDomain>(root, RESEARCH_LOG_RELATIVE_PATH) {
         Ok(projection) => projection,
         Err(source) => {
             return AdmissionResult {
-                status: AdmissionStatus::StoreError(ResearchAdmitError::Read {
-                    path: root.join(RESEARCH_LOG_RELATIVE_PATH),
-                    source: source.to_string(),
-                }),
+                status: AdmissionStatus::StoreError(source),
                 source_id,
             };
         }
     };
-    let sequence = next_sequence(&projection);
+    let sequence = next_sequence::<ResearchDomain>(&projection);
 
-    // 4. Append the event. Serialize outside the store helper, then route
-    //    through append_json_line_with_durability so the store owns all the
-    //    framing/path/lock conventions and we do not reimplement them.
+    // 4. Append the event. The serialize→Value→append shim lives in
+    //    forge_core_eventlog::append_event; the store's internal per-path lock
+    //    handles torn-write safety, and our RESEARCH_LOCK_RELATIVE_PATH
+    //    serializes the read-sequence-then-write window so the two compose.
     let event = ResearchEvent::SourceAdded {
         sequence,
         at_unix: now_unix(),
         source,
     };
-    let serialized = match serde_json::to_vec(&event) {
-        Ok(serialized) => serialized,
-        Err(source) => {
-            return AdmissionResult {
-                status: AdmissionStatus::StoreError(ResearchAdmitError::Serialize {
-                    source: source.to_string(),
-                }),
-                source_id,
-            };
-        }
-    };
-    match append_bytes(root, &serialized, durability) {
-        Ok(()) => AdmissionResult {
+    match append_event::<ResearchDomain>(
+        root,
+        RESEARCH_LOG_RELATIVE_PATH,
+        &event,
+        durability,
+        &lock,
+    ) {
+        Ok(_) => AdmissionResult {
             status: AdmissionStatus::Admitted { sequence },
             source_id,
         },
@@ -163,28 +156,6 @@ pub fn admit_source_with_durability(
             source_id,
         },
     }
-}
-
-/// Append an already-serialized JSON line to the research log under durability.
-/// Keeps the serialize step outside the lock-critical path while still routing
-/// through `append_json_line_with_durability`'s per-path lock for torn-write
-/// safety. Same trade-off as the memory PEP: correctness and convention-adherence
-/// over micro-optimization (one extra serialize pass for a low-volume log).
-fn append_bytes(
-    root: &Path,
-    serialized: &[u8],
-    durability: WalDurability,
-) -> Result<(), ResearchAdmitError> {
-    let value: serde_json::Value =
-        serde_json::from_slice(serialized).map_err(|source| ResearchAdmitError::Serialize {
-            source: source.to_string(),
-        })?;
-    append_json_line_with_durability(root, RESEARCH_LOG_RELATIVE_PATH, &value, durability)
-        .map_err(|source| ResearchAdmitError::Append {
-            path: root.join(RESEARCH_LOG_RELATIVE_PATH),
-            source: source.to_string(),
-        })?;
-    Ok(())
 }
 
 #[cfg(test)]

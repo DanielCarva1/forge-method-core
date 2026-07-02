@@ -6,6 +6,7 @@
 //! effect against its payload set before the WAL apply.
 
 use super::*;
+use std::marker::PhantomData;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -58,8 +59,32 @@ pub struct RuntimeOperationEffectPayload {
     pub content: Vec<u8>,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct RuntimeOperationExecutionContext<'a> {
+/// Marker: the context has NOT yet been through the gate chain. An
+/// `Unverified` context cannot call [`execute_operation`]; it must be
+/// transitioned to [`Audited`] via [`audited`](RuntimeOperationExecutionContext::audited)
+/// (or [`dangerous_unchecked`](RuntimeOperationExecutionContext::dangerous_unchecked)
+/// under the `dangerous-bypass` feature).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Unverified;
+
+/// Marker: the context HAS been through the configured gate chain (or has been
+/// explicitly marked dangerous-unchecked). Only an `Audited` context can call
+/// [`execute_operation`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Audited;
+
+/// The execution context, parameterized over verification state.
+///
+/// `Unverified` contexts cannot call [`execute_operation`]; only `Audited` can.
+/// Transition with [`audited`](RuntimeOperationExecutionContext::audited) after
+/// attaching gates via [`with_gate`](RuntimeOperationExecutionContext::with_gate).
+///
+/// V2.C note: this struct is no longer `Copy` because it owns a
+/// `Vec<Box<dyn OperationGate>>`. Callers pass it by reference to
+/// [`execute_operation`]. The existing [`single_root`](Self::single_root)
+/// constructor is preserved (returns an `Unverified` context) so historical
+/// call sites keep compiling after adding the typestate transition.
+pub struct RuntimeOperationExecutionContext<'a, S = Unverified> {
     pub command_context: CommandExecutionContext<'a>,
     pub effect_store_root: &'a Path,
     pub evidence_log_relative_path: &'a str,
@@ -72,11 +97,17 @@ pub struct RuntimeOperationExecutionContext<'a> {
     /// `SyncOnAppend` preserves the historical contract; CLI commands
     /// may pass `NoSync` when the user opts in via `--no-sync`.
     pub durability: WalDurability,
+    /// The gate chain consulted by [`execute_operation`] before any WAL append.
+    /// Empty by default (V2.C ships the seam; V3.A fills it with real gates).
+    gates: Vec<Box<dyn OperationGate>>,
+    _state: PhantomData<S>,
 }
 
-impl<'a> RuntimeOperationExecutionContext<'a> {
-    #[must_use]
-    pub fn single_root(root: &'a Path) -> Self {
+impl<'a, S> RuntimeOperationExecutionContext<'a, S> {
+    /// Shared field-wise constructor used by both the typestate constructors
+    /// below. Not public: callers go through [`single_root`](Self::single_root)
+    /// (Unverified) or the builder.
+    fn from_parts(root: &'a Path) -> Self {
         Self {
             command_context: CommandExecutionContext::single_root(root),
             effect_store_root: root,
@@ -87,7 +118,80 @@ impl<'a> RuntimeOperationExecutionContext<'a> {
             recorded_at: "unknown",
             tx_id_prefix: "runtime-operation",
             durability: WalDurability::default(),
+            gates: Vec::new(),
+            _state: PhantomData,
         }
+    }
+}
+
+impl<'a> RuntimeOperationExecutionContext<'a, Unverified> {
+    /// Historical constructor. Returns an `Unverified` context: callers must
+    /// transition it via [`audited`](Self::audited) (or
+    /// [`dangerous_unchecked`](Self::dangerous_unchecked)) before calling
+    /// [`execute_operation`].
+    #[must_use]
+    pub fn single_root(root: &'a Path) -> Self {
+        Self::from_parts(root)
+    }
+
+    /// Attach a gate to the chain. Gates are consulted in attachment order
+    /// during [`execute_operation`]'s preamble; the first to reject wins
+    /// (fail-closed). Returns `Self` so gates chain fluently.
+    #[must_use]
+    pub fn with_gate(mut self, gate: Box<dyn OperationGate>) -> Self {
+        self.gates.push(gate);
+        self
+    }
+
+    /// Mark the context as having passed the gate chain. After this, no more
+    /// gates can be added, and [`execute_operation`] becomes callable.
+    ///
+    /// This transition is unconditional with respect to gate evaluation: the
+    /// gate chain is *consulted* (not run) at [`execute_operation`] time, once
+    /// the plan is available. `audited()` only encodes that the caller has
+    /// finished *configuring* the chain.
+    #[must_use]
+    pub fn audited(self) -> RuntimeOperationExecutionContext<'a, Audited> {
+        RuntimeOperationExecutionContext {
+            command_context: self.command_context,
+            effect_store_root: self.effect_store_root,
+            evidence_log_relative_path: self.evidence_log_relative_path,
+            wal_relative_path: self.wal_relative_path,
+            lock_relative_path: self.lock_relative_path,
+            effect_metadata_index_relative_path: self.effect_metadata_index_relative_path,
+            recorded_at: self.recorded_at,
+            tx_id_prefix: self.tx_id_prefix,
+            durability: self.durability,
+            gates: self.gates,
+            _state: PhantomData,
+        }
+    }
+
+    /// EXPLICIT bypass — the rustls `dangerous()` pattern. Only available under
+    /// the `dangerous-bypass` feature flag, so a bypass is visible in the diff
+    /// AND the feature config, never silent. For tests/legacy callers that
+    /// genuinely don't need gates. V2.C ships the seam; real callers should
+    /// prefer [`audited`](Self::audited).
+    #[cfg(feature = "dangerous-bypass")]
+    #[must_use]
+    pub fn dangerous_unchecked(self) -> RuntimeOperationExecutionContext<'a, Audited> {
+        tracing::warn!(
+            tx_id_prefix = %self.tx_id_prefix,
+            "RuntimeOperationExecutionContext marked dangerous_unchecked: \
+             mutation gates bypassed (dangerous-bypass feature). \
+             This must never ship in a production binary."
+        );
+        self.audited()
+    }
+}
+
+impl RuntimeOperationExecutionContext<'_, Audited> {
+    /// Read-only access to the configured gate chain, in attachment order.
+    /// Used by [`execute_operation`]'s preamble. Exposed so auditors/tests can
+    /// assert on the chain without re-running it.
+    #[must_use]
+    pub fn gates(&self) -> &[Box<dyn OperationGate>] {
+        &self.gates
     }
 }
 
@@ -155,6 +259,16 @@ pub enum RuntimeEffectTransactionReason {
     TransactionReady,
 }
 
+/// Run the configured gate chain against the operation plan, then execute the
+/// mutation (staging, command evidence, effect application, WAL append). Each
+/// attached gate is consulted in attachment order before any state is touched.
+///
+/// # Errors
+///
+/// Returns `Err(GateRejection)` when the first gate in the chain rejects the
+/// planned mutation. Gates are fail-closed: a rejection blocks the WAL append
+/// entirely, so the mutation does not take effect. No gate runs after a
+/// rejection (first rejection wins).
 #[instrument(skip_all, fields(operation_id = tracing::field::Empty, effect_count = effects.len(), command_count = commands.len()), level = "info")]
 pub fn execute_operation(
     document: &OperationContractDocument,
@@ -162,11 +276,62 @@ pub fn execute_operation(
     commands: &[RuntimeOperationCommandInput],
     effects: &[RuntimeOperationEffectInput],
     payloads: &[RuntimeOperationEffectPayload],
-    context: &RuntimeOperationExecutionContext<'_>,
-) -> RuntimeOperationExecution {
+    context: &RuntimeOperationExecutionContext<'_, Audited>,
+) -> Result<RuntimeOperationExecution, GateRejection> {
     let plan = plan_operation_with_snapshot(document, snapshot);
     let operation_id = plan.contract_id.clone();
     tracing::Span::current().record("operation_id", operation_id.0.as_str());
+
+    // V2.C gate preamble — the hook V3.A fills with real gates. Each attached
+    // gate is consulted, in attachment order, against the plan of what WILL
+    // happen. The first rejection wins (fail-closed): the mutation is blocked
+    // and the typed reason is returned early, before any staging, command
+    // evidence, or WAL append. This runs BEFORE the kernel's own
+    // OperationContract authorization and does not replace it.
+    for gate in context.gates() {
+        gate.evaluate(&plan)?;
+    }
+
+    Ok(execute_operation_inner(
+        document,
+        snapshot,
+        commands,
+        effects,
+        payloads,
+        context,
+        plan,
+        operation_id,
+    ))
+}
+
+/// Unchanged body of [`execute_operation`], factored out so the public
+/// entrypoint can prepend the V2.C gate preamble without touching the
+/// plan/staging/command/WAL logic. Takes the already-computed `plan` and
+/// `operation_id` so nothing is recomputed. The `context` keeps the typestate
+/// `Audited` marker because this is only reachable from an audited context.
+// This helper is the central mutate path and genuinely takes 8 arguments: the
+// operation document, read snapshot, command inputs, effect inputs, effect
+// payloads, audited execution context, the precomputed plan, and the operation
+// id. Splitting or bundling them would hurt readability of the step-by-step
+// mutation walk; the signature mirrors `execute_operation`'s public shape plus
+// the two precomputed values. Follows the same rationale as the crate-level
+// `#![allow(clippy::too_many_lines)]`.
+#[allow(clippy::too_many_arguments)]
+fn execute_operation_inner(
+    document: &OperationContractDocument,
+    snapshot: RuntimeReadSnapshot<'_>,
+    commands: &[RuntimeOperationCommandInput],
+    effects: &[RuntimeOperationEffectInput],
+    payloads: &[RuntimeOperationEffectPayload],
+    context: &RuntimeOperationExecutionContext<'_, Audited>,
+    plan: RuntimePlan,
+    operation_id: StableId,
+) -> RuntimeOperationExecution {
+    // `document`/`snapshot` were consumed only to build `plan` in the public
+    // entrypoint; the body below never reads them again. Keep them as params so
+    // this helper's signature mirrors the historical shape and the move stays
+    // mechanical.
+    let _ = (document, snapshot);
     let mut reasons = Vec::new();
 
     if plan.status != RuntimePlanStatus::ReadyToCallOperation {

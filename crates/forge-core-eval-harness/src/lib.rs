@@ -77,65 +77,28 @@ pub struct EvalHarnessPolicy {
     pub require_matching_tasks: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum HarnessDiagnosticSeverity {
-    Error,
-    Warning,
-}
+// ---------------------------------------------------------------------------
+// Diagnostics — migrated to the canonical `forge_core_validate` types (V2.B).
+//
+// `HarnessDiagnostic`, `HarnessDiagnosticSeverity`, and `HarnessDiagnosticCode`
+// were near-identical clones of `Diagnostic` / `DiagnosticSeverity` /
+// `DiagnosticCode`. They are now aliases for the canonical types: the
+// harness-specific code variants live in `forge_core_validate::DiagnosticCode`
+// (prefixed `Harness*`), each with an explicit `#[serde(rename)]` preserving
+// the original snake_case wire string. The canonical enum also gained
+// `PartialOrd, Ord` so this crate's deterministic `sort_by_key` on
+// `(code, path)` keeps working unchanged.
+// ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum HarnessDiagnosticCode {
-    UnsupportedHarnessSchemaVersion,
-    EmptyArms,
-    FewerThanTwoArms,
-    DuplicateArmLabel,
-    ArmCommandEmpty,
-    ArmTimeoutZero,
-    EmptyCorpusRef,
-    EmptyRunDir,
-    PlaceholderMissing,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct HarnessDiagnostic {
-    pub severity: HarnessDiagnosticSeverity,
-    pub code: HarnessDiagnosticCode,
-    pub path: String,
-    pub message: String,
-}
-
-impl HarnessDiagnostic {
-    #[must_use]
-    pub fn error(
-        code: HarnessDiagnosticCode,
-        path: impl Into<String>,
-        message: impl Into<String>,
-    ) -> Self {
-        Self {
-            severity: HarnessDiagnosticSeverity::Error,
-            code,
-            path: path.into(),
-            message: message.into(),
-        }
-    }
-
-    #[must_use]
-    pub fn warning(
-        code: HarnessDiagnosticCode,
-        path: impl Into<String>,
-        message: impl Into<String>,
-    ) -> Self {
-        Self {
-            severity: HarnessDiagnosticSeverity::Warning,
-            code,
-            path: path.into(),
-            message: message.into(),
-        }
-    }
-}
+/// Canonical diagnostic, re-exported so harness callers keep their existing
+/// import path (`HarnessDiagnostic`) without touching call sites.
+pub type HarnessDiagnostic = forge_core_validate::Diagnostic;
+/// Canonical diagnostic severity.
+pub type HarnessDiagnosticSeverity = forge_core_validate::DiagnosticSeverity;
+/// Canonical diagnostic code (the harness-specific variants are `Harness*`-
+/// prefixed members of the canonical enum, renamed to their original wire
+/// strings).
+pub type HarnessDiagnosticCode = forge_core_validate::DiagnosticCode;
 
 /// Error returned when a config document cannot be parsed at all (malformed
 /// YAML or structural mismatch). Semantic diagnostics come from
@@ -193,13 +156,13 @@ pub fn validate_harness_config(config: &EvalHarnessConfig) -> Vec<HarnessDiagnos
 
     if config.arms.is_empty() {
         diagnostics.push(HarnessDiagnostic::error(
-            HarnessDiagnosticCode::EmptyArms,
+            HarnessDiagnosticCode::HarnessEmptyArms,
             "eval_harness_config.arms",
             "at least two arms are required for a comparison",
         ));
     } else if config.arms.len() < 2 {
         diagnostics.push(HarnessDiagnostic::error(
-            HarnessDiagnosticCode::FewerThanTwoArms,
+            HarnessDiagnosticCode::HarnessFewerThanTwoArms,
             "eval_harness_config.arms",
             "a comparison needs a baseline and a candidate arm",
         ));
@@ -210,7 +173,7 @@ pub fn validate_harness_config(config: &EvalHarnessConfig) -> Vec<HarnessDiagnos
         let path = format!("eval_harness_config.arms[{index}]");
         if !seen_labels.insert(arm.label) {
             diagnostics.push(HarnessDiagnostic::error(
-                HarnessDiagnosticCode::DuplicateArmLabel,
+                HarnessDiagnosticCode::HarnessDuplicateArmLabel,
                 path.clone(),
                 format!("arm label '{}' is not unique", arm.label),
             ));
@@ -222,14 +185,14 @@ pub fn validate_harness_config(config: &EvalHarnessConfig) -> Vec<HarnessDiagnos
                 .is_some_and(|token| token.trim().is_empty())
         {
             diagnostics.push(HarnessDiagnostic::error(
-                HarnessDiagnosticCode::ArmCommandEmpty,
+                HarnessDiagnosticCode::HarnessArmCommandEmpty,
                 format!("{path}.command"),
                 "arm command must start with a non-empty program token",
             ));
         }
         if arm.timeout_ms == Some(0) {
             diagnostics.push(HarnessDiagnostic::error(
-                HarnessDiagnosticCode::ArmTimeoutZero,
+                HarnessDiagnosticCode::HarnessArmTimeoutZero,
                 format!("{path}.timeout_ms"),
                 "timeout_ms must be positive when set, or omitted for unbounded",
             ));
@@ -241,7 +204,7 @@ pub fn validate_harness_config(config: &EvalHarnessConfig) -> Vec<HarnessDiagnos
         });
         if !uses_placeholder {
             diagnostics.push(HarnessDiagnostic::warning(
-                HarnessDiagnosticCode::PlaceholderMissing,
+                HarnessDiagnosticCode::HarnessPlaceholderMissing,
                 format!("{path}.command"),
                 "command contains no {task_file}/{task_id}/{output_file} placeholder; \
                  the arm will receive no task input and write no raw output",
@@ -251,14 +214,14 @@ pub fn validate_harness_config(config: &EvalHarnessConfig) -> Vec<HarnessDiagnos
 
     if config.corpus_ref.0.is_empty() {
         diagnostics.push(HarnessDiagnostic::error(
-            HarnessDiagnosticCode::EmptyCorpusRef,
+            HarnessDiagnosticCode::HarnessEmptyCorpusRef,
             "eval_harness_config.corpus_ref",
             "corpus_ref must point at a task corpus",
         ));
     }
     if config.run_dir.0.is_empty() {
         diagnostics.push(HarnessDiagnostic::error(
-            HarnessDiagnosticCode::EmptyRunDir,
+            HarnessDiagnosticCode::HarnessEmptyRunDir,
             "eval_harness_config.run_dir",
             "run_dir must be set",
         ));
@@ -277,7 +240,7 @@ pub fn validate_harness_config_document(
     let mut diagnostics = Vec::new();
     if document.schema_version != EVAL_HARNESS_SCHEMA_VERSION {
         diagnostics.push(HarnessDiagnostic::error(
-            HarnessDiagnosticCode::UnsupportedHarnessSchemaVersion,
+            HarnessDiagnosticCode::HarnessUnsupportedSchemaVersion,
             "schema_version",
             format!(
                 "expected '{}', got '{}'",
@@ -745,7 +708,7 @@ eval_harness_config:
         document.schema_version = "eval-harness-v999".to_string();
         let diagnostics = validate_harness_config_document(&document);
         let has = diagnostics.iter().any(|diagnostic| {
-            diagnostic.code == HarnessDiagnosticCode::UnsupportedHarnessSchemaVersion
+            diagnostic.code == HarnessDiagnosticCode::HarnessUnsupportedSchemaVersion
         });
         assert!(
             has,
@@ -760,7 +723,7 @@ eval_harness_config:
         let diagnostics = validate_harness_config_document(&document);
         let has = diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == HarnessDiagnosticCode::FewerThanTwoArms);
+            .any(|diagnostic| diagnostic.code == HarnessDiagnosticCode::HarnessFewerThanTwoArms);
         assert!(has, "expected FewerThanTwoArms, got {diagnostics:?}");
     }
 
@@ -771,7 +734,7 @@ eval_harness_config:
         let diagnostics = validate_harness_config_document(&document);
         let has = diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == HarnessDiagnosticCode::DuplicateArmLabel);
+            .any(|diagnostic| diagnostic.code == HarnessDiagnosticCode::HarnessDuplicateArmLabel);
         assert!(has, "expected DuplicateArmLabel, got {diagnostics:?}");
     }
 
@@ -782,7 +745,7 @@ eval_harness_config:
         let diagnostics = validate_harness_config_document(&document);
         let has = diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == HarnessDiagnosticCode::PlaceholderMissing);
+            .any(|diagnostic| diagnostic.code == HarnessDiagnosticCode::HarnessPlaceholderMissing);
         assert!(
             has,
             "expected PlaceholderMissing warning, got {diagnostics:?}"
@@ -796,7 +759,7 @@ eval_harness_config:
         let diagnostics = validate_harness_config_document(&document);
         let has = diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == HarnessDiagnosticCode::ArmTimeoutZero);
+            .any(|diagnostic| diagnostic.code == HarnessDiagnosticCode::HarnessArmTimeoutZero);
         assert!(has, "expected ArmTimeoutZero, got {diagnostics:?}");
     }
 
@@ -807,7 +770,7 @@ eval_harness_config:
         let diagnostics = validate_harness_config_document(&document);
         let has = diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == HarnessDiagnosticCode::ArmCommandEmpty);
+            .any(|diagnostic| diagnostic.code == HarnessDiagnosticCode::HarnessArmCommandEmpty);
         assert!(has, "expected ArmCommandEmpty, got {diagnostics:?}");
     }
 
@@ -835,7 +798,7 @@ eval_harness_config:
         let diagnostics = validate_harness_config_document(&document);
         let has = diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == HarnessDiagnosticCode::DuplicateArmLabel);
+            .any(|diagnostic| diagnostic.code == HarnessDiagnosticCode::HarnessDuplicateArmLabel);
         assert!(
             has,
             "on-disk invalid fixture must flag DuplicateArmLabel, got {diagnostics:?}"

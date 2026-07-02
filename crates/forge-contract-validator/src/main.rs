@@ -16,7 +16,7 @@ fn main() {
     } else {
         for diagnostic in summary.diagnostics {
             eprintln!(
-                "{} {} {}: {}",
+                "{:?} {:?} {}: {}",
                 diagnostic.severity, diagnostic.code, diagnostic.path, diagnostic.message
             );
         }

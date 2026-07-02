@@ -19,10 +19,11 @@ use std::path::Path;
 use forge_core_contracts::{
     MemoryContract, MemoryContractDocument, MemoryEntry, MemoryScope, MemoryScopeKind, StableId,
 };
-use forge_core_store::{append_json_line_with_durability, WalDurability};
+use forge_core_eventlog::{append_event, next_sequence, now_unix, project_locked, EventLogLock};
+use forge_core_store::WalDurability;
 
 use crate::{
-    next_sequence, now_unix, project_locked, ForgetError, MemoryEvent, MemoryProjection,
+    ForgetError, MemoryDomain, MemoryEvent, MemoryProjection, MemoryProjectionDiagnostic,
     MEMORY_LOCK_RELATIVE_PATH, MEMORY_LOG_RELATIVE_PATH,
 };
 
@@ -89,27 +90,24 @@ pub fn forget_with_durability(
 ) -> ForgetResult {
     let root = root.as_ref();
 
-    let _lock = match forge_core_store::acquire_effect_store_lock(root, MEMORY_LOCK_RELATIVE_PATH) {
+    let lock = match EventLogLock::acquire::<MemoryProjectionDiagnostic>(
+        root,
+        MEMORY_LOCK_RELATIVE_PATH,
+    ) {
         Ok(lock) => lock,
         Err(source) => {
             return ForgetResult {
-                status: ForgetStatus::StoreError(ForgetError::Lock {
-                    path: root.join(MEMORY_LOCK_RELATIVE_PATH),
-                    source: source.to_string(),
-                }),
+                status: ForgetStatus::StoreError(source),
                 entry_id,
             };
         }
     };
 
-    let projection = match project_locked(root) {
+    let projection = match project_locked::<MemoryDomain>(root, MEMORY_LOG_RELATIVE_PATH) {
         Ok(projection) => projection,
         Err(source) => {
             return ForgetResult {
-                status: ForgetStatus::StoreError(ForgetError::Read {
-                    path: root.join(MEMORY_LOG_RELATIVE_PATH),
-                    source: source.to_string(),
-                }),
+                status: ForgetStatus::StoreError(source),
                 entry_id,
             };
         }
@@ -129,7 +127,7 @@ pub fn forget_with_durability(
         };
     };
 
-    let sequence = next_sequence(&projection);
+    let sequence = next_sequence::<MemoryDomain>(&projection);
     let content_hash = MemoryEvent::content_hash_of(&before);
     let event = MemoryEvent::Forgotten {
         sequence,
@@ -137,19 +135,8 @@ pub fn forget_with_durability(
         before,
         content_hash,
     };
-    let serialized = match serde_json::to_vec(&event) {
-        Ok(serialized) => serialized,
-        Err(source) => {
-            return ForgetResult {
-                status: ForgetStatus::StoreError(ForgetError::Serialize {
-                    source: source.to_string(),
-                }),
-                entry_id,
-            };
-        }
-    };
-    match append_bytes(root, &serialized, durability) {
-        Ok(()) => ForgetResult {
+    match append_event::<MemoryDomain>(root, MEMORY_LOG_RELATIVE_PATH, &event, durability, &lock) {
+        Ok(_) => ForgetResult {
             status: ForgetStatus::Forgotten { sequence },
             entry_id,
         },
@@ -183,26 +170,23 @@ pub fn list_now_with_durability(
 ) -> ListResult {
     let root = root.as_ref();
 
-    let _lock = match forge_core_store::acquire_effect_store_lock(root, MEMORY_LOCK_RELATIVE_PATH) {
+    let lock = match EventLogLock::acquire::<MemoryProjectionDiagnostic>(
+        root,
+        MEMORY_LOCK_RELATIVE_PATH,
+    ) {
         Ok(lock) => lock,
         Err(source) => {
             return ListResult {
-                status: ListStatus::StoreError(ForgetError::Lock {
-                    path: root.join(MEMORY_LOCK_RELATIVE_PATH),
-                    source: source.to_string(),
-                }),
+                status: ListStatus::StoreError(source),
             };
         }
     };
 
-    let projection = match project_locked(root) {
+    let projection = match project_locked::<MemoryDomain>(root, MEMORY_LOG_RELATIVE_PATH) {
         Ok(projection) => projection,
         Err(source) => {
             return ListResult {
-                status: ListStatus::StoreError(ForgetError::Read {
-                    path: root.join(MEMORY_LOG_RELATIVE_PATH),
-                    source: source.to_string(),
-                }),
+                status: ListStatus::StoreError(source),
             };
         }
     };
@@ -228,9 +212,11 @@ pub fn list_now_with_durability(
 
     // Persist each flipped entry by appending a fresh Admitted event with the
     // updated freshness (append-only; no in-place edits). Re-read the projection
-    // sequence once; subsequent appends increment locally.
+    // sequence once; subsequent appends increment locally. Best-effort: a failed
+    // append for one entry does not abort the sweep for the rest (the next
+    // `list_now` re-derives stale flags from the log).
     if flipped > 0 {
-        let mut seq = next_sequence(&projection);
+        let mut seq = next_sequence::<MemoryDomain>(&projection);
         for entry in &contract_doc.memory_contract.entries {
             if entry.freshness.stale {
                 let event = MemoryEvent::Admitted {
@@ -238,17 +224,15 @@ pub fn list_now_with_durability(
                     at_unix: now_unix,
                     entry: entry.clone(),
                 };
-                if let Ok(serialized) = serde_json::to_vec(&event) {
-                    let value: serde_json::Value = match serde_json::from_slice(&serialized) {
-                        Ok(v) => v,
-                        Err(_) => continue,
-                    };
-                    let _ = append_json_line_with_durability(
-                        root,
-                        MEMORY_LOG_RELATIVE_PATH,
-                        &value,
-                        durability,
-                    );
+                if append_event::<MemoryDomain>(
+                    root,
+                    MEMORY_LOG_RELATIVE_PATH,
+                    &event,
+                    durability,
+                    &lock,
+                )
+                .is_ok()
+                {
                     seq = seq.saturating_add(1);
                 }
             }
@@ -288,24 +272,6 @@ fn projection_to_contract_doc(projection: &MemoryProjection) -> MemoryContractDo
                 .collect(),
         },
     }
-}
-
-fn append_bytes(
-    root: &Path,
-    serialized: &[u8],
-    durability: WalDurability,
-) -> Result<(), ForgetError> {
-    let value: serde_json::Value =
-        serde_json::from_slice(serialized).map_err(|source| ForgetError::Serialize {
-            source: source.to_string(),
-        })?;
-    append_json_line_with_durability(root, MEMORY_LOG_RELATIVE_PATH, &value, durability).map_err(
-        |source| ForgetError::Append {
-            path: root.join(MEMORY_LOG_RELATIVE_PATH),
-            source: source.to_string(),
-        },
-    )?;
-    Ok(())
 }
 
 #[cfg(test)]
