@@ -386,11 +386,50 @@ authority validada.
 **Esforço**: médio **Risco**: baixo **Impacto**: melhora UX onboarding
 **Depende**: F05-F08 podem fornecer contexto
 
-#### F12.1 — [grill] Design do fluxo guiado
-- Sem YAML manual: wizard interativo ou scaffolding
-- Pergunta: TUI? prompts no CLI? generated project?
+#### F12.1 — [grill + improve] Design do fluxo guiado  ✅ FECHADO
+- Princípio fixado: o agente é o intérprete bidirecional (usuário ↔ Forge);
+  o CLI tem um único consumidor (o agente), não "modos" por audiência.
+- `start` é **read-only e idempotente**: diagnostica o estado real do projeto e
+  emite o próximo passo concreto; nunca executa efeitos, nunca cria arquivos.
+- Fronteira com `guide` (Opção A): `start` resolve o **bootstrap zero-state**
+  e **entrega a `guide`** quando há pré-requisitos; não recomenda workflows.
+- Fronteira com `project init` (Opção A nuanceada): `start` detecta ausência de
+  link/sidecar e recomenda `init` no payload; não o invoca internamente.
+- Escolha de objetivo/risco (Opção A): `start` referencia exemplos canônicos
+  (`docs/fixtures/operation-contract-v0/`) e o comando de validação; **não**
+  gera scaffolding de spec — a authority boundary é o contract validado.
+- 5 estados de bootstrap: `no_link` → `link_present_no_sidecar` →
+  `sidecar_ready_no_contract` → `contract_present` → `preview_run`.
+- Termos em `CONTEXT.md`: "Agent as Bidirectional Interpreter", "Guided Start",
+  "Start Bootstrap State". Sem ADR (decisões reversíveis; rationale no glossário).
 
-#### F12.2-F12.5 — (definir após grill)
+#### F12.2 — [desenvolver] `forge-core start` verb + state machine read-only
+- Novo módulo `crates/forge-core-cli/src/start_cmd.rs`, append em `command_registry::COMMANDS`
+  + `lib.rs::pub mod` (no **fim do array**).
+- `pub fn run_start_command(args: &[String]) -> Result<(), ExitError>`.
+- Payload tipado: estado atual + próximo passo (comando pronto) + contexto
+  (paths, referências). Dual-output via `CliEnvelope` + `emit()` + `json_output_unless_text_selected`.
+- Detecção de estado: checa `.forge-method.yaml`, sidecar/state tree,
+  operation contracts no consumer repo. Read-only puro — sem claim.
+- Template: `memory_cmd.rs` (multi-subcommand) + `eval_harness_cmd.rs` (simples).
+
+#### F12.3 — [desenvolver] Estado 3 (`sidecar_ready_no_contract`) enrichment
+- Payload do estado 3 referencia `docs/fixtures/operation-contract-v0/`
+  (cenários canônicos) + o comando de validação (`forge-core preview --operation <path>`).
+- Não gera spec; não faz perguntas. Delega ao agente intérprete.
+- Paramétrico (anti-G1): o `start` adapta só com base no estado real do repo,
+  nunca prescreve conteúdo.
+
+#### F12.4 — [desenvolver] Handoff explícito para `guide`
+- Estado 4 (`contract_present`) emite `forge-core guide describe` como próximo
+  passo; estado 5 (`preview_run`) indica projeto onboarded.
+- Validar que `start` não duplica `guide status`/`describe` — compor, não reimplementar.
+
+#### F12.5 — [medir] Fixtures + E2E regression
+- `docs/fixtures/guided-start-v0/` com cenários: repo vazio, só-link, sidecar-pronto,
+  com-contract, pós-preview + `README.md`.
+- E2E template: `tests/governance_cli_e2e.rs` / `memory_cli_e2e.rs` (F06.8).
+- Verificar anchor 122 preservada.
 
 ---
 
