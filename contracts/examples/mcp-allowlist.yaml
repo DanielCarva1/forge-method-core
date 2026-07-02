@@ -1,0 +1,28 @@
+# mcp-allowlist.yaml — canonical example Allowlist for the Forge MCP server.
+#
+# Declares which `forge-core` commands an MCP server instance exposes as
+# tools (ADR-0006 Decision 3). `policy: read-only` tools need no
+# OperationContract; `policy: mutate` tools require an OperationContract
+# (--operation/--command/--effect) AND a Tool-Call Attestation at call time.
+#
+# This is the safe-by-default surface: read-only exploration plus explicit
+# mutate verbs. Copy and trim to lock a server down further (e.g. drop the
+# mutate tools for a pure read-only deployment).
+
+tools:
+  - name: preview
+    policy: read-only
+  - name: ready
+    policy: read-only
+  - name: graph
+    policy: read-only
+  - name: explain
+    policy: read-only
+  - name: memory
+    policy: read-only
+  - name: query-effect-index
+    policy: read-only
+  - name: execute-operation
+    policy: mutate
+  - name: claim
+    policy: mutate
