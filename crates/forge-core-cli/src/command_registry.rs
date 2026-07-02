@@ -301,6 +301,11 @@ pub const COMMANDS: &[CommandSpec] = &[
         usage_lines: &["       forge-core host-adapter-verify-certificate-ocsp-status --trust-policy-path <path> --certificate-path <path> --issuer-certificate-path <path> --ocsp-response-path <path> --verification-time-unix <seconds> [--expected-nonce-hex <hex>] [--json]"],
         handler: crate::host_adapter_verify_cmd::run_host_adapter_verify_certificate_ocsp_status_command,
     },
+    CommandSpec {
+        name: "start",
+        usage_lines: &["       forge-core start [--root <path>] [--agent-id <id>] [--json|--no-json]"],
+        handler: crate::start_cmd::run_start_command,
+    },
 ];
 
 /// Looks up a command by its argv[1] token and invokes its handler.
