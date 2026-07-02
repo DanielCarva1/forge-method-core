@@ -352,9 +352,16 @@ fn classify(
             "A preview has already been produced; the project is onboarded.".to_string(),
             Some(NextStep {
                 command: Some("forge-core guide describe".to_string()),
-                description: "Project onboarded. Use guide/preview/ready to drive work."
+                description: "Project onboarded. start has nothing more to add; guide orients \
+                              ongoing work (phases, workflows, gates)."
                     .to_string(),
-                references: vec![],
+                references: vec![
+                    "next: forge-core guide status --phase <current-phase>  \
+                     — workflows eligible now + forward gate pending"
+                        .to_string(),
+                    "start will keep reporting preview_run; it is a terminal bootstrap state."
+                        .to_string(),
+                ],
             }),
         );
     }
@@ -365,9 +372,17 @@ fn classify(
             "An operation contract exists; the project is ready for the guide surface.".to_string(),
             Some(NextStep {
                 command: Some("forge-core guide describe".to_string()),
-                description: "Hand off to guide; it will orient phase, workflows, and gates."
+                description: "Hand off to guide; it orients phase, workflows, and gates. start's \
+                              bootstrap job is done."
                     .to_string(),
-                references: vec![],
+                references: vec![
+                    "then: forge-core guide status --phase discovery  \
+                     — first phase; lists eligible workflows + the grill forward gate"
+                        .to_string(),
+                    "then: forge-core preview --operation <your-contract>  \
+                     — validate the contract end-to-end before driving work"
+                        .to_string(),
+                ],
             }),
         );
     }
@@ -662,6 +677,24 @@ mod tests {
         assert_eq!(payload.state, BootstrapState::ContractPresent);
         let next = payload.next_step.as_ref().expect("next step");
         assert_eq!(next.command.as_deref(), Some("forge-core guide describe"));
+        // F12.4: state 4 references must point the agent past `guide describe`
+        // to the concrete next actions (status discovery + preview validate).
+        assert!(
+            next.references
+                .iter()
+                .any(|r| r.contains("guide status --phase discovery")),
+            "state 4 should point at guide status for the first phase"
+        );
+        assert!(
+            next.references
+                .iter()
+                .any(|r| r.contains("preview --operation")),
+            "state 4 should remind to validate the contract with preview"
+        );
+        assert!(
+            !next.references.is_empty(),
+            "state 4 references must not be empty (F12.4 enrichment)"
+        );
     }
 
     #[test]
@@ -680,6 +713,16 @@ mod tests {
         let payload = env.data.as_ref().expect("payload on ok");
         assert!(env.ok);
         assert_eq!(payload.state, BootstrapState::PreviewRun);
+        let next = payload.next_step.as_ref().expect("next step");
+        // F12.4: state 5 is terminal bootstrap; it points at guide status
+        // (ongoing orientation) and is explicit that start has nothing more.
+        assert_eq!(next.command.as_deref(), Some("forge-core guide describe"));
+        assert!(
+            next.references
+                .iter()
+                .any(|r| r.contains("guide status --phase")),
+            "state 5 should point at guide status for ongoing orientation"
+        );
     }
 
     #[test]
