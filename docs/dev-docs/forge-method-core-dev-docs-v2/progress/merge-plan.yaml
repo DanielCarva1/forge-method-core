@@ -43,6 +43,16 @@
 #     (handoff: path), e pare. Não empurre pra degradação.
 #
 # REGRAS DE OURO (não negociáveis):
+#   - **NA DÚVIDA, ATUALIZE O MERGE-PLAN ANTES DE MEXER NAS COISAS.** Esta é a
+#     regra zero. Se você não tem certeza de que sua ação está alinhada com os
+#     outros chats, PRIMEIRO atualize §2/§3/§4/§7 deste arquivo, commit só ele,
+#     e SÓ DEPOIS faça a mutação no código. O merge-plan é o único ponto de
+#     coordenação entre chats — se ele não reflete o que você vai fazer, você
+#     está desalinhado. Atualizar-antes é barato; desalinhamento depois de
+#     commit é caro (rework, conflito de merge, ADR divergente).
+#     Aplicação concreta: antes de (a) criar crate nova, (b) tocar arquivo
+#     shared (§5), (c) mudar decisão de design (§3 adrs/open_questions),
+#     (d) abrir mão de um scope — atualize o merge-plan primeiro.
 #   - Cada branch adiciona sua entrada nos arquivos shared NO FIM do array
 #     (COMMANDS, pub mod, members). Nunca no meio. Isso transforma conflito de
 #     merge em "duas linhas novas no fim".
@@ -245,6 +255,8 @@ audit_trail:
   - "2026-07-02 | f14 | grill F14.1 fechado: 7 decisões cravadas, ADR-0010 criado, followups F14.2-F14.8 definidas (commit 6b8b0378)"
   - "2026-07-02 | f14 | correção: handoff_f14 'greenfield total' era falso — SourceId/FieldEvidenceRegistry/validate_yaml_source_id_references já existem; §2 corrigida"
   - "2026-07-02 | f14 | CONTEXT.md + handoff_f14 + merge-plan.yaml working changes (commit pendente — primeiro commit do próximo chat F14)"
+  - "2026-07-02 | f14 | handoff_f14 + merge-plan.yaml committed (4b89e454); F14.1 fechada, worktree limpa"
+  - "2026-07-02 | f14 | REGRA ZERO adicionada ao §1: 'na dúvida, atualize o merge-plan ANTES de mexer nas coisas' (alinhamento entre chats antes de qualquer mutação)"
   # PRÓXIMO: adicione sua linha aqui ao commitar.
 
 # ===================================================================
