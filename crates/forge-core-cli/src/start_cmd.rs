@@ -47,7 +47,7 @@
 
 use std::path::{Path, PathBuf};
 
-use forge_core_contracts::{CliEnvelope, ENVELOPE_SCHEMA_VERSION, ExitReason};
+use forge_core_contracts::{CliEnvelope, ExitReason, ENVELOPE_SCHEMA_VERSION};
 
 use crate::cli_error::ExitError;
 use crate::project_cmd::{
@@ -66,6 +66,21 @@ const OPERATION_CONTRACT_REFERENCE_DIR: &str = "docs/fixtures/operation-contract
 /// The command that validates an authored operation contract. `start` points
 /// at it but does not run it; the agent runs it once a spec exists.
 const OPERATION_VALIDATION_COMMAND: &str = "forge-core preview --operation <path>";
+
+/// Two fixtures hand-picked as the smallest structurally-complete models for
+/// a *first* operation contract. `start` surfaces these by name (not the whole
+/// directory) so a new agent has an obvious starting point instead of 23
+/// undifferentiated files. They are references, not prescriptions: the agent
+/// adapts the structure to the human's actual goal.
+///
+/// - `observe-project-status` — the simplest shape: a read-only operation
+///   (`autonomy.mode: observe`). Best model when the first step is to look at
+///   the project rather than change it.
+/// - `execute-trivial-write` — the simplest *write* shape: shows the
+///   `authority.mutation_policy` field. Best model when the first step is a
+///   small, reversible change.
+const STARTER_FIXTURE_OBSERVE: &str = "observe-project-status.yaml";
+const STARTER_FIXTURE_EXECUTE: &str = "execute-trivial-write.yaml";
 
 /// The `start` success payload. Carries the diagnosed state, the resolved
 /// project context (when present), and the concrete next step for the agent
@@ -230,9 +245,7 @@ pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
             "--root" => {
                 index += 1;
                 let Some(value) = args.get(index) else {
-                    return Err(ExitError::usage(
-                        "start: --root requires a value",
-                    ));
+                    return Err(ExitError::usage("start: --root requires a value"));
                 };
                 root = PathBuf::from(value);
             }
@@ -312,10 +325,7 @@ fn classify(
             format!(
                 "Project Link exists at {} but the state root {} does not; \
                  the sidecar tree is missing or has been removed.",
-                resolved
-                    .link_path
-                    .as_deref()
-                    .unwrap_or("<unresolved link>"),
+                resolved.link_path.as_deref().unwrap_or("<unresolved link>"),
                 resolved.state_root
             ),
             Some(NextStep {
@@ -339,8 +349,7 @@ fn classify(
     if has_preview {
         return (
             BootstrapState::PreviewRun,
-            "A preview has already been produced; the project is onboarded."
-                .to_string(),
+            "A preview has already been produced; the project is onboarded.".to_string(),
             Some(NextStep {
                 command: Some("forge-core guide describe".to_string()),
                 description: "Project onboarded. Use guide/preview/ready to drive work."
@@ -353,8 +362,7 @@ fn classify(
     if has_contract {
         return (
             BootstrapState::ContractPresent,
-            "An operation contract exists; the project is ready for the guide surface."
-                .to_string(),
+            "An operation contract exists; the project is ready for the guide surface.".to_string(),
             Some(NextStep {
                 command: Some("forge-core guide describe".to_string()),
                 description: "Hand off to guide; it will orient phase, workflows, and gates."
@@ -365,18 +373,28 @@ fn classify(
     }
 
     // State tree healthy, nothing on top of it yet: the agent (with the
-    // human) authors a minimal operation contract. start points at canonical
-    // reference scenarios and the validation command but does NOT generate
-    // the spec — the authority boundary is the validated contract.
+    // human) authors a minimal operation contract. start points at two
+    // hand-picked starter fixtures (not the whole directory) and the
+    // validation command, but does NOT generate the spec — the authority
+    // boundary is the validated contract, not a template.
     (
         BootstrapState::SidecarReadyNoContract,
         "State tree is healthy but no operation contract exists yet.".to_string(),
         Some(NextStep {
             command: None,
-            description: "Author a minimal operation contract, then validate it with preview."
+            description: "Author a minimal operation contract modelled on a starter fixture, \
+                          then validate it with preview."
                 .to_string(),
             references: vec![
-                format!("reference scenarios: {OPERATION_CONTRACT_REFERENCE_DIR}"),
+                format!(
+                    "starter (observe): {OPERATION_CONTRACT_REFERENCE_DIR}{STARTER_FIXTURE_OBSERVE}  \
+                     — simplest read-only shape"
+                ),
+                format!(
+                    "starter (execute): {OPERATION_CONTRACT_REFERENCE_DIR}{STARTER_FIXTURE_EXECUTE}  \
+                     — simplest write shape (shows authority.mutation_policy)"
+                ),
+                format!("more scenarios: {OPERATION_CONTRACT_REFERENCE_DIR}"),
                 format!("validate with: {OPERATION_VALIDATION_COMMAND}"),
             ],
         }),
@@ -505,7 +523,14 @@ mod tests {
     }
 
     fn make_state_tree(state: &Path) {
-        for d in ["", "artifacts", "claims-active", "evidence", "traces", "wal"] {
+        for d in [
+            "",
+            "artifacts",
+            "claims-active",
+            "evidence",
+            "traces",
+            "wal",
+        ] {
             fs::create_dir_all(state.join(d)).unwrap();
         }
     }
@@ -543,7 +568,10 @@ mod tests {
         assert!(!env.ok);
         assert_eq!(env.exit_reason.0, ExitReason::EnvConfig.as_str());
         assert_eq!(env.exit_code(), ExitReason::EnvConfig.as_code());
-        assert!(env.project.is_none());
+        assert!(
+            env.data.is_none(),
+            "no_link must not build a payload (no project context to report)"
+        );
     }
 
     #[test]
@@ -584,8 +612,9 @@ mod tests {
         assert_eq!(payload.state, BootstrapState::SidecarReadyNoContract);
         let next = payload.next_step.as_ref().expect("next step");
         assert!(
-            next.references.iter().any(|r| r
-                .contains(OPERATION_CONTRACT_REFERENCE_DIR)),
+            next.references
+                .iter()
+                .any(|r| r.contains(OPERATION_CONTRACT_REFERENCE_DIR)),
             "state 3 should point at reference scenarios"
         );
         assert!(
@@ -593,6 +622,21 @@ mod tests {
                 .iter()
                 .any(|r| r.contains("preview --operation")),
             "state 3 should point at the validation command"
+        );
+        // F12.3 enrichment: state 3 must surface the two hand-picked starter
+        // fixtures by name, so a new agent has an obvious entry point instead
+        // of 23 undifferentiated files.
+        assert!(
+            next.references
+                .iter()
+                .any(|r| r.contains(STARTER_FIXTURE_OBSERVE)),
+            "state 3 should name the observe starter fixture"
+        );
+        assert!(
+            next.references
+                .iter()
+                .any(|r| r.contains(STARTER_FIXTURE_EXECUTE)),
+            "state 3 should name the execute starter fixture"
         );
         assert!(
             next.command.is_none(),
