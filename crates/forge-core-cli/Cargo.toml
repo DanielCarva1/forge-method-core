@@ -24,6 +24,7 @@ forge-core-engine = { path = "../forge-core-engine" }
 forge-core-graph = { path = "../forge-core-graph" }
 forge-core-governance = { path = "../forge-core-governance" }
 forge-core-memory = { path = "../forge-core-memory" }
+forge-core-protocol-mcp = { path = "../forge-core-protocol-mcp" }
 forge-core-runtime = { path = "../forge-core-runtime" }
 forge-core-store = { path = "../forge-core-store" }
 forge-core-trace = { path = "../forge-core-trace" }
