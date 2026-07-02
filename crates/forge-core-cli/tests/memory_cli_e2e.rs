@@ -10,6 +10,14 @@
 //! wire envelope the way an agent would consume it. Mirrors
 //! `autonomy_route_e2e.rs` structure.
 
+// E2E test files run the real binary through long lifecycle scenarios; the
+// doc-comment / line-count pedantic lints are noise here, not signal (helpers
+// reference unquoted identifiers like forge-core in doc-comments, and the
+// lifecycle test is a single linear scenario by design). Matches the
+// governance_cli_e2e.rs convention.
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::too_many_lines)]
+
 use assert_cmd::Command;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
