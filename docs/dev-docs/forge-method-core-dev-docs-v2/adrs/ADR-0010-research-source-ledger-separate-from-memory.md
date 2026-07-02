@@ -1,6 +1,6 @@
 # ADR-0010 - Source Ledger do research é um log separado do memory
 
-Status: proposto
+Status: accepted (F14.2 implementada — crate `forge-core-research` + contract `ResearchSource`/`ResearchPolicy` + PDP `ResearchContract::can_admit_source` + PEP append-only)
 
 ## Contexto
 

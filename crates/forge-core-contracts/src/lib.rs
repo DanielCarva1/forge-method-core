@@ -24,6 +24,7 @@ pub mod phase;
 pub mod project_link;
 pub mod recovery;
 pub mod request;
+pub mod research;
 pub mod runtime;
 pub mod telemetry;
 pub mod tool_effect;
@@ -83,3 +84,7 @@ pub use envelope::{CliEnvelope, CliError, ExitReason, ENVELOPE_SCHEMA_VERSION};
 pub use guide_decision::{GuideDecision, GuideDecisionDocument};
 pub use phase::Phase;
 pub use workflow::{Workflow, WorkflowDocument};
+pub use research::{
+    ResearchAdmissionDecision, ResearchAdmissionDenialReason, ResearchContract, ResearchPolicy,
+    ResearchSource, ResearchSourceKind,
+};

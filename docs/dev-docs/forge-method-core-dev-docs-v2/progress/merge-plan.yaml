@@ -73,7 +73,7 @@ worktree_status:
   f07: { active: false, last_seen: "2026-07-02T03:00Z", where: "f06.2-trust-axes", note: "F07.5-F07.7 em andamento; F07 fechou em commits 0145/2f32" }
   f08: { active: false, last_seen: "2026-07-02T03:00Z", where: "D:/forge-f08", note: "ADR-0006 + 7 stories; pronto pra codar" }
   f12: { active: false, last_seen: "2026-07-02T03:00Z", where: "D:/Forge-method-core", note: "grill F12.1 pendente" }
-  f14: { active: true, last_seen: "2026-07-02T03:30Z", where: "D:/forge-f14", note: "grill F14.1 FECHADO; F14.2 é o próximo" }
+  f14: { active: true, last_seen: "2026-07-02T04:00Z", where: "D:/forge-f14", note: "F14.1 FECHADO; F14.2 IN_PROGRESS (mesmo chat, sem /clear — contexto leve)" }
 
 # ===================================================================
 # §3  PER-BRANCH STATUS (cada chat mantém o seu)
@@ -116,10 +116,10 @@ branches:
   f14:
     epic: "F14 Knowledge Orchestration mode (P3)"
     base: "f06.2-trust-axes"   # ver §14 do handoff_f14
-    current_story: "F14.1 FECHADO; próximo = F14.2"
-    status: "f14_1_closed_ready_for_f14_2"
-    last_commit: "6b8b0378 F14.1: grill + improve — research mode design (ADR-0010 + story breakdown)"
-    next_story: "F14.2 — forge-core-research crate + ResearchSource contract + PEP"
+    current_story: "F14.2 FECHADA; próximo = F14.3 (citation check validator)"
+    status: "f14_2_closed_ready_for_f14_3"
+    last_commit: "(próximo commit: F14.2 — research crate + contract + PEP)"
+    next_story: "F14.3 — estender validate_yaml_source_id_references p/ 2 backings + DiagnosticCode::UnresolvedSourceId"
     handoff: "docs/dev-docs/forge-method-core-dev-docs-v2/progress/handoff_f14_knowledge_orchestration.md"
     working_changes_uncommitted:
       - "CONTEXT.md (seção Knowledge Orchestration F14) — COMMITAR PRIMEIRO"
@@ -257,6 +257,9 @@ audit_trail:
   - "2026-07-02 | f14 | CONTEXT.md + handoff_f14 + merge-plan.yaml working changes (commit pendente — primeiro commit do próximo chat F14)"
   - "2026-07-02 | f14 | handoff_f14 + merge-plan.yaml committed (4b89e454); F14.1 fechada, worktree limpa"
   - "2026-07-02 | f14 | REGRA ZERO adicionada ao §1: 'na dúvida, atualize o merge-plan ANTES de mexer nas coisas' (alinhamento entre chats antes de qualquer mutação)"
+  - "2026-07-02 | f14 | F14.2 INICIADA (mesmo chat, sem /clear): ResearchSource contract + PDP + crate forge-core-research PEP. REGRA ZERO aplicada — merge-plan atualizado antes de codar."
+  - "2026-07-02 | f14 | F14.2 FECHADA: crate forge-core-research (PEP append-only + 13 testes + 2 proptests determinismo) + contract research.rs (PDP + 11 testes). ADR-0010 -> accepted. Clippy pedantic limpo na crate nova. Anchor 122 preservado (100/100 validate tests). Workspace check verde."
+  - "2026-07-02 | f14 | NOTA pro integrador: 2 warnings pré-existentes em forge-core-contracts/src/memory.rs:373,388 (must_use_candidate em authority_level_effective/review_state_effective, código F06) — NÃO são desta story. Não mexi (fora de escopo, REGRA ZERO). Se o CI -D pedantic reclamar, é preexistente."
   # PRÓXIMO: adicione sua linha aqui ao commitar.
 
 # ===================================================================
