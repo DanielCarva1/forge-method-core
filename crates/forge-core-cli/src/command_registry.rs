@@ -111,6 +111,16 @@ pub const COMMANDS: &[CommandSpec] = &[
         handler: crate::memory_cmd::run_memory_command,
     },
     CommandSpec {
+        name: "governance",
+        usage_lines: &[
+            "       forge-core governance record   --conflict-file <path> [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--no-json]",
+            "       forge-core governance conflicts [--status pending|resolved|escalated] [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--no-json]",
+            "       forge-core governance arbitrate --conflict-id <id> --policy-file <path> --arbiter <principal> (--awarded-to <principal> | --both-released | --split-scope) [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--no-json]",
+            "       forge-core governance escalate  --conflict-id <id> --policy-file <path> --principal <principal> [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--no-json]",
+        ],
+        handler: crate::governance_cmd::run_governance_command,
+    },
+    CommandSpec {
         name: "coordination",
         usage_lines: &["       forge-core coordination [--root <path>] [--allow-bootstrap-core] [--json]"],
         handler: crate::coordination::run_coordination_command,
