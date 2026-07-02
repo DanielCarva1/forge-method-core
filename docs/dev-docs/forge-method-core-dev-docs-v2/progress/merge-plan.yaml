@@ -1,0 +1,259 @@
+# ===================================================================
+# merge-plan.yaml — auto-organização das branches paralelas
+# ===================================================================
+#
+# ESTE É O ÚNICO DOCUMENTO DE COORDENAÇÃO. Não há integrador humano entre
+# turnos. Cada chat lê, decide e atualiza por conta própria.
+#
+# LEIA ANTES DE QUALQUER COISA. Atualize antes de commitar.
+#
+# worktrees (cada epic mora na sua — NÃO editar cross-worktree):
+#   D:/Forge-method-core  -> f12-guided-start
+#   D:/forge-f08          -> f08-mcp-adapter
+#   D:/forge-f14          -> f14-knowledge-orchestration
+#   F07 roda em f06.2-trust-axes até o merge final
+#
+# master é a base comum; feature branches saem de master e voltam pra ela.
+
+# ===================================================================
+# §1  PROTOCOLO (como cada chat usa este arquivo)
+# ===================================================================
+#
+# AO ABRIR A SESSÃO (primeira ação, antes de codar):
+#   1. git pull --rebase no seu worktree.
+#   2. git checkout origin/merge-plan-is-tracked? — NÃO. Este arquivo vive em
+#      CADA branch. Você lê a cópia no SEU worktree. O merge plan é fundido no
+#      merge final (resolução: manter a versão mais recente por seção — ver §6).
+#   3. Leia §2 (worktree status) e §3 (per-branch status). Confirme que sua
+#      branch está marcada "active" por você.
+#   4. Verifique §4 (lock de arquivos shared). Se o arquivo que você vai tocar
+#      está com alguém "writing", ESPERE (ou abra mão da edição / proponha
+#      append no fim). Append-only no fim do array nunca conflita (§5).
+#
+# ANTES DE COMMITAR:
+#   1. Atualize §3 (seu branch status): current_story, last_commit, next_story.
+#   2. Se criou/tochou arquivo shared, atualize §4 (lock state).
+#   3. Se sua decisão impactou outra branch, atualize §7 (open_questions) e,
+#      se resolveu uma, marque resolved.
+#   4. Adicione 1 linha em §8 (audit_trail): <data> <branch> <o que fez>.
+#   5. Commit este arquivo junto com seu código (mesmo commit ou seguinte).
+#
+# AO DEGRADAR CONTEXTO (~150-200k tokens estimados):
+#   - Escreva handoff_<branch>_<story>.md no seu worktree, anote em §3
+#     (handoff: path), e pare. Não empurre pra degradação.
+#
+# REGRAS DE OURO (não negociáveis):
+#   - Cada branch adiciona sua entrada nos arquivos shared NO FIM do array
+#     (COMMANDS, pub mod, members). Nunca no meio. Isso transforma conflito de
+#     merge em "duas linhas novas no fim".
+#   - Não editar cross-worktree. Você escreve SÓ no seu worktree.
+#   - Anchor 122 é sagrado: forge-core validate --json deve emitir
+#     122x "diagnostics": 0. Se quebrar, sua branch está vermelha — não
+#     commit até corrigir.
+#   - CI -D pedantic + hook pi-green-loop + AGENTS.md valem por branch.
+
+# ===================================================================
+# §2  WORKTREE STATUS (quem está vivo agora)
+# ===================================================================
+worktree_status:
+  # Cada chat marca a si mesmo "active: true" ao abrir sessão e "false" ao
+  # fechar. Se um chat precisar saber se outro está vivo, lê aqui.
+  # last_seen = ISO timestamp aproximado da última atualização.
+
+  f07: { active: false, last_seen: "2026-07-02T03:00Z", where: "f06.2-trust-axes", note: "F07.5-F07.7 em andamento; F07 fechou em commits 0145/2f32" }
+  f08: { active: false, last_seen: "2026-07-02T03:00Z", where: "D:/forge-f08", note: "ADR-0006 + 7 stories; pronto pra codar" }
+  f12: { active: false, last_seen: "2026-07-02T03:00Z", where: "D:/Forge-method-core", note: "grill F12.1 pendente" }
+  f14: { active: true, last_seen: "2026-07-02T03:30Z", where: "D:/forge-f14", note: "grill F14.1 FECHADO; F14.2 é o próximo" }
+
+# ===================================================================
+# §3  PER-BRANCH STATUS (cada chat mantém o seu)
+# ===================================================================
+branches:
+  f07:
+    epic: "F07 multi-principal governance (P1, fechando)"
+    base: "f06.2-trust-axes"
+    current_story: "F07.5-F07.7 (governance CLI + E2E)"
+    status: "in_progress"
+    last_commit: "01451033 F07.5: arbitration ledger append-only"
+    next_story: "confirmar F07.6/F07.7 no handoff_f06_f07_session.md"
+    handoff: "docs/dev-docs/forge-method-core-dev-docs-v2/progress/handoff_f06_f07_session.md"
+    blockers: []
+    adrs: ["ADR-0007"]
+
+  f08:
+    epic: "F08 secure MCP adapter (P1)"
+    base: "master"
+    current_story: "F08.1 (expandir ADR-0006)"
+    status: "ready_to_code"
+    last_commit: "(branch nova, ver handoff)"
+    next_story: "F08.1 -> F08.7 (7 stories detalhadas no handoff)"
+    handoff: "docs/dev-docs/forge-method-core-dev-docs-v2/progress/handoff_f08_mcp_adapter.md"
+    blockers: []
+    adrs: ["ADR-0006"]
+    note: "MAIS pronto pra codar das 4. NÃO depende de F07/F14."
+
+  f12:
+    epic: "F12 Guided Start e Product UX (P2)"
+    base: "master"
+    current_story: "F12.1 (grill primeiro — pouco especificada)"
+    status: "grill_pending"
+    last_commit: "(branch em andamento — ver worktree D:/Forge-method-core)"
+    next_story: "grill F12.1 antes de codar (anti-objetivo do handoff)"
+    handoff: "docs/dev-docs/forge-method-core-dev-docs-v2/progress/handoff_f12_guided_start.md"
+    blockers: []
+    note: "Pouco especificada. Grill é ~50% do trabalho."
+
+  f14:
+    epic: "F14 Knowledge Orchestration mode (P3)"
+    base: "f06.2-trust-axes"   # ver §14 do handoff_f14
+    current_story: "F14.1 FECHADO; próximo = F14.2"
+    status: "f14_1_closed_ready_for_f14_2"
+    last_commit: "6b8b0378 F14.1: grill + improve — research mode design (ADR-0010 + story breakdown)"
+    next_story: "F14.2 — forge-core-research crate + ResearchSource contract + PEP"
+    handoff: "docs/dev-docs/forge-method-core-dev-docs-v2/progress/handoff_f14_knowledge_orchestration.md"
+    working_changes_uncommitted:
+      - "CONTEXT.md (seção Knowledge Orchestration F14) — COMMITAR PRIMEIRO"
+      - "progress/handoff_f14_knowledge_orchestration.md (§0 = 7 decisões) — COMMITAR PRIMEIRO"
+      - "progress/merge-plan.yaml (este arquivo) — COMMITAR PRIMEIRO"
+    f14_1_decisions:  # NÃO re-debater — cravadas em ADR-0010
+      1: "Ledger distinto, reusa SourceId (NAO funde com FieldEvidenceRegistry = reintroduz Model B)"
+      2: "Claim polimorfica, sem ResearchClaim; evidence graph é projecao"
+      3: "NAO bloqueia F08 (semantica de citacao ortogonal ao transport)"
+      4: "Store proprio research/sources.ndjson + ADR-0010 obrigatorio"
+      5: "Fail-closed = resolucao de source_id (nao tier); validator + gate runtime"
+      6: "Verbs atomicos + ResearchPolicy; SEM research run (G1 anti-script-de-novela)"
+      7: "Glossario em CONTEXT.md; 'evidence' tem 3 eixos ortogonais flaggeados"
+    blockers: []
+    adrs: ["ADR-0010 (proposto -> accepted ao fechar F14.2)"]
+    correction_to_prior_handoff: >
+      A seção "GREENFIELD (confirmado)" do handoff_f14 estava ERRADA: SourceId,
+      FieldEvidenceRegistry e validate_yaml_source_id_references JA EXISTEM e sao
+      reusados/estendidos (nao reimplementados). Handoff corrigido em §2. Greenfield
+      é só: crate forge-core-research, contract ResearchSource/ResearchPolicy,
+      projecao evidence_graph, CLI research, ADR-0010.
+
+# ===================================================================
+# §4  LOCK DE ARQUIVOS SHARED (coordenação write-write)
+# ===================================================================
+#
+# Append-only no FIM do array nunca conflita (§5). Este §4 é só pra arquivos
+# onde você edita NO MEIO ou reestrutura — ai sim precisa de coordenação.
+#
+# Convenção: owner = branch que está editando AGORA. Liberado = [].
+# Se você vai editar um arquivo aqui com owner != [], AVISE (open_questions §7)
+# ou espere. Edição append-only não precisa declarar aqui.
+shared_locks:
+  "crates/forge-core-validate/src/lib.rs":
+    # F14 ESTENDE validate_yaml_source_id_references (lib.rs:280) p/ 2 backings.
+    # F07 também adiciona validators. Se ambos appendam no fim, ok.
+    # F14 CUIDADO: manter assinatura estendida ao resolver conflito.
+    owners: []
+    conflict_type: "append_validators_at_end"
+    note: "F14 adiciona DiagnosticCode::UnresolvedSourceId + validate_citation_*"
+  "CONTEXT.md":
+    # Cada epic appenda sua seção "## ..." no FIM. Conflito baixo.
+    owners: []
+    conflict_type: "append_section_at_end"
+    note: "F14 já escreveu '## Knowledge Orchestration (F14)'"
+
+# ===================================================================
+# §5  MATRIZ DE OVERLAP (quem toca o quê + ação exata)
+# ===================================================================
+overlap_matrix:
+  always_conflict_append_only:
+    - file: "Cargo.toml (root) [members]"
+      rule: "append no fim do array"
+      actions:
+        f07: '(já em master) forge-core-governance'
+        f08: 'append "crates/forge-core-protocol-mcp"'
+        f12: 'append "crates/forge-core-onboarding"'
+        f14: 'append "crates/forge-core-research"'
+    - file: "crates/forge-core-cli/src/lib.rs [pub mod]"
+      rule: "append no fim"
+      actions:
+        f07: 'pub mod governance_cmd;'
+        f08: 'pub mod mcp_cmd;'
+        f12: 'pub mod start_cmd;'
+        f14: 'pub mod research_cmd;'
+    - file: "crates/forge-core-cli/src/command_registry.rs [COMMANDS]"
+      rule: "append CommandSpec no fim do array. NÃO duplicar nomes (teste every_command_name_is_unique em command_registry.rs:354)"
+      actions:
+        f07: 'CommandSpec { name: "governance", ... }'
+        f08: 'CommandSpec { name: "mcp", ... }'
+        f12: 'CommandSpec { name: "start", ... }'
+        f14: 'CommandSpec { name: "research", handler: crate::research_cmd::run_research_command, ... }'
+  sometimes_conflict:
+    - file: "crates/forge-core-validate/src/lib.rs"
+      f14: "ESTENDE validate_yaml_source_id_references (lib.rs:280) p/ 2 backings (curated ∪ runtime); append DiagnosticCode::UnresolvedSourceId no fim"
+      f07: "append validators no fim"
+      resolution: "ambos appendam no fim; mecânico"
+  no_conflict_new_crate:  # zero conflito
+    f14:
+      - "crates/forge-core-research/ (nova crate)"
+      - "crates/forge-core-contracts/src/research.rs (ResearchSource/ResearchPolicy)"
+      - "crates/forge-core-cli/src/research_cmd.rs"
+      - "contracts/examples/research-source.yaml, research-policy.yaml"
+      - "docs/fixtures/research-v0/"
+
+# ===================================================================
+# §6  ORDEM DE MERGE (prioridade, NÃO dependência)
+# ===================================================================
+merge_order:
+  recommended: ["F07", "F08", "F12", "F14"]
+  rationale: >
+    P1 (F07, F08) antes de P2 (F12) antes de P3 (F14). É PRIORIDADE, não
+    dependência. F14 é ORTOGONAL a F08 (decisão grill F14.1 #3) — pode rodar
+    paralelo sem toque. F12 não bloqueia nada.
+  per_merge_resolution: >
+    A cada merge -> resolver overlap dos arquivos shared (append-only, manter
+    entradas de TODAS as branches) -> rodar green-loop completo (cargo check +
+    clippy -D pedantic + test + fmt) -> confirmar anchor 122 (forge-core
+    validate --json -> 122x "diagnostics": 0) -> commit de integração.
+  merge_plan_reconciliation: >
+    Este merge-plan.yaml vive em cada branch. No merge, o integrador mantiene a
+    versão MAIS RECENTE por seção (worktree_status, per-branch status, audit
+    trail = união). Não há conflito semântico — cada seção é independente.
+
+# ===================================================================
+# §7  OPEN QUESTIONS / cross-branch (resolve e marca aqui)
+# ===================================================================
+open_questions:
+  - id: Q1
+    question: "F14 deve esperar F08 (MCP)?"
+    status: RESOLVED (grill F14.1, 2026-07-02)
+    answer: "NÃO. F14 entrega standalone; MCP vira story pós-merge de ambos (F14.8)."
+    affects: [f08, f14]
+  - id: Q2
+    question: "F14 bloqueia F12 ou F07?"
+    status: RESOLVED
+    answer: "NÃO. Ortogonal. Cada um mora em crate nova."
+    affects: [f07, f12, f14]
+  - id: Q3
+    question: "Quem edita validate/lib.rs primeiro, F07 ou F14?"
+    status: OPEN (mecânico)
+    answer: >
+      Ambos appendam validators no FIM. Se o integrador encontrar conflito,
+      manter ambas as adições. F14 cuida ao estender validate_yaml_source_id_references
+      (manter assinatura com 2 backings).
+    affects: [f07, f14]
+
+# ===================================================================
+# §8  AUDIT TRAIL (append-only, 1 linha por commit relevante)
+# ===================================================================
+audit_trail:
+  # formato: data | branch | ação
+  - "2026-07-02 | f14 | grill F14.1 fechado: 7 decisões cravadas, ADR-0010 criado, followups F14.2-F14.8 definidas (commit 6b8b0378)"
+  - "2026-07-02 | f14 | correção: handoff_f14 'greenfield total' era falso — SourceId/FieldEvidenceRegistry/validate_yaml_source_id_references já existem; §2 corrigida"
+  - "2026-07-02 | f14 | CONTEXT.md + handoff_f14 + merge-plan.yaml working changes (commit pendente — primeiro commit do próximo chat F14)"
+  # PRÓXIMO: adicione sua linha aqui ao commitar.
+
+# ===================================================================
+# §9  SALVAGUARDAS (operam por branch — não recriar)
+# ===================================================================
+safeguards:
+  ci: "cargo clippy --workspace --all-targets -- -D clippy::pedantic (zero warnings ou quebra)"
+  hook: "pi-green-loop: check + clippy -W pedantic + test + fmt por turno"
+  anchor_122: 'forge-core validate --json -> 122x "diagnostics": 0'
+  methodology: "grill -> improve -> documentar -> desenvolver -> medir"
+  conventions: "AGENTS.md (sem anyhow/thiserror/Result<_,String>; enums de erro à mão; validation accumulating)"
+  governance: "protocolo claim/check-write (skill forge-method)"
