@@ -12,15 +12,25 @@
 //! (the Allowlist subset). Declaring an empty or read-only Allowlist is the
 //! safe default.
 //!
-//! # F08.2 scope
+//! # YAML format
 //!
-//! This module defines the types and the canonical tool-name defaults. Full
-//! YAML parsing + typed diagnostics land in F08.4 (validator in
-//! `forge-core-validate`). For F08.2/F08.3 the server is constructed from an
-//! in-memory `Allowlist` so the adapter compiles and tools can be exercised
-//! before the config layer is wired.
+//! ```yaml
+//! tools:
+//!   - name: preview
+//!     policy: read-only
+//!   - name: execute-operation
+//!     policy: mutate
+//! ```
+//!
+//! `policy` is `read-only` (default) or `mutate`. An unknown `name` (one that
+//! does not match any registered command) is reported as a typed `Diagnostic`
+//! but does not short-circuit — validation accumulates all problems so the
+//! operator sees every issue at once (the project convention).
 
 use std::fmt;
+
+use forge_core_validate::{Diagnostic, DiagnosticCode, ValidationReport};
+use serde::{Deserialize, Serialize};
 
 /// The kind of an [`AllowedTool`]: read-only (safe to expose without an
 /// `OperationContract`) or mutate (gated by the `MutateGate` + Tool-Call
@@ -190,6 +200,109 @@ impl Allowlist {
     pub fn is_empty(&self) -> bool {
         self.tools.is_empty()
     }
+
+    /// Parse an Allowlist from a YAML string (`mcp-allowlist.yaml` content).
+    ///
+    /// Validation accumulates typed diagnostics (project convention: never
+    /// short-circuit on the first problem). The returned `ValidationReport`
+    /// lets the caller decide via `report.has_errors()`. An unknown tool name
+    /// (one not matching any registered command) is an error; a duplicate is
+    /// an error; an empty tools list is an error.
+    ///
+    /// `known_commands` is the set of registered command names from
+    /// `command_registry::COMMANDS` — the validator checks each Allowlist
+    /// entry against it so a typo is caught at load, not at call time.
+    ///
+    /// # Errors
+    ///
+    /// Never returns `Err` — parse failures become a single
+    /// `McpAllowlistYamlParseFailed` diagnostic and an empty Allowlist, so the
+    /// caller always gets a (possibly empty) `Allowlist` plus a report.
+    #[must_use]
+    pub fn from_yaml_str(yaml: &str, known_commands: &[&str]) -> (Self, ValidationReport) {
+        let mut report = ValidationReport::default();
+        // Parse the YAML envelope. If parsing fails, return an empty Allowlist
+        // + a single error diagnostic (the whole document is unusable).
+        let parsed: AllowlistYaml = match yaml_serde::from_str(yaml) {
+            Ok(doc) => doc,
+            Err(e) => {
+                report.push(Diagnostic::error(
+                    DiagnosticCode::McpAllowlistYamlParseFailed,
+                    "mcp-allowlist.yaml",
+                    format!("YAML parse failed: {e}"),
+                ));
+                return (Self { tools: Vec::new() }, report);
+            }
+        };
+
+        // Empty tools list is an error (fail-closed: no implicit exposure).
+        if parsed.tools.is_empty() {
+            report.push(Diagnostic::error(
+                DiagnosticCode::McpAllowlistEmpty,
+                "mcp-allowlist.yaml",
+                "allowlist must declare at least one tool (empty = fail-closed)",
+            ));
+            return (Self { tools: Vec::new() }, report);
+        }
+
+        let known: std::collections::HashSet<&str> = known_commands.iter().copied().collect();
+        let mut seen = std::collections::HashSet::new();
+        let mut tools = Vec::with_capacity(parsed.tools.len());
+        for (i, entry) in parsed.tools.iter().enumerate() {
+            let path = format!("mcp-allowlist.yaml#tools[{i}]");
+            if !known.contains(entry.name.as_str()) {
+                report.push(Diagnostic::error(
+                    DiagnosticCode::McpAllowlistUnknownTool,
+                    path,
+                    format!(
+                        "tool {:?} is not a registered forge-core command",
+                        entry.name
+                    ),
+                ));
+                continue;
+            }
+            if !seen.insert(entry.name.as_str()) {
+                report.push(Diagnostic::error(
+                    DiagnosticCode::McpAllowlistDuplicateTool,
+                    path,
+                    format!("tool {:?} declared more than once", entry.name),
+                ));
+                continue;
+            }
+            tools.push(AllowedTool {
+                name: entry.name.clone(),
+                policy: entry.policy(),
+            });
+        }
+        (Self { tools }, report)
+    }
+}
+
+/// The YAML-deserialized shape of `mcp-allowlist.yaml`. `policy` is a string
+/// (`read-only` default, `mutate`) so the YAML stays human-friendly; it maps
+/// to the typed [`AllowlistPolicy`] via [`ToolEntryYaml::policy`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AllowlistYaml {
+    #[serde(default)]
+    tools: Vec<ToolEntryYaml>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ToolEntryYaml {
+    name: String,
+    #[serde(default)]
+    policy: String,
+}
+
+impl ToolEntryYaml {
+    /// Map the YAML policy string to the typed enum. Unknown strings default
+    /// to `read-only` (fail-safe: never silently promote to mutate).
+    fn policy(&self) -> AllowlistPolicy {
+        match self.policy.as_str() {
+            "mutate" => AllowlistPolicy::Mutate,
+            _ => AllowlistPolicy::ReadOnly,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -234,5 +347,107 @@ mod tests {
         let al = Allowlist::default_read_only();
         // Absent = None; fail-closed at the server layer checks `is_none()`.
         assert!(al.get("definitely-not-a-tool").is_none());
+    }
+
+    const KNOWN_COMMANDS: &[&str] = &[
+        "preview",
+        "ready",
+        "graph",
+        "explain",
+        "memory",
+        "query-effect-index",
+        "execute-operation",
+        "claim",
+    ];
+
+    #[test]
+    fn yaml_parses_read_only_and_mutate() {
+        let yaml = "\
+tools:
+  - name: preview
+    policy: read-only
+  - name: execute-operation
+    policy: mutate
+";
+        let (al, report) = Allowlist::from_yaml_str(yaml, KNOWN_COMMANDS);
+        assert!(
+            !report.has_errors(),
+            "unexpected errors: {:?}",
+            report.diagnostics()
+        );
+        assert!(al.get("preview").is_some_and(|t| !t.policy.is_mutate()));
+        assert!(al
+            .get("execute-operation")
+            .is_some_and(|t| t.policy.is_mutate()));
+    }
+
+    #[test]
+    fn yaml_unknown_tool_is_error_diagnostic() {
+        let yaml = "\
+tools:
+  - name: preview
+  - name: not-a-real-command
+";
+        let (al, report) = Allowlist::from_yaml_str(yaml, KNOWN_COMMANDS);
+        assert!(report.has_errors());
+        // The known tool is still admitted; only the unknown one is dropped.
+        assert!(al.get("preview").is_some());
+        assert!(al.get("not-a-real-command").is_none());
+        assert!(report
+            .diagnostics()
+            .iter()
+            .any(|d| d.code == DiagnosticCode::McpAllowlistUnknownTool));
+    }
+
+    #[test]
+    fn yaml_duplicate_tool_is_error() {
+        let yaml = "\
+tools:
+  - name: preview
+  - name: preview
+";
+        let (_al, report) = Allowlist::from_yaml_str(yaml, KNOWN_COMMANDS);
+        assert!(report
+            .diagnostics()
+            .iter()
+            .any(|d| d.code == DiagnosticCode::McpAllowlistDuplicateTool));
+    }
+
+    #[test]
+    fn yaml_empty_tools_is_error() {
+        let yaml = "tools: []\n";
+        let (al, report) = Allowlist::from_yaml_str(yaml, KNOWN_COMMANDS);
+        assert!(report.has_errors());
+        assert!(al.is_empty());
+        assert!(report
+            .diagnostics()
+            .iter()
+            .any(|d| d.code == DiagnosticCode::McpAllowlistEmpty));
+    }
+
+    #[test]
+    fn yaml_malformed_is_parse_error() {
+        let yaml = "tools: [this is not: valid: yaml\n";
+        let (al, report) = Allowlist::from_yaml_str(yaml, KNOWN_COMMANDS);
+        assert!(report.has_errors());
+        assert!(al.is_empty());
+        assert!(report
+            .diagnostics()
+            .iter()
+            .any(|d| d.code == DiagnosticCode::McpAllowlistYamlParseFailed));
+    }
+
+    #[test]
+    fn yaml_unknown_policy_defaults_to_readonly() {
+        // Fail-safe: an unrecognized policy string never silently promotes
+        // to mutate.
+        let yaml = "\
+tools:
+  - name: preview
+    policy: bogus-value
+";
+        let (al, report) = Allowlist::from_yaml_str(yaml, KNOWN_COMMANDS);
+        assert!(!report.has_errors());
+        assert!(al.get("preview").is_some_and(|t| !t.policy.is_mutate()));
     }
 }

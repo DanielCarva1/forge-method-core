@@ -140,10 +140,24 @@ impl ForgeMcpServer {
                     tool: tool_name.to_string(),
                     reason: "tool not in allowlist".into(),
                 })?;
-        // Keep policy used so the lint stays quiet and the gate is visible.
-        let _ = policy;
 
-        // 2. Build argv: ["forge-core", <tool_name>, ...argv_tail, --json,
+        // 2. MutateGate (ADR-0006 Decision 2): a mutate tool must carry an
+        //    OperationContract. The CLI signals this via `--operation <path>`
+        //    (or `--command`/`--effect` equivalents) in the argv. A mutate
+        //    call with none of these is rejected at the adapter boundary,
+        //    before the kernel is reached — fail-closed. This is the schema-
+        //    level mitigation for tool poisoning: a caller cannot mutate shared
+        //    state without declaring the authorized intent first.
+        if policy.is_mutate() && !argv_carries_contract(argv_tail) {
+            return Err(McpAdapterError::DeniedByMutateGate {
+                tool: tool_name.to_string(),
+                reason: "mutate tool requires an OperationContract \
+                         (--operation <path>, or --command/--effect)"
+                    .into(),
+            });
+        }
+
+        // 3. Build argv: ["forge-core", <tool_name>, ...argv_tail, --json,
         //    (--root <path>)?, (--allow-bootstrap-core)?]
         let mut cmd = Command::new(&self.config.forge_core_binary);
         cmd.arg(tool_name);
@@ -264,6 +278,18 @@ fn arguments_to_argv(arguments: Option<&JsonObject>) -> Vec<String> {
         }
     }
     out
+}
+
+/// Whether an argv carries an `OperationContract` signal (ADR-0006 Decision 2).
+///
+/// The forge-core CLI accepts the contract via `--operation <path>` (the
+/// canonical `OperationContract` path) or its `--command`/`--effect`
+/// equivalents. Any of these present means the caller declared an authorized
+/// intent, so the `MutateGate` passes. None present means the mutate call is
+/// unscoped and the gate rejects (fail-closed).
+fn argv_carries_contract(argv: &[String]) -> bool {
+    argv.windows(2)
+        .any(|pair| matches!(pair[0].as_str(), "--operation" | "--command" | "--effect"))
 }
 
 impl ServerHandler for ForgeMcpServer {
@@ -491,6 +517,66 @@ mod tests {
             .invoke_tool("definitely-not-allowlisted", &[])
             .unwrap_err();
         assert!(matches!(err, McpAdapterError::DeniedByAllowlist { .. }));
+    }
+
+    #[test]
+    fn mutate_gate_rejects_execute_operation_without_contract() {
+        // A mutate tool with no --operation/--command/--effect is rejected at
+        // the MutateGate before the subprocess is spawned (ADR-0006 Decision 2).
+        let envelope = "{}";
+        let bin = make_fake_forge_core(true, envelope);
+        let cfg = McpServerConfig {
+            allowlist: Allowlist::default_with_mutate(),
+            ..config_with_fake_binary(bin)
+        };
+        let server = ForgeMcpServer::new(cfg);
+        let err = server.invoke_tool("execute-operation", &[]).unwrap_err();
+        assert!(
+            matches!(err, McpAdapterError::DeniedByMutateGate { .. }),
+            "expected MutateGate denial, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn mutate_gate_passes_when_contract_attached() {
+        // With --operation <path> present, the mutate gate passes and the
+        // subprocess is invoked (returns the fake envelope).
+        let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
+        let bin = make_fake_forge_core(true, envelope);
+        let cfg = McpServerConfig {
+            allowlist: Allowlist::default_with_mutate(),
+            ..config_with_fake_binary(bin)
+        };
+        let server = ForgeMcpServer::new(cfg);
+        let argv = vec!["--operation".to_string(), "/tmp/op.yaml".to_string()];
+        let out = server.invoke_tool("execute-operation", &argv);
+        assert!(out.is_ok(), "expected gate to pass: {out:?}");
+    }
+
+    #[test]
+    fn mutate_gate_passes_with_command_or_effect_flag() {
+        let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
+        let bin = make_fake_forge_core(true, envelope);
+        let cfg = McpServerConfig {
+            allowlist: Allowlist::default_with_mutate(),
+            ..config_with_fake_binary(bin)
+        };
+        let server = ForgeMcpServer::new(cfg);
+        // --command is also a valid contract signal.
+        let argv = vec!["--command".to_string(), "/tmp/cmd.yaml".to_string()];
+        assert!(server.invoke_tool("execute-operation", &argv).is_ok());
+        // --effect too.
+        let argv = vec!["--effect".to_string(), "/tmp/effect.yaml".to_string()];
+        assert!(server.invoke_tool("execute-operation", &argv).is_ok());
+    }
+
+    #[test]
+    fn argv_carries_contract_detection() {
+        assert!(!argv_carries_contract(&[]));
+        assert!(!argv_carries_contract(&["--json".into()]));
+        assert!(argv_carries_contract(&["--operation".into(), "/x".into()]));
+        assert!(argv_carries_contract(&["--command".into(), "/x".into()]));
+        assert!(argv_carries_contract(&["--effect".into(), "/x".into()]));
     }
 
     #[test]
