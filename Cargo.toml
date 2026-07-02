@@ -15,6 +15,7 @@ members = [
   "crates/forge-core-eval-harness",
   "crates/forge-core-engine",
   "crates/forge-core-governance",
+  "crates/forge-core-protocol-mcp",
 ]
 resolver = "2"
 
@@ -62,6 +63,11 @@ fs4 = "1.1.0"
 # code). Std-lib does not ship a regex engine; this is the de-facto Rust choice.
 regex = "1.11"
 tokio = { version = "1.52.3", default-features = false, features = ["rt", "time"] }
+# F08 — Official Rust MCP SDK (modelcontextprotocol/rust-sdk). Used by
+# `forge-core-protocol-mcp` for stdio JSON-RPC transport. Default features
+# (base64, macros, server) cover the tool/server surface; the crate enables
+# `transport-io` locally for stdio + `tokio` `io-util`/`macros` locally.
+rmcp = "2"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "registry", "fmt", "json", "env-filter", "ansi"] }
 
