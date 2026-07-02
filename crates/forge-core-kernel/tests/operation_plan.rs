@@ -8,7 +8,7 @@ use forge_core_contracts::{
     CommandContract, CommandContractDocument, OperationContractDocument, RepoPath, StableId,
     ToolEffectContractDocument,
 };
-use forge_core_runtime::{
+use forge_core_kernel::{
     command_execution_evidence_record, plan_operation, plan_operation_with_snapshot,
     prepare_effect_transaction, preview_operation_with_snapshot, preview_runtime_plan,
     ready_operation_with_snapshot, ready_runtime_plan, run_staged_read_only_command,
@@ -116,7 +116,7 @@ fn fresh_temp_root(label: &str) -> PathBuf {
         .expect("system clock before UNIX_EPOCH")
         .as_nanos();
     let path = std::env::temp_dir().join(format!(
-        "forge-core-runtime-{label}-{}-{timestamp_nanos}-{counter}",
+        "forge-core-kernel-{label}-{}-{timestamp_nanos}-{counter}",
         std::process::id()
     ));
     fs::create_dir_all(&path).expect("create temp root");
@@ -720,7 +720,7 @@ fn execute_operation_waits_without_side_effects_when_plan_needs_human() {
     let temp_root = fresh_temp_root("awaiting-human");
     let context = RuntimeOperationExecutionContext::single_root(&temp_root);
 
-    let execution = forge_core_runtime::execute_operation(
+    let execution = forge_core_kernel::execute_operation(
         &document,
         RuntimeReadSnapshot::new(&index),
         &[],
@@ -750,7 +750,7 @@ fn execute_operation_blocks_missing_required_command_before_effects() {
     let temp_root = fresh_temp_root("missing-command");
     let context = RuntimeOperationExecutionContext::single_root(&temp_root);
 
-    let execution = forge_core_runtime::execute_operation(
+    let execution = forge_core_kernel::execute_operation(
         &document,
         RuntimeReadSnapshot::new(&index),
         &[],
@@ -809,7 +809,7 @@ fn execute_operation_records_command_evidence_and_applies_effect_with_wal_lock()
         durability: WalDurability::NoSync,
     };
 
-    let execution = forge_core_runtime::execute_operation(
+    let execution = forge_core_kernel::execute_operation(
         &document,
         RuntimeReadSnapshot::new(&index),
         &[command],
@@ -855,7 +855,7 @@ fn execute_operation_records_command_evidence_and_applies_effect_with_wal_lock()
 #[test]
 fn compute_rollback_available_returns_true_for_empty_slice() {
     // Vacuously true: read-only operations have nothing to roll back.
-    assert!(forge_core_runtime::compute_rollback_available(&[]));
+    assert!(forge_core_kernel::compute_rollback_available(&[]));
 }
 
 #[test]
@@ -870,17 +870,17 @@ fn compute_rollback_available_returns_false_when_any_effect_has_inverse_none() {
     let mut with_inverse = no_inverse.clone();
     with_inverse.tool_effect_contract.repair.inverse.kind = InverseKind::ExactRollback;
 
-    assert!(!forge_core_runtime::compute_rollback_available(&[
+    assert!(!forge_core_kernel::compute_rollback_available(&[
         no_inverse.clone()
     ]));
-    assert!(forge_core_runtime::compute_rollback_available(&[
+    assert!(forge_core_kernel::compute_rollback_available(&[
         with_inverse.clone()
     ]));
-    assert!(!forge_core_runtime::compute_rollback_available(&[
+    assert!(!forge_core_kernel::compute_rollback_available(&[
         with_inverse.clone(),
         no_inverse,
     ]));
-    assert!(forge_core_runtime::compute_rollback_available(&[
+    assert!(forge_core_kernel::compute_rollback_available(&[
         with_inverse.clone(),
         with_inverse,
     ]));
@@ -903,7 +903,7 @@ fn preview_operation_with_effect_documents_overrides_rollback_placeholder() {
     let mut effect = effect_fixture("story-artifact-write-effect.yaml");
     effect.tool_effect_contract.repair.inverse.kind = InverseKind::ExactRollback;
     let resolved =
-        forge_core_runtime::preview_operation_with_effect_documents(&document, snapshot, &[effect]);
+        forge_core_kernel::preview_operation_with_effect_documents(&document, snapshot, &[effect]);
     assert!(resolved.rollback_available);
     // Everything else in the report must be unchanged.
     assert_eq!(resolved.status, placeholder.status);
@@ -924,7 +924,7 @@ fn preview_operation_with_effect_documents_unions_touched_refs_from_write_sets()
 
     let effect = effect_fixture("story-artifact-write-effect.yaml");
     let resolved =
-        forge_core_runtime::preview_operation_with_effect_documents(&document, snapshot, &[effect]);
+        forge_core_kernel::preview_operation_with_effect_documents(&document, snapshot, &[effect]);
 
     // The shipped story effect declares writes to .forge-method/artifacts and
     // .forge-method/evidence — both ArtifactId/EvidenceId (file-backed).
@@ -982,7 +982,7 @@ fn collect_effect_touched_refs_skips_non_file_backed_targets() {
             destructive: false,
         });
 
-    let refs = forge_core_runtime::collect_effect_touched_refs(&[effect]);
+    let refs = forge_core_kernel::collect_effect_touched_refs(&[effect]);
     assert_eq!(
         refs.iter()
             .map(|reference| reference.0.as_str())

@@ -8,8 +8,8 @@ use forge_core_contracts::{
     Catalog, CatalogEntry, CliEnvelope, ExitReason, Phase, ENVELOPE_SCHEMA_VERSION,
 };
 use forge_core_contracts::{GuideDecision, GuideDecisionDocument};
-use forge_core_engine::{load_catalog, load_embedded_catalog, CatalogLoadReport};
-use forge_core_engine::{
+use forge_core_decisions::{load_catalog, load_embedded_catalog, CatalogLoadReport};
+use forge_core_decisions::{
     validate_guide_decision, GateKind, GuideRejection, GuideValidation, ProvidedGateResult,
 };
 use std::path::Path;
@@ -89,7 +89,7 @@ fn compact_workflow(e: &CatalogEntry) -> DescribeWorkflow {
 }
 
 /// The static map of which gate is required for which forward transition.
-/// Kept in lockstep with forge-core-engine::phase_transition::required_gate_for.
+/// Kept in lockstep with forge-core-decisions::phase_transition::required_gate_for.
 fn gate_table() -> Vec<DescribeGate> {
     vec![
         DescribeGate {
@@ -347,7 +347,7 @@ pub fn run_status(catalog_dir: Option<&Path>, phase: &str) -> CliEnvelope<Status
 
 /// The forward gate + destination for a phase, in lockstep with `phase_transition`.
 fn forward_gates_for(phase: Phase) -> (Vec<StatusGate>, Vec<String>) {
-    use forge_core_engine::GateKind;
+    use forge_core_decisions::GateKind;
     let (gate, unlocks) = match phase {
         Phase::Discovery => (Some(GateKind::Grill), Some(Phase::Specification)),
         Phase::Specification => (Some(GateKind::SystemDesign), Some(Phase::Plan)),
@@ -597,9 +597,9 @@ pub fn run_guide_status(args: &[String]) -> Result<(), ExitError> {
 
 /// Parse the gates-file into `ProvidedGateResult` rows. Empty/absent = no gates provided.
 #[must_use]
-pub fn load_gates(path: Option<&std::path::Path>) -> Vec<forge_core_engine::ProvidedGateResult> {
+pub fn load_gates(path: Option<&std::path::Path>) -> Vec<forge_core_decisions::ProvidedGateResult> {
     use forge_core_contracts::gate::GateStatus;
-    use forge_core_engine::GateKind;
+    use forge_core_decisions::GateKind;
     let Some(path) = path else {
         return Vec::new();
     };
@@ -627,7 +627,7 @@ pub fn load_gates(path: Option<&std::path::Path>) -> Vec<forge_core_engine::Prov
                 "missing" => GateStatus::Missing,
                 _ => GateStatus::NotApplicable,
             };
-            Some(forge_core_engine::ProvidedGateResult {
+            Some(forge_core_decisions::ProvidedGateResult {
                 gate_kind: gk,
                 status,
             })

@@ -177,7 +177,7 @@ epics:
           - "policy_first_control_2603_18059"
         existing_artifacts:
           - "contracts/operations/operation-contract-v0.yaml"
-          - "crates/forge-core-runtime"
+          - "crates/forge-core-kernel"
         acceptance:
           - "OperationContractDocument validates before runtime planning."
           - "Observe/correct-course/report-only boundaries cannot mutate state."
@@ -191,7 +191,7 @@ epics:
           - "runtime_command_runner_validated"
         existing_artifacts:
           - "contracts/commands/story-validation-fast.yaml"
-          - "crates/forge-core-runtime"
+          - "crates/forge-core-kernel"
           - "crates/forge-core-store"
         acceptance:
           - "Only staged read-only commands can execute."

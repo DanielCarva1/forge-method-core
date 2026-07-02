@@ -11,7 +11,7 @@ grill_state_machine:
 inputs:
   - "contracts/policies/runtime-effect-wal-compaction-and-locking-boundary.yaml"
   - "contracts/research/field-evidence-20260625.yaml"
-  - "crates/forge-core-runtime/src/lib.rs"
+  - "crates/forge-core-kernel/src/lib.rs"
   - "crates/forge-core-cli/src/lib.rs"
   - "crates/forge-core-store/src/lib.rs"
 decision:

@@ -12,7 +12,7 @@ Comando e API que mostram plano, arquivos, comandos, authority, gates, efeitos e
 P21,P22,P28,O03,C06
 
 ## Crates
-forge-core-runtime, forge-core-store, forge-core-cli
+forge-core-kernel, forge-core-store, forge-core-cli
 
 ## Acceptance
 - Dado um OperationContract mutavel, preview retorna JSON deterministico com status, touched_refs, risk, gates, rollback_available e next_human_action.
@@ -32,7 +32,7 @@ Gate unificado para tests, lint, typecheck, evals, security checks e readiness r
 P22,P23,P30,C06
 
 ## Crates
-forge-core-runtime, forge-core-validate, forge-core-cli
+forge-core-kernel, forge-core-validate, forge-core-cli
 
 ## Acceptance
 - Um run so passa se todos os gates obrigatorios passarem; falhas retornam reasons tipadas e evidencias.

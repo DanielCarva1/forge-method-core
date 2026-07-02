@@ -209,7 +209,7 @@ Para a justificativa do Modelo A (no ADR 0002 §Rationale). IDs confirmados:
 forge-core-contracts/   ← memory.rs VIVE AQUI (newtypes, ApprovalState)
 forge-contract-validator/ ← só main.rs hoje; F06 precisa de validator aqui
 forge-core-cli/         ← contract_cmd.rs parseia MemoryContractDocument
-forge-core-runtime/     ← F06 vai precisar tocar (promote é operação mutável)
+forge-core-kernel/     ← F06 vai precisar tocar (promote é operação mutável)
 forge-core-store/       ← F06 persiste memória aqui
 (não existe) forge-core-memory/ ← a ser criado em F06.3
 ```

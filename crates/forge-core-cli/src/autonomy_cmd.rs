@@ -15,7 +15,7 @@ use forge_core_contracts::verification_goal::{
     VerificationGoalContract, VerificationGoalContractDocument,
 };
 use forge_core_contracts::{CliEnvelope, ExitReason};
-use forge_core_engine::autonomy_router::{route_lane, route_lane_for_tool_classes, LaneDecision};
+use forge_core_decisions::autonomy_router::{route_lane, route_lane_for_tool_classes, LaneDecision};
 
 use crate::cli_error::ExitError;
 
@@ -456,7 +456,7 @@ mod tests {
         AutonomyMode, AutonomyPolicyContract, EscalationPolicy, PolicyScope, PolicyScopeKind,
     };
     use forge_core_contracts::common::StableId;
-    use forge_core_engine::autonomy_router::LaneKind;
+    use forge_core_decisions::autonomy_router::LaneKind;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn args(values: &[&str]) -> Vec<String> {

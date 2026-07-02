@@ -91,7 +91,7 @@ success_signal:
 scope:
   catalog_source: "110 existing workflows (audited structurally complete) to be migrated to typed YAML + fixed (FX1-FX7)"
   new_work:
-    - "forge_core_engine crate (the missing state machine + orchestrator + funnel)"
+    - "forge_core_decisions crate (the missing state machine + orchestrator + funnel)"
     - "orchestrator-guide command + router eval corpus"
     - "system-design gate (promote architecture workflow)"
     - "4-layer governance runtime surface (claim/release/lane/handoff/bus) on existing contracts"
@@ -110,7 +110,7 @@ roadmap:
   slice_1_engine_core_and_catalog:
     goal: "the missing state machine + typed contracts + the 110 workflows migrated to typed YAML (the orchestrator needs real typed catalog data to route)"
     work:
-      - "forge_core_engine crate (state machine, phase transitions, gate enforcement)"
+      - "forge_core_decisions crate (state machine, phase transitions, gate enforcement)"
       - "workflow/phase/catalog typed contract schema"
       - "MIGRATE the 110 workflows md->yaml (85% scriptable: 85 already pure yaml; 25 need manual cleanup)"
       - "FX1: add phase declaration to all 110 (closes the 101/101 gap)"

@@ -57,7 +57,7 @@ spec:
           owns: "WAL replay → ClaimState projection. acquire creates/renews lease; release removes on agent+claim match; heartbeat refreshes liveness; tombstone suppresses. THE ONLY authority constructor for claim state."
       new_deps: ["crc32c", "ciborium (or cendol) — canonical CBOR"]
       reuse: ["fs4 (already via io_util)", "DirLock primitive (H1.3)"]
-    forge_core_engine:
+    forge_core_decisions:
       change: "claim_engine.rs switches its state source from load_claims to derive_state. claim_engine validation (TTL, rfc3339, expiry — already hardened in H1.1) runs on the DERIVED state, unchanged."
     forge_core_cli:
       change: "claim.rs: load_claims (line 451) becomes debug/fallback. Authority path: claim status / acquire / release all go through derive_state. A `--from-cache` debug flag preserves the legacy YAML read for diagnostics."
@@ -119,7 +119,7 @@ spec:
         owns_disjoint: ["crates/forge-core-store/src/derive_state.rs (new)"]
       - id: "C4"
         title: "wire derive_state as authority; demote load_claims"
-        owns_disjoint: ["crates/forge-core-cli/src/claim.rs", "crates/forge-core-engine/src/claim_engine.rs (state-source line only)"]
+        owns_disjoint: ["crates/forge-core-cli/src/claim.rs", "crates/forge-core-decisions/src/claim_engine.rs (state-source line only)"]
       - id: "C5"
         title: "exploit-closed + torn-write + concurrency tests; migration doc"
         owns_disjoint: ["crates/forge-core-store/tests/claims_wal_recovery.rs (new)", "crates/forge-core-cli/tests/claims_authority_e2e.rs (new)"]

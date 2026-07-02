@@ -1,5 +1,5 @@
 meta:
-  scope: "crates/forge-core-store/src/*.rs; crates/forge-core-cli/src/*.rs; crates/forge-core-runtime/src/*.rs"
+  scope: "crates/forge-core-store/src/*.rs; crates/forge-core-cli/src/*.rs; crates/forge-core-kernel/src/*.rs"
   files_audited: 9
   date: 2026-06-27
 summary:
@@ -73,7 +73,7 @@ candidates:
   - id: IO-008
     kind: consistency
     severity: medium
-    file: "crates/forge-core-runtime/src/lib.rs"
+    file: "crates/forge-core-kernel/src/lib.rs"
     line: "551-579"
     problem: "After an effect is applied, metadata index append failure makes execution fail but leaves the file mutation committed; operators must infer they can repair from WAL."
     suggested_fix: "Return an explicit applied_but_metadata_missing status/reason and surface a suggested rebuild-effect-index repair path instead of a generic Failed execution."

@@ -149,7 +149,7 @@ helpers OCSP/CRL/sigstore/CT/TSA.
       `rasn`, `rasn-ocsp`, `sha1`, `sha2`, `sct`, `sigstore-tsa`,
       `rustls-pki-types`, `x509-parser`).
 - [ ] Depende de `forge-core-contracts` (para tipos de contrato de verificação).
-- [ ] Não depende de `forge-core-cli` nem de `forge-core-runtime`.
+- [ ] Não depende de `forge-core-cli` nem de `forge-core-kernel`.
 - [ ] Adicionar ao workspace `members`.
 
 #### R10.2 — Mover módulos crypto da CLI
@@ -182,7 +182,7 @@ Em ordem:
 
 - [ ] `forge-core-cli/src/lib.rs` < 1500 linhas (só host adapter types + manifest
       + validate).
-- [ ] `forge-core-crypto` tem zero deps em `forge-core-cli` ou `forge-core-runtime`.
+- [ ] `forge-core-crypto` tem zero deps em `forge-core-cli` ou `forge-core-kernel`.
 - [ ] Todos os gates verdes.
 - [ ] CLI output snapshot inalterado.
 
@@ -255,7 +255,7 @@ Em ordem de valor:
 
 - [ ] `forge-core-store::claim_wal` (append, rotate, replay) — span por operação
       com `tx_id`, `claim_id`.
-- [ ] `forge-core-runtime::execute_operation` — span com `operation_id`,
+- [ ] `forge-core-kernel::execute_operation` — span com `operation_id`,
       `effect_count`.
 - [ ] `forge-core-crypto::run_host_adapter_*_verification` — span com
       `verification_kind`, `subject_ref`, `result`.

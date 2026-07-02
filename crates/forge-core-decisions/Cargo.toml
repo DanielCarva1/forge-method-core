@@ -1,5 +1,5 @@
 [package]
-name = "forge-core-engine"
+name = "forge-core-decisions"
 version.workspace = true
 edition.workspace = true
 

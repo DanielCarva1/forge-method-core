@@ -1,22 +1,23 @@
-//! # forge-core-engine
+//! # forge-core-decisions
 //!
-//! The Forge Method surface: the state machine, phase transitions, and gate
-//! enforcement. This crate owns the METHOD logic; it depends on the typed
-//! contracts ([`forge_core_contracts`]) and sits above the runtime executor
-//! (see the S1.1 engine-boundary decision).
+//! A library of pure, deterministic decision functions for the Forge Method.
+//! These functions take data in and return a verdict out — no IO, no mutable
+//! state, and **no dependency on the mutation kernel**. The only crate-level
+//! dependency is the typed [`forge_core_contracts`] layer (per ADR-0001's
+//! deterministic Rust kernel). Mutation itself lives in [`forge_core_kernel`];
+//! this crate only *decides* what should be allowed to happen.
 //!
-//! ## What lives here (slice 1)
+//! ## What lives here
 //!
-//! - [`phase_transition`]: hard-gate enforcement. The engine decides whether a
-//!   phase transition is ALLOWED or BLOCKED, independent of what the host LLM
-//!   suggests. This is the "hard gate" half of DC1: the orchestrator reasons
-//!   freely *within* gates; the engine blocks illegal transitions.
-//!
-//! ## Hard gates (DC6)
-//!
-//! The `Specification -> Plan` transition mandates a passing **system-design**
-//! gate. Even before the full system-design workflow exists, the engine
-//! enforces the gate reference (content is filled in slice 3).
+//! - [`phase_transition`]: hard-gate enforcement — is a phase transition
+//!   ALLOWED or BLOCKED, independent of what the host LLM suggests (DC1's
+//!   "hard gate": the orchestrator reasons freely *within* gates; this module
+//!   blocks illegal transitions).
+//! - [`claim_engine`]: claims lifecycle and validity rules.
+//! - [`isolation`]: worktree isolation decisions.
+//! - [`autonomy_router`]: autonomy routing.
+//! - [`catalog`]: workflow catalog selection and eligibility.
+//! - [`coordination_eval`] / [`guide_validation`]: coordination and guide checks.
 
 // The coordination-eval aggregator and a few routers walk many independent
 // dimensions while accumulating diagnostics; splitting them just to satisfy

@@ -2,7 +2,7 @@ use crate::cli_error::ExitError;
 use crate::cli_util::{next_arg_or_err, next_path_or_err, usage};
 use crate::project_cmd::{resolve_project, ProjectResolveError};
 use forge_core_contracts::OperationContractDocument;
-use forge_core_runtime::{
+use forge_core_kernel::{
     preview_operation_with_snapshot, ready_operation_with_snapshot, RuntimePreviewReport,
     RuntimeReadyReport,
 };
@@ -156,7 +156,7 @@ pub fn run_preview(input: &M1CommandInput) -> Result<PreviewCommandOutput, M1Com
         build_reference_index(&project_root).map_err(|error| reference_index_error(&error))?;
     let report = preview_operation_with_snapshot(
         &operation,
-        forge_core_runtime::RuntimeReadSnapshot::new(&index),
+        forge_core_kernel::RuntimeReadSnapshot::new(&index),
     );
     let trace_id = stable_run_id("trace", &report.operation_id.0, &input.recorded_at);
     let run_id = stable_run_id("run", &report.operation_id.0, &input.recorded_at);
@@ -204,7 +204,7 @@ pub fn run_ready(input: &M1CommandInput) -> Result<ReadyCommandOutput, M1Command
         build_reference_index(&project_root).map_err(|error| reference_index_error(&error))?;
     let report = ready_operation_with_snapshot(
         &operation,
-        forge_core_runtime::RuntimeReadSnapshot::new(&index),
+        forge_core_kernel::RuntimeReadSnapshot::new(&index),
     );
     let trace_id = stable_run_id("trace", &report.operation_id.0, &input.recorded_at);
     let run_id = stable_run_id("run", &report.operation_id.0, &input.recorded_at);
@@ -542,12 +542,12 @@ fn append_trace_events(state_root: &Path, events: &[TraceEvent]) -> Result<(), M
     Ok(())
 }
 
-fn trace_risk(destructive: bool, level: forge_core_runtime::RuntimeRiskLevel) -> TraceRisk {
+fn trace_risk(destructive: bool, level: forge_core_kernel::RuntimeRiskLevel) -> TraceRisk {
     let risk_level = match level {
-        forge_core_runtime::RuntimeRiskLevel::Low => TraceRiskLevel::Low,
-        forge_core_runtime::RuntimeRiskLevel::Medium => TraceRiskLevel::Medium,
-        forge_core_runtime::RuntimeRiskLevel::High => TraceRiskLevel::High,
-        forge_core_runtime::RuntimeRiskLevel::Blocked => TraceRiskLevel::Blocked,
+        forge_core_kernel::RuntimeRiskLevel::Low => TraceRiskLevel::Low,
+        forge_core_kernel::RuntimeRiskLevel::Medium => TraceRiskLevel::Medium,
+        forge_core_kernel::RuntimeRiskLevel::High => TraceRiskLevel::High,
+        forge_core_kernel::RuntimeRiskLevel::Blocked => TraceRiskLevel::Blocked,
     };
     TraceRisk::new(risk_level, destructive)
 }
@@ -862,7 +862,7 @@ pub fn run_m1_preview(input: &M1CommandInput, json: bool) -> Result<(), ExitErro
                     output.report.status, output.report.operation_id.0, output.trace_id
                 );
             }
-            if output.report.status == forge_core_runtime::RuntimePreviewStatus::Blocked {
+            if output.report.status == forge_core_kernel::RuntimePreviewStatus::Blocked {
                 return Err(ExitError::failed("preview status blocked"));
             }
             Ok(())

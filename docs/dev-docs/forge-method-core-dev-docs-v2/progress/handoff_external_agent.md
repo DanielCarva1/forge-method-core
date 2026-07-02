@@ -151,7 +151,7 @@ ADRs em `docs/dev-docs/forge-method-core-dev-docs-v2/adrs/` (9 ADRs, último ADR
 | 3 | `pub use` de items `pub(crate)` → E0364 | Mudar item pra `pub`. |
 | 4 | `clippy --fix` em crypto QUEBRA `ocsp.rs`/`host_adapter_verification.rs` | Mudanças manuais. |
 | 5 | `cargo test --workspace` transient filesystem lock no Windows (tempdirs) | Rodar workspace test 1x no fim, não iterar nele. |
-| 6 | 5 warnings preexistentes em `crates/forge-core-engine/src/conflict_detection.rs` (linhas 681, 776) | Não são de trilha ativa. NÃO corrigir. |
+| 6 | 5 warnings preexistentes em `crates/forge-core-decisions/src/conflict_detection.rs` (linhas 681, 776) | Não são de trilha ativa. NÃO corrigir. |
 | 7 | fmt drift preexistente em `claim.rs`, `cli_util.rs`, `preflight_cmd.rs`, `claims.rs`, `graph_contract.rs` | Não corrigir se não for da trilha ativa. |
 | 8 | `ExitReason` variants: só `Ok`, `RejectedByGate`, `InvalidDecisionShape`, `Conflict`, `EnvConfig` | Não inventar `Usage`/`InvalidValue`/`Failed`. |
 | 9 | Wire format JSON usa **snake_case**: `"env_config"`, `"invalid_decision_shape"`, `"rejected_by_gate"` | Nunca kebab-case. |

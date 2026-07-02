@@ -37,7 +37,7 @@ unlocks:
 2. **R3.2** — Spans on critical paths (one file per commit, biggest value
    first):
    - `forge-core-store::claim_wal` — span per op with `tx_id`, `claim_id`.
-   - `forge-core-runtime::execute_operation` — span with `operation_id`,
+   - `forge-core-kernel::execute_operation` — span with `operation_id`,
      `effect_count`.
    - `forge-core-crypto::*_verification` — span with `verification_kind`,
      `subject_ref`, `result`.

@@ -25,7 +25,7 @@ Observação inicial: **nenhum paper é puramente oriental**. As fontes orientai
 - **Region**: Western.
 - **Key findings**: 13 findings (F1–F13); fontes: 17.
 - **Implementation status**: 🟡 Partial.
-- **Where**: `crates/forge-core-runtime/`, `crates/forge-core-engine/phase_transition.rs`, `docs/dev-docs/forge-method-core-dev-docs-v2/progress/r6_benchmarks.md` (R6.1+R6.2).
+- **Where**: `crates/forge-core-kernel/`, `crates/forge-core-decisions/phase_transition.rs`, `docs/dev-docs/forge-method-core-dev-docs-v2/progress/r6_benchmarks.md` (R6.1+R6.2).
 - **Evidence**: há runtime com transição de fase e benchmarks R6.1/R6.2 estabelecidos (base mensurável); a noção de "pista rápida" aproxima-se da separação preview/ready/gate em `forge-core-trace::TraceEventKind` (`PreviewCompleted`, `ReadyCompleted`, `GatePassed`).
 - **Gap**: F1/F2 (estudos de caso de vendor) não são actionable; F7/F8 (limites de concorrência por modelo) ainda não têm policy codificada; banco de eval de throughput (F13) parcial — pendente F05/R9.
 
@@ -35,8 +35,8 @@ Observação inicial: **nenhum paper é puramente oriental**. As fontes orientai
 - **Region**: Mixed (F7 traz fontes orientais: Alibaba/TRAE/Qwen3).
 - **Key findings**: 8 findings + catálogo FEAT; fontes: 24.
 - **Implementation status**: 🟡 Partial.
-- **Where**: depende do item FEAT — `crates/forge-core-crypto/` (FEAT assinatura/transparência), `crates/forge-core-engine/` (FEAT isolamento/claim), pendentes F05–F14.
-- **Evidence**: FEATs de criptografia e isolamento têm reflexo concreto (`forge-core-crypto` com rekor/ocsp/sigstore/tuf/slsa_transparency; `forge-core-engine/isolation.rs`). FEAT-03 (self-evolving tools) e FEAT-04 (shared-state coordination) mapeiam para pendentes F08 (MCP) e F09 (A2A).
+- **Where**: depende do item FEAT — `crates/forge-core-crypto/` (FEAT assinatura/transparência), `crates/forge-core-decisions/` (FEAT isolamento/claim), pendentes F05–F14.
+- **Evidence**: FEATs de criptografia e isolamento têm reflexo concreto (`forge-core-crypto` com rekor/ocsp/sigstore/tuf/slsa_transparency; `forge-core-decisions/isolation.rs`). FEAT-03 (self-evolving tools) e FEAT-04 (shared-state coordination) mapeiam para pendentes F08 (MCP) e F09 (A2A).
 - **Gap**: a maior parte do catálogo FEAT é *aspiracional* — corresponde exatamente aos features F08–F14 ainda não entregues no `excellence_roadmap.md`.
 
 ### `cli-llm-first-design.yaml`
@@ -75,7 +75,7 @@ Observação inicial: **nenhum paper é puramente oriental**. As fontes orientai
 - **Region**: Mixed (síntese cross-regional de casos industriais).
 - **Key findings**: verdict + padrão de 4 camadas; fontes: sintéticas.
 - **Implementation status**: ✅ Implemented.
-- **Where**: `crates/forge-core-engine/src/conflict_detection.rs`, `crates/forge-core-engine/src/isolation.rs`, `crates/forge-core-store/src/claim_wal.rs`, `crates/forge-core-engine/src/claim_engine.rs`.
+- **Where**: `crates/forge-core-decisions/src/conflict_detection.rs`, `crates/forge-core-decisions/src/isolation.rs`, `crates/forge-core-store/src/claim_wal.rs`, `crates/forge-core-decisions/src/claim_engine.rs`.
 - **Evidence**: `conflict_detection.rs` implementa exatamente o padrão de 4 camadas — classificação pura `WriteCheck::Ok { governed_by_self, ungoverned } | Blocked { blocks }` com `BlockDetail { blocked_path, blocking_claim_id, claimant, conflict_code }`. DD8/DD10/DD19/DD26/DD27/DD28 estão codificados como invariantes documentados nos comentários do módulo. O WAL materializa a reserva semântica (S4.3 citada no próprio paper).
 - **Gap**: governance de handoff multi-principal (mais de 2 agentes) ainda é parcial — ver F07.
 
@@ -85,7 +85,7 @@ Observação inicial: **nenhum paper é puramente oriental**. As fontes orientai
 - **Region**: Mixed (F7: Qwen-Agent, MegaAgent).
 - **Key findings**: 8 findings (F1–F8); fontes: 18.
 - **Implementation status**: 🟡 Partial.
-- **Where**: `crates/forge-core-contracts/`, `crates/forge-core-validate/`, `crates/forge-core-engine/catalog.rs`.
+- **Where**: `crates/forge-core-contracts/`, `crates/forge-core-validate/`, `crates/forge-core-decisions/catalog.rs`.
 - **Evidence**: os contratos tipados (Claim, Effect, Operation) são o núcleo do Forge — `protocol-scale` valida essa escolha de design (F3/F8 "hard gates + freedom within gates"). O validator acumula `Diagnostic` (não short-circuit) conforme a filosofia do paper.
 - **Gap**: F1/F8 (evidência empírica de scale-with-model via benchmarks) é exatamente o pendente F05/R9 — ainda sem baseline comparativo.
 
@@ -135,7 +135,7 @@ Observação inicial: **nenhum paper é puramente oriental**. As fontes orientai
 - **Region**: Unspecified (auditoria interna).
 - **Key findings**: 15 ocorrências (não usa `key_findings`; usa `occurrences`).
 - **Implementation status**: 🟡 Partial.
-- **Where**: `crates/forge-core-store/src/claim_wal.rs`, `crates/forge-core-engine/src/claim_engine.rs`.
+- **Where**: `crates/forge-core-store/src/claim_wal.rs`, `crates/forge-core-decisions/src/claim_engine.rs`.
 - **Evidence**: as ocorrências foram triadas; as críticas endereçadas via `ClaimWalStopReason` tipado (não panic) e `Result` com enums nomeados conforme `AGENTS.md`. O WAL agora fail-closes em record type desconhecido (`FLAG_SKIPPABLE_UNKNOWN`, `from_record_type` retorna `None`).
 - **Gap**: failpoint injection ativa (simular disk full, partial write, crash mid-append) ainda pendente — correlaciona-se com R4 fuzz e F11 (risk audit).
 
@@ -155,7 +155,7 @@ Observação inicial: **nenhum paper é puramente oriental**. As fontes orientai
 - **Region**: Unspecified (auditoria interna).
 - **Key findings**: `io_operations` + `answers` (Q1/Q2/Q3; não usa `key_findings`).
 - **Implementation status**: 🟡 Partial.
-- **Where**: `crates/forge-core-engine/src/conflict_detection.rs`, `crates/forge-core-store/src/claim_wal.rs`, `crates/forge-core-cli/src/lib.rs`.
+- **Where**: `crates/forge-core-decisions/src/conflict_detection.rs`, `crates/forge-core-store/src/claim_wal.rs`, `crates/forge-core-cli/src/lib.rs`.
 - **Evidence**: as Q1/Q2/Q3 do paper (quem escreve, quando, onde) são respondidas em código: write-set entra em `conflict_detection::check_write_set`, sinalizado via WAL `Acquire`/`Release`/`Heartbeat`/`HandoffRecorded`, efeitos stageados via `TraceEventKind::EffectStaged` → `EffectApplied`.
 - **Gap**: auditoria identificou cantos onde o path bifurca (CLI vs runtime vs validator); nem todos têm telemetria ponta-a-ponta.
 

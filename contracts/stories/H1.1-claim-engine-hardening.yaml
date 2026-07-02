@@ -15,9 +15,9 @@ decision_sources:
 intent: "Eliminate the 3 HIGH-severity fail-closed violations in claim_engine.rs so every claim the engine produces is arithmetically sound, time-valid, and validator-consistent. This is the core authority engine; correctness here is non-negotiable."
 
 owned_files:
-  - "crates/forge-core-engine/src/claim_engine.rs"
+  - "crates/forge-core-decisions/src/claim_engine.rs"
 forbidden_files:
-  - "crates/forge-core-engine/src/conflict_detection.rs"   # owned by H1.2
+  - "crates/forge-core-decisions/src/conflict_detection.rs"   # owned by H1.2
   - "crates/forge-core-cli/src/io_util.rs"                 # owned by H1.3
 
 tasks:
@@ -34,7 +34,7 @@ acceptance_criteria:
   - "cargo check + clippy clean on the engine crate"
 
 checks:
-  - "cargo test -p forge-core-engine"
-  - "cargo clippy -p forge-core-engine -- -D warnings"
+  - "cargo test -p forge-core-decisions"
+  - "cargo clippy -p forge-core-decisions -- -D warnings"
 blocks: []
 next_workflow: "merge with H1.2 + H1.3, then driver runs full green-loop"

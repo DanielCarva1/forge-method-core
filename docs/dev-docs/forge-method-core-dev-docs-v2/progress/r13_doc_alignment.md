@@ -120,5 +120,5 @@ No commit was made, per task instructions.
 
 3. **Tracing example references `RuntimeReadSnapshot<'_>` and
    `plan_operation_with_snapshot`.** Not checked for drift against the current
-   `forge-core-runtime` API. Outside the R13.1 scope (error/CLI conventions only);
+   `forge-core-kernel` API. Outside the R13.1 scope (error/CLI conventions only);
    flagged for a possible future drift audit.

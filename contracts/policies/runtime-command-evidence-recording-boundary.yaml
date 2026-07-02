@@ -65,7 +65,7 @@ acceptance:
     - "append_json_line creates parent directories and appends JSON lines."
     - "append_json_line rejects path escapes."
   validation:
-    - "cargo test -p forge-core-runtime"
+    - "cargo test -p forge-core-kernel"
     - "cargo test -p forge-core-store"
     - "cargo test --workspace"
     - "cargo clippy --workspace -- -D warnings"

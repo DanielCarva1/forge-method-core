@@ -2,7 +2,7 @@
 //!
 //! Pure path/payload resolution layer that lives between the CLI entrypoint
 //! (`run_execute_operation_command` in `main.rs`) and the runtime executor
-//! (`forge_core_runtime::execute_operation`).
+//! (`forge_core_kernel::execute_operation`).
 //!
 //! Responsibilities:
 //! - Resolve operation/command/effect contract paths against the project root,
@@ -28,7 +28,7 @@ use forge_core_contracts::{
     CommandContractDocument, FieldEvidenceRegistry, OperationContractDocument, RepoPath,
     ToolEffectContractDocument,
 };
-use forge_core_runtime::{
+use forge_core_kernel::{
     execute_operation, CommandExecutionContext, RuntimeEffectPayloadKind,
     RuntimeOperationCommandInput, RuntimeOperationEffectInput, RuntimeOperationEffectPayload,
     RuntimeOperationExecution, RuntimeOperationExecutionContext, RuntimeReadSnapshot,
@@ -236,7 +236,7 @@ impl std::error::Error for ExecuteOperationError {}
 ///
 /// Resolves all paths against `root`, builds the reference index, loads
 /// contract documents and runtime payloads, then hands everything off to
-/// [`forge_core_runtime::execute_operation`].
+/// [`forge_core_kernel::execute_operation`].
 ///
 /// # Errors
 ///
@@ -767,7 +767,7 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
             execution.status, execution.reasons
         );
     }
-    if execution.status != forge_core_runtime::RuntimeOperationExecutionStatus::Completed {
+    if execution.status != forge_core_kernel::RuntimeOperationExecutionStatus::Completed {
         return Err(ExitError::failed("execution did not complete"));
     }
     Ok(())

@@ -74,7 +74,7 @@ acceptance:
     - "forge-core execute-operation --root <path> --operation <path> --json returns structured RuntimeOperationExecution."
     - "CLI execute path delegates to runtime operation executor."
   validation:
-    - "cargo test -p forge-core-runtime"
+    - "cargo test -p forge-core-kernel"
     - "cargo test -p forge-core-cli"
     - "cargo test --workspace"
     - "cargo clippy --workspace -- -D warnings"

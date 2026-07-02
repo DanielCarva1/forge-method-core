@@ -20,7 +20,7 @@ context:
     - target: "forge-contract-validator"
     - target: "forge-core-cli"
     - target: "forge-core-contracts"
-    - target: "forge-core-runtime"
+    - target: "forge-core-kernel"
     - target: "forge-core-store"
     - target: "forge-core-validate"
   known_symptom: "deserializes_all_operation_fixtures panics at line ~105 (fixtures/code desync)"

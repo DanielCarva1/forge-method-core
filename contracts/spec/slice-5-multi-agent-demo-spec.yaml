@@ -25,13 +25,13 @@ demo_design:
 
   worker_alice:
     agent_id: "alice"
-    target_file: "crates/forge-core-engine/src/coordination_eval.rs"
+    target_file: "crates/forge-core-decisions/src/coordination_eval.rs"
     claim_scope: "lane/worker-coordination"
     task: "rustdoc on validate_coordination_contract, coordination_fixture_gaps, score_coordination + module-level doc"
 
   worker_bob:
     agent_id: "bob"
-    target_file: "crates/forge-core-engine/src/conflict_detection.rs"
+    target_file: "crates/forge-core-decisions/src/conflict_detection.rs"
     claim_scope: "lane/worker-conflict"
     task: "rustdoc on check_write_against_claims, classify_target + module-level doc"
 

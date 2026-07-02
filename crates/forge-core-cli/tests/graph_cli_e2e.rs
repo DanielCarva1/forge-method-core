@@ -131,7 +131,7 @@ kind: "workflow_graph"
 graph_id: "graph.e2e.valid"
 created_at: "2026-06-29T00:00:00Z"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 nodes:
@@ -161,7 +161,7 @@ kind: "workflow_graph"
 graph_id: "graph.e2e.duplicate"
 created_at: "2026-06-29T00:00:00Z"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 nodes:
@@ -184,7 +184,7 @@ kind: "workflow_graph"
 graph_id: "graph.e2e.blocked"
 created_at: "2026-06-29T00:00:00Z"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 nodes:
@@ -222,7 +222,7 @@ kind: "workflow_graph"
 graph_id: "graph.e2e.ready-mutation"
 created_at: "2026-06-29T00:00:00Z"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 nodes:
@@ -700,7 +700,7 @@ kind: "workflow_graph"
 graph_id: "graph.e2e.operation-resolution"
 created_at: "2026-06-29T00:00:00Z"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 nodes:
@@ -758,7 +758,7 @@ kind: "workflow_graph"
 graph_id: "graph.e2e.missing-operation"
 created_at: "2026-06-29T00:00:00Z"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 nodes:
@@ -809,7 +809,7 @@ kind: "workflow_graph"
 graph_id: "graph.e2e.operation-ref-escape"
 created_at: "2026-06-29T00:00:00Z"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 nodes:
@@ -867,7 +867,7 @@ kind: "workflow_graph"
 graph_id: "graph.e2e.operation-ref-absolute"
 created_at: "2026-06-29T00:00:00Z"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 nodes:
@@ -939,7 +939,7 @@ kind: "workflow_graph"
 graph_id: "graph.e2e.operation-ref-symlink"
 created_at: "2026-06-29T00:00:00Z"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 nodes:
@@ -998,7 +998,7 @@ kind: "workflow_graph"
 graph_id: "graph.e2e.invalid-operation"
 created_at: "2026-06-29T00:00:00Z"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 nodes:
@@ -1047,7 +1047,7 @@ kind: "workflow_graph"
 graph_id: "graph.e2e.review-required-operation"
 created_at: "2026-06-29T00:00:00Z"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 nodes:
@@ -1106,7 +1106,7 @@ kind: "workflow_graph"
 graph_id: "graph.e2e.no-trace-mutation"
 created_at: "2026-06-29T00:00:00Z"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 nodes:

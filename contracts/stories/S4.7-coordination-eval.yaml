@@ -17,11 +17,11 @@ intent: |
 context:
   contract_type: "crates/forge-core-contracts/src/coordination_eval.rs (exists: CoordinationEvalContract, 9 dims, PassPolicy)"
   suite: "contracts/evals/minimal-coordination-eval-suite.yaml (22 refs, 0 dangling — already real)"
-  precedent: "crates/forge-core-engine/src/eval.rs (score_router host-provide-fn pattern — the template)"
+  precedent: "crates/forge-core-decisions/src/eval.rs (score_router host-provide-fn pattern — the template)"
 
 scope:
   in:
-    - "Engine module crates/forge-core-engine/src/coordination_eval.rs (pure logic, no IO except fixture-gaps file check like corpus_coverage_gaps)"
+    - "Engine module crates/forge-core-decisions/src/coordination_eval.rs (pure logic, no IO except fixture-gaps file check like corpus_coverage_gaps)"
     - "Types: CoordinationOutcome, CoordinationVerdict, CoordinationScore"
     - "Fns: validate_coordination_contract (structural), coordination_fixture_gaps (dangling refs), score_coordination (host outcome closure -> typed verdict)"
     - "pass_policy enforcement: required_level + all_must_pass + manual_review_blocks_release"

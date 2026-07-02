@@ -22,7 +22,7 @@ use forge_core_contracts::isolation::{
     MergePolicy,
 };
 use forge_core_contracts::{CliEnvelope, ExitReason, RepoPath, ENVELOPE_SCHEMA_VERSION};
-use forge_core_engine::isolation::{
+use forge_core_decisions::isolation::{
     detect_isolation_conflict, propose_merge, transition_status, validate_isolation_contract,
 };
 use std::path::{Path, PathBuf};
@@ -94,7 +94,7 @@ pub fn run_propose(
         branch_name: branch_name.to_string(),
         worktree_path: RepoPath(worktree_path.to_string()),
         base_ref: base_ref.to_string(),
-        created_at: forge_core_engine::unix_to_rfc3339(now_unix),
+        created_at: forge_core_decisions::unix_to_rfc3339(now_unix),
         status: IsolationStatus::Proposed,
         merge_policy,
         claim_id,

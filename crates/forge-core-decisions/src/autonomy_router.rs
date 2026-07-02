@@ -250,12 +250,12 @@ mod tests {
                 phase: "4-build-verify".to_owned(),
                 story_ref: Some(sid("story-test")),
                 changed_paths: vec![RepoPath(
-                    "crates/forge-core-engine/src/autonomy_router.rs".to_owned(),
+                    "crates/forge-core-decisions/src/autonomy_router.rs".to_owned(),
                 )],
             },
             goals: vec![VerificationGoal {
                 kind: GoalKind::UnitTestsPass,
-                target: "cargo test -p forge-core-engine".to_owned(),
+                target: "cargo test -p forge-core-decisions".to_owned(),
                 status,
                 adapter: AdapterKind::Cargo,
                 detail: None,

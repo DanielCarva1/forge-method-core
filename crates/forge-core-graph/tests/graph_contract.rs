@@ -44,7 +44,7 @@ stop_conditions:
   - "budget_exceeded"
   - "human_required"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 "#;
@@ -86,7 +86,7 @@ nodes: []
 edges: []
 stop_conditions: []
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 unexpected: true
@@ -106,7 +106,7 @@ nodes: []
 edges: []
 stop_conditions: []
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 "#;
@@ -141,7 +141,7 @@ edges:
 stop_conditions:
   - "validation_errors"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 "#;
@@ -186,7 +186,7 @@ edges: []
 stop_conditions:
   - "validation_errors"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 "#;
@@ -246,7 +246,7 @@ edges:
 stop_conditions:
   - "validation_errors"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 "#;
@@ -297,7 +297,7 @@ edges:
 stop_conditions:
   - "validation_errors"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 "#;
@@ -343,7 +343,7 @@ stop_conditions:
   - "validation_errors"
   - "verifier_failed"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 "#;
@@ -382,7 +382,7 @@ edges: []
 stop_conditions:
   - "validation_errors"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 "#,
@@ -437,7 +437,7 @@ edges:
 stop_conditions:
   - "validation_errors"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 "#,
@@ -503,7 +503,7 @@ edges: []
 stop_conditions:
   - "validation_errors"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 "#,

@@ -1,7 +1,7 @@
 id,path,finding,implication
 C01,README.md:52-70,"Forge v2 ja define .forge-method como camada de coordenacao para humanos e agentes, com registry, lane claims, handoffs append-only e optimistic concurrency.","A base conceitual ja encaixa com MPAC, graph runtime e trace."
-C02,Cargo.toml:3-12,"Workspace Rust separado em forge-contract-validator, forge-core-contracts, forge-core-schema, forge-core-cli, forge-core-store, forge-core-validate e forge-core-runtime.",O repo ja tem fronteira natural para virar kernel modular.
+C02,Cargo.toml:3-12,"Workspace Rust separado em forge-contract-validator, forge-core-contracts, forge-core-schema, forge-core-cli, forge-core-store, forge-core-validate e forge-core-kernel.",O repo ja tem fronteira natural para virar kernel modular.
 C03,crates/forge-core-contracts/src/operation.rs:13-44,"OperationContract modela autonomia, autoridade, coordenação, execucao, stop policy, comandos, efeitos, gates e diagnostics.","O contrato atual pode virar node de WorkflowGraph, mas esta grande demais para ser editado manualmente por agentes."
 C04,"crates/forge-core-store/src/lib.rs:21-34,127-177,299-324","Store concentra indexacao, coleta de YAML, append JSONL, efeito transacional, WAL, lock e metadata.",Separar em modulos para reduzir blast radius e carga cognitiva de agentes.
 C05,crates/forge-core-cli/src/main.rs:47-93,"CLI atual usa parsing manual por env::args, match command, loops de indice e process::exit.",Migrar para clap derive para reduzir erro e boilerplate.
-C06,"crates/forge-core-runtime/src/lib.rs:43-98,244-365","RuntimePlan ja calcula status e reasons tipados com validacao, gates, human input, review e mutation policy.","Esse planner deve ser base de preview, ready e graph executor."
+C06,"crates/forge-core-kernel/src/lib.rs:43-98,244-365","RuntimePlan ja calcula status e reasons tipados com validacao, gates, human input, review e mutation policy.","Esse planner deve ser base de preview, ready e graph executor."

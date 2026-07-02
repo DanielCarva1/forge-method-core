@@ -12,7 +12,7 @@ use forge_core_contracts::{
     claim::{ActorRole, ClaimScopeKind, ClaimStatus},
     ClaimId, ExitReason, RepoPath, ScopeId, StableId,
 };
-use forge_core_engine::{
+use forge_core_decisions::{
     check_write_against_claims, expire_stale, is_expired, is_live, project_active, unix_to_rfc3339,
     AcquireRequest, WriteCheck,
 };

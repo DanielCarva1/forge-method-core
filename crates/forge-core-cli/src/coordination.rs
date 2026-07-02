@@ -9,13 +9,13 @@
 //! the suite is REAL (all 22 refs resolve, all 9 dims well-formed). Exit 2 =
 //! structural problems or dangling refs reported as typed `CoordinationValidationError`s.
 //!
-//! Scoring ([`forge_core_engine::score_coordination`]) stays engine-only (like
+//! Scoring ([`forge_core_decisions::score_coordination`]) stays engine-only (like
 //! `score_router`): the host supplies outcomes (file-backed, DC10) and the
 //! engine is the deterministic gate. A future MCP surface (slice 6) exposes it.
 
 use forge_core_contracts::coordination_eval::CoordinationEvalContractDocument;
 use forge_core_contracts::{CliEnvelope, ExitReason};
-use forge_core_engine::{coordination_fixture_gaps, validate_coordination_contract};
+use forge_core_decisions::{coordination_fixture_gaps, validate_coordination_contract};
 use std::path::{Path, PathBuf};
 
 use crate::cli_error::ExitError;

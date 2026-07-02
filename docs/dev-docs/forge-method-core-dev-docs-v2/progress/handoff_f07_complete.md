@@ -67,7 +67,7 @@ O epic F07 está **completo**. Os epics pendentes (ver `followups_v0_1_to_10.md`
 4. `crates/forge-core-contracts/src/governance.rs` — schemas + `GovernancePolicy::can_arbitrate`.
 5. `crates/forge-core-cli/src/governance_cmd.rs` — o CLI (F07.6, template: memory_cmd.rs).
 6. `crates/forge-core-cli/tests/governance_cli_e2e.rs` — E2E (F07.7, template: memory_cli_e2e.rs).
-7. `crates/forge-core-engine/src/claim_engine.rs` — o seam de detecção (acquire; helper `build_conflict`).
+7. `crates/forge-core-decisions/src/claim_engine.rs` — o seam de detecção (acquire; helper `build_conflict`).
 8. `crates/forge-core-memory/src/lib.rs` — o template arquitetural espelhado.
 9. Este handoff + o anterior (`handoff_f06_f07_session.md`).
 

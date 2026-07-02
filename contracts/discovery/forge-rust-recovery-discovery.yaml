@@ -78,7 +78,7 @@ audit:
         forge_core_contracts: "2215 lines, 17 files, dozens of typed enums, serde-derived"
         forge_core_store: "4054 lines, WAL append-only with begin/before-image/commit + rollback + validate_tool_effect before write"
         forge_core_cli: "12821 lines"
-        forge_core_runtime: "1844 lines"
+        forge_core_kernel: "1844 lines"
         forge_core_validate: "2458 lines"
         forge_core_schema: "344 lines"
         forge_contract_validator: "405 lines"

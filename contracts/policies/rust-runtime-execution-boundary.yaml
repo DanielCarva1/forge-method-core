@@ -4,7 +4,7 @@ status: "accepted"
 purpose: "Define the first Rust runtime execution boundary so Forge moves authority out of host-agent prose without recreating the old monolithic runtime."
 decision:
   selected_strategy: "operation_plan_first_no_mutating_executor"
-  runtime_crate: "forge-core-runtime"
+  runtime_crate: "forge-core-kernel"
   first_public_api: "plan_operation"
   input_contracts:
     - "OperationContractDocument"
@@ -65,7 +65,7 @@ tradeoffs:
       reason: "Prompt reminders are not an enforceable runtime boundary."
 acceptance:
   crate:
-    - "Add forge-core-runtime as a library crate."
+    - "Add forge-core-kernel as a library crate."
     - "Expose plan_operation(document: &OperationContractDocument) -> RuntimePlan."
     - "Do not depend on CLI, MCP, terminal styling, or host adapters."
   tests:
@@ -75,15 +75,15 @@ acceptance:
     - "destructive missing inverse fixture routes to blocked."
     - "host drift invented next step does not route to ready_to_call_operation."
   validation:
-    - "cargo test -p forge-core-runtime"
+    - "cargo test -p forge-core-kernel"
     - "cargo test --workspace"
     - "cargo clippy --workspace -- -D warnings"
 implementation_evidence:
   crate_refs:
-    - "crates/forge-core-runtime/src/lib.rs"
-    - "crates/forge-core-runtime/tests/operation_plan.rs"
+    - "crates/forge-core-kernel/src/lib.rs"
+    - "crates/forge-core-kernel/tests/operation_plan.rs"
   validation:
-    - "cargo test -p forge-core-runtime"
+    - "cargo test -p forge-core-kernel"
 evidence_basis:
   direct_patterns:
     - source_id: "natural_language_agent_harnesses_2603_25723"

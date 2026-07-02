@@ -71,7 +71,7 @@ stories:
     status: "pending"
     autonomy_value: "HIGH — the semantic core that makes claims MEAN something"
     scope:
-      - "ClaimEngine in forge-core-engine: acquire, heartbeat, release, expire_stale, list_active"
+      - "ClaimEngine in forge-core-decisions: acquire, heartbeat, release, expire_stale, list_active"
       - "ClaimLifecycleDecision typed result (Accepted | Rejected(ClaimRejection)) mirroring GuideValidation"
       - "ClaimRejection variants: AlreadyClaimedByOther, StaleCannotHeartbeat, NotClaimant, IllegalTransition, ExpiredRequiresHandoff"
       - "Lease/TTL computation: now - last_heartbeat > ttl_seconds => Stale; Stale past grace => Expired"

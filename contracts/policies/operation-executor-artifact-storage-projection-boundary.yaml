@@ -64,7 +64,7 @@ acceptance:
     - "Runtime operation executor can apply the current story artifact/evidence ToolEffect without mutating target kinds in tests."
   validation:
     - "cargo test -p forge-core-store"
-    - "cargo test -p forge-core-runtime"
+    - "cargo test -p forge-core-kernel"
     - "cargo test --workspace"
     - "cargo clippy --workspace -- -D warnings"
 evidence_basis:

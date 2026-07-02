@@ -14,7 +14,7 @@ grill_question:
   question: "After validation and compatibility are stabilized, which Rust runtime execution boundary should be implemented next without recreating the old giant Python runtime?"
   options:
     - id: "operation_plan_first_no_mutating_executor"
-      summary: "Create forge-core-runtime with a typed plan_operation API that validates OperationContract and returns RuntimePlan, without executing commands or writing files."
+      summary: "Create forge-core-kernel with a typed plan_operation API that validates OperationContract and returns RuntimePlan, without executing commands or writing files."
       advantages:
         - "Turns guide/gate authority into typed runtime output."
         - "Reduces host-agent drift with small blast radius."
@@ -45,7 +45,7 @@ grill_question:
         - "Premature before contracts, store reads, and operation planning are stable."
         - "Adds installation and lifecycle complexity across Codex/Cursor/opencode/Claude/pi.dev."
   selected_option: "operation_plan_first_no_mutating_executor"
-  decision: "Implement a narrow forge-core-runtime operation planner now. It validates OperationContractDocument, classifies status, and returns typed action guidance. It does not execute commands, write files, run LLM calls, start a daemon, or encode host-specific behavior."
+  decision: "Implement a narrow forge-core-kernel operation planner now. It validates OperationContractDocument, classifies status, and returns typed action guidance. It does not execute commands, write files, run LLM calls, start a daemon, or encode host-specific behavior."
 evidence_basis:
   direct_patterns:
     - source_id: "natural_language_agent_harnesses_2603_25723"
@@ -69,14 +69,14 @@ evidence_basis:
     note: "This boundary intentionally includes China-origin work because agent harness, multi-agent state, and tool orchestration research is active there."
   inference_boundary: "The evidence supports explicit contracts, runtime governance, and state mediation. The exact RuntimePlan API is a Forge-specific design choice constrained by existing Rust types."
 implementation_plan:
-  - "Add forge-core-runtime crate to the Cargo workspace."
+  - "Add forge-core-kernel crate to the Cargo workspace."
   - "Expose RuntimePlan and RuntimePlanStatus."
   - "Run forge-core-validate before planning."
   - "Map fixtures to statuses with Rust tests."
   - "Keep execution and mutation out of this boundary."
 acceptance:
   validation:
-    - "cargo test -p forge-core-runtime"
+    - "cargo test -p forge-core-kernel"
     - "cargo test --workspace"
     - "cargo clippy --workspace -- -D warnings"
 policy_ref: "contracts/policies/rust-runtime-execution-boundary.yaml"

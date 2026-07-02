@@ -3,7 +3,7 @@ kind: "workflow_graph"
 graph_id: "graph.fixture.verifier-blocks-mutation"
 created_at: "2026-06-29T00:00:00Z"
 authority_boundary:
-  source_of_truth: "forge-core-runtime"
+  source_of_truth: "forge-core-kernel"
   adapters_may_suggest: true
   adapters_may_mutate: false
 nodes:

@@ -48,10 +48,10 @@ evidence_basis:
     supports: "Internal channels and shared memory can leak private data, so indexes should use data minimization."
 implementation_refs:
   - "crates/forge-core-store/src/lib.rs"
-  - "crates/forge-core-runtime/src/lib.rs"
+  - "crates/forge-core-kernel/src/lib.rs"
   - "crates/forge-core-cli/src/lib.rs"
   - "crates/forge-core-store/tests/reference_index.rs"
-  - "crates/forge-core-runtime/tests/operation_plan.rs"
+  - "crates/forge-core-kernel/tests/operation_plan.rs"
 acceptance:
   - "Applied artifact/evidence/request effects return EffectTargetMetadataRecord values."
   - "Runtime execution appends `.forge-method/index/effect-targets.ndjson` after successful effect application."

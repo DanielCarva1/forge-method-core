@@ -44,7 +44,7 @@ pub enum IntentScopeKind {
     Repo,
     /// A path-prefix sub-tree (the canonical case — matches the existing
     /// path-segment claim-overlap detector at
-    /// `forge-core-engine/src/conflict_detection.rs`).
+    /// `forge-core-decisions/src/conflict_detection.rs`).
     PathPrefix,
     /// A single memory entry (for the capability-governance gap that unblocks
     /// F06's `review` axis).

@@ -1,7 +1,7 @@
 schema_version: "0.1"
 policy: "runtime_command_runner_boundary"
 status: "accepted"
-purpose: "Define how forge-core-runtime executes staged read-only CommandContract commands without allowing host-agent prose, shell strings, mutation, network, or irreversible commit."
+purpose: "Define how forge-core-kernel executes staged read-only CommandContract commands without allowing host-agent prose, shell strings, mutation, network, or irreversible commit."
 decision:
   selected_strategy: "staged_read_only_command_runner_with_typed_result"
   runtime_api:
@@ -71,7 +71,7 @@ tradeoffs:
       reason: "Shell improves convenience but widens injection, quoting, platform, and process-control risk."
 acceptance:
   crate:
-    - "CommandExecutionContext exists in forge-core-runtime."
+    - "CommandExecutionContext exists in forge-core-kernel."
     - "RuntimeCommandExecution returns typed status, reasons, exit code, timeout, duration, output, truncation, and validation counts."
     - "run_staged_read_only_command executes only staged read-only commands."
     - "Shell executors, mutating commands, network commands, unsafe flags, missing env, forbidden env, unsupported platform, and zero timeout block before spawn."
@@ -82,7 +82,7 @@ acceptance:
     - "shell executor is blocked."
     - "zero timeout is blocked."
   validation:
-    - "cargo test -p forge-core-runtime"
+    - "cargo test -p forge-core-kernel"
     - "cargo test --workspace"
     - "cargo clippy --workspace -- -D warnings"
 evidence_basis:

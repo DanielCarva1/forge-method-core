@@ -13,7 +13,7 @@ inputs:
   - "contracts/research/field-evidence-20260625.yaml"
   - "contracts/effects/story-artifact-write-effect.yaml"
   - "crates/forge-core-store/src/lib.rs"
-  - "crates/forge-core-runtime/tests/operation_plan.rs"
+  - "crates/forge-core-kernel/tests/operation_plan.rs"
 decision:
   canonical_term: "Artifact Storage Projection"
   policy_ref: "contracts/policies/operation-executor-artifact-storage-projection-boundary.yaml"

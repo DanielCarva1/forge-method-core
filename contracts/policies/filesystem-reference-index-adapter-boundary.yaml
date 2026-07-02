@@ -8,7 +8,7 @@ decision:
   consumed_by:
     - "forge-core-cli"
     - "forge-contract-validator compatibility binary"
-    - "forge-core-runtime"
+    - "forge-core-kernel"
     - "forge-core-mcp"
     - "future standalone app"
   does_not_belong_in:

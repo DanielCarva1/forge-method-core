@@ -53,14 +53,14 @@ tradeoffs:
       reason: "Would delay discovery of missing payload authority until the dangerous file-write boundary."
 acceptance:
   crate:
-    - "RuntimeEffectPayload and RuntimeEffectTransactionPlan exist in forge-core-runtime."
+    - "RuntimeEffectPayload and RuntimeEffectTransactionPlan exist in forge-core-kernel."
     - "prepare_effect_transaction blocks unstaged, invalid, empty-write, or missing-payload effects."
     - "prepare_effect_transaction returns ready only for staged valid effects with payloads for every non-delete write."
   tests:
     - "story artifact effect blocks when no payloads are supplied."
     - "story artifact effect is transaction-ready when all write targets have payloads."
   validation:
-    - "cargo test -p forge-core-runtime"
+    - "cargo test -p forge-core-kernel"
     - "cargo test --workspace"
     - "cargo clippy --workspace -- -D warnings"
 evidence_basis:

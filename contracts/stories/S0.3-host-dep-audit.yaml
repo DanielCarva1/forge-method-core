@@ -19,7 +19,7 @@ context:
     - "crates/forge-core-contracts"
     - "crates/forge-core-store"
     - "crates/forge-core-schema"
-    - "crates/forge-core-runtime"
+    - "crates/forge-core-kernel"
   binary_host_surface: "crates/forge-core-cli, crates/forge-contract-validator (these ARE allowed to have host coupling)"
   what_counts_as_host_dep: "imports that bind to a specific shell/runtime (codex tool defs, cursor adapters, MCP server crates, tokio runtime coupling in library, std::process in library, UI crates)"
 

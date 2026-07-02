@@ -81,7 +81,7 @@ ilucao de distincao.
 ### 3. Seam de deteccao de conflito (para F07.4)
 
 A deteccao vive **no acquire do claim engine**
-(`crates/forge-core-engine/src/claim_engine.rs:317`, chamado de
+(`crates/forge-core-decisions/src/claim_engine.rs:317`, chamado de
 `claim.rs:295`). Dois principals com intents sobrepostas em repo-paths **ja sao
 bloqueados la** (`PathAlreadyClaimed`/`AlreadyClaimedByOther`) — o F07.4 apenas
 reformula essa rejeicao flat num `ConflictContract` estruturado, reaproveitando

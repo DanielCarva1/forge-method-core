@@ -25,7 +25,7 @@ crate_topology:
     forge_core_store:
       role: "append-only WAL authority + projections + integrity. HOST-FREE."
       status: "exists (4054 lines); real spine; tests must be fixed"
-    forge_core_engine:
+    forge_core_decisions:
       role: "NEW. the state machine, phase transitions, orchestrator-guide dispatch, funnel-of-autonomy density, gate enforcement. HOST-FREE."
       status: "to build on top of store+contracts (this is the missing forge-core)"
     forge_core_cli:
@@ -34,7 +34,7 @@ crate_topology:
     forge_host_adapter:
       role: "thin shim per host (codex/cursor/opencode/pi) that calls the CLI and maps host capabilities. NOT in core."
       status: "to define"
-  reuse_rule: "the standalone forge-rust-app depends on forge_core_engine (library), never on forge_core_cli. Core has zero host deps."
+  reuse_rule: "the standalone forge-rust-app depends on forge_core_decisions (library), never on forge_core_cli. Core has zero host deps."
 
 # ---------------------------------------------------------------------------
 # the orchestrator-guide (DC1) - the heart of the product

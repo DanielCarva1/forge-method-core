@@ -6,8 +6,8 @@ meta:
     - "crates/forge-core-cli/src/claim.rs"
     - "crates/forge-core-cli/src/io_util.rs"
     - "crates/forge-core-cli/src/main.rs"
-    - "crates/forge-core-engine/src/claim_engine.rs"
-    - "crates/forge-core-engine/src/conflict_detection.rs"
+    - "crates/forge-core-decisions/src/claim_engine.rs"
+    - "crates/forge-core-decisions/src/conflict_detection.rs"
     - "crates/forge-core-contracts/src/claim.rs"
     - "crates/forge-core-contracts/src/common.rs"
   core_model:
@@ -18,11 +18,11 @@ meta:
       scope_id: "crates/forge-core-contracts/src/common.rs:23-25"
       claim_id: "crates/forge-core-contracts/src/common.rs:31-33"
     claim_id_derivation:
-      location: "crates/forge-core-engine/src/claim_engine.rs:286-293"
+      location: "crates/forge-core-decisions/src/claim_engine.rs:286-293"
       mechanism: "ClaimId(format!(\"claim.{}.{}.{}\", scope_kind_slug(req.scope_kind), req.scope_id.0, req.scope_id.0)); filename later slugifies this id."
     engine_io_boundary:
-      claim_engine: "Pure state machine; acquire/heartbeat/release/project_active mutate in memory only. See crates/forge-core-engine/src/claim_engine.rs:254-323,328-365,373-408,434-450."
-      conflict_detection: "Pure write-set classifier; no filesystem IO. See crates/forge-core-engine/src/conflict_detection.rs:114-129 and 134-173."
+      claim_engine: "Pure state machine; acquire/heartbeat/release/project_active mutate in memory only. See crates/forge-core-decisions/src/claim_engine.rs:254-323,328-365,373-408,434-450."
+      conflict_detection: "Pure write-set classifier; no filesystem IO. See crates/forge-core-decisions/src/conflict_detection.rs:114-129 and 134-173."
 
 io_operations:
   - location: "crates/forge-core-cli/src/claim.rs:170-179"

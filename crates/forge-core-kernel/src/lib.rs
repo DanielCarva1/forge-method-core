@@ -2012,7 +2012,7 @@ mod tests {
 
     fn fresh_temp_root(label: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
-            "forge-core-runtime-lib-{label}-{}",
+            "forge-core-kernel-lib-{label}-{}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&path);

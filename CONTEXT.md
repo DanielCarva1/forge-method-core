@@ -8,6 +8,27 @@ The application, game, library, or product repository being developed with Forge
 
 A sibling directory or repository that owns the Forge Method runtime state for one Consumer Project Repo. It contains the real `.forge-method/` tree, including state, artifacts, evidence, ledger, stories, and claims.
 
+## Kernel (the mutation crate)
+
+The Rust crate that is the single source of truth for mutation. Today this is
+`forge-core-kernel` (renamed from `forge-core-runtime` in ADR-0014 to make the
+name match the role every other ADR and this glossary already ascribes to "the
+kernel"). It owns `execute_operation` and the WAL append; every state-bearing
+mutating path flows through it. Per ADR-0001, the kernel stays deterministic
+and auditable; per ADR-0003, it is the sole Policy Decision Point (PDP) for
+mutation — adapters and the CLI are dumb Policy Enforcement Points (PEPs).
+
+## Decisions (the pure-function library)
+
+The Rust crate `forge-core-decisions` (renamed from `forge-core-engine` in
+ADR-0014). A library of pure, deterministic decision functions — claims
+lifecycle, worktree isolation, phase-transition gates, autonomy routing,
+workflow catalog, coordination evaluation, guide validation. It takes data in
+and returns a verdict; **no IO, no mutable state, and no dependency on the
+Kernel.** It only *decides* what should be allowed; the Kernel performs the
+mutation. The two are sibling crates, not stacked layers — do not describe
+Decisions as "sitting above" the Kernel.
+
 ## Forge Project Link
 
 The small `.forge-method.yaml` file stored at a Consumer Project Repo root. It points to the Forge Runtime Sidecar and its `.forge-method/` state root. Its `state_root` must resolve under `sidecar_root` and must end in `.forge-method`, normally as `<sidecar_root>/.forge-method`.

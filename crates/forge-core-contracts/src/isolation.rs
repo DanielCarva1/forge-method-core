@@ -11,7 +11,7 @@
 //! `git rebase`. Forge never shells out (keeps the engine pure, deterministic,
 //! and free of a git-subprocess coupling).
 //!
-//! See `crates/forge-core-engine/src/isolation.rs` for the pure logic.
+//! See `crates/forge-core-decisions/src/isolation.rs` for the pure logic.
 
 use crate::common::{RepoPath, StableId};
 use schemars::JsonSchema;

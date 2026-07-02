@@ -565,11 +565,11 @@ call them.
 ```
 crates/
   forge-core-contracts/   typed YAML contract types (the vocabulary)
-  forge-core-engine/      guide, claims, conflict detection, phase transitions
+  forge-core-decisions/      guide, claims, conflict detection, phase transitions
   forge-core-store/       reference index + validation store
   forge-core-validate/    schema + semantic validator
   forge-core-schema/      JSON-schema projections
-  forge-core-runtime/     operation planning + execution
+  forge-core-kernel/     operation planning + execution
   forge-core-cli/         the forge-core binary
 contracts/
   workflows/              the 110-workflow catalog (the method)

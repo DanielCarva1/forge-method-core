@@ -320,14 +320,14 @@ verification_goal_contract:
                 goals: vec![
                     VerificationGoal {
                         kind: GoalKind::UnitTestsPass,
-                        target: "cargo test -p forge-core-runtime".to_string(),
+                        target: "cargo test -p forge-core-kernel".to_string(),
                         status: GoalStatus::Passed,
                         adapter: AdapterKind::Cargo,
                         detail: None,
                     },
                     VerificationGoal {
                         kind: GoalKind::UnitTestsPass,
-                        target: "cargo test -p forge-core-runtime --test operation_plan"
+                        target: "cargo test -p forge-core-kernel --test operation_plan"
                             .to_string(),
                         status: GoalStatus::Flaky,
                         adapter: AdapterKind::Cargo,

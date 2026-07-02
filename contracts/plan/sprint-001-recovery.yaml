@@ -41,7 +41,7 @@ slice_0_unblock:
       depends_on: ["S0.2"]
   exit_criteria:
     - "cargo test --workspace exits 0 (green)"
-    - "library crates (forge-core-contracts, forge-core-store, forge-core-schema, forge-core-runtime) have ZERO host/UI imports, OR boundary refactor is scoped"
+    - "library crates (forge-core-contracts, forge-core-store, forge-core-schema, forge-core-kernel) have ZERO host/UI imports, OR boundary refactor is scoped"
     - "a runnable demo shows an out-of-authority effect being REJECTED before write"
   next_workflow_after_slice_0: "plan slice 1 in detail, then build slice 1"
 
@@ -53,9 +53,9 @@ slice_1_engine_core_and_catalog:
   sequencing_reason: "orchestrator (slice 2) cannot route without typed catalog. Migration is cheap (85/110 already pure yaml). Doing it now also fixes FX1+FX2 structural bugs."
   stories:
     - id: "S1.1"
-      title: "Inspect forge-core-runtime; define engine boundary (new crate vs extend runtime)"
+      title: "Inspect forge-core-kernel; define engine boundary (new crate vs extend runtime)"
       detail: "contracts/stories/S1.1-engine-boundary.yaml"
-      note: "forge-core-runtime ALREADY EXISTS. Do NOT blindly create forge_core_engine. First inspect what runtime does; decide build-vs-extend. Prevents duplicate-crate mistake."
+      note: "forge-core-kernel ALREADY EXISTS. Do NOT blindly create forge_core_decisions. First inspect what runtime does; decide build-vs-extend. Prevents duplicate-crate mistake."
     - id: "S1.2"
       title: "Typed contract schema: workflow, phase, catalog entry, gate"
       detail: "contracts/stories/S1.2-typed-contract-schema.yaml"

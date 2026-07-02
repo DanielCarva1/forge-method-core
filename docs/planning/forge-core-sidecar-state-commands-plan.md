@@ -47,7 +47,7 @@ Targeted tests added or updated:
 ```bash
 cargo test -p forge-core-cli --test operation_sidecar_e2e
 cargo test -p forge-core-cli --test validate
-cargo test -p forge-core-runtime
+cargo test -p forge-core-kernel
 cargo test -p forge-core-cli --test claim_cli_sidecar_e2e --test project_link_hardening_e2e --test project_resolve_e2e
 ```
 

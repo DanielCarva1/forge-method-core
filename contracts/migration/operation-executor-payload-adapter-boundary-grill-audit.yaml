@@ -12,7 +12,7 @@ inputs:
   - "contracts/policies/runtime-store-adapter-integration-boundary.yaml"
   - "contracts/research/field-evidence-20260625.yaml"
   - "crates/forge-core-cli/src/lib.rs"
-  - "crates/forge-core-runtime/src/lib.rs"
+  - "crates/forge-core-kernel/src/lib.rs"
 decision:
   canonical_term: "Operation Executor Payload Adapter"
   policy_ref: "contracts/policies/operation-executor-payload-adapter-boundary.yaml"

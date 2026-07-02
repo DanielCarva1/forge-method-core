@@ -1,7 +1,7 @@
 schema_version: "0.1"
 policy: "runtime_effect_staging_boundary"
 status: "accepted"
-purpose: "Define how forge-core-runtime stages commands and tool-effect refs from a ready RuntimePlan without executing or committing irreversible effects."
+purpose: "Define how forge-core-kernel stages commands and tool-effect refs from a ready RuntimePlan without executing or committing irreversible effects."
 decision:
   selected_strategy: "typed_staging_plan_without_commit"
   runtime_api:
@@ -60,7 +60,7 @@ tradeoffs:
       reason: "Even read-only command execution needs runner, output capture, timeout, and audit semantics."
 acceptance:
   crate:
-    - "RuntimeEffectStagingPlan exists in forge-core-runtime."
+    - "RuntimeEffectStagingPlan exists in forge-core-kernel."
     - "stage_operation_effects stages refs only and never executes."
     - "commit_allowed is false for every status."
   tests:
@@ -68,7 +68,7 @@ acceptance:
     - "facilitation plan is not stageable."
     - "read/write conflict notification stages effect refs only."
   validation:
-    - "cargo test -p forge-core-runtime"
+    - "cargo test -p forge-core-kernel"
     - "cargo test --workspace"
     - "cargo clippy --workspace -- -D warnings"
 evidence_basis:

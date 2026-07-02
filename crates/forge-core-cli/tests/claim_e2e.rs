@@ -15,7 +15,7 @@ use forge_core_contracts::{
     claim::{ActorRole, ClaimScopeKind},
     RepoPath, ScopeId, StableId,
 };
-use forge_core_engine::AcquireRequest;
+use forge_core_decisions::AcquireRequest;
 use forge_core_store::WalDurability;
 use std::path::PathBuf;
 

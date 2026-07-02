@@ -28,10 +28,10 @@ candidates:
   - id: Q03
     kind: test_gap
     severity: high
-    file: "crates/forge-core-engine/tests/"
+    file: "crates/forge-core-decisions/tests/"
     line: "area: missing tests dir"
-    problem: "No engine integration tests dir was found for public gate-enforcement APIs re-exported by forge-core-engine."
-    suggested_fix: "Add forge-core-engine/tests/phase_transition.rs covering allowed, blocked, missing-gate, failed-gate, and waiver cases using public APIs only."
+    problem: "No engine integration tests dir was found for public gate-enforcement APIs re-exported by forge-core-decisions."
+    suggested_fix: "Add forge-core-decisions/tests/phase_transition.rs covering allowed, blocked, missing-gate, failed-gate, and waiver cases using public APIs only."
     effort: M
     value: high
   - id: Q04
@@ -82,7 +82,7 @@ candidates:
   - id: Q09
     kind: test_flakiness
     severity: medium
-    file: "crates/forge-core-runtime/tests/operation_plan.rs"
+    file: "crates/forge-core-kernel/tests/operation_plan.rs"
     line: "76-81"
     problem: "fresh_temp_root uses only label plus process id for temp directories, which can collide across repeated or concurrent cargo test invocations in the same process namespace."
     suggested_fix: "Include a timestamp/counter/random suffix and cleanup guard in the integration-test temp root helper."

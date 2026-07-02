@@ -1,7 +1,7 @@
 schema_version: "0.1"
 policy: "runtime_store_state_read_boundary"
 status: "accepted"
-purpose: "Define how forge-core-runtime may consume store-backed project state without gaining broad filesystem traversal or mutation authority."
+purpose: "Define how forge-core-kernel may consume store-backed project state without gaining broad filesystem traversal or mutation authority."
 decision:
   selected_strategy: "adapter_built_read_snapshot"
   runtime_api:
@@ -36,7 +36,7 @@ decision:
     - "effect staging or commit"
 rules:
   - id: "store_builds_runtime_reads"
-    rule: "Filesystem and projection discovery belong to forge-core-store or adapters; forge-core-runtime receives typed read snapshots."
+    rule: "Filesystem and projection discovery belong to forge-core-store or adapters; forge-core-kernel receives typed read snapshots."
   - id: "snapshot_refs_block_authority_when_missing"
     rule: "If a read snapshot is supplied and operation cross-reference validation reports errors, RuntimePlan must be blocked before action readiness."
   - id: "no_snapshot_keeps_contract_only_planning"
@@ -67,16 +67,16 @@ tradeoffs:
       reason: "Freshness and commit safety require ToolEffect/read-write execution boundaries, not a read-only planning boundary."
 acceptance:
   crate:
-    - "RuntimeReadSnapshot type exists in forge-core-runtime."
+    - "RuntimeReadSnapshot type exists in forge-core-kernel."
     - "plan_operation_with_snapshot runs validate_operation_cross_references."
     - "missing snapshot refs block ready operation plans."
-    - "forge-core-runtime production dependencies do not include forge-core-store."
+    - "forge-core-kernel production dependencies do not include forge-core-store."
   tests:
     - "store-built snapshot keeps a valid mechanical operation ready."
     - "empty snapshot blocks a ready mechanical operation with reference errors."
     - "existing no-snapshot fixture tests still pass."
   validation:
-    - "cargo test -p forge-core-runtime"
+    - "cargo test -p forge-core-kernel"
     - "cargo test --workspace"
     - "cargo clippy --workspace -- -D warnings"
 evidence_basis:

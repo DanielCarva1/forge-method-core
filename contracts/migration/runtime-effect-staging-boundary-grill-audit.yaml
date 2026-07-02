@@ -6,7 +6,7 @@ inputs:
   - "contracts/policies/runtime-store-state-read-boundary.yaml"
   - "contracts/policies/request-effect-type-boundary.yaml"
   - "contracts/research/field-evidence-20260625.yaml"
-  - "crates/forge-core-runtime/src/lib.rs"
+  - "crates/forge-core-kernel/src/lib.rs"
   - "crates/forge-core-contracts/src/command.rs"
   - "crates/forge-core-contracts/src/tool_effect.rs"
 grill_question:
@@ -60,10 +60,10 @@ evidence_basis:
   inference_boundary: "The papers support a staged pre-execution boundary. Forge's local decision is to stage refs only first, leaving command runners and effect transactions for later boundaries."
 implementation_evidence:
   crate_refs:
-    - "crates/forge-core-runtime/src/lib.rs"
-    - "crates/forge-core-runtime/tests/operation_plan.rs"
+    - "crates/forge-core-kernel/src/lib.rs"
+    - "crates/forge-core-kernel/tests/operation_plan.rs"
   validation:
-    - "cargo test -p forge-core-runtime"
+    - "cargo test -p forge-core-kernel"
 acceptance:
   - "Ready mechanical story produces staged command/effect refs and commit_allowed false."
   - "Non-ready facilitation plan is not stageable."

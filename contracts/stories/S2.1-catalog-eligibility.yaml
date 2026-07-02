@@ -13,7 +13,7 @@ decision_sources:
 intent: "The engine must be able to (a) load the 110 typed workflow documents into the typed Catalog at runtime, and (b) filter the catalog to workflows eligible in a given current project phase. This is the routing substrate every other slice-2 story depends on (the host LLM reasons over the ELIGIBLE subset, not all 110)."
 
 tasks:
-  - "add a catalog module to forge-core-engine: load_catalog(dir) reads contracts/workflows/*.yaml, deserializes each into WorkflowDocument, builds a Catalog of CatalogEntry (id, phases, workflow_ref, triggers, prerequisites, outputs)"
+  - "add a catalog module to forge-core-decisions: load_catalog(dir) reads contracts/workflows/*.yaml, deserializes each into WorkflowDocument, builds a Catalog of CatalogEntry (id, phases, workflow_ref, triggers, prerequisites, outputs)"
   - "add eligibility filter: eligible_in(catalog, current_phase) -> Vec<&CatalogEntry> using Phase::tag_eligible over entry.phases"
   - "handle the 'anytime' wildcard: workflows tagged anytime are eligible in every phase"
   - "cache/load once; the catalog is static for a project session"
@@ -26,7 +26,7 @@ acceptance_criteria:
 
 checks:
   - "unit tests: load-110, eligibility-per-phase, anytime-universal, malformed-rejected"
-  - "cargo clippy -p forge-core-engine -- -W pedantic clean"
+  - "cargo clippy -p forge-core-decisions -- -W pedantic clean"
 
 blocks: ["S2.3", "S2.4"]
 next_workflow: "build-story S2.2 (GuideDecision contract)"

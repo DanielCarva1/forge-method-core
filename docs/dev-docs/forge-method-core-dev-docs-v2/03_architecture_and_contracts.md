@@ -119,7 +119,7 @@ Adapters, agentes externos, context files, memory summaries e tool outputs nao s
 
 - `forge-core-contracts`: structs e schemas para contratos novos.
 - `forge-core-validate`: validators e cross-reference checks.
-- `forge-core-runtime`: planner e executor de graph.
+- `forge-core-kernel`: planner e executor de graph.
 - `forge-core-store`: WAL, effects, trace append, metadata index.
 - `forge-core-cli`: comandos de usuario.
 - Novos crates: `forge-core-trace`, `forge-core-graph`, `forge-core-eval`, `forge-core-memory`, `forge-core-protocol-mcp`, `forge-core-protocol-a2a`.

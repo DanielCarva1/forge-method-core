@@ -1,7 +1,7 @@
 //! `forge-core-governance` — the Policy Enforcement Point (PEP) for the F07
 //! multi-principal governance arbitration ledger (ADR-0007).
 //!
-//! The claim engine (`forge-core-engine::claim_engine`) is a pure state machine
+//! The claim engine (`forge-core-decisions::claim_engine`) is a pure state machine
 //! (DD16): on a path-overlap acquire it returns a
 //! [`ConflictContract`](forge_core_contracts::ConflictContract) inside the
 //! rejection. But the engine touches no filesystem — emitting the conflict to a

@@ -101,7 +101,7 @@ A CLI passa a ser um cliente fino que re-exporta a API pública do
 - [x] **R10.5** — DoD:
   - [x] `forge-core-cli/src/lib.rs` < 1500 linhas — **94 linhas**
   - [x] `forge-core-crypto` tem zero deps em `forge-core-cli` ou
-    `forge-core-runtime` — confirmado (só depende de
+    `forge-core-kernel` — confirmado (só depende de
     `forge-core-contracts`)
   - [x] Todos os gates verdes
   - [x] CLI output snapshot inalterado (`validate --root . --json` →

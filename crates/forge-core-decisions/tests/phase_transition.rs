@@ -1,6 +1,6 @@
 use forge_core_contracts::gate::GateStatus;
 use forge_core_contracts::StableId;
-use forge_core_engine::{
+use forge_core_decisions::{
     evaluate_transition, GateKind, Phase, ProvidedGateResult, TransitionBlockReason,
     TransitionDecision, TransitionRequest, Waiver,
 };

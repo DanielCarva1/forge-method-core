@@ -180,9 +180,9 @@ de implementação).
 ## Crates existentes (13)
 
 `forge-contract-validator`, `forge-core-cli`, `forge-core-contracts`,
-`forge-core-crypto`, `forge-core-engine`, `forge-core-eval` (934 linhas,
+`forge-core-crypto`, `forge-core-decisions`, `forge-core-eval` (934 linhas,
 lib de comparação pronta, **precisa de harness**), `forge-core-graph`,
-`forge-core-runtime`, `forge-core-schema`, `forge-core-store`,
+`forge-core-kernel`, `forge-core-schema`, `forge-core-store`,
 `forge-core-trace`, `forge-core-validate`.
 
 **Crates que ainda precisam ser criadas** (features futuras):

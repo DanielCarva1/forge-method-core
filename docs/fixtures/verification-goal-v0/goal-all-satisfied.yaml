@@ -8,12 +8,12 @@ verification_goal_contract:
       - docs/fixtures/autonomy-policy-v0/policy-yolo-default.yaml
   goals:
     - kind: unit_tests_pass
-      target: cargo test -p forge-core-engine
+      target: cargo test -p forge-core-decisions
       status: passed
       adapter: cargo
       detail: "All engine tests passed."
     - kind: lint_clean
-      target: cargo clippy -p forge-core-engine --all-targets
+      target: cargo clippy -p forge-core-decisions --all-targets
       status: passed
       adapter: cargo
       detail: "clippy clean."

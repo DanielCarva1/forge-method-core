@@ -38,7 +38,7 @@ use forge_core_contracts::autonomy_policy::{
 use forge_core_contracts::verification_goal::{
     VerificationGoalContract, VerificationGoalContractDocument,
 };
-use forge_core_engine::autonomy_router::{route_lane, LaneDecision, LaneKind, LaneRouteReason};
+use forge_core_decisions::autonomy_router::{route_lane, LaneDecision, LaneKind, LaneRouteReason};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -48,11 +48,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn workspace_root() -> PathBuf {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    // forge-core-engine is at crates/forge-core-engine, workspace root is two up.
+    // forge-core-decisions is at crates/forge-core-decisions, workspace root is two up.
     manifest
         .ancestors()
         .nth(2)
-        .expect("workspace root must be two levels above forge-core-engine manifest")
+        .expect("workspace root must be two levels above forge-core-decisions manifest")
         .to_path_buf()
 }
 
@@ -203,7 +203,7 @@ fn framework_manual_tool_override_beats_yolo_default() {
         forge_core_contracts::autonomy_policy::ToolClass::SecretAccess,
     ];
     let label = case_label("mixed-manual-secret", Some("satisfied"), 0);
-    let decision = forge_core_engine::autonomy_router::route_lane_for_tool_classes(
+    let decision = forge_core_decisions::autonomy_router::route_lane_for_tool_classes(
         &policy,
         Some(&goal),
         0,
@@ -223,7 +223,7 @@ fn framework_disabled_escalation_lets_satisfied_goal_route_fast() {
     let goal = load_goal("goal-all-satisfied.yaml");
     let tool_classes = [forge_core_contracts::autonomy_policy::ToolClass::SecretAccess];
     let label = case_label("yolo-disabled-escalation", Some("satisfied"), 0);
-    let decision = forge_core_engine::autonomy_router::route_lane_for_tool_classes(
+    let decision = forge_core_decisions::autonomy_router::route_lane_for_tool_classes(
         &policy,
         Some(&goal),
         0,

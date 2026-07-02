@@ -146,7 +146,7 @@ exaustivos, não carregam contexto estruturado, quebram `?` em boundaries.
 - [ ] `StatefulCommandRoots` builder → `StatefulCommandRootsError`
 - [ ] Testes
 
-### R2.6 — `forge-core-engine` (3 sites)
+### R2.6 — `forge-core-decisions` (3 sites)
 - [ ] `catalog.rs::load_one` → `CatalogLoadError`
 - [ ] `catalog.rs::parse_workflow_yaml` → reusar
 - [ ] `eval.rs::load_eval_corpus` → `EvalCorpusLoadError`
@@ -180,7 +180,7 @@ Sem `eprintln!` em lib code (exceção: `main.rs` antes de subscriber init).
 
 ### R3.1 — Adicionar deps
 - [ ] `tracing`, `tracing-subscriber` em `[workspace.dependencies]`
-- [ ] Adicionar às deps de `forge-core-store`, `forge-core-runtime`,
+- [ ] Adicionar às deps de `forge-core-store`, `forge-core-kernel`,
       `forge-core-cli`, `forge-core-validate`
 - [ ] `cargo check`
 

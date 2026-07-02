@@ -30,7 +30,7 @@ artifact:
 priority_1_high:
   - id: P1.1
     title: "fix: TTL lease overflow (debug panic / release wrap)"
-    files: [crates/forge-core-engine/src/claim_engine.rs]
+    files: [crates/forge-core-decisions/src/claim_engine.rs]
     lines: ["285", "356"]
     problem: "now_unix + ttl com i64::try_from(ttl).unwrap_or(i64::MAX) pode overflow. Debug = panic, release = wrap (corrompe expires_at)."
     fix: "checked_add / saturating_add com rejection path (InvalidRequest) para TTL irrepresentável."
@@ -39,9 +39,9 @@ priority_1_high:
     status: verified_current_core
     verified_by:
       files:
-        - crates/forge-core-engine/src/claim_engine.rs
+        - crates/forge-core-decisions/src/claim_engine.rs
       tests:
-        - cargo test -p forge-core-engine claim_engine
+        - cargo test -p forge-core-decisions claim_engine
       evidence:
         - checked_lease_expiry uses checked conversion and checked_add.
         - acquire_rejects_ttl_overflow
@@ -51,7 +51,7 @@ priority_1_high:
 
   - id: P1.2
     title: "fix: rfc3339_to_unix aceita datas inválidas (viola fail-closed + DD21)"
-    files: [crates/forge-core-engine/src/claim_engine.rs]
+    files: [crates/forge-core-decisions/src/claim_engine.rs]
     lines: ["53-62"]
     problem: "Aceita 2026-02-31, hora 99:99:99. Lease corrompido tratado como vivo."
     fix: "Validar day vs mês/leap-year + h(0..23) m(0..59) s(0..59) antes de days_from_civil. Retornar None → fail-closed."
@@ -60,16 +60,16 @@ priority_1_high:
     status: verified_current_core
     verified_by:
       files:
-        - crates/forge-core-engine/src/claim_engine.rs
+        - crates/forge-core-decisions/src/claim_engine.rs
       tests:
-        - cargo test -p forge-core-engine claim_engine
+        - cargo test -p forge-core-decisions claim_engine
       evidence:
         - rfc3339_to_unix validates leap years, month length, hour, minute, and second before conversion.
         - timestamp_rejects_invalid_calendar_values
 
   - id: P1.3
     title: "fix: acquire() gera claim inválida pelo próprio validador"
-    files: [crates/forge-core-engine/src/claim_engine.rs]
+    files: [crates/forge-core-decisions/src/claim_engine.rs]
     lines: ["319", "457-463"]
     problem: "default_expiry_policy() = handoff_required=true + handoff_request_ref=None → validador rejeita. Toda claim nova é inválida."
     fix: "Tornar default_expiry_policy() internamente válido, ou mudar policy/default contract juntos. Teste: acquire() result passa validate_claim."
@@ -79,16 +79,16 @@ priority_1_high:
     status: verified_current_core
     verified_by:
       files:
-        - crates/forge-core-engine/src/claim_engine.rs
+        - crates/forge-core-decisions/src/claim_engine.rs
       tests:
-        - cargo test -p forge-core-engine claim_engine
+        - cargo test -p forge-core-decisions claim_engine
       evidence:
         - default_expiry_policy sets handoff_request_ref to contracts/requests/claim-expiry-handoff-request.yaml.
         - acquire_default_expiry_policy_is_validator_consistent
 
   - id: P1.4
     title: "fix: root paths (./) viram escopo vazio → false negative em conflito"
-    files: [crates/forge-core-engine/src/conflict_detection.rs]
+    files: [crates/forge-core-decisions/src/conflict_detection.rs]
     lines: ["242-243", "264-268"]
     problem: "normalize('.')/''/'' → segmentos vazios → path_covers retorna false → claim root não bloqueia nada."
     fix: "Rejeitar '.','/','' na acquisition COM erro tipado, OU representar root explicitamente. Testes: '.','/', '', child 'src/lib.rs'."
@@ -98,9 +98,9 @@ priority_1_high:
     accepted_semantics: "Represent explicit repo-root claims instead of rejecting them; root claims cover descendants and overlap detection blocks conflicting acquisitions."
     verified_by:
       files:
-        - crates/forge-core-engine/src/conflict_detection.rs
+        - crates/forge-core-decisions/src/conflict_detection.rs
       tests:
-        - cargo test -p forge-core-engine conflict_detection
+        - cargo test -p forge-core-decisions conflict_detection
       evidence:
         - is_explicit_repo_root_path recognizes '.', '/', empty, and separator-only paths.
         - explicit_repo_root_claim_blocks_descendant_paths
@@ -203,8 +203,8 @@ priority_2_medium:
         - Cargo.toml
         - Cargo.lock
         - crates/forge-core-cli/Cargo.toml
-        - crates/forge-core-engine/src/claim_engine.rs
-        - crates/forge-core-engine/src/lib.rs
+        - crates/forge-core-decisions/src/claim_engine.rs
+        - crates/forge-core-decisions/src/lib.rs
         - crates/forge-core-store/src/claim_wal.rs
         - crates/forge-core-store/tests/claim_wal.rs
         - crates/forge-core-cli/src/claim.rs
@@ -213,7 +213,7 @@ priority_2_medium:
         - crates/forge-core-cli/tests/claim_reconcile_e2e.rs
         - crates/forge-core-cli/tests/claim_cli_sidecar_e2e.rs
       tests:
-        - cargo test -p forge-core-engine claim_engine
+        - cargo test -p forge-core-decisions claim_engine
         - cargo test -p forge-core-store --test claim_wal
         - cargo test -p forge-core-cli --test claims
         - cargo test -p forge-core-cli --test claim_reconcile_e2e
@@ -247,15 +247,15 @@ priority_2_medium:
     scope_note: "Engine invariants were already present in current core (checked lease arithmetic and semantic RFC3339 validation). This slice completed the remaining store/CLI fail-loud tier: prepared-write panics became debug_assert + blocked InternalInvariant diagnostics, PreparedAccessMode type-excludes Read from commit, repo_relative strip_prefix is a ReferenceIndexBuildError/Diagnostic, latest metadata indexing uses debug_assert + safe get, effect-store blocking locks use bounded try_lock retries, and atomic temp/backup cleanup failures are surfaced in returned errors."
     verified_by:
       files:
-        - crates/forge-core-engine/src/claim_engine.rs
+        - crates/forge-core-decisions/src/claim_engine.rs
         - crates/forge-core-store/src/lib.rs
         - crates/forge-core-store/tests/reference_index.rs
         - crates/forge-core-cli/src/io_util.rs
       tests:
-        - cargo test -p forge-core-engine claim_engine
+        - cargo test -p forge-core-decisions claim_engine
         - cargo test -p forge-core-store --lib
         - cargo test -p forge-core-store --test reference_index
-        - cargo test -p forge-core-runtime effect_transaction
+        - cargo test -p forge-core-kernel effect_transaction
         - cargo test -p forge-core-cli --test validate query_effect_index
         - cargo test -p forge-core-cli io_util
         - cargo check --workspace
@@ -295,7 +295,7 @@ priority_3_low:
 
   - id: P3.2
     title: "fix: case-fold ASCII-only em conflito (Unicode quebra WSL/Windows)"
-    files: [crates/forge-core-engine/src/conflict_detection.rs]
+    files: [crates/forge-core-decisions/src/conflict_detection.rs]
     lines: ["276-285"]
     fix: "Unicode case folding ou canonical path identity no IO boundary."
     source: [review-conflict-detection F3]
@@ -303,10 +303,10 @@ priority_3_low:
     status: verified_current_core
     verified_by:
       files:
-        - crates/forge-core-engine/src/conflict_detection.rs
+        - crates/forge-core-decisions/src/conflict_detection.rs
         - contracts/stories/H1.2-conflict-detection-hardening.yaml
       tests:
-        - cargo test -p forge-core-engine conflict_detection
+        - cargo test -p forge-core-decisions conflict_detection
       evidence:
         - normalize_segments uses Rust Unicode to_lowercase rather than ASCII-only folding.
         - unicode_case_insensitive_matching_blocks_case_folded_peer covers accented non-ASCII path segments.
@@ -406,8 +406,8 @@ verification_status_at_handoff:
     p2_medium: "P2.1 WAL append/recovery, P2.2 WAL-derived claim state authority, P2.3 reconcile loop, and P2.4 tiered invariants verified."
     p3_low: "P3.1, P3.2, P3.3, and P3.4 verified in current core."
   targeted_verification:
-    - cargo test -p forge-core-engine claim_engine
-    - cargo test -p forge-core-engine conflict_detection
+    - cargo test -p forge-core-decisions claim_engine
+    - cargo test -p forge-core-decisions conflict_detection
     - cargo test -p forge-core-cli io_util
     - cargo test -p forge-core-cli --test claim_handoff_e2e
     - cargo test -p forge-core-store --test claim_wal
@@ -421,7 +421,7 @@ verification_status_at_handoff:
     - cargo test -p forge-core-cli --test graph_cli_e2e
     - cargo test -p forge-core-store --lib
     - cargo test -p forge-core-store --test reference_index
-    - cargo test -p forge-core-runtime effect_transaction
+    - cargo test -p forge-core-kernel effect_transaction
     - cargo test -p forge-core-cli --test validate query_effect_index
   full_gate: passed_2026-06-29
   full_gate_commands:

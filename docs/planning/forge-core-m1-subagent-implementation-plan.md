@@ -152,7 +152,7 @@ Use one integration branch plus narrow worktrees/branches per lane. Each impleme
 | --- | --- | --- | --- |
 | L0 manifest/dependency gate | root `Cargo.toml`, `Cargo.lock`, per-crate `Cargo.toml` only | dependency creep, workspace deps, no forbidden crates | `cargo metadata --format-version 1 --no-deps` |
 | L1 trace contract crate | `crates/forge-core-trace/**` | schema/serde stability, deterministic IDs, manual errors | `cargo test -p forge-core-trace`; `cargo clippy -p forge-core-trace --all-targets -- -W clippy::pedantic` |
-| L2 runtime preview/ready models | `crates/forge-core-runtime/src/lib.rs`, runtime tests | fail-closed semantics, no API breakage | targeted runtime tests around `preview`, `ready`, `trace` |
+| L2 runtime preview/ready models | `crates/forge-core-kernel/src/lib.rs`, runtime tests | fail-closed semantics, no API breakage | targeted runtime tests around `preview`, `ready`, `trace` |
 | L3 store trace persistence | `crates/forge-core-store/src/lib.rs`, store tests | append-only NDJSON, sidecar-relative state path, backward compatibility | targeted store tests for trace append/query and metadata optionality |
 | L4 CLI commands | `crates/forge-core-cli/src/main.rs`, new CLI module/tests | thin CLI, error envelopes, no full parser refactor | targeted CLI tests for `preview`, `ready`, `explain` |
 | L5 schema/docs fixtures | `crates/forge-core-schema/**`, focused fixtures/docs only | schema matches wire format, fixtures stable | targeted schema tests and fixture validation |
@@ -204,8 +204,8 @@ Run per lane, not all at once:
 cargo metadata --format-version 1 --no-deps
 cargo test -p forge-core-trace
 cargo clippy -p forge-core-trace --all-targets -- -W clippy::pedantic
-cargo test -p forge-core-runtime --test operation_plan preview
-cargo test -p forge-core-runtime --test operation_plan ready
+cargo test -p forge-core-kernel --test operation_plan preview
+cargo test -p forge-core-kernel --test operation_plan ready
 cargo test -p forge-core-store trace
 cargo test -p forge-core-cli m1
 cargo test -p forge-core-schema generated_schemas_cover_v0_contract_surface
@@ -219,7 +219,7 @@ Only after lane workers and reviewers finish:
 
 ```powershell
 cargo check --workspace
-cargo test -p forge-core-trace -p forge-core-runtime -p forge-core-store -p forge-core-schema
+cargo test -p forge-core-trace -p forge-core-kernel -p forge-core-store -p forge-core-schema
 cargo test -p forge-core-cli
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -W clippy::pedantic

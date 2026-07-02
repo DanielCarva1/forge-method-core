@@ -28,7 +28,7 @@ use forge_core_contracts::tool_effect::ConflictCode;
 use forge_core_contracts::{
     ClaimId, CliEnvelope, ExitReason, ScopeId, StableId, ENVELOPE_SCHEMA_VERSION,
 };
-use forge_core_engine::{
+use forge_core_decisions::{
     acquire, check_write_against_claims, heartbeat, is_expired, project_active, reconcile_claims,
     record_handoff, release, unix_to_rfc3339, AcquireRequest, ActiveClaimSummary,
     ClaimLifecycleDecision, ClaimReconcileTransition, ClaimRejection, RecordHandoffRequest,
@@ -717,7 +717,7 @@ pub fn run_check_write(
         .collect();
     let verdict = check_write_against_claims(&repo_paths, writer_agent_id, &existing, now_unix);
     match verdict {
-        forge_core_engine::WriteCheck::Ok {
+        forge_core_decisions::WriteCheck::Ok {
             governed_by_self,
             ungoverned,
         } => {
@@ -753,7 +753,7 @@ pub fn run_check_write(
                 CliEnvelope::reject("check-write", ExitReason::RejectedByGate, msg, payload)
             }
         }
-        forge_core_engine::WriteCheck::Blocked { blocks } => {
+        forge_core_decisions::WriteCheck::Blocked { blocks } => {
             // M1 fix: emit the STRUCTURED payload alongside the rejection so
             // the writer can self-correct programmatically (DD17), not just by
             // parsing prose. The legible message is still attached for stderr.
@@ -1692,7 +1692,7 @@ pub fn resolve_claims_dir_or_err(
 pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::{parse_role, parse_scope_kind, run_acquire};
     use forge_core_contracts::{RepoPath, ScopeId, StableId};
-    use forge_core_engine::AcquireRequest;
+    use forge_core_decisions::AcquireRequest;
 
     let mut scope_kind: Option<String> = None;
     let mut scope_id: Option<String> = None;

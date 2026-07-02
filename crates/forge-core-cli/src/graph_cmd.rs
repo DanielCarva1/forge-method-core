@@ -7,13 +7,13 @@ use forge_core_contracts::{
     tool_effect::{AccessMode, EffectTargetKind},
     OperationContractDocument, RepoPath, StableId, ToolEffectContractDocument,
 };
-use forge_core_engine::{check_write_against_claims, WriteCheck};
+use forge_core_decisions::{check_write_against_claims, WriteCheck};
 use forge_core_graph::{
     dry_run_graph_with_context, validate_graph, GraphClaimPreflightBlock,
     GraphClaimPreflightEvaluation, GraphClaimPreflightStatus, GraphDryRunContext,
     GraphOperationEvaluation, GraphOperationStatus, WorkflowGraph,
 };
-use forge_core_runtime::{
+use forge_core_kernel::{
     preview_operation_with_snapshot, ready_operation_with_snapshot, RuntimePreviewReport,
     RuntimePreviewStatus, RuntimeReadyReport,
 };
@@ -357,11 +357,11 @@ fn evaluate_graph_operation(
 
     let preview = preview_operation_with_snapshot(
         &operation,
-        forge_core_runtime::RuntimeReadSnapshot::new(index),
+        forge_core_kernel::RuntimeReadSnapshot::new(index),
     );
     let ready = ready_operation_with_snapshot(
         &operation,
-        forge_core_runtime::RuntimeReadSnapshot::new(index),
+        forge_core_kernel::RuntimeReadSnapshot::new(index),
     );
     let plan_allowed = graph_operation_plan_allowed(&preview, &ready);
     let status = if plan_allowed {

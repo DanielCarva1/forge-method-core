@@ -794,15 +794,15 @@ dependencies = [
  "ed25519-dalek",
  "forge-core-contracts",
  "forge-core-crypto",
- "forge-core-engine",
+ "forge-core-decisions",
  "forge-core-eval",
  "forge-core-eval-harness",
  "forge-core-governance",
  "forge-core-graph",
+ "forge-core-kernel",
  "forge-core-memory",
  "forge-core-protocol-mcp",
  "forge-core-research",
- "forge-core-runtime",
  "forge-core-store",
  "forge-core-trace",
  "forge-core-validate",
@@ -866,7 +866,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "forge-core-engine"
+name = "forge-core-decisions"
 version = "0.1.0"
 dependencies = [
  "forge-core-contracts",
@@ -919,6 +919,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "forge-core-kernel"
+version = "0.1.0"
+dependencies = [
+ "forge-core-contracts",
+ "forge-core-store",
+ "forge-core-validate",
+ "serde",
+ "sha2",
+ "tracing",
+ "yaml_serde",
+]
+
+[[package]]
 name = "forge-core-memory"
 version = "0.1.0"
 dependencies = [
@@ -961,19 +974,6 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "sha2",
- "tracing",
- "yaml_serde",
-]
-
-[[package]]
-name = "forge-core-runtime"
-version = "0.1.0"
-dependencies = [
- "forge-core-contracts",
- "forge-core-store",
- "forge-core-validate",
- "serde",
  "sha2",
  "tracing",
  "yaml_serde",

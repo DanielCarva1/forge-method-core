@@ -40,7 +40,7 @@ decision:
         - "MCP transport"
         - "Codex-specific paths"
       public_api_policy: "storage traits plus file-store implementation"
-    - name: "forge-core-runtime"
+    - name: "forge-core-kernel"
       crate_type: "library"
       responsibility: "Guide/gate/doctor/oracle operation engine, Funnel Autonomy, state-machine routing, policy decisions, recovery, and OperationContract generation."
       depends_on:
@@ -57,7 +57,7 @@ decision:
       crate_type: "binary"
       responsibility: "Universal command-line surface for Codex, opencode, Cursor, VS Code, Claude, pi.dev, scripts, and human debugging."
       depends_on:
-        - "forge-core-runtime"
+        - "forge-core-kernel"
       must_not_depend_on:
         - "private runtime internals beyond public runtime API"
       public_api_policy: "thin adapter with structured JSON output by default"
@@ -65,7 +65,7 @@ decision:
       crate_type: "binary_or_library"
       responsibility: "Optional MCP server surface exposing typed Forge operations after local-process security review."
       depends_on:
-        - "forge-core-runtime"
+        - "forge-core-kernel"
       must_not_depend_on:
         - "CLI-only output contracts"
       public_api_policy: "adapter boundary; not core authority"
@@ -109,7 +109,7 @@ build_order:
   - stage: "store_runtime"
     crates:
       - "forge-core-store"
-      - "forge-core-runtime"
+      - "forge-core-kernel"
     acceptance:
       - "Initial runtime operation planning may compile before store-backed state reads."
       - "Guide/gate/doctor/oracle operations return OperationContract outputs from typed state/store reads."

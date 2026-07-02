@@ -7,7 +7,7 @@ inputs:
   - "contracts/policies/typed-cross-file-reference-validation-boundary.yaml"
   - "contracts/policies/filesystem-reference-index-adapter-boundary.yaml"
   - "contracts/research/field-evidence-20260625.yaml"
-  - "crates/forge-core-runtime/src/lib.rs"
+  - "crates/forge-core-kernel/src/lib.rs"
   - "crates/forge-core-store/src/lib.rs"
   - "crates/forge-core-validate/src/lib.rs"
 grill_question:
@@ -62,10 +62,10 @@ evidence_basis:
   inference_boundary: "The evidence supports explicit state checks and separation from irreversible effects. Reusing ReferenceIndex as RuntimeReadSnapshot is a Forge-local step because ReferenceIndex already exists and passes Rust validation."
 implementation_evidence:
   crate_refs:
-    - "crates/forge-core-runtime/src/lib.rs"
-    - "crates/forge-core-runtime/tests/operation_plan.rs"
+    - "crates/forge-core-kernel/src/lib.rs"
+    - "crates/forge-core-kernel/tests/operation_plan.rs"
   validation:
-    - "cargo test -p forge-core-runtime"
+    - "cargo test -p forge-core-kernel"
 acceptance:
   - "A valid store-built snapshot preserves ready mechanical plans."
   - "An empty snapshot blocks mechanical plans through reference errors."

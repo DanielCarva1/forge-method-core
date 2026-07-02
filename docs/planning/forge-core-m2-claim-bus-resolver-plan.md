@@ -105,7 +105,7 @@ Acceptance:
 
 Ownership:
 
-- `crates/forge-core-engine/src/claim_engine.rs`
+- `crates/forge-core-decisions/src/claim_engine.rs`
 - `crates/forge-core-cli/src/claim.rs`
 - `crates/forge-core-cli/src/main.rs`
 

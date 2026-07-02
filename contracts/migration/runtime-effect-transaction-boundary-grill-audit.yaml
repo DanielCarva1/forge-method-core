@@ -14,7 +14,7 @@ inputs:
   - "contracts/policies/runtime-command-evidence-recording-boundary.yaml"
   - "contracts/research/field-evidence-20260625.yaml"
   - "crates/forge-core-contracts/src/tool_effect.rs"
-  - "crates/forge-core-runtime/src/lib.rs"
+  - "crates/forge-core-kernel/src/lib.rs"
 gap_confirmed_by_code:
   observed:
     - "ToolEffectContract write_set declares targets and access modes."

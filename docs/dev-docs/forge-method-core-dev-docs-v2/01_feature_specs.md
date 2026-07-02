@@ -10,7 +10,7 @@ Este arquivo detalha cada feature recomendada. Use como base para epics, issues 
 Prioridade: P0  
 Usuarios: todos  
 Evidencias: P21,P22,P28,O03,C06  
-Crates principais: forge-core-runtime, forge-core-store, forge-core-cli
+Crates principais: forge-core-kernel, forge-core-store, forge-core-cli
 
 Demanda: Medo de mutacao errada, necessidade de entender impacto antes da acao.
 
@@ -43,7 +43,7 @@ Implementacao minima:
 Prioridade: P0  
 Usuarios: usuario comum, QA, dev, empresa  
 Evidencias: P22,P23,P30,C06  
-Crates principais: forge-core-runtime, forge-core-validate, forge-core-cli
+Crates principais: forge-core-kernel, forge-core-validate, forge-core-cli
 
 Demanda: Confianca operacional e validacao antes de declarar pronto.
 

@@ -483,7 +483,7 @@ contract_areas:
     required_changes:
       - "Define RustRuntimeExecutionBoundary policy."
       - "Close rust runtime execution boundary grill audit."
-      - "Implement forge-core-runtime with plan_operation and fixture-backed Rust tests."
+      - "Implement forge-core-kernel with plan_operation and fixture-backed Rust tests."
   - id: runtime_store_state_read_boundary
     status: accepted_adapter_built_read_snapshot
     evidence:
@@ -771,38 +771,38 @@ closed_grill_questions:
     policy_ref: "contracts/policies/rust-runtime-execution-boundary.yaml"
     implementation_refs:
       - "contracts/policies/rust-runtime-execution-boundary.yaml"
-      - "crates/forge-core-runtime/src/lib.rs"
-      - "crates/forge-core-runtime/tests/operation_plan.rs"
+      - "crates/forge-core-kernel/src/lib.rs"
+      - "crates/forge-core-kernel/tests/operation_plan.rs"
   - id: runtime_store_state_read_boundary
     status: "closed"
     decision_ref: "contracts/migration/runtime-store-state-read-boundary-grill-audit.yaml"
     policy_ref: "contracts/policies/runtime-store-state-read-boundary.yaml"
     implementation_refs:
-      - "crates/forge-core-runtime/src/lib.rs"
-      - "crates/forge-core-runtime/tests/operation_plan.rs"
+      - "crates/forge-core-kernel/src/lib.rs"
+      - "crates/forge-core-kernel/tests/operation_plan.rs"
   - id: runtime_effect_staging_boundary
     status: "closed"
     decision_ref: "contracts/migration/runtime-effect-staging-boundary-grill-audit.yaml"
     policy_ref: "contracts/policies/runtime-effect-staging-boundary.yaml"
     implementation_refs:
-      - "crates/forge-core-runtime/src/lib.rs"
-      - "crates/forge-core-runtime/tests/operation_plan.rs"
+      - "crates/forge-core-kernel/src/lib.rs"
+      - "crates/forge-core-kernel/tests/operation_plan.rs"
   - id: runtime_command_runner_boundary
     status: "closed"
     decision_ref: "contracts/migration/runtime-command-runner-boundary-grill-audit.yaml"
     policy_ref: "contracts/policies/runtime-command-runner-boundary.yaml"
     implementation_refs:
       - "contracts/policies/runtime-command-runner-boundary.yaml"
-      - "crates/forge-core-runtime/src/lib.rs"
-      - "crates/forge-core-runtime/tests/operation_plan.rs"
+      - "crates/forge-core-kernel/src/lib.rs"
+      - "crates/forge-core-kernel/tests/operation_plan.rs"
   - id: runtime_command_evidence_recording_boundary
     status: "closed"
     decision_ref: "contracts/migration/runtime-command-evidence-recording-boundary-grill-audit.yaml"
     policy_ref: "contracts/policies/runtime-command-evidence-recording-boundary.yaml"
     implementation_refs:
       - "contracts/policies/runtime-command-evidence-recording-boundary.yaml"
-      - "crates/forge-core-runtime/src/lib.rs"
-      - "crates/forge-core-runtime/tests/operation_plan.rs"
+      - "crates/forge-core-kernel/src/lib.rs"
+      - "crates/forge-core-kernel/tests/operation_plan.rs"
       - "crates/forge-core-store/src/lib.rs"
       - "crates/forge-core-store/tests/reference_index.rs"
   - id: runtime_effect_transaction_boundary
@@ -811,8 +811,8 @@ closed_grill_questions:
     policy_ref: "contracts/policies/runtime-effect-transaction-boundary.yaml"
     implementation_refs:
       - "contracts/policies/runtime-effect-transaction-boundary.yaml"
-      - "crates/forge-core-runtime/src/lib.rs"
-      - "crates/forge-core-runtime/tests/operation_plan.rs"
+      - "crates/forge-core-kernel/src/lib.rs"
+      - "crates/forge-core-kernel/tests/operation_plan.rs"
   - id: runtime_effect_application_boundary
     status: "closed"
     decision_ref: "contracts/migration/runtime-effect-application-boundary-grill-audit.yaml"
@@ -843,8 +843,8 @@ closed_grill_questions:
     policy_ref: "contracts/policies/runtime-store-adapter-integration-boundary.yaml"
     implementation_refs:
       - "contracts/policies/runtime-store-adapter-integration-boundary.yaml"
-      - "crates/forge-core-runtime/src/lib.rs"
-      - "crates/forge-core-runtime/tests/operation_plan.rs"
+      - "crates/forge-core-kernel/src/lib.rs"
+      - "crates/forge-core-kernel/tests/operation_plan.rs"
       - "crates/forge-core-cli/src/lib.rs"
       - "crates/forge-core-cli/src/main.rs"
   - id: operation_executor_payload_adapter_boundary
@@ -864,7 +864,7 @@ closed_grill_questions:
       - "contracts/policies/operation-executor-artifact-storage-projection-boundary.yaml"
       - "crates/forge-core-store/src/lib.rs"
       - "crates/forge-core-store/tests/reference_index.rs"
-      - "crates/forge-core-runtime/tests/operation_plan.rs"
+      - "crates/forge-core-kernel/tests/operation_plan.rs"
   - id: operation_executor_metadata_index_boundary
     status: "closed"
     decision_ref: "contracts/migration/operation-executor-metadata-index-boundary-grill-audit.yaml"
@@ -872,10 +872,10 @@ closed_grill_questions:
     implementation_refs:
       - "contracts/policies/operation-executor-metadata-index-boundary.yaml"
       - "crates/forge-core-store/src/lib.rs"
-      - "crates/forge-core-runtime/src/lib.rs"
+      - "crates/forge-core-kernel/src/lib.rs"
       - "crates/forge-core-cli/src/lib.rs"
       - "crates/forge-core-store/tests/reference_index.rs"
-      - "crates/forge-core-runtime/tests/operation_plan.rs"
+      - "crates/forge-core-kernel/tests/operation_plan.rs"
   - id: operation_executor_metadata_rebuild_boundary
     status: "closed"
     decision_ref: "contracts/migration/operation-executor-metadata-rebuild-boundary-grill-audit.yaml"

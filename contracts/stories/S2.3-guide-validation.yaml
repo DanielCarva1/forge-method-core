@@ -7,7 +7,7 @@ title: "Guide decision validation (engine enforces routing gates)"
 
 decision_sources:
   - "contracts/spec/engine-architecture.yaml#orchestrator_guide (hard gates: engine ENFORCES allowed transitions independent of LLM)"
-  - "crates/forge-core-engine/src/phase_transition.rs (S1.7 evaluate_transition)"
+  - "crates/forge-core-decisions/src/phase_transition.rs (S1.7 evaluate_transition)"
 
 intent: "When the host LLM emits a GuideDecision, the engine VALIDATES it: the recommended workflow exists in the catalog, is eligible in the current phase, and any proposed phase transition clears the S1.7 hard gates. Illegal guidance is rejected with a typed reason. This closes the DC1 loop: host reasons freely, engine blocks the illegal."
 

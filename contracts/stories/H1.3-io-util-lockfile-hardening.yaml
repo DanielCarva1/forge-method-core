@@ -15,8 +15,8 @@ intent: "Prevent orphan lockfiles (from a crashed process) from permanently bloc
 owned_files:
   - "crates/forge-core-cli/src/io_util.rs"
 forbidden_files:
-  - "crates/forge-core-engine/src/claim_engine.rs"        # owned by H1.1
-  - "crates/forge-core-engine/src/conflict_detection.rs"  # owned by H1.2
+  - "crates/forge-core-decisions/src/claim_engine.rs"        # owned by H1.1
+  - "crates/forge-core-decisions/src/conflict_detection.rs"  # owned by H1.2
 
 tasks:
   - "DirLock::acquire (lines ~41-66): write pid + acquisition timestamp into the lockfile (not just pid). On encountering an existing lockfile, detect staleness: if the pid is not alive (or lock age exceeds a sane threshold), treat as orphan and reclaim with a typed diagnostic warning. Add an ownership token so Drop only removes a lockfile it actually owns (compare before unlink)."

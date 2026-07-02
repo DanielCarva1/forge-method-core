@@ -96,7 +96,7 @@ fn e2e_full_agent_loop_describe_status_decide() {
 #[test]
 fn e2e_legal_transition_when_gate_provided() {
     use forge_core_contracts::gate::GateStatus;
-    use forge_core_engine::{GateKind, ProvidedGateResult};
+    use forge_core_decisions::{GateKind, ProvidedGateResult};
 
     // Host in specification, proposes plan-sprint (a 3-plan workflow) with a
     // PROPOSED transition spec->plan. Without the system-design gate: blocked.
