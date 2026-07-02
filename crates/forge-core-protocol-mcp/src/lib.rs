@@ -44,7 +44,8 @@ pub use allowlist::{
     DEFAULT_READONLY_TOOLS,
 };
 pub use attestation::{
-    AttestationError, AttestationInput, AttestationPolicy, AttestationVerifier, CanonicalIntent,
+    AttestationError, AttestationGateOutcome, AttestationInput, AttestationPolicy,
+    AttestationVerifier, CanonicalIntent,
 };
 pub use error::{McpAdapterError, ServerRunError};
 pub use server::{ForgeMcpServer, McpServerConfig};

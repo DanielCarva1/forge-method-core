@@ -138,6 +138,18 @@ impl fmt::Display for AttestationError {
 
 impl std::error::Error for AttestationError {}
 
+/// The outcome of the attestation gate at the MCP boundary (ADR-0006 Decision
+/// 4). `None` means the gate passed (attestation present+valid, OR not
+/// required for this tool class). `Some` means rejection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AttestationGateOutcome {
+    /// The policy required an attestation for this tool but none was present.
+    RequiredMissing,
+    /// An attestation was present (or required) but failed verification. The
+    /// carried string is the lossy reason.
+    Invalid(String),
+}
+
 /// Verifier for Tool-Call Attestations. Holds no mutable state; constructed
 /// once per server from the policy.
 #[derive(Debug, Clone)]

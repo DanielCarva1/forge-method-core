@@ -107,6 +107,93 @@ impl ForgeMcpServer {
         self.config.allowlist.get(name).map(|t| t.policy)
     }
 
+    /// Check the Tool-Call Attestation gate for an incoming `tools/call`
+    /// request (ADR-0006 Decision 4).
+    ///
+    /// Returns `None` if the gate passes (attestation present+valid, OR the
+    /// policy does not require attestation for this tool class). Returns
+    /// `Some(outcome)` on rejection, which the caller surfaces as a tool-level
+    /// error result.
+    ///
+    /// The attestation rides in `_meta.attestation` of the MCP request. It is
+    /// deserialized into an [`AttestationInput`]; the signed
+    /// [`CanonicalIntent`] is reconstructed from `(tool_name, arguments,
+    /// nonce, ts)` and verified against the caller-supplied public key.
+    ///
+    /// Note: this verifies the *signature* (origin proof). Whether the public
+    /// key is *authorized* is a separate deploy-time concern (the set of
+    /// authorized keys is configured at the operator level); F08 keeps the
+    /// verify step self-contained.
+    #[must_use]
+    fn check_attestation_gate(
+        &self,
+        request: &CallToolRequestParams,
+        tool_name: &str,
+        is_mutate: bool,
+    ) -> Option<crate::attestation::AttestationGateOutcome> {
+        let policy = self.config.attestation.policy();
+        if !policy.requires_for(is_mutate) {
+            // Not required: read-only under default policy, or NeverRequired.
+            // If an attestation is present we still try to verify it (defense
+            // in depth) but a missing one is allowed.
+            return self.verify_present_attestation(request, tool_name);
+        }
+        // Required for this tool class: must be present and valid.
+        match extract_attestation(request) {
+            Some(Ok(att)) => match self.verify_attestation(request, tool_name, &att) {
+                Ok(()) => None,
+                Err(e) => Some(crate::attestation::AttestationGateOutcome::Invalid(
+                    e.to_string(),
+                )),
+            },
+            Some(Err(msg)) => Some(crate::attestation::AttestationGateOutcome::Invalid(msg)),
+            None => Some(crate::attestation::AttestationGateOutcome::RequiredMissing),
+        }
+    }
+
+    /// Verify an attestation when one is present but not required. Missing is
+    /// allowed; present-but-invalid is a rejection.
+    #[must_use]
+    fn verify_present_attestation(
+        &self,
+        request: &CallToolRequestParams,
+        tool_name: &str,
+    ) -> Option<crate::attestation::AttestationGateOutcome> {
+        match extract_attestation(request) {
+            Some(Ok(att)) => match self.verify_attestation(request, tool_name, &att) {
+                Ok(()) => None,
+                Err(e) => Some(crate::attestation::AttestationGateOutcome::Invalid(
+                    e.to_string(),
+                )),
+            },
+            Some(Err(msg)) => Some(crate::attestation::AttestationGateOutcome::Invalid(msg)),
+            None => None, // allowed when not required
+        }
+    }
+
+    /// Reconstruct the [`CanonicalIntent`] from the request + attestation and
+    /// verify it.
+    fn verify_attestation(
+        &self,
+        request: &CallToolRequestParams,
+        tool_name: &str,
+        att: &crate::attestation::AttestationInput,
+    ) -> Result<(), crate::attestation::AttestationError> {
+        let arguments = request
+            .arguments
+            .as_ref()
+            .map_or(serde_json::Value::Object(serde_json::Map::default()), |m| {
+                serde_json::Value::Object(m.clone())
+            });
+        let intent = crate::attestation::CanonicalIntent {
+            tool: tool_name.to_string(),
+            arguments,
+            nonce: att.nonce.clone(),
+            ts: att.ts,
+        };
+        self.config.attestation.verify(&intent, att)
+    }
+
     /// Invoke a tool as a subprocess and return the captured `CliEnvelope`
     /// JSON.
     ///
@@ -280,6 +367,24 @@ fn arguments_to_argv(arguments: Option<&JsonObject>) -> Vec<String> {
     out
 }
 
+/// Extract the Tool-Call Attestation from the MCP request's `_meta.attestation`
+/// field (ADR-0006 Decision 4).
+///
+/// Returns `None` if no attestation is present (caller decides if that is
+/// allowed). Returns `Some(Ok(att))` on successful extraction, or
+/// `Some(Err(msg))` if the field is present but malformed (a present-but-
+/// unparseable attestation is a rejection, never silently ignored).
+fn extract_attestation(
+    request: &CallToolRequestParams,
+) -> Option<Result<crate::attestation::AttestationInput, String>> {
+    let meta = request.meta.as_ref()?;
+    let att_value = meta.0.get("attestation")?;
+    Some(
+        serde_json::from_value::<crate::attestation::AttestationInput>(att_value.clone())
+            .map_err(|e| e.to_string()),
+    )
+}
+
 /// Whether an argv carries an `OperationContract` signal (ADR-0006 Decision 2).
 ///
 /// The forge-core CLI accepts the contract via `--operation <path>` (the
@@ -333,14 +438,41 @@ impl ServerHandler for ForgeMcpServer {
 impl ForgeMcpServer {
     /// The synchronous body of `call_tool`, separated so it can be unit-tested
     /// without a live rmcp transport.
+    ///
+    /// Enforcement order (ADR-0006):
+    /// 1. Allowlist lookup (also tells us mutate-ness).
+    /// 2. Tool-Call Attestation — if the policy requires it for this tool's
+    ///    class (mutate by default) and it is missing/invalid, reject here.
+    /// 3. `invoke_tool` performs the Allowlist re-check + `MutateGate` + subprocess.
     #[allow(clippy::needless_pass_by_value)] // trait-adjacent; param by-value matches call_tool
     fn handle_call_tool(
         &self,
         request: CallToolRequestParams,
     ) -> Result<CallToolResult, ErrorData> {
-        let tool_name = request.name.as_ref();
+        let tool_name = request.name.as_ref().to_string();
+
+        // Determine mutate-ness from the Allowlist (None = not allowlisted;
+        // invoke_tool below will emit the precise DeniedByAllowlist).
+        let policy = self.lookup_tool(&tool_name);
+        let is_mutate = policy.is_some_and(AllowlistPolicy::is_mutate);
+
+        // Tool-Call Attestation gate (ADR-0006 Decision 4).
+        if let Some(att_err) = self.check_attestation_gate(&request, &tool_name, is_mutate) {
+            // Gate denial surfaces as a tool-level error result.
+            let (tool, reason) = match att_err {
+                crate::attestation::AttestationGateOutcome::RequiredMissing => (
+                    tool_name.clone(),
+                    "attestation required for mutate tool but none in _meta".to_string(),
+                ),
+                crate::attestation::AttestationGateOutcome::Invalid(msg) => {
+                    (tool_name.clone(), format!("attestation invalid: {msg}"))
+                }
+            };
+            return Ok(rejection_result(&tool, &reason));
+        }
+
         let argv = arguments_to_argv(request.arguments.as_ref());
-        match self.invoke_tool(tool_name, &argv) {
+        match self.invoke_tool(&tool_name, &argv) {
             Ok(envelope_json) => Ok(CallToolResult::success(vec![ContentBlock::text(
                 envelope_json,
             )])),
@@ -577,6 +709,168 @@ mod tests {
         assert!(argv_carries_contract(&["--operation".into(), "/x".into()]));
         assert!(argv_carries_contract(&["--command".into(), "/x".into()]));
         assert!(argv_carries_contract(&["--effect".into(), "/x".into()]));
+    }
+
+    // --- F08.5 attestation gate tests --------------------------------------
+
+    fn mutate_config_with_fake_binary(bin: PathBuf) -> McpServerConfig {
+        McpServerConfig {
+            allowlist: Allowlist::default_with_mutate(),
+            attestation: crate::attestation::AttestationVerifier::new(
+                crate::attestation::AttestationPolicy::Default,
+            ),
+            forge_core_binary: bin,
+            root: None,
+            allow_bootstrap_core: false,
+        }
+    }
+
+    /// Sign a Tool-Call Attestation for a tool call, returning the
+    /// `AttestationInput` that would ride in `_meta.attestation`.
+    fn sign_test_attestation(
+        tool: &str,
+        arguments: serde_json::Value,
+        nonce: &str,
+        ts: i64,
+    ) -> crate::attestation::AttestationInput {
+        use ed25519_dalek::{Signer, SigningKey};
+        use rand::RngCore;
+        let mut bytes = [0u8; 32];
+        rand::rngs::OsRng.fill_bytes(&mut bytes);
+        let sk = SigningKey::from_bytes(&bytes);
+        let intent = crate::attestation::CanonicalIntent {
+            tool: tool.into(),
+            arguments,
+            nonce: nonce.into(),
+            ts,
+        };
+        let canon = intent.canonical_bytes().unwrap();
+        let sig = sk.sign(&canon);
+        let pk = sk.verifying_key();
+        crate::attestation::AttestationInput {
+            nonce: nonce.into(),
+            ts,
+            signature: crate::attestation::hex_encode(&sig.to_bytes()),
+            public_key_hex: crate::attestation::hex_encode(&pk.to_bytes()),
+        }
+    }
+
+    /// Build a `CallToolRequestParams` with `_meta.attestation` set.
+    #[allow(clippy::needless_pass_by_value)] // test helper; att moved into meta
+    fn request_with_attestation(
+        tool: &str,
+        arguments: JsonObject,
+        att: crate::attestation::AttestationInput,
+    ) -> CallToolRequestParams {
+        use rmcp::model::Meta;
+        let mut meta_map = JsonObject::new();
+        meta_map.insert("attestation".into(), serde_json::to_value(&att).unwrap());
+        let mut req = CallToolRequestParams::new(tool.to_string());
+        req.arguments = (!arguments.is_empty()).then_some(arguments);
+        req.meta = Some(Meta(meta_map));
+        req
+    }
+
+    #[test]
+    fn attestation_gate_rejects_mutate_without_attestation() {
+        let envelope = "{}";
+        let bin = make_fake_forge_core(true, envelope);
+        let server = ForgeMcpServer::new(mutate_config_with_fake_binary(bin));
+        // execute-operation is mutate; Default policy requires attestation.
+        // No _meta.attestation present → rejection at the attestation gate,
+        // BEFORE the MutateGate/subprocess is reached.
+        let req = CallToolRequestParams::new("execute-operation");
+        let res = server.handle_call_tool(req).unwrap();
+        assert!(res.is_error.unwrap_or(false));
+        assert!(content_text(&res).contains("attestation required"));
+    }
+
+    #[test]
+    fn attestation_gate_passes_mutate_with_valid_attestation_and_contract() {
+        let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
+        let bin = make_fake_forge_core(true, envelope);
+        let server = ForgeMcpServer::new(mutate_config_with_fake_binary(bin));
+        // Mutate tool WITH contract AND valid attestation → gate passes,
+        // subprocess invoked, envelope returned.
+        let mut args = JsonObject::new();
+        args.insert("--operation".into(), serde_json::json!("/tmp/op.yaml"));
+        let att = sign_test_attestation(
+            "execute-operation",
+            serde_json::json!({ "--operation": "/tmp/op.yaml" }),
+            "n-1",
+            1_700_000_000,
+        );
+        let req = request_with_attestation("execute-operation", args, att);
+        let res = server.handle_call_tool(req).unwrap();
+        assert!(
+            !res.is_error.unwrap_or(true),
+            "expected success, got: {}",
+            content_text(&res)
+        );
+    }
+
+    #[test]
+    fn attestation_gate_rejects_mutate_with_tampered_attestation() {
+        let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
+        let bin = make_fake_forge_core(true, envelope);
+        let server = ForgeMcpServer::new(mutate_config_with_fake_binary(bin));
+        // Sign over one intent but call with different arguments → tampered.
+        let mut args = JsonObject::new();
+        args.insert("--operation".into(), serde_json::json!("/tmp/actual.yaml"));
+        let att = sign_test_attestation(
+            "execute-operation",
+            serde_json::json!({ "--operation": "/tmp/DIFFERENT.yaml" }),
+            "n-1",
+            1_700_000_000,
+        );
+        let req = request_with_attestation("execute-operation", args, att);
+        let res = server.handle_call_tool(req).unwrap();
+        assert!(res.is_error.unwrap_or(false));
+        assert!(content_text(&res).contains("attestation invalid"));
+    }
+
+    #[test]
+    fn attestation_gate_allows_readonly_without_attestation() {
+        // Default policy: read-only tools do not require attestation.
+        let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
+        let bin = make_fake_forge_core(true, envelope);
+        let server = ForgeMcpServer::new(McpServerConfig {
+            allowlist: Allowlist::default_read_only(),
+            ..mutate_config_with_fake_binary(bin)
+        });
+        let req = CallToolRequestParams::new("preview");
+        let res = server.handle_call_tool(req).unwrap();
+        assert!(!res.is_error.unwrap_or(true));
+    }
+
+    #[test]
+    fn attestation_gate_never_required_allows_mutate_without_attestation() {
+        // NeverRequired policy: even mutate does not require attestation
+        // (verify-only-when-present). Missing is allowed. NOTE: the MutateGate
+        // still independently requires an OperationContract — attestation and
+        // the contract are separate gates (ADR-0006 Decisions 2 & 4).
+        let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
+        let bin = make_fake_forge_core(true, envelope);
+        let cfg = McpServerConfig {
+            allowlist: Allowlist::default_with_mutate(),
+            attestation: crate::attestation::AttestationVerifier::new(
+                crate::attestation::AttestationPolicy::NeverRequired,
+            ),
+            ..mutate_config_with_fake_binary(bin)
+        };
+        let server = ForgeMcpServer::new(cfg);
+        // Mutate + contract, no attestation → attestation gate passes
+        // (NeverRequired), MutateGate passes (contract present).
+        let mut args = JsonObject::new();
+        args.insert("--operation".into(), serde_json::json!("/tmp/op.yaml"));
+        let mut req = CallToolRequestParams::new("execute-operation");
+        req.arguments = Some(args);
+        let res = server.handle_call_tool(req).unwrap();
+        assert!(
+            !res.is_error.unwrap_or(true),
+            "expected success, got: {}",
+            content_text(&res)
+        );
     }
 
     #[test]
