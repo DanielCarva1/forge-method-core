@@ -800,6 +800,7 @@ dependencies = [
  "forge-core-governance",
  "forge-core-graph",
  "forge-core-memory",
+ "forge-core-protocol-mcp",
  "forge-core-runtime",
  "forge-core-store",
  "forge-core-trace",
@@ -935,7 +936,6 @@ name = "forge-core-protocol-mcp"
 version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
- "forge-core-cli",
  "forge-core-contracts",
  "forge-core-validate",
  "proptest",

@@ -5,7 +5,6 @@ edition.workspace = true
 
 [dependencies]
 forge-core-contracts = { path = "../forge-core-contracts" }
-forge-core-cli = { path = "../forge-core-cli" }
 forge-core-validate = { path = "../forge-core-validate" }
 # Local tokio features for stdio MCP server (io-util + macros for the
 # async runtime + buffered stdin/AsyncBufReadExt). We do NOT modify the

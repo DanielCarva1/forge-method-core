@@ -52,6 +52,7 @@ pub(crate) mod host_command;
 pub mod io_util;
 pub mod isolation;
 pub mod m1_cmd;
+pub mod mcp_cmd;
 pub mod memory_cmd;
 pub mod preflight_cmd;
 pub mod project_cmd;

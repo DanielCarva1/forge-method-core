@@ -306,6 +306,13 @@ pub const COMMANDS: &[CommandSpec] = &[
         usage_lines: &["       forge-core start [--root <path>] [--agent-id <id>] [--json|--no-json]"],
         handler: crate::start_cmd::run_start_command,
     },
+    CommandSpec {
+        name: "mcp",
+        usage_lines: &[
+            "       forge-core mcp serve [--allowlist <yaml>] [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
+        ],
+        handler: crate::mcp_cmd::run_mcp_command,
+    },
 ];
 
 /// Looks up a command by its argv[1] token and invokes its handler.
