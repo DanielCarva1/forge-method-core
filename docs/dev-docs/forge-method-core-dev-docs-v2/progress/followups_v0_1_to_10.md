@@ -303,9 +303,23 @@ não merge silencioso.
 - ✅ Fixtures em `contracts/examples/`: `governance-policy.yaml`,
   `intent-contract.yaml`, `conflict-contract.yaml` (round-trip testado).
 
-#### F07.4 — Conflict detection no runtime
-- Antes do WAL write: checar se ref é disputado entre principals
-- Se conflito: NÃO faz merge silencioso, emite `ConflictContract`
+#### F07.4 — Conflict detection no runtime ✅ **DONE**
+- ✅ Wire no seam mapeado: `claim_engine.rs` `acquire` (os 2 pontos de rejeição por
+  sobreposição — `AlreadyClaimedByOther` e `PathAlreadyClaimed`). NÃO no WAL (que
+  permanece serializador burro).
+- ✅ Reformulação additive: campo `conflict: Option<ConflictContract>` adicionado aos
+  2 variantes (backward-compat — consumers usam `{ .. }`). Populado **só quando
+  principals são distintos** (`holder != req.agent_id`); `None` quando mesmo agente
+  (continuation/heartbeat, não conflito — alinhado ao validator
+  `GovernanceConflictPartiesNotDistinct`).
+- ✅ Helper puro `build_conflict` (no engine, co-localizado com o seam): reusa os dados
+  de atribuição que o acquire já computa (`holder`, `path`/`scope_id`, `now_unix`).
+  Converte `StableId` → `PrincipalId` explicitamente (R8). `conflict_id` determinístico
+  + ordering-independent (alice-vs-bob == bob-vs-alice).
+- ✅ 3 testes: conflito-emitido-principais-distintos (path overlap); None-mesmo-agente;
+  atribuição-correta (principal_a/b, target, reason, detected_at, resolution=Pending).
+- ⏳ Persistir o ConflictContract no ledger = F07.5 (neste story ele é computed no
+  acquire e retornado na `ClaimLifecycleDecision`; a persistência é a próxima story).
 
 #### F07.5 — Arbitration ledger (append-only)
 - Log de todos os conflitos detectados + resoluções
