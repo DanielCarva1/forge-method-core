@@ -235,3 +235,58 @@ advance jumps to the correct state:
 
 - The global Forge skill/start script now calls `forge-core project init --root <repo>` when a first-use consumer repo lacks a Project Link, unless `-NoInit` is passed.
 - Product readiness still depends on verified clean install, init, project resolution, and state-bearing command flow from a consumer repo.
+
+## Secure Protocol Adapters (F08)
+
+A family of protocol adapters (MCP today; A2A later) that expose Forge Method
+commands to external clients (Claude Desktop, other agent hosts) over stdio
+JSON-RPC. The adapters are governed by ADR-0006. The inviolable rule: an
+adapter is **never the source of truth** and **never mutates the store
+directly** — every mutation flows through the kernel and an `OperationContract`.
+The adapter is an access surface, not a second implementation of the engine.
+
+## MCPTool
+
+A Forge CLI command exposed as a single MCP tool. Each MCPTool is a thin
+pass-through adapter with no domain logic: it maps MCP `(tool_name, arguments)`
+to an argv `&[String]`, invokes the matching `CommandSpec::handler` in
+`command_registry::COMMANDS`, and returns the resulting `CliEnvelope` JSON as
+the tool result. The set of MCPTools is a *projection* of `COMMANDS` filtered
+by the Allowlist — adding a tool never duplicates command logic, and removing
+the adapter costs callers programmatic access, not functionality (the deletion
+test). Read-only MCPTools (preview, ready, graph, explain, memory list,
+query-effect-index) and mutate MCPTools (execute-operation, claim acquire)
+share the same wrapper shape; only the gate differs.
+
+## Allowlist
+
+The explicit, named set of MCPTools a given MCP server instance is permitted
+to expose, declared in `mcp-allowlist.yaml`. A tool absent from the Allowlist
+is invisible to `tools/list` and rejected on `tools/call` — fail-closed. The
+Allowlist is the capability surface: it separates "Forge can do X" from "this
+MCP client may ask Forge to do X". It is data, not code (adding a tool to a
+server requires no Rust change), mirroring the risk-audit contract model.
+
+## MutateGate
+
+The enforcement point at the MCP boundary where a mutate MCPTool is coupled
+to an `OperationContract`. A mutate tool-call without a valid `OperationContract`
+attached is rejected at the gate before the kernel is reached — fail-closed.
+This is where ADR-0006's "all mutation passes through the kernel and an
+OperationContract" is enforced for external callers. The MutateGate composes
+with Tool-Call Attestation (proven caller) on one side and the kernel's own
+`OperationContract` authorization (authorized intent) on the other; neither
+alone is sufficient for a mutation.
+
+## Tool-Call Attestation (MCP)
+
+A detached ed25519 signature over the canonicalized tool-call intent —
+`{tool_name, arguments, nonce, timestamp}` serialized with
+`serde_json_canonicalizer` — carried in the `tools/call` request and verified
+against a configured authorized public key. This is the protocol-boundary
+proof of *who called*, the MCP/stdio analog of a signed HTTP request (stdio
+carries no headers, so the signature rides in the request body, in `_meta`).
+Tool-Call Attestation is **required for mutate MCPTools** and **optional for
+read-only ones** under the default policy. It is distinct from F07's in-ledger
+*Principal Attestation* (a reviewer's attestation on a memory record); the two
+compose but do not subsume each other — distinct concepts keep distinct names.
