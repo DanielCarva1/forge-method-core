@@ -290,3 +290,98 @@ Tool-Call Attestation is **required for mutate MCPTools** and **optional for
 read-only ones** under the default policy. It is distinct from F07's in-ledger
 *Principal Attestation* (a reviewer's attestation on a memory record); the two
 compose but do not subsume each other — distinct concepts keep distinct names.
+
+## Knowledge Orchestration (F14)
+
+The F14 subsistem adds a research mode in which agents produce claims that are
+always traceable to auditable sources, instead of opaque synthesis. Its trust
+boundary mirrors F06: citation without backing is rejected fail-closed, as
+promotion without raw evidence is rejected fail-closed. Decision record:
+ADR-0010.
+
+**ResearchSource**:
+A source harvested at runtime by an agent during a run (paper, URL, local
+doc), registered in the Source Ledger with provenance (`fetched_at`,
+`content_hash`, `harvested_by`, `trace_ref`). Distinct population of trust
+from the curated Field Evidence Registry.
+_Avoid_: EvidenceSource (the curated kind), Source (too generic), Reference.
+
+**Source Ledger**:
+The append-only event-sourced log (`<state_root>/research/sources.ndjson`)
+that is the source of truth for `ResearchSource`s, with a rebuildable
+`ResearchProjection`. Separate from the memory log (ADR-0010).
+_Avoid_: Source Registry (collides with Field Evidence Registry), Source Store.
+
+**Field Evidence Registry**:
+The curated, static `ContractDocument` (already exists as
+`forge-core-contracts` `FieldEvidenceRegistry`/`EvidenceSource`) that backs
+**design decisions of Forge itself**, with tiered (A/B/C) sources. One of the
+two citation backings, alongside the Source Ledger. Validated as part of
+anchor 122.
+_Avoid_: Research Registry, Evidence List.
+
+**SourceId**:
+The opaque identifier of a source, project-wide unique. Resolves against the
+**union** of two backings: curated (Field Evidence Registry) ∪ runtime (Source
+Ledger). A `source_id` that resolves in neither is an invalid citation
+(fail-closed). The shared reuse boundary between curated and runtime sources;
+distinct Source kinds share the id namespace on purpose.
+_Avoid_: ref, citation-id.
+
+**Citation**:
+The edge that links a claim (any node that carries a `source_id`) to a source.
+Not a claim type; a constraint imposed on claims.
+_Avoid_: reference, link, attribution.
+
+**Citation Check**:
+The fail-closed validator that rejects claims whose `source_id` does not
+resolve against the joint backing. Runs offline (`research check` / `validate`)
+and as a runtime gate on the mutable path (mirrors the risk-audit gate
+pattern). In the MVP it attests only to **resolution**, not to quality/tier.
+_Avoid_: source validator, reference checker.
+
+**Evidence Graph**:
+The projection `SourceId → claims that cite it`, computed by walking existing
+artifacts. **Not a first-class type and not populated by the agent** — it is a
+query/index, like `forge-core-store`'s `reference_index`.
+_Avoid_: Knowledge Graph (overloaded paper term), Citation Graph.
+
+**Research claim** (deliberately absent):
+There is no `ResearchClaim` type. A claim is any node that exposes a
+`source_id`. F14 defines the source side and a constraint over claims, not a
+new claim type — this avoids type inflation and honours the deletion test
+(see ADR-0010).
+
+**ResearchPolicy**:
+The parametric contract (YAML, mirroring `MemoryPolicy`) declaring what a
+source/citation admission permits (`permitted_source_kinds`,
+`require_content_hash`, `require_evidence_ref_on_cite`). The "research mode"
+**is** the active policy, not a flow; there is no `research run` pipeline
+(anti-script-de-novela, G1).
+_Avoid_: Research Config, Research Pipeline.
+
+### Flagged ambiguities
+
+- "evidence" carries three distinct meanings in this repo and must not be
+  conflated:
+  1. `evidence_ref` in `MemoryEntry.provenance` (F06) — raw evidence (test
+     output, log, diff) that justifies an authority promotion.
+  2. `EvidenceTier` in the Field Evidence Registry — the strength grade
+     (A/B/C) of a curated source.
+  3. Resolution of `source_id` in the Citation Check — whether a cited source
+     is registered and reachable (F14).
+  These are three orthogonal axes; none implies another. A source may be
+  resolved (3) and low-tier (2); a memory may be authority (1) without being
+  cited, and vice-versa.
+
+### Relationships (F14)
+
+- A **ResearchSource** has exactly one **SourceId** (project-unique).
+- A **claim** (any node with `source_id`) cites **1..N** **SourceId**s.
+- A **SourceId** resolves in exactly one backing: either a Field Evidence
+  Registry `EvidenceSource` **or** a Source Ledger `ResearchSource** — never
+  both. A collision is a registration error.
+- **Citation Check** consults Field Evidence Registry ∪ Source Ledger; rejects
+  if it resolves in neither.
+- **Evidence Graph** is derived from (claims × SourceIds); **ResearchPolicy**
+  governs admission on both sides of the edge.
