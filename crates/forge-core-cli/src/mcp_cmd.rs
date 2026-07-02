@@ -184,35 +184,7 @@ fn json_output_unless_text_selected(args: &[String]) -> bool {
 
 fn emit_err(command: &str, message: &str, want_json: bool) -> Result<(), ExitError> {
     let env: CliEnvelope<()> = CliEnvelope::err(command, ExitReason::InvalidDecisionShape, message);
-    emit(env, want_json)
-}
-
-#[allow(clippy::needless_pass_by_value)]
-fn emit<T: serde::Serialize>(env: CliEnvelope<T>, want_json: bool) -> Result<(), ExitError> {
-    let code = env.exit_code();
-    if want_json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&env).expect("serialize envelope")
-        );
-    } else {
-        let command = env.command.0.as_str();
-        if env.ok {
-            println!("{command}: ok");
-        } else {
-            eprintln!(
-                "{command} failed: {}",
-                env.error
-                    .as_ref()
-                    .map_or("unknown", |error| error.message.as_str())
-            );
-        }
-    }
-    if code == 0 {
-        Ok(())
-    } else {
-        Err(ExitError::with_code(code, String::new()))
-    }
+    crate::cli_util::emit_envelope(env, want_json)
 }
 
 #[cfg(test)]

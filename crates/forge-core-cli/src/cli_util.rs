@@ -428,6 +428,13 @@ pub fn resolve_stateful_roots_or_err(
 
 /// Result variant of [`emit_envelope`].
 ///
+/// Legacy emit path retained for the `claim` / `isolation` families. Its
+/// text-mode contract DIFFERS from the canonical [`emit_envelope`]: it prints
+/// nothing on success (silent) and uses the passed-in `family` label (not
+/// `env.command`) for the failure line. New command families should call
+/// [`emit_envelope`] (the `"command: ok"` text path) instead; do not adopt
+/// this helper for new code.
+///
 /// Prints the envelope to stdout (JSON mode) or stderr (text-mode failure),
 /// matching the legacy [`emit_envelope`] byte-for-byte. Returns `Ok(())` when
 /// the envelope exit code is 0 so the caller can keep going (or simply return
@@ -463,6 +470,112 @@ pub fn emit_envelope_or_err<T: serde::Serialize>(
             family,
             env.error.as_ref().map_or("unknown", |e| e.message.as_str())
         );
+    }
+    if code == 0 {
+        Ok(())
+    } else {
+        Err(ExitError::with_code(code, String::new()))
+    }
+}
+
+/// The SINGLE emit path for every CLI command.
+///
+/// Prints the envelope to stdout (JSON mode) or a one-line human summary
+/// (text mode), and returns `Ok(())` when the envelope's exit code is 0 (or
+/// `Err(ExitError::with_code(code, ..))` when it is non-zero) so the binary
+/// entrypoint can translate the latter into `process::exit(code)`.
+///
+/// Text-mode contract (must stay stable — operators and scripts parse it):
+/// - success: `"{command}: ok"` to stdout
+/// - failure: `"{command} failed: {message}"` to stderr
+///
+/// where `command` is the envelope's own [`CliEnvelope::command`] field, so a
+/// command never has to restate its name at the call site.
+///
+/// # Do not define per-module `emit` twins
+///
+/// Before V1.D, seven command modules each carried a byte-identical private
+/// `emit(env, want_json)` (~15 lines each), and two had drifted:
+/// `contract_cmd` hardcoded its command name, and `autonomy_cmd` printed an
+/// extra "lane" line. Both needs are now served by THIS function and
+/// [`emit_envelope_with`] (the rare-case variant that takes an optional
+/// text-mode success line). If you find yourself writing another `fn emit`,
+/// call [`emit_envelope`] instead.
+///
+/// # Errors
+///
+/// Returns `ExitError::with_code` carrying the envelope's non-zero exit code
+/// (the human-readable diagnostic was already written to stderr/stdout).
+///
+/// # Panics
+///
+/// Panics in JSON mode if `env` cannot be serialized by `serde_json`. `T:
+/// Serialize` is bound, so this is a programming error that never occurs on
+/// well-formed envelope types. (V4.A will replace this `expect` with a typed
+/// error; for now the behavior is preserved exactly from the deleted twins.)
+pub fn emit_envelope<T: serde::Serialize>(
+    env: forge_core_contracts::CliEnvelope<T>,
+    want_json: bool,
+) -> Result<(), ExitError> {
+    emit_envelope_with(env, want_json, None)
+}
+
+/// The rare-case variant of [`emit_envelope`] for commands whose text-mode
+/// success line carries domain meaning beyond a plain `"{command}: ok"`.
+///
+/// `text_success_line` overrides the stdout success line in text mode only
+/// (JSON mode is unaffected — the full envelope is still printed). Pass
+/// `None` to get the standard `"{command}: ok"` line (identical to
+/// [`emit_envelope`]); pass `Some(line)` to render a richer summary such as
+/// the autonomy router's `"lane: fast"`.
+///
+/// The failure path is identical to [`emit_envelope`] regardless of the
+/// override, so a rejection still prints `"{command} failed: {message}"`.
+///
+/// # When to use this
+///
+/// Only when a command's text-mode success summary is genuinely a different
+/// *kind* of output the operator reads directly (e.g. the selected autonomy
+/// lane is the command's whole point). Do NOT reach for it to add cosmetic
+/// decoration — prefer [`emit_envelope`] and let the JSON payload carry detail.
+///
+/// # Errors
+///
+/// Returns `ExitError::with_code` carrying the envelope's non-zero exit code
+/// (the human-readable diagnostic was already written to stderr/stdout).
+///
+/// # Panics
+///
+/// Panics in JSON mode if `env` cannot be serialized by `serde_json`. `T:
+/// Serialize` is bound, so this is a programming error that never occurs on
+/// well-formed envelope types. (V4.A will replace this `expect` with a typed
+/// error; for now the behavior is preserved exactly from the deleted twins.)
+pub fn emit_envelope_with<T: serde::Serialize>(
+    env: forge_core_contracts::CliEnvelope<T>,
+    want_json: bool,
+    text_success_line: Option<&str>,
+) -> Result<(), ExitError> {
+    let code = env.exit_code();
+    if want_json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&env).expect("serialize envelope")
+        );
+    } else {
+        let command = env.command.0.as_str();
+        if env.ok {
+            match text_success_line {
+                Some(line) => println!("{line}"),
+                None => println!("{command}: ok"),
+            }
+        } else {
+            eprintln!(
+                "{command} failed: {}",
+                env.error
+                    .as_ref()
+                    .map_or("unknown", |error| error.message.as_str())
+            );
+        }
     }
     if code == 0 {
         Ok(())

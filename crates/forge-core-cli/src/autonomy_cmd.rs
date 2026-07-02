@@ -15,7 +15,9 @@ use forge_core_contracts::verification_goal::{
     VerificationGoalContract, VerificationGoalContractDocument,
 };
 use forge_core_contracts::{CliEnvelope, ExitReason};
-use forge_core_decisions::autonomy_router::{route_lane, route_lane_for_tool_classes, LaneDecision};
+use forge_core_decisions::autonomy_router::{
+    route_lane, route_lane_for_tool_classes, LaneDecision,
+};
 
 use crate::cli_error::ExitError;
 
@@ -88,7 +90,7 @@ pub fn run_route(args: &[String]) -> Result<(), ExitError> {
         )
     };
     let env = CliEnvelope::ok(ROUTE_COMMAND, decision);
-    emit(env, options.want_json)
+    emit_autonomy(env, options.want_json)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -407,46 +409,30 @@ fn error_envelope(command: &str, message: &str) -> CliEnvelope<()> {
 
 fn emit_err(command: &str, message: &str, want_json: bool) -> Result<(), ExitError> {
     let env = error_envelope(command, message);
-    emit(env, want_json)
+    crate::cli_util::emit_envelope(env, want_json)
 }
 
-#[allow(clippy::needless_pass_by_value)]
-fn emit<T: serde::Serialize>(env: CliEnvelope<T>, want_json: bool) -> Result<(), ExitError> {
-    let code = env.exit_code();
-    if want_json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&env).expect("serialize envelope")
-        );
-    } else {
-        // Text mode: surface the lane for the accepted case.
-        let command = env.command.0.as_str();
-        if env.ok {
-            let data_value = env.data.as_ref().and_then(|d| serde_json::to_value(d).ok());
-            let lane = data_value
-                .as_ref()
-                .and_then(|v| v.get("lane"))
-                .and_then(|l| l.as_str());
-            match lane {
-                Some(l) => println!("lane: {l}"),
-                None => println!("{command}: ok"),
-            }
-        } else {
-            eprintln!(
-                "{command} failed: {}",
-                env.error
-                    .as_ref()
-                    .map_or("unknown", |error| error.message.as_str())
-            );
-        }
-    }
-    if code == 0 {
-        Ok(())
-    } else {
-        // The envelope already carried the human-readable failure message
-        // to stderr/stdout; the ExitError only carries the exit code.
-        Err(ExitError::with_code(code, String::new()))
-    }
+/// Emit an autonomy envelope, surfacing the router's selected lane in text
+/// mode. This is the one place the autonomy family diverges from the
+/// standard `"{command}: ok"` line — the lane (`fast`/`rigorous`) is the
+/// command's entire verdict, so it is the text-mode success summary.
+///
+/// Delegates to [`crate::cli_util::emit_envelope_with`] so JSON output,
+/// failure text, and exit-code translation stay on the single shared path;
+/// only the text-mode success line is overridden.
+fn emit_autonomy<T: serde::Serialize>(
+    env: CliEnvelope<T>,
+    want_json: bool,
+) -> Result<(), ExitError> {
+    let lane = env
+        .data
+        .as_ref()
+        .and_then(|d| serde_json::to_value(d).ok())
+        .as_ref()
+        .and_then(|v| v.get("lane"))
+        .and_then(|l| l.as_str())
+        .map(|l| format!("lane: {l}"));
+    crate::cli_util::emit_envelope_with(env, want_json, lane.as_deref())
 }
 
 #[cfg(test)]

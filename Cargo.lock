@@ -897,6 +897,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "forge-core-eventlog"
+version = "0.1.0"
+dependencies = [
+ "forge-core-store",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "forge-core-governance"
 version = "0.1.0"
 dependencies = [

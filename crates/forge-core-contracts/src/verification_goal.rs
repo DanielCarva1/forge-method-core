@@ -327,8 +327,7 @@ verification_goal_contract:
                     },
                     VerificationGoal {
                         kind: GoalKind::UnitTestsPass,
-                        target: "cargo test -p forge-core-kernel --test operation_plan"
-                            .to_string(),
+                        target: "cargo test -p forge-core-kernel --test operation_plan".to_string(),
                         status: GoalStatus::Flaky,
                         adapter: AdapterKind::Cargo,
                         detail: Some("passed on retry".to_string()),

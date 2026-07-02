@@ -1,0 +1,13 @@
+[package]
+name = "forge-core-eventlog"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Generic append-only event-sourced log mechanics (trait + replay/project/append/lock), shared across the Forge PEP crates."
+
+[dependencies]
+forge-core-store = { path = "../forge-core-store" }
+serde.workspace = true
+serde_json.workspace = true

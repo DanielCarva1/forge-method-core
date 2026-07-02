@@ -141,7 +141,9 @@ pub fn run_validate(args: &[String]) -> Result<(), ExitError> {
     };
 
     match validate_kind(&kind, &text) {
-        Ok(payload) => emit(CliEnvelope::ok("contract validate", payload), want_json),
+        Ok(payload) => {
+            crate::cli_util::emit_envelope(CliEnvelope::ok("contract validate", payload), want_json)
+        }
         Err(message) => Err(emit_err(
             "contract validate",
             &message.to_string(),
@@ -260,41 +262,15 @@ fn require_value(
 
 fn emit_err(command: &str, message: &str, want_json: bool) -> ExitError {
     let env: CliEnvelope<()> = CliEnvelope::err(command, ExitReason::InvalidDecisionShape, message);
-    // Print the envelope in the same shape as `emit` so behavior is
-    // byte-identical to the legacy exit-on-error path.
-    if want_json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&env).expect("serialize envelope")
-        );
-    } else {
-        eprintln!(
-            "{command} failed: {}",
-            env.error.as_ref().map_or("unknown", |e| e.message.as_str())
-        );
-    }
-    ExitError::with_code(env.exit_code(), String::new())
-}
-
-fn emit<T: serde::Serialize>(env: CliEnvelope<T>, want_json: bool) -> Result<(), ExitError> {
-    let code = env.exit_code();
-    if want_json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&env).expect("serialize envelope")
-        );
-    } else if env.ok {
-        println!("contract validate: ok");
-    } else {
-        eprintln!(
-            "contract validate failed: {}",
-            env.error.as_ref().map_or("unknown", |e| e.message.as_str())
-        );
-    }
-    if code == 0 {
-        Ok(())
-    } else {
-        Err(ExitError::with_code(code, String::new()))
+    // Delegate to the single emit path; unwrap the Ok (unreachable here — the
+    // envelope is always an error, so emit_envelope returns WithCode) and
+    // surface the typed ExitError. The caller wraps this in `Err(...)`.
+    match crate::cli_util::emit_envelope(env, want_json) {
+        Ok(()) => ExitError::with_code(
+            ExitReason::InvalidDecisionShape.as_code(),
+            "emit_envelope Ok path is unreachable: envelope is always an error here".to_string(),
+        ),
+        Err(err) => err,
     }
 }
 

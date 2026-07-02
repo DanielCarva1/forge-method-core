@@ -116,9 +116,26 @@ pub fn run_validate(
 // arg parsing + dispatch (called from main.rs)
 // ---------------------------------------------------------------------------
 
-/// Parse and run `forge-core coordination <subcommand>`. Returns the envelope
-/// as a pretty-printed JSON string + the process exit code (DD10).
-pub fn dispatch(args: &[String]) -> (String, i32) {
+/// Parse and run `forge-core coordination <subcommand>`.
+///
+/// Emits the result envelope via the single shared path
+/// ([`crate::cli_util::emit_envelope`] / [`crate::cli_util::emit_envelope_with`])
+/// and returns a `Result<(), ExitError>` carrying the DD10 exit code, so this
+/// composes with every other command dispatcher and the registry handler.
+///
+/// The validate text-mode success summary is the one place coordination
+/// renders richer output than the standard `"{command}: ok"` line — it lists
+/// the suite, dimensions, structural errors, and dangling refs (the whole
+/// point of the gate). That detail is passed to `emit_envelope_with` as the
+/// text-mode success override; JSON mode still prints the full envelope.
+///
+/// # Errors
+///
+/// Returns `ExitError::with_code` carrying the dispatcher's non-zero exit
+/// code (3 for argv-shape errors, 2 for unknown subcommand, or the envelope's
+/// own code for a validate result) so the entrypoint can translate it into
+/// `process::exit(code)`.
+pub fn dispatch(args: &[String]) -> Result<(), ExitError> {
     let sub = args.get(1).map_or("--help", String::as_str);
     match sub {
         "validate" => {
@@ -136,7 +153,7 @@ pub fn dispatch(args: &[String]) -> (String, i32) {
                         idx += 1;
                         let Some(val) = args.get(idx) else {
                             eprintln!("coordination validate: --suite requires a value");
-                            return (String::new(), 3);
+                            return Err(ExitError::with_code(3, String::new()));
                         };
                         suite = PathBuf::from(val);
                     }
@@ -144,35 +161,26 @@ pub fn dispatch(args: &[String]) -> (String, i32) {
                         idx += 1;
                         let Some(val) = args.get(idx) else {
                             eprintln!("coordination validate: --repo-root requires a value");
-                            return (String::new(), 3);
+                            return Err(ExitError::with_code(3, String::new()));
                         };
                         repo_root = PathBuf::from(val);
                     }
                     "--no-json" => want_json = false,
                     "--help" | "-h" => {
                         print_validate_help();
-                        return (String::new(), 0);
+                        return Ok(());
                     }
                     other => {
                         eprintln!("coordination validate: unknown flag '{other}'");
-                        return (String::new(), 3);
+                        return Err(ExitError::with_code(3, String::new()));
                     }
                 }
                 idx += 1;
             }
 
             let env = run_validate(&suite, &repo_root);
-            let exit = env.exit_code();
-            if want_json {
-                (
-                    serde_json::to_string_pretty(&env)
-                        .unwrap_or_else(|e| format!("{{error: {e}}}")),
-                    exit,
-                )
-            } else {
-                print_validate_human(&env);
-                (String::new(), exit)
-            }
+            let report = render_validate_human(&env);
+            crate::cli_util::emit_envelope_with(env, want_json, Some(&report))
         }
         "--help" | "-h" | "help" | "" => {
             println!("forge-core coordination <subcommand> [options]");
@@ -181,11 +189,11 @@ pub fn dispatch(args: &[String]) -> (String, i32) {
             println!("    Loads + structurally validates a coordination-eval suite and reports");
             println!("    dangling fixture/evidence refs. Exit 0 = suite is REAL (all refs");
             println!("    resolve, all 9 dims well-formed).");
-            (String::new(), 0)
+            Ok(())
         }
         other => {
             eprintln!("forge-core coordination: unknown subcommand '{other}'. Try: validate");
-            (String::new(), 2)
+            Err(ExitError::with_code(2, String::new()))
         }
     }
 }
@@ -194,46 +202,44 @@ fn print_validate_help() {
     println!("forge-core coordination validate --suite <path> [--repo-root <path>] [--no-json]");
 }
 
-fn print_validate_human(env: &CliEnvelope<CoordinationValidatePayload>) {
+/// Build the multi-line text-mode success report for `coordination validate`.
+/// Returned as a single `String` (newlines embedded) so it can be handed to
+/// [`crate::cli_util::emit_envelope_with`] as the text-mode success override.
+fn render_validate_human(env: &CliEnvelope<CoordinationValidatePayload>) -> String {
+    let mut out = String::new();
     if let Some(d) = &env.data {
-        println!("suite: {}", d.suite_path);
-        println!("dimensions: {}", d.dimension_count);
-        println!("structural errors: {}", d.structural_errors.len());
+        use std::fmt::Write;
+        let _ = writeln!(out, "suite: {}", d.suite_path);
+        let _ = writeln!(out, "dimensions: {}", d.dimension_count);
+        let _ = writeln!(out, "structural errors: {}", d.structural_errors.len());
         for e in &d.structural_errors {
-            println!("  - {e:?}");
+            let _ = writeln!(out, "  - {e:?}");
         }
-        println!("dangling refs: {}", d.dangling_refs.len());
+        let _ = writeln!(out, "dangling refs: {}", d.dangling_refs.len());
         for r in &d.dangling_refs {
-            println!("  - {r}");
+            let _ = writeln!(out, "  - {r}");
         }
-        println!("is_real: {}", d.is_real);
+        let _ = write!(out, "is_real: {}", d.is_real);
     } else {
         let msg = env
             .error
             .as_ref()
             .map_or("(no error detail)", |e| e.message.as_str());
-        println!("{msg}");
+        out.push_str(msg);
     }
+    out
 }
 
 /// Dispatch entrypoint for the `forge-core coordination` command tree.
+/// Delegates to [`dispatch`], which emits via the single shared path and
+/// returns the `Result<(), ExitError>` the registry expects.
 ///
 /// # Errors
 ///
 /// Returns `ExitError::with_code` carrying the dispatcher's non-zero exit
 /// code so the entrypoint can translate it into `process::exit(code)`.
 pub fn run_coordination_command(args: &[String]) -> Result<(), ExitError> {
-    let (json, exit) = dispatch(args);
-    if !json.is_empty() {
-        println!("{json}");
-    }
-    if exit == 0 {
-        Ok(())
-    } else {
-        // dispatch already wrote any stderr / stdout it needed; the
-        // ExitError only carries the exit code for the binary entrypoint.
-        Err(ExitError::with_code(exit, String::new()))
-    }
+    dispatch(args)
 }
 #[cfg(test)]
 mod tests {
@@ -280,6 +286,17 @@ mod tests {
         assert!(env.data.is_none());
     }
 
+    /// Exit code carried by a `dispatch` result: 0 for `Ok(())`, otherwise the
+    /// `ExitError::with_code` code. `dispatch` now returns `Result<(), ExitError>`
+    /// (V1.D — folded the legacy `(String, i32)` return-tuple style into the
+    /// single shared emit path), so tests assert on the exit code it carries.
+    fn exit_of(result: Result<(), ExitError>) -> i32 {
+        match result {
+            Ok(()) => 0,
+            Err(err) => err.exit_code(),
+        }
+    }
+
     #[test]
     fn dispatch_validate_returns_zero_for_real_suite() {
         let args: Vec<String> = vec![
@@ -290,10 +307,11 @@ mod tests {
             "--repo-root".into(),
             repo_root().to_string_lossy().into_owned(),
         ];
-        let (json, exit) = dispatch(&args);
-        assert_eq!(exit, 0, "json: {json}");
-        assert!(json.contains("\"ok\": true"));
-        assert!(json.contains("\"is_real\": true"));
+        // dispatch now emits via the shared path and returns Result; the JSON
+        // envelope shape ("ok"/"is_real") is still covered by
+        // `validate_real_suite_is_real` calling `run_validate` directly.
+        let result = dispatch(&args);
+        assert_eq!(exit_of(result), 0);
     }
 
     #[test]
@@ -305,22 +323,22 @@ mod tests {
             "--suite".into(),
             "/nonexistent/suite.yaml".into(),
         ];
-        let (_json, exit) = dispatch(&args);
-        assert_eq!(exit, 5);
+        let result = dispatch(&args);
+        assert_eq!(exit_of(result), 5);
     }
 
     #[test]
     fn dispatch_unknown_subcommand_exits_2() {
         let args: Vec<String> = vec!["coordination".into(), "bogus".into()];
-        let (_out, exit) = dispatch(&args);
-        assert_eq!(exit, 2);
+        let result = dispatch(&args);
+        assert_eq!(exit_of(result), 2);
     }
 
     #[test]
     fn dispatch_unknown_flag_exits_3() {
         let args: Vec<String> = vec!["coordination".into(), "validate".into(), "--bogus".into()];
-        let (_out, exit) = dispatch(&args);
-        assert_eq!(exit, 3);
+        let result = dispatch(&args);
+        assert_eq!(exit_of(result), 3);
     }
 
     // --- review S4.7 fixes (CLI) ------------------------------------------
@@ -334,8 +352,8 @@ mod tests {
             "validate".into(),
             "--suite".into(), // no value follows
         ];
-        let (_out, exit) = dispatch(&args);
-        assert_eq!(exit, 3);
+        let result = dispatch(&args);
+        assert_eq!(exit_of(result), 3);
     }
 
     #[test]
@@ -346,8 +364,8 @@ mod tests {
             "validate".into(),
             "--repo-root".into(),
         ];
-        let (_out, exit) = dispatch(&args);
-        assert_eq!(exit, 3);
+        let result = dispatch(&args);
+        assert_eq!(exit_of(result), 3);
     }
 
     #[test]
@@ -388,10 +406,16 @@ mod tests {
             "--repo-root".into(),
             ".".into(),
         ];
-        let (json, exit) = dispatch(&args);
-        assert_eq!(exit, 2, "broken suite must reject, json: {json}");
-        assert!(json.contains("\"ok\": false"));
-        assert!(json.contains("\"is_real\": false"));
+        // Exit 2 = gate rejection. The envelope's "ok":false / "is_real":false
+        // JSON shape is still asserted via `run_validate` + serialization below
+        // (dispatch no longer returns the JSON string after V1.D).
+        let result = dispatch(&args);
+        assert_eq!(exit_of(result), 2, "broken suite must reject");
+        let env = run_validate(&tmp, Path::new("."));
+        let json = serde_json::to_string(&env).expect("serialize");
+        // Compact JSON (serde_json::to_string) emits no space after the colon.
+        assert!(json.contains("\"ok\":false"));
+        assert!(json.contains("\"is_real\":false"));
         let _ = std::fs::remove_file(&tmp);
     }
 }

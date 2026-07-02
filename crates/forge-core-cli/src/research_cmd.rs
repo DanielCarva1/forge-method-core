@@ -262,7 +262,7 @@ fn run_source_add(args: &[String]) -> Result<(), ExitError> {
             format!("research store error: {error}"),
         ),
     };
-    emit(env, outcome.common.want_json)
+    crate::cli_util::emit_envelope(env, outcome.common.want_json)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -309,7 +309,7 @@ fn run_source_list(args: &[String]) -> Result<(), ExitError> {
                 .collect::<Vec<_>>(),
         },
     );
-    emit(env, outcome.want_json)
+    crate::cli_util::emit_envelope(env, outcome.want_json)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -393,7 +393,7 @@ fn run_check(args: &[String]) -> Result<(), ExitError> {
             .expect("serialize check ok"),
         )
     };
-    emit(env, outcome.want_json)
+    crate::cli_util::emit_envelope(env, outcome.want_json)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -459,7 +459,7 @@ fn run_graph(args: &[String]) -> Result<(), ExitError> {
                 .collect(),
         },
     );
-    emit(env, outcome.want_json)
+    crate::cli_util::emit_envelope(env, outcome.want_json)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -533,7 +533,7 @@ fn run_cite(args: &[String]) -> Result<(), ExitError> {
             .expect("serialize cite rejection"),
         )
     };
-    emit(env, outcome.common.want_json)
+    crate::cli_util::emit_envelope(env, outcome.common.want_json)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -867,35 +867,7 @@ fn reasons_iter(reasons: Vec<forge_core_contracts::ResearchAdmissionDenialReason
 
 fn emit_err(command: &str, message: &str, want_json: bool) -> Result<(), ExitError> {
     let env: CliEnvelope<()> = CliEnvelope::err(command, ExitReason::InvalidDecisionShape, message);
-    emit(env, want_json)
-}
-
-#[allow(clippy::needless_pass_by_value)]
-fn emit<T: serde::Serialize>(env: CliEnvelope<T>, want_json: bool) -> Result<(), ExitError> {
-    let code = env.exit_code();
-    if want_json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&env).expect("serialize envelope")
-        );
-    } else {
-        let command = env.command.0.as_str();
-        if env.ok {
-            println!("{command}: ok");
-        } else {
-            eprintln!(
-                "{command} failed: {}",
-                env.error
-                    .as_ref()
-                    .map_or("unknown", |error| error.message.as_str())
-            );
-        }
-    }
-    if code == 0 {
-        Ok(())
-    } else {
-        Err(ExitError::with_code(code, String::new()))
-    }
+    crate::cli_util::emit_envelope(env, want_json)
 }
 
 #[cfg(test)]

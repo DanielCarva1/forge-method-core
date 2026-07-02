@@ -4,6 +4,8 @@
 // helpers and hurt audit readability.
 #![allow(clippy::too_many_lines)]
 
+pub mod codes;
+pub mod failure;
 pub mod risk_audit;
 
 use forge_core_contracts::{
@@ -51,6 +53,35 @@ impl ValidationReport {
         self.diagnostics
             .iter()
             .any(|item| item.severity == DiagnosticSeverity::Error)
+    }
+
+    /// Phase-gate: if this report carries any `Error`-severity diagnostics,
+    /// return `Err(self)` so the caller can bail at a phase boundary — after
+    /// accumulating *all* diagnostics in the phase. Modeled on rustc's
+    /// `DiagCtxt::abort_if_errors`.
+    ///
+    /// Unlike short-circuiting on the first error, this lets the full phase run
+    /// and collect every problem before deciding to stop: the caller runs a
+    /// whole validation pass, accumulates into the report, then calls
+    /// `report.abort_if_errors()?` to either continue to the next phase
+    /// (`Ok(())`) or hand the *complete* report back to its caller (`Err(self)`).
+    /// Nothing is dropped on the floor either way.
+    ///
+    /// Consumes `self` so the success path can drop the (empty or warning-only)
+    /// report without the caller having to ignore it, and so the failure path
+    /// moves ownership of the accumulated diagnostics to whoever handles the
+    /// `Err`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(self)` when the report contains at least one
+    /// `DiagnosticSeverity::Error` diagnostic; returns `Ok(())` otherwise.
+    pub fn abort_if_errors(self) -> Result<(), Self> {
+        if self.has_errors() {
+            Err(self)
+        } else {
+            Ok(())
+        }
     }
 }
 

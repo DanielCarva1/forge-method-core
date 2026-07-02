@@ -266,7 +266,7 @@ pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
     }
 
     let env = run_start(&root, allow_bootstrap_core);
-    emit(env, want_json)
+    crate::cli_util::emit_envelope(env, want_json)
 }
 
 /// Pure core: resolve the project, classify the bootstrap state, build the
@@ -467,37 +467,6 @@ fn dir_has_any_entry(path: &Path) -> bool {
         return false;
     };
     entries.flatten().next().is_some()
-}
-
-/// Dual-output emitter, mirroring the established pattern in `memory_cmd`.
-/// JSON (default) prints the full envelope; text mode prints a one-line
-/// human summary. Diagnostics go to stderr; the envelope contract is on
-/// stdout (R1: stdout is contract).
-fn emit<T: serde::Serialize>(env: CliEnvelope<T>, want_json: bool) -> Result<(), ExitError> {
-    let code = env.exit_code();
-    if want_json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&env).expect("serialize envelope")
-        );
-    } else {
-        let command = env.command.0.as_str();
-        if env.ok {
-            println!("{command}: ok");
-        } else {
-            eprintln!(
-                "{command} failed: {}",
-                env.error
-                    .as_ref()
-                    .map_or("unknown", |error| error.message.as_str())
-            );
-        }
-    }
-    if code == 0 {
-        Ok(())
-    } else {
-        Err(ExitError::with_code(code, String::new()))
-    }
 }
 
 /// Map a [`ProjectResolveError`]'s exit reason onto the envelope taxonomy.

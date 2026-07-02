@@ -5,6 +5,7 @@ members = [
   "crates/forge-core-schema",
   "crates/forge-core-cli",
   "crates/forge-core-crypto",
+  "crates/forge-core-eventlog",
   "crates/forge-core-store",
   "crates/forge-core-memory",
   "crates/forge-core-validate",
