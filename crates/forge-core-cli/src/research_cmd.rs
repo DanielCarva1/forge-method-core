@@ -819,7 +819,7 @@ fn load_evidence(explicit: Option<&Path>, root: &Path) -> Result<FieldEvidenceRe
 /// Construct an empty curated registry. Used as the fallback when no evidence
 /// file is present so the citation check degrades to runtime-only rather than
 /// erroring (the curated half of the union is simply empty).
-fn empty_evidence() -> FieldEvidenceRegistry {
+pub(crate) fn empty_evidence() -> FieldEvidenceRegistry {
     FieldEvidenceRegistry {
         schema_version: String::new(),
         research: String::new(),
