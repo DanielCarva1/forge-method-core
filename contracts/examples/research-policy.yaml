@@ -1,0 +1,10 @@
+# F14.7 fixture — a ResearchPolicy used by the E2E suite.
+# Admits all four source kinds; requires a content_hash and trace_ref so a
+# harvested source carries provenance integrity + run lineage.
+permitted_source_kinds:
+  - paper
+  - web_url
+  - local_doc
+  - repo_ref
+require_content_hash: true
+require_trace_ref: true

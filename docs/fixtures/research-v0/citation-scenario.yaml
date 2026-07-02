@@ -1,0 +1,22 @@
+# F14.7 fixture — a citation scenario for the E2E suite.
+#
+# This document is the "claim side" of the F14 evidence model: it carries
+# `source_id` occurrences that the Citation Check resolves against the joint
+# backing (curated Field Evidence Registry ∪ runtime Source Ledger). It is NOT
+# a ContractDocument; it is a synthetic policy-shaped YAML used to exercise the
+# citation validator's source_id walk (the validator treats any node carrying
+# `source_id` as a claim — see ADR-0010).
+#
+# Used by research_cli_e2e.rs to prove the full loop:
+#   research source add -> research check (resolves) -> research cite
+#
+# The `research.source.swe-agent` id resolves in the runtime Source Ledger
+# after `research source add` admits it; `ghost.unregistered` is the
+# unresolved control (the check flags it, cite rejects it).
+schema_version: "0.1"
+evidence_basis:
+  direct_patterns:
+    - source_id: "research.source.swe-agent"
+      note: "cited by the E2E fixture after admission to the Source Ledger"
+    - source_id: "ghost.unregistered"
+      note: "deliberately unresolved; the citation check must flag this"

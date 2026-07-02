@@ -1,0 +1,11 @@
+# F14.7 fixture — a valid ResearchSource used by the E2E suite.
+# Admitted by the F14 gate under research-policy.yaml. Cites a canonical
+# paper backing a Forge design decision.
+id: research.source.swe-agent
+kind: paper
+title: "SWE-agent: Agent-Computer Interactions Enable Software Engineering"
+locator: "https://arxiv.org/abs/2405.15793"
+fetched_at: 1719000000
+content_hash: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+harvested_by: "agent.research.1"
+trace_ref: "run.f14-research.1"
