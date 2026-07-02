@@ -437,10 +437,91 @@ authority validada.
 
 **Frente**: Features comunidade (P3)
 **Esforço**: alto **Risco**: médio **Impacto**: research agents
-**Depende**: F08 (MCP), F06 (memory)
+**Depende**: F06 (memory) ✅; **não bloqueia em F08** (decisão grill F14.1)
+**ADR**: ADR-0010 (`adrs/ADR-0010-research-source-ledger-separate-from-memory.md`)
+**Termos**: `CONTEXT.md` § Knowledge Orchestration (F14)
 
-#### F14.1 — [grill] Design do evidence graph
-- (deferido até F06/F08 completos)
+#### F14.1 — [grill + improve + documentar] Design do modo research ✅ FECHADO
+Decisões cravadas (7), cada uma com rationale em ADR-0010 / CONTEXT.md:
+
+1. **Ledger distinto, reusa `SourceId`** — F14 não funde runtime no
+   `FieldEvidenceRegistry` (reintroduz Model B); não forja tipos novos de id
+   (recria bug R8). Reuso é só `SourceId`.
+2. **Claim polimórfica** — sem tipo `ResearchClaim`. F14 define o lado source
+   + uma restrição sobre claims ("tem `source_id`? é citável"). Evidence graph
+   é projeção, não struct first-class.
+3. **Não bloqueia F08** — F14 é semântica de citação ortogonal ao transport.
+   Exposição via MCP vira story pós-merge de ambos.
+4. **Store próprio** — `research/sources.ndjson` + lock próprio + projeção
+   própria, espelhando `forge-core-memory`. **ADR-0010 obrigatório** (passa
+   nos 3 testes: hard-to-reverse, surprising, real trade-off).
+5. **Fail-closed = resolução** — citation gate atesta só que `source_id`
+   resolve (curated ∪ runtime), não tier/qualidade. Validator offline **+**
+   gate runtime no path mutável (padrão risk-audit). Tier-min é policy futura.
+6. **Verbs atômicos + `ResearchPolicy`** — sem `research run` (G1
+   anti-script-de-novela). O "modo" é a policy ativa.
+7. **Glossário** — ResearchSource / Source Ledger / Field Evidence Registry /
+   SourceId / Citation / Citation Check / Evidence Graph / ResearchPolicy;
+   ambiguidade "evidence" (3 eixos) flaggeada.
+
+#### F14.2 — `forge-core-research` crate + `ResearchSource` contract + PEP
+- Contrato `ResearchSource { id: SourceId, kind, title, locator, fetched_at,
+  content_hash, harvested_by, trace_ref }` em `forge-core-contracts/src/research.rs`.
+- Contrato `ResearchPolicy { permitted_source_kinds, require_content_hash,
+  require_evidence_ref_on_cite }` (espelha `MemoryPolicy`).
+- PDP puro `ResearchContract::can_admit_source(&source, &policy)`.
+- Crate `forge-core-research` (template `forge-core-memory`):
+  `RESEARCH_LOG_RELATIVE_PATH = "research/sources.ndjson"`,
+  `RESEARCH_LOCK_RELATIVE_PATH = "locks/research.sources.lock"`,
+  `ResearchProjection`, `ResearchEvent::{SourceAdded, SourceRetired}`,
+  replay determinístico (proptest).
+- Erros à mão (`ResearchAdmitError`, `ResearchProjectionError`).
+- Flipar ADR-0010 para `accepted` ao fechar a story.
+
+#### F14.3 — Citation Check validator (estende o existente, não duplica)
+- Estender `validate_yaml_source_id_references` (`forge-core-validate/src/lib.rs:280`)
+  p/ resolver `source_id` contra **dois** backings: `FieldEvidenceRegistry`
+  ∪ `ResearchProjection`.
+- Novos `DiagnosticCode`: `UnresolvedSourceId` (error). `DanglingEvidenceRef`
+  fica warning e **fora do MVP** (registrar como follow-up).
+- Manter anchor 122 (118/122 existentes + 4 novos = 122; confirmar contagem).
+- Sem short-circuit; acumula em `ValidationReport`.
+
+#### F14.4 — Evidence Graph como projeção/index
+- `evidence_graph(projection, artifacts) -> BTreeMap<SourceId, Vec<ClaimRef>>`
+  computado por walk (não populado pelo agent). Mesmo padrão do
+  `reference_index` do `forge-core-store`.
+- Sem struct first-class, sem `EvidenceGraph::insert` (deletion test).
+- Expõe via `forge-core research graph` (query read-only).
+
+#### F14.5 — CLI `forge-core research` (template `memory_cmd.rs`)
+- `source add --source-file <p> --policy-file <p> [--root] [--allow-bootstrap-core]
+   [--research-dir] [--no-json]`
+- `source list [--root] [--no-json]`
+- `cite --claim-ref <id> --source-id <id> [--evidence <ref>...]` (registra aresta)
+- `check [--root] [--no-json]` (rodar validator → `CliEnvelope`)
+- `graph [--root] [--no-json]` (read-only, F14.4)
+- Dual-output via `CliEnvelope` (JSON agents / texto humano).
+- Append `CommandSpec` no **fim** do array `COMMANDS` (regra do handoff master).
+
+#### F14.6 — Gate runtime no path mutável (padrão risk-audit)
+- `execute-operation` (ou seam equivalente) consulta citation validator;
+  `report.has_errors()` → `DeniedByGate`, fail-closed.
+- Opcional flag `--require-citation` (espelha `--require-risk-audit`) — decidir
+  se é opt-in ou always-on na F14.6 (lean: opt-in primeiro, always-on depois).
+- Atualizar `CONTEXT.md` se a política de gate mudar.
+
+#### F14.7 — Fixtures + E2E (template `memory_cli_e2e.rs`)
+- `docs/fixtures/research-v0/` (source-valid.yaml, source-missing-hash.yaml,
+  citation-valid.yaml, citation-unresolved.yaml).
+- `contracts/examples/research-source.yaml` + `research-policy.yaml`.
+- E2E CLI: add → cite → check (passa); cite sem source (fail-closed).
+- Snapshot de output (dual JSON/texto).
+
+#### F14.8 — (opcional, pós-F08) Exposição via MCP
+- Só abrir depois de F08 (MCP adapter) em master.
+- Vira tools `mcp_research_source_add` / `_cite` / `_check` consumindo a
+  crate `forge-core-research`. Story separada, fora do escopo P3 inicial.
 
 ---
 
