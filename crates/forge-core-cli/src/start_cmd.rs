@@ -282,6 +282,7 @@ pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
 /// Returns [`StartError::ProjectResolve`] when the project cannot be
 /// resolved (missing root, missing/malformed link, unsafe state root, …).
 /// The caller maps the [`ExitReason`] into the envelope exit code.
+#[must_use]
 pub fn run_start(root: &Path, allow_bootstrap_core: bool) -> CliEnvelope<StartPayload> {
     let resolved = match resolve_project(root, allow_bootstrap_core) {
         Ok(payload) => payload,
@@ -443,13 +444,16 @@ fn operation_contract_present(project_root: &Path) -> bool {
             continue;
         };
         for entry in entries.flatten() {
-            if let Some(name) = entry.file_name().to_str() {
-                let lower = name.to_ascii_lowercase();
-                if lower.contains("operation")
-                    && (lower.ends_with(".yaml") || lower.ends_with(".yml"))
-                {
-                    return true;
-                }
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(std::ffi::OsStr::to_str) else {
+                continue;
+            };
+            let lower = name.to_ascii_lowercase();
+            let is_yaml = path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("yaml") || ext.eq_ignore_ascii_case("yml"));
+            if lower.contains("operation") && is_yaml {
+                return true;
             }
         }
     }
