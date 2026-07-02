@@ -955,12 +955,14 @@ version = "0.1.0"
 dependencies = [
  "forge-core-contracts",
  "forge-core-store",
+ "forge-core-validate",
  "proptest",
  "schemars",
  "serde",
  "serde_json",
  "sha2",
  "tracing",
+ "yaml_serde",
 ]
 
 [[package]]

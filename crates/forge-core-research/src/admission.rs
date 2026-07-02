@@ -103,7 +103,8 @@ pub fn admit_source_with_durability(
 
     // 2. Acquire the exclusive lock for the whole read-sequence-then-write
     //    critical section. Held until this function returns (RAII _lock).
-    let _lock = match forge_core_store::acquire_effect_store_lock(root, RESEARCH_LOCK_RELATIVE_PATH) {
+    let _lock = match forge_core_store::acquire_effect_store_lock(root, RESEARCH_LOCK_RELATIVE_PATH)
+    {
         Ok(lock) => lock,
         Err(source) => {
             return AdmissionResult {
@@ -178,12 +179,11 @@ fn append_bytes(
         serde_json::from_slice(serialized).map_err(|source| ResearchAdmitError::Serialize {
             source: source.to_string(),
         })?;
-    append_json_line_with_durability(root, RESEARCH_LOG_RELATIVE_PATH, &value, durability).map_err(
-        |source| ResearchAdmitError::Append {
+    append_json_line_with_durability(root, RESEARCH_LOG_RELATIVE_PATH, &value, durability)
+        .map_err(|source| ResearchAdmitError::Append {
             path: root.join(RESEARCH_LOG_RELATIVE_PATH),
             source: source.to_string(),
-        },
-    )?;
+        })?;
     Ok(())
 }
 

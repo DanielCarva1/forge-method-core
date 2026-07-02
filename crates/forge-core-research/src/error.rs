@@ -48,7 +48,11 @@ impl std::fmt::Display for ResearchAdmitError {
                 write!(formatter, "serialize research event failed: {source}")
             }
             Self::Read { path, source } => {
-                write!(formatter, "read research log at {} failed: {source}", path.display())
+                write!(
+                    formatter,
+                    "read research log at {} failed: {source}",
+                    path.display()
+                )
             }
         }
     }
@@ -78,7 +82,11 @@ impl std::fmt::Display for ResearchProjectionError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Read { path, source } => {
-                write!(formatter, "read research log at {} failed: {source}", path.display())
+                write!(
+                    formatter,
+                    "read research log at {} failed: {source}",
+                    path.display()
+                )
             }
             Self::Parse {
                 path,

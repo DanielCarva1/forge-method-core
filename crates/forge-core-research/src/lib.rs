@@ -33,6 +33,7 @@
 
 pub mod admission;
 pub mod error;
+pub mod graph;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -43,6 +44,7 @@ use serde::{Deserialize, Serialize};
 
 pub use admission::{admit_source, admit_source_with_durability, AdmissionResult, AdmissionStatus};
 pub use error::{ResearchAdmitError, ResearchProjectionError};
+pub use graph::{evidence_graph, ClaimRef};
 
 /// State-root-relative path of the append-only research source event log.
 pub const RESEARCH_LOG_RELATIVE_PATH: &str = "research/sources.ndjson";
