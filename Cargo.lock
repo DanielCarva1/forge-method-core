@@ -831,6 +831,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "forge-core-governance"
+version = "0.1.0"
+dependencies = [
+ "forge-core-contracts",
+ "forge-core-store",
+ "proptest",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tracing",
+]
+
+[[package]]
 name = "forge-core-graph"
 version = "0.1.0"
 dependencies = [
