@@ -57,6 +57,7 @@ pub mod preflight_cmd;
 pub mod project_cmd;
 pub mod risk_audit_cmd;
 pub mod risk_audit_trace;
+pub mod start_cmd;
 pub mod telemetry_cmd;
 pub mod tracing_init;
 pub mod validate;
