@@ -449,9 +449,9 @@ fn operation_contract_present(project_root: &Path) -> bool {
                 continue;
             };
             let lower = name.to_ascii_lowercase();
-            let is_yaml = path
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("yaml") || ext.eq_ignore_ascii_case("yml"));
+            let is_yaml = path.extension().is_some_and(|ext| {
+                ext.eq_ignore_ascii_case("yaml") || ext.eq_ignore_ascii_case("yml")
+            });
             if lower.contains("operation") && is_yaml {
                 return true;
             }
