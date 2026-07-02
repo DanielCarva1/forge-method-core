@@ -801,6 +801,7 @@ dependencies = [
  "forge-core-graph",
  "forge-core-memory",
  "forge-core-protocol-mcp",
+ "forge-core-research",
  "forge-core-runtime",
  "forge-core-store",
  "forge-core-trace",

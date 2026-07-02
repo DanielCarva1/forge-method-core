@@ -56,6 +56,7 @@ pub mod mcp_cmd;
 pub mod memory_cmd;
 pub mod preflight_cmd;
 pub mod project_cmd;
+pub mod research_cmd;
 pub mod risk_audit_cmd;
 pub mod risk_audit_trace;
 pub mod start_cmd;

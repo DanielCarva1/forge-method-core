@@ -83,8 +83,8 @@ pub use catalog::{Catalog, CatalogDocument, CatalogEntry};
 pub use envelope::{CliEnvelope, CliError, ExitReason, ENVELOPE_SCHEMA_VERSION};
 pub use guide_decision::{GuideDecision, GuideDecisionDocument};
 pub use phase::Phase;
-pub use workflow::{Workflow, WorkflowDocument};
 pub use research::{
     ResearchAdmissionDecision, ResearchAdmissionDenialReason, ResearchContract, ResearchPolicy,
     ResearchSource, ResearchSourceKind,
 };
+pub use workflow::{Workflow, WorkflowDocument};
