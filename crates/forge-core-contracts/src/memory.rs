@@ -370,6 +370,7 @@ impl MemoryEntry {
     /// `approval` mapping — this is how a migrated record opts into the new
     /// axis. `AutoPromoted` collapses to `Raw` (never `Authority`), honouring
     /// the F06 NFR that promote exige policy e evidência raw.
+    #[must_use]
     pub fn authority_level_effective(&self) -> AuthorityLevel {
         if let Some(explicit) = self.authority_level {
             return explicit;
@@ -385,6 +386,7 @@ impl MemoryEntry {
 
     /// Effective review state (Trust Axis 2). `None` on the field is treated
     /// as `Unreviewed` (legacy floor).
+    #[must_use]
     pub fn review_state_effective(&self) -> ReviewState {
         self.review_state.unwrap_or(ReviewState::Unreviewed)
     }

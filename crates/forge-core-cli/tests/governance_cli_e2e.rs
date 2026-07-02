@@ -11,6 +11,7 @@
 //! envelope the way an agent would consume it. Mirrors `memory_cli_e2e.rs`.
 
 #![allow(clippy::too_many_lines)]
+#![allow(clippy::doc_markdown)]
 
 use assert_cmd::Command;
 use serde_json::Value;
