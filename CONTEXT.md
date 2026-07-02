@@ -179,6 +179,58 @@ recorded in the F07 governance ledger. Reusing `StableId` — not inventing a
 distinct types only when comparison would be a bug; reviewer identity is
 comparable to any other `StableId`, so it reuses the newtype.
 
+
+## Agent as Bidirectional Interpreter
+
+In the Forge model the agent — not the CLI — is the interface between a human
+and the product. The CLI's stdout is a contract consumed by an agent, never
+rendered directly to an end user as the primary surface. The agent translates
+in both directions: it renders product state into whatever the human asked to
+know, and it translates the human's intent into the Forge actions that advance
+the project. Consequence: a command does not need to "decide how to talk" to
+multiple audiences. There is one audience (the agent), and the command's job is
+to emit a payload that gives the agent everything it needs to form the next
+action or question. A legible `--no-json` text rendering may exist as a
+convenience, but it is not the design centre.
+
+## Guided Start (start)
+
+A read-only, idempotent diagnostic command (`forge-core start`) that advances
+a Consumer Project Repo from an empty state to the point where the `guide`
+surface can take over. `start` never executes effects and never creates files:
+it inspects the real project state (is there a Project Link? a state tree? a
+first operation spec?) and emits a payload describing where the project is and
+what the concrete next step is — typically `project init`, then producing a
+minimal operation spec, then invoking `guide describe`. The canonical operation
+contract scenarios that inform the spec live in
+`docs/fixtures/operation-contract-v0/`. `start` composes with `project init`
+and `guide`; it does not duplicate either. It does not recommend workflows or
+phases: once a project has the prerequisites for `guide` to operate, `start`
+hands off to `guide` (Opção A from the F12 grill). Because `start` is
+read-only, it requires no claim and performs no check-write.
+
+## Start Bootstrap State
+
+The discrete conditions a Consumer Project Repo can be in along the path that
+`start` diagnoses. Each implies one concrete next step, and `start` emits the
+matching step in its payload. The states are ordered but `start` is read-only
+and recomputes from the real project on every call, so re-running after an
+advance jumps to the correct state:
+
+- **no_link** — no Project Link present. Next: `forge-core project init`.
+- **link_present_no_sidecar** — link exists but the sidecar/state tree does not.
+  Next: diagnose via `project resolve`, or re-`init` if the link points nowhere.
+- **sidecar_ready_no_contract** — state tree is healthy but no operation spec
+  exists yet. Next: the agent produces a minimal operation contract, using the
+  canonical examples as structural reference (the canonical scenarios live in
+  `docs/fixtures/operation-contract-v0/`); `start` points at the contract
+  location and the validation command but never generates or pre-fills the spec.
+  The authority boundary is the validated contract, not a template.
+- **contract_present** — at least one operation spec exists. Next: `forge-core
+  guide describe` (handoff to the `guide` surface).
+- **preview_run** — a preview has already been produced. Next: none; the project
+  is onboarded, `start` directs to `guide`/`preview`/`ready`.
+
 ## Remaining Bootstrap Gaps
 
 - The global Forge skill/start script now calls `forge-core project init --root <repo>` when a first-use consumer repo lacks a Project Link, unless `-NoInit` is passed.
