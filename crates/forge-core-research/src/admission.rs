@@ -1,0 +1,299 @@
+//! Admission — the PEP for `ResearchContract::can_admit_source`.
+//!
+//! [`admit_source`] acquires the exclusive research lock, reads the current
+//! projection (to compute the next sequence number), calls the pure
+//! [`ResearchContract::can_admit_source`](forge_core_contracts::ResearchContract::can_admit_source)
+//! PDP, and — only if `Allowed` — appends a [`SourceAdded`](crate::ResearchEvent::SourceAdded)
+//! event under the same lock. The lock is held across decide-and-write, closing
+//! the TOCTOU window (CWE-367). A denied decision appends **nothing** and is
+//! reported as [`AdmissionStatus::DeniedByGate`], not as an error (the PEP
+//! enforces; it does not re-evaluate policy — Cedar/OPA/XACML).
+//!
+//! This module is the F14 twin of `forge-core-memory::admission`; the storage
+//! mechanics (lock + append + sequence) are identical, only the event shape and
+//! the PDP differ (ADR-0010).
+
+use std::path::Path;
+
+use forge_core_contracts::{
+    ResearchAdmissionDecision, ResearchAdmissionDenialReason, ResearchContract, ResearchPolicy,
+    ResearchSource, SourceId,
+};
+use forge_core_store::{append_json_line_with_durability, WalDurability};
+
+use crate::{
+    next_sequence, now_unix, project_locked, ResearchAdmitError, ResearchEvent,
+    RESEARCH_LOCK_RELATIVE_PATH, RESEARCH_LOG_RELATIVE_PATH,
+};
+
+/// The outcome status of an [`admit_source`] call.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AdmissionStatus {
+    /// The source was admitted; the `SourceAdded` event was appended with this
+    /// sequence number.
+    Admitted { sequence: u64 },
+    /// The gate blocked the source. No event was appended. The reasons come
+    /// straight from the pure PDP.
+    DeniedByGate(Vec<ResearchAdmissionDenialReason>),
+    /// A storage error prevented admission (lock, append, serialize, read).
+    StoreError(ResearchAdmitError),
+}
+
+/// The full result of an [`admit_source`] call: the status plus the source id
+/// under test.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdmissionResult {
+    pub status: AdmissionStatus,
+    pub source_id: SourceId,
+}
+
+impl AdmissionResult {
+    /// Convenience: was the source admitted?
+    #[must_use]
+    pub fn is_admitted(&self) -> bool {
+        matches!(self.status, AdmissionStatus::Admitted { .. })
+    }
+}
+
+/// Admit `source` under `policy`, writing to
+/// `<state_root>/research/sources.ndjson`.
+///
+/// `root` is the state root. Durability defaults to
+/// [`WalDurability::SyncOnAppend`] (production); tests pass
+/// [`WalDurability::NoSync`].
+pub fn admit_source(
+    root: impl AsRef<Path>,
+    source: ResearchSource,
+    policy: &ResearchPolicy,
+) -> AdmissionResult {
+    admit_source_with_durability(root, source, policy, WalDurability::default())
+}
+
+/// As [`admit_source`] with an explicit durability knob (the repo's
+/// `_with_durability` convention).
+#[allow(clippy::needless_pass_by_value)]
+pub fn admit_source_with_durability(
+    root: impl AsRef<Path>,
+    source: ResearchSource,
+    policy: &ResearchPolicy,
+    durability: WalDurability,
+) -> AdmissionResult {
+    let root = root.as_ref();
+    let source_id = source.id.clone();
+
+    // 1. Pure PDP. Decide BEFORE taking the lock — the decision is a pure
+    //    function of (source, policy) and does not depend on store state.
+    //    (Cedar/OPA: the decision is deterministic, replayable, side-effect-free.)
+    let ResearchAdmissionDecision::Allowed = ResearchContract::can_admit_source(&source, policy)
+    else {
+        let ResearchAdmissionDecision::Blocked(reasons) =
+            ResearchContract::can_admit_source(&source, policy)
+        else {
+            // Unreachable: AdmissionDecision has exactly two variants.
+            return AdmissionResult {
+                status: AdmissionStatus::DeniedByGate(vec![]),
+                source_id,
+            };
+        };
+        return AdmissionResult {
+            status: AdmissionStatus::DeniedByGate(reasons),
+            source_id,
+        };
+    };
+
+    // 2. Acquire the exclusive lock for the whole read-sequence-then-write
+    //    critical section. Held until this function returns (RAII _lock).
+    let _lock = match forge_core_store::acquire_effect_store_lock(root, RESEARCH_LOCK_RELATIVE_PATH) {
+        Ok(lock) => lock,
+        Err(source) => {
+            return AdmissionResult {
+                status: AdmissionStatus::StoreError(ResearchAdmitError::Lock {
+                    path: root.join(RESEARCH_LOCK_RELATIVE_PATH),
+                    source: source.to_string(),
+                }),
+                source_id,
+            };
+        }
+    };
+
+    // 3. Read the current projection (under the lock) to compute the next
+    //    sequence number. Two concurrent admitters cannot both see seq=N
+    //    because the lock serializes them.
+    let projection = match project_locked(root) {
+        Ok(projection) => projection,
+        Err(source) => {
+            return AdmissionResult {
+                status: AdmissionStatus::StoreError(ResearchAdmitError::Read {
+                    path: root.join(RESEARCH_LOG_RELATIVE_PATH),
+                    source: source.to_string(),
+                }),
+                source_id,
+            };
+        }
+    };
+    let sequence = next_sequence(&projection);
+
+    // 4. Append the event. Serialize outside the store helper, then route
+    //    through append_json_line_with_durability so the store owns all the
+    //    framing/path/lock conventions and we do not reimplement them.
+    let event = ResearchEvent::SourceAdded {
+        sequence,
+        at_unix: now_unix(),
+        source,
+    };
+    let serialized = match serde_json::to_vec(&event) {
+        Ok(serialized) => serialized,
+        Err(source) => {
+            return AdmissionResult {
+                status: AdmissionStatus::StoreError(ResearchAdmitError::Serialize {
+                    source: source.to_string(),
+                }),
+                source_id,
+            };
+        }
+    };
+    match append_bytes(root, &serialized, durability) {
+        Ok(()) => AdmissionResult {
+            status: AdmissionStatus::Admitted { sequence },
+            source_id,
+        },
+        Err(err) => AdmissionResult {
+            status: AdmissionStatus::StoreError(err),
+            source_id,
+        },
+    }
+}
+
+/// Append an already-serialized JSON line to the research log under durability.
+/// Keeps the serialize step outside the lock-critical path while still routing
+/// through `append_json_line_with_durability`'s per-path lock for torn-write
+/// safety. Same trade-off as the memory PEP: correctness and convention-adherence
+/// over micro-optimization (one extra serialize pass for a low-volume log).
+fn append_bytes(
+    root: &Path,
+    serialized: &[u8],
+    durability: WalDurability,
+) -> Result<(), ResearchAdmitError> {
+    let value: serde_json::Value =
+        serde_json::from_slice(serialized).map_err(|source| ResearchAdmitError::Serialize {
+            source: source.to_string(),
+        })?;
+    append_json_line_with_durability(root, RESEARCH_LOG_RELATIVE_PATH, &value, durability).map_err(
+        |source| ResearchAdmitError::Append {
+            path: root.join(RESEARCH_LOG_RELATIVE_PATH),
+            source: source.to_string(),
+        },
+    )?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::project;
+    use forge_core_contracts::ResearchSourceKind;
+    use std::fs;
+    use std::path::PathBuf;
+
+    /// Hand-rolled temp dir (repo convention: no `tempfile` workspace dep).
+    fn temp_root(label: &str) -> PathBuf {
+        let pid = std::process::id();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let path = std::env::temp_dir().join(format!("forge-research-{label}-{pid}-{nanos}"));
+        fs::create_dir_all(&path).expect("create temp root");
+        path
+    }
+
+    fn permissive_policy() -> ResearchPolicy {
+        ResearchPolicy {
+            permitted_source_kinds: vec![
+                ResearchSourceKind::Paper,
+                ResearchSourceKind::WebUrl,
+                ResearchSourceKind::LocalDoc,
+                ResearchSourceKind::RepoRef,
+            ],
+            require_content_hash: false,
+            require_trace_ref: false,
+        }
+    }
+
+    fn deny_all_policy() -> ResearchPolicy {
+        ResearchPolicy {
+            permitted_source_kinds: vec![],
+            require_content_hash: false,
+            require_trace_ref: false,
+        }
+    }
+
+    fn sample_source(id: &str) -> ResearchSource {
+        ResearchSource {
+            id: SourceId(id.into()),
+            kind: ResearchSourceKind::Paper,
+            title: "A canonical source".into(),
+            locator: "https://example.org/source".into(),
+            fetched_at: 1_700_000_000,
+            content_hash: Some("sha256:abc".into()),
+            harvested_by: "agent.1".into(),
+            trace_ref: Some("run.1".into()),
+        }
+    }
+
+    #[test]
+    fn admit_allowed_appends_event_and_advances_sequence() {
+        let root = temp_root("admit-allowed");
+        let result = admit_source(&root, sample_source("s.one"), &permissive_policy());
+        assert!(result.is_admitted(), "{result:?}");
+        let AdmissionStatus::Admitted { sequence } = result.status else {
+            panic!("expected Admitted");
+        };
+        assert_eq!(sequence, 1, "first admit is sequence 1");
+        let projection = project(&root).expect("project after admit");
+        assert!(projection.sources.contains_key("s.one"));
+        assert_eq!(projection.sequence, 1);
+    }
+
+    #[test]
+    fn admit_denied_by_gate_appends_nothing() {
+        let root = temp_root("admit-denied");
+        let result = admit_source(&root, sample_source("s.one"), &deny_all_policy());
+        assert!(!result.is_admitted());
+        assert!(matches!(result.status, AdmissionStatus::DeniedByGate(_)));
+        // No event was appended — the log does not exist.
+        assert!(!root.join(RESEARCH_LOG_RELATIVE_PATH).exists());
+        let projection = project(&root).expect("project is empty");
+        assert!(projection.is_empty());
+    }
+
+    #[test]
+    fn admit_denied_does_not_advance_sequence_for_later_admit() {
+        let root = temp_root("admit-denied-then-allowed");
+        let denied = admit_source(&root, sample_source("s.denied"), &deny_all_policy());
+        assert!(!denied.is_admitted());
+        let allowed = admit_source(&root, sample_source("s.ok"), &permissive_policy());
+        let AdmissionStatus::Admitted { sequence } = allowed.status else {
+            panic!("expected Admitted, got {:?}", allowed.status);
+        };
+        assert_eq!(sequence, 1, "denial must not consume a sequence number");
+    }
+
+    #[test]
+    fn admit_two_sources_yields_monotonic_sequence() {
+        let root = temp_root("admit-two");
+        let r1 = admit_source(&root, sample_source("s.one"), &permissive_policy());
+        let r2 = admit_source(&root, sample_source("s.two"), &permissive_policy());
+        let AdmissionStatus::Admitted { sequence: s1 } = r1.status else {
+            panic!();
+        };
+        let AdmissionStatus::Admitted { sequence: s2 } = r2.status else {
+            panic!();
+        };
+        assert_eq!(s1, 1);
+        assert_eq!(s2, 2);
+        let projection = project(&root).expect("project");
+        assert_eq!(projection.len(), 2);
+        assert_eq!(projection.sequence, 2);
+    }
+}

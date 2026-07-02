@@ -950,6 +950,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "forge-core-research"
+version = "0.1.0"
+dependencies = [
+ "forge-core-contracts",
+ "forge-core-store",
+ "proptest",
+ "schemars",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tracing",
+]
+
+[[package]]
 name = "forge-core-runtime"
 version = "0.1.0"
 dependencies = [

@@ -16,6 +16,7 @@ members = [
   "crates/forge-core-engine",
   "crates/forge-core-governance",
   "crates/forge-core-protocol-mcp",
+  "crates/forge-core-research",
 ]
 resolver = "2"
 
