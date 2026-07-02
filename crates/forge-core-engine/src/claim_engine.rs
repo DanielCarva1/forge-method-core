@@ -23,7 +23,10 @@ use forge_core_contracts::claim::{
     ActorRole, ClaimContract, ClaimIdentity, ClaimKind, ClaimLease, ClaimScope, ClaimScopeKind,
     ClaimStatus, ClaimStatusRecord, ExpiryAction, ExpiryPolicy, ReclaimPolicy,
 };
-use forge_core_contracts::{ClaimId, RepoPath, ScopeId, StableId};
+use forge_core_contracts::{
+    ClaimId, ConflictContract, ConflictDetectionReason, ConflictResolutionState, IntentScope,
+    IntentScopeKind, PrincipalId, RepoPath, ScopeId, StableId,
+};
 
 use crate::conflict_detection::repo_paths_overlap;
 
@@ -166,7 +169,10 @@ impl AcquireRequest {
 
 /// The engine's verdict on a claim-lifecycle operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(clippy::large_enum_variant)] // accepted carries the full contract; rejection is light — rare, not hot
+// Both variants can be large: Accepted carries the full ClaimContract, and
+// Rejected now carries an optional ConflictContract (F07.4). Rejection is a
+// rare error path, not hot data, so the size is acceptable.
+#[allow(clippy::large_enum_variant, clippy::result_large_err)]
 pub enum ClaimLifecycleDecision {
     /// The operation is allowed; carries the resulting (possibly new) claim.
     Accepted(ClaimContract),
@@ -183,6 +189,13 @@ pub enum ClaimRejection {
         scope_id: ScopeId,
         holder: StableId,
         expires_at: String,
+        /// F07.4 — a structured conflict object, populated when the holder is a
+        /// *distinct* principal from the requester (a real A↔B conflict). `None`
+        /// when the same agent re-acquires (continuation, not conflict — the
+        /// validator's `GovernanceConflictPartiesNotDistinct` rule). The flat
+        /// rejection fields above remain for backward compatibility; this is the
+        /// first-class [`ConflictContract`] ADR-0007 mandates.
+        conflict: Option<ConflictContract>,
     },
     /// A requested path is already covered by a live claim.
     PathAlreadyClaimed {
@@ -190,6 +203,8 @@ pub enum ClaimRejection {
         blocking_claim_id: ClaimId,
         holder: StableId,
         expires_at: String,
+        /// F07.4 — structured conflict object (see [`AlreadyClaimedByOther`]).
+        conflict: Option<ConflictContract>,
     },
     /// The caller is not the claimant of this claim.
     NotClaimant {
@@ -326,10 +341,21 @@ pub fn acquire(
         if is_live(c, now_unix) {
             // Live by anyone (including the same agent) blocks a fresh acquire;
             // same-agent continuation is heartbeat, not a second authority.
+            let holder = c.claim.claimant_agent_id.clone();
             return ClaimLifecycleDecision::Rejected(ClaimRejection::AlreadyClaimedByOther {
                 scope_id: req.scope_id.clone(),
-                holder: c.claim.claimant_agent_id.clone(),
+                holder: holder.clone(),
                 expires_at: c.lease.expires_at.clone(),
+                // F07.4: emit a structured ConflictContract only when the holder
+                // is a distinct principal from the requester (a real A↔B conflict).
+                conflict: build_conflict(
+                    &req.agent_id,
+                    &holder,
+                    IntentScopeKind::Project,
+                    req.scope_id.0.as_str(),
+                    ConflictDetectionReason::AuthorityScopeOverlap,
+                    now_unix,
+                ),
             });
         }
         // Not live. If it is still *open* (Active/Stale) yet past its lease, and
@@ -354,11 +380,24 @@ pub fn acquire(
             continue;
         };
         if is_live(c, now_unix) {
+            let holder = c.claim.claimant_agent_id.clone();
+            // F07.4: emit a structured ConflictContract only when the holder is a
+            // distinct principal from the requester. The contested scope is the
+            // overlapping path prefix (PathOverlap detection reason).
+            let conflict = build_conflict(
+                &req.agent_id,
+                &holder,
+                IntentScopeKind::PathPrefix,
+                path.0.as_str(),
+                ConflictDetectionReason::PathOverlap,
+                now_unix,
+            );
             return ClaimLifecycleDecision::Rejected(ClaimRejection::PathAlreadyClaimed {
                 path,
                 blocking_claim_id: c.id.clone(),
-                holder: c.claim.claimant_agent_id.clone(),
+                holder,
                 expires_at: c.lease.expires_at.clone(),
+                conflict,
             });
         }
         if matches!(c.status.value, ClaimStatus::Active | ClaimStatus::Stale)
@@ -739,6 +778,58 @@ fn first_overlapping_path(requested: &[RepoPath], existing: &[RepoPath]) -> Opti
         .cloned()
 }
 
+/// F07.4 — Build a structured [`ConflictContract`] for two principals
+/// contesting a scope, or return `None` when they are the same principal (a
+/// same-agent re-acquire is continuation, not conflict — ADR-0007 /
+/// `GovernanceConflictPartiesNotDistinct`).
+///
+/// Pure and deterministic: the `conflict_id` is derived from the two
+/// principals + the contested target so two acquires of the same conflict
+/// produce the same id (idempotent identification; the arbitration ledger in
+/// F07.5 deduplicates on it). `now_unix` drives `detected_at`; the resolution
+/// starts `Pending` (F07.5 moves it to `Resolved`/`Escalated`).
+#[must_use]
+fn build_conflict(
+    requester: &StableId,
+    holder: &StableId,
+    scope_kind: IntentScopeKind,
+    contested_target: &str,
+    reason: ConflictDetectionReason,
+    now_unix: i64,
+) -> Option<ConflictContract> {
+    // Same principal re-acquiring is continuation (heartbeat), not conflict.
+    if requester == holder {
+        return None;
+    }
+    let principal_a = PrincipalId(requester.0.clone());
+    let principal_b = PrincipalId(holder.0.clone());
+    // Deterministic, ordering-independent id: the two principals are sorted so
+    // alice-vs-bob and bob-vs-alice produce the same conflict_id.
+    let (lo, hi) = if principal_a.0 <= principal_b.0 {
+        (&principal_a.0, &principal_b.0)
+    } else {
+        (&principal_b.0, &principal_a.0)
+    };
+    let conflict_id = StableId(format!("conflict.{lo}.{hi}.{contested_target}"));
+    Some(ConflictContract {
+        conflict_id,
+        // Intent refs are not yet wired (F07.5 ledger links them); use the
+        // principals + scope as the identifying tuple for now.
+        intent_a: StableId(requester.0.clone()),
+        intent_b: StableId(holder.0.clone()),
+        principal_a,
+        principal_b,
+        contested_scope: IntentScope {
+            kind: scope_kind,
+            target: StableId(contested_target.to_string()),
+        },
+        detection_reason: reason,
+        detected_at: u64::try_from(now_unix.max(0)).unwrap_or(0),
+        resolution: ConflictResolutionState::Pending,
+    })
+}
+
+#[allow(clippy::result_large_err)] // ClaimRejection is a rare error path, not hot data (F07.4 added ConflictContract)
 fn checked_lease_expiry(
     now_unix: i64,
     ttl_seconds: u64,
@@ -973,6 +1064,81 @@ mod tests {
             d,
             ClaimLifecycleDecision::Rejected(ClaimRejection::ExpiredRequiresHandoff { .. })
         ));
+    }
+
+    // --- F07.4: structured ConflictContract emission on intent overlap ---
+
+    #[test]
+    fn acquire_emits_conflict_when_distinct_principals_overlap_path() {
+        // agentA holds a live claim covering crates/x-s1; agentB requests an
+        // overlapping path → PathAlreadyClaimed WITH a structured ConflictContract
+        // (distinct principals ⇒ real conflict).
+        let holder = manual_claim("s1", "agentA", T0 + 600, ClaimStatus::Active);
+        let mut request = req("s2", "agentB");
+        request.paths = vec![RepoPath("crates/x-s1/src/lib.rs".into())];
+        let d = acquire(&[holder], &request, T0);
+        match d {
+            ClaimLifecycleDecision::Rejected(ClaimRejection::PathAlreadyClaimed {
+                conflict: Some(conflict),
+                ..
+            }) => {
+                assert_eq!(conflict.principal_a, PrincipalId("agentB".into()));
+                assert_eq!(conflict.principal_b, PrincipalId("agentA".into()));
+                assert_eq!(
+                    conflict.detection_reason,
+                    ConflictDetectionReason::PathOverlap
+                );
+                assert_eq!(conflict.contested_scope.kind, IntentScopeKind::PathPrefix);
+                assert_eq!(conflict.contested_scope.target.0, "crates/x-s1/src/lib.rs");
+                assert_eq!(conflict.resolution, ConflictResolutionState::Pending);
+            }
+            other => panic!("expected PathAlreadyClaimed with conflict, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn acquire_no_conflict_when_same_agent_reacquires() {
+        // Same agent re-acquiring a live scope is continuation (heartbeat), NOT
+        // conflict. The rejection fires (a fresh acquire is still blocked), but
+        // conflict must be None.
+        let holder = manual_claim("s1", "agentA", T0 + 600, ClaimStatus::Active);
+        let d = acquire(&[holder], &req("s1", "agentA"), T0);
+        match d {
+            ClaimLifecycleDecision::Rejected(ClaimRejection::AlreadyClaimedByOther {
+                conflict: None,
+                ..
+            }) => {}
+            other => panic!("expected AlreadyClaimedByOther with conflict=None, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn acquire_emits_conflict_with_correct_attribution() {
+        // Two distinct principals contesting a scope → full attribution check.
+        let holder = manual_claim("s1", "alice", T0 + 600, ClaimStatus::Active);
+        let d = acquire(&[holder], &req("s1", "bob"), T0);
+        match d {
+            ClaimLifecycleDecision::Rejected(ClaimRejection::AlreadyClaimedByOther {
+                conflict: Some(conflict),
+                ..
+            }) => {
+                // detected_at = now (deterministic; the engine never touches a clock).
+                assert_eq!(conflict.detected_at, u64::try_from(T0).unwrap());
+                // conflict_id is deterministic + ordering-independent.
+                assert!(
+                    conflict.conflict_id.0.contains("alice")
+                        && conflict.conflict_id.0.contains("bob")
+                        && conflict.conflict_id.0.contains("s1"),
+                    "conflict_id must name both principals + the scope: {}",
+                    conflict.conflict_id.0
+                );
+                assert_eq!(
+                    conflict.detection_reason,
+                    ConflictDetectionReason::AuthorityScopeOverlap
+                );
+            }
+            other => panic!("expected AlreadyClaimedByOther with conflict, got {other:?}"),
+        }
     }
 
     #[test]
