@@ -313,6 +313,17 @@ pub const COMMANDS: &[CommandSpec] = &[
         ],
         handler: crate::mcp_cmd::run_mcp_command,
     },
+    CommandSpec {
+        name: "research",
+        usage_lines: &[
+            "       forge-core research source add  --source-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--no-json]",
+            "       forge-core research source list [--root <path>] [--allow-bootstrap-core] [--no-json]",
+            "       forge-core research check       [--root <path>] [--allow-bootstrap-core] [--evidence-file <path>] [--no-json]",
+            "       forge-core research graph       [--root <path>] [--allow-bootstrap-core] [--no-json]",
+            "       forge-core research cite        --source-id <id> [--root <path>] [--allow-bootstrap-core] [--evidence-file <path>] [--no-json]",
+        ],
+        handler: crate::research_cmd::run_research_command,
+    },
 ];
 
 /// Looks up a command by its argv[1] token and invokes its handler.

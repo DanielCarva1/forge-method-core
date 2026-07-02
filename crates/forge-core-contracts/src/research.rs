@@ -183,7 +183,10 @@ impl ResearchContract {
     /// Ledger. Fail-closed: any missing policy requirement blocks. Admitting
     /// attests to **registration/resolution**, never to truthfulness or tier
     /// (ADR-0010 §5). See `CONTEXT.md` "Citation Check".
-    pub fn can_admit_source(source: &ResearchSource, policy: &ResearchPolicy) -> ResearchAdmissionDecision {
+    pub fn can_admit_source(
+        source: &ResearchSource,
+        policy: &ResearchPolicy,
+    ) -> ResearchAdmissionDecision {
         let mut denials = Vec::new();
 
         if !kind_is_permitted(source.kind, &policy.permitted_source_kinds) {
@@ -295,10 +298,8 @@ mod tests {
             ResearchSourceKind::LocalDoc,
             ResearchSourceKind::RepoRef,
         ] {
-            let decision = ResearchContract::can_admit_source(
-                &sample_source("s.x", kind),
-                &deny_all_policy(),
-            );
+            let decision =
+                ResearchContract::can_admit_source(&sample_source("s.x", kind), &deny_all_policy());
             assert!(decision.is_blocked(), "{kind:?} should be denied");
         }
     }
