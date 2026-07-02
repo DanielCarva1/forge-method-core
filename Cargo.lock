@@ -937,6 +937,7 @@ dependencies = [
  "ed25519-dalek",
  "forge-core-cli",
  "forge-core-contracts",
+ "forge-core-validate",
  "proptest",
  "rand 0.8.6",
  "rmcp",
@@ -945,6 +946,7 @@ dependencies = [
  "serde_json_canonicalizer",
  "tokio",
  "tracing",
+ "yaml_serde",
 ]
 
 [[package]]

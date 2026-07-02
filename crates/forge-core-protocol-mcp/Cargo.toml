@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 forge-core-contracts = { path = "../forge-core-contracts" }
 forge-core-cli = { path = "../forge-core-cli" }
+forge-core-validate = { path = "../forge-core-validate" }
 # Local tokio features for stdio MCP server (io-util + macros for the
 # async runtime + buffered stdin/AsyncBufReadExt). We do NOT modify the
 # workspace tokio pin (`features = ["rt","time"]`) — other crates depend
@@ -16,6 +17,9 @@ serde.workspace = true
 serde_json.workspace = true
 serde_json_canonicalizer.workspace = true
 ed25519-dalek.workspace = true
+# Project-standard YAML crate (AGENTS.md: yaml_serde is the project standard;
+# serde_yaml/serde_yml are dev-only bench crates, NOT used in production).
+yaml_serde.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]

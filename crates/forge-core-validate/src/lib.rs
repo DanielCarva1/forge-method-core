@@ -194,6 +194,15 @@ pub enum DiagnosticCode {
     GovernanceConflictPartiesNotDistinct,
     GovernanceConflictMissingParty,
     GovernanceConflictPolicySilentLastWriterWins,
+    // F08 — Secure MCP adapter (allowlist + attestation).
+    McpAllowlistYamlReadFailed,
+    McpAllowlistYamlParseFailed,
+    McpAllowlistUnknownTool,
+    McpAllowlistDuplicateTool,
+    McpAllowlistEmpty,
+    McpMutateGateMissingOperationContract,
+    McpAttestationRequiredMissing,
+    McpAttestationInvalid,
 }
 
 #[derive(Debug, Clone)]
