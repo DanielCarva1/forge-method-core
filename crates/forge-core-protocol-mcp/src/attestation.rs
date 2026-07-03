@@ -308,6 +308,7 @@ pub(crate) fn hex_encode(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use ed25519_dalek::{Signer, SigningKey};
+    use proptest::prelude::*;
     use rand::RngCore;
 
     fn fresh_signing_key() -> SigningKey {
@@ -422,5 +423,127 @@ mod tests {
             verifier.verify(&intent, &att),
             Err(AttestationError::SignatureDecode(_))
         ));
+    }
+
+    // --- security-gap tests ------------------------------------------------
+
+    /// `RequireAll` requires attestation even for read-only tools. This pins
+    /// that a read-only intent signed and verified under `RequireAll` round-
+    /// trips Ok (the policy does not change the verify primitive — it only
+    /// changes whether the gate *demands* an attestation — so a valid one must
+    /// still verify). The complementary "`RequireAll` rejects read-only without
+    /// attestation" path is integration-tested in `server.rs`.
+    #[test]
+    fn require_all_roundtrip_signs_and_verifies_readonly() {
+        let sk = fresh_signing_key();
+        let intent = CanonicalIntent {
+            tool: "preview".into(),
+            arguments: serde_json::json!({"--root": "/tmp/x"}),
+            nonce: "n-requireall".into(),
+            ts: 1_700_000_000,
+        };
+        let att = sign_intent(&intent, &sk);
+        let verifier = AttestationVerifier::new(AttestationPolicy::RequireAll);
+        // RequireAll must still verify a correctly-signed read-only intent.
+        assert!(verifier.verify(&intent, &att).is_ok());
+    }
+
+    /// Regression test for the documented contract at `verify` (attestation.rs
+    /// ~L190): `AttestationVerifier::verify` is a **signature check only** and
+    /// does NOT consult any authorized-key set. Any validly-signed attestation
+    /// verifies, regardless of whether the key is "authorized".
+    ///
+    /// We cannot test "unauthorized" because `verify` takes no key-set
+    /// parameter, so we pin "any key works" as the contract: two independent
+    /// signing keys (A and B) both round-trip Ok against their own public keys.
+    /// If someone later adds key-set enforcement inside `verify`, THIS test
+    /// must be updated intentionally (the API would gain a key-set parameter).
+    #[test]
+    fn valid_signature_from_unauthorized_key_still_verifies() {
+        let sk_a = fresh_signing_key();
+        let sk_b = fresh_signing_key();
+        let intent = CanonicalIntent {
+            tool: "preview".into(),
+            arguments: serde_json::json!({"--root": "/tmp/any"}),
+            nonce: "n-any-key".into(),
+            ts: 1_700_000_000,
+        };
+
+        // Key A: sign with A, build att with A's signature + A's public key.
+        let att_a = sign_intent(&intent, &sk_a);
+        let verifier = AttestationVerifier::new(AttestationPolicy::Default);
+        assert!(verifier.verify(&intent, &att_a).is_ok());
+
+        // Key B: independently sign and verify against B's OWN public key.
+        // The point: verify never rejects a validly-signed attestation based on
+        // which key produced it — there is no authorized set to consult.
+        let att_b = sign_intent(&intent, &sk_b);
+        assert!(
+            verifier.verify(&intent, &att_b).is_ok(),
+            "verify must not consult an authorized-key set; any valid signature verifies"
+        );
+
+        // A signed attestation does NOT verify against a DIFFERENT key's public
+        // key — this is the real cryptographic boundary (tamper detection), not
+        // an authorization check.
+        let mismatched_att = AttestationInput {
+            public_key_hex: att_b.public_key_hex.clone(),
+            ..att_a.clone()
+        };
+        assert_eq!(
+            verifier.verify(&intent, &mismatched_att),
+            Err(AttestationError::Invalid),
+            "signature must not verify against a different public key"
+        );
+    }
+
+    proptest! {
+        /// Property: sign-then-verify round-trips for arbitrary intents, and a
+        /// single-byte flip of the signature bytes always breaks verification
+        /// (returns `AttestationError::Invalid`). Exercises the tamper-
+        /// detection arm of the verifier over many inputs, not just one fixed
+        /// fixture.
+        #[test]
+        fn prop_sign_verify_roundtrip_and_tamper(
+            tool in "[a-z][a-z0-9-]{0,15}",
+            nonce in "[a-zA-Z0-9_]{0,12}",
+            ts in -2i64..2_000_000_000i64,
+        ) {
+            let sk = fresh_signing_key();
+            let intent = CanonicalIntent {
+                tool: tool.clone(),
+                arguments: serde_json::json!({}),
+                nonce: nonce.clone(),
+                ts,
+            };
+            let att = sign_intent(&intent, &sk);
+            let verifier = AttestationVerifier::new(AttestationPolicy::Default);
+
+            // Round-trip: a correctly-signed attestation verifies.
+            prop_assert!(
+                verifier.verify(&intent, &att).is_ok(),
+                "valid signature must verify for tool={:?} nonce={:?} ts={}",
+                tool,
+                nonce,
+                ts
+            );
+
+            // Tamper: flip one byte of the decoded signature, re-encode hex.
+            let mut sig_bytes = hex_decode(&att.signature).expect("hex signature decodes");
+            // Flip the low bit of the first byte (guaranteed to change it).
+            sig_bytes[0] ^= 0x01;
+            let tampered = AttestationInput {
+                signature: hex_encode(&sig_bytes),
+                ..att.clone()
+            };
+            prop_assert_eq!(
+                verifier.verify(&intent, &tampered),
+                Err(AttestationError::Invalid),
+                "tampered signature must fail for tool={:?} nonce={:?} ts={}",
+                tool,
+                nonce,
+                ts
+            );
+        }
     }
 }

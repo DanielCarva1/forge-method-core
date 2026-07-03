@@ -725,6 +725,21 @@ mod tests {
         }
     }
 
+    /// Like `config_with_fake_binary` (read-only allowlist) but with the
+    /// hardened `RequireAll` policy: attestation is required for ALL tools,
+    /// read-only included.
+    fn require_all_config_with_fake_binary(bin: PathBuf) -> McpServerConfig {
+        McpServerConfig {
+            allowlist: Allowlist::default_read_only(),
+            attestation: crate::attestation::AttestationVerifier::new(
+                crate::attestation::AttestationPolicy::RequireAll,
+            ),
+            forge_core_binary: bin,
+            root: None,
+            allow_bootstrap_core: false,
+        }
+    }
+
     /// Sign a Tool-Call Attestation for a tool call, returning the
     /// `AttestationInput` that would ride in `_meta.attestation`.
     fn sign_test_attestation(
@@ -876,6 +891,102 @@ mod tests {
             "expected success, got: {}",
             content_text(&res)
         );
+    }
+
+    // --- security-gap: RequireAll at the gate (no integration test) ---------
+
+    #[test]
+    fn require_all_gate_rejects_readonly_without_attestation() {
+        // RequireAll: attestation required even for read-only tools. "preview"
+        // is read-only (in Allowlist::default_read_only()) but with no
+        // _meta.attestation the gate must reject BEFORE the subprocess runs.
+        let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
+        let bin = make_fake_forge_core(true, envelope);
+        let server = ForgeMcpServer::new(require_all_config_with_fake_binary(bin));
+        let req = CallToolRequestParams::new("preview");
+        let res = server.handle_call_tool(req).unwrap();
+        assert!(
+            res.is_error.unwrap_or(false),
+            "RequireAll must reject read-only without attestation, got: {}",
+            content_text(&res)
+        );
+        assert!(content_text(&res).contains("attestation required"));
+    }
+
+    #[test]
+    fn require_all_gate_passes_readonly_with_valid_attestation() {
+        // Symmetric: RequireAll + read-only tool + valid signed attestation
+        // → gate passes and the subprocess envelope is returned. Uses the
+        // read-only allowlist (includes "preview").
+        let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
+        let bin = make_fake_forge_core(true, envelope);
+        let server = ForgeMcpServer::new(require_all_config_with_fake_binary(bin));
+        let att = sign_test_attestation("preview", serde_json::json!({}), "n-rall", 1_700_000_000);
+        let req = request_with_attestation("preview", JsonObject::new(), att);
+        let res = server.handle_call_tool(req).unwrap();
+        assert!(
+            !res.is_error.unwrap_or(true),
+            "RequireAll + valid attestation must pass, got: {}",
+            content_text(&res)
+        );
+    }
+
+    // --- security-gap: present-but-invalid on read-only (verify_present) -----
+
+    #[test]
+    fn present_but_invalid_attestation_on_readonly_is_rejected() {
+        // Default policy: read-only does not REQUIRE attestation, but if one is
+        // present it must verify (defense in depth via verify_present_attestation
+        // at server.rs ~L157). Sign a valid attestation, then tamper one byte of
+        // the signature hex → the gate must reject even though attestation is
+        // optional for read-only.
+        let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
+        let bin = make_fake_forge_core(true, envelope);
+        let server = ForgeMcpServer::new(config_with_fake_binary(bin));
+        let mut att = sign_test_attestation("preview", serde_json::json!({}), "n-tamper", 1_700_000_000);
+        // Flip one hex nibble in the signature: take the char at index 0 and
+        // toggle its low bit, staying within valid hex digits.
+        let mut sig_chars: Vec<char> = att.signature.chars().collect();
+        let orig = sig_chars[0];
+        sig_chars[0] = if orig == '0' { '1' } else { '0' };
+        att.signature = sig_chars.into_iter().collect();
+        let req = request_with_attestation("preview", JsonObject::new(), att);
+        let res = server.handle_call_tool(req).unwrap();
+        assert!(
+            res.is_error.unwrap_or(false),
+            "tampered attestation on read-only must be rejected (defense in depth), got: {}",
+            content_text(&res)
+        );
+        assert!(content_text(&res).contains("attestation invalid"));
+    }
+
+    // --- security-gap: malformed _meta.attestation (extract_attestation) ----
+
+    #[test]
+    fn malformed_meta_attestation_is_rejected() {
+        // Default policy, mutate tool (so attestation is REQUIRED). Put
+        // _meta.attestation as a plain string (not a valid AttestationInput
+        // object) → extract_attestation's `Some(Err(msg))` arm (server.rs
+        // ~L149/L377) must reject. This exercises the present-but-unparseable
+        // path: a malformed attestation is never silently ignored.
+        let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
+        let bin = make_fake_forge_core(true, envelope);
+        let server = ForgeMcpServer::new(mutate_config_with_fake_binary(bin));
+        let mut meta_map = JsonObject::new();
+        // A bare string is not a deserializable AttestationInput.
+        meta_map.insert("attestation".into(), serde_json::json!("not valid json"));
+        let mut req = CallToolRequestParams::new("execute-operation");
+        let mut args = JsonObject::new();
+        args.insert("--operation".into(), serde_json::json!("/tmp/op.yaml"));
+        req.arguments = Some(args);
+        req.meta = Some(rmcp::model::Meta(meta_map));
+        let res = server.handle_call_tool(req).unwrap();
+        assert!(
+            res.is_error.unwrap_or(false),
+            "malformed _meta.attestation must be rejected, got: {}",
+            content_text(&res)
+        );
+        assert!(content_text(&res).contains("attestation invalid"));
     }
 
     #[test]
