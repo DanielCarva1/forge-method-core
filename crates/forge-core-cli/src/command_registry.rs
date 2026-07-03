@@ -328,9 +328,9 @@ pub const COMMANDS: &[CommandSpec] = &[
 
 /// Looks up a command by its argv[1] token and invokes its handler.
 ///
-/// Falls back to printing the global usage text for `--help` / `-h` and to
-/// `ExitError::usage` for unknown commands. This replaces the 90-line match
-/// that previously lived in `main.rs`.
+/// Falls back to printing the global usage text for `--help` / `-h` / no
+/// args, the version string for `--version` / `-V`, and an actionable
+/// unknown-command error otherwise.
 ///
 /// # Errors
 ///
@@ -345,24 +345,80 @@ pub fn dispatch(command: &str, args: &[String]) -> Result<(), ExitError> {
             println!("{}", global_usage());
             Ok(())
         }
-        _ => Err(ExitError::usage(global_usage())),
+        "--version" | "-V" => {
+            println!("{}", version_string());
+            Ok(())
+        }
+        _ => Err(ExitError::usage(format!(
+            "forge-core: unknown command '{command}'.\n\n{global_usage_hint}",
+            global_usage_hint = global_usage_hint()
+        ))),
     }
 }
 
-/// Builds the global `--help` / unknown-command usage text by joining every
-/// [`CommandSpec::usage_lines`] entry, in registration order, separated by
-/// newlines. The first line is the `usage: forge-core validate ...` header.
+/// The version line printed by `--version` / `-V`.
+///
+/// Built from the Cargo package version (the source of truth for releases).
+/// A `VERSION` file at the repo root, if present, overrides the Cargo version
+/// so a release manager can bump the marketing version without a Cargo edit.
+#[must_use]
+pub fn version_string() -> String {
+    let cargo_version = env!("CARGO_PKG_VERSION");
+    // The VERSION file is optional and lives at the workspace root. Read it at
+    // runtime (not compile time) so a cargo build outside the repo does not
+    // fail when it is absent; fall back to the baked-in Cargo version.
+    let resolved = std::fs::read_to_string("VERSION")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| cargo_version.to_string());
+    format!("forge-core {resolved}")
+}
+
+/// A short, framed hint shown above the full command list in `--help` and in
+/// the unknown-command error. Points new users at `start` as the onboarding
+/// entry point.
+#[must_use]
+pub fn global_usage_hint() -> String {
+    // Resolve the version the same way `--version` does so the hint and the
+    // version flag never disagree (a VERSION file overrides the baked-in
+    // Cargo version at runtime).
+    let resolved_version = std::fs::read_to_string("VERSION")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
+    let mut hint = String::with_capacity(512);
+    hint.push_str("Forge Method Core — governance runtime for multi-agent builds.\n");
+    hint.push_str("Version ");
+    hint.push_str(&resolved_version);
+    hint.push_str(". Bring your own model; Forge coordinates many agents in one repo.\n\n");
+    hint.push_str("First run? Start here:\n");
+    hint.push_str("  forge-core start          diagnose a repo and get the next step\n");
+    hint.push_str("  forge-core project init   create the Forge Project Link + sidecar\n");
+    hint.push_str("  forge-core guide describe list every workflow in the catalog\n\n");
+    hint.push_str("All commands accept --json for machine consumption.\n\n");
+    hint.push_str("Commands:");
+    hint
+}
+
+/// Builds the global `--help` / unknown-command usage text. A framed header
+/// (what Forge is, the onboarding entry points) is prepended to the full
+/// per-command usage line list, grouped so a new user can find `start`,
+/// `project`, and `guide` before the long tail of host-adapter verifiers.
 #[must_use]
 pub fn global_usage() -> String {
-    let mut out = String::with_capacity(8 * 1024);
+    let mut out = String::with_capacity(12 * 1024);
+    out.push_str(&global_usage_hint());
+    out.push('\n');
     for spec in COMMANDS {
         for line in spec.usage_lines {
             out.push_str(line);
             out.push('\n');
         }
     }
-    // Trim the trailing newline added by the last line; matches the legacy
-    // `concat!` output which had no trailing newline.
+    // Trim the trailing newline added by the last line; keeps the output
+    // stable for snapshot-style assertions.
     if out.ends_with('\n') {
         out.pop();
     }
@@ -437,5 +493,44 @@ mod tests {
     #[test]
     fn global_usage_is_nonempty() {
         assert!(!global_usage().is_empty());
+    }
+
+    #[test]
+    fn global_usage_starts_with_framing_header() {
+        // The header must introduce Forge and surface the onboarding entry
+        // point (`start`) so a new user running --help knows where to begin.
+        let usage = global_usage();
+        assert!(
+            usage.starts_with("Forge Method Core —"),
+            "global_usage() must start with the framing header"
+        );
+        assert!(
+            usage.contains("forge-core start"),
+            "global_usage() must surface the `start` onboarding command"
+        );
+    }
+
+    #[test]
+    fn version_string_carries_binary_name_and_version() {
+        let v = version_string();
+        assert!(
+            v.starts_with("forge-core "),
+            "version_string must start with 'forge-core ': {v:?}"
+        );
+        // CARGO_PKG_VERSION is baked at compile time and is non-empty.
+        assert!(
+            v.len() > "forge-core ".len(),
+            "version_string must carry a version after the name: {v:?}"
+        );
+    }
+
+    #[test]
+    fn dispatch_version_flag_returns_ok_with_version() {
+        // --version and -V must not be treated as unknown commands (the old
+        // bug: they fell through to ExitError::usage and exited 2).
+        for flag in ["--version", "-V"] {
+            let result = dispatch(flag, &[]);
+            assert!(result.is_ok(), "dispatch({flag:?}) should succeed");
+        }
     }
 }

@@ -11,6 +11,14 @@ fn main() {
     tracing_init::init_subscriber();
 
     let args: Vec<String> = env::args().skip(1).collect();
+    // No args → print help and exit 0. The previous default ran `validate`
+    // silently, which surprised users who just wanted to see what the binary
+    // does. `validate` is still the implicit subject of `--help`, but it must
+    // be requested explicitly (either by name or by running it in a repo).
+    if args.is_empty() {
+        println!("{}", command_registry::global_usage());
+        return;
+    }
     let command = args.first().map_or("validate", String::as_str);
 
     // Root session span. When FORGE_AGENT_ID is set, every nested span carries

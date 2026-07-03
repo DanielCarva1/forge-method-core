@@ -1812,7 +1812,12 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
         want_json,
     )?;
     let durability = if no_sync {
-        eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        // The durability warning is human-facing guidance; suppress it in
+        // --json mode so a machine consumer (MCP, agent) gets a clean stdout
+        // and stderr, per the documented JSON contract.
+        if !want_json {
+            eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        }
         WalDurability::NoSync
     } else {
         WalDurability::SyncOnAppend
@@ -1940,7 +1945,12 @@ pub fn run_claim_single_target(
         want_json,
     )?;
     let durability = if no_sync {
-        eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        // The durability warning is human-facing guidance; suppress it in
+        // --json mode so a machine consumer (MCP, agent) gets a clean stdout
+        // and stderr, per the documented JSON contract.
+        if !want_json {
+            eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        }
         WalDurability::NoSync
     } else {
         WalDurability::SyncOnAppend
@@ -2041,7 +2051,12 @@ pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
         want_json,
     )?;
     let durability = if no_sync {
-        eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        // The durability warning is human-facing guidance; suppress it in
+        // --json mode so a machine consumer (MCP, agent) gets a clean stdout
+        // and stderr, per the documented JSON contract.
+        if !want_json {
+            eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        }
         WalDurability::NoSync
     } else {
         WalDurability::SyncOnAppend
@@ -2204,7 +2219,12 @@ pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
         want_json,
     )?;
     let durability = if no_sync {
-        eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        // The durability warning is human-facing guidance; suppress it in
+        // --json mode so a machine consumer (MCP, agent) gets a clean stdout
+        // and stderr, per the documented JSON contract.
+        if !want_json {
+            eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        }
         WalDurability::NoSync
     } else {
         WalDurability::SyncOnAppend

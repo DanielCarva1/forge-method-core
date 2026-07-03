@@ -815,7 +815,11 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
     let durability = if no_sync {
         // ADR-0009: emit a one-line stderr warning the first time the flag is
         // honoured, so a CI log makes the durability trade-off visible.
-        eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        // Suppressed in --json mode to keep stdout/stderr clean for machine
+        // consumers (MCP, agents).
+        if !json {
+            eprintln!("forge-core: --no-sync active; WAL appends are not durable for this process");
+        }
         WalDurability::NoSync
     } else {
         WalDurability::default()

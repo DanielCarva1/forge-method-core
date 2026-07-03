@@ -194,9 +194,13 @@ pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError
     if no_sync {
         // ADR-0009: emit a one-line stderr warning the first time the flag is
         // honoured, so a CI log makes the durability trade-off visible.
-        eprintln!(
-            "forge-core: --no-sync active; index rebuild append is not durable for this process"
-        );
+        // Suppressed in --json mode to keep stdout/stderr clean for machine
+        // consumers (MCP, agents).
+        if !json {
+            eprintln!(
+                "forge-core: --no-sync active; index rebuild append is not durable for this process"
+            );
+        }
         input.durability = WalDurability::NoSync;
     }
 

@@ -24,8 +24,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// strings (not imported) so this test stays a black-box against the binary —
 /// it catches wire-form regressions the unit tests would not.
 ///
-/// `no_link` is intentionally absent: that state emits no payload (`data` is
-/// null), so there is no `state` field to compare against.
+/// `no_link` is covered by its own dedicated case below (it returns an `ok`
+/// envelope with a `project init` `next_step`), so it has no entry in the
+/// bootstrap-state constant list.
 const STATE_LINK_NO_SIDECAR: &str = "link_present_no_sidecar";
 const STATE_SIDECAR_READY: &str = "sidecar_ready_no_contract";
 const STATE_CONTRACT_PRESENT: &str = "contract_present";
@@ -119,24 +120,34 @@ fn make_state_tree(state: &Path) {
 }
 
 #[test]
-fn state_one_no_link_fails_closed_with_env_config_exit() {
-    // Scenario A: empty repo, no Project Link. start must NOT create anything
-    // and must exit non-zero (env_config, code 5) with ok=false and no payload.
+fn state_one_no_link_emits_ok_envelope_with_project_init_next_step() {
+    // Scenario A: empty repo, no Project Link. `start` must NOT create
+    // anything (read-only invariant) and must surface the state as an ok
+    // envelope: state=no_link, next_step=`forge-core project init --root .`.
+    // This is the onboarding entry point — surfacing it is the whole reason
+    // `start` exists, so a bare env-config error here would defeat the command.
     let parent = FreshParent::new("no-link");
     let app = parent.path.join("app");
     fs::create_dir_all(&app).unwrap();
 
     let (exit_ok, env) = run_start(&app);
 
-    assert!(!exit_ok, "no_link must exit non-zero");
-    assert_eq!(env["ok"], false, "no_link envelope ok must be false");
+    assert!(exit_ok, "no_link must exit zero (it is a diagnosis, not a failure)");
+    assert_eq!(env["ok"], true, "no_link envelope ok must be true");
     assert_eq!(
-        env["exit_reason"], "env_config",
-        "no_link must report env_config"
+        env["exit_reason"], "ok",
+        "no_link must report ok, not env_config"
     );
+    assert_eq!(
+        env["data"]["state"], "no_link",
+        "no_link state must be reported in the payload"
+    );
+    let next = &env["data"]["next_step"];
     assert!(
-        env.get("data").is_none() || env["data"].is_null(),
-        "no_link must not build a payload (no project context)"
+        next["command"]
+            .as_str()
+            .is_some_and(|c| c.contains("project init")),
+        "no_link should recommend `forge-core project init`; got {next}"
     );
     // Read-only invariant: nothing was created in the app dir.
     assert!(

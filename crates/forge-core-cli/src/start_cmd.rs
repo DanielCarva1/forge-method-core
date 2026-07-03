@@ -277,15 +277,50 @@ pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
 /// claim. Project resolution reuses [`resolve_project`] verbatim — `start`
 /// does not duplicate the link/sidecar logic.
 ///
+/// The one place `start` diverges from `resolve_project` is the
+/// [`ProjectResolveError::MissingProjectLink`] case: instead of propagating a
+/// bare env-config error, `start` returns an `ok` envelope in the `no_link`
+/// bootstrap state with a concrete `next_step` of
+/// `forge-core project init --root .`. That is the single most useful thing
+/// `start` can tell a new user, and it was previously unreachable because
+/// `resolve_project` failed before classification ran.
+///
 /// # Errors
 ///
 /// Returns [`StartError::ProjectResolve`] when the project cannot be
-/// resolved (missing root, missing/malformed link, unsafe state root, …).
-/// The caller maps the [`ExitReason`] into the envelope exit code.
+/// resolved for any reason OTHER than a missing link (missing root,
+/// malformed link, unsafe state root, …). The caller maps the [`ExitReason`]
+/// into the envelope exit code.
 #[must_use]
 pub fn run_start(root: &Path, allow_bootstrap_core: bool) -> CliEnvelope<StartPayload> {
     let resolved = match resolve_project(root, allow_bootstrap_core) {
         Ok(payload) => payload,
+        Err(ProjectResolveError::MissingProjectLink { .. }) => {
+            // The repo has no `.forge-method.yaml`. This is the canonical
+            // "brand new user" state — surface it as an actionable ok
+            // envelope rather than an opaque env-config error.
+            return CliEnvelope::ok(
+                "start",
+                StartPayload {
+                    schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
+                    state: BootstrapState::NoLink,
+                    reason: "No Forge Project Link found; the repo is not yet \
+                             governed by Forge."
+                        .to_string(),
+                    next_step: Some(NextStep {
+                        command: Some(format!(
+                            "forge-core project init --root {}",
+                            root.display()
+                        )),
+                        description: "Create the Forge Project Link and the sibling \
+                                      Runtime Sidecar so Forge can govern writes."
+                            .to_string(),
+                        references: Vec::new(),
+                    }),
+                    project: None,
+                },
+            );
+        }
         Err(err) => {
             return CliEnvelope::err("start", resolve_error_exit_reason(&err), err.to_string());
         }
@@ -549,16 +584,29 @@ mod tests {
     }
 
     #[test]
-    fn no_link_returns_env_config_error() {
+    fn no_link_returns_ok_with_project_init_next_step() {
         // State 1: repo with no Project Link and no bootstrap exception.
+        // `start` must surface this as an actionable ok envelope (state
+        // NoLink + next_step `forge-core project init --root .`), NOT as a
+        // bare env-config error. This is the single most useful thing `start`
+        // can tell a brand-new user.
         let root = temp_root("no-link");
         let env = run_start(&root, false);
-        assert!(!env.ok);
-        assert_eq!(env.exit_reason.0, ExitReason::EnvConfig.as_str());
-        assert_eq!(env.exit_code(), ExitReason::EnvConfig.as_code());
+        assert!(env.ok, "no_link must be an ok envelope, not an error");
+        assert_eq!(env.exit_reason.0, ExitReason::Ok.as_str());
+        let payload = env.data.as_ref().expect("payload on no_link");
+        assert_eq!(payload.state, BootstrapState::NoLink);
+        let next = payload.next_step.as_ref().expect("next step on no_link");
         assert!(
-            env.data.is_none(),
-            "no_link must not build a payload (no project context to report)"
+            next.command
+                .as_ref()
+                .is_some_and(|c| c.contains("project init")),
+            "no_link should recommend `forge-core project init`; got {:?}",
+            next.command
+        );
+        assert!(
+            payload.project.is_none(),
+            "no_link has no project context to report"
         );
     }
 
