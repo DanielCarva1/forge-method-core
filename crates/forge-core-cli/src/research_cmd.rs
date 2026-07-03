@@ -357,7 +357,7 @@ fn run_check(args: &[String]) -> Result<(), ExitError> {
 
     let evidence = match load_evidence(outcome.evidence_file.as_deref(), &root_path) {
         Ok(evidence) => evidence,
-        Err(error) => return emit_err(CHECK_COMMAND, &error, outcome.want_json),
+        Err(error) => return emit_err(CHECK_COMMAND, &error.to_string(), outcome.want_json),
     };
     let projection = match resolve_state_root(outcome.root.as_deref(), outcome.allow_bootstrap_core)
     {
@@ -491,7 +491,7 @@ fn run_cite(args: &[String]) -> Result<(), ExitError> {
 
     let evidence = match load_evidence(outcome.common.evidence_file.as_deref(), &root_path) {
         Ok(evidence) => evidence,
-        Err(error) => return emit_err(CITE_COMMAND, &error, outcome.common.want_json),
+        Err(error) => return emit_err(CITE_COMMAND, &error.to_string(), outcome.common.want_json),
     };
     let projection = match resolve_state_root(
         outcome.common.root.as_deref(),
@@ -794,18 +794,30 @@ fn load_policy_file(path: &Path) -> Result<ResearchPolicy, LoadError> {
 
 /// Load the curated `FieldEvidenceRegistry`, preferring `--evidence-file`, then
 /// the canonical repo path, then an empty registry (citation check degrades to
-/// runtime-only). Returns an error message string when an explicit
-/// `--evidence-file` cannot be read or parsed.
-fn load_evidence(explicit: Option<&Path>, root: &Path) -> Result<FieldEvidenceRegistry, String> {
+/// runtime-only). Returns an error when an explicit `--evidence-file` cannot
+/// be read or parsed.
+///
+/// # Errors
+///
+/// Returns [`EvidenceLoadError`] only when an explicit `--evidence-file` is
+/// given and fails to read or parse. The canonical-path fallback never
+/// errors — a missing or malformed canonical file degrades to an empty
+/// registry.
+fn load_evidence(
+    explicit: Option<&Path>,
+    root: &Path,
+) -> Result<FieldEvidenceRegistry, EvidenceLoadError> {
     if let Some(path) = explicit {
-        let text = std::fs::read_to_string(path).map_err(|source| {
-            format!("cannot read evidence file '{}': {source}", path.display())
-        })?;
+        let text =
+            std::fs::read_to_string(path).map_err(|source| EvidenceLoadError::ReadFailed {
+                path: path.display().to_string(),
+                source: source.to_string(),
+            })?;
         return yaml_serde::from_str::<FieldEvidenceRegistry>(&text).map_err(|source| {
-            format!(
-                "evidence file '{}' is not a valid FieldEvidenceRegistry YAML: {source}",
-                path.display()
-            )
+            EvidenceLoadError::ParseFailed {
+                path: path.display().to_string(),
+                source: source.to_string(),
+            }
         });
     }
     let canonical = root.join("contracts/research/field-evidence-20260625.yaml");
@@ -815,6 +827,43 @@ fn load_evidence(explicit: Option<&Path>, root: &Path) -> Result<FieldEvidenceRe
         Err(_) => Ok(empty_evidence()),
     }
 }
+
+/// Failures loading an explicit `--evidence-file`. Hand-rolled per AGENTS.md.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EvidenceLoadError {
+    /// The evidence file could not be read.
+    ReadFailed {
+        /// The file path, display-formatted.
+        path: String,
+        /// The underlying IO error, as a lossy String.
+        source: String,
+    },
+    /// The evidence file is not valid `FieldEvidenceRegistry` YAML.
+    ParseFailed {
+        /// The file path, display-formatted.
+        path: String,
+        /// The underlying serde error, as a lossy String.
+        source: String,
+    },
+}
+
+impl std::fmt::Display for EvidenceLoadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ReadFailed { path, source } => {
+                write!(f, "cannot read evidence file '{path}': {source}")
+            }
+            Self::ParseFailed { path, source } => {
+                write!(
+                    f,
+                    "evidence file '{path}' is not a valid FieldEvidenceRegistry YAML: {source}"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for EvidenceLoadError {}
 
 /// Construct an empty curated registry. Used as the fallback when no evidence
 /// file is present so the citation check degrades to runtime-only rather than

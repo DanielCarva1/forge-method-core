@@ -1535,12 +1535,12 @@ pub fn recover_effect_wal(
     };
     let (records, parse_diagnostics) = match parse_effect_wal_records_for_recovery(&text) {
         Ok(parsed) => parsed,
-        Err(diagnostic) => {
+        Err(error) => {
             return EffectWalRecoveryResult {
                 status: EffectWalRecoveryStatus::RecoveryFailed,
                 recovered_transactions: Vec::new(),
                 reasons: vec![EffectWalRecoveryReason::WalParseFailed],
-                diagnostics: vec![diagnostic],
+                diagnostics: vec![error.to_string()],
             };
         }
     };
@@ -1601,7 +1601,7 @@ pub fn recover_effect_wal(
 
 fn parse_effect_wal_records_for_recovery(
     text: &str,
-) -> Result<(Vec<EffectWalRecord>, Vec<String>), String> {
+) -> Result<(Vec<EffectWalRecord>, Vec<String>), EffectWalRecoveryParseError> {
     let lines = text.lines().collect::<Vec<_>>();
     let final_line_is_truncated = !text.is_empty() && !text.ends_with('\n');
     let mut records = Vec::new();
@@ -1617,13 +1617,44 @@ fn parse_effect_wal_records_for_recovery(
                 ));
             }
             Err(error) => {
-                return Err(format!("parse WAL line {} failed: {error}", index + 1));
+                return Err(EffectWalRecoveryParseError::LineParseFailed {
+                    line_number: index + 1,
+                    source: error.to_string(),
+                });
             }
         }
     }
 
     Ok((records, diagnostics))
 }
+
+/// Failures parsing effect WAL records for recovery. Hand-rolled per
+/// AGENTS.md (no anyhow/thiserror); derives Debug, Clone, `PartialEq`, Eq.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EffectWalRecoveryParseError {
+    /// A WAL line could not be parsed as an `EffectWalRecord`.
+    LineParseFailed {
+        /// 1-based line number of the offending record.
+        line_number: usize,
+        /// The underlying `serde_json` error, as a lossy String.
+        source: String,
+    },
+}
+
+impl fmt::Display for EffectWalRecoveryParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::LineParseFailed {
+                line_number,
+                source,
+            } => {
+                write!(f, "parse WAL line {line_number} failed: {source}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for EffectWalRecoveryParseError {}
 
 pub fn rebuild_effect_target_metadata_index_with_lock(
     root: impl AsRef<Path>,

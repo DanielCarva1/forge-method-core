@@ -74,7 +74,12 @@ struct ServeArgs {
 }
 
 /// Parse the `serve` subcommand args.
-fn parse_serve_args(args: &[String]) -> Result<ServeArgs, String> {
+///
+/// # Errors
+///
+/// Returns [`ServeArgsError`] when a flag is missing its value or an unknown
+/// flag/positional is present.
+fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
     let mut allowlist = None;
     let mut root = None;
     let mut allow_bootstrap_core = false;
@@ -87,22 +92,22 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, String> {
                 i += 1;
                 let p = args
                     .get(i)
-                    .ok_or_else(|| "--allowlist requires a <yaml> path".to_string())?;
+                    .ok_or(ServeArgsError::MissingValue("--allowlist <yaml>"))?;
                 allowlist = Some(PathBuf::from(p));
             }
             "--root" => {
                 i += 1;
                 let p = args
                     .get(i)
-                    .ok_or_else(|| "--root requires a <path>".to_string())?;
+                    .ok_or(ServeArgsError::MissingValue("--root <path>"))?;
                 root = Some(PathBuf::from(p));
             }
             "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--json" | "--no-json" | "--text" => { /* handled by want_json */ }
             other if other.starts_with("--") => {
-                return Err(format!("unknown flag: {other}"));
+                return Err(ServeArgsError::UnknownFlag(other.to_string()));
             }
-            other => return Err(format!("unexpected positional argument: {other}")),
+            other => return Err(ServeArgsError::UnexpectedPositional(other.to_string())),
         }
         i += 1;
     }
@@ -114,11 +119,40 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, String> {
     })
 }
 
+/// Failures parsing `mcp serve` arguments. Hand-rolled per AGENTS.md.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ServeArgsError {
+    /// A flag that requires a value was given none.
+    MissingValue(&'static str),
+    /// An unrecognized flag (starts with `--`).
+    UnknownFlag(String),
+    /// An unexpected positional argument.
+    UnexpectedPositional(String),
+}
+
+impl std::fmt::Display for ServeArgsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingValue(flag) => write!(f, "{flag} requires a value"),
+            Self::UnknownFlag(flag) => write!(f, "unknown flag: {flag}"),
+            Self::UnexpectedPositional(arg) => {
+                write!(f, "unexpected positional argument: {arg}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ServeArgsError {}
+
 fn run_serve(args: &[String]) -> Result<(), ExitError> {
     let parsed = match parse_serve_args(args) {
         Ok(p) => p,
-        Err(msg) => {
-            return emit_err(SERVE_COMMAND, &msg, json_output_unless_text_selected(args));
+        Err(error) => {
+            return emit_err(
+                SERVE_COMMAND,
+                &error.to_string(),
+                json_output_unless_text_selected(args),
+            );
         }
     };
 
@@ -228,14 +262,14 @@ mod tests {
     fn parse_serve_rejects_allowlist_without_value() {
         let args: Vec<String> = vec!["--allowlist".into()];
         let err = parse_serve_args(&args).unwrap_err();
-        assert!(err.contains("requires a <yaml> path"));
+        assert!(err.to_string().contains("requires a value"));
     }
 
     #[test]
     fn parse_serve_rejects_unknown_flag() {
         let args: Vec<String> = vec!["--bogus".into()];
         let err = parse_serve_args(&args).unwrap_err();
-        assert!(err.contains("unknown flag"));
+        assert!(err.to_string().contains("unknown flag"));
     }
 
     #[test]

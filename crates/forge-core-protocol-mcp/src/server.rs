@@ -146,7 +146,9 @@ impl ForgeMcpServer {
                     e.to_string(),
                 )),
             },
-            Some(Err(msg)) => Some(crate::attestation::AttestationGateOutcome::Invalid(msg)),
+            Some(Err(error)) => Some(crate::attestation::AttestationGateOutcome::Invalid(
+                error.to_string(),
+            )),
             None => Some(crate::attestation::AttestationGateOutcome::RequiredMissing),
         }
     }
@@ -166,7 +168,9 @@ impl ForgeMcpServer {
                     e.to_string(),
                 )),
             },
-            Some(Err(msg)) => Some(crate::attestation::AttestationGateOutcome::Invalid(msg)),
+            Some(Err(error)) => Some(crate::attestation::AttestationGateOutcome::Invalid(
+                error.to_string(),
+            )),
             None => None, // allowed when not required
         }
     }
@@ -372,18 +376,45 @@ fn arguments_to_argv(arguments: Option<&JsonObject>) -> Vec<String> {
 ///
 /// Returns `None` if no attestation is present (caller decides if that is
 /// allowed). Returns `Some(Ok(att))` on successful extraction, or
-/// `Some(Err(msg))` if the field is present but malformed (a present-but-
+/// `Some(Err(..))` if the field is present but malformed (a present-but-
 /// unparseable attestation is a rejection, never silently ignored).
 fn extract_attestation(
     request: &CallToolRequestParams,
-) -> Option<Result<crate::attestation::AttestationInput, String>> {
+) -> Option<Result<crate::attestation::AttestationInput, AttestationExtractError>> {
     let meta = request.meta.as_ref()?;
     let att_value = meta.0.get("attestation")?;
     Some(
-        serde_json::from_value::<crate::attestation::AttestationInput>(att_value.clone())
-            .map_err(|e| e.to_string()),
+        serde_json::from_value::<crate::attestation::AttestationInput>(att_value.clone()).map_err(
+            |source| AttestationExtractError::Malformed {
+                source: source.to_string(),
+            },
+        ),
     )
 }
+
+/// Failures extracting a Tool-Call Attestation from a request's `_meta`.
+/// Hand-rolled per AGENTS.md (no anyhow/thiserror).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AttestationExtractError {
+    /// The `_meta.attestation` field was present but did not deserialize into
+    /// an `AttestationInput`.
+    Malformed {
+        /// The underlying `serde_json` error, as a lossy String.
+        source: String,
+    },
+}
+
+impl std::fmt::Display for AttestationExtractError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Malformed { source } => {
+                write!(f, "attestation present but malformed: {source}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for AttestationExtractError {}
 
 /// Whether an argv carries an `OperationContract` signal (ADR-0006 Decision 2).
 ///
