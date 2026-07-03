@@ -29,6 +29,7 @@ pub mod catalog;
 pub mod claim_engine;
 pub mod conflict_detection;
 pub mod coordination_eval;
+pub mod embedded_contracts;
 pub mod eval;
 pub mod guide_validation;
 pub mod isolation;
@@ -38,6 +39,7 @@ pub use catalog::{
     eligible_count, eligible_entries, find_entry, load_catalog, load_embedded_catalog,
     CatalogFileError, CatalogLoadReport,
 };
+pub use embedded_contracts::{embedded_exists, embedded_text, read_contract_text};
 
 pub use autonomy_router::{route_lane, LaneDecision, LaneKind, LaneRouteReason};
 pub use eval::{
