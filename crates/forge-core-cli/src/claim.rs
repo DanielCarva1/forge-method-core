@@ -34,8 +34,7 @@ use forge_core_decisions::{
     ClaimLifecycleDecision, ClaimReconcileTransition, ClaimRejection, RecordHandoffRequest,
 };
 use forge_core_store::claim_wal::{
-    append_claim_wal_record_with_durability, claim_wal_path, replay_claim_wal, ClaimWalOperation,
-    ClaimWalStopReason,
+    append_claim_wal_record_with_durability, claim_wal_path, ClaimWalOperation,
 };
 use forge_core_store::WalDurability;
 use std::fmt::Write as _;
@@ -522,7 +521,28 @@ pub fn run_handoff(
 /// reacquire until their recovery evidence is recorded.
 #[must_use]
 pub fn run_status(claims_dir: &Path, now_unix: i64) -> CliEnvelope<ClaimStatusView> {
-    let (existing, errs) = load_claims(claims_dir);
+    run_status_with_source(claims_dir, now_unix, false)
+}
+
+/// Like [`run_status`], but with an explicit claim-state source.
+///
+/// `from_cache == false` (the default, used by [`run_status`]) reads the WAL
+/// authority via [`load_claims`]. `from_cache == true` reads the legacy
+/// `claims-active/*.yaml` cache directly via [`load_claims_from_cache`] — a
+/// debug/diagnostic path surfaced as `forge-core claim status --from-cache`.
+/// The cache path is never an authority; it exists to inspect stale editable
+/// YAML without going through the WAL.
+#[must_use]
+pub fn run_status_with_source(
+    claims_dir: &Path,
+    now_unix: i64,
+    from_cache: bool,
+) -> CliEnvelope<ClaimStatusView> {
+    let (existing, errs) = if from_cache {
+        load_claims_from_cache(claims_dir)
+    } else {
+        load_claims(claims_dir)
+    };
     if let Some(env) = env_config_if_errors(claims_dir, &errs) {
         return env;
     }
@@ -813,19 +833,36 @@ pub fn conflict_code_str(c: ConflictCode) -> &'static str {
 // persistence (DD22: filesystem is the bus; spine audits writes)
 // ============================================================================
 
-/// Load the authoritative claim state for `dir`.
+/// Load claim state from the **authority source**: the append-only WAL, via
+/// [`forge_core_store::derive_state`].
 ///
-/// WAL replay is authoritative when `wal/claims.fmw1` exists under the inferred
-/// state root. The YAML files in `dir` are only a materialized cache. If that
-/// cache contains claim documents but no WAL exists, this fails closed with a
-/// migration/debug error instead of silently trusting cache-only state.
+/// This is the sole authority path — the ephemeral `claims-active/*.yaml`
+/// cache is never read here. To inspect the legacy cache (diagnostics only),
+/// use [`load_claims_from_cache`] explicitly, surfaced in the CLI behind the
+/// `--from-cache` debug flag.
+///
+/// Returns the same `(Vec<ClaimContract>, Vec<String>)` shape callers already
+/// consume, so the migration from the old dual-path `load_claims` is internal:
+/// every reader now goes through `derive_state` without touching call sites.
+///
+/// # Fail-closed behaviour
+///
+/// - WAL present and clean → projected claims.
+/// - WAL present but recovery stopped on a hard reason (CRC mismatch,
+///   sequence gap, …) → empty claims + a diagnostic string; the caller's
+///   `env_config_if_errors` check turns this into a non-zero exit.
+/// - WAL absent and cache empty → empty claims (fresh repo).
+/// - WAL absent but cache non-empty → fail-closed error: refuses to trust
+///   editable YAML as authority (per spec AC5/AC7). Run an explicit migration
+///   or inspect with `--from-cache`.
 #[must_use]
 pub fn load_claims(dir: &Path) -> (Vec<ClaimContract>, Vec<String>) {
     let state_root = state_root_from_claims_dir(dir);
     let wal_path = claim_wal_path(&state_root);
     if wal_path.exists() {
-        return load_claims_from_wal(&state_root);
+        return load_claims_from_authority(&state_root);
     }
+    // WAL absent. A genuinely empty claims bus (no cache either) is fine.
     let (cache_claims, cache_errors) = load_claims_from_cache(dir);
     if !cache_errors.is_empty() {
         return (Vec::new(), cache_errors);
@@ -833,10 +870,13 @@ pub fn load_claims(dir: &Path) -> (Vec<ClaimContract>, Vec<String>) {
     if cache_claims.is_empty() {
         return (cache_claims, Vec::new());
     }
+    // Cache present but WAL missing: refuse to honour editable YAML as
+    // authority. The operator must run an explicit migration/import or
+    // inspect with --from-cache.
     (
         Vec::new(),
         vec![format!(
-            "{}: claim cache contains {} YAML document(s), but authoritative WAL {} is missing; run an explicit migration/import or inspect with a cache/debug reader",
+            "{}: claim cache contains {} YAML document(s), but authoritative WAL {} is missing; run an explicit migration/import or inspect with a cache/debug reader (--from-cache)",
             dir.display(),
             cache_claims.len(),
             wal_path.display()
@@ -844,63 +884,14 @@ pub fn load_claims(dir: &Path) -> (Vec<ClaimContract>, Vec<String>) {
     )
 }
 
-fn load_claims_from_wal(state_root: &Path) -> (Vec<ClaimContract>, Vec<String>) {
-    match replay_claim_wal(state_root, false) {
-        Ok(projection) if projection.recovery.stop_reason == ClaimWalStopReason::CleanEof => {
-            (projection.claims, Vec::new())
-        }
-        Ok(projection)
-            if matches!(
-                projection.recovery.stop_reason,
-                ClaimWalStopReason::TruncatedHeader | ClaimWalStopReason::TruncatedPayload
-            ) =>
-        {
-            match replay_claim_wal(state_root, true) {
-                Ok(_) => match replay_claim_wal(state_root, false) {
-                    Ok(repaired)
-                        if repaired.recovery.stop_reason == ClaimWalStopReason::CleanEof =>
-                    {
-                        (repaired.claims, Vec::new())
-                    }
-                    Ok(repaired) => (
-                        Vec::new(),
-                        vec![format!(
-                            "{}: claim WAL recovery still stopped with {:?} after repair",
-                            repaired.recovery.wal_path.display(),
-                            repaired.recovery.stop_reason
-                        )],
-                    ),
-                    Err(error) => (
-                        Vec::new(),
-                        vec![format!(
-                            "{}: claim WAL reread after repair failed: {error}",
-                            state_root.display()
-                        )],
-                    ),
-                },
-                Err(error) => (
-                    Vec::new(),
-                    vec![format!(
-                        "{}: claim WAL truncation repair failed: {error}",
-                        state_root.display()
-                    )],
-                ),
-            }
-        }
-        Ok(projection) => (
-            Vec::new(),
-            vec![format!(
-                "{}: claim WAL recovery stopped with {:?} at {}/{}; refusing YAML fallback",
-                projection.recovery.wal_path.display(),
-                projection.recovery.stop_reason,
-                projection.recovery.last_good_offset,
-                projection.recovery.original_len
-            )],
-        ),
+/// Derive claim state via the WAL authority and flatten to the legacy shape.
+fn load_claims_from_authority(state_root: &Path) -> (Vec<ClaimContract>, Vec<String>) {
+    match forge_core_store::derive_state::derive_state(state_root) {
+        Ok(projection) => (projection.claims, Vec::new()),
         Err(error) => (
             Vec::new(),
             vec![format!(
-                "{}: claim WAL replay failed: {error}",
+                "{}: derive_state failed: {error}",
                 state_root.display()
             )],
         ),
@@ -908,6 +899,11 @@ fn load_claims_from_wal(state_root: &Path) -> (Vec<ClaimContract>, Vec<String>) 
 }
 
 /// Load every `*.yaml` claim document in `dir` as a compatibility/debug cache.
+///
+/// This is the explicit legacy/cache reader. It is **not** an authority path:
+/// it exists for the `--from-cache` debug flag and for migrations that import
+/// pre-WAL claim state. Authority callers use [`load_claims`] (which routes
+/// through `derive_state`).
 #[must_use]
 pub fn load_claims_from_cache(dir: &Path) -> (Vec<ClaimContract>, Vec<String>) {
     let mut claims = Vec::new();
@@ -2081,12 +2077,13 @@ pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
 /// status read surfaces a non-zero exit code, and `ExitError::env_config`
 /// (via [`resolve_claims_dir_or_err`]) when project resolution fails.
 pub fn run_claim_status(args: &[String]) -> Result<(), ExitError> {
-    use crate::claim::run_status;
+    use crate::claim::{run_status, run_status_with_source};
     let mut claims_dir: Option<PathBuf> = None;
     let mut root = PathBuf::from(".");
     let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
     let mut want_json = true;
+    let mut from_cache = false;
     let mut idx = 0usize;
     while idx < args.len() {
         match args[idx].as_str() {
@@ -2110,10 +2107,15 @@ pub fn run_claim_status(args: &[String]) -> Result<(), ExitError> {
                     "now-unix",
                 )?);
             }
+            // Debug/diagnostic flag: read the legacy claims-active/*.yaml cache
+            // directly instead of the WAL authority. Not for production use;
+            // exists to inspect stale editable YAML (spec AC5/AC7).
+            "--from-cache" => from_cache = true,
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core claim status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("forge-core claim status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--from-cache] [--json|--no-json]");
                 println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
+                println!("  --from-cache reads the legacy YAML cache (debug) instead of the WAL authority.");
                 return Ok(());
             }
             _ => {}
@@ -2127,7 +2129,11 @@ pub fn run_claim_status(args: &[String]) -> Result<(), ExitError> {
         allow_bootstrap_core,
         want_json,
     )?;
-    let env = run_status(&claims_dir, resolve_now_unix(now_unix));
+    let env = if from_cache {
+        run_status_with_source(&claims_dir, resolve_now_unix(now_unix), true)
+    } else {
+        run_status(&claims_dir, resolve_now_unix(now_unix))
+    };
     crate::cli_util::emit_envelope_or_err("claim", env, want_json)
 }
 
