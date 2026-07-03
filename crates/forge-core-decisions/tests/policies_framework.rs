@@ -2,7 +2,8 @@
 //!
 //! ## Why this test exists
 //!
-//! G1 (`progress/g1_policies_script_novela_audit.md`) confirmed that every
+//! G1 (`g1_policies_script_novela_audit.md` in the Forge-method-archive
+//! sibling repo's dev-journals) confirmed that every
 //! YAML in `contracts/policies/` is a parametric matrix (modes + thresholds),
 //! not a prescriptive script. G2 closes the loop by proving the **runtime**
 //! side of that claim: the same `route_lane` function must produce coherent,

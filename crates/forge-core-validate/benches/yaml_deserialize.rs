@@ -24,7 +24,8 @@
 //! ## Reading the result
 //!
 //! If `yaml_serde` is at parity or faster, R7 is confirmed. If it is slower,
-//! the trade-off is documented in `progress/r6_benchmarks.md` (R6.3 section)
+//! the trade-off is documented in the R6.3 benchmarks
+//! (`r6_benchmarks.md` in the Forge-method-archive sibling repo),
 //! and the migration is not reverted — the safety/maintenance wins of
 //! `yaml_serde 0.10.4` are load-bearing per ADR-0007-class rationale.
 //!

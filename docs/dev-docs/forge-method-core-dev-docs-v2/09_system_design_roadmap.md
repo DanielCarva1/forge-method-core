@@ -472,8 +472,8 @@ com Fase 2-3, mas **não** dá pra paralelizar nada com Fase 0 ou Fase 1.
 
 ## Tracking
 
-Cada faixa (R1-R13) terá arquivo de progresso em
-`docs/dev-docs/forge-method-core-dev-docs-v2/progress/`. Convenção:
+Cada faixa (R1-R13) tem um arquivo de progresso em `dev-journals/` no sibling
+repo `Forge-method-archive`. Convenção:
 
 - `r1_lib_inventory.md` (existe)
 - `r10_crypto_crate.md`

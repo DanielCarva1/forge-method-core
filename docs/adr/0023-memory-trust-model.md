@@ -417,7 +417,7 @@ but not a passing test run.
 ## References
 
 - F06 spec: `docs/dev-docs/forge-method-core-dev-docs-v2/01_feature_specs.md`
-- F06 epic: `docs/dev-docs/forge-method-core-dev-docs-v2/progress/followups_v0_1_to_10.md`
+- F06 epic: `../Forge-method-archive/dev-journals/followups_v0_1_to_10.md`
 - F07 spec: same dir, `01_feature_specs.md` F07
 - Threat evidence: arXiv 2302.12173, 2402.07867 (USENIX Security 2025),
   2407.12784, 2503.03704, 2502.13172; FilterRAG defense arXiv 2508.02835

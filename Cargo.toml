@@ -50,7 +50,8 @@ yaml_serde = "0.10.4"
 # Dev-only YAML crates used exclusively by R6.3 deserialize benchmarks.
 # They are NOT used in production code paths; the project standard is
 # `yaml_serde`. Kept here so each bench crate can pull them as dev-dependency
-# without duplicating version pins. See `progress/r6_benchmarks.md` (R6.3).
+# without duplicating version pins. See R6.3 benchmarks (r6_benchmarks.md) in
+# the Forge-method-archive sibling repo.
 serde_yaml = { version = "0.9", default-features = false }
 serde_yml = "0.0.12"
 sha1 = "0.10.6"

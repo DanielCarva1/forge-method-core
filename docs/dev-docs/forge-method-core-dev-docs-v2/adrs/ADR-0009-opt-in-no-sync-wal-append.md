@@ -13,7 +13,8 @@ generic JSONL append path (`append_json_line` in
 `crates/forge-core-store/src/lib.rs`) call `sync_data()` / `sync_all()` on
 every single record append to guarantee post-crash durability.
 
-Benchmarking (see `docs/dev-docs/forge-method-core-dev-docs-v2/progress/r6_benchmarks.md`)
+Benchmarking (see `r6_benchmarks.md` in the Forge-method-archive sibling
+repo's dev-journals)
 showed that on Windows the `fsync` dominates the append cost: a single append
 takes ~32ms typical, of which 25–50ms (with 300ms spikes) is the `fsync` itself.
 On Linux SSD the same call costs 5–15ms.

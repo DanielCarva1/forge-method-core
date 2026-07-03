@@ -25,7 +25,7 @@ Observação inicial: **nenhum paper é puramente oriental**. As fontes orientai
 - **Region**: Western.
 - **Key findings**: 13 findings (F1–F13); fontes: 17.
 - **Implementation status**: 🟡 Partial.
-- **Where**: `crates/forge-core-kernel/`, `crates/forge-core-decisions/phase_transition.rs`, `docs/dev-docs/forge-method-core-dev-docs-v2/progress/r6_benchmarks.md` (R6.1+R6.2).
+- **Where**: `crates/forge-core-kernel/`, `crates/forge-core-decisions/phase_transition.rs`, `../Forge-method-archive/dev-journals/r6_benchmarks.md` (R6.1+R6.2).
 - **Evidence**: há runtime com transição de fase e benchmarks R6.1/R6.2 estabelecidos (base mensurável); a noção de "pista rápida" aproxima-se da separação preview/ready/gate em `forge-core-trace::TraceEventKind` (`PreviewCompleted`, `ReadyCompleted`, `GatePassed`).
 - **Gap**: F1/F2 (estudos de caso de vendor) não são actionable; F7/F8 (limites de concorrência por modelo) ainda não têm policy codificada; banco de eval de throughput (F13) parcial — pendente F05/R9.
 
@@ -45,7 +45,7 @@ Observação inicial: **nenhum paper é puramente oriental**. As fontes orientai
 - **Region**: Western.
 - **Key findings**: 19 findings (F1–F19); fontes: 28.
 - **Implementation status**: 🟡 Partial.
-- **Where**: `crates/forge-core-cli/`, `crates/forge-core-contracts/`, `crates/forge-core-schema/`, `docs/dev-docs/forge-method-core-dev-docs-v2/progress/r7_yaml_serde.md`.
+- **Where**: `crates/forge-core-cli/`, `crates/forge-core-contracts/`, `crates/forge-core-schema/`, `../Forge-method-archive/dev-journals/r7_yaml_serde.md`.
 - **Evidence**: o CLI existe com contratos tipados em `forge-core-contracts` e canonical serde validado pelo R7 (yaml_serde). O modelo `TraceEvent`/`TraceActor` é determinístico e machine-readable. O padrão "parse-don't-validate" (F9 tau-bench policy) reflete-se nos newtypes `RepoPath`/`ClaimId`/`StableId`.
 - **Gap**: F8/F10/F11 (benchmark leaderboards públicos, narração humana) não são actionable para um core local. F14–F19 não foram auditados finding-a-finding.
 
@@ -95,7 +95,7 @@ Observação inicial: **nenhum paper é puramente oriental**. As fontes orientai
 - **Region**: Western (k8s/ARIES/Postgres/MongoDB/Bazel/LumiMAS).
 - **Key findings**: 9 findings (F1–F9); fontes: 30.
 - **Implementation status**: ✅ Implemented.
-- **Where**: `crates/forge-core-store/src/claim_wal.rs`, `crates/forge-core-trace/src/lib.rs`, `docs/dev-docs/forge-method-core-dev-docs-v2/progress/r6_benchmarks.md`.
+- **Where**: `crates/forge-core-store/src/claim_wal.rs`, `crates/forge-core-trace/src/lib.rs`, `../Forge-method-archive/dev-journals/r6_benchmarks.md`.
 - **Evidence**: F1 (ARIES) → `claim_wal.rs` tem `ClaimWalRecovery` com `last_good_offset`, `stop_reason: ClaimWalStopReason` (`TruncatedHeader`, `PayloadChecksumMismatch`, `SequenceGap`, …). F2 (level-triggered reconcile) → operação `ClaimWalOperation::ReconcileStatus` (record type 7). F5 (observabilidade) → `TraceEvent` com `TraceActor { principal_id, agent_id, role }` e `TraceEventKind` cobrindo RunStarted/PreviewCompleted/ReadyCompleted/GatePassed/GateBlocked/EffectStaged/EffectApplied. R6.1/R6.2 benchmarks estabelecem a janela de recovery (DEFAULT_ROTATE_MAX_REPLAY_MILLIS = 250ms).
 - **Gap**: F9 (chaos/fault injection em CI) parcial — R4 (fuzz via ADR-0008 Linux CI) cobre parte, mas failpoint injection no claim path é pendente.
 
@@ -125,7 +125,7 @@ Observação inicial: **nenhum paper é puramente oriental**. As fontes orientai
 - **Region**: Western.
 - **Key findings**: 7 findings (F1–F7); fontes: 18.
 - **Implementation status**: ✅ Implemented.
-- **Where**: `docs/dev-docs/forge-method-core-dev-docs-v2/progress/r4_fuzz_plan.md`, testes em `crates/*/tests/`, ADR-0008.
+- **Where**: `../Forge-method-archive/dev-journals/r4_fuzz_plan.md`, testes em `crates/*/tests/`, ADR-0008.
 - **Evidence**: R8 foi fechado pela combinação newtype + proptest + trycmd + fuzz (ADR-0008 Linux CI). O paper é a fundamentação teórica dessa stack — F1 (parse-don't-validate), F2 (property tests), F3 (snapshot/CLI golden), F4 (fuzz), F5 (mutation), F6 (invariantes), F7 (fixtures).
 - **Gap**: F5 (mutation testing) não está no CI; F6 (invariantes formais) parcial.
 

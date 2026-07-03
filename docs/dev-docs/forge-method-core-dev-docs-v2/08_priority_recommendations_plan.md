@@ -445,5 +445,5 @@ consumer repo init funciona sem state local.
 
 ## Tracking
 
-Cada recomendação terá um arquivo de progresso em
-`docs/dev-docs/forge-method-core-dev-docs-v2/progress/` conforme for iniciada.
+Cada recomendação tem um arquivo de progresso em `dev-journals/` no sibling
+repo `Forge-method-archive` conforme for iniciada.
