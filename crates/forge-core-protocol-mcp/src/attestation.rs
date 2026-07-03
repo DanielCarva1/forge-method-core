@@ -546,4 +546,88 @@ mod tests {
             );
         }
     }
+
+    /// Deterministic known-answer test for canonicalization + verification.
+    ///
+    /// Every other test in this module generates a fresh key via `OsRng`, so a
+    /// regression in `CanonicalIntent::canonical_bytes` (e.g. a
+    /// canonicalization library bump that reorders keys, or a serde tag drift)
+    /// would surface only as a flaky verify failure tied to whichever random
+    /// key happened to be drawn. This test fixes the inputs entirely:
+    ///
+    /// - A fixed 32-byte seed → a fixed `SigningKey`/`VerifyingKey`.
+    /// - A fixed `CanonicalIntent` → fixed canonical bytes → a fixed signature.
+    /// - The canonical bytes (hex-encoded) are pinned, so any drift in
+    ///   canonicalization breaks this test with a clear diff rather than a
+    ///   random verify failure elsewhere.
+    /// - The pinned signature verifies Ok against the pinned key.
+    ///
+    /// If this test fails after an intentional canonicalization change,
+    /// recompute the two pinned values (`canonical_hex`, `pinned_sig_hex`)
+    /// from the new canonical bytes and update them here — that update IS the
+    /// review that the change is intentional and migration-safe.
+    #[test]
+    fn deterministic_kat_pins_canonicalization_and_signature() {
+        use ed25519_dalek::{Signer, SigningKey};
+
+        // Fixed seed. NOT a secret — it is a test vector. Any 32 bytes work;
+        // these were chosen as a simple monotonic pattern for readability.
+        let seed: [u8; 32] = {
+            let mut s = [0u8; 32];
+            for (i, b) in s.iter_mut().enumerate() {
+                // i is bounded to 0..32 (the array length), so the cast is
+                // lossless; assert it so clippy::cast_possible_truncation is
+                // satisfied and the bound is documented.
+                let i = u8::try_from(i).expect("i < 32");
+                *b = i.wrapping_mul(7).wrapping_add(1);
+            }
+            s
+        };
+        let sk = SigningKey::from_bytes(&seed);
+        let pk = sk.verifying_key();
+
+        let intent = CanonicalIntent {
+            tool: "execute-operation".to_string(),
+            arguments: serde_json::json!({"--operation": "/tmp/op.yaml", "--root": "."}),
+            nonce: "kat-nonce-001".to_string(),
+            ts: 1_700_000_000,
+        };
+
+        // Pin the canonical bytes (hex). If canonicalization drifts (key
+        // reordering, tag change, etc.), this changes and the test fails with
+        // a clear before/after diff.
+        let canon = intent
+            .canonical_bytes()
+            .expect("canonicalize fixed intent");
+        let canonical_hex = hex_encode(&canon);
+        assert_eq!(
+            canonical_hex,
+            "7b22617267756d656e7473223a7b222d2d6f7065726174696f6e223a222f746d702f6f702e79616d6c222c222d2d726f6f74223a222e227d2c226e6f6e6365223a226b61742d6e6f6e63652d303031222c22746f6f6c223a22657865637574652d6f7065726174696f6e222c227473223a313730303030303030307d",
+            "canonical bytes drifted — canonicalization changed; \
+             recompute and update intentionally",
+        );
+
+        // Pin the signature over the pinned canonical bytes.
+        let sig = sk.sign(&canon);
+        let pinned_sig_hex = hex_encode(&sig.to_bytes());
+        assert_eq!(
+            pinned_sig_hex,
+            "51024ed8a3dd2175e7a36e33878ef8f40514416d95a1e7a754315d87719c99a2e285eeb056945ca0efb596791b0d4f3b2a69f0b6a44784ed1bb984a8773d6502",
+            "ed25519 signature over the pinned canonical bytes drifted; \
+             recompute and update intentionally",
+        );
+
+        // The verifier must accept the pinned attestation against the pinned key.
+        let att = AttestationInput {
+            nonce: intent.nonce.clone(),
+            ts: intent.ts,
+            signature: pinned_sig_hex.clone(),
+            public_key_hex: hex_encode(&pk.to_bytes()),
+        };
+        let verifier = AttestationVerifier::new(AttestationPolicy::Default);
+        assert!(
+            verifier.verify(&intent, &att).is_ok(),
+            "pinned KAT attestation must verify"
+        );
+    }
 }
