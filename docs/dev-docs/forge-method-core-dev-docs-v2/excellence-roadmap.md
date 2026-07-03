@@ -93,16 +93,25 @@ inline. O gap real do MCP era vetores de ataque específicos não cobertos.
 | `forge-core-eval` | 890 | Baixo | Pendente — contract types |
 | `forge-core-trace` | 479 | Baixo | Pendente — trivial |
 
-### Fase 2 — `forge-core-crypto` (P0, prioridade máxima) — PRÓXIMA SESSÃO
+### Fase 2 — `forge-core-crypto` (P0, prioridade máxima) — Commit 2.1 ✅ LANDED
 
 O crate de maior risco: 5812 LOC de verificação criptográfica com cobertura
 essencialmente zero. Um bug aqui é silencioso e catastrófico. Cobertura
 ampla por commit:
 
-- **Commit 2.1 — ed25519/p256 signature verification.** Round-trip
-  sign→verify (Ok), tampered sig→verify (Invalid), wrong key→verify
-  (Invalid). KAT com seed fixa.
-- **Commit 2.2 — rekor log entry parse + verify.** Parse de uma
+- **Commit 2.1 — ed25519/p256 signature verification.** ✅ LANDED (14
+  testes). Round-trip sign→verify (Ok), tampered sig→verify (Invalid),
+  wrong key→verify (Invalid). KAT determinístico com seed fixa pinando
+  verifying key + assinatura ed25519 (espelha o padrão do MCP
+  `attestation.rs:568`). p256 bundle + DSSE verify testados ponta-a-ponta
+  com a signing key extraída do certificado de teste (ponte
+  rcgen `KeyPair::serialize_der()` → `p256::ecdsa::SigningKey::from_pkcs8_der`).
+  Cobertura dos 3 sites: `verify_ed25519_signature`,
+  `verify_bundle_signature_with_certificate`,
+  `verify_dsse_signature_with_certificate`. Proptest sign/verify+tamper
+  em ambos os algoritmos. `cargo test -p forge-core-crypto` verde (14 lib
+  + 7 zeroize_smoke), clippy pedantic limpo.
+- **Commit 2.2 — rekor log entry parse + verify.** PRÓXIMO. Parse de uma
   transparency log entry real, inclusão proof, reject de entry forjada.
 - **Commit 2.3 — OCSP/CRL/CT-SCT status.** Decode OCSP (good/revoked/
   unknown), CRL revoked detection, CT/SCT timestamp validation.

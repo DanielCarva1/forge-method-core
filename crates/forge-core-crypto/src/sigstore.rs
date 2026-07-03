@@ -1266,3 +1266,283 @@ pub(crate) fn decode_ct_log_id(value: &str, reasons: &mut Vec<String>) -> Option
     }
     None
 }
+
+#[cfg(test)]
+mod tests {
+    //! Unit coverage for the two p256 ECDSA verification entrypoints:
+    //! `verify_bundle_signature_with_certificate` (message-digest signature)
+    //! and `verify_dsse_signature_with_certificate` (PAE signature).
+    //!
+    //! These are security-critical: a silent bug here accepts a forged bundle
+    //! or DSSE record as genuine. The crate had zero unit coverage on these
+    //! functions (only indirect CLI E2E in `forge-core-cli/tests/validate.rs`
+    //! touched them, and with a signing key unrelated to the certificate's
+    //! public key). These tests sign with the exact private key backing the
+    //! test certificate, so they exercise the real verify path end-to-end.
+
+    use super::{verify_bundle_signature_with_certificate, verify_dsse_signature_with_certificate};
+    use p256::ecdsa::signature::Signer;
+    use p256::ecdsa::{Signature as P256Signature, SigningKey as P256SigningKey};
+    use p256::pkcs8::DecodePrivateKey;
+    use rcgen::{CertificateParams, KeyPair};
+    use x509_parser::prelude::{FromDer as _, X509Certificate};
+
+    /// Generate a self-signed P-256 test certificate and recover the matching
+    /// `p256::ecdsa::SigningKey`. rcgen's `KeyPair::generate()` defaults to
+    /// ECDSA P-256 (see rcgen 0.14 `key_pair.rs`), which is exactly the curve
+    /// the sigstore verify helpers expect via `P256VerifyingKey::from_sec1_bytes`.
+    /// We serialize the `KeyPair` as `PKCS#8` DER and decode it back into a p256
+    /// signing key, so the key signing the test signature is provably the key
+    /// embedded in the certificate's `subjectPublicKeyInfo`.
+    fn test_p256_keypair() -> (P256SigningKey, Vec<u8>) {
+        let key_pair = KeyPair::generate().expect("generate P-256 key pair");
+        let der = key_pair.serialize_der();
+        let signing_key =
+            P256SigningKey::from_pkcs8_der(&der).expect("decode rcgen KeyPair as p256 signing key");
+        let params = CertificateParams::new(Vec::<String>::new())
+            .expect("empty-SAN params are valid for a self-signed test cert");
+        let certificate = params
+            .self_signed(&key_pair)
+            .expect("self-sign test certificate");
+        (signing_key, certificate.der().to_vec())
+    }
+
+    /// Parse a DER certificate blob into the `X509Certificate` view the
+    /// verify helpers consume. Mirrors the parse pattern used throughout
+    /// `host_adapter_verification.rs`.
+    fn parse_cert(der: &[u8]) -> X509Certificate<'_> {
+        X509Certificate::from_der(der).expect("DER parses").1 // (rem, cert) tuple
+    }
+
+    /// A 32-byte SHA-256-length digest for bundle verification tests.
+    /// `verify_bundle_signature_with_certificate` forwards this verbatim to
+    /// `VerifyingKey::verify`, so the length is not enforced by our code, but
+    /// keeping it at the real SHA-256 width documents the contract.
+    fn fake_digest(seed: u8) -> [u8; 32] {
+        [seed; 32]
+    }
+
+    #[test]
+    fn p256_bundle_roundtrip_ok() {
+        let (signing_key, cert_der) = test_p256_keypair();
+        let cert = parse_cert(&cert_der);
+        let message_digest = fake_digest(0x01);
+        let signature: P256Signature = signing_key.sign(&message_digest);
+        let sig_der = signature.to_der();
+
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+        verify_bundle_signature_with_certificate(
+            &cert,
+            &message_digest,
+            sig_der.as_bytes(),
+            &mut evidence,
+            &mut reasons,
+        );
+
+        assert!(
+            evidence.contains(&"bundle_signature_verified_with_certificate_key".to_string()),
+            "round-trip signature must push the verified evidence: {evidence:?} reasons={reasons:?}"
+        );
+        assert!(
+            reasons.is_empty(),
+            "no reasons expected on round-trip: {reasons:?}"
+        );
+    }
+
+    #[test]
+    fn p256_bundle_tampered_signature_invalid() {
+        let (signing_key, cert_der) = test_p256_keypair();
+        let cert = parse_cert(&cert_der);
+        let message_digest = fake_digest(0x02);
+        let signature: P256Signature = signing_key.sign(&message_digest);
+        let mut sig_der = signature.to_der().as_bytes().to_vec();
+        // Flip one byte in the DER. Either the DER stops parsing
+        // (`bundle_signature_der_invalid`) or it parses but no longer matches
+        // the digest (`bundle_signature_verification_failed`). Either way the
+        // signature is rejected.
+        sig_der[0] ^= 0xFF;
+
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+        verify_bundle_signature_with_certificate(
+            &cert,
+            &message_digest,
+            &sig_der,
+            &mut evidence,
+            &mut reasons,
+        );
+
+        assert!(
+            !evidence.contains(&"bundle_signature_verified_with_certificate_key".to_string()),
+            "tampered signature must NOT push the verified evidence"
+        );
+        assert!(
+            !reasons.is_empty(),
+            "tampered signature must push a reason: {reasons:?}"
+        );
+    }
+
+    #[test]
+    fn p256_bundle_wrong_message_invalid() {
+        let (signing_key, cert_der) = test_p256_keypair();
+        let cert = parse_cert(&cert_der);
+        let signed_digest = fake_digest(0x03);
+        let verified_digest = fake_digest(0x04); // different
+        let signature: P256Signature = signing_key.sign(&signed_digest);
+        let sig_der = signature.to_der();
+
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+        verify_bundle_signature_with_certificate(
+            &cert,
+            &verified_digest, // wrong message
+            sig_der.as_bytes(),
+            &mut evidence,
+            &mut reasons,
+        );
+
+        assert!(
+            reasons
+                .iter()
+                .any(|r| r == "bundle_signature_verification_failed"),
+            "wrong-message must push bundle_signature_verification_failed: {reasons:?}"
+        );
+    }
+
+    #[test]
+    fn p256_dsse_roundtrip_ok() {
+        let (signing_key, cert_der) = test_p256_keypair();
+        let cert = parse_cert(&cert_der);
+        let payload_type = "application/vnd.in-toto+json";
+        let payload = b"{\"_type\":\"https://in-toto.io/Statement/v1\"}";
+        let pae = super::dsse_pae(payload_type, payload);
+        let signature: P256Signature = signing_key.sign(&pae);
+        let sig_der = signature.to_der();
+
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+        verify_dsse_signature_with_certificate(
+            &cert,
+            payload_type,
+            payload,
+            sig_der.as_bytes(),
+            &mut evidence,
+            &mut reasons,
+        );
+
+        assert!(
+            evidence.contains(&"dsse_signature_verified_with_certificate_key".to_string()),
+            "DSSE round-trip must push the verified evidence: {evidence:?} reasons={reasons:?}"
+        );
+        assert!(
+            reasons.is_empty(),
+            "no reasons expected on DSSE round-trip: {reasons:?}"
+        );
+    }
+
+    #[test]
+    fn p256_dsse_tampered_payload_invalid() {
+        let (signing_key, cert_der) = test_p256_keypair();
+        let cert = parse_cert(&cert_der);
+        let payload_type = "application/vnd.in-toto+json";
+        let signed_payload = b"{\"statement\":\"A\"}";
+        let verified_payload = b"{\"statement\":\"B\"}"; // different → PAE diverges
+        let pae = super::dsse_pae(payload_type, signed_payload);
+        let signature: P256Signature = signing_key.sign(&pae);
+        let sig_der = signature.to_der();
+
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+        verify_dsse_signature_with_certificate(
+            &cert,
+            payload_type,
+            verified_payload, // wrong payload
+            sig_der.as_bytes(),
+            &mut evidence,
+            &mut reasons,
+        );
+
+        assert!(
+            reasons
+                .iter()
+                .any(|r| r == "dsse_signature_verification_failed"),
+            "tampered payload must push dsse_signature_verification_failed: {reasons:?}"
+        );
+    }
+
+    #[test]
+    fn p256_bundle_tampered_digest_byte_invalid() {
+        // Complement to `wrong_message_invalid`: mutate a single byte of the
+        // digest rather than substituting a whole different one. Catches
+        // off-by-one / truncation bugs in the verify path.
+        let (signing_key, cert_der) = test_p256_keypair();
+        let cert = parse_cert(&cert_der);
+        let mut digest = fake_digest(0xAB);
+        let signature: P256Signature = signing_key.sign(&digest);
+        let sig_der = signature.to_der();
+        digest[31] ^= 0x01; // flip the last digest byte
+
+        let mut evidence = Vec::new();
+        let mut reasons = Vec::new();
+        verify_bundle_signature_with_certificate(
+            &cert,
+            &digest,
+            sig_der.as_bytes(),
+            &mut evidence,
+            &mut reasons,
+        );
+
+        assert!(
+            reasons
+                .iter()
+                .any(|r| r == "bundle_signature_verification_failed"),
+            "single-byte digest mutation must fail-closed: {reasons:?}"
+        );
+    }
+
+    /// Property test: for any 32-byte digest, sign→verify Ok; a single-bit
+    /// flip in the digest flips the verdict to Invalid. Guards against
+    /// length/endianness regressions and fail-open bugs.
+    #[test]
+    fn p256_proptest_bundle_sign_verify() {
+        use proptest::prelude::*;
+
+        proptest!(|(digest in proptest::collection::vec(0u8..=255, 32))| {
+            let (signing_key, cert_der) = test_p256_keypair();
+            let cert = parse_cert(&cert_der);
+            let signature: P256Signature = signing_key.sign(&digest);
+            let sig_der = signature.to_der();
+
+            let mut evidence = Vec::new();
+            let mut reasons = Vec::new();
+            verify_bundle_signature_with_certificate(
+                &cert,
+                &digest,
+                sig_der.as_bytes(),
+                &mut evidence,
+                &mut reasons,
+            );
+            prop_assert!(
+                evidence.contains(&"bundle_signature_verified_with_certificate_key".to_string()),
+                "round-trip must verify for any 32-byte digest"
+            );
+
+            let mut tampered = digest.clone();
+            tampered[0] ^= 0x01;
+            let mut evidence_t = Vec::new();
+            let mut reasons_t = Vec::new();
+            verify_bundle_signature_with_certificate(
+                &cert,
+                &tampered,
+                sig_der.as_bytes(),
+                &mut evidence_t,
+                &mut reasons_t,
+            );
+            prop_assert!(
+                reasons_t.iter().any(|r| r == "bundle_signature_verification_failed"),
+                "single-bit digest flip must fail-closed"
+            );
+        });
+    }
+}

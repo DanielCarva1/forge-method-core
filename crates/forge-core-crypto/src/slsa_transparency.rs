@@ -236,3 +236,208 @@ pub(crate) fn transparency_leaf_hash(provenance_sha256: &str, signature_sha256: 
     content.extend_from_slice(payload.as_bytes());
     hex_sha256(&content)
 }
+
+#[cfg(test)]
+mod tests {
+    //! Unit coverage for `verify_ed25519_signature`.
+    //!
+    //! This is a security-critical path: a silent bug here means a forged
+    //! provenance signature passes verification. The crate had zero unit
+    //! coverage on this function (only the indirect CLI E2E in
+    //! `forge-core-cli/tests/validate.rs` exercised it). These tests pin the
+    //! contract directly: round-trip Ok, every tamper variant fail-closed,
+    //! malformed inputs return `false` rather than panicking, and a
+    //! deterministic KAT pins the exact canonical bytes + signature so a
+    //! dalek/canonicalization drift surfaces as a clear diff.
+
+    use super::verify_ed25519_signature;
+    use ed25519_dalek::{Signer, SigningKey};
+
+    /// Fixed 32-byte seed reused across tests for determinism.
+    /// NOT a secret — it is a test vector. Mirrors `validate.rs:288`
+    /// (`SigningKey::from_bytes(&[7u8; 32])`) so the two suites agree on the
+    /// same key material.
+    fn test_signing_key() -> SigningKey {
+        SigningKey::from_bytes(&[7u8; 32])
+    }
+
+    fn hex_encode(bytes: &[u8]) -> String {
+        let mut out = String::with_capacity(bytes.len() * 2);
+        for b in bytes {
+            use std::fmt::Write as _;
+            let _ = write!(out, "{b:02x}");
+        }
+        out
+    }
+
+    #[test]
+    fn ed25519_roundtrip_ok() {
+        let signing_key = test_signing_key();
+        let verifying_bytes = signing_key.verifying_key().to_bytes();
+        let message = b"forge provenance payload";
+        let signature = signing_key.sign(message).to_bytes();
+
+        assert!(
+            verify_ed25519_signature(&verifying_bytes, &signature, message),
+            "valid signature must verify"
+        );
+    }
+
+    #[test]
+    fn ed25519_tampered_signature_invalid() {
+        let signing_key = test_signing_key();
+        let verifying_bytes = signing_key.verifying_key().to_bytes();
+        let message = b"forge provenance payload";
+        let mut signature = signing_key.sign(message).to_bytes();
+        // Flip a single bit in the first signature byte.
+        signature[0] ^= 0x01;
+
+        assert!(
+            !verify_ed25519_signature(&verifying_bytes, &signature, message),
+            "tampered signature must fail-closed"
+        );
+    }
+
+    #[test]
+    fn ed25519_tampered_message_invalid() {
+        let signing_key = test_signing_key();
+        let verifying_bytes = signing_key.verifying_key().to_bytes();
+        let signed_message = b"forge provenance payload";
+        let signature = signing_key.sign(signed_message).to_bytes();
+        let tampered_message = b"forge provenance payload EVIL";
+
+        assert!(
+            !verify_ed25519_signature(&verifying_bytes, &signature, tampered_message),
+            "signature over a different message must fail-closed"
+        );
+    }
+
+    #[test]
+    fn ed25519_wrong_key_invalid() {
+        let signing_key = test_signing_key();
+        let message = b"forge provenance payload";
+        let signature = signing_key.sign(message).to_bytes();
+
+        // A different key (different seed) must reject the signature.
+        let wrong_key = SigningKey::from_bytes(&[8u8; 32]);
+        let wrong_verifying_bytes = wrong_key.verifying_key().to_bytes();
+
+        assert!(
+            !verify_ed25519_signature(&wrong_verifying_bytes, &signature, message),
+            "signature verified with the wrong public key must fail-closed"
+        );
+    }
+
+    #[test]
+    fn ed25519_malformed_inputs_return_false_not_panic() {
+        // The function's contract is: lengths are enforced (32-byte key,
+        // 64-byte signature); anything else returns `false` without
+        // panicking. It does NOT promise to reject every degenerate-but-
+        // well-formed key/sig pair (ed25519 admits valid encodings of the
+        // identity point), only structural failures.
+        let valid_signature = [0u8; 64];
+
+        // Public key too short: returns false, does not panic.
+        assert!(
+            !verify_ed25519_signature(&[0u8; 31], &valid_signature, b"msg"),
+            "31-byte public key must be rejected without panicking"
+        );
+
+        // Signature wrong length: returns false.
+        assert!(
+            !verify_ed25519_signature(&[0u8; 32], &[0u8; 63], b"msg"),
+            "63-byte signature must be rejected without panicking"
+        );
+
+        // Public key too long: returns false.
+        assert!(
+            !verify_ed25519_signature(&[0u8; 33], &valid_signature, b"msg"),
+            "33-byte public key must be rejected without panicking"
+        );
+
+        // Signature too long: returns false.
+        assert!(
+            !verify_ed25519_signature(&[0u8; 32], &[0u8; 65], b"msg"),
+            "65-byte signature must be rejected without panicking"
+        );
+    }
+
+    /// Deterministic known-answer test.
+    ///
+    /// Pins (a) the 32-byte verifying key derived from the fixed seed, and
+    /// (b) the 64-byte signature over a fixed message. Any drift in the
+    /// ed25519-dalek crate, the seed derivation, or the signature encoding
+    /// surfaces here as a clear before/after hex diff rather than as a flaky
+    /// verify failure elsewhere. If this fails after an intentional upgrade,
+    /// recompute the two pinned values from the new outputs and update them
+    /// here — that update IS the review that the change is intentional.
+    #[test]
+    fn ed25519_deterministic_kat_pins_key_and_signature() {
+        // Pinned values live at the top of the function so clippy's
+        // `items_after_statements` stays quiet and the constants read as
+        // "the contract this test pins", not "an incidental local".
+        const PINNED_VERIFYING_KEY_HEX: &str =
+            "ea4a6c63e29c520abef5507b132ec5f9954776aebebe7b92421eea691446d22c";
+        // Ed25519 is deterministic, so the same seed + message always yields
+        // the same signature.
+        const PINNED_SIGNATURE_HEX: &str = "\
+            b0bc8e6733416ebd9cb1ebd1c596896f2cfaa4dcbdecaf392b3024d2394dff4b\
+            def737a4b392ca71597ab34530ca7c56d6688e4221cbeb7bffe675620d4d9604";
+
+        let signing_key = test_signing_key();
+        let verifying_key = signing_key.verifying_key();
+
+        // Pin the verifying key (hex). If the seed→key derivation or the
+        // dalek encoding changes, this changes.
+        let actual_verify_hex = hex_encode(&verifying_key.to_bytes());
+        assert_eq!(
+            actual_verify_hex, PINNED_VERIFYING_KEY_HEX,
+            "pinned verifying key drifted; if the dalek version or seed changed, \
+             recompute and update this constant"
+        );
+
+        let message = b"deterministic-kat-message";
+        let signature = signing_key.sign(message);
+        let signature_bytes = signature.to_bytes();
+
+        // Pin the signature (hex).
+        let actual_sig_hex = hex_encode(&signature_bytes);
+        assert_eq!(
+            actual_sig_hex, PINNED_SIGNATURE_HEX,
+            "pinned signature drifted; if the dalek version or seed changed, \
+             recompute and update this constant"
+        );
+
+        // The pinned signature must verify against the pinned key.
+        assert!(
+            verify_ed25519_signature(&verifying_key.to_bytes(), &signature_bytes, message),
+            "pinned KAT signature must verify"
+        );
+    }
+
+    /// Property test: for any message length in 0..256 bytes, sign→verify Ok,
+    /// and a single-bit flip in the signature flips the verdict to Invalid.
+    /// Guards against length-dependent edge cases and fail-open regressions.
+    #[test]
+    fn ed25519_proptest_sign_verify_tamper() {
+        use proptest::prelude::*;
+
+        proptest!(|(message in proptest::collection::vec(0u8..=255, 0..256))| {
+            let signing_key = test_signing_key();
+            let verifying_bytes = signing_key.verifying_key().to_bytes();
+            let signature = signing_key.sign(&message).to_bytes();
+
+            prop_assert!(
+                verify_ed25519_signature(&verifying_bytes, &signature, &message),
+                "valid signature must verify for any message length"
+            );
+
+            let mut tampered = signature;
+            tampered[0] ^= 0x01;
+            prop_assert!(
+                !verify_ed25519_signature(&verifying_bytes, &tampered, &message),
+                "single-bit-flipped signature must fail-closed"
+            );
+        });
+    }
+}
