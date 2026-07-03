@@ -24,6 +24,117 @@ aceite. Trabalhe um item por sessão; commit; próxima.
 
 ---
 
+## Handoff para o próximo agente (Commit 2.2 — rekor parse + verify)
+
+> **Leia isto primeiro.** É a tarefa corrente, auto-contida, com tudo o que
+> um agente fresco precisa para continuar sem redescobrir o que esta sessão
+> já mapeou.
+
+### Próxima tarefa: Commit 2.2 — rekor log entry parse + inclusion proof verify
+
+**Arquivo-alvo:** `crates/forge-core-crypto/src/rekor.rs` (397 LOC).
+
+**Status atual do crate:** o crate quebrou a cobertura zero no Commit 2.1
+(agora tem 14 testes lib + 7 integration). A Fase 2 está ~25% completa.
+O `rekor.rs` ainda tem **zero testes unitários** — só é exercido
+indiretamente pelo CLI E2E em
+`crates/forge-core-cli/tests/validate.rs` (`rekor_entry_fixture` linha 337,
+`rekor_entry_fixture_for_bundle` linha 1174).
+
+**Funções a cobrir (4 entrypoints, ordem por criticidade):**
+
+1. `pub fn parse_rekor_log_entry(text: &str) -> Result<ParsedRekorEntry, RekorParseError>`
+   (linha 122) — **pública** (fuzz-exposed). Já tem `RekorParseError` tipado
+   com 16 variantes (`LogEntryJsonInvalid`, `MissingField`, `BodyBase64Invalid`,
+   `VerificationMissing`, `InclusionProofMissing`, `InclusionHashesMissing`,
+   `InclusionHashInvalid`, etc.). Testar cada variante de erro + happy path.
+2. `pub fn parse_signed_checkpoint(checkpoint: &str) -> Result<ParsedCheckpoint, RekorParseError>`
+   (linha 278) — **pública**. Variações: `CheckpointFormatInvalid` (sem
+   `\n\n`), `CheckpointNoteInvalid` (<4 linhas), `CheckpointOriginMissing`,
+   `CheckpointTreeSizeInvalid` (não-numérico), happy path.
+3. `pub(crate) fn verify_rekor_checkpoint(proof, rekor_key) -> Result<(), RekorParseError>`
+   (linha 243) — **`pub(crate)`, teste inline.** Verifica assinatura p256
+   do checkpoint. `CheckpointTreeSizeMismatch`, `CheckpointRootHashMismatch`,
+   `CheckpointSignatureMissing`, `CheckpointSignatureInvalid` (key errada).
+4. `pub(crate) fn verify_merkle_inclusion(leaf_hash, hashes, log_index, tree_size, root_hash) -> bool`
+   (linha 341) — **`pub(crate)`, teste inline.** Matemática Merkle RFC 6962.
+   Casos: tree_size=1 (trivial), log_index>=tree_size (reject), path válido,
+   path adulterado, hashes com tamanho errado.
+
+**Padrões a reusar (NÃO reinventar):**
+
+- **Fixture de rekor entry real:** `validate.rs:337-435` (`rekor_entry_fixture`)
+  gera uma log entry JSON completa com checkpoint assinado por
+  `P256SigningKey::from_slice(&[8u8;32])`. **Espelhar este helper** para os
+  testes — ele já resolve toda a dança de leaf hash, root hash e assinatura
+  de checkpoint. Copie o helper para um `#[cfg(test)] mod tests` no
+  `rekor.rs` (ou um `tests/rekor.rs` para as funções `pub`).
+- **Ponte p256 signing key ↔ verifying key:** estabelecida no Commit 2.1.
+  Para o `verify_rekor_checkpoint`, assine com
+  `P256SigningKey::from_slice(&[8u8;32])` (seed fixa, como `validate.rs:341`)
+  e construa o `P256VerifyingKey` via
+  `signing_key.verifying_key()`. **Não** use `KeyPair::generate()` para o
+  checkpoint (precisa de seed determinística para KAT).
+- **KAT determinístico:** se for fixar uma log entry canônica + seus hashes,
+  espelhar o padrão do Commit 2.1 (`ed25519_deterministic_kat_*` em
+  `slsa_transparency.rs:374`) — pinar leaf_hash/root_hash/signature em hex.
+
+**Decisões de design já tomadas (NÃO reconsiderar):**
+
+- **Visibilidade:** `parse_rekor_log_entry` e `parse_signed_checkpoint` são
+  `pub` por estratégia de fuzz (documentada em `lib.rs:74-80`). Os testes
+  dessas duas podem ir em `tests/rekor_parse.rs` (integration test) OU
+  inline `#[cfg(test)]`. `verify_rekor_checkpoint` e `verify_merkle_inclusion`
+  são `pub(crate)` → **obrigatoriamente inline**.
+- **Tratamento de erro:** `RekorParseError` já existe e deriva
+  `Debug, Clone, PartialEq, Eq` (cumpre AGENTS.md). Tem `.display()`
+  `pub(crate)` que renderiza a string de diagnóstico legacy. Testes podem
+  comparar `assert_eq!(err, RekorParseError::MissingField { field: "logID" })`.
+- **Não migrar nada para `Result<_, String>`** — o caminho oposto já foi
+  feito (commit `a2ff9ac9` migrou 4 sites; rekor já estava tipado).
+
+**Gate de aceite (Commit 2.2):**
+
+- `cargo test -p forge-core-crypto` verde.
+- Clippy pedantic limpo (roda automático via `pi-green-loop` hook, OU
+  manualmente: `cargo clippy -p forge-core-crypto --all-targets --
+  -W clippy::pedantic`).
+- `cargo fmt -p forge-core-crypto -- --check` limpo.
+- Cada uma das 4 funções com: ≥1 happy path + ≥1 caso de erro por variante
+  de `RekorParseError` relevante + (para `verify_merkle_inclusion`) casos
+  de borda de tree_size/log_index.
+- Zero churn em código de produção (só `#[cfg(test)]` ou `tests/`).
+
+**Verificação automática:** o hook `pi-green-loop` roda após cada turno de
+edição e reporta `cargo check --workspace`, `cargo clippy --workspace
+--all-targets -- -W clippy::pedantic`, `cargo test --workspace`, e
+`cargo fmt --all -- --check`. Normalmente não é necessário rodar manualmente.
+`/green` roda agora; `/green on|off` toggla o auto-fix loop.
+
+**Convenções do repo a respeitar** (em `AGENTS.md`, sempre carregadas):
+
+- **Sem `anyhow`/`thiserror`.** Roll error enums à mão. `RekorParseError`
+  já existe — não criar novo.
+- **Validação é acumuladora** — mas `rekor.rs` usa `Result` (bail-out),
+  não `ValidationReport`. Manter o padrão existente do módulo.
+- **Editor stability (WSL+Windows+r-a):** nunca rodar dois cargos em
+  paralelo. Um cargo de cada vez. `target/debug` acumula ~130k arquivos;
+  se o editor morrer com OOM, ver `AGENTS.md → Editor stability`.
+- **Context hygiene:** uma story por sessão. Este handoff é Commit 2.2
+  (uma sessão). Ao terminar: commit, marcar Commit 2.2 ✅ LANDED neste
+  doc, `/clear`, próximo agente pega Commit 2.3.
+- **Commits:** o usuário commita explicitamente quando pede. Esta sessão
+  fez 1 commit (`21f0840d`).
+
+**Depois do 2.2 (roadmap restante da Fase 2):**
+
+- Commit 2.3 — OCSP/CRL/CT-SCT (`ocsp.rs` 408 LOC).
+- Commit 2.4 — TUF trusted-root freshness (`tuf.rs` 207 LOC).
+- Fase 3 — governance, eval-harness, research, eventlog, eval, trace
+  (1 crate por sessão).
+
+---
+
 ## 1. `derive_state` layer (o gap real de v0.2) — ✅ LANDED
 
 **Status:** concluído em 3 commits (`f94eac45`, `d8a36c1d`, `d8a36c1d`+tests).
@@ -223,7 +334,38 @@ parser devolve o usage dump global para um erro de valor único.
   existem.
 - **WAL de claims** é append-only por design (audit log). Não truncar.
 
-## Histórico desta sessão
+## Histórico
+
+### Sessão Fase 2 / Commit 2.1 (ed25519/p256 signature tests) — `21f0840d`
+
+Quebrou a cobertura zero do `forge-core-crypto` nos 3 sites de verificação
+de assinatura. 14 testes novos, zero churn em produção:
+
+- **`slsa_transparency.rs`** (ed25519, 7 testes): round-trip Ok, tampered
+  signature, tampered message, wrong key, malformed lengths, KAT
+  determinístico (seed `[7u8;32]`, pin verifying key + assinatura em hex),
+  proptest sign/verify+tamper.
+- **`sigstore.rs`** (p256 ECDSA, 7 testes): bundle + DSSE verify
+  ponta-a-ponta com signing key extraída do cert de teste via ponte
+  rcgen `KeyPair::serialize_der()` (PKCS#8) →
+  `p256::ecdsa::SigningKey::from_pkcs8_der`. Round-trip Ok, tampered DER,
+  wrong-message, single-byte digest mutation, DSSE tampered payload,
+  proptest.
+
+**Descoberta técnica:** o `validate.rs` (CLI E2E) assinava com
+`P256SigningKey::from_slice(&[8u8;32])` *não relacionada* à chave pública
+do certificado — os testes unitários agora cobrem o caminho real onde as
+chaves correspondem.
+
+**Descoberta de contrato:** `verify_ed25519_signature` só promete
+fail-closed em erros *estruturais* (tamanho de key/sig). Keys degeneradas
+(all-zero) codificam um ponto válido em ed25519 e NÃO são rejeitadas —
+testado e documentado honestamente no teste `ed25519_malformed_*`.
+
+Gate: `cargo test -p forge-core-crypto` verde (14 lib + 7 zeroize_smoke),
+clippy pedantic limpo, fmt limpo.
+
+### Sessão original (Fases A–D)
 
 Ver `git log` entre `1ebcdc06` (Fase A) e `d9dbe1d9` (Fase C). As 4 fases
 landed:
