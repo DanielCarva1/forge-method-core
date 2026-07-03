@@ -60,21 +60,24 @@ estado** — ele **não existe**.
 
 ---
 
-## 2. Migrar 5 `Result<_, String>` (AGENTS.md manda)
+## 2. Migrar 5 `Result<_, String>` (AGENTS.md manda) — 1/5 ✅, 4 pendentes
 
 **Contexto.** AGENTS.md:24 proíbe novos `Result<_, String>` e manda migrar os
 existentes quando tocados. Há 5 offenders vivos (o resto dos hits são
 doc-comments documentando a migração — bons).
 
+**Estado:** 1 migrado (attestation.rs `hex_decode` → `HexDecodeError` tipado),
+4 pendentes.
+
 **Os 5 sites:**
 1. `crates/forge-core-store/src/lib.rs:1574` —
    `parse_effect_wal_records_for_recovery() -> Result<(Vec<_>, Vec<String>), String>`
    com `return Err(format!(...))` na linha 1592. **O pior:** String error num
-   caminho estrutural de recovery.
-2. `crates/forge-core-cli/src/mcp_cmd.rs:77` — `parse_serve_args() -> Result<ServeArgs, String>`
-3. `crates/forge-core-cli/src/research_cmd.rs:799` — `load_evidence() -> Result<FieldEvidenceRegistry, String>`
-4. `crates/forge-core-protocol-mcp/src/attestation.rs:238` — `hex_decode() -> Result<Vec<u8>, String>` (security-adjacent: ed25519)
-5. `crates/forge-core-protocol-mcp/src/server.rs:379` — `Option<Result<AttestationInput, String>>`
+   caminho estrutural de recovery. (pendente)
+2. `crates/forge-core-cli/src/mcp_cmd.rs:77` — `parse_serve_args() -> Result<ServeArgs, String>` (pendente)
+3. `crates/forge-core-cli/src/research_cmd.rs:799` — `load_evidence() -> Result<FieldEvidenceRegistry, String>` (pendente)
+4. ~~`crates/forge-core-protocol-mcp/src/attestation.rs:238` — `hex_decode`~~ ✅ migrado para `HexDecodeError` (OddLength, InvalidNibble).
+5. `crates/forge-core-protocol-mcp/src/server.rs:379` — `Option<Result<AttestationInput, String>>` (pendente)
 
 **Padrão a seguir.** Definir um enum error nomeado por operação (Derive
 `Debug, Clone, PartialEq, Eq`), ao lado da função. Espelhar
@@ -92,14 +95,31 @@ verde; `cargo test --workspace` verde.
 ## 3. Cobertura de testes — 4 crates sem testes
 
 **Contexto.** O spine é bem testado (store, validate, decisions, kernel,
-cli têm suites E2E + unit). Mas 4 crates têm lógica real e zero testes:
+cli têm suites E2E + unit). O audit inicial dizia que 4 crates tinham zero
+testes, mas isso estava **errado para o MCP** — ele já tinha ~33 testes
+inline. O gap real do MCP era vetores de ataque específicos não cobertos.
 
-| Crate | LOC | Risco | Por que dói |
-|-------|-----|-------|-------------|
-| `forge-core-governance` | 1447 | Alto | Lógica de arbitrate/escalate/record — governança sem prova |
-| `forge-core-eval-harness` | 1371 | Alto | Referenciado por ADR-0023; decide baseline vs candidate |
-| `forge-core-research` | 1025 | Médio | Admission/graph; tem `proptest` dev-dep mas 0 testes |
-| `forge-core-protocol-mcp` | 2016 | Alto | Security-sensitive: ed25519 attestation, allowlist; só 3 smoke tests |
+| Crate | LOC | Risco | Estado |
+|-------|-----|-------|--------|
+| `forge-core-governance` | 1447 | Alto | Pendente — arbitrate/escalate/record sem prova |
+| `forge-core-eval-harness` | 1371 | Alto | Pendente — decide baseline vs candidate (ADR-0023) |
+| `forge-core-research` | 1025 | Médio | Pendente — admission/graph; `proptest` dev-dep mas 0 testes |
+| `forge-core-protocol-mcp` | 2016 | Alto | ✅ **Attestation gaps fechados** (44 testes; ver abaixo) |
+
+### `forge-core-protocol-mcp` — ✅ LANDED (parcial)
+
+Os gaps de attestation/authorization foram fechados (3 commits, sessão
+seguinte ao derive_state):
+- 7 testes novos: RequireAll gate, present-but-invalid no read-only
+  (defense-in-depth), malformed `_meta.attestation`, unauthorized-key
+  pin do contrato documentado, proptest sign/verify+tamper.
+- KAT determinístico (seed fixa) que pin canonical bytes + assinatura
+  ed25519 — apanha regressões de canonicalização que eram flaky em OsRng.
+- `hex_decode` migrado de `Result<_, String>` para `HexDecodeError` tipado
+  (também fecha item #2 parcialmente para o crate MCP).
+
+**O que NÃO landed:** allowlist tem 11 testes (cobertura boa); server.rs
+tem 17 testes (gate coberto). O `run_stdio` live loop fica implícito.
 
 **Abordagem.** Um crate por sessão. Comece pelo `forge-core-protocol-mcp`
 (security-sensitive tem prioridade). Para cada:
