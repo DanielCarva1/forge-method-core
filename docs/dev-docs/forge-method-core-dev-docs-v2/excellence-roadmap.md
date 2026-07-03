@@ -24,111 +24,109 @@ aceite. Trabalhe um item por sessão; commit; próxima.
 
 ---
 
-## Handoff para o próximo agente (Commit 2.2 — rekor parse + verify)
+## Handoff para o próximo agente (Commit 2.3 — OCSP decode + freshness)
 
 > **Leia isto primeiro.** É a tarefa corrente, auto-contida, com tudo o que
 > um agente fresco precisa para continuar sem redescobrir o que esta sessão
 > já mapeou.
 
-### Próxima tarefa: Commit 2.2 — rekor log entry parse + inclusion proof verify
+### Histórico da sessão: Commit 2.2 ✅ LANDED
 
-**Arquivo-alvo:** `crates/forge-core-crypto/src/rekor.rs` (397 LOC).
+Commit 2.2 cobriu os 4 entrypoints de `rekor.rs` (397 LOC) com 30 testes
+inline + 1 KAT regenerator `#[ignore]`d. Detalhes na seção Fase 2 abaixo.
+Duas descobertas técnicas para não serem re-litigadas:
 
-**Status atual do crate:** o crate quebrou a cobertura zero no Commit 2.1
-(agora tem 14 testes lib + 7 integration). A Fase 2 está ~25% completa.
-O `rekor.rs` ainda tem **zero testes unitários** — só é exercido
-indiretamente pelo CLI E2E em
-`crates/forge-core-cli/tests/validate.rs` (`rekor_entry_fixture` linha 337,
-`rekor_entry_fixture_for_bundle` linha 1174).
+1. **`ParsedRekorEntry` / `ParsedCheckpoint` não implementam `Debug`/`PartialEq`**
+   (produção, zero churn). Testes usam `assert!(matches!(result, Err(...)))`
+   em vez de `assert_eq!` no `Result` completo.
+2. **`test_signing_key().verifying_key()` é borrow-after-free** — a
+   `verifying_key()` empresta a signing key, então é preciso bindar a
+   signing key num local antes (`let sk = test_signing_key(); let vk =
+   sk.verifying_key();`). Mesma armadilha para a wrong key.
 
-**Funções a cobrir (4 entrypoints, ordem por criticidade):**
+### Próxima tarefa: Commit 2.3 — OCSP decode + signature/freshness verify
 
-1. `pub fn parse_rekor_log_entry(text: &str) -> Result<ParsedRekorEntry, RekorParseError>`
-   (linha 122) — **pública** (fuzz-exposed). Já tem `RekorParseError` tipado
-   com 16 variantes (`LogEntryJsonInvalid`, `MissingField`, `BodyBase64Invalid`,
-   `VerificationMissing`, `InclusionProofMissing`, `InclusionHashesMissing`,
-   `InclusionHashInvalid`, etc.). Testar cada variante de erro + happy path.
-2. `pub fn parse_signed_checkpoint(checkpoint: &str) -> Result<ParsedCheckpoint, RekorParseError>`
-   (linha 278) — **pública**. Variações: `CheckpointFormatInvalid` (sem
-   `\n\n`), `CheckpointNoteInvalid` (<4 linhas), `CheckpointOriginMissing`,
-   `CheckpointTreeSizeInvalid` (não-numérico), happy path.
-3. `pub(crate) fn verify_rekor_checkpoint(proof, rekor_key) -> Result<(), RekorParseError>`
-   (linha 243) — **`pub(crate)`, teste inline.** Verifica assinatura p256
-   do checkpoint. `CheckpointTreeSizeMismatch`, `CheckpointRootHashMismatch`,
-   `CheckpointSignatureMissing`, `CheckpointSignatureInvalid` (key errada).
-4. `pub(crate) fn verify_merkle_inclusion(leaf_hash, hashes, log_index, tree_size, root_hash) -> bool`
-   (linha 341) — **`pub(crate)`, teste inline.** Matemática Merkle RFC 6962.
-   Casos: tree_size=1 (trivial), log_index>=tree_size (reject), path válido,
-   path adulterado, hashes com tamanho errado.
+**Arquivo-alvo:** `crates/forge-core-crypto/src/ocsp.rs` (408 LOC).
 
-**Padrões a reusar (NÃO reinventar):**
+**Status atual do crate:** Fase 2 ~50% completa (Commits 2.1-2.2 landed:
+ed25519/p256/rekor cobertos, 44 testes lib + 7 zeroize_smoke). `ocsp.rs`
+tem **zero testes** e zero fixtures OCSP em qualquer `tests/`.
 
-- **Fixture de rekor entry real:** `validate.rs:337-435` (`rekor_entry_fixture`)
-  gera uma log entry JSON completa com checkpoint assinado por
-  `P256SigningKey::from_slice(&[8u8;32])`. **Espelhar este helper** para os
-  testes — ele já resolve toda a dança de leaf hash, root hash e assinatura
-  de checkpoint. Copie o helper para um `#[cfg(test)] mod tests` no
-  `rekor.rs` (ou um `tests/rekor.rs` para as funções `pub`).
-- **Ponte p256 signing key ↔ verifying key:** estabelecida no Commit 2.1.
-  Para o `verify_rekor_checkpoint`, assine com
-  `P256SigningKey::from_slice(&[8u8;32])` (seed fixa, como `validate.rs:341`)
-  e construa o `P256VerifyingKey` via
-  `signing_key.verifying_key()`. **Não** use `KeyPair::generate()` para o
-  checkpoint (precisa de seed determinística para KAT).
-- **KAT determinístico:** se for fixar uma log entry canônica + seus hashes,
-  espelhar o padrão do Commit 2.1 (`ed25519_deterministic_kat_*` em
-  `slsa_transparency.rs:374`) — pinar leaf_hash/root_hash/signature em hex.
+**Funções a cobrir (11, todas `pub(crate)` exceto 1 `pub`):**
+
+| # | Função | Visib. | Linha | Retorno |
+|---|--------|--------|-------|---------|
+| 1 | `decode_ocsp_response(der, evidence, reasons)` | `pub` | 34 | `Option<OcspResponse>` |
+| 2 | `decode_basic_ocsp_response(der, evidence, reasons)` | `pub(crate)` | 52 | `Option<BasicOcspResponse>` |
+| 3 | `verify_basic_ocsp_signature_with_issuer(...)` | `pub(crate)` | 70 | `bool` |
+| 4 | `ocsp_responder_id_matches_issuer(...)` | `pub(crate)` | 144 | `bool` |
+| 5 | `find_matching_ocsp_single_response(...)` | `pub(crate)` | 175 | `Option<&SingleResponse>` |
+| 6 | `verify_ocsp_single_response_freshness(...)` | `pub(crate)` | 239 | `()` |
+| 7 | `apply_ocsp_cert_status(...)` | `pub(crate)` | 267 | `()` |
+| 8 | `extract_ocsp_response_nonce_hex(...)` | `pub(crate)` | 297 | `Option<String>` |
+| 9 | `verify_ocsp_nonce(expected, observed, ...)` | `pub(crate)` | 324 | `()` |
+| 10 | `normalize_expected_ocsp_nonce_hex(value, reasons)` | `pub(crate)` | 352 | `Option<String>` |
+| 11 | `rasn_oid_matches(oid, expected)` | `pub(crate)` | 406 | `bool` |
+
+**Estilo de erro (DIFERENTE de rekor/slsa):** `ocsp.rs` **não usa `Result`
+nem `ValidationReport` nem enum tipado.** Todas as funções recebem
+`verified_evidence: &mut Vec<String>` + `reasons: &mut Vec<String>` e fazem
+push de reason codes lowercase pontilhados (`"ocsp_status_response_expired"`,
+`"ocsp_status_nonce_mismatch"`, etc.). Failures = `None`/`false`/`()` + reason
+pushed. **Não migrar este estilo** — é o padrão do módulo. Testes devem
+inspecionar o `Vec<String>` final e/ou o `Option`/`bool` retornado.
+
+**Gate de aceite (Commit 2.3):**
+
+- `cargo test -p forge-core-crypto` verde.
+- Clippy pedantic + fmt limpos (auto via `pi-green-loop` hook).
+- Cobertura mínima: happy-path decode (`decode_ocsp_response` Good/Revoked/
+  Unknown), responder ID match (ByName + ByKey), nonce constant-time compare
+  (match/mismatch), freshness window (dentro/fora de thisUpdate..nextUpdate).
+- Zero churn em produção (só `#[cfg(test)]`).
+
+**Padrões a reusar / armadilhas conhecidas:**
+
+- **Sem fixtures OCSP existentes.** Grepei `crates/forge-core-cli/tests/` —
+  zero hits para ocsp/revocation/crl. `tests/fixtures/` tem subdirs `ct`,
+  `rfc3161`, `risk-audit`, mas **nenhum `ocsp`**. Vai ter que mintar DER
+  OCSP do zero. Use `rasn-ocsp` (`rasn::der::encode`) + `rcgen` (issuer
+  cert) para construir respostas de teste — ambos já são dev-deps.
+- **Crates de ASN.1/DER:** `rasn-ocsp` (tipos: `OcspResponse`,
+  `BasicOcspResponse`, `CertId`, `CertStatus`, `ResponderId`,
+  `SingleResponse`, `Nonce`), `rasn` (encode/decode), `asn1-rs` (`BitString`,
+  `FromDer` p/ signature), `x509-parser` (`X509Certificate`,
+  `verify_signature`), `sha1`/`sha2` (digest OIDs).
+- **Entrypoint público não está em ocsp.rs** — é
+  `crate::run_host_adapter_certificate_ocsp_status_verification` em `lib.rs`.
+  ocsp.rs só tem os helpers low-level. Os testes podem chamar os helpers
+  `pub(crate)` diretamente (inline) ou o entrypoint público via integration
+  test.
+- **p256 signing key ↔ cert:** se precisar de uma OCSP response assinada
+  por um issuer válido, reusar a ponte rcgen `KeyPair::serialize_der()` →
+  `p256::ecdsa::SigningKey::from_pkcs8_der` estabelecida no Commit 2.1.
+  Seed fixa `[8u8;32]` já alinhada com `validate.rs:341`.
 
 **Decisões de design já tomadas (NÃO reconsiderar):**
 
-- **Visibilidade:** `parse_rekor_log_entry` e `parse_signed_checkpoint` são
-  `pub` por estratégia de fuzz (documentada em `lib.rs:74-80`). Os testes
-  dessas duas podem ir em `tests/rekor_parse.rs` (integration test) OU
-  inline `#[cfg(test)]`. `verify_rekor_checkpoint` e `verify_merkle_inclusion`
-  são `pub(crate)` → **obrigatoriamente inline**.
-- **Tratamento de erro:** `RekorParseError` já existe e deriva
-  `Debug, Clone, PartialEq, Eq` (cumpre AGENTS.md). Tem `.display()`
-  `pub(crate)` que renderiza a string de diagnóstico legacy. Testes podem
-  comparar `assert_eq!(err, RekorParseError::MissingField { field: "logID" })`.
-- **Não migrar nada para `Result<_, String>`** — o caminho oposto já foi
-  feito (commit `a2ff9ac9` migrou 4 sites; rekor já estava tipado).
-
-**Gate de aceite (Commit 2.2):**
-
-- `cargo test -p forge-core-crypto` verde.
-- Clippy pedantic limpo (roda automático via `pi-green-loop` hook, OU
-  manualmente: `cargo clippy -p forge-core-crypto --all-targets --
-  -W clippy::pedantic`).
-- `cargo fmt -p forge-core-crypto -- --check` limpo.
-- Cada uma das 4 funções com: ≥1 happy path + ≥1 caso de erro por variante
-  de `RekorParseError` relevante + (para `verify_merkle_inclusion`) casos
-  de borda de tree_size/log_index.
-- Zero churn em código de produção (só `#[cfg(test)]` ou `tests/`).
-
-**Verificação automática:** o hook `pi-green-loop` roda após cada turno de
-edição e reporta `cargo check --workspace`, `cargo clippy --workspace
---all-targets -- -W clippy::pedantic`, `cargo test --workspace`, e
-`cargo fmt --all -- --check`. Normalmente não é necessário rodar manualmente.
-`/green` roda agora; `/green on|off` toggla o auto-fix loop.
+- **Visibilidade:** só `decode_ocsp_response` é `pub` (fuzz-exposed, doc em
+  `lib.rs:74-80`). As outras 10 são `pub(crate)` → **testes inline
+  obrigatórios** (não dá acesar de `tests/`).
+- **Não criar enum de erro** para ocsp.rs — conflitaria com o estilo
+  `Vec<String>` existente e com AGENTS.md (que diz que validação é
+  acumuladora). Manter o `reasons: &mut Vec<String>`.
 
 **Convenções do repo a respeitar** (em `AGENTS.md`, sempre carregadas):
 
-- **Sem `anyhow`/`thiserror`.** Roll error enums à mão. `RekorParseError`
-  já existe — não criar novo.
-- **Validação é acumuladora** — mas `rekor.rs` usa `Result` (bail-out),
-  não `ValidationReport`. Manter o padrão existente do módulo.
-- **Editor stability (WSL+Windows+r-a):** nunca rodar dois cargos em
-  paralelo. Um cargo de cada vez. `target/debug` acumula ~130k arquivos;
-  se o editor morrer com OOM, ver `AGENTS.md → Editor stability`.
-- **Context hygiene:** uma story por sessão. Este handoff é Commit 2.2
-  (uma sessão). Ao terminar: commit, marcar Commit 2.2 ✅ LANDED neste
-  doc, `/clear`, próximo agente pega Commit 2.3.
-- **Commits:** o usuário commita explicitamente quando pede. Esta sessão
-  fez 1 commit (`21f0840d`).
+- **Sem `anyhow`/`thiserror`.**
+- **Editor stability (WSL+Windows+r-a):** nunca dois cargos em paralelo.
+- **Context hygiene:** uma story por sessão. Commit 2.3 = uma sessão.
+  Ao terminar: commit, marcar Commit 2.3 ✅ LANDED neste doc, `/clear`,
+  próximo agente pega Commit 2.4.
+- **Commits:** o usuário commita explicitamente quando pede.
 
-**Depois do 2.2 (roadmap restante da Fase 2):**
+**Depois do 2.3 (roadmap restante):**
 
-- Commit 2.3 — OCSP/CRL/CT-SCT (`ocsp.rs` 408 LOC).
 - Commit 2.4 — TUF trusted-root freshness (`tuf.rs` 207 LOC).
 - Fase 3 — governance, eval-harness, research, eventlog, eval, trace
   (1 crate por sessão).
@@ -204,7 +202,7 @@ inline. O gap real do MCP era vetores de ataque específicos não cobertos.
 | `forge-core-eval` | 890 | Baixo | Pendente — contract types |
 | `forge-core-trace` | 479 | Baixo | Pendente — trivial |
 
-### Fase 2 — `forge-core-crypto` (P0, prioridade máxima) — Commit 2.1 ✅ LANDED
+### Fase 2 — `forge-core-crypto` (P0, prioridade máxima) — Commits 2.1-2.2 ✅ LANDED
 
 O crate de maior risco: 5812 LOC de verificação criptográfica com cobertura
 essencialmente zero. Um bug aqui é silencioso e catastrófico. Cobertura
@@ -222,9 +220,34 @@ ampla por commit:
   `verify_dsse_signature_with_certificate`. Proptest sign/verify+tamper
   em ambos os algoritmos. `cargo test -p forge-core-crypto` verde (14 lib
   + 7 zeroize_smoke), clippy pedantic limpo.
-- **Commit 2.2 — rekor log entry parse + verify.** PRÓXIMO. Parse de uma
-  transparency log entry real, inclusão proof, reject de entry forjada.
-- **Commit 2.3 — OCSP/CRL/CT-SCT status.** Decode OCSP (good/revoked/
+- **Commit 2.2 — rekor log entry parse + inclusion proof verify.** ✅
+  LANDED (30 testes lib + 1 KAT regenerator `#[ignore]`d). Cobertura direta
+  dos 4 entrypoints de `rekor.rs` (397 LOC), todos inline `#[cfg(test)]`
+  (os 2 `pub(crate)` exigem):
+  - `parse_rekor_log_entry` — happy path + cada variante de
+    `RekorParseError` (8 variantes: JSON inválido, body base64 inválido,
+    body não-JSON, `verification`/`inclusionProof`/`hashes` ausentes,
+    hash não-string, e cada `MissingField` via remoção de campo por path).
+  - `parse_signed_checkpoint` — happy-path KAT (pina `tree_size` + root
+    hash), extensão de note lines, e 6 variantes de erro de formato
+    (`CheckpointFormatInvalid`, `NoteInvalid`, `OriginMissing`,
+    `TreeSizeInvalid`, `RootHashBase64Invalid`).
+  - `verify_rekor_checkpoint` — Ok + 4 variantes (`TreeSizeMismatch`,
+    `RootHashMismatch`, `SignatureMissing`, `SignatureInvalid` via key
+    errada). KAT p256 pina o verifying key sec1-hex derivado da seed
+    `[8u8;32]` (regenerador `#[ignore]`d).
+  - `verify_merkle_inclusion` — tree_size=1 trivial match/mismatch,
+    tree_size=0 / log_index≥tree_size reject, árvore 2-leaf (ambos
+    índices), árvore 4-leaf (todos índices + tamper + hash malformado),
+    proptest sobre árvores 4-leaf aleatórias (fail-closed para impostor
+    leaf e root errado).
+  - Plus: regression guard do `RekorParseError::display()` (legacy strings).
+  Zero churn de produção (+752 LOC, só `#[cfg(test)]`). `cargo test -p
+  forge-core-crypto` verde (44 lib + 7 zeroize_smoke + 1 ignored KAT),
+  clippy pedantic limpo, fmt limpo. Workspace: 1 falha pré-existente
+  (`operation_sidecar_e2e::execute_operation_rejects_outside_root_operation_path_before_read`)
+  já falha em `b46d0bf2` — não regressão deste commit.
+- **Commit 2.3 — OCSP/CRL/CT-SCT status.** PRÓXIMO. Decode OCSP (good/revoked/
   unknown), CRL revoked detection, CT/SCT timestamp validation.
 - **Commit 2.4 — TUF trusted-root freshness.** Version monotonicity,
   timestamp/snapshot/targets version checks, expiry.
