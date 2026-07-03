@@ -14,7 +14,7 @@ Este ADR formaliza o design do F07 (expandindo o stub original). Tres frentes
 de pesquisa paralela (modelos de governance RBAC/ReBAC/Cedar/Zanzibar; o seam
 de deteccao de conflito no codebase; e a questao R8 `PrincipalId` vs `StableId`)
 convergem numa arquitetura de tres camadas e resolvem uma contradicao com o
-ADR 0002.
+ADR 0023.
 
 ## Decisao
 
@@ -29,7 +29,7 @@ emite um ConflictContract estruturado, nunca merge silencioso") e um problema de
 - **Camada de autorizacao (ReBAC/Cedar):** `GovernancePolicy` + `PrincipalId`
   modelam *quem e o principal* e *que autoridade ele tem*. Cedar
   `(principal, action, resource) → Decision` e o PDP (consistente com
-  ADR 0002/0003). Esta camada **nao** detecta conflito A↔B.
+  ADR 0023/0024). Esta camada **nao** detecta conflito A↔B.
 - **Camada de coordenacao (intent-locks de Gray):** `IntentContract` = um
   intent-lock sobre um authority scope (sub-arvore de paths) com **expiração**
   (lease). Conflito = sobreposicao, detectada pela matriz de compatibilidade de
@@ -49,9 +49,9 @@ Nenhum padrao de governance de agentes cobre contencao de recursos ainda (MAST
 NeurIPS 2025 arXiv:2503.13657; GaaS arXiv:2508.18765 sao 2025-26, em formacao) —
 o design e research-grounded, nao standards-compliant.
 
-### 2. `PrincipalId` tipado (supersede a previsao do ADR 0002)
+### 2. `PrincipalId` tipado (supersede a previsao do ADR 0023)
 
-O ADR 0002 (Accepted) afirma "F07 does not introduce a rival PrincipalId type"
+O ADR 0023 (Accepted) afirma "F07 does not introduce a rival PrincipalId type"
 — uma *previsao* sobre o F07 feita para decidir a pergunta do F06. A spec do
 F07 (`01_feature_specs.md:215`) e este ADR a contradizem.
 
@@ -63,10 +63,10 @@ principal_b }`, `is_authorized(principal, resource)`) colocam um id de principal
 e um id de recurso na mesma comparacao, onde um swap de campo/argumento e um bug
 silencioso de seguranca — exatamente a classe que o split `ScopeId`/`ClaimId`
 tornou irrepresentavel. Um `PrincipalId` distinto transforma esse swap em erro
-de compilacao. Os precedentes industriais que o proprio ADR 0002 cita (AWS Cedar,
+de compilacao. Os precedentes industriais que o proprio ADR 0023 cita (AWS Cedar,
 Google Zanzibar) impoem separacao tipada Principal/Resource pela mesma razao.
 
-Isto **supersede formalmente a previsao do ADR 0002** (registro de decisao
+Isto **supersede formalmente a previsao do ADR 0023** (registro de decisao
 datado, nao override silencioso). O campo `reviewed_by` (F06) migra de
 `Option<StableId>` para `Option<PrincipalId>` para consistencia
 (one-concept-one-type). Como `PrincipalId` e `#[serde(transparent)]`, YAML
@@ -109,7 +109,7 @@ path.
 
 ## Escopo desta story (F07.1-F07.3)
 
-- ✅ F07.1: este ADR (Accepted; supersede da previsao do ADR 0002).
+- ✅ F07.1: este ADR (Accepted; supersede da previsao do ADR 0023).
 - ✅ F07.2: `PrincipalId` newtype em `common.rs`; migracao de `reviewed_by`.
 - ✅ F07.3: `governance.rs` (`GovernancePolicy`, `IntentContract`,
   `ConflictContract` + enums) + validator com diagnostics tipados + fixtures.
@@ -142,7 +142,7 @@ path.
 - GaaS (arXiv 2508.18765, 2025): https://arxiv.org/abs/2508.18765
 - Tian Pan — Conflict Resolution Patterns for Parallel AI Systems (2026):
   https://tianpan.co/blog/2026-05-02-multi-agent-conflict-resolution-disagreement-patterns
-- In-repo: ADR 0002 (memory trust model — previsao supersedida); ADR 0003
+- In-repo: ADR 0023 (memory trust model — previsao supersedida); ADR 0024
   (PDP/PEP); `common.rs` (R8 + `ScopeId`/`ClaimId` precedent);
   `claim_engine.rs:317` (o seam do F07.4);
   `conflict_detection.rs:253` (`repo_paths_overlap`, o primitivo reusavel).

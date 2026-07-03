@@ -1,4 +1,4 @@
-# ADR 0002: Two Orthogonal Trust Axes for Agent Memory
+# ADR 0023: Two Orthogonal Trust Axes for Agent Memory
 
 ## Status
 

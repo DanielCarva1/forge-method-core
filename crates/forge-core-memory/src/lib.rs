@@ -1,14 +1,14 @@
 //! `forge-core-memory` — the Policy Enforcement Point (PEP) for the memory
-//! trust model (ADR 0002 + ADR 0003).
+//! trust model (ADR 0023 + ADR 0024).
 //!
 //! Candidato 1 (in `forge-core-contracts`) built the pure decision functions
 //! (`MemoryContract::can_admit`, `can_promote`, `mark_stale`). This crate is
 //! their enforcement counterpart: it calls those PDPs and performs the
 //! mutation **atomically** under an exclusive file lock, closing the TOCTOU
 //! window between decide and write (CWE-367 — atomicity at the write site, not
-//! check-fusion; ADR-0002 Decision 1).
+//! check-fusion; ADR-0023 Decision 1).
 //!
-//! # Architecture (ADR 0003)
+//! # Architecture (ADR 0024)
 //!
 //! - **Event log** (`memory/events.ndjson`): append-only JSONL. The source of
 //!   truth. Never mutated in place ("the dataset only grows" — rerun.io).
@@ -73,7 +73,7 @@ pub const MEMORY_LOCK_RELATIVE_PATH: &str = "locks/memory.log.lock";
 ///   the review axis.
 /// - [`Forgotten`](MemoryEvent::Forgotten) — explicit removal. Carries the FULL
 ///   before-image (Debezium `before` / Postgres `REPLICA IDENTITY FULL`
-///   pattern; ADR-0002 requires the prior `(authority_level, review_state)`,
+///   pattern; ADR-0023 requires the prior `(authority_level, review_state)`,
 ///   the full entry makes it reversible-by-replay).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]

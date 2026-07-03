@@ -71,7 +71,7 @@ fn entry(id: &str) -> MemoryEntry {
 }
 
 /// A denied admission appends NOTHING to the log and does not consume a
-/// sequence number. (ADR-0002: the PEP never writes on a denial.)
+/// sequence number. (ADR-0023: the PEP never writes on a denial.)
 #[test]
 fn denied_admission_appends_nothing_and_consumes_no_sequence() {
     let root = temp_root("deny-noop");
@@ -158,7 +158,7 @@ fn forget_before_image_hash_matches_replayed_entry() {
 
 /// Promote never touches the review axis: after a successful promote, the
 /// entry's `review_state`/`reviewed_by`/`reviewed_at` are still at the admission
-/// floor. (The Model-B-back-door guard, ADR-0002.)
+/// floor. (The Model-B-back-door guard, ADR-0023.)
 #[test]
 fn promote_leaves_review_axis_untouched() {
     let root = temp_root("promote-no-review");

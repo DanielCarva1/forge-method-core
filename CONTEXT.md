@@ -15,7 +15,7 @@ The Rust crate that is the single source of truth for mutation. Today this is
 name match the role every other ADR and this glossary already ascribes to "the
 kernel"). It owns `execute_operation` and the WAL append; every state-bearing
 mutating path flows through it. Per ADR-0001, the kernel stays deterministic
-and auditable; per ADR-0003, it is the sole Policy Decision Point (PDP) for
+and auditable; per ADR-0024, it is the sole Policy Decision Point (PDP) for
 mutation — adapters and the CLI are dumb Policy Enforcement Points (PEPs).
 
 ## Decisions (the pure-function library)

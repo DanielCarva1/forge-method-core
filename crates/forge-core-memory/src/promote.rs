@@ -9,7 +9,7 @@
 //! [`PromoteStatus::DeniedByGate`].
 //!
 //! Authority-axis ONLY: the review fields on the entry are never touched by a
-//! promote (ADR-0002 orthogonality NFR). The `before`/`after` in the event are
+//! promote (ADR-0023 orthogonality NFR). The `before`/`after` in the event are
 //! `AuthorityLevel` values; review state is unaffected.
 
 use std::path::Path;
@@ -322,7 +322,7 @@ mod tests {
     #[test]
     fn promote_does_not_touch_review_axis() {
         // After a promote, the review fields are still at the admission floor.
-        // This is the Model-B-back-door guard (ADR-0002).
+        // This is the Model-B-back-door guard (ADR-0023).
         let root = temp_root("promote-no-review");
         admit_entry(&root, "e.one");
         let _ = promote(

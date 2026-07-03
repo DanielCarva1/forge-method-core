@@ -41,9 +41,9 @@ pub struct ClaimId(pub String);
 /// — exactly the class the [`ScopeId`]/[`ClaimId`] split made unrepresentable. A
 /// distinct `PrincipalId` makes that swap a compile error.
 ///
-/// This **formally supersedes ADR 0002's F07-prediction** ("F07 does not introduce a
+/// This **formally supersedes ADR 0023's F07-prediction** ("F07 does not introduce a
 /// rival `PrincipalId` type"), recorded in the expanded ADR-0007. The industrial
-/// precedent ADR 0002 itself cites (AWS Cedar, Google Zanzibar) enforces typed
+/// precedent ADR 0023 itself cites (AWS Cedar, Google Zanzibar) enforces typed
 /// `Principal`/`Resource` separation for the same reason. `#[serde(transparent)]`
 /// keeps the wire format identical to the legacy string (`"principal.daniel"`), so
 /// existing YAML (including F06's `reviewed_by`) deserializes unchanged — zero

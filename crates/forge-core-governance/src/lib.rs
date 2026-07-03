@@ -12,7 +12,7 @@
 //! Here: `GovernancePolicy::can_arbitrate` = the pure PDP;
 //! `arbitrate_with_durability` = the PEP.
 //!
-//! # Architecture (mirrors `forge-core-memory` / ADR-0003)
+//! # Architecture (mirrors `forge-core-memory` / ADR-0024)
 //!
 //! - **Event log** (`governance/conflicts.ndjson`): append-only JSONL. The
 //!   source of truth. Never mutated in place ("the dataset only grows" —

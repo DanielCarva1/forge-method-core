@@ -31,7 +31,7 @@ Reusar o log do memory (alternativa considerada) reintroduz a classe de bug
 Model B uma camada abaixo: funde **confianca** (eixos Authority/Review de F06,
 "isto e ground-truth actionable") com **proveniencia de citacao** ("isto aponta
 para uma fonte") num unico event-sourced log. Misturar as duas semanticas num
-`MemoryProjection::apply_event` viola a ortogonalidade que ADR-0002 cravou para
+`MemoryProjection::apply_event` viola a ortogonalidade que ADR-0023 cravou para
 o memory e reabre a superficie de memory/citation poisoning.
 
 O custo e boilerplate: uma crate, um lock, uma projecao a mais (contra o NFR

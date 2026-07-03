@@ -1,6 +1,6 @@
 //! `forge-core memory` — the CLI surface for the memory trust model (F06.7).
 //!
-//! Five subcommands wrap the `forge-core-memory` PEP (ADR 0002 + ADR 0003):
+//! Five subcommands wrap the `forge-core-memory` PEP (ADR 0023 + ADR 0024):
 //! - `ingest`  — admit a `MemoryEntry` (from a YAML `--entry-file`) under a
 //!   `--policy-file`. Calls `forge_core_memory::admit`.
 //! - `list`    — lazy TTL sweep + list live entries. Calls `list_now`.
@@ -461,7 +461,7 @@ fn run_review(args: &[String]) -> Result<(), ExitError> {
     // GovernancePolicy) which is not yet implemented. Rather than ship a stub
     // that silently flips a boolean, we emit a clear "deferred" envelope so
     // the verb is discoverable but cannot mislead a caller into thinking a
-    // review landed. This is the ADR-0002 orthogonality discipline: review is
+    // review landed. This is the ADR-0023 orthogonality discipline: review is
     // a principal attestation, not a magic boolean.
     let want_json = json_output_unless_text_selected(args);
     let _ = parse_common_only(args); // consume/validate flags without acting

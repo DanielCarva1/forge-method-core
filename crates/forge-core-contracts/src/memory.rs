@@ -73,7 +73,7 @@ impl MemoryContract {
         }
     }
 
-    // --- F06.2 (Candidato 1) trust gates (ADR 0002 addendum) ---
+    // --- F06.2 (Candidato 1) trust gates (ADR 0023 addendum) ---
     //
     // Pure predicates (Policy Decision Points). They decide whether an entry
     // may be admitted / promoted; they do NOT mutate the contract. The actual
@@ -202,7 +202,7 @@ impl EvidenceField {
 /// evidence (a log line, a test-run id, a committed diff) — never an LLM
 /// inference. The gate is field-gated (presence of a non-empty ref), not
 /// content-scored: the policy names what counts as evidence; it does not
-/// grade the artifact. See ADR 0002 addendum.
+/// grade the artifact. See ADR 0023 addendum.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct AdmissionEvidence {
@@ -253,7 +253,7 @@ impl AdmissionDecision {
 /// Why a trust gate blocked. As-data (Cedar-style diagnostics). The
 /// `PromoteTargetsReviewAxis` variant is the structural guard for the
 /// orthogonality NFR: a promote path that ever touched the review axis would
-/// re-introduce the Model B bug "through the back door" (ADR 0002). The pure
+/// re-introduce the Model B bug "through the back door" (ADR 0023). The pure
 /// `can_promote` API cannot trigger it today; it exists so any future caller
 /// that conflates the axes has a named denial to emit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -324,7 +324,7 @@ pub struct MemoryEntry {
     pub approval: ApprovalState,
     pub supersedes: Option<StableId>,
     pub invalidation_reason: Option<String>,
-    // --- F06 Trust Axes (ADR 0002). Additive, non-breaking: `None` = legacy
+    // --- F06 Trust Axes (ADR 0023). Additive, non-breaking: `None` = legacy
     // document written before F06.2. Both default to the trust floor so a
     // legacy record is never silently authoritative. ---
     /// Trust Axis 1 — authority. `None` = legacy; resolved via
@@ -336,7 +336,7 @@ pub struct MemoryEntry {
     pub review_state: Option<ReviewState>,
     /// Who attested to the record (F07 principal attestation). `None` unless
     /// `review_state == Reviewed`. Now a `PrincipalId` (R8: the attester is a
-    /// principal, distinct from resource ids; ADR-0007 supersedes ADR 0002's
+    /// principal, distinct from resource ids; ADR-0007 supersedes ADR 0023's
     /// earlier "use `StableId`" prediction — see the expanded ADR-0007). The
     /// field is `#[serde(default)]` + `PrincipalId` is `#[serde(transparent)]`,
     /// so legacy `reviewed_by: principal.daniel` YAML still parses (zero
@@ -355,7 +355,7 @@ impl MemoryEntry {
     /// [`AuthorityLevel`] (Trust Axis 1). Co-localised with the enum so the
     /// coexistence rule lives in one place, not in N callers.
     ///
-    /// # Mapping (Opção A, ADR 0002)
+    /// # Mapping (Opção A, ADR 0023)
     ///
     /// | legacy `approval`     | `authority_level` field | effective result      |
     /// |-----------------------|-------------------------|-----------------------|
@@ -451,7 +451,7 @@ pub enum ReviewState {
 }
 
 /// Legacy single-axis approval state. Superseded by the two-axis model
-/// ([`AuthorityLevel`] + [`ReviewState`]) in ADR 0002. Retained for
+/// ([`AuthorityLevel`] + [`ReviewState`]) in ADR 0023. Retained for
 /// zero-migration-cost backwards compatibility (Opção A); bridged to the
 /// new axes by [`MemoryEntry::authority_level_effective`].
 ///
@@ -719,7 +719,7 @@ memory_contract:
         );
     }
 
-    // --- F06 trust-axis bridge tests (ADR 0002, Opção A) ---
+    // --- F06 trust-axis bridge tests (ADR 0023, Opção A) ---
 
     #[test]
     fn bridge_legacy_approved_maps_to_provisional() {
@@ -833,7 +833,7 @@ memory_contract:
         assert_eq!(entry.review_state_effective(), ReviewState::Unreviewed);
     }
 
-    // --- F06.2 (Candidato 1) trust-gate tests (ADR 0002 addendum) ---
+    // --- F06.2 (Candidato 1) trust-gate tests (ADR 0023 addendum) ---
 
     /// A permissive policy used by most tests: all kinds allowed, every
     /// evidence field required, one ref buys Authority.

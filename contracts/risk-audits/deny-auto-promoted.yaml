@@ -7,7 +7,7 @@
 # a record reaches the top of trust with no policy and no evidence.
 #
 # The variant is retained in `ApprovalState` for zero-migration-cost backwards
-# compatibility (ADR 0002, Opção A), but its use is forbidden. This detector
+# compatibility (ADR 0023, Opção A), but its use is forbidden. This detector
 # fails closed on the YAML token — a stronger gate than a `#[deprecated]`
 # compile warning (which is avoided to keep the six derives clippy-clean; see
 # rust-lang/rust#92313).

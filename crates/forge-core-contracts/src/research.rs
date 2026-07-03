@@ -4,7 +4,7 @@
 //! decides whether a [`ResearchSource`] may ENTER the Source Ledger, under a
 //! [`ResearchPolicy`]. This module is the PDP (Policy Decision Point); the PEP
 //! that enforces it under an exclusive file lock lives in `forge-core-research`
-//! (mirrors the F06 `MemoryContract`/`forge-core-memory` split — ADR-0003).
+//! (mirrors the F06 `MemoryContract`/`forge-core-memory` split — ADR-0024).
 //!
 //! # Trust boundary (ADR-0010, decision §5)
 //!

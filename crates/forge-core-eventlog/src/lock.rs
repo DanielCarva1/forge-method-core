@@ -26,7 +26,7 @@ use crate::EventLogError;
 /// (delegated to the inner [`EffectStoreLock`], which calls `File::unlock`).
 /// Holding this guard witnesses that the caller owns the
 /// read-sequence-then-write critical section (CWE-367: atomicity at the write
-/// site, not check-fusion — ADR-0002 Decision 1).
+/// site, not check-fusion — ADR-0023 Decision 1).
 ///
 /// Note that [`crate::append_event`] routes the actual write through
 /// `append_json_line_with_durability`, which takes its **own** separate

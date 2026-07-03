@@ -5,7 +5,7 @@ Status: **Accepted** (2026-07-02; expandido de `proposto`)
 ## Contexto
 
 O Forge Method core e uma camada de governance sobre shared state agentic: ela
-serialize writes por path (lane claims, ADR 0002), resolve conflitos de
+serialize writes por path (lane claims, ADR 0023), resolve conflitos de
 principals como objetos estruturados (F07, ADR 0007) e mantem o kernel como
 unica fonte de verdade para mutacao. Mas o core so e util se agentes externos
 puderem chama-lo — e o ecossistema de agentes em 2025-26 convergiu para dois
@@ -28,12 +28,12 @@ documenta que clientes MCP confiam em tools/list e tools/call sem separar
 Poisoning" (Kolahal et al., 2025) mostra que tools maliciosas se escondem em
 metadados (`_meta`) que o cliente renderiza sem sandbox. Adicionar MCP ao
 Forge sem disciplina re-introduz, pela porta dos fundos, exatamente as classes
-de bug que o ADR 0002 (memory trust) e ADR 0007 (governance) tornaram
+de bug que o ADR 0023 (memory trust) e ADR 0007 (governance) tornaram
 irrepresentaveis: autoridade sem provenance, mutacao sem intent declarada,
 caller anonimo mutando shared state.
 
 Este ADR formaliza o design do F08 (expandindo o stub original). O principio
-central e o mesmo do ADR 0003 (PDP/PEP): a superficie de protocolo e um PEP
+central e o mesmo do ADR 0024 (PDP/PEP): a superficie de protocolo e um PEP
 burro; toda decisao de autorizacao e mutacao vive no kernel.
 
 ## Decisao
@@ -61,7 +61,7 @@ acoplamento se espalharia por cada command handler.
 
 **Rejeitado: implementar o engine dentro do adapter.** Isto duplicaria a
 logica de cada comando e quebraria o deletion test (remover o adapter
-destruiria funcionalidade). E exatamente o anti-pattern que o ADR 0003
+destruiria funcionalidade). E exatamente o anti-pattern que o ADR 0024
 combate: PEP com logica de PDP.
 
 ### 2. Toda mutacao passa pelo kernel e por um OperationContract
@@ -70,7 +70,7 @@ O principio inviolavel (do stub original, mantido): **o adapter nao muta a
 store diretamente.** Toda mutacao flui pelo kernel (`execute-operation`,
 `claim acquire`) e carrega um `OperationContract` que declara a intent
 autorizada. O adapter apenas encaminha; o kernel continua sendo o unico PDP
-para mutacao, consistente com ADR 0002/0003.
+para mutacao, consistente com ADR 0023/0024.
 
 Isso resolve o vector de tool poisoning no level do schema: um cliente MCP
 malicioso que peça `execute-operation` sem `OperationContract` e rejeitado
@@ -162,7 +162,7 @@ pin do workspace, que outras crates dependem.
 
 - **Interoperabilidade sem entregar autoridade.** Agentes externos
   (Claude Desktop, etc.) descobrem e invocam Forge via MCP, mas a fonte de
-  verdade continua no kernel. O adapter e um PEP, nao um PDP (ADR 0003).
+  verdade continua no kernel. O adapter e um PEP, nao um PDP (ADR 0024).
 - **Tool poisoning mitigado por design.** Um tool malicioso que se esconde
   em `_meta` nao ganha mutacao sem `OperationContract` + attestation; um
   caller anonimo e rejeitado no MutateGate. A superficie de ataque do
@@ -212,7 +212,7 @@ pin do workspace, que outras crates dependem.
 - shuttle.dev — How to build a stdio MCP server in Rust (tutorial, 2025):
   https://shuttle.dev/blog/2025/07/18/how-to-build-a-stdio-mcp-server-in-rust
 - rmcp (Rust MCP SDK): https://docs.rs/rmcp
-- In-repo: ADR 0002 (memory trust model), ADR 0003 (PDP/PEP),
+- In-repo: ADR 0023 (memory trust model), ADR 0024 (PDP/PEP),
   `command_registry.rs:68` (o seam do adapter), `envelope.rs:77`
   (`CliEnvelope` — o tipo de retorno de cada tool),
   `CONTEXT.md` (termos F08: MCPTool, Allowlist, MutateGate, Tool-Call

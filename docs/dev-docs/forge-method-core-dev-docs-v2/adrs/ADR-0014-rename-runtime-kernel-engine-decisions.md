@@ -14,7 +14,7 @@ review de arquitetura.
 
 1. **A crate que muta estado** chamava-se `forge-core-runtime`. Mas ADR-0001, `CONTEXT.md`
    e todo outro ADR já a chamavam de **"o kernel"** — a fonte única de verdade para mutação,
-   determinística e auditável (ADR-0001), o único PDP para mutação (ADR-0003). O nome
+   determinística e auditável (ADR-0001), o único PDP para mutação (ADR-0024). O nome
    "runtime" é genérico (qualquer crate de execução pode ser "runtime"); "kernel" diz o
    papel. A divergência entre nome e papel era corrigida verbalmente em cada conversa e
    re-sugerida em cada review.
@@ -88,7 +88,7 @@ camada sobre o kernel.
 
 ## Referencias
 
-- In-repo: ADR-0001 (kernel determinístico), ADR-0003 (kernel é único PDP para mutação),
+- In-repo: ADR-0001 (kernel determinístico), ADR-0024 (kernel é único PDP para mutação),
   `CONTEXT.md` (seções "Kernel (the mutation crate)", "Decisions (the pure-function
   library)"), `crates/forge-core-kernel/src/lib.rs`,
   `crates/forge-core-decisions/src/lib.rs`.

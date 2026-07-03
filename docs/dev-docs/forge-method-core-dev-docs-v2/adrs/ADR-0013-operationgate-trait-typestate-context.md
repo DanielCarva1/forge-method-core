@@ -14,9 +14,9 @@ Um caller do kernel que não fosse o CLI — um teste que invoca `execute_operat
 ou um futuro in-process MCP server — **bypassava-os silenciosamente**. Nada na assinatura de
 `execute_operation` exigia que os checks tivessem rodado antes.
 
-Isso violava diretamente ADR-0003: o kernel é o **único PDP (Policy Decision Point) para
+Isso violava diretamente ADR-0024: o kernel é o **único PDP (Policy Decision Point) para
 mutação**. Se os preconditions de mutação são enforcement points vivendo no caller CLI, então
-um caller diferente tem um kernel diferente — a própria propriedade que ADR-0003 cravou
+um caller diferente tem um kernel diferente — a própria propriedade que ADR-0024 cravou
 irrepresentável. A mutação podia proceder sem que ninguém tivesse consultado o gate.
 
 ## Decisao
@@ -102,7 +102,7 @@ então um binary de produção (sem a feature) fisicamente não pode bypassar.
 - O kernel **possui** seus gates de pré-WAL. Um caller de teste ou in-process MCP que invoca
   `execute_operation` diretamente precisa configurar a gate chain para chegar a `Audited`;
   não há caminho silencioso (default binário: sem `dangerous-bypass`, sem bypass).
-- CLI flags viram config (quais gates anexar), não localização. ADR-0003 é honrado: o kernel
+- CLI flags viram config (quais gates anexar), não localização. ADR-0024 é honrado: o kernel
   é o único PDP para mutação, e agora isso é enforced em tipo, não em disciplina de caller.
 - O escape hatch `.dangerous_unchecked()` torna qualquer bypass visível no diff (a chamada
   aparece) E na feature config (`--features dangerous-bypass`). Um reviewer que vê
@@ -134,7 +134,7 @@ então um binary de produção (sem a feature) fisicamente não pode bypassar.
 - `rustls` `dangerous_configuration` (escape hatch explícito):
   https://docs.rs/rustls/latest/rustls/server/struct.ServerConfig.html
 - Cliff Biffle — typestate pattern in Rust (Rust as a Language for Writing Real Things).
-- In-repo: ADR-0001 (kernel determinístico, sem async), ADR-0003 (kernel é único PDP para
+- In-repo: ADR-0001 (kernel determinístico, sem async), ADR-0024 (kernel é único PDP para
   mutação),
   `crates/forge-core-kernel/src/{gate.rs, builtin_gates.rs, wal_orchestration.rs (typestate)}`,
   ADR-0014 (rename `runtime`→`kernel`).

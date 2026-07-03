@@ -1,19 +1,19 @@
-# ADR 0003 — `forge-core-memory`: the PEP for the memory trust model
+# ADR 0024 — `forge-core-memory`: the PEP for the memory trust model
 
 **Status**: Accepted (2026-07-01)
-**Supersedes**: none · **Extends**: [ADR 0002](0002-memory-trust-model.md) (the PDP/PEP split)
+**Supersedes**: none · **Extends**: [ADR 0023](0023-memory-trust-model.md) (the PDP/PEP split)
 **Decides**: the architecture of the `forge-core-memory` crate (F06.3).
 
 ## Context
 
-ADR 0002 (Candidato 1) established the PDP/PEP separation for the memory trust
+ADR 0023 (Candidato 1) established the PDP/PEP separation for the memory trust
 model: the pure decision functions `can_admit` / `can_promote` / `mark_stale`
 live in `forge-core-contracts`; a separate Policy Enforcement Point performs
 the mutation **atomically**, closing the TOCTOU gap between decide and write
 (CWE-367 — "atomicity at the use site, not check-fusion"). This ADR decides
 how that PEP is built.
 
-The question is not *whether* to build a PEP (ADR 0002 already mandated one),
+The question is not *whether* to build a PEP (ADR 0023 already mandated one),
 but *how*: invent the storage/locking/durability machinery, or compose the
 primitives the repo already provides.
 
@@ -75,7 +75,7 @@ stale-read race (Algomaster; CWE-367) the under-lock sweep eliminates.
 ### 4. Before-image on forget (audit + reversibility-by-replay)
 
 A `Forgotten` event carries the **full** prior `MemoryEntry` plus a
-`"sha256:{hex}"` content hash. ADR 0002 required recording the prior
+`"sha256:{hex}"` content hash. ADR 0023 required recording the prior
 `(authority_level, review_state)`; the Debezium `before` / Postgres
 `REPLICA IDENTITY FULL` / in-repo `EffectWalOriginal` precedent says capture
 the *whole* prior entry — this doubles the log as the audit trail and makes
@@ -95,7 +95,7 @@ per-operation enums for the same reason).
 `admit` calls `MemoryContract::can_admit`; if `Blocked`, returns
 `AdmissionStatus::DeniedByGate(reasons)` and **appends nothing**. `promote`
 calls `can_promote`; `Blocked` ⇒ `PromoteStatus::DeniedByGate`. This is the
-ADR-0002 Decision-1 invariant (Cedar / OPA / XACML: the PEP only enforces; it
+ADR-0023 Decision-1 invariant (Cedar / OPA / XACML: the PEP only enforces; it
 does not re-evaluate thresholds). A denial is an outcome, never an error.
 
 ## Alternatives considered
@@ -131,7 +131,7 @@ does not re-evaluate thresholds). A denial is an outcome, never an error.
 - **CLI-ready**: the public API (`admit` / `promote` / `forget` / `list_now` /
   `project`) returns typed result structs (`AdmissionResult`, `PromoteResult`,
   `ForgetResult`, `ListResult`) shaped for the `CliEnvelope` dual-output pattern;
-  F06.7's `forge-core memory` verbs will be thin wrappers (ADR-0002 Decision-1).
+  F06.7's `forge-core memory` verbs will be thin wrappers (ADR-0023 Decision-1).
 
 ## Scope (this story vs. the next)
 
@@ -144,7 +144,7 @@ designed so the CLI is a thin wrapper.
 
 ## References
 
-- [ADR 0002](0002-memory-trust-model.md) — the PDP/PEP split this crate enforces.
+- [ADR 0023](0023-memory-trust-model.md) — the PDP/PEP split this crate enforces.
 - CWE-367 (TOCTOU) — https://cwe.mitre.org/data/definitions/367.html
 - Martin Fowler — Event Sourcing — https://martinfowler.com/eaaDev/EventSourcing.html
 - Martin Fowler — CQRS — https://martinfowler.com/bliki/CQRS.html

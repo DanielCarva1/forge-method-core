@@ -4,7 +4,7 @@
 # flipped=1. Demonstrates the lazy TTL sweep (Redis passive-expiry model).
 entry_id: memory.entry.expired
 kind: decision
-content: "Adopt the two-axis trust model for memory (ADR 0002)."
+content: "Adopt the two-axis trust model for memory (ADR 0023)."
 provenance:
   source_run_id: run.f06-ttl
   source_agent: agent.f06

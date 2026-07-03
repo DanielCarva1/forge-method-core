@@ -4,7 +4,7 @@
 # while review STAYS unreviewed (the orthogonality NFR).
 entry_id: memory.entry.promoted
 kind: lesson_learned
-content: "Compose forge-core-store primitives rather than reinventing them (ADR 0003)."
+content: "Compose forge-core-store primitives rather than reinventing them (ADR 0024)."
 provenance:
   source_run_id: run.f06-promote
   source_agent: agent.f06

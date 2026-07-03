@@ -20,7 +20,7 @@ que ~62% da crate era o template, não o domínio.
 A tentação seria fundir os logs num único log compartilhado para economizar código. Mas
 ADR-0010 cravou que os **logs devem permanecer separados** — fundir trust domains distintos
 (memory = confiança; research = proveniência de citação) num único event-sourced log
-reabre a classe de bug Model B que ADR-0002 tornou irrepresentável. O que estava duplicado
+reabre a classe de bug Model B que ADR-0023 tornou irrepresentável. O que estava duplicado
 eram as **mecânicas**, não a **separação**.
 
 Havia também um bug latente: a cópia do `forge-core-memory` recomputava

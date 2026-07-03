@@ -7,7 +7,7 @@
 //! **atomically** under an exclusive file lock, closing the TOCTOU window
 //! between decide and write (CWE-367 — atomicity at the write site; ADR-0010).
 //!
-//! # Architecture (mirrors ADR-0003 / `forge-core-memory`)
+//! # Architecture (mirrors ADR-0024 / `forge-core-memory`)
 //!
 //! - **Event log** (`research/sources.ndjson`): append-only JSONL. The source
 //!   of truth. Never mutated in place ("the dataset only grows").

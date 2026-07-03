@@ -24,7 +24,7 @@
 //! - **[`error`]** — hand-rolled error enums (project convention: no
 //!   `anyhow`/`thiserror`, no `Result<_, String>`).
 //!
-//! The MCP server is a PEP (Policy Enforcement Point) per ADR-0003; the
+//! The MCP server is a PEP (Policy Enforcement Point) per ADR-0024; the
 //! kernel remains the only PDP (Policy Decision Point) for mutation.
 //!
 //! # Deletion test

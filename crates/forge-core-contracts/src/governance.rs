@@ -161,7 +161,7 @@ pub struct GovernancePolicy {
     /// all (fail-closed, matching the F06 `MemoryPolicy` convention).
     pub permitted_principals: Vec<PrincipalId>,
     /// Principals authorized to attest memory reviews (unblocks F06's deferred
-    /// `memory review` verb — ADR 0002's reviewer-authorization requirement).
+    /// `memory review` verb — ADR 0023's reviewer-authorization requirement).
     pub authorized_reviewers: Vec<PrincipalId>,
     /// How conflicts are handled. `EmitContract` is the F07 default and the
     /// only correct posture; `SilentLastWriterWins` is present for completeness
