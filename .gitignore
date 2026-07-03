@@ -8,6 +8,7 @@ venv/
 .mypy_cache/
 .ruff_cache/
 target/
+darkest-roguelite/
 .forge-method/*.local
 .forge-method/test-runs/
 .forge-method/claims-active/

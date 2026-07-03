@@ -15,7 +15,7 @@ authority:
     - "contracts/**/*.yaml"
     - "crates/**"
   forensic_reference_only:
-    - "forensic-reference/**"
+    - "../Forge-method-archive/forensic-reference/**"
   not_copied:
     - "old Python runtime scripts"
     - "old Codex plugin skill surface"
@@ -25,7 +25,7 @@ rules:
   - "Python is not an implementation target for this project."
   - "Markdown is not runtime or agent-facing authority."
   - "Typed YAML/JSON/Rust contracts are the source of truth."
-  - "Forensic references can be mined for failures and product lessons, but cannot authorize implementation."
+  - "Historical material (forensic reference, research digests, dev journals) lives in the sibling Forge-method-archive repo and cannot authorize implementation."
 validation_baseline:
   package_manager: "cargo"
   expected_workspace_file: "Cargo.toml"

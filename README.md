@@ -576,11 +576,14 @@ contracts/
   spec/  plan/  stories/  discovery artifacts (typed YAML)
   claims/                 claim fixtures + schemas
 skill/forge-method/        host skill wiring
-forensic-reference/       migrated legacy reference (NOT runtime authority)
+docs/                      live ADRs + design specs (code-cited)
 ```
 
-`forensic-reference/` is historical context only. The authority is always the
-`contracts/` tree plus the running `forge-core` binary.
+The authority is always the `contracts/` tree plus the running `forge-core`
+binary. Historical research digests, agent session journals, milestone plans,
+and the legacy forensic reference that motivated the Rust migration live in the
+sibling **[Forge-method-archive](../Forge-method-archive)** repository — they
+are not runtime authority.
 
 ## License
 
