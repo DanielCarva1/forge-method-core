@@ -100,6 +100,46 @@ pub fn embedded_exists(rel_path: &str) -> bool {
     embedded_text(rel_path).is_some()
 }
 
+/// Every `.yaml` file in the embedded tree, as repo-relative paths
+/// (e.g. `"contracts/claims/claim-contract-v0.yaml"`).
+///
+/// Used by callers that need the full set of canonically-known contract
+/// paths to seed a reference index without scanning disk.
+#[must_use]
+pub fn embedded_yaml_paths() -> Vec<String> {
+    use include_dir::DirEntry;
+    fn walk<'a>(dir: &'a Dir<'a>, prefix: &str, out: &mut Vec<String>) {
+        for entry in dir.entries() {
+            match entry {
+                DirEntry::Dir(d) => {
+                    let name = d.path().to_string_lossy();
+                    let child_prefix = if prefix.is_empty() {
+                        name.into_owned()
+                    } else {
+                        format!("{prefix}/{name}")
+                    };
+                    walk(d, &child_prefix, out);
+                }
+                DirEntry::File(f) => {
+                    if f.path().extension().is_some_and(|ext| ext == "yaml") {
+                        let name = f.path().to_string_lossy();
+                        let full = if prefix.is_empty() {
+                            format!("contracts/{name}")
+                        } else {
+                            format!("contracts/{prefix}/{name}")
+                        };
+                        out.push(full);
+                    }
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(&EMBEDDED_CONTRACTS, "", &mut out);
+    out.sort();
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

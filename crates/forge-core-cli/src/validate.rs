@@ -26,7 +26,7 @@ use forge_core_contracts::{
     ToolEffectContractDocument,
 };
 use forge_core_store::{
-    build_reference_index, collect_known_repo_paths, collect_validation_yaml_documents,
+    collect_known_repo_paths, collect_validation_yaml_documents,
 };
 use forge_core_validate::{
     validate_claim, validate_claim_cross_references, validate_command, validate_completion,
@@ -174,6 +174,21 @@ impl ValidateSummary {
     }
 }
 
+/// Detect whether `root` is a consumer project (no local `contracts/` tree)
+/// versus the Forge core repo (which owns the canonical contracts).
+///
+/// A consumer created by `forge-core project init` ships no `contracts/`
+/// directory: it carries only the `.forge-method.yaml` pointer and its runtime
+/// state lives in the sibling sidecar. The shared contract definitions are
+/// served from the binary (embedded), and the core-only fixtures
+/// (`contracts/runtimes`, `docs/fixtures/operation-contract-v0`, the evidence
+/// registry, the inventory) are not present. This predicate gates those
+/// core-only validation passes so a consumer gets a clean validation rather
+/// than hard errors for files it is not supposed to ship.
+fn is_consumer_repo(root: &Path) -> bool {
+    !root.join("contracts").is_dir()
+}
+
 /// Validate the Forge workspace rooted at `root`. Walks the contract tree,
 /// builds a reference index, parses every YAML document, and accumulates
 /// diagnostics into a [`ValidateSummary`] whose JSON shape is the regression
@@ -187,7 +202,15 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
         diagnostics: Vec::new(),
     };
 
-    let index = match build_reference_index(root) {
+    // Build the reference index. Seed it with the embedded contract paths so
+    // a consumer repo that ships no `contracts/` tree still resolves the
+    // shared definitions served from the binary (disk copies still win when
+    // present, via insert_existing).
+    let embedded_refs = forge_core_decisions::embedded_yaml_paths();
+    let index = match forge_core_store::ReferenceIndexBuilder::new()
+        .with_known_embedded_refs(embedded_refs)
+        .build(root)
+    {
         Ok(index) => index,
         Err(err) => {
             summary.push_diagnostic(Diagnostic::error(
@@ -204,7 +227,16 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
     summary.add_validation_diagnostics("yaml_parse", &yaml_documents.diagnostics);
 
     let evidence_path = root.join("contracts/research/field-evidence-20260625.yaml");
-    let evidence = read_yaml::<FieldEvidenceRegistry>(&evidence_path, &mut summary);
+    // The evidence registry and inventory are core-only fixtures: a consumer
+    // repo never ships them. When the consumer has no local contracts/ tree,
+    // read them silently as None (skip the dependent checks) rather than
+    // emitting hard errors for files the consumer is not supposed to have.
+    let is_consumer = is_consumer_repo(root);
+    let evidence = if is_consumer {
+        None
+    } else {
+        read_yaml::<FieldEvidenceRegistry>(&evidence_path, &mut summary)
+    };
     if let Some(evidence) = &evidence {
         summary.add_report("evidence_registry", validate_evidence_registry(evidence));
         summary.add_report(
@@ -218,7 +250,11 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
     );
 
     let inventory_path = root.join("contracts/inventory/v0-contract-family-lock.yaml");
-    let inventory = read_yaml::<ContractFamilyInventoryDocument>(&inventory_path, &mut summary);
+    let inventory = if is_consumer {
+        None
+    } else {
+        read_yaml::<ContractFamilyInventoryDocument>(&inventory_path, &mut summary)
+    };
     if let Some(inventory) = &inventory {
         if let Some(evidence) = &evidence {
             summary.add_report("inventory", validate_inventory(inventory, evidence));
@@ -237,9 +273,18 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
         &mut summary,
         validate_command,
     );
-    validate_operation_fixtures(root, &index, &mut summary);
-    validate_side_contracts(root, &index, &mut summary);
-    validate_runtime_contracts(root, &index, &mut summary);
+    // Operation fixtures (docs/fixtures/operation-contract-v0), side-contract
+    // instances, and runtime contracts (contracts/runtimes/*.yaml) are
+    // core-only fixtures. A consumer repo never ships them, so skip these
+    // checks entirely when running against a consumer (no local contracts/
+    // tree). The consumer's own instances, if any, live under contracts/ and
+    // are already covered by the named-dir-instance + known-repo-ref checks
+    // above when present.
+    if !is_consumer {
+        validate_operation_fixtures(root, &index, &mut summary);
+        validate_side_contracts(root, &index, &mut summary);
+        validate_runtime_contracts(root, &index, &mut summary);
+    }
 
     summary.finish();
     summary
@@ -577,6 +622,13 @@ fn yaml_files(dir: &Path, summary: &mut ValidateSummary) -> Vec<PathBuf> {
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(err) => {
+            // A missing directory is not an error: it means there are no
+            // instances to validate (common for a consumer repo that ships
+            // no contracts/commands, contracts/claims, etc.). Any other IO
+            // error (permission denied, …) is a real failure and surfaces.
+            if err.kind() == std::io::ErrorKind::NotFound {
+                return Vec::new();
+            }
             summary.push_diagnostic(Diagnostic::error(
                 DiagnosticCode::ReadDirFailed,
                 dir.to_string_lossy(),

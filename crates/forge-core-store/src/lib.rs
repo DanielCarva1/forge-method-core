@@ -86,6 +86,11 @@ impl Default for ReferenceIndexOptions {
 #[derive(Debug, Clone, Default)]
 pub struct ReferenceIndexBuilder {
     options: ReferenceIndexOptions,
+    /// Repo-relative paths of contracts that are canonically known even when
+    /// absent from disk (e.g. embedded in the binary). `insert_existing`
+    /// registers these regardless of disk presence, so a consumer repo
+    /// without a `contracts/` tree still resolves the shared definitions.
+    known_embedded_refs: std::collections::HashSet<String>,
 }
 
 impl ReferenceIndexBuilder {
@@ -96,7 +101,25 @@ impl ReferenceIndexBuilder {
 
     #[must_use]
     pub fn with_options(options: ReferenceIndexOptions) -> Self {
-        Self { options }
+        Self {
+            options,
+            known_embedded_refs: std::collections::HashSet::new(),
+        }
+    }
+
+    /// Declare repo-relative paths that are canonically known even when they
+    /// are not present on disk under `root` (e.g. they are embedded in the
+    /// binary). The builder will register them as existing definitions so
+    /// downstream reference checks pass for a consumer repo that ships no
+    /// `contracts/` tree of its own.
+    #[must_use]
+    pub fn with_known_embedded_refs<I, S>(mut self, refs: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.known_embedded_refs = refs.into_iter().map(Into::into).collect();
+        self
     }
 
     /// Build a [`ReferenceIndex`] by scanning the repository at `root`.
@@ -112,13 +135,13 @@ impl ReferenceIndexBuilder {
         let root = root.as_ref();
         let mut index = ReferenceIndex::new();
 
-        add_contract_definitions(&mut index, root);
-        add_policy_files(&mut index, root)?;
+        add_contract_definitions(&mut index, root, &self.known_embedded_refs);
+        add_policy_files(&mut index, root, &self.known_embedded_refs)?;
         add_operation_fixtures(&mut index, root)?;
-        add_contract_instances(&mut index, root)?;
+        add_contract_instances(&mut index, root, &self.known_embedded_refs)?;
         add_command_contracts(&mut index, root)?;
-        add_runtime_contracts(&mut index, root)?;
-        add_runtime_state_refs(&mut index, root, &self.options);
+        add_runtime_contracts(&mut index, root, &self.known_embedded_refs)?;
+        add_runtime_state_refs(&mut index, root, &self.options, &self.known_embedded_refs);
 
         Ok(index)
     }
@@ -2240,15 +2263,26 @@ impl fmt::Display for EffectStoreLockError {
 
 impl std::error::Error for EffectStoreLockError {}
 
-fn add_contract_definitions(index: &mut ReferenceIndex, root: &Path) {
+fn add_contract_definitions(
+    index: &mut ReferenceIndex,
+    root: &Path,
+    known_embedded: &std::collections::HashSet<String>,
+) {
     for reference in CONTRACT_DEFINITIONS {
-        insert_existing(index, root, reference, ReferenceKind::ContractDefinition);
+        insert_existing(
+            index,
+            root,
+            reference,
+            ReferenceKind::ContractDefinition,
+            known_embedded,
+        );
     }
 }
 
 fn add_policy_files(
     index: &mut ReferenceIndex,
     root: &Path,
+    known_embedded: &std::collections::HashSet<String>,
 ) -> Result<(), ReferenceIndexBuildError> {
     add_yaml_files_in_dir(index, root, "contracts/policies", ReferenceKind::Policy)?;
     insert_existing(
@@ -2256,6 +2290,7 @@ fn add_policy_files(
         root,
         "contracts/operations/operation-reference-policy-v0.yaml",
         ReferenceKind::Policy,
+        known_embedded,
     );
     Ok(())
 }
@@ -2275,6 +2310,7 @@ fn add_operation_fixtures(
 fn add_contract_instances(
     index: &mut ReferenceIndex,
     root: &Path,
+    _known_embedded: &std::collections::HashSet<String>,
 ) -> Result<(), ReferenceIndexBuildError> {
     add_instance_dir(
         index,
@@ -2362,6 +2398,7 @@ fn add_command_contracts(
 fn add_runtime_contracts(
     index: &mut ReferenceIndex,
     root: &Path,
+    _known_embedded: &std::collections::HashSet<String>,
 ) -> Result<(), ReferenceIndexBuildError> {
     let dir = root.join("contracts/runtimes");
     for path in yaml_files(&dir)? {
@@ -2389,12 +2426,14 @@ fn add_runtime_state_refs(
     index: &mut ReferenceIndex,
     root: &Path,
     options: &ReferenceIndexOptions,
+    known_embedded: &std::collections::HashSet<String>,
 ) {
     insert_existing(
         index,
         root,
         ".forge-method/ledger.ndjson",
         ReferenceKind::Ledger,
+        known_embedded,
     );
     if options.include_standard_runtime_projections {
         index.insert(
@@ -2627,8 +2666,17 @@ fn read_yaml_value(path: &Path) -> Result<Value, ReferenceIndexBuildError> {
     })
 }
 
-fn insert_existing(index: &mut ReferenceIndex, root: &Path, reference: &str, kind: ReferenceKind) {
-    if root.join(reference).exists() {
+fn insert_existing(
+    index: &mut ReferenceIndex,
+    root: &Path,
+    reference: &str,
+    kind: ReferenceKind,
+    known_embedded: &std::collections::HashSet<String>,
+) {
+    // Register if the file is present on disk OR if it is a canonically
+    // known embedded contract (a consumer repo may ship no contracts/ tree
+    // but still reference the shared definitions served from the binary).
+    if root.join(reference).exists() || known_embedded.contains(reference) {
         index.insert(reference, kind);
     }
 }
