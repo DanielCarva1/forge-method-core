@@ -338,9 +338,8 @@ mod tests {
         {
             assert!(
                 registered.contains(name),
-                "default tool {:?} is not a registered forge-core command \
+                "default tool {name:?} is not a registered forge-core command \
                  (rename in COMMANDS, or a typo in DEFAULT_*_TOOLS)",
-                name,
             );
         }
         // The two default arrays must not overlap (a tool is read-only XOR mutate).
@@ -348,8 +347,7 @@ mod tests {
         for name in DEFAULT_MUTATE_TOOLS.iter().copied() {
             assert!(
                 !ro.contains(name),
-                "tool {:?} appears in both DEFAULT_READONLY_TOOLS and DEFAULT_MUTATE_TOOLS",
-                name,
+                "tool {name:?} appears in both DEFAULT_READONLY_TOOLS and DEFAULT_MUTATE_TOOLS",
             );
         }
     }
