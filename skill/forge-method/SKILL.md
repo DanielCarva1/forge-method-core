@@ -38,7 +38,14 @@ Resolve `forge-core` from PATH or Cargo bin. It may be `forge-core` or
 ```bash
 forge-core --version 2>/dev/null \
   || forge-core.exe --version 2>/dev/null \
-  || ~/.cargo/bin/forge-core --version 2>/dev/null \
+  || echo "NOT_FOUND"
+```
+
+If the binary is installed but not on PATH, check the Cargo bin dir before
+giving up:
+
+```bash
+~/.cargo/bin/forge-core --version 2>/dev/null \
   || ~/.cargo/bin/forge-core.exe --version 2>/dev/null \
   || echo "NOT_FOUND"
 ```
@@ -46,8 +53,8 @@ forge-core --version 2>/dev/null \
 If missing, install from the core repo:
 
 ```bash
-git clone https://github.com/DanielCarva1/Forge-method-core.git
-cd Forge-method-core
+git clone https://github.com/Stable-Studio/forge-method-rust.git
+cd forge-method-rust
 cargo install --path crates/forge-core-cli
 ```
 

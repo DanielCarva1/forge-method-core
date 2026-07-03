@@ -504,9 +504,10 @@ call them.
 
 **Not yet (roadmap)**
 
-- **MCP server** — today host agents call `forge-core` over the shell; a native
-  MCP surface is the next slice (v0.2). The CLI is the intended agent boundary
-  by design.
+- **MCP server** — `forge-core mcp serve` is implemented (stdio JSON-RPC,
+  tool-call attestation, fail-closed allowlist). Roadmap: snapshotting /
+  hardening and a richer tool surface. The CLI remains the intended agent
+  boundary by design.
 - **Full state derivation layer** — the effect WAL is implemented and
   tested. Current coordination state is still
   reconstructed from the claims bus on each invocation; the fuller
