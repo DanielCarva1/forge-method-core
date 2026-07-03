@@ -842,6 +842,7 @@ version = "0.1.0"
 dependencies = [
  "asn1-rs",
  "base64",
+ "chrono",
  "criterion",
  "ed25519-dalek",
  "forge-core-contracts",
@@ -849,6 +850,7 @@ dependencies = [
  "proptest",
  "rasn",
  "rasn-ocsp",
+ "rasn-pkix",
  "rcgen",
  "rustls-pki-types",
  "sct",

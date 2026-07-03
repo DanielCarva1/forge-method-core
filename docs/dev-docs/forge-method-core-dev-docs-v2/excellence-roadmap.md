@@ -24,112 +24,111 @@ aceite. Trabalhe um item por sessão; commit; próxima.
 
 ---
 
-## Handoff para o próximo agente (Commit 2.3 — OCSP decode + freshness)
+## Handoff para o próximo agente (Commit 2.4 — TUF trusted-root freshness)
 
 > **Leia isto primeiro.** É a tarefa corrente, auto-contida, com tudo o que
 > um agente fresco precisa para continuar sem redescobrir o que esta sessão
 > já mapeou.
 
-### Histórico da sessão: Commit 2.2 ✅ LANDED
+### Histórico da sessão: Commit 2.3 ✅ LANDED
 
-Commit 2.2 cobriu os 4 entrypoints de `rekor.rs` (397 LOC) com 30 testes
-inline + 1 KAT regenerator `#[ignore]`d. Detalhes na seção Fase 2 abaixo.
-Duas descobertas técnicas para não serem re-litigadas:
+Commit 2.3 cobriu os 11 helpers `pub(crate)` de `ocsp.rs` com 34 testes
+inline. Detalhes na seção Fase 2 abaixo. Descobertas técnicas para não serem
+re-litigadas:
 
-1. **`ParsedRekorEntry` / `ParsedCheckpoint` não implementam `Debug`/`PartialEq`**
-   (produção, zero churn). Testes usam `assert!(matches!(result, Err(...)))`
-   em vez de `assert_eq!` no `Result` completo.
-2. **`test_signing_key().verifying_key()` é borrow-after-free** — a
-   `verifying_key()` empresta a signing key, então é preciso bindar a
-   signing key num local antes (`let sk = test_signing_key(); let vk =
-   sk.verifying_key();`). Mesma armadilha para a wrong key.
+1. **`ocsp.rs` já tinha cobertura E2E completa** (17 integration tests em
+   `validate.rs` cobrindo o entrypoint público via DER assinado rcgen). O
+   Commit 2.3 focou em cobertura unitária direta dos helpers, construindo
+   structs `rasn-ocsp` em Rust puro — fail-close ao ponto de falha.
+2. **`rasn::types::Name` (X.500 Distinguished Name) não é publicamente
+   construído** em rasn 0.28. Testes usam `ResponderId::ByKey` (que só
+   precisa de `OctetString`) em vez de `ResponderId::ByName(Name)`.
+3. **`ObjectIdentifier::new()` retorna `Option`**; use
+   `ObjectIdentifier::new_unchecked(arcs.into())` em fixtures de teste.
+4. **`SequenceOf<T>` é alias para `Vec<T>`** — `.into()` é inútil (clippy
+   pega); atribua direto.
+5. **Dev-deps adicionadas:** `chrono` + `rasn-pkix` (workspace deps).
+6. **Serial do rcgen CA default é grande demais para u64** — sempre setar
+   `params.serial_number = Some(rcgen::SerialNumber::from(<u64>))` em
+   fixtures de teste.
 
-### Próxima tarefa: Commit 2.3 — OCSP decode + signature/freshness verify
+### Próxima tarefa: Commit 2.4 — TUF trusted-root freshness
 
-**Arquivo-alvo:** `crates/forge-core-crypto/src/ocsp.rs` (408 LOC).
+**Arquivo-alvo:** `crates/forge-core-crypto/src/tuf.rs` (207 LOC).
 
-**Status atual do crate:** Fase 2 ~50% completa (Commits 2.1-2.2 landed:
-ed25519/p256/rekor cobertos, 44 testes lib + 7 zeroize_smoke). `ocsp.rs`
-tem **zero testes** e zero fixtures OCSP em qualquer `tests/`.
+**Status atual do crate:** Fase 2 ~75% completa (Commits 2.1-2.3 landed:
+ed25519/p256/rekor/OCSP cobertos, 78 testes lib + 7 zeroize_smoke). `tuf.rs`
+tem **zero testes inline** — mas já tem 6 integration tests E2E em
+`validate.rs` (linhas 4576-4742) cobrindo o entrypoint público
+`run_host_adapter_tuf_trusted_root_freshness_verification`.
 
-**Funções a cobrir (11, todas `pub(crate)` exceto 1 `pub`):**
+**Funções a cobrir (1 `pub(crate)` + 5 privadas, todas inline):**
 
 | # | Função | Visib. | Linha | Retorno |
 |---|--------|--------|-------|---------|
-| 1 | `decode_ocsp_response(der, evidence, reasons)` | `pub` | 34 | `Option<OcspResponse>` |
-| 2 | `decode_basic_ocsp_response(der, evidence, reasons)` | `pub(crate)` | 52 | `Option<BasicOcspResponse>` |
-| 3 | `verify_basic_ocsp_signature_with_issuer(...)` | `pub(crate)` | 70 | `bool` |
-| 4 | `ocsp_responder_id_matches_issuer(...)` | `pub(crate)` | 144 | `bool` |
-| 5 | `find_matching_ocsp_single_response(...)` | `pub(crate)` | 175 | `Option<&SingleResponse>` |
-| 6 | `verify_ocsp_single_response_freshness(...)` | `pub(crate)` | 239 | `()` |
-| 7 | `apply_ocsp_cert_status(...)` | `pub(crate)` | 267 | `()` |
-| 8 | `extract_ocsp_response_nonce_hex(...)` | `pub(crate)` | 297 | `Option<String>` |
-| 9 | `verify_ocsp_nonce(expected, observed, ...)` | `pub(crate)` | 324 | `()` |
-| 10 | `normalize_expected_ocsp_nonce_hex(value, reasons)` | `pub(crate)` | 352 | `Option<String>` |
-| 11 | `rasn_oid_matches(oid, expected)` | `pub(crate)` | 406 | `bool` |
+| 1 | `verify_tuf_metadata_freshness_role(...)` | `pub(crate)` | 39 | `()` |
+| 2 | `parse_tuf_datetime_utc_to_unix(expires, reasons)` | priv | 132 | `Option<i64>` |
+| 3 | `parse_fixed_i32(slice, start, end)` | priv | 175 | `Option<i32>` |
+| 4 | `days_in_month(year, month)` | priv | 181 | `i32` |
+| 5 | `is_leap_year(year)` | priv | 192 | `bool` |
+| 6 | `days_from_civil(y, m, d)` | priv | 199 | `i64` |
 
-**Estilo de erro (DIFERENTE de rekor/slsa):** `ocsp.rs` **não usa `Result`
-nem `ValidationReport` nem enum tipado.** Todas as funções recebem
-`verified_evidence: &mut Vec<String>` + `reasons: &mut Vec<String>` e fazem
-push de reason codes lowercase pontilhados (`"ocsp_status_response_expired"`,
-`"ocsp_status_nonce_mismatch"`, etc.). Failures = `None`/`false`/`()` + reason
-pushed. **Não migrar este estilo** — é o padrão do módulo. Testes devem
-inspecionar o `Vec<String>` final e/ou o `Option`/`bool` retornado.
+**Estilo de erro:** mesmo padrão `Vec<String>` accumulation do OCSP —
+`verify_tuf_metadata_freshness_role` recebe `&mut Vec<HostAdapterTufMetadataFreshnessRole>`
++ `&mut Vec<String>` (evidence) + `&mut Vec<String>` (reasons). **Sem
+enum de erro.** Testes inspecionam os vetores + o `Option<i64>` do parser.
 
-**Gate de aceite (Commit 2.3):**
+**Vantagem: muito mais simples que OCSP.** `tuf.rs` depende só de
+`serde_json::Value` + `std::path::Path` — **sem chrono, sem rcgen, sem
+rasn-ocsp.** Datetime parsing é hand-rolled (RFC 3339 → unix secs via
+`days_from_civil`). Fixtures são JSON simples.
+
+**Padrões a reusar (NÃO reinventar):**
+
+- **E2E já cobre os 6 cenários** (fresh metadata, expired root, rollback
+  version, invalid expiry format, non-TUF policy, binary JSON output).
+  Commit 2.4 = cobertura unitária direta dos helpers, focando em edge cases
+  de datetime parsing (`parse_tuf_datetime_utc_to_unix`,
+  `days_from_civil`, `is_leap_year`, `days_in_month`) que o E2E não isola.
+- **Tipos de entrada:** `verify_tuf_metadata_freshness_role` recebe um
+  `serde_json::Value` (o metadata doc) + strings de role type/version floor.
+  Construa JSON fixtures inline.
+
+**Gate de aceite (Commit 2.4):**
 
 - `cargo test -p forge-core-crypto` verde.
 - Clippy pedantic + fmt limpos (auto via `pi-green-loop` hook).
-- Cobertura mínima: happy-path decode (`decode_ocsp_response` Good/Revoked/
-  Unknown), responder ID match (ByName + ByKey), nonce constant-time compare
-  (match/mismatch), freshness window (dentro/fora de thisUpdate..nextUpdate).
+- Cobertura mínima: `verify_tuf_metadata_freshness_role` (fresh + expired +
+  rollback), `parse_tuf_datetime_utc_to_unix` (RFC 3339 válido, formatos
+  inválidos), `is_leap_year`/`days_in_month`/`days_from_civil` (edge cases
+  de calendário: ano bissexto, fevereiro, datas limite).
 - Zero churn em produção (só `#[cfg(test)]`).
-
-**Padrões a reusar / armadilhas conhecidas:**
-
-- **Sem fixtures OCSP existentes.** Grepei `crates/forge-core-cli/tests/` —
-  zero hits para ocsp/revocation/crl. `tests/fixtures/` tem subdirs `ct`,
-  `rfc3161`, `risk-audit`, mas **nenhum `ocsp`**. Vai ter que mintar DER
-  OCSP do zero. Use `rasn-ocsp` (`rasn::der::encode`) + `rcgen` (issuer
-  cert) para construir respostas de teste — ambos já são dev-deps.
-- **Crates de ASN.1/DER:** `rasn-ocsp` (tipos: `OcspResponse`,
-  `BasicOcspResponse`, `CertId`, `CertStatus`, `ResponderId`,
-  `SingleResponse`, `Nonce`), `rasn` (encode/decode), `asn1-rs` (`BitString`,
-  `FromDer` p/ signature), `x509-parser` (`X509Certificate`,
-  `verify_signature`), `sha1`/`sha2` (digest OIDs).
-- **Entrypoint público não está em ocsp.rs** — é
-  `crate::run_host_adapter_certificate_ocsp_status_verification` em `lib.rs`.
-  ocsp.rs só tem os helpers low-level. Os testes podem chamar os helpers
-  `pub(crate)` diretamente (inline) ou o entrypoint público via integration
-  test.
-- **p256 signing key ↔ cert:** se precisar de uma OCSP response assinada
-  por um issuer válido, reusar a ponte rcgen `KeyPair::serialize_der()` →
-  `p256::ecdsa::SigningKey::from_pkcs8_der` estabelecida no Commit 2.1.
-  Seed fixa `[8u8;32]` já alinhada com `validate.rs:341`.
 
 **Decisões de design já tomadas (NÃO reconsiderar):**
 
-- **Visibilidade:** só `decode_ocsp_response` é `pub` (fuzz-exposed, doc em
-  `lib.rs:74-80`). As outras 10 são `pub(crate)` → **testes inline
-  obrigatórios** (não dá acesar de `tests/`).
-- **Não criar enum de erro** para ocsp.rs — conflitaria com o estilo
-  `Vec<String>` existente e com AGENTS.md (que diz que validação é
-  acumuladora). Manter o `reasons: &mut Vec<String>`.
+- **Visibilidade:** `verify_tuf_metadata_freshness_role` é `pub(crate)` →
+  **teste inline obrigatório**. As 5 helpers privadas só são acessíveis
+  inline dentro do próprio módulo.
+- **Não criar enum de erro** — manter o `Vec<String>` accumulation.
+- **Entrypoint público não está em tuf.rs** — é
+  `crate::run_host_adapter_tuf_trusted_root_freshness_verification` em
+  `host_adapter_verification.rs:1521` (chama
+  `verify_tuf_metadata_freshness_role` 4× — uma por role root/timestamp/
+  snapshot/targets).
 
 **Convenções do repo a respeitar** (em `AGENTS.md`, sempre carregadas):
 
 - **Sem `anyhow`/`thiserror`.**
 - **Editor stability (WSL+Windows+r-a):** nunca dois cargos em paralelo.
-- **Context hygiene:** uma story por sessão. Commit 2.3 = uma sessão.
-  Ao terminar: commit, marcar Commit 2.3 ✅ LANDED neste doc, `/clear`,
-  próximo agente pega Commit 2.4.
+- **Context hygiene:** uma story por sessão. Commit 2.4 = uma sessão.
+  Ao terminar: commit, marcar Commit 2.4 ✅ LANDED, Fase 2 completa.
+  Próximo agente pega Fase 3 (governance, eval-harness, etc.).
 - **Commits:** o usuário commita explicitamente quando pede.
 
-**Depois do 2.3 (roadmap restante):**
+**Depois do 2.4 (Fase 3):**
 
-- Commit 2.4 — TUF trusted-root freshness (`tuf.rs` 207 LOC).
-- Fase 3 — governance, eval-harness, research, eventlog, eval, trace
-  (1 crate por sessão).
+- Fase 3 — 1 crate por sessão, ordem por risco:
+  governance → eval-harness → research → eventlog → eval/trace.
 
 ---
 
@@ -247,9 +246,34 @@ ampla por commit:
   clippy pedantic limpo, fmt limpo. Workspace: 1 falha pré-existente
   (`operation_sidecar_e2e::execute_operation_rejects_outside_root_operation_path_before_read`)
   já falha em `b46d0bf2` — não regressão deste commit.
-- **Commit 2.3 — OCSP/CRL/CT-SCT status.** PRÓXIMO. Decode OCSP (good/revoked/
-  unknown), CRL revoked detection, CT/SCT timestamp validation.
-- **Commit 2.4 — TUF trusted-root freshness.** Version monotonicity,
+- **Commit 2.3 — OCSP helpers: cobertura unitária direta dos `pub(crate)`.**
+  ✅ LANDED (34 testes inline). O crate já tinha cobertura E2E completa do
+  entrypoint público OCSP (17 integration tests em `validate.rs` cobrindo
+  good/revoked/unknown/expired/future/nonce/sig/responder-mismatch via DER
+  assinado rcgen). O gap era cobertura unitária direta dos 11 helpers
+  `pub(crate)` de `ocsp.rs` — só exercitados indiretamente. Cobertura por
+  construção de structs `rasn-ocsp` em Rust puro (sem DER assinado):
+  - `decode_ocsp_response`/`decode_basic_ocsp_response` — round-trip
+    (encode→decode) + DER inválido → `None` + reason.
+  - `verify_ocsp_single_response_freshness` — janela válida, this_update no
+    futuro, next_update expirado, next_update ausente.
+  - `apply_ocsp_cert_status` — Good/Revoked (revoked_at + reason Debug)/Unknown.
+  - `extract_ocsp_response_nonce_hex` — nonce presente (double-wrapped
+    OCTET STRING), extensões ausentes, OID não-nonce.
+  - `verify_ocsp_nonce` — match/mismatch/missing/present-without-expectation/
+    neither-supplied (todos os 5 ramos).
+  - `normalize_expected_ocsp_nonce_hex` — lowercase, separadores (`:`/`-`/
+    espaço), odd-length, caractere inválido, vazio.
+  - `rasn_oid_matches` — match, prefix-only, arcos diferentes.
+  - `ocsp_responder_id_matches_issuer` (ByKey) + `find_matching_ocsp_single_response`
+    — match, serial mismatch, hash algorithm unsupported (com issuer cert
+    rcgen real).
+  - `verify_basic_ocsp_signature_with_issuer` — caminho negativo (sig sintética;
+    happy-path já coberto no E2E).
+  Adicionadas dev-deps `chrono` + `rasn-pkix` (workspace). Zero churn de
+  produção. `cargo test -p forge-core-crypto` verde (78 lib + 7 zeroize_smoke
+  + 1 ignored KAT), clippy pedantic limpo, fmt limpo.
+- **Commit 2.4 — TUF trusted-root freshness.** PRÓXIMO. Version monotonicity,
   timestamp/snapshot/targets version checks, expiry.
 
 Cada commit: `cargo test -p forge-core-crypto` a passar.
