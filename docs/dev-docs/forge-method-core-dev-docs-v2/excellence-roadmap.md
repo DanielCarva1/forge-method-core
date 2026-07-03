@@ -24,7 +24,31 @@ aceite. Trabalhe um item por sessão; commit; próxima.
 
 ---
 
-## 1. `derive_state` layer (o gap real de v0.2)
+## 1. `derive_state` layer (o gap real de v0.2) — ✅ LANDED
+
+**Status:** concluído em 3 commits (`f94eac45`, `d8a36c1d`, `d8a36c1d`+tests).
+
+**O que landed:**
+- `crates/forge-core-store/src/derive_state.rs` — o único construtor de
+  autoridade para claim state. Enrola a projeção já existente
+  (`replay_claim_wal`) e incorpora a dança de auto-repair de torn-tail que
+  vivia inline em `claim.rs`.
+- `load_claims()` em `claim.rs` agora roteia por `derive_state` internamente
+  (zero churn nos 7 call sites: acquire/heartbeat/release/handoff/status/
+  reconcile/check-write + graph_cmd.rs migraram transparentemente).
+- `forge-core claim status --from-cache` adicionado (debug/diagnóstico, lê o
+  YAML legado; spec AC5).
+- 5 testes novos provam os ACs: tamper-fail-closed (ac1/ac4),
+  cache-mutation-inert (ac7), from-cache-flag (ac5).
+- Toda a rede de regressão verde: 66 store + 204 CLI lib + 22 claim E2E.
+
+**O que NÃO landed (follow-up opcional):**
+- Snapshot/rotation como cache de leitura (P3.3, "later perf layer" no spec).
+- Tipo opaco `ClaimState` com seal compile-time (defense-in-depth, opção b).
+
+---
+
+## 1-OLD (arquivo histórico — substituído por ✅ acima)
 
 **Contexto.** Hoje o estado de coordenação é reconstruído lendo os YAMLs de
 claim a cada invocação (`load_claims()` em `claim.rs:823`). O WAL
@@ -33,23 +57,6 @@ leitura ainda faz replay completo em cada chamada. A spec
 `contracts/spec/claims-integrity-spine-spec.yaml:56` manda existir um
 `crates/forge-core-store/src/derive_state.rs` como **único construtor de
 estado** — ele **não existe**.
-
-**Por que importa.** É o item de roadmap mais citado no README "Not yet" e
-bloqueia performances em escala (muitos claims = replay caro a cada comando).
-
-**Arquivos.**
-- Criar: `crates/forge-core-store/src/derive_state.rs`
-- Spec: `contracts/spec/claims-integrity-spine-spec.yaml` (já define o contrato)
-- Migração de leitores: `crates/forge-core-cli/src/claim.rs:823`
-  (`load_claims`), `graph_cmd.rs:429`, `coordination.rs`
-
-**Gate de aceite.** `derive_state()` é a única função que consome o WAL e
-produz o estado projetado; todo leitor de claims roteia por ela; o benchmark
-de replay (se existir) mostra ganho ou no-breakage; `cargo test --workspace`
-verde.
-
-**Estimativa.** 2-3 sessões. Comece lendo a spec inteira + `claim_wal.rs`
-(projeção já existe em `project_claim_wal_recovery`).
 
 ---
 

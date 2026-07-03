@@ -508,10 +508,12 @@ call them.
   tool-call attestation, fail-closed allowlist). Roadmap: snapshotting /
   hardening and a richer tool surface. The CLI remains the intended agent
   boundary by design.
-- **Full state derivation layer** — the effect WAL is implemented and
-  tested. Current coordination state is still
-  reconstructed from the claims bus on each invocation; the fuller
-  `derive_state`-as-sole-constructor layer remains queued for v0.2.
+- **State derivation layer** — `forge_core_store::derive_state` is now the
+  sole authority constructor for claim state, replaying the append-only WAL
+  with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is
+  no longer an authority path (inspect it via `claim status --from-cache`).
+  The effect WAL is also implemented and tested. Snapshot/rotation as a read
+  cache (P3.3) remains a later perf layer.
 - **First-use skill wiring** — the global Forge skill/start script still needs
   to call or guide `forge-core project init --root <repo>` for repos that do not
   yet have a Forge Project Link.
