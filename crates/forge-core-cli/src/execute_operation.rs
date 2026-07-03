@@ -457,12 +457,7 @@ pub fn run_execute_operation(
     } else {
         None
     };
-    let operation_path = resolve_contract_input_path(
-        &root,
-        &canonical_root,
-        &input.operation_path,
-        ExecuteOperationContractPathKind::Operation,
-    )?;
+    let operation = load_operation_contract(&root, &canonical_root, &input.operation_path)?;
     let command_paths = input
         .command_paths
         .iter()
@@ -489,7 +484,6 @@ pub fn run_execute_operation(
         .collect::<Result<Vec<_>, _>>()?;
     let index = build_reference_index(&root)
         .map_err(|error| ExecuteOperationError::ReferenceIndexBuild(error.to_string()))?;
-    let operation = read_yaml_result::<OperationContractDocument>(&operation_path)?;
     let commands = command_paths
         .iter()
         .map(|path| {
@@ -672,6 +666,53 @@ fn resolve_contract_input_path(
             root: canonical_root.to_path_buf(),
             path,
         })
+    }
+}
+
+/// Load an operation contract, falling back to the embedded contract tree
+/// when the path is not present on disk under `root`.
+///
+/// Resolution order:
+/// 1. On-disk at `<root>/<op_path>` (canonicalized, must be under root —
+///    the standard provenance gate).
+/// 2. Embedded in the binary (via `forge_core_decisions::embedded_contracts`),
+///    only when `op_path` is a repo-relative path that resolves to a known
+///    embedded contract. The embedded bytes never pass through filesystem
+///    canonicalization, so this fallback cannot be used to escape the root.
+///
+/// # Errors
+///
+/// Returns [`ExecuteOperationError::ReadFile`] when the path is neither on
+/// disk nor embedded, or [`ExecuteOperationError::ContractPathOutsideRoot`]
+/// when an on-disk path resolves outside the root.
+fn load_operation_contract(
+    root: &Path,
+    canonical_root: &Path,
+    op_path: &Path,
+) -> Result<OperationContractDocument, ExecuteOperationError> {
+    // 1. Try the on-disk path first (the established provenance-gated path).
+    match resolve_contract_input_path(
+        root,
+        canonical_root,
+        op_path,
+        ExecuteOperationContractPathKind::Operation,
+    ) {
+        Ok(path) => read_yaml_result::<OperationContractDocument>(&path),
+        Err(disk_err) => {
+            // 2. Embedded fallback: only when op_path is a repo-relative
+            //    string that names a known embedded contract. Normalize
+            //    backslashes to forward slashes so the lookup matches the
+            //    embedded tree's POSIX-style paths on Windows.
+            let rel = op_path.to_string_lossy().replace('\\', "/");
+            if let Some(text) = forge_core_decisions::read_contract_text(root, &rel) {
+                yaml_serde::from_str(&text).map_err(|source| ExecuteOperationError::ParseYaml {
+                    path: op_path.to_path_buf(),
+                    source,
+                })
+            } else {
+                Err(disk_err)
+            }
+        }
     }
 }
 
