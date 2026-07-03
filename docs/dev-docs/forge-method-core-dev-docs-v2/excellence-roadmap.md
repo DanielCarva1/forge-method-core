@@ -24,111 +24,104 @@ aceite. Trabalhe um item por sessão; commit; próxima.
 
 ---
 
-## Handoff para o próximo agente (Commit 2.4 — TUF trusted-root freshness)
+## Handoff para o próximo agente (Commit 3.1 — governance: fechar lacunas)
 
 > **Leia isto primeiro.** É a tarefa corrente, auto-contida, com tudo o que
 > um agente fresco precisa para continuar sem redescobrir o que esta sessão
 > já mapeou.
 
-### Histórico da sessão: Commit 2.3 ✅ LANDED
+### Histórico da sessão: Commit 2.4 ✅ LANDED (Fase 2 completa)
 
-Commit 2.3 cobriu os 11 helpers `pub(crate)` de `ocsp.rs` com 34 testes
-inline. Detalhes na seção Fase 2 abaixo. Descobertas técnicas para não serem
-re-litigadas:
+Commit 2.4 cobriu as 6 funções de `tuf.rs` (1 `pub(crate)` + 5 privadas)
+com **41 testes inline**, zero churn de produção. Detalhes na seção Fase 2
+abaixo. **A Fase 2 (`forge-core-crypto`) está 100% completa** — 4 commits,
+119 lib tests + 7 zeroize_smoke + 1 KAT ignored. Próximo agente pega a
+Fase 3.
 
-1. **`ocsp.rs` já tinha cobertura E2E completa** (17 integration tests em
-   `validate.rs` cobrindo o entrypoint público via DER assinado rcgen). O
-   Commit 2.3 focou em cobertura unitária direta dos helpers, construindo
-   structs `rasn-ocsp` em Rust puro — fail-close ao ponto de falha.
-2. **`rasn::types::Name` (X.500 Distinguished Name) não é publicamente
-   construído** em rasn 0.28. Testes usam `ResponderId::ByKey` (que só
-   precisa de `OctetString`) em vez de `ResponderId::ByName(Name)`.
-3. **`ObjectIdentifier::new()` retorna `Option`**; use
-   `ObjectIdentifier::new_unchecked(arcs.into())` em fixtures de teste.
-4. **`SequenceOf<T>` é alias para `Vec<T>`** — `.into()` é inútil (clippy
-   pega); atribua direto.
-5. **Dev-deps adicionadas:** `chrono` + `rasn-pkix` (workspace deps).
-6. **Serial do rcgen CA default é grande demais para u64** — sempre setar
-   `params.serial_number = Some(rcgen::SerialNumber::from(<u64>))` em
-   fixtures de teste.
+### Próxima tarefa: Commit 3.1 — fechar lacunas em `forge-core-governance`
 
-### Próxima tarefa: Commit 2.4 — TUF trusted-root freshness
+**Crate-alvo:** `crates/forge-core-governance` (1447 LOC, 5 arquivos em `src/`).
 
-**Arquivo-alvo:** `crates/forge-core-crypto/src/tuf.rs` (207 LOC).
+**⚠️ Surpresa do reconhecimento:** o roadmap original dizia que governance
+tinha "zero testes". **ESTAVA ERRADO.** O crate **já tem 22 `#[test]` + 2
+`proptest!` inline** (44% do LOC de `lib.rs` é teste). As PEPs `record`/
+`arbitrate`/`escalate` têm happy-path + gate + double-resolve cobertos, e
+`replay`/`project`/`apply` têm cobertura boa. **Commit 3.1 NÃO é escrever
+testes do zero — é fechar lacunas específicas** que o reconhecimento
+identificou.
 
-**Status atual do crate:** Fase 2 ~75% completa (Commits 2.1-2.3 landed:
-ed25519/p256/rekor/OCSP cobertos, 78 testes lib + 7 zeroize_smoke). `tuf.rs`
-tem **zero testes inline** — mas já tem 6 integration tests E2E em
-`validate.rs` (linhas 4576-4742) cobrindo o entrypoint público
-`run_host_adapter_tuf_trusted_root_freshness_verification`.
+**Lacunas a cobrir (priorizadas):**
 
-**Funções a cobrir (1 `pub(crate)` + 5 privadas, todas inline):**
+| # | Lacuna | Arquivo | Por quê |
+|---|--------|---------|---------|
+| 1 | `list(root, filter)` sem teste | `lib.rs:321` | Púb., sem nenhuma cobertura. Testar filter `None` vs `Some(ConflictResolutionState::*)` |
+| 2 | `project` cold-read sem teste direto | `lib.rs:302` | Só exercitado via PEPs. Testar isolado: lock + replay |
+| 3 | Paths `StoreError(...)` das 3 PEPs | `arbitrate.rs`/`escalate.rs`/`record.rs` | Nenhum teste força `RecordError`/`ArbitrateError`/`EscalateError`. Hard sem injetar falha de fs — pode skipar ou usar root inexistente |
+| 4 | Variantes `_with_durability` não chamadas | `*.rs:71-85` | As 3 PEPs `*_with_durability` explícitas nunca testadas. Testar com `WalDurability::default()` + valor explícito |
+| 5 | `EventSourced` trait methods em `GovernanceDomain` | `lib.rs:186-266` | `apply`/`record_diagnostic`/`sequence_of`/`advance_sequence`/diagnostics — alguns cobertos via replay, mas não isolados |
 
-| # | Função | Visib. | Linha | Retorno |
-|---|--------|--------|-------|---------|
-| 1 | `verify_tuf_metadata_freshness_role(...)` | `pub(crate)` | 39 | `()` |
-| 2 | `parse_tuf_datetime_utc_to_unix(expires, reasons)` | priv | 132 | `Option<i64>` |
-| 3 | `parse_fixed_i32(slice, start, end)` | priv | 175 | `Option<i32>` |
-| 4 | `days_in_month(year, month)` | priv | 181 | `i32` |
-| 5 | `is_leap_year(year)` | priv | 192 | `bool` |
-| 6 | `days_from_civil(y, m, d)` | priv | 199 | `i64` |
+**Padrão das PEPs (importante — DIFFERE de crypto):**
 
-**Estilo de erro:** mesmo padrão `Vec<String>` accumulation do OCSP —
-`verify_tuf_metadata_freshness_role` recebe `&mut Vec<HostAdapterTufMetadataFreshnessRole>`
-+ `&mut Vec<String>` (evidence) + `&mut Vec<String>` (reasons). **Sem
-enum de erro.** Testes inspecionam os vetores + o `Option<i64>` do parser.
+- As 3 PEPs **NÃO retornam `Result`, NÃO acumulam em `Vec<String>`**.
+  Retornam um struct (`RecordResult`/`ArbitrateResult`/`EscalateResult`)
+  carregando um `status: <Foo>Status` enum. Erros de storage são uma
+  **variante do enum de status** (`StoreError(RecordError)`), não `Err`.
+- `RecordStatus` variantes: `Recorded{sequence}`, `AlreadyRecorded`,
+  `StoreError(RecordError)` (`record.rs:33`).
+- `ArbitrateStatus`: `Resolved{sequence}`, `DeniedByGate`,
+  `ConflictNotFound`, `NotPending`, `StoreError(ArbitrateError)`
+  (`arbitrate.rs:32`).
+- `EscalateStatus`: `Escalated{sequence}`, `DeniedByGate`,
+  `ConflictNotFound`, `NotPending`, `StoreError(EscalateError)`
+  (`escalate.rs:28`).
+- `project`/`list` **sim** retornam `Result` (`ProjectionResult`,
+  `lib.rs:282`).
+- Testes fazem `match` sobre `result.status` e assertam a variante.
+  Espelhar o padrão existente (ver `arbitrate.rs:222`).
 
-**Vantagem: muito mais simples que OCSP.** `tuf.rs` depende só de
-`serde_json::Value` + `std::path::Path` — **sem chrono, sem rcgen, sem
-rasn-ocsp.** Datetime parsing é hand-rolled (RFC 3339 → unix secs via
-`days_from_civil`). Fixtures são JSON simples.
+**Erros:** governance **não define enums de erro próprios**. `error.rs:27-44`
+define 4 type aliases todos `= forge_core_eventlog::EventLogError<ArbitrationProjectionDiagnostic>`.
+Os erros reais moram em `forge-core-eventlog`. Convenção do projeto (sem
+`anyhow`/`thiserror`) é seguida.
 
-**Padrões a reusar (NÃO reinventar):**
+**Cargo.toml:** `[dev-dependencies]` só tem `proptest` (já em uso). Para
+testes de fs que precisam de temp dir, **NÃO adicionar `tempfile`** — os
+testes existentes usam `forge-core-store` helpers ou `std::env::temp_dir()`.
+Espelhar o padrão dos testes já presentes no crate (ver como
+`arbitrate.rs:222` cria o `root`). **Sem `chrono`, sem `rcgen`, sem `rasn`.**
 
-- **E2E já cobre os 6 cenários** (fresh metadata, expired root, rollback
-  version, invalid expiry format, non-TUF policy, binary JSON output).
-  Commit 2.4 = cobertura unitária direta dos helpers, focando em edge cases
-  de datetime parsing (`parse_tuf_datetime_utc_to_unix`,
-  `days_from_civil`, `is_leap_year`, `days_in_month`) que o E2E não isola.
-- **Tipos de entrada:** `verify_tuf_metadata_freshness_role` recebe um
-  `serde_json::Value` (o metadata doc) + strings de role type/version floor.
-  Construa JSON fixtures inline.
+**Caller:** único caller é `crates/forge-core-cli/src/governance_cmd.rs:29`
+(4 subcomandos: record/conflicts/arbitrate/escalate). Sem uso no kernel.
 
-**Gate de aceite (Commit 2.4):**
+**Gate de aceite (Commit 3.1):**
 
-- `cargo test -p forge-core-crypto` verde.
+- `cargo test -p forge-core-governance` verde.
 - Clippy pedantic + fmt limpos (auto via `pi-green-loop` hook).
-- Cobertura mínima: `verify_tuf_metadata_freshness_role` (fresh + expired +
-  rollback), `parse_tuf_datetime_utc_to_unix` (RFC 3339 válido, formatos
-  inválidos), `is_leap_year`/`days_in_month`/`days_from_civil` (edge cases
-  de calendário: ano bissexto, fevereiro, datas limite).
+- Lacunas #1 (`list`) e #4 (`_with_durability`) **obrigatórias**. #2 (`project`)
+  recomendada. #3 (`StoreError`) opcional se injetar falha de fs for caro.
 - Zero churn em produção (só `#[cfg(test)]`).
 
 **Decisões de design já tomadas (NÃO reconsiderar):**
 
-- **Visibilidade:** `verify_tuf_metadata_freshness_role` é `pub(crate)` →
-  **teste inline obrigatório**. As 5 helpers privadas só são acessíveis
-  inline dentro do próprio módulo.
-- **Não criar enum de erro** — manter o `Vec<String>` accumulation.
-- **Entrypoint público não está em tuf.rs** — é
-  `crate::run_host_adapter_tuf_trusted_root_freshness_verification` em
-  `host_adapter_verification.rs:1521` (chama
-  `verify_tuf_metadata_freshness_role` 4× — uma por role root/timestamp/
-  snapshot/targets).
+- **Não criar enums de erro novos** — governance delega ao eventlog.
+- **Manter o padrão struct-result + status enum** das PEPs.
+- **Visibilidade:** todas as PEPs e `project`/`list` são `pub` → teste
+  inline OU em `tests/`. Os testes existentes são inline (`mod tests` em
+  cada arquivo) — espelhar.
 
 **Convenções do repo a respeitar** (em `AGENTS.md`, sempre carregadas):
 
 - **Sem `anyhow`/`thiserror`.**
 - **Editor stability (WSL+Windows+r-a):** nunca dois cargos em paralelo.
-- **Context hygiene:** uma story por sessão. Commit 2.4 = uma sessão.
-  Ao terminar: commit, marcar Commit 2.4 ✅ LANDED, Fase 2 completa.
-  Próximo agente pega Fase 3 (governance, eval-harness, etc.).
+- **Context hygiene:** uma story por sessão. Commit 3.1 = uma sessão.
 - **Commits:** o usuário commita explicitamente quando pede.
 
-**Depois do 2.4 (Fase 3):**
+**Depois do 3.1 (Fase 3 continua):**
 
-- Fase 3 — 1 crate por sessão, ordem por risco:
-  governance → eval-harness → research → eventlog → eval/trace.
+- 3.2 — `forge-core-eval-harness` (decide baseline vs candidate, ADR-0023)
+- 3.3 — `forge-core-research` (admission/graph; `proptest` já dev-dep)
+- 3.4 — `forge-core-eventlog` (EventSourced trait mechanics)
+- 3.5 — `forge-core-eval` / `forge-core-trace` (baixo risco)
 
 ---
 
@@ -192,7 +185,7 @@ inline. O gap real do MCP era vetores de ataque específicos não cobertos.
 
 | Crate | LOC | Risco | Estado |
 |-------|-----|-------|--------|
-| `forge-core-crypto` | 5812 | **P0 — security-critical** | Pendente — só 101 LOC de smoke tests. ed25519/p256/rekor/OCSP/TUF. **Prioridade máxima.** |
+| `forge-core-crypto` | 5812 | **P0 — security-critical** | ✅ **Fase 2 completa** (4 commits: ed25519/p256/rekor/OCSP/TUF; 119 lib + 7 smoke + 1 KAT) |
 | `forge-core-protocol-mcp` | 2016 | Alto | ✅ **Attestation gaps fechados** (44 testes) |
 | `forge-core-governance` | 1447 | Alto | Pendente — arbitrate/escalate/record sem prova |
 | `forge-core-eval-harness` | 1371 | Alto | Pendente — decide baseline vs candidate (ADR-0023) |
@@ -273,8 +266,39 @@ ampla por commit:
   Adicionadas dev-deps `chrono` + `rasn-pkix` (workspace). Zero churn de
   produção. `cargo test -p forge-core-crypto` verde (78 lib + 7 zeroize_smoke
   + 1 ignored KAT), clippy pedantic limpo, fmt limpo.
-- **Commit 2.4 — TUF trusted-root freshness.** PRÓXIMO. Version monotonicity,
-  timestamp/snapshot/targets version checks, expiry.
+- **Commit 2.4 — TUF trusted-root freshness.** ✅ LANDED (41 testes
+  inline). Cobertura das 6 funções de `tuf.rs` (207 LOC): 1 `pub(crate)`
+  (`verify_tuf_metadata_freshness_role`) + 5 helpers privadas
+  (`parse_tuf_datetime_utc_to_unix`, `parse_fixed_i32`, `days_in_month`,
+  `is_leap_year`, `days_from_civil`). O crate já tinha 6 integration tests
+  E2E em `validate.rs` (linhas 4576-4742) cobrindo o entrypoint público;
+  Commit 2.4 = cobertura unitária direta dos helpers, focando em edge cases
+  de datetime parsing que o E2E não isola:
+  - `verify_tuf_metadata_freshness_role` — fresh (evidence correta),
+    expired (expires < update_start), rollback (version < floor),
+    version missing, version present sem floor, role type mismatch,
+    expires missing, expires format inválido (partial entry), read failure
+    (partial entry, label `tuf_metadata_read_failed`), JSON inválido,
+    sem envelope `signed` (todos os campos missing).
+  - `parse_tuf_datetime_utc_to_unix` — KATs (epoch=0, 2030-01-01=
+    1893456000, 2020-01-01T12:30:45Z=1577881845, pré-epoch=-1), rejeição
+    de length errada, Z faltante, separadores errados, não-numéricos,
+    mês 0/13, dia fora do mês (incl. feb-29 em ano comum), feb-29 em ano
+    bissexto (2024), overflow de H/M/S, reason com role-scope correto.
+  - `parse_fixed_i32` — decimal, não-dígito, out-of-range, negativo.
+  - `days_in_month` — meses 31/30, feb comum/bissexto (1900 não-bissexto,
+    2000 bissexto), mês inválido = 0.
+  - `is_leap_year` — div-by-4 comum, century não-div-by-400 (1900/2100),
+    century div-by-400 (1600/2000).
+  - `days_from_civil` — KAT table de 10 datas (epoch, pré-epoch, 1900,
+    2000 leap day, 2024 leap day, 2030 root date) + spans de ano completo
+    (365 comum, 366 bissexto).
+  KATs de calendário computados independentemente (Python `datetime`) e
+  pinados como regression guards. ScopedTempDir RAII para fixtures de fs
+  (sem dev-dep `tempfile`). Zero churn de produção (+~500 LOC, só
+  `#[cfg(test)]`). `cargo test -p forge-core-crypto` verde (119 lib +
+  7 zeroize_smoke + 1 ignored KAT), clippy pedantic limpo, fmt limpo.
+  **Fase 2 completa.**
 
 Cada commit: `cargo test -p forge-core-crypto` a passar.
 
@@ -382,6 +406,26 @@ parser devolve o usage dump global para um erro de valor único.
 - **WAL de claims** é append-only por design (audit log). Não truncar.
 
 ## Histórico
+
+### Sessão Fase 2 / Commit 2.4 (TUF trusted-root freshness tests)
+
+Último commit da Fase 2. Cobriu as 6 funções de `tuf.rs` (207 LOC, zero
+testes inline antes) com 41 testes, zero churn de produção.
+
+**Descoberta técnica:** o label real do `read_required_file` no path de
+read failure é o literal `"tuf_metadata"` (não `"tuf_root"`) — o reason
+produzido é `tuf_metadata_read_failed:...`. Os reasons role-scoped só
+aparecem após o parse bem-sucedido. Teste de read-failure deve assertar
+contra `tuf_metadata_read_failed`, não `tuf_{role}_read_failed`.
+
+**Abordagem:** KAT table de calendário (10 datas) computada
+independentemente via Python `datetime` e pinada como regression guard do
+algoritmo `days_from_civil`. ScopedTempDir RAII caseiro (sem `tempfile`
+dev-dep) para fixtures de fs, isolando cada teste com
+`forge-tuf-test-<label>-<pid>` e limpando no `Drop`.
+
+Gate: `cargo test -p forge-core-crypto` verde (119 lib + 7 zeroize_smoke
++ 1 ignored KAT), clippy pedantic limpo, fmt limpo. **Fase 2 completa.**
 
 ### Sessão Fase 2 / Commit 2.1 (ed25519/p256 signature tests) — `21f0840d`
 
