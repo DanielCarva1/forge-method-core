@@ -323,4 +323,55 @@ mod tests {
         );
         assert!(matches!(result.status, ArbitrateStatus::DeniedByGate));
     }
+
+    #[test]
+    fn arbitrate_with_durability_nosync_resolves() {
+        // The explicit _with_durability entry point is never exercised by the
+        // arbitrate() tests above (they use the SyncOnAppend default). Drive it
+        // directly with NoSync — durability only governs fsync, so the
+        // observable contract is identical: Resolved, sequence advances, and
+        // the projection reflects the decision.
+        let root = temp_root("arb-nosync");
+        record(&root, sample_conflict("conflict.1"));
+        let result = arbitrate_with_durability(
+            &root,
+            StableId("conflict.1".into()),
+            &PrincipalId("principal.daniel".into()),
+            ResolutionDecision::BothReleased,
+            &policy_with_arbiter("principal.daniel"),
+            WalDurability::NoSync,
+        );
+        let ArbitrateStatus::Resolved { sequence } = result.status else {
+            panic!("expected Resolved, got {:?}", result.status);
+        };
+        assert_eq!(sequence, 2, "record=1, arbitrate=2");
+        let conflict = &project(&root).expect("project").conflicts["conflict.1"];
+        assert!(matches!(
+            conflict.resolution,
+            ConflictResolutionState::Resolved { .. }
+        ));
+    }
+
+    #[test]
+    fn arbitrate_on_regular_file_root_is_store_error() {
+        // A root that is a regular file makes the lock acquire fail (ENOTDIR on
+        // create_dir_all), which arbitrate_with_durability maps to
+        // ArbitrateStatus::StoreError. Cheap path — no fs-fault injection.
+        use std::fs;
+        let parent = temp_root("arb-not-a-dir");
+        let not_a_dir = parent.join("i-am-a-file");
+        fs::write(&not_a_dir, b"x").expect("write file");
+        let result = arbitrate(
+            &not_a_dir,
+            StableId("conflict.1".into()),
+            &PrincipalId("principal.daniel".into()),
+            ResolutionDecision::BothReleased,
+            &policy_with_arbiter("principal.daniel"),
+        );
+        assert!(
+            matches!(result.status, ArbitrateStatus::StoreError(_)),
+            "expected StoreError, got {:?}",
+            result.status
+        );
+    }
 }

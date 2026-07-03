@@ -259,4 +259,50 @@ mod tests {
         );
         assert!(matches!(r2.status, EscalateStatus::NotPending));
     }
+
+    #[test]
+    fn escalate_with_durability_nosync_escalates() {
+        // The explicit _with_durability entry point is never exercised by the
+        // escalate() tests above (they use the SyncOnAppend default). Drive it
+        // directly with NoSync — durability only governs fsync, so the
+        // observable contract is identical: Escalated, sequence advances, and
+        // the projection reflects Escalated.
+        let root = temp_root("esc-nosync");
+        record(&root, sample_conflict("conflict.1"));
+        let result = escalate_with_durability(
+            &root,
+            StableId("conflict.1".into()),
+            &PrincipalId("principal.daniel".into()),
+            &policy_with_arbiter("principal.daniel"),
+            WalDurability::NoSync,
+        );
+        let EscalateStatus::Escalated { sequence } = result.status else {
+            panic!("expected Escalated, got {:?}", result.status);
+        };
+        assert_eq!(sequence, 2, "record=1, escalate=2");
+        let conflict = &project(&root).expect("project").conflicts["conflict.1"];
+        assert_eq!(conflict.resolution, ConflictResolutionState::Escalated);
+    }
+
+    #[test]
+    fn escalate_on_regular_file_root_is_store_error() {
+        // A root that is a regular file makes the lock acquire fail (ENOTDIR on
+        // create_dir_all), which escalate_with_durability maps to
+        // EscalateStatus::StoreError. Cheap path — no fs-fault injection.
+        use std::fs;
+        let parent = temp_root("esc-not-a-dir");
+        let not_a_dir = parent.join("i-am-a-file");
+        fs::write(&not_a_dir, b"x").expect("write file");
+        let result = escalate(
+            &not_a_dir,
+            StableId("conflict.1".into()),
+            &PrincipalId("principal.daniel".into()),
+            &policy_with_arbiter("principal.daniel"),
+        );
+        assert!(
+            matches!(result.status, EscalateStatus::StoreError(_)),
+            "expected StoreError, got {:?}",
+            result.status
+        );
+    }
 }

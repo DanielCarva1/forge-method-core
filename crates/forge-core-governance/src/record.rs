@@ -254,4 +254,40 @@ mod tests {
         assert_eq!(sequence, 1);
         assert_eq!(conflict.conflict_id.0, "conflict.1");
     }
+
+    #[test]
+    fn record_with_durability_nosync_appends_and_round_trips() {
+        // The explicit _with_durability entry point is never exercised by the
+        // record() tests above (they go through the SyncOnAppend default). Drive
+        // it directly with NoSync — the durability knob only governs fsync, so
+        // the observable contract is identical: the event lands, the sequence
+        // advances, and it round-trips through the log.
+        let root = temp_root("record-nosync");
+        let result =
+            record_with_durability(&root, sample_conflict("conflict.1"), WalDurability::NoSync);
+        let RecordStatus::Recorded { sequence } = result.status else {
+            panic!("expected Recorded, got {:?}", result.status);
+        };
+        assert_eq!(sequence, 1);
+        let projection = crate::project(&root).expect("project");
+        assert!(projection.conflicts.contains_key("conflict.1"));
+        assert_eq!(projection.sequence, 1);
+    }
+
+    #[test]
+    fn record_on_regular_file_root_is_store_error() {
+        // A root that is a regular file makes create_dir_all(`<file>/governance`)
+        // fail (ENOTDIR), so the lock acquire returns EventLogError::Lock, which
+        // record_with_durability maps to RecordStatus::StoreError. This is the
+        // cheap StoreError path — no fs-fault injection required.
+        let parent = temp_root("record-not-a-dir");
+        let not_a_dir = parent.join("i-am-a-file");
+        fs::write(&not_a_dir, b"x").expect("write file");
+        let result = record(&not_a_dir, sample_conflict("conflict.1"));
+        assert!(
+            matches!(result.status, RecordStatus::StoreError(_)),
+            "expected StoreError, got {:?}",
+            result.status
+        );
+    }
 }
