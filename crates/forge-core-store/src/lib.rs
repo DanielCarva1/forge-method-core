@@ -26,6 +26,11 @@ use tracing::instrument;
 use yaml_serde::Value;
 
 pub mod claim_wal;
+pub mod derive_state;
+
+/// The sole authority constructor for claim state. Replays the append-only
+/// claims WAL into a typed projection. See [`derive_state`] for the contract.
+pub use derive_state::derive_state;
 
 const CONTRACT_DEFINITIONS: &[&str] = &[
     "contracts/commands/command-contract-v0.yaml",
