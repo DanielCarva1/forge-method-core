@@ -29,6 +29,62 @@ Kernel.** It only *decides* what should be allowed; the Kernel performs the
 mutation. The two are sibling crates, not stacked layers — do not describe
 Decisions as "sitting above" the Kernel.
 
+## EventSourced trait
+
+The generic event-sourcing abstraction in `forge-core-eventlog` (ADR-0011) that
+the PEP crates (`forge-core-memory`, `forge-core-research`, `forge-core-governance`,
+and the JSONL half of `forge-core-store`) implement. A domain provides its
+`Event`, `Projection`, and `Diagnostic` associated types plus an `apply` fold;
+this crate supplies the mechanics (cold-read `project_locked` with torn-tail
+tolerance, `replay`, `next_sequence`, `append_event`, `EventLogLock`). It
+collapses the **mechanics** while preserving **log separation** — each domain
+keeps its own log file, lock, and projection, honoring ADR-0010's "trust domains
+stay in separate logs." Associated types are plain `type` aliases (not GATs),
+synchronous (no async — ADR-0001), and the `event_envelope!` macro is
+`macro_rules!` (not proc-macro).
+
+## OperationGate
+
+The trait for mutation preconditions the Kernel runs internally before any WAL
+append (ADR-0013). Implementations live in the Kernel's `builtin_gates` module:
+`RiskAuditGate` (fail-closed on Error-severity risk-audit findings) and
+`CitationGate` (fail-closed on unresolved `source_id`s). The Kernel calls
+`evaluate(&plan)` on each gate in its chain — fail-closed, first rejection wins —
+*before* staging, command evidence, or WAL append. CLI flags
+(`--require-risk-audit`/`--require-citation`) become **config** for which gates
+to attach, not where the check runs, so a non-CLI caller (tests, future
+in-process MCP) cannot silently bypass them. Modeled on Tower's `Service`/
+`Layer` pattern but synchronous (ADR-0001). A bypass exists only via
+`.dangerous_unchecked()` under the `dangerous-bypass` feature flag (the rustls
+`dangerous()` pattern) — never silent.
+
+## TypedFailure
+
+The adjacently-tagged structured failure vocabulary carried by `CliEnvelope`
+alongside the human-readable `error.message` (V2.D). The mutate path's failures
+(risk-audit gate, citation gate, contract parse, payload scope) used to be
+stringified at the collapse site, losing variant info that a programmatic
+consumer (MCP/agent) then had to re-parse out of free text. `TypedFailure` rides
+alongside `error.message` so consumers branch on `typed_failure.type` instead of
+parsing prose. Serialized serde **adjacently-tagged**
+(`{"type": "<variant>", "data": {...}}`), never `untagged` (which loses variant
+fidelity — serde issue #1307). Field/variant names are wire-stable: renaming one
+is a breaking change to the envelope contract.
+
+## DiagnosticCodeDef
+
+The const-table entry for a diagnostic code (ADR-0012), modeled on rustc's
+`Lint` struct and the `clippy`/`deno_lint`/`dprint` const-table approach. A
+struct of `code` (stable snake_case `&'static str` wire identifier, e.g.
+`"memory_authority_floor"`) + `description` + `category` + `default_severity`.
+Declared one-per-line via the `declare_diagnostic_code!` macro (a `macro_rules!`,
+not proc-macro) as a `pub static`. This is the lookup seam for config-driven
+severity overrides (the ESLint/rustc lint-level model: a code declares its
+*default* level, and a consumer config may promote/demote it), resolved via the
+read-only `DiagnosticRegistry`. The wire-format `code` is a stable string from
+the start, never the `format!("{:?}")` Debug of an enum variant — keeping type
+information across the JSON/MCP boundary.
+
 ## Forge Project Link
 
 The small `.forge-method.yaml` file stored at a Consumer Project Repo root. It points to the Forge Runtime Sidecar and its `.forge-method/` state root. Its `state_root` must resolve under `sidecar_root` and must end in `.forge-method`, normally as `<sidecar_root>/.forge-method`.

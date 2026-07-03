@@ -645,16 +645,23 @@ pub fn load_gates(path: Option<&std::path::Path>) -> Vec<forge_core_decisions::P
 ///
 /// # Panics
 ///
-/// Panics in JSON mode if `env` cannot be serialized by `serde_json`. `T:
-/// Serialize` is bound on the function, so this is a programming error and
-/// never occurs on well-formed envelope types.
+/// Does NOT panic on serialization failure (V4.A). In JSON mode, if `env`
+/// cannot be serialized by `serde_json`, an error is written to stderr and an
+/// `ExitError::env_config` (exit code 5) is returned. `T: Serialize` is bound,
+/// so this is effectively infallible in practice, but a panic is the wrong
+/// tool in a shared stdout emit path.
 pub fn emit_guide<T: serde::Serialize>(
     env: forge_core_contracts::CliEnvelope<T>,
     want_json: bool,
 ) -> Result<(), ExitError> {
     let code = env.exit_code();
     if want_json {
-        println!("{}", serde_json::to_string_pretty(&env).unwrap());
+        // Serialize before printing so a failure is a typed error, not a panic.
+        let json = serde_json::to_string_pretty(&env).map_err(|e| {
+            eprintln!("internal error: failed to serialize guide envelope: {e}");
+            ExitError::env_config(format!("failed to serialize guide envelope: {e}"))
+        })?;
+        println!("{json}");
     } else if !env.ok {
         eprintln!(
             "guide failed: {}",

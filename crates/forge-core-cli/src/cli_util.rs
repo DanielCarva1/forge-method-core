@@ -546,10 +546,11 @@ pub fn emit_envelope<T: serde::Serialize>(
 ///
 /// # Panics
 ///
-/// Panics in JSON mode if `env` cannot be serialized by `serde_json`. `T:
-/// Serialize` is bound, so this is a programming error that never occurs on
-/// well-formed envelope types. (V4.A will replace this `expect` with a typed
-/// error; for now the behavior is preserved exactly from the deleted twins.)
+/// This function does NOT panic on serialization failure (V4.A). In JSON mode,
+/// if `env` cannot be serialized by `serde_json`, an error is written to stderr
+/// and an `ExitError::env_config` (exit code 5) is returned. In practice this
+/// never fires — `T: Serialize` is bound, so well-formed envelope types always
+/// serialize — but a panic is the wrong tool in a shared/stdout-critical path.
 pub fn emit_envelope_with<T: serde::Serialize>(
     env: forge_core_contracts::CliEnvelope<T>,
     want_json: bool,
@@ -557,10 +558,15 @@ pub fn emit_envelope_with<T: serde::Serialize>(
 ) -> Result<(), ExitError> {
     let code = env.exit_code();
     if want_json {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&env).expect("serialize envelope")
-        );
+        // Serialize before printing so a failure is a typed error, not a
+        // panic. `T: Serialize` makes this effectively infallible, but the
+        // shared stdout emit path must fail gracefully (stderr + env-config
+        // exit code 5) rather than abort the process.
+        let json = serde_json::to_string_pretty(&env).map_err(|e| {
+            eprintln!("internal error: failed to serialize envelope: {e}");
+            ExitError::env_config(format!("failed to serialize envelope: {e}"))
+        })?;
+        println!("{json}");
     } else {
         let command = env.command.0.as_str();
         if env.ok {

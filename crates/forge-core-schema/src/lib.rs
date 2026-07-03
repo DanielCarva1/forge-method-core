@@ -2,9 +2,9 @@ use forge_core_contracts::{
     ClaimContractDocument, CommandContractDocument, CompletionContractDocument,
     ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
     DecisionCloseContractDocument, FieldEvidenceRegistry, GateContractDocument,
-    HealthRecoveryContractDocument, OperationContractDocument, OperationReferencePolicyDocument,
-    RequestContractDocument, RuntimeCapabilityDocument, RuntimeHandoffContractDocument,
-    RuntimeRegistryEntryDocument, ToolEffectContractDocument,
+    HealthRecoveryContractDocument, OperationContractDocument,
+    OperationCrossReferencePolicyDocument, RequestContractDocument, RuntimeCapabilityDocument,
+    RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument, ToolEffectContractDocument,
 };
 use schemars::{schema_for, JsonSchema};
 use serde::Serialize;
@@ -56,11 +56,11 @@ pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
             Some("operation_contract"),
             "central authority response for host-agent action",
         ),
-        schema_artifact::<OperationReferencePolicyDocument>(
+        schema_artifact::<OperationCrossReferencePolicyDocument>(
             "operation_reference_policy",
-            "OperationReferencePolicyDocument",
+            "OperationCrossReferencePolicyDocument",
             None,
-            "approved side-contract reference fields for operations",
+            "approved cross-contract (side-contract) reference fields for operations; not citation refs",
         ),
         schema_artifact::<ClaimContractDocument>(
             "claim_contract",

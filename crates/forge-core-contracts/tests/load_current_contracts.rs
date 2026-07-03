@@ -2,9 +2,9 @@ use forge_core_contracts::{
     ClaimContractDocument, CommandContractDocument, CompletionContractDocument,
     ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
     DecisionCloseContractDocument, FieldEvidenceRegistry, GateContractDocument,
-    HealthRecoveryContractDocument, OperationContractDocument, OperationReferencePolicyDocument,
-    RequestContractDocument, RuntimeCapabilityDocument, RuntimeHandoffContractDocument,
-    RuntimeRegistryEntryDocument, ToolEffectContractDocument,
+    HealthRecoveryContractDocument, OperationContractDocument,
+    OperationCrossReferencePolicyDocument, RequestContractDocument, RuntimeCapabilityDocument,
+    RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument, ToolEffectContractDocument,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -84,7 +84,7 @@ fn deserializes_operation_reference_policy() {
         .join("operations")
         .join("operation-reference-policy-v0.yaml");
     let text = fs::read_to_string(&path).expect("read operation reference policy");
-    let policy: OperationReferencePolicyDocument =
+    let policy: OperationCrossReferencePolicyDocument =
         yaml_serde::from_str(&text).expect("deserialize operation reference policy");
 
     assert_eq!(policy.contract.0, "operation_reference_policy");

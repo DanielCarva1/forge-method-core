@@ -1,3 +1,29 @@
+//! Thin compatibility shim / legacy binary entry point.
+//!
+//! This binary is a **thin compatibility shim**: it performs NO validation of
+//! its own. All validation logic lives in `forge-core-cli::run_validate` (in
+//! the `forge-core-cli` / `forge-core-validate` crates). This binary only:
+//!
+//! 1. Delegates entirely to `forge_core_cli::run_validate` (the real
+//!    validation pipeline — accumulating diagnostics, `ValidationReport`, etc.).
+//! 2. Adds one legacy summary-counts output line on success (the
+//!    `rust_contract_validation_passed ...` machine-readable summary that
+//!    pre-R8 CI parsed).
+//!
+//! The name `forge-contract-validator` implies a second, independent validator,
+//! but no such validator exists. It exists only as a stable binary entry point
+//! some callers/CI may depend on for the legacy summary line; the architecture
+//! review (V4.A) flags the naming as friction, not a code path. Do not add new
+//! validation logic here — extend `forge-core-validate` instead.
+//!
+//! # Output (diagnostics use `{:?}` Debug formatting)
+//!
+//! `DiagnosticSeverity` and `DiagnosticCode` (in `forge-core-validate`) have no
+//! `Display` impl — only derived `Debug`. The `{:?}` formatting below is the
+//! legacy output shape this binary has always produced; it is preserved for
+//! stability, not switched to `{}`, so existing parsers are not broken. If a
+//! future task adds `Display` to those types, the formatter can change to `{}`.
+
 use forge_core_cli::run_validate;
 use std::env;
 use std::fs;
@@ -15,6 +41,10 @@ fn main() {
         println!("{}", counts.render());
     } else {
         for diagnostic in summary.diagnostics {
+            // Legacy `{:?}` Debug output: DiagnosticSeverity/DiagnosticCode
+            // have no Display impl (only derived Debug), so this is the only
+            // available formatter. Output shape is preserved for stability;
+            // see the module doc comment.
             eprintln!(
                 "{:?} {:?} {}: {}",
                 diagnostic.severity, diagnostic.code, diagnostic.path, diagnostic.message

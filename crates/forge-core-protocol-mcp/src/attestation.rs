@@ -275,7 +275,12 @@ mod tests {
     }
 
     fn sign_intent(intent: &CanonicalIntent, signing_key: &SigningKey) -> AttestationInput {
-        let canon = intent.canonical_bytes().unwrap();
+        // Test-only signing helper: the intent was just built from JSON above,
+        // so canonical_bytes() is infallible here. This is NOT the verification
+        // path — the security boundary lives in `AttestationVerifier::verify`
+        // (line ~202), which uses `?` and returns AttestationError::Canonicalize
+        // on failure → fail-closed rejection at the server's attestation gate.
+        let canon = intent.canonical_bytes().expect("canonicalize test intent");
         let sig = signing_key.sign(&canon);
         let pk = signing_key.verifying_key();
         AttestationInput {

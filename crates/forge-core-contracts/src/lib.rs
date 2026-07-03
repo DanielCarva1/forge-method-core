@@ -65,7 +65,7 @@ pub use memory::{
     MemoryPolicy, MemoryProvenance, MemoryScope, MemoryScopeKind, ReviewState,
 };
 pub use operation::{OperationContract, OperationContractDocument};
-pub use operation_reference::OperationReferencePolicyDocument;
+pub use operation_reference::OperationCrossReferencePolicyDocument;
 pub use project_link::{ProjectLinkDocument, PROJECT_LINK_FILE_NAME, PROJECT_LINK_SCHEMA_VERSION};
 pub use recovery::{
     HealthRecoveryContract, HealthRecoveryContractDocument, HealthStatus, RecoveryAction,

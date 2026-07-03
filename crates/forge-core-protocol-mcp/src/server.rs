@@ -744,7 +744,12 @@ mod tests {
             nonce: nonce.into(),
             ts,
         };
-        let canon = intent.canonical_bytes().unwrap();
+        // Test-only signing helper. Infallible-by-construction (intent built
+        // from JSON just above); NOT the security boundary. The verification
+        // path (server.rs verify_attestation → AttestationVerifier::verify) is
+        // fail-closed: a canonicalization failure returns AttestationError and
+        // surfaces as a tool-call rejection, never a panic.
+        let canon = intent.canonical_bytes().expect("canonicalize test intent");
         let sig = sk.sign(&canon);
         let pk = sk.verifying_key();
         crate::attestation::AttestationInput {

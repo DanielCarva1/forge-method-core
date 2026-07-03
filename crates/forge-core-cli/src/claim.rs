@@ -2272,7 +2272,20 @@ pub(crate) fn run_claim_reconcile_loop_or_err(
             let env = run_reconcile_once(&claims_dir, resolve_now_unix(now_unix), durability);
             let code = env.exit_code();
             if want_json {
-                println!("{}", serde_json::to_string(&env).unwrap());
+                // V4.A: serialize before printing so a failure is a graceful
+                // exit, not a panic, in this long-running reconcile loop. The
+                // closure returns an i32 exit code; on serialization failure
+                // we log to stderr and bail with the env-config code (5),
+                // which the caller wraps into ExitError::with_code(5, ...).
+                // `T: Serialize` makes this effectively infallible, but a
+                // panic is the wrong tool in a stdout-critical loop.
+                match serde_json::to_string(&env) {
+                    Ok(json) => println!("{json}"),
+                    Err(e) => {
+                        eprintln!("claim.reconcile: failed to serialize envelope: {e}");
+                        return 5;
+                    }
+                }
             } else if let Some(data) = env.data.as_ref() {
                 eprintln!(
                     "claim.reconcile tick={ticks} scanned={} changed={}",
