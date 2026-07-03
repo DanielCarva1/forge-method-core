@@ -2155,7 +2155,7 @@ fn check_source_ref(
 // first error). Each check pushes a typed Diagnostic; the caller decides via
 // `report.has_errors()`.
 
-/// Validate an [`IntentContract`] (F07). Checks the load-bearing expiry
+/// Validate an [`forge_core_contracts::IntentContract`] (F07). Checks the load-bearing expiry
 /// invariant: `expires_at` must be strictly greater than `declared_at` (an
 /// already-expired intent is a deadlock/liveness footgun — Gray 2PL, Spanner).
 #[must_use]
@@ -2185,7 +2185,7 @@ pub fn validate_intent_contract(intent: &forge_core_contracts::IntentContract) -
     report
 }
 
-/// Validate a [`ConflictContract`] (F07). The two parties must be present and
+/// Validate a [`forge_core_contracts::ConflictContract`] (F07). The two parties must be present and
 /// distinct (a principal cannot conflict with itself — that is a
 /// self-overlap, a different concern). The contested scope target must be
 /// non-empty.
@@ -2221,7 +2221,7 @@ pub fn validate_conflict_contract(
     report
 }
 
-/// Validate a [`GovernancePolicy`] (F07). Warns (does not error) on
+/// Validate a [`forge_core_contracts::GovernancePolicy`] (F07). Warns (does not error) on
 /// `SilentLastWriterWins` — it is the documented anti-pattern F07 exists to
 /// forbid, but it is structurally permitted for completeness (a deployment
 /// that opts into silent merge should do so loudly, with a warning on record).

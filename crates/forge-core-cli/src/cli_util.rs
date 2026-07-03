@@ -184,7 +184,7 @@ pub fn resolve_now_unix(flag: Option<i64>) -> i64 {
 // dispatcher is migrated, the legacy exit-on-error helpers will be deleted.
 // ===========================================================================
 
-/// Result variant of [`next_arg`].
+/// Result variant of `next_arg`.
 ///
 /// # Errors
 ///
@@ -196,7 +196,7 @@ pub fn next_arg_or_err(args: &[String], index: usize) -> Result<&str, ExitError>
         .ok_or_else(|| ExitError::usage(usage()))
 }
 
-/// Result variant of [`next_path`].
+/// Result variant of `next_path`.
 ///
 /// # Errors
 ///
@@ -206,7 +206,7 @@ pub fn next_path_or_err(args: &[String], index: usize) -> Result<PathBuf, ExitEr
     Ok(PathBuf::from(next_arg_or_err(args, index)?))
 }
 
-/// Result variant of [`parse_payload_arg`].
+/// Result variant of `parse_payload_arg`.
 ///
 /// # Errors
 ///
@@ -222,7 +222,7 @@ pub fn parse_payload_arg_or_err(value: &str) -> Result<PayloadFileSpec, ExitErro
     })
 }
 
-/// Result variant of [`parse_u64`].
+/// Result variant of `parse_u64`.
 ///
 /// # Errors
 ///
@@ -231,7 +231,7 @@ pub fn parse_u64_or_err(value: &str) -> Result<u64, ExitError> {
     value.parse::<u64>().map_err(|_| ExitError::usage(usage()))
 }
 
-/// Result variant of [`parse_i64`].
+/// Result variant of `parse_i64`.
 ///
 /// # Errors
 ///
@@ -240,7 +240,7 @@ pub fn parse_i64_or_err(value: &str) -> Result<i64, ExitError> {
     value.parse::<i64>().map_err(|_| ExitError::usage(usage()))
 }
 
-/// Result variant of [`parse_usize`].
+/// Result variant of `parse_usize`.
 ///
 /// # Errors
 ///
@@ -251,7 +251,7 @@ pub fn parse_usize_or_err(value: &str) -> Result<usize, ExitError> {
         .map_err(|_| ExitError::usage(usage()))
 }
 
-/// Result variant of [`parse_target_kind`].
+/// Result variant of `parse_target_kind`.
 ///
 /// # Errors
 ///
@@ -271,7 +271,7 @@ pub fn parse_target_kind_or_err(value: &str) -> Result<EffectTargetKind, ExitErr
     }
 }
 
-/// Result variant of [`parse_runtime_kind`].
+/// Result variant of `parse_runtime_kind`.
 ///
 /// # Errors
 ///
@@ -291,7 +291,7 @@ pub fn parse_runtime_kind_or_err(value: &str) -> Result<RuntimeKind, ExitError> 
     }
 }
 
-/// Result variant of [`parse_metadata_consumer_use`].
+/// Result variant of `parse_metadata_consumer_use`.
 ///
 /// # Errors
 ///
@@ -308,7 +308,7 @@ pub fn parse_metadata_consumer_use_or_err(
     }
 }
 
-/// Result variant of [`parse_metadata_adapter_trigger`].
+/// Result variant of `parse_metadata_adapter_trigger`.
 ///
 /// # Errors
 ///
@@ -326,7 +326,7 @@ pub fn parse_metadata_adapter_trigger_or_err(
     }
 }
 
-/// Result variant of [`parse_host_adapter_projection_target`].
+/// Result variant of `parse_host_adapter_projection_target`.
 ///
 /// # Errors
 ///
@@ -343,7 +343,7 @@ pub fn parse_host_adapter_projection_target_or_err(
     }
 }
 
-/// Result variant of [`parse_host_adapter_process_target`].
+/// Result variant of `parse_host_adapter_process_target`.
 ///
 /// # Errors
 ///
@@ -360,7 +360,7 @@ pub fn parse_host_adapter_process_target_or_err(
     }
 }
 
-/// Result variant of [`parse_update_channel`].
+/// Result variant of `parse_update_channel`.
 ///
 /// # Errors
 ///
@@ -375,7 +375,7 @@ pub fn parse_update_channel_or_err(value: &str) -> Result<HostAdapterUpdateChann
     }
 }
 
-/// Result variant of [`require_value`].
+/// Result variant of `require_value`.
 ///
 /// Surfaces `ExitError::InvalidValue` (exit 3) to match the historical
 /// strict-value rejection code used by governance commands.
@@ -394,7 +394,7 @@ pub fn require_value_or_err(args: &[String], idx: usize, flag: &str) -> Result<S
     }
 }
 
-/// Result variant of [`parse_strict`].
+/// Result variant of `parse_strict`.
 ///
 /// Surfaces `ExitError::InvalidValue` (exit 3) on a malformed number, matching
 /// the historical strict-parse rejection used by `claim` and `isolation`.
@@ -407,7 +407,7 @@ pub fn parse_strict_or_err<T: std::str::FromStr>(s: &str, flag: &str) -> Result<
         .map_err(|_| ExitError::invalid_value(format!("claim: invalid value for --{flag}: '{s}'")))
 }
 
-/// Result variant of [`resolve_stateful_roots_or_exit`].
+/// Result variant of `resolve_stateful_roots_or_exit`.
 ///
 /// The error variant is `ExitError::Failed` (exit 1) to match the historical
 /// "command failed" code emitted by the legacy wrapper.
@@ -489,7 +489,7 @@ pub fn emit_envelope_or_err<T: serde::Serialize>(
 /// - success: `"{command}: ok"` to stdout
 /// - failure: `"{command} failed: {message}"` to stderr
 ///
-/// where `command` is the envelope's own [`CliEnvelope::command`] field, so a
+/// where `command` is the envelope's own `CliEnvelope::command` field, so a
 /// command never has to restate its name at the call site.
 ///
 /// # Do not define per-module `emit` twins

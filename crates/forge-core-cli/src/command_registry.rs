@@ -33,12 +33,12 @@ use crate::m1_cmd::M1CommandKind;
 
 /// One row in the CLI dispatch table.
 ///
-/// `name` is the argv[1] token the user types. `usage_lines` are the
+/// `name` is the `argv[1]` token the user types. `usage_lines` are the
 /// `usage:` lines printed by the global `forge-core --help` output; a command
 /// with subcommands contributes multiple lines. `handler` is the dispatcher
-/// invoked when `name` matches argv[1].
+/// invoked when `name` matches `argv[1]`.
 pub struct CommandSpec {
-    /// The argv[1] token that selects this command (e.g. `"validate"`,
+    /// The `argv[1]` token that selects this command (e.g. `"validate"`,
     /// `"host-adapter-verify-rekor-entry"`).
     pub name: &'static str,
     /// One or more `usage:` lines for the global `--help` text, without a
@@ -326,7 +326,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     },
 ];
 
-/// Looks up a command by its argv[1] token and invokes its handler.
+/// Looks up a command by its `argv[1]` token and invokes its handler.
 ///
 /// Falls back to printing the global usage text for `--help` / `-h` / no
 /// args, the version string for `--version` / `-V`, and an actionable

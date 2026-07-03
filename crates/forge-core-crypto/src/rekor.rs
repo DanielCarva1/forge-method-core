@@ -15,7 +15,7 @@ use crate::hashing::{hex_bytes, hex_sha256, normalize_sha256_display};
 /// Error raised while parsing rekor log entries or verifying inclusion proofs.
 ///
 /// Mirrors the diagnostic strings previously embedded in `Result<_, String>`
-/// signatures. Use [`RekorParseError::display`] to recover the exact message
+/// signatures. Use `RekorParseError::display` to recover the exact message
 /// emitted by the legacy implementation at the diagnostic-push boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RekorParseError {

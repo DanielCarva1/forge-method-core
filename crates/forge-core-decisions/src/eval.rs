@@ -1,7 +1,7 @@
 //! Router eval corpus + measurement harness (resolves grill R2).
 //!
 //! The engine ships NO model (DC9), so it cannot run the router itself. Instead
-//! it provides: (a) a typed eval corpus ([`EvalCorpus`]) of utterance ->
+//! it provides: (a) a typed eval corpus ([`EvalCorpusDocument`]) of utterance ->
 //! expected-workflow cases, and (b) a scorer ([`score_router`]) that measures
 //! how often a host-provided router fn matches expected. The C1 accuracy bar
 //! (>=90%) is REPORTED by running the target host against this corpus, not

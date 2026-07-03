@@ -2,7 +2,7 @@
 //! research source trust model (ADR-0010).
 //!
 //! Candidato 1 (in `forge-core-contracts`) built the pure decision function
-//! [`ResearchContract::can_admit_source`]. This crate is its enforcement
+//! [`forge_core_contracts::ResearchContract::can_admit_source`]. This crate is its enforcement
 //! counterpart: it calls that PDP and appends a `SourceAdded` event
 //! **atomically** under an exclusive file lock, closing the TOCTOU window
 //! between decide and write (CWE-367 — atomicity at the write site; ADR-0010).

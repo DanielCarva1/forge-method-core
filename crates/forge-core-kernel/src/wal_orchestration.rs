@@ -62,7 +62,7 @@ pub struct RuntimeOperationEffectPayload {
 /// Marker: the context has NOT yet been through the gate chain. An
 /// `Unverified` context cannot call [`execute_operation`]; it must be
 /// transitioned to [`Audited`] via [`audited`](RuntimeOperationExecutionContext::audited)
-/// (or [`dangerous_unchecked`](RuntimeOperationExecutionContext::dangerous_unchecked)
+/// (or `dangerous_unchecked`
 /// under the `dangerous-bypass` feature).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Unverified;
@@ -127,7 +127,7 @@ impl<'a, S> RuntimeOperationExecutionContext<'a, S> {
 impl<'a> RuntimeOperationExecutionContext<'a, Unverified> {
     /// Historical constructor. Returns an `Unverified` context: callers must
     /// transition it via [`audited`](Self::audited) (or
-    /// [`dangerous_unchecked`](Self::dangerous_unchecked)) before calling
+    /// `dangerous_unchecked`) before calling
     /// [`execute_operation`].
     #[must_use]
     pub fn single_root(root: &'a Path) -> Self {

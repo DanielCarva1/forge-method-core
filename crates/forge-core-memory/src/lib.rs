@@ -154,7 +154,7 @@ pub struct MemoryProjectionDiagnostic {
 /// The rebuildable read model: `entry_id → current entry` plus the `superseded`
 /// set (forgotten / replaced ids). Rebuilt from scratch by [`replay`]; never
 /// the source of truth (the event log is). Last-event-wins per `entry_id`,
-/// matching `claim_wal.rs`'s [`apply_record`] discipline.
+/// matching `claim_wal.rs`'s `apply_record` discipline.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct MemoryProjection {

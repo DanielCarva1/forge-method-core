@@ -653,7 +653,7 @@ pub fn append_claim_wal_record(
 }
 
 /// Like [`append_claim_wal_record`] but lets the caller pick the
-/// [`WalDurability`] tier. See ADR-0009 for when `NoSync` is appropriate
+/// [`crate::WalDurability`] tier. See ADR-0009 for when `NoSync` is appropriate
 /// (benchmarks, tests, dev) and when it is not (production).
 ///
 /// # Errors

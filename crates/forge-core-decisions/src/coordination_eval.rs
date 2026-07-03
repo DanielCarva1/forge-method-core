@@ -226,8 +226,8 @@ pub fn validate_coordination_contract(
 ///   producing a false REAL signal. Absolute refs, leading-backslash refs, and
 ///   any ref containing a backslash are flagged as gaps. Ref strings MUST be
 ///   repo-relative with forward slashes.
-/// - **N1 (review S4.7 v2)**: the Windows drive-letter check requires byte[1]
-///   == `:` AND byte[2] in `{/, \}` — a legitimate 2-char relative ref like
+/// - **N1 (review S4.7 v2)**: the Windows drive-letter check requires `byte[1]`
+///   == `:` AND `byte[2]` in `{/, \}` — a legitimate 2-char relative ref like
 ///   `a:b` is NOT a false gap.
 #[must_use]
 pub fn coordination_fixture_gaps(

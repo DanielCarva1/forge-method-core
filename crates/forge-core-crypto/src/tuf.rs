@@ -18,7 +18,7 @@
 //!
 //! ## Visibility
 //!
-//! Only [`verify_tuf_metadata_freshness_role`] is `pub(crate)` and
+//! Only `verify_tuf_metadata_freshness_role` is `pub(crate)` and
 //! re-exported at the crate root via `pub(crate) use`. The datetime helpers
 //! are consumed exclusively inside this module and remain private.
 

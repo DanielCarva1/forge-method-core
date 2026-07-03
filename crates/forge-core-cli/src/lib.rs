@@ -6,7 +6,7 @@
 //! host-adapter manifest + projection builders that the CLI owns). All
 //! cryptographic verification primitives, host-adapter verification
 //! entrypoints, and host-adapter data types have been moved to the
-//! [`forge_core_crypto`](::forge_core_crypto) crate, which this crate
+//! [`forge_core_crypto`] crate, which this crate
 //! re-exports transitively at the crate root so existing call sites in
 //! `main.rs`, `tests/validate.rs`, and `forge-contract-validator` keep
 //! resolving `forge_core_cli::run_host_adapter_*_verification` and

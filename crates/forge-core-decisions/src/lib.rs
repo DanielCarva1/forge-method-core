@@ -4,7 +4,7 @@
 //! These functions take data in and return a verdict out — no IO, no mutable
 //! state, and **no dependency on the mutation kernel**. The only crate-level
 //! dependency is the typed [`forge_core_contracts`] layer (per ADR-0001's
-//! deterministic Rust kernel). Mutation itself lives in [`forge_core_kernel`];
+//! deterministic Rust kernel). Mutation itself lives in `forge_core_kernel`;
 //! this crate only *decides* what should be allowed to happen.
 //!
 //! ## What lives here

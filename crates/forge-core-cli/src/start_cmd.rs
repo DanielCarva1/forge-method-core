@@ -225,12 +225,12 @@ impl std::error::Error for StartError {}
 /// Parses `--root` (default `.`), `--allow-bootstrap-core`, and the standard
 /// `--json`/`--no-json` dual-output flags, resolves the project, classifies
 /// the bootstrap state, and emits a [`CliEnvelope<StartPayload>`] via
-/// [`emit`].
+/// `emit`.
 ///
 /// # Errors
 ///
 /// Returns [`ExitError::usage`] on a malformed argv, and [`ExitError::with_code`]
-/// (via [`emit`]) when project resolution fails and the envelope carries a
+/// (via `emit`) when project resolution fails and the envelope carries a
 /// non-zero exit code.
 pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
     let mut root = PathBuf::from(".");

@@ -12,7 +12,7 @@
 //! process will self-deadlock (the store's `acquire_effect_store_lock` blocks).
 //! Callers that hold this guard across a cold read must call
 //! [`project_locked`](crate::project_locked), NOT
-//! [`project`](crate::project) (which would re-acquire).
+//! `project` (which would re-acquire).
 
 use std::path::{Path, PathBuf};
 

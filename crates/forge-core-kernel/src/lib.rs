@@ -19,13 +19,13 @@
 //! `rustc_middle` / `DataFusion` pattern of deep internals behind a small public
 //! surface:
 //!
-//! - [`planning`] — read-only analysis: `plan_operation`, `preview_operation`,
+//! - `planning` — read-only analysis: `plan_operation`, `preview_operation`,
 //!   `ready_operation` and their supporting report types. Never mutates.
-//! - [`staging`] — `stage_operation_effects` and the staging-plan types that
+//! - `staging` — `stage_operation_effects` and the staging-plan types that
 //!   gate which commands/effects are eligible for application.
-//! - [`evidence`] — `run_staged_read_only_command` and the evidence-record
+//! - `evidence` — `run_staged_read_only_command` and the evidence-record
 //!   builder that durable-logs each command execution.
-//! - [`wal_orchestration`] — `execute_operation`, the single public mutation
+//! - `wal_orchestration` — `execute_operation`, the single public mutation
 //!   entrypoint, plus `prepare_effect_transaction` and the execution-result
 //!   types.
 //! - [`gate`] — the `OperationGate` trait and `GateRejection` type: mutation
@@ -38,10 +38,6 @@
 //! below, so downstream crates see an unchanged public interface
 //! (`forge_core_kernel::execute_operation`, etc.).
 //!
-//! [`planning`]: planning
-//! [`staging`]: staging
-//! [`evidence`]: evidence
-//! [`wal_orchestration`]: wal_orchestration
 
 // Shared external imports. Every internal module begins with
 // `use super::*;`, so these are visible to all four modules without

@@ -195,7 +195,7 @@ impl ClaimResult {
 /// R8 (slice-5): `claim.id` (canonical `claim.lane.s1.s1`) and `scope.id`
 /// (operator-typed `s1`) shared one `StableId` type, so a `==` lookup silently
 /// never matched the operator's token. `ClaimRef` splits them: the operator's
-/// token parses into one of two variants and [`resolve_claim`] matches on the
+/// token parses into one of two variants and `resolve_claim` matches on the
 /// variant — it can never compare a [`ClaimId`] to a [`ScopeId`] (that would be
 /// a compile error, which is the whole point).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -834,7 +834,7 @@ pub fn conflict_code_str(c: ConflictCode) -> &'static str {
 // ============================================================================
 
 /// Load claim state from the **authority source**: the append-only WAL, via
-/// [`forge_core_store::derive_state`].
+/// [`forge_core_store::derive_state()`].
 ///
 /// This is the sole authority path — the ephemeral `claims-active/*.yaml`
 /// cache is never read here. To inspect the legacy cache (diagnostics only),
@@ -1628,7 +1628,7 @@ pub fn run_claim_command(args: &[String]) -> Result<(), ExitError> {
 ///
 /// # Errors
 ///
-/// Returns `ExitError::env_config` (via [`emit_envelope_or_err`]) when
+/// Returns `ExitError::env_config` (via [`crate::cli_util::emit_envelope_or_err`]) when
 /// `--claims-dir` is unset and project resolution fails or the resolved
 /// `state_root` does not exist.
 pub fn resolve_claims_dir_or_err(
@@ -1683,7 +1683,7 @@ pub fn resolve_claims_dir_or_err(
 ///
 /// Returns `ExitError::invalid_value` when required flags
 /// (`--scope`, `--id`, `--agent`) are missing or carry unknown aliases,
-/// and `ExitError::with_code` (via [`emit_envelope_or_err`]) when the
+/// and `ExitError::with_code` (via [`crate::cli_util::emit_envelope_or_err`]) when the
 /// acquire operation surfaces a non-zero exit code.
 pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::{parse_role, parse_scope_kind, run_acquire};
@@ -1827,7 +1827,7 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
 /// # Errors
 ///
 /// Returns `ExitError::invalid_value` when `--id` or `--agent` are missing,
-/// and `ExitError::with_code` (via [`emit_envelope_or_err`]) when the
+/// and `ExitError::with_code` (via [`crate::cli_util::emit_envelope_or_err`]) when the
 /// heartbeat operation surfaces a non-zero exit code.
 pub fn run_claim_heartbeat(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_heartbeat;
@@ -1845,7 +1845,7 @@ pub fn run_claim_heartbeat(args: &[String]) -> Result<(), ExitError> {
 /// # Errors
 ///
 /// Returns `ExitError::invalid_value` when `--id` or `--agent` are missing,
-/// and `ExitError::with_code` (via [`emit_envelope_or_err`]) when the
+/// and `ExitError::with_code` (via [`crate::cli_util::emit_envelope_or_err`]) when the
 /// release operation surfaces a non-zero exit code.
 pub fn run_claim_release(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_release;
@@ -1863,7 +1863,7 @@ pub fn run_claim_release(args: &[String]) -> Result<(), ExitError> {
 /// # Errors
 ///
 /// Returns `ExitError::invalid_value` when `--id` or `--agent` are missing,
-/// and `ExitError::with_code` (via [`emit_envelope_or_err`]) when the
+/// and `ExitError::with_code` (via [`crate::cli_util::emit_envelope_or_err`]) when the
 /// underlying claim operation surfaces a non-zero exit code.
 pub fn run_claim_single_target(
     args: &[String],
@@ -1966,7 +1966,7 @@ pub fn run_claim_single_target(
 /// # Errors
 ///
 /// Returns `ExitError::invalid_value` when `--id`, `--agent`, or `--summary`
-/// are missing, and `ExitError::with_code` (via [`emit_envelope_or_err`])
+/// are missing, and `ExitError::with_code` (via [`crate::cli_util::emit_envelope_or_err`])
 /// when the handoff operation surfaces a non-zero exit code.
 pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_handoff;
@@ -2073,7 +2073,7 @@ pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
 ///
 /// # Errors
 ///
-/// Returns `ExitError::with_code` (via [`emit_envelope_or_err`]) when the
+/// Returns `ExitError::with_code` (via [`crate::cli_util::emit_envelope_or_err`]) when the
 /// status read surfaces a non-zero exit code, and `ExitError::env_config`
 /// (via [`resolve_claims_dir_or_err`]) when project resolution fails.
 pub fn run_claim_status(args: &[String]) -> Result<(), ExitError> {
@@ -2145,7 +2145,7 @@ pub fn run_claim_status(args: &[String]) -> Result<(), ExitError> {
 /// # Errors
 ///
 /// Returns `ExitError::invalid_value` when `--interval-ms` is zero, and
-/// `ExitError::with_code` (via [`emit_envelope_or_err`] or the loop driver)
+/// `ExitError::with_code` (via [`crate::cli_util::emit_envelope_or_err`] or the loop driver)
 /// when a reconciliation pass surfaces a non-zero exit code.
 pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_reconcile_once;
@@ -2341,7 +2341,7 @@ pub(crate) fn run_claim_reconcile_loop_or_err(
 ///
 /// Returns `ExitError::invalid_value` when `--agent` is missing or no
 /// `--target` is provided, and `ExitError::with_code` (via
-/// [`emit_envelope_or_err`]) when the write-check surfaces a non-zero
+/// [`crate::cli_util::emit_envelope_or_err`]) when the write-check surfaces a non-zero
 /// exit code.
 pub fn run_claim_check_write(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::run_check_write;

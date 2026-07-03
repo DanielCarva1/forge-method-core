@@ -36,7 +36,7 @@
 //!
 //! - [`DiagnosticCodeDef`]: the const-table entry (struct of `&'static str` +
 //!   default severity).
-//! - [`declare_diagnostic_code!`]: the declaration macro that emits a
+//! - `declare_diagnostic_code!`: the declaration macro that emits a
 //!   `pub static <NAME>: DiagnosticCodeDef`.
 //! - [`DiagnosticRegistry`]: a const-constructed lookup from code string →
 //!   `&'static DiagnosticCodeDef`.
@@ -239,8 +239,8 @@ const SEED_ENTRIES: &[&DiagnosticCodeDef] = &[
 ];
 
 /// The seed registry: every code declared above. New codes are added by
-/// declaring them with [`declare_diagnostic_code!`] and appending a `&NAME`
-/// entry to [`SEED_ENTRIES`]. V2.B will grow this into the full vocabulary as
+/// declaring them with `declare_diagnostic_code!` and appending a `&NAME`
+/// entry to `SEED_ENTRIES`. V2.B will grow this into the full vocabulary as
 /// callers migrate.
 pub const SEED_REGISTRY: DiagnosticRegistry = DiagnosticRegistry::new(SEED_ENTRIES);
 

@@ -203,7 +203,7 @@ pub enum ClaimRejection {
         blocking_claim_id: ClaimId,
         holder: StableId,
         expires_at: String,
-        /// F07.4 — structured conflict object (see [`AlreadyClaimedByOther`]).
+        /// F07.4 — structured conflict object (see [`ClaimRejection::AlreadyClaimedByOther`]).
         conflict: Option<ConflictContract>,
     },
     /// The caller is not the claimant of this claim.

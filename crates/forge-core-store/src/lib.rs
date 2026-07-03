@@ -29,7 +29,7 @@ pub mod claim_wal;
 pub mod derive_state;
 
 /// The sole authority constructor for claim state. Replays the append-only
-/// claims WAL into a typed projection. See [`derive_state`] for the contract.
+/// claims WAL into a typed projection. See [`fn@derive_state`] for the contract.
 pub use derive_state::derive_state;
 
 const CONTRACT_DEFINITIONS: &[&str] = &[
@@ -243,7 +243,7 @@ where
 ///
 /// # Errors
 ///
-/// Forwards [`AppendJsonLineError`] from [`append_json_line_with_lock_durability`].
+/// Forwards [`AppendJsonLineError`] from `append_json_line_with_lock_durability`.
 pub fn append_json_line_with_durability<T>(
     root: impl AsRef<Path>,
     relative_path: &str,
@@ -1271,7 +1271,7 @@ pub fn apply_file_effect_transaction_with_wal(
 
 /// [`apply_file_effect_transaction_with_wal`] with an explicit [`WalDurability`] knob.
 ///
-/// `durability` threads through to [`append_effect_wal_record`] for the four
+/// `durability` threads through to `append_effect_wal_record` for the four
 /// WAL appends this function performs (begin, before-image, write-applied,
 /// commit). Rollback paths inside this function hard-code [`WalDurability::SyncOnAppend`]
 /// because losing a rollback marker would corrupt the next recovery pass.

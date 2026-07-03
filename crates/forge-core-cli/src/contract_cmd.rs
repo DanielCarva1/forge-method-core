@@ -30,7 +30,7 @@ pub struct ContractValidationResult {
     pub schema_version: String,
 }
 
-/// Hand-rolled error enum for [`validate_kind`] / [`parse_document`] (no `thiserror`).
+/// Hand-rolled error enum for [`validate_kind`] / `parse_document` (no `thiserror`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ContractValidateError {
     /// The `kind` string did not match any of the supported contract kinds.
@@ -161,7 +161,7 @@ pub fn run_validate(args: &[String]) -> Result<(), ExitError> {
 /// # Errors
 ///
 /// Returns [`ContractValidateError::UnsupportedKind`] when `kind` is not
-/// in [`SUPPORTED_KINDS`], and parse/contract-validation variants when the
+/// in `SUPPORTED_KINDS`, and parse/contract-validation variants when the
 /// document is malformed or violates the schema.
 pub fn validate_kind(
     kind: &str,

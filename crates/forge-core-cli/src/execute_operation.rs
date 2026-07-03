@@ -164,12 +164,12 @@ pub enum ExecuteOperationError {
         error_count: usize,
         first_error: String,
     },
-    /// V3.A: a kernel-internal [`OperationGate`] rejected the mutation before
+    /// V3.A: a kernel-internal `OperationGate` rejected the mutation before
     /// any WAL append. Carries the typed kernel rejection verbatim. Nothing is
     /// persisted when this fires. The risk-audit and citation gates now run
     /// inside the kernel too; their failures are mapped back to the historical
     /// `RiskAuditFailed` / `CitationCheckFailed` variants by
-    /// [`map_kernel_rejection`] so consumers/tests see the same shape. This
+    /// `map_kernel_rejection` so consumers/tests see the same shape. This
     /// variant covers any OTHER gate the kernel runs (e.g. `Custom`).
     GateRejected {
         rejection: GateRejection,

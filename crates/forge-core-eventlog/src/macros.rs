@@ -7,7 +7,7 @@
 //! (compiled as a `proc-macro = true` dylib), adding a build-time dependency
 //! and a second compilation unit for every consumer — against the Rust 2024H2 /
 //! 2025H1 "reduce proc-macro build cost" direction. A declarative
-//! [`macro_rules!`] is hygienic, composable, has zero build-time cost beyond
+//! `macro_rules!` is hygienic, composable, has zero build-time cost beyond
 //! the single crate it already lives in, and is debuggable with
 //! `cargo expand`. The trade is expressiveness: `macro_rules!` cannot inspect
 //! tokens as deeply, so we only generate what is truly mechanical (the

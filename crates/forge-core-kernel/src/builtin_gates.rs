@@ -4,7 +4,7 @@
 //! runs internally, before any WAL append. The CLI/risk-audit crates no longer
 //! run the checks inline; instead they construct the gates from config (the
 //! `--require-risk-audit` / `--require-citation` flags) and attach them to the
-//! [`RuntimeOperationExecutionContext`] via `.with_gate(Box::new(...))`.
+//! [`crate::RuntimeOperationExecutionContext`] via `.with_gate(Box::new(...))`.
 //!
 //! Each gate:
 //! - holds only config + the pre-resolved data it needs (the rule set, the

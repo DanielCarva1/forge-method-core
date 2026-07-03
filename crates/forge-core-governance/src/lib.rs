@@ -3,7 +3,7 @@
 //!
 //! The claim engine (`forge-core-decisions::claim_engine`) is a pure state machine
 //! (DD16): on a path-overlap acquire it returns a
-//! [`ConflictContract`](forge_core_contracts::ConflictContract) inside the
+//! [`ConflictContract`] inside the
 //! rejection. But the engine touches no filesystem — emitting the conflict to a
 //! durable, queryable store is a *separate* concern, and that is what this
 //! crate is. It mirrors the F06 split exactly:
@@ -69,11 +69,11 @@ pub const GOVERNANCE_LOCK_RELATIVE_PATH: &str = "locks/governance.conflicts.lock
 /// Variants mirror the conflict lifecycle:
 /// - [`Detected`](GovernanceEvent::Detected) — a conflict entered the ledger at
 ///   `Pending` resolution (the carrying [`ConflictContract`] is the full
-///   attribution record). Emitted by [`record`].
+///   attribution record). Emitted by [`fn@record`].
 /// - [`Resolved`](GovernanceEvent::Resolved) — an authorized arbiter moved a
-///   `Pending` conflict to `Resolved`. Emitted by [`arbitrate`].
+///   `Pending` conflict to `Resolved`. Emitted by [`fn@arbitrate`].
 /// - [`Escalated`](GovernanceEvent::Escalated) — an authorized arbiter moved a
-///   `Pending` conflict to `Escalated`. Emitted by [`escalate`].
+///   `Pending` conflict to `Escalated`. Emitted by [`fn@escalate`].
 ///
 /// `Resolved`/`Escalated` are transition events: they reference a `conflict_id`
 /// rather than re-stating the whole contract, and the projection folds them
