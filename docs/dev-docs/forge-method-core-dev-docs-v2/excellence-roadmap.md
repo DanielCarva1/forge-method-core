@@ -60,35 +60,18 @@ estado** — ele **não existe**.
 
 ---
 
-## 2. Migrar 5 `Result<_, String>` (AGENTS.md manda) — 1/5 ✅, 4 pendentes
+## 2. Migrar `Result<_, String>` (AGENTS.md manda) — ✅ LANDED (5/5)
 
-**Contexto.** AGENTS.md:24 proíbe novos `Result<_, String>` e manda migrar os
-existentes quando tocados. Há 5 offenders vivos (o resto dos hits são
-doc-comments documentando a migração — bons).
+Todos os 5 sites migrados para enums tipados (Debug, Clone, PartialEq, Eq):
 
-**Estado:** 1 migrado (attestation.rs `hex_decode` → `HexDecodeError` tipado),
-4 pendentes.
+1. ~~`store/lib.rs` `parse_effect_wal_records_for_recovery`~~ → `EffectWalRecoveryParseError`
+2. ~~`cli/mcp_cmd.rs` `parse_serve_args`~~ → `ServeArgsError`
+3. ~~`cli/research_cmd.rs` `load_evidence`~~ → `EvidenceLoadError`
+4. ~~`protocol-mcp/attestation.rs` `hex_decode`~~ → `HexDecodeError`
+5. ~~`protocol-mcp/server.rs` `extract_attestation`~~ → `AttestationExtractError`
 
-**Os 5 sites:**
-1. `crates/forge-core-store/src/lib.rs:1574` —
-   `parse_effect_wal_records_for_recovery() -> Result<(Vec<_>, Vec<String>), String>`
-   com `return Err(format!(...))` na linha 1592. **O pior:** String error num
-   caminho estrutural de recovery. (pendente)
-2. `crates/forge-core-cli/src/mcp_cmd.rs:77` — `parse_serve_args() -> Result<ServeArgs, String>` (pendente)
-3. `crates/forge-core-cli/src/research_cmd.rs:799` — `load_evidence() -> Result<FieldEvidenceRegistry, String>` (pendente)
-4. ~~`crates/forge-core-protocol-mcp/src/attestation.rs:238` — `hex_decode`~~ ✅ migrado para `HexDecodeError` (OddLength, InvalidNibble).
-5. `crates/forge-core-protocol-mcp/src/server.rs:379` — `Option<Result<AttestationInput, String>>` (pendente)
-
-**Padrão a seguir.** Definir um enum error nomeado por operação (Derive
-`Debug, Clone, PartialEq, Eq`), ao lado da função. Espelhar
-`AppendJsonLineError` / `ReferenceIndexBuildError` em `forge-core-store`.
-Converter com `.map_err(NamedError::from)` ou `From` impl no boundary.
-
-**Gate de aceite.** Zero `Result<_, String>` em `crates/*/src/` (grep
-confirma); `cargo clippy --workspace --all-targets -- -W clippy::pedantic`
-verde; `cargo test --workspace` verde.
-
-**Estimativa.** 1 sessão. Cada site é isolado.
+**Zero `Result<_, String>` em `crates/*/src/`** (grep confirma). Gate de
+aceite cumprido: clippy pedantic verde, testes verde.
 
 ---
 
@@ -101,16 +84,46 @@ inline. O gap real do MCP era vetores de ataque específicos não cobertos.
 
 | Crate | LOC | Risco | Estado |
 |-------|-----|-------|--------|
+| `forge-core-crypto` | 5812 | **P0 — security-critical** | Pendente — só 101 LOC de smoke tests. ed25519/p256/rekor/OCSP/TUF. **Prioridade máxima.** |
+| `forge-core-protocol-mcp` | 2016 | Alto | ✅ **Attestation gaps fechados** (44 testes) |
 | `forge-core-governance` | 1447 | Alto | Pendente — arbitrate/escalate/record sem prova |
 | `forge-core-eval-harness` | 1371 | Alto | Pendente — decide baseline vs candidate (ADR-0023) |
 | `forge-core-research` | 1025 | Médio | Pendente — admission/graph; `proptest` dev-dep mas 0 testes |
-| `forge-core-protocol-mcp` | 2016 | Alto | ✅ **Attestation gaps fechados** (44 testes; ver abaixo) |
+| `forge-core-eventlog` | 1132 | Médio | Pendente — EventSourced trait mechanics |
+| `forge-core-eval` | 890 | Baixo | Pendente — contract types |
+| `forge-core-trace` | 479 | Baixo | Pendente — trivial |
+
+### Fase 2 — `forge-core-crypto` (P0, prioridade máxima) — PRÓXIMA SESSÃO
+
+O crate de maior risco: 5812 LOC de verificação criptográfica com cobertura
+essencialmente zero. Um bug aqui é silencioso e catastrófico. Cobertura
+ampla por commit:
+
+- **Commit 2.1 — ed25519/p256 signature verification.** Round-trip
+  sign→verify (Ok), tampered sig→verify (Invalid), wrong key→verify
+  (Invalid). KAT com seed fixa.
+- **Commit 2.2 — rekor log entry parse + verify.** Parse de uma
+  transparency log entry real, inclusão proof, reject de entry forjada.
+- **Commit 2.3 — OCSP/CRL/CT-SCT status.** Decode OCSP (good/revoked/
+  unknown), CRL revoked detection, CT/SCT timestamp validation.
+- **Commit 2.4 — TUF trusted-root freshness.** Version monotonicity,
+  timestamp/snapshot/targets version checks, expiry.
+
+Cada commit: `cargo test -p forge-core-crypto` a passar.
+
+### Fase 3 — crates sem testes (SESSÕES seguintes, ordem por risco)
+
+1. `forge-core-governance` (arbitrate/escalate/record)
+2. `forge-core-eval-harness` (decide baseline vs candidate)
+3. `forge-core-research` (admission/graph; `proptest` dev-dep disponível)
+4. `forge-core-eventlog` (EventSourced trait mechanics)
+5. `forge-core-eval` / `forge-core-trace` (baixo risco)
 
 ### `forge-core-protocol-mcp` — ✅ LANDED (parcial)
 
 Os gaps de attestation/authorization foram fechados (3 commits, sessão
 seguinte ao derive_state):
-- 7 testes novos: RequireAll gate, present-but-invalid no read-only
+- 7 testes novo: RequireAll gate, present-but-invalid no read-only
   (defense-in-depth), malformed `_meta.attestation`, unauthorized-key
   pin do contrato documentado, proptest sign/verify+tamper.
 - KAT determinístico (seed fixa) que pin canonical bytes + assinatura
@@ -121,17 +134,10 @@ seguinte ao derive_state):
 **O que NÃO landed:** allowlist tem 11 testes (cobertura boa); server.rs
 tem 17 testes (gate coberto). O `run_stdio` live loop fica implícito.
 
-**Abordagem.** Um crate por sessão. Comece pelo `forge-core-protocol-mcp`
-(security-sensitive tem prioridade). Para cada:
-1. Testes unitários nos módulos puros (`allowlist.rs`, `attestation.rs`).
-2. Testes E2E em `tests/` usando `assert_cmd` no binário `forge-core mcp serve`.
-3. Para governance/eval-harness/research: property tests com o `proptest` já
-   no dev-deps.
-
 **Gate de aceite.** Cada crate tem ≥1 teste E2E + cobertura unitária nos
 caminhos críticos; `cargo test -p <crate>` verde.
 
-**Estimativa.** 3-4 sessões (1 por crate, MCP pode precisar de 2).
+**Estimativa.** Fase 2: 1-2 sessões. Fase 3: 4-5 sessões (1 por crate).
 
 ---
 
