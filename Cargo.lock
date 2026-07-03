@@ -937,6 +937,7 @@ version = "0.1.0"
 dependencies = [
  "forge-core-contracts",
  "forge-core-store",
+ "forge-core-trace",
  "forge-core-validate",
  "serde",
  "sha2",
@@ -964,6 +965,7 @@ name = "forge-core-protocol-mcp"
 version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
+ "forge-core-cli",
  "forge-core-contracts",
  "forge-core-validate",
  "proptest",

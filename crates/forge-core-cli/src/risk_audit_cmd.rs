@@ -1,4 +1,4 @@
-//! `forge-core risk-audit` — F11 Risk Audit Gate.
+//! `forge-core risk-audit` — F11 Risk Audit Gate (standalone CLI).
 //!
 //! Loads a `risk-audit-v0` rule set from `--rules <path>`, walks the
 //! consumer repo at `--root`, and runs the rules against every source file
@@ -6,10 +6,11 @@
 //! `ValidationReport` and the command fails closed when the report has any
 //! `Error`-severity diagnostic.
 //!
-//! The walker is intentionally simple: it visits every regular file under
-//! `--root`, skipping `.git`, `target`, `node_modules`, and `.forge-method`
-//! (the latter is reserved for Forge runtime state and never audited as
-//! product source). Future sub-tracks can extend the walker (gitignore
+//! The file walker lives in `forge-core-validate::risk_audit::collect_risk_audit_targets`
+//! (V3.A moved it there so the same walker backs both this standalone command
+//! and the risk-audit mutation gate in the kernel). It visits every regular
+//! file under `--root`, skipping `.git`, `target`, `node_modules`, and
+//! `.forge-method`. Future sub-tracks can extend the walker (gitignore
 //! awareness, symlinks, etc.) without touching the rule engine.
 
 use crate::cli_error::ExitError;
@@ -17,8 +18,7 @@ use crate::cli_util::{resolve_now_unix, usage};
 use forge_core_contracts::{CliEnvelope, ExitReason};
 use forge_core_store::append_trace_event;
 use forge_core_validate::risk_audit::{
-    evaluate_risk_audit, validate_risk_audit_rule_set, RiskAuditRuleSet, RiskAuditTarget,
-    RISK_AUDIT_MAX_FILE_BYTES,
+    collect_risk_audit_targets, evaluate_risk_audit, validate_risk_audit_rule_set, RiskAuditRuleSet,
 };
 use serde::Serialize;
 use std::fs;
@@ -27,20 +27,6 @@ use tracing::instrument;
 
 const RISK_AUDIT_USAGE_LINE: &str =
     "       forge-core risk-audit [--root <path>] --rules <path> [--json]";
-
-/// Directories the walker always skips. They are either Forge runtime state
-/// (`.forge-method`), build artifacts (`target`, `node_modules`, `dist`,
-/// `build`), or VCS metadata (`.git`, `.hg`, `.svn`).
-const SKIP_DIRS: &[&str] = &[
-    ".git",
-    ".hg",
-    ".svn",
-    "target",
-    "node_modules",
-    "dist",
-    "build",
-    ".forge-method",
-];
 
 #[derive(Debug, Clone, Serialize)]
 struct RiskAuditDiagnosticView {
@@ -357,7 +343,7 @@ fn run_risk_audit(root: &Path, rules_path: Option<&Path>) -> CliEnvelope<RiskAud
         );
     }
 
-    let targets = match collect_targets(root) {
+    let targets = match collect_risk_audit_targets(root) {
         Ok(targets) => targets,
         Err(source) => {
             return CliEnvelope::err(
@@ -416,67 +402,4 @@ fn run_risk_audit(root: &Path, rules_path: Option<&Path>) -> CliEnvelope<RiskAud
             summary,
         )
     }
-}
-
-#[derive(Debug)]
-pub(crate) enum CollectTargetsError {
-    Walk { source: String },
-}
-
-impl std::fmt::Display for CollectTargetsError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Walk { source } => write!(f, "walk error: {source}"),
-        }
-    }
-}
-
-pub(crate) fn collect_targets(root: &Path) -> Result<Vec<RiskAuditTarget>, CollectTargetsError> {
-    let mut targets = Vec::new();
-    walk_dir(root, root, &mut targets).map_err(|source| CollectTargetsError::Walk {
-        source: source.to_string(),
-    })?;
-    targets.sort_by(|a, b| a.path.cmp(&b.path));
-    Ok(targets)
-}
-
-fn walk_dir(root: &Path, dir: &Path, targets: &mut Vec<RiskAuditTarget>) -> std::io::Result<()> {
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        let file_type = entry.file_type()?;
-        if file_type.is_dir() {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if SKIP_DIRS.contains(&name.as_str()) {
-                continue;
-            }
-            walk_dir(root, &path, targets)?;
-        } else if file_type.is_file() {
-            // Skip files larger than the audit budget without reading them.
-            if let Ok(meta) = entry.metadata() {
-                let file_size = usize::try_from(meta.len()).unwrap_or(usize::MAX);
-                if file_size > RISK_AUDIT_MAX_FILE_BYTES {
-                    let rel = repo_relative(root, &path);
-                    targets.push(RiskAuditTarget {
-                        path: rel,
-                        content: String::new(),
-                    });
-                    continue;
-                }
-            }
-            let rel = repo_relative(root, &path);
-            // Read failure is non-fatal; we still surface the target path so
-            // the rule engine can emit a `RiskAuditTargetFileUnreadable`.
-            let content = fs::read_to_string(&path).unwrap_or_default();
-            targets.push(RiskAuditTarget { path: rel, content });
-        }
-    }
-    Ok(())
-}
-
-fn repo_relative(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .replace('\\', "/")
 }

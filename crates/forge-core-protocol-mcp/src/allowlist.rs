@@ -107,11 +107,16 @@ impl fmt::Display for AllowlistError {
 
 impl std::error::Error for AllowlistError {}
 
-/// Canonical read-only tool names (projection of `command_registry::COMMANDS`
-/// that performs no store mutation). See ADR-0006 / CONTEXT.md "`MCPTool`".
+/// Canonical read-only tool names exposed by default. Each entry MUST match a
+/// `CommandSpec::name` in `command_registry::COMMANDS`; the
+/// `default_tools_are_registered_commands` test asserts this, so renaming a
+/// command in COMMANDS without updating this list is a test failure.
 ///
-/// `explain` is the "trace" surface; `query-effect-index` is the read side of
-/// the effect index. `memory list` is the read verb of the memory PEP.
+/// This is NOT the policy layer (ADR-0006 Decision 3 keeps that as YAML
+/// data). It is the curated default surface — the projection of COMMANDS that
+/// performs no store mutation. `explain` is the "trace" surface;
+/// `query-effect-index` is the read side of the effect index; `memory list` is
+/// the read verb of the memory PEP.
 pub const DEFAULT_READONLY_TOOLS: &[&str] = &[
     "preview",
     "ready",
@@ -121,8 +126,12 @@ pub const DEFAULT_READONLY_TOOLS: &[&str] = &[
     "query-effect-index",
 ];
 
-/// Canonical mutate tool names (require `OperationContract` + Tool-Call
-/// Attestation at the `MutateGate`). See ADR-0006 Decisions 2 & 4.
+/// Canonical mutate tool names exposed by default. Each entry MUST match a
+/// `CommandSpec::name` in `command_registry::COMMANDS`; the
+/// `default_tools_are_registered_commands` test asserts this.
+///
+/// These require an `OperationContract` + Tool-Call Attestation at the
+/// `MutateGate` (ADR-0006 Decisions 2 & 4).
 pub const DEFAULT_MUTATE_TOOLS: &[&str] = &["execute-operation", "claim"];
 
 impl Allowlist {
@@ -309,6 +318,42 @@ impl ToolEntryYaml {
 mod tests {
     use super::*;
 
+    /// Drift guard: every name in [`DEFAULT_READONLY_TOOLS`] and
+    /// [`DEFAULT_MUTATE_TOOLS`] MUST be a registered command name in
+    /// `command_registry::COMMANDS`. This makes a command rename in the CLI a
+    /// test failure HERE — the adapter's tool-name arrays can no longer drift
+    /// silently from the registry they claim to project.
+    ///
+    /// The arrays are intentionally hand-curated (the default surface is a
+    /// *subset* of COMMANDS, not the whole table), so this is a validation,
+    /// not a generation. A command may exist in COMMANDS without appearing in
+    /// either default array; the reverse is forbidden.
+    #[test]
+    fn default_tools_are_registered_commands() {
+        let registered: std::collections::HashSet<&str> = known_commands().into_iter().collect();
+        for name in DEFAULT_READONLY_TOOLS
+            .iter()
+            .chain(DEFAULT_MUTATE_TOOLS.iter())
+            .copied()
+        {
+            assert!(
+                registered.contains(name),
+                "default tool {:?} is not a registered forge-core command \
+                 (rename in COMMANDS, or a typo in DEFAULT_*_TOOLS)",
+                name,
+            );
+        }
+        // The two default arrays must not overlap (a tool is read-only XOR mutate).
+        let ro: std::collections::HashSet<&str> = DEFAULT_READONLY_TOOLS.iter().copied().collect();
+        for name in DEFAULT_MUTATE_TOOLS.iter().copied() {
+            assert!(
+                !ro.contains(name),
+                "tool {:?} appears in both DEFAULT_READONLY_TOOLS and DEFAULT_MUTATE_TOOLS",
+                name,
+            );
+        }
+    }
+
     #[test]
     fn default_read_only_has_no_mutate() {
         let al = Allowlist::default_read_only();
@@ -349,16 +394,17 @@ mod tests {
         assert!(al.get("definitely-not-a-tool").is_none());
     }
 
-    const KNOWN_COMMANDS: &[&str] = &[
-        "preview",
-        "ready",
-        "graph",
-        "explain",
-        "memory",
-        "query-effect-index",
-        "execute-operation",
-        "claim",
-    ];
+    /// The registered command names, projected from
+    /// `forge_core_cli::command_registry::COMMANDS`. This is NOT a
+    /// hand-maintained list — it is derived at test time so the YAML-loader
+    /// tests validate against the real registry. A rename in COMMANDS updates
+    /// this set automatically.
+    fn known_commands() -> Vec<&'static str> {
+        forge_core_cli::command_registry::COMMANDS
+            .iter()
+            .map(|c| c.name)
+            .collect()
+    }
 
     #[test]
     fn yaml_parses_read_only_and_mutate() {
@@ -369,7 +415,7 @@ tools:
   - name: execute-operation
     policy: mutate
 ";
-        let (al, report) = Allowlist::from_yaml_str(yaml, KNOWN_COMMANDS);
+        let (al, report) = Allowlist::from_yaml_str(yaml, &known_commands());
         assert!(
             !report.has_errors(),
             "unexpected errors: {:?}",
@@ -388,7 +434,7 @@ tools:
   - name: preview
   - name: not-a-real-command
 ";
-        let (al, report) = Allowlist::from_yaml_str(yaml, KNOWN_COMMANDS);
+        let (al, report) = Allowlist::from_yaml_str(yaml, &known_commands());
         assert!(report.has_errors());
         // The known tool is still admitted; only the unknown one is dropped.
         assert!(al.get("preview").is_some());
@@ -406,7 +452,7 @@ tools:
   - name: preview
   - name: preview
 ";
-        let (_al, report) = Allowlist::from_yaml_str(yaml, KNOWN_COMMANDS);
+        let (_al, report) = Allowlist::from_yaml_str(yaml, &known_commands());
         assert!(report
             .diagnostics()
             .iter()
@@ -416,7 +462,7 @@ tools:
     #[test]
     fn yaml_empty_tools_is_error() {
         let yaml = "tools: []\n";
-        let (al, report) = Allowlist::from_yaml_str(yaml, KNOWN_COMMANDS);
+        let (al, report) = Allowlist::from_yaml_str(yaml, &known_commands());
         assert!(report.has_errors());
         assert!(al.is_empty());
         assert!(report
@@ -428,7 +474,7 @@ tools:
     #[test]
     fn yaml_malformed_is_parse_error() {
         let yaml = "tools: [this is not: valid: yaml\n";
-        let (al, report) = Allowlist::from_yaml_str(yaml, KNOWN_COMMANDS);
+        let (al, report) = Allowlist::from_yaml_str(yaml, &known_commands());
         assert!(report.has_errors());
         assert!(al.is_empty());
         assert!(report
@@ -446,7 +492,7 @@ tools:
   - name: preview
     policy: bogus-value
 ";
-        let (al, report) = Allowlist::from_yaml_str(yaml, KNOWN_COMMANDS);
+        let (al, report) = Allowlist::from_yaml_str(yaml, &known_commands());
         assert!(!report.has_errors());
         assert!(al.get("preview").is_some_and(|t| !t.policy.is_mutate()));
     }

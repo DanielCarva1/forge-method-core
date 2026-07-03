@@ -10,6 +10,8 @@
 
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity, ValidationReport};
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
 
 /// Schema version marker for risk-audit contracts. Bumping this signals a
 /// breaking change in the rule shape.
@@ -18,7 +20,117 @@ pub const RISK_AUDIT_SCHEMA_VERSION: &str = "risk-audit-v0";
 /// Maximum file size (in bytes) the regex detector will scan. Larger files
 /// are reported as unreadable to avoid pathological regex backtracking on
 /// huge blobs (e.g. generated code, minified JS).
+///
+/// This is the single enforcement point: the file walker
+/// ([`collect_risk_audit_targets`]) skips files above this size *before*
+/// reading them, leaving their `content` empty. The evaluator in
+/// [`evaluate_risk_audit`] also short-circuits an oversized `content` as a
+/// defensive backstop (so synthetic/in-memory targets still get the
+/// `RiskAuditTargetFileUnreadable` diagnostic).
 pub const RISK_AUDIT_MAX_FILE_BYTES: usize = 10 * 1024 * 1024; // 10 MiB
+
+/// Directories the risk-audit file walker always skips. They are either Forge
+/// runtime state (`.forge-method`), build artifacts (`target`,
+/// `node_modules`, `dist`, `build`), or VCS metadata (`.git`, `.hg`, `.svn`).
+pub const RISK_AUDIT_SKIP_DIRS: &[&str] = &[
+    ".git",
+    ".hg",
+    ".svn",
+    "target",
+    "node_modules",
+    "dist",
+    "build",
+    ".forge-method",
+];
+
+/// Error returned by [`collect_risk_audit_targets`] when the directory walk
+/// fails.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CollectRiskAuditTargetsError {
+    pub source: String,
+}
+
+impl std::fmt::Display for CollectRiskAuditTargetsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "walk error: {}", self.source)
+    }
+}
+
+impl std::error::Error for CollectRiskAuditTargetsError {}
+
+/// Walk `root` and collect every regular file as a [`RiskAuditTarget`],
+/// skipping the directories in [`RISK_AUDIT_SKIP_DIRS`] and files larger than
+/// [`RISK_AUDIT_MAX_FILE_BYTES`] (those are surfaced with an empty `content`
+/// so the rule engine can emit a `RiskAuditTargetFileUnreadable` diagnostic).
+///
+/// This is the canonical walker shared by the standalone `risk-audit` CLI
+/// command and the risk-audit mutation gate. It owns the file-size
+/// enforcement so the budget is checked once, before reading (efficient), in a
+/// single place. Targets are sorted by path for deterministic output.
+///
+/// # Errors
+///
+/// Returns `Err` if the underlying `read_dir`/file-type walk fails.
+pub fn collect_risk_audit_targets(
+    root: impl AsRef<Path>,
+) -> Result<Vec<RiskAuditTarget>, CollectRiskAuditTargetsError> {
+    let root = root.as_ref();
+    let mut targets = Vec::new();
+    walk_dir_for_risk_audit(root, root, &mut targets).map_err(|source| {
+        CollectRiskAuditTargetsError {
+            source: source.to_string(),
+        }
+    })?;
+    targets.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(targets)
+}
+
+fn walk_dir_for_risk_audit(
+    root: &Path,
+    dir: &Path,
+    targets: &mut Vec<RiskAuditTarget>,
+) -> std::io::Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path: PathBuf = entry.path();
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if RISK_AUDIT_SKIP_DIRS.contains(&name.as_str()) {
+                continue;
+            }
+            walk_dir_for_risk_audit(root, &path, targets)?;
+        } else if file_type.is_file() {
+            // Single enforcement of RISK_AUDIT_MAX_FILE_BYTES: skip reading
+            // oversized files (leave content empty) so the rule engine emits
+            // `RiskAuditTargetFileUnreadable` without pathological I/O.
+            if let Ok(meta) = entry.metadata() {
+                let file_size = usize::try_from(meta.len()).unwrap_or(usize::MAX);
+                if file_size > RISK_AUDIT_MAX_FILE_BYTES {
+                    let rel = repo_relative(root, &path);
+                    targets.push(RiskAuditTarget {
+                        path: rel,
+                        content: String::new(),
+                    });
+                    continue;
+                }
+            }
+            let rel = repo_relative(root, &path);
+            // Read failure is non-fatal; we still surface the target path so
+            // the rule engine can emit a `RiskAuditTargetFileUnreadable`.
+            let content = fs::read_to_string(&path).unwrap_or_default();
+            targets.push(RiskAuditTarget { path: rel, content });
+        }
+    }
+    Ok(())
+}
+
+fn repo_relative(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

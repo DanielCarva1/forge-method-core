@@ -1,16 +1,27 @@
 //! F11.3 Risk Audit Gate enforcement in `execute-operation` — E2E.
 //!
-//! These tests exercise the `--require-risk-audit <path>` flag added by F11.3.
-//! The gate runs BEFORE any contract parse or WAL write, so:
+//! V3.A moved the risk-audit and citation gates from inline CLI steps into the
+//! kernel (attached via `.with_gate(...)`). The `--require-risk-audit` flag is
+//! now CONFIG (which gate to attach), not the gate's location. The kernel runs
+//! the gate against the operation plan BEFORE any WAL append, so:
 //!
-//! - `blocked`: anti-pattern in source + flag → fail-closed, WAL untouched.
+//! - `blocked`: anti-pattern in source + flag → fail-closed, WAL untouched,
+//!   trace emitted.
 //! - `passes_when_clean`: clean source + flag → gate passes; the operation
-//!   still fails afterwards (no real operation contract) but NOT with a
-//!   risk-audit error, proving the gate did not block.
+//!   reaches the runtime (the plan is `AwaitingHuman`, so no WAL is written)
+//!   without a risk-audit error, proving the gate did not block.
 //! - `without_flag_skips_audit`: anti-pattern in source, NO flag → gate does
-//!   not run; same downstream failure, no risk-audit error.
+//!   not attach; no risk-audit error.
 //! - `invalid_rules_yaml`: malformed rules YAML + flag → `ParseYaml` error
-//!   propagated clearly.
+//!   propagated clearly (the CLI still loads/validates the rule set before
+//!   constructing the gate).
+//!
+//! NOTE: the kernel gate runs after the CLI loads the operation contract (the
+//! kernel needs the plan). To isolate the gate from contract correctness, the
+//! blocked/clean tests point `--operation` at a valid non-mutating fixture
+//! (`facilitate-first-product-idea.yaml`, whose plan is `AwaitingHuman`) copied
+//! into the scaffold. The gate preamble still runs before the plan-status
+//! early-return, so the gate is evaluated.
 
 use assert_cmd::Command;
 use serde_json::Value;
@@ -33,10 +44,15 @@ fn repo_root() -> PathBuf {
 /// Consumer project layout: `<parent>/app` is the project, `<parent>/forge-app`
 /// is the sidecar carrying `<parent>/forge-app/.forge-method` as `state_root`.
 /// Mirrors the layout used by `operation_sidecar_e2e.rs::consumer_fixture`,
-/// kept minimal (no operation/command/effect contracts copied).
+/// kept minimal (no command/effect contracts copied). A single non-mutating
+/// operation fixture is copied in so the flow reaches the kernel's gate
+/// preamble (V3.A): the gate now runs inside the kernel against the plan, so
+/// the operation contract must load successfully for the gate to evaluate.
 struct ConsumerScaffold {
     app: PathBuf,
     state_root: PathBuf,
+    /// Path (under `app`) of the copied non-mutating operation contract.
+    operation_path: PathBuf,
 }
 
 fn fresh_consumer(label: &str) -> ConsumerScaffold {
@@ -60,7 +76,21 @@ fn fresh_consumer(label: &str) -> ConsumerScaffold {
     )
     .expect("write project link");
     fs::write(app.join("README.md"), "# app\n").expect("write app readme");
-    ConsumerScaffold { app, state_root }
+    // Copy a non-mutating operation fixture whose plan resolves to
+    // `AwaitingHuman`. The gate preamble in `execute_operation` runs before
+    // the plan-status early-return, so the gate still evaluates whether or
+    // not the plan would proceed to the WAL.
+    let fixture =
+        repo_root().join("docs/fixtures/operation-contract-v0/facilitate-first-product-idea.yaml");
+    let op_dir = app.join("contracts/operations");
+    fs::create_dir_all(&op_dir).expect("create operations dir");
+    let operation_path = op_dir.join("facilitate-first-product-idea.yaml");
+    fs::copy(&fixture, &operation_path).expect("copy operation fixture");
+    ConsumerScaffold {
+        app,
+        state_root,
+        operation_path,
+    }
 }
 
 fn fail_soft_rules() -> PathBuf {
@@ -68,7 +98,7 @@ fn fail_soft_rules() -> PathBuf {
 }
 
 /// Write `src/lib.rs` under the project root so the risk-audit walker
-/// (`collect_targets`) picks it up.
+/// (`collect_risk_audit_targets`) picks it up.
 fn write_source(app: &Path, body: &str) {
     fs::create_dir_all(app.join("src")).expect("create src dir");
     fs::write(app.join("src/lib.rs"), body).expect("write src/lib.rs");
@@ -76,14 +106,15 @@ fn write_source(app: &Path, body: &str) {
 
 /// Run `execute-operation` against the scaffold with the given rules arg.
 /// `rules_arg` controls whether `--require-risk-audit <path>` is appended.
-fn run_execute_operation(app: &Path, rules_arg: Option<&Path>) -> std::process::Output {
+/// The operation points at the scaffold's copied non-mutating fixture so the
+/// flow reaches the kernel gate (V3.A).
+fn run_execute_operation(
+    scaffold: &ConsumerScaffold,
+    rules_arg: Option<&Path>,
+) -> std::process::Output {
     let mut cmd = bin();
-    cmd.args(["execute-operation", "--root"]).arg(app);
-    // Operation path points to a non-existent file under root. The gate
-    // (when it runs) executes before this path is read, so blocked runs never
-    // reach the read; clean runs fail here with a read error AFTER the gate.
-    cmd.args(["--operation"])
-        .arg(app.join("contracts/no-such-op.yaml"));
+    cmd.args(["execute-operation", "--root"]).arg(&scaffold.app);
+    cmd.args(["--operation"]).arg(&scaffold.operation_path);
     if let Some(rules) = rules_arg {
         cmd.args(["--require-risk-audit"]).arg(rules);
     }
@@ -92,12 +123,12 @@ fn run_execute_operation(app: &Path, rules_arg: Option<&Path>) -> std::process::
 
 #[test]
 fn execute_operation_blocked_by_risk_audit() {
-    let ConsumerScaffold { app, state_root } = fresh_consumer("blocked");
+    let scaffold = fresh_consumer("blocked");
     write_source(
-        &app,
+        &scaffold.app,
         "pub fn risky() -> u32 {\n    let x: Option<u32> = None;\n    x.unwrap()\n}\n",
     );
-    let output = run_execute_operation(&app, Some(&fail_soft_rules()));
+    let output = run_execute_operation(&scaffold, Some(&fail_soft_rules()));
     assert!(
         !output.status.success(),
         "gate must fail-closed when anti-patterns are present"
@@ -108,14 +139,14 @@ fn execute_operation_blocked_by_risk_audit() {
         "stderr should report risk-audit gate failure, got: {stderr}"
     );
     // Fail-closed contract: nothing is written to the WAL.
-    let wal = state_root.join("wal/effects.ndjson");
+    let wal = scaffold.state_root.join("wal/effects.ndjson");
     assert!(
         !wal.exists(),
         "WAL must not be written when the risk-audit gate fails"
     );
     // F11.4: the gate emits TraceEvents to the project trace log even on
     // failure, so `forge explain` can narrate the audit later.
-    let trace = state_root.join("traces/events.ndjson");
+    let trace = scaffold.state_root.join("traces/events.ndjson");
     assert!(
         trace.exists(),
         "trace log must be written so the audit is visible to forge explain"
@@ -133,42 +164,35 @@ fn execute_operation_blocked_by_risk_audit() {
 
 #[test]
 fn execute_operation_passes_when_risk_audit_clean() {
-    let ConsumerScaffold { app, state_root } = fresh_consumer("clean");
+    let scaffold = fresh_consumer("clean");
     // Clean source: no anti-patterns matched by fail-soft.yaml.
-    write_source(&app, "pub fn answer() -> u32 {\n    42\n}\n");
-    let output = run_execute_operation(&app, Some(&fail_soft_rules()));
-    // Downstream parse fails because `no-such-op.yaml` does not exist, but the
-    // gate must NOT have blocked: stderr must not mention risk-audit.
-    assert!(
-        !output.status.success(),
-        "downstream read should still fail"
-    );
+    write_source(&scaffold.app, "pub fn answer() -> u32 {\n    42\n}\n");
+    let output = run_execute_operation(&scaffold, Some(&fail_soft_rules()));
+    // The operation fixture's plan is `AwaitingHuman`, so the runtime returns
+    // without writing the WAL. Crucially the gate must NOT have blocked: stderr
+    // must not mention a risk-audit failure.
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         !stderr.contains("risk-audit gate failed"),
         "clean source must pass the gate; stderr: {stderr}"
     );
-    // WAL is still not written because the operation never reached the runtime.
-    let wal = state_root.join("wal/effects.ndjson");
+    // WAL is not written: the plan awaits a human, so no effects applied.
+    let wal = scaffold.state_root.join("wal/effects.ndjson");
     assert!(
         !wal.exists(),
-        "WAL must not be written on downstream failure"
+        "WAL must not be written when the plan awaits a human"
     );
 }
 
 #[test]
 fn execute_operation_without_flag_skips_audit() {
-    let ConsumerScaffold { app, state_root: _ } = fresh_consumer("skip");
+    let scaffold = fresh_consumer("skip");
     write_source(
-        &app,
+        &scaffold.app,
         "pub fn risky() -> u32 {\n    let x: Option<u32> = None;\n    x.unwrap()\n}\n",
     );
-    // No --require-risk-audit: the gate must not run, even with anti-patterns.
-    let output = run_execute_operation(&app, None);
-    assert!(
-        !output.status.success(),
-        "downstream read should still fail"
-    );
+    // No --require-risk-audit: the gate must not attach, even with anti-patterns.
+    let output = run_execute_operation(&scaffold, None);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         !stderr.contains("risk-audit gate failed"),
@@ -178,15 +202,15 @@ fn execute_operation_without_flag_skips_audit() {
 
 #[test]
 fn execute_operation_risk_audit_invalid_rules_yaml_fails_clearly() {
-    let ConsumerScaffold { app, state_root } = fresh_consumer("bad-rules");
-    let bad_rules = app.join("bad-rules.yaml");
+    let scaffold = fresh_consumer("bad-rules");
+    let bad_rules = scaffold.app.join("bad-rules.yaml");
     // Intentionally malformed YAML so `yaml_serde::from_str` rejects it.
     fs::write(
         &bad_rules,
         "schema_version: risk-audit-v0\nrules: [unclosed bracket\n",
     )
     .expect("write bad rules yaml");
-    let output = run_execute_operation(&app, Some(&bad_rules));
+    let output = run_execute_operation(&scaffold, Some(&bad_rules));
     assert!(
         !output.status.success(),
         "invalid rules YAML must surface as a failure"
@@ -196,7 +220,7 @@ fn execute_operation_risk_audit_invalid_rules_yaml_fails_clearly() {
         stderr.contains("parse") && stderr.contains("bad-rules.yaml"),
         "stderr should report a parse error on the rules file, got: {stderr}"
     );
-    let wal = state_root.join("wal/effects.ndjson");
+    let wal = scaffold.state_root.join("wal/effects.ndjson");
     assert!(
         !wal.exists(),
         "WAL must not be written when the rules YAML is invalid"

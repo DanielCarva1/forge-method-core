@@ -29,17 +29,12 @@ use forge_core_contracts::{
     OperationContractDocument, RepoPath, ToolEffectContractDocument, TypedFailure,
 };
 use forge_core_kernel::{
-    execute_operation, GateRejection, RuntimeEffectPayloadKind, RuntimeOperationCommandInput,
-    RuntimeOperationEffectInput, RuntimeOperationEffectPayload, RuntimeOperationExecution,
-    RuntimeOperationExecutionContext, RuntimeReadSnapshot,
+    execute_operation, CitationGate, GateRejection, RiskAuditGate, RuntimeEffectPayloadKind,
+    RuntimeOperationCommandInput, RuntimeOperationEffectInput, RuntimeOperationEffectPayload,
+    RuntimeOperationExecution, RuntimeOperationExecutionContext, RuntimeReadSnapshot,
 };
-use forge_core_store::{
-    append_trace_event, build_reference_index, collect_validation_yaml_documents, WalDurability,
-};
-use forge_core_validate::risk_audit::{
-    evaluate_risk_audit, validate_risk_audit_rule_set, RiskAuditRuleSet,
-};
-use forge_core_validate::validate_yaml_citation_references;
+use forge_core_store::{build_reference_index, WalDurability};
+use forge_core_validate::risk_audit::{validate_risk_audit_rule_set, RiskAuditRuleSet};
 
 use crate::cli_error::ExitError;
 use crate::cli_util::{
@@ -170,12 +165,13 @@ pub enum ExecuteOperationError {
         error_count: usize,
         first_error: String,
     },
-    /// V2.C: a kernel-internal [`OperationGate`] rejected the mutation before
+    /// V3.A: a kernel-internal [`OperationGate`] rejected the mutation before
     /// any WAL append. Carries the typed kernel rejection verbatim. Nothing is
-    /// persisted when this fires. The CLI's own risk-audit/citation gates
-    /// (`RiskAuditFailed` / `CitationCheckFailed`) still run first in the CLI
-    /// flow; this variant covers gates that run inside the kernel
-    /// (V3.A will attach real gates there).
+    /// persisted when this fires. The risk-audit and citation gates now run
+    /// inside the kernel too; their failures are mapped back to the historical
+    /// `RiskAuditFailed` / `CitationCheckFailed` variants by
+    /// [`map_kernel_rejection`] so consumers/tests see the same shape. This
+    /// variant covers any OTHER gate the kernel runs (e.g. `Custom`).
     GateRejected {
         rejection: GateRejection,
     },
@@ -376,32 +372,38 @@ pub fn run_execute_operation(
     let root = input.root;
     let effect_store_root = input.effect_store_root.unwrap_or_else(|| root.clone());
     let canonical_root = canonicalize_existing_path(&root)?;
-    // F11.3: Risk Audit Gate. Run as the FIRST step after root canonicalization,
-    // before any contract parse or WAL write. Auditing is a precondition for
-    // mutation, not a post-parse check, so the gate never depends on the
-    // operation/command/effect contracts being valid. Fail-closed: nothing is
-    // persisted to the WAL if the rule set is structurally invalid or any
-    // Error-severity finding is reported against the project tree.
+    // V3.A: the risk-audit and citation gates now run INSIDE the kernel
+    // (attached via `.with_gate(...)` below), not as inline CLI steps. The CLI
+    // keeps two responsibilities here: (1) the `--require-risk-audit` /
+    // `--require-citation` flags become CONFIG — which gates to attach; (2) it
+    // still loads/parses the rule set and resolves the citation gate's runtime
+    // Source Ledger half, because the kernel cannot depend on
+    // `forge-core-research` (research depends back through store/validate).
+    // Those pre-resolved inputs are passed into the gate structs as data.
     //
-    // F11.4: the gate also emits TraceEvents (started + passed/failed) to the
-    // project's trace log so `forge explain` can narrate the audit. Trace
-    // persistence is best-effort: it must never mask the gate's fail-closed
-    // contract, so a trace write failure is logged to stderr but does not
-    // change the gate outcome.
-    if let Some(rules_path) = &input.risk_audit_rules {
-        let rules_yaml =
-            fs::read_to_string(rules_path).map_err(|source| ExecuteOperationError::ReadFile {
-                path: rules_path.clone(),
-                source,
+    // The rule set is still structurally validated up front so a malformed
+    // contract surfaces as a parse/shape error before the kernel is even
+    // entered (preserving the historical, pre-WAL error mapping). The gate's
+    // own `evaluate` re-runs the structural check and the walk.
+    let risk_audit_gate = match &input.risk_audit_rules {
+        Some(rules_path) => {
+            let rules_yaml = fs::read_to_string(rules_path).map_err(|source| {
+                ExecuteOperationError::ReadFile {
+                    path: rules_path.clone(),
+                    source,
+                }
             })?;
-        let ruleset: RiskAuditRuleSet = yaml_serde::from_str(&rules_yaml).map_err(|source| {
-            ExecuteOperationError::ParseYaml {
-                path: rules_path.clone(),
-                source,
-            }
-        })?;
-        let structure_report = validate_risk_audit_rule_set(&ruleset);
-        let (gate_error, error_count, warning_count, target_count, structural_error) =
+            let ruleset: RiskAuditRuleSet =
+                yaml_serde::from_str(&rules_yaml).map_err(|source| {
+                    ExecuteOperationError::ParseYaml {
+                        path: rules_path.clone(),
+                        source,
+                    }
+                })?;
+            // Surface structural errors before the kernel runs, mapping them to
+            // the historical RiskAuditFailed shape so the typed envelope (and
+            // any test asserting on it) is unchanged.
+            let structure_report = validate_risk_audit_rule_set(&ruleset);
             if structure_report.has_errors() {
                 let first_error = structure_report
                     .diagnostics()
@@ -411,108 +413,50 @@ pub fn run_execute_operation(
                         || "unknown structural error".to_string(),
                         |d| format!("{}: {}", d.path, d.message),
                     );
-                (
-                    Some(ExecuteOperationError::RiskAuditFailed {
-                        error_count: structure_report.diagnostics().len(),
-                        first_error: first_error.clone(),
-                    }),
-                    structure_report.diagnostics().len(),
-                    0,
-                    0,
-                    Some(first_error),
-                )
-            } else {
-                let targets = crate::risk_audit_cmd::collect_targets(&root).map_err(|source| {
-                    ExecuteOperationError::ReferenceIndexBuild(format!(
-                        "risk-audit collect_targets: {source}"
-                    ))
-                })?;
-                let findings = evaluate_risk_audit(&ruleset, &targets);
-                let error_count = findings
-                    .diagnostics()
-                    .iter()
-                    .filter(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
-                    .count();
-                let warning_count = findings
-                    .diagnostics()
-                    .iter()
-                    .filter(|d| d.severity == forge_core_validate::DiagnosticSeverity::Warning)
-                    .count();
-                if findings.has_errors() {
-                    let first_error = findings
-                        .diagnostics()
-                        .iter()
-                        .find(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
-                        .map_or_else(
-                            || "unknown error".to_string(),
-                            |d| format!("{}: {}", d.path, d.message),
-                        );
-                    (
-                        Some(ExecuteOperationError::RiskAuditFailed {
-                            error_count,
-                            first_error,
-                        }),
-                        error_count,
-                        warning_count,
-                        targets.len(),
-                        None,
-                    )
-                } else {
-                    (None, error_count, warning_count, targets.len(), None)
-                }
-            };
-        // F11.4: emit TraceEvents (started + outcome) before returning. The
-        // trace log lives under the same `.forge-method` state root as the
-        // WAL; create the dir best-effort and ignore persistence failures so
-        // observability never overrides the gate decision.
-        let trace_id = format!("{}.risk-audit", input.tx_id_prefix);
-        let run_id = format!("{}.risk-audit.{}", input.tx_id_prefix, input.recorded_at);
-        let rule_set_ref = rules_path.to_string_lossy().to_string();
-        let ctx = crate::risk_audit_trace::RiskAuditTraceContext {
-            trace_id: &trace_id,
-            run_id: &run_id,
-            recorded_at: &input.recorded_at,
-            principal_id: "forge-core",
-            agent_id: "execute-operation",
-            rule_set_ref: &rule_set_ref,
-        };
-        let events = crate::risk_audit_trace::build_risk_audit_events(
-            &ctx,
-            error_count,
-            warning_count,
-            target_count,
-            structural_error.as_deref(),
-        );
-        let trace_state_root = effect_store_root.join(".forge-method");
-        let _ = fs::create_dir_all(&trace_state_root);
-        for event in &events {
-            if let Err(source) = append_trace_event(&trace_state_root, event) {
-                eprintln!("forge-core: risk-audit trace append failed (non-fatal): {source}");
+                return Err(ExecuteOperationError::RiskAuditFailed {
+                    error_count: structure_report.diagnostics().len(),
+                    first_error,
+                });
             }
+            let trace_id = format!("{}.risk-audit", input.tx_id_prefix);
+            let run_id = format!("{}.risk-audit.{}", input.tx_id_prefix, input.recorded_at);
+            let rule_set_ref = rules_path.to_string_lossy().to_string();
+            let trace_state_root = effect_store_root.join(".forge-method");
+            Some(RiskAuditGate {
+                ruleset,
+                project_root: root.clone(),
+                trace_state_root,
+                trace_id,
+                run_id,
+                recorded_at: input.recorded_at.clone(),
+                rule_set_ref,
+            })
         }
-        if let Some(error) = gate_error {
-            return Err(error);
-        }
-    }
-    // F14.6: Citation Gate. When `require_citation` is set, run the Citation
-    // Check over the workspace YAML BEFORE any contract parse or WAL write,
-    // resolving `source_id`s against the curated Field Evidence Registry ∪
-    // the runtime Source Ledger. Fail-closed via
-    // `ExecuteOperationError::CitationCheckFailed`: citing an unregistered
-    // source is a precondition failure, not a post-hoc finding. Opt-in — the
-    // default (false) preserves existing execute-operation behaviour.
-    //
-    // The runtime ledger is read best-effort: if the sidecar/state root is not
-    // resolvable, the runtime half of the union is empty and the gate checks
-    // curated citations only. The curated registry is read from the canonical
-    // repo path; if absent, it too is empty (the gate then passes iff no
-    // `source_id` occurs in the workspace, which is the correct degenerate
-    // behaviour for a repo with no citations to check).
-    if input.require_citation {
-        if let Some(error) = run_citation_gate(&root, &effect_store_root) {
-            return Err(error);
-        }
-    }
+        None => None,
+    };
+    // F14.6: citation gate config. Resolve the curated Field Evidence Registry
+    // (canonical repo path, best-effort) and the runtime Source Ledger ids
+    // (best-effort — an unresolvable state root means the runtime half of the
+    // union is empty). These are passed as data into the gate.
+    let citation_gate = if input.require_citation {
+        let evidence = load_curated_evidence(&root);
+        let runtime_ids = forge_core_research::project(&effect_store_root)
+            .map(|projection| {
+                projection
+                    .sources
+                    .keys()
+                    .cloned()
+                    .collect::<std::collections::HashSet<String>>()
+            })
+            .unwrap_or_default();
+        Some(CitationGate {
+            project_root: root.clone(),
+            evidence,
+            runtime_ids,
+        })
+    } else {
+        None
+    };
     let operation_path = resolve_contract_input_path(
         &root,
         &canonical_root,
@@ -569,12 +513,10 @@ pub fn run_execute_operation(
         .iter()
         .map(|payload| runtime_payload_from_file(&root, payload, input.payload_policy))
         .collect::<Result<Vec<_>, _>>()?;
-    // V2.C: the kernel's `RuntimeOperationExecutionContext` is now typestate'd.
-    // The CLI attaches NO real gates here yet — V3.A will add
-    // `.with_gate(Box::new(RiskAuditGate { ... }))`. For now `.audited()`
-    // transitions the context with an empty gate chain, preserving the
-    // historical execute-operation behaviour (the CLI's own risk-audit and
-    // citation gates already ran above, before this point).
+    // V3.A: attach the built-in gates to the kernel's execution context. The
+    // kernel runs them (fail-closed) before any WAL append. The flags
+    // `--require-risk-audit` / `--require-citation` are now CONFIG: they
+    // decide WHICH gates attach, not WHERE the check runs.
     let mut context = RuntimeOperationExecutionContext::single_root(&root);
     context.effect_store_root = &effect_store_root;
     context.evidence_log_relative_path = ".forge-method/evidence/command-execution.ndjson";
@@ -584,6 +526,12 @@ pub fn run_execute_operation(
     context.recorded_at = &input.recorded_at;
     context.tx_id_prefix = &input.tx_id_prefix;
     context.durability = input.durability;
+    if let Some(gate) = risk_audit_gate {
+        context = context.with_gate(Box::new(gate));
+    }
+    if let Some(gate) = citation_gate {
+        context = context.with_gate(Box::new(gate));
+    }
     let context = context.audited();
 
     let execution = execute_operation(
@@ -594,58 +542,62 @@ pub fn run_execute_operation(
         &payloads,
         &context,
     )
-    .map_err(|rejection| ExecuteOperationError::GateRejected { rejection })?;
+    .map_err(map_kernel_rejection)?;
 
     Ok(execution)
 }
 
-/// F14.6: run the Citation Check gate. Returns `Some(CitationCheckFailed)` when
-/// the check reports any `UnresolvedSourceId` error, `None` when it passes (or
-/// when neither backing is readable — the degenerate "no citations to check"
-/// case). Best-effort on both backings: a missing curated registry or an
-/// unresolvable runtime ledger does not itself fail the gate (the union is
-/// simply emptier); only an unresolved `source_id` fails it.
-fn run_citation_gate(root: &Path, effect_store_root: &Path) -> Option<ExecuteOperationError> {
-    let documents = collect_validation_yaml_documents(root);
-    // Curated half: canonical repo path, best-effort.
+/// Map the kernel's typed [`GateRejection`] back to the historical CLI error
+/// variants. V3.A moved the risk-audit and citation checks INTO the kernel, so
+/// their failures now arrive as `GateRejection::RiskAuditFailed` /
+/// `CitationCheckFailed`. Mapping them to `ExecuteOperationError::RiskAuditFailed`
+/// / `CitationCheckFailed` preserves the pre-V3.A error shape (and the typed
+/// envelope in V2.D) — tests and consumers see no change. Unrecognised
+/// (`Custom`) rejections fall through to `GateRejected`.
+fn map_kernel_rejection(rejection: GateRejection) -> ExecuteOperationError {
+    match rejection {
+        GateRejection::RiskAuditFailed {
+            error_count,
+            finding_paths,
+        } => {
+            let first_error = finding_paths
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| "unknown error".to_string());
+            ExecuteOperationError::RiskAuditFailed {
+                error_count,
+                first_error,
+            }
+        }
+        GateRejection::CitationCheckFailed {
+            unresolved_source_ids,
+        } => {
+            let error_count = unresolved_source_ids.len();
+            let first_error = unresolved_source_ids
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| "unknown error".to_string());
+            ExecuteOperationError::CitationCheckFailed {
+                error_count,
+                first_error,
+            }
+        }
+        other @ GateRejection::Custom { .. } => {
+            ExecuteOperationError::GateRejected { rejection: other }
+        }
+    }
+}
+
+/// Load the curated Field Evidence Registry from its canonical repo path.
+/// Best-effort: a missing or unparseable file yields the empty registry (the
+/// citation gate then checks runtime ids only, which is the correct
+/// degenerate behaviour for a repo with no curated citations).
+fn load_curated_evidence(root: &Path) -> FieldEvidenceRegistry {
     let evidence_path = root.join("contracts/research/field-evidence-20260625.yaml");
-    let evidence = fs::read_to_string(&evidence_path)
+    fs::read_to_string(&evidence_path)
         .ok()
         .and_then(|text| yaml_serde::from_str::<FieldEvidenceRegistry>(&text).ok())
-        .unwrap_or_else(crate::research_cmd::empty_evidence);
-    // Runtime half: the Source Ledger under the state root. Best-effort — if
-    // the state root does not resolve, the runtime union is empty.
-    let runtime_ids = forge_core_research::project(effect_store_root)
-        .map(|projection| {
-            projection
-                .sources
-                .keys()
-                .cloned()
-                .collect::<std::collections::HashSet<String>>()
-        })
-        .unwrap_or_default();
-    let report = validate_yaml_citation_references(&documents.documents, &evidence, &runtime_ids);
-    if report.has_errors() {
-        let error_count = report
-            .diagnostics()
-            .iter()
-            .filter(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
-            .count();
-        let first_error = report
-            .diagnostics()
-            .iter()
-            .find(|d| d.severity == forge_core_validate::DiagnosticSeverity::Error)
-            .map_or_else(
-                || "unknown error".to_string(),
-                |d| format!("{}: {}", d.path, d.message),
-            );
-        Some(ExecuteOperationError::CitationCheckFailed {
-            error_count,
-            first_error,
-        })
-    } else {
-        None
-    }
+        .unwrap_or_else(crate::research_cmd::empty_evidence)
 }
 
 /// Read and parse one YAML contract, mapping IO and parse errors into

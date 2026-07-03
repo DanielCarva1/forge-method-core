@@ -31,6 +31,8 @@
 //! - [`gate`] — the `OperationGate` trait and `GateRejection` type: mutation
 //!   preconditions the kernel runs before any WAL append. V2.C builds the seam
 //!   (the trait + typestate context); V3.A fills it with real gates.
+//! - [`builtin_gates`] — V3.A's two built-in gates (`RiskAuditGate`,
+//!   `CitationGate`) that the CLI attaches via `.with_gate(...)`.
 //!
 //! Every previously-top-level `pub` item is re-exported at the crate root
 //! below, so downstream crates see an unchanged public interface
@@ -81,8 +83,13 @@ mod planning;
 mod staging;
 mod wal_orchestration;
 
+// V3.A: the two built-in mutation gates (risk-audit, citation). Public so the
+// CLI can construct them from config and attach them to the execution context.
+pub mod builtin_gates;
+
 // Re-export the entire public API at the crate root. This preserves every
 // historical path 1:1 — downstream crates need no import changes.
+pub use builtin_gates::*;
 pub use evidence::*;
 pub use gate::*;
 pub use planning::*;
