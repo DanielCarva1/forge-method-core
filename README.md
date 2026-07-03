@@ -517,10 +517,14 @@ call them.
 - **First-use skill wiring** — the global Forge skill/start script still needs
   to call or guide `forge-core project init --root <repo>` for repos that do not
   yet have a Forge Project Link.
-- **Product-ready bootstrap proof** — release readiness still depends on a
-  verified clean install -> init -> resolve -> claim/operation flow from a
-  consumer repo. Until that evidence exists, do not describe Forge as fully
-  done.
+- **Product-ready bootstrap proof** — ✅ Proven end-to-end. A fresh consumer
+  repo (`git init` + README, no `contracts/` tree) runs the full flow:
+  `forge-core start` → `project init` → `project resolve` → `claim acquire` →
+  `claim check-write` (owner allowed, intruder blocked) → `claim release` →
+  `validate` (passes clean, 0 diagnostics) → `execute-operation` (resolves).
+  Shared contract definitions are served from the binary (embedded), so a
+  consumer needs no local `contracts/` tree. Covered by the regression test
+  `bootstrap_consumer_e2e.rs`.
 
 
 ### Patch notes — evolve phase
