@@ -15,11 +15,11 @@
 
 use assert_cmd::Command;
 use forge_core_contracts::claim::{
-    ActorRole, ClaimContract, ClaimIdentity, ClaimKind, ClaimLease, ClaimScope, ClaimScopeKind,
-    ClaimStatus, ClaimStatusRecord, ClaimContractDocument, ExpiryAction, ExpiryPolicy,
+    ActorRole, ClaimContract, ClaimContractDocument, ClaimIdentity, ClaimKind, ClaimLease,
+    ClaimScope, ClaimScopeKind, ClaimStatus, ClaimStatusRecord, ExpiryAction, ExpiryPolicy,
     ReclaimPolicy,
 };
-use forge_core_contracts::{ClaimId, ENVELOPE_SCHEMA_VERSION, RepoPath, ScopeId, StableId};
+use forge_core_contracts::{ClaimId, RepoPath, ScopeId, StableId, ENVELOPE_SCHEMA_VERSION};
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -205,13 +205,7 @@ fn editing_cache_yaml_does_not_change_claim_status() {
     let claims_dir = fixture.state_root.join("claims-active");
 
     // Real authority: one acquire on src/main.rs.
-    acquire(
-        &fixture.app,
-        "AC7-real",
-        "alice",
-        "src/main.rs",
-        NOW,
-    );
+    acquire(&fixture.app, "AC7-real", "alice", "src/main.rs", NOW);
 
     // Authority baseline: exactly one active claim, the real one.
     let before = status(&fixture.app, NOW + 1, false);
@@ -225,7 +219,10 @@ fn editing_cache_yaml_does_not_change_claim_status() {
             .as_array()
             .expect("active array")
             .iter()
-            .any(|c| c["agent_id"] == "alice" && c["paths"].as_array().is_some_and(|paths| paths.iter().any(|p| p == "src/main.rs"))),
+            .any(|c| c["agent_id"] == "alice"
+                && c["paths"]
+                    .as_array()
+                    .is_some_and(|paths| paths.iter().any(|p| p == "src/main.rs"))),
         "baseline must show the real alice claim: {before:#}"
     );
 
@@ -260,7 +257,9 @@ fn editing_cache_yaml_does_not_change_claim_status() {
             .as_array()
             .expect("active array")
             .iter()
-            .all(|c| c["paths"].as_array().is_none_or(|paths| !paths.iter().any(|p| p == "src/attacker-controlled.rs"))),
+            .all(|c| c["paths"]
+                .as_array()
+                .is_none_or(|paths| !paths.iter().any(|p| p == "src/attacker-controlled.rs"))),
         "the forged path must never appear in authority status: {after:#}"
     );
 
@@ -288,8 +287,7 @@ fn from_cache_flag_reads_legacy_yaml() {
 
     let cached = status(&fixture.app, NOW + 1, true);
     assert_eq!(
-        cached["command"],
-        "claim.status",
+        cached["command"], "claim.status",
         "--from-cache status should still report the claim.status command: {cached:#}"
     );
     let active = cached["data"]["active"]

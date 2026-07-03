@@ -25,9 +25,7 @@ use forge_core_contracts::{
     RuntimeCapabilityDocument, RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument,
     ToolEffectContractDocument,
 };
-use forge_core_store::{
-    collect_known_repo_paths, collect_validation_yaml_documents,
-};
+use forge_core_store::{collect_known_repo_paths, collect_validation_yaml_documents};
 use forge_core_validate::{
     validate_claim, validate_claim_cross_references, validate_command, validate_completion,
     validate_completion_cross_references, validate_coordination_eval,

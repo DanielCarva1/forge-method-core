@@ -21,7 +21,6 @@
 
 use std::fmt;
 use std::fs;
-use std::io;
 use std::path::{Path, PathBuf};
 
 use forge_core_contracts::{
@@ -120,16 +119,16 @@ impl ExecuteOperationContractPathKind {
 }
 
 /// Hand-rolled error enum (no `thiserror`) for the execute-operation flow.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecuteOperationError {
     ReferenceIndexBuild(String),
     ReadFile {
         path: PathBuf,
-        source: io::Error,
+        source: String,
     },
     ParseYaml {
         path: PathBuf,
-        source: yaml_serde::Error,
+        source: String,
     },
     InvalidEffectPath {
         root: PathBuf,
@@ -257,7 +256,7 @@ impl From<&ExecuteOperationError> for TypedFailure {
             },
             ExecuteOperationError::ReadFile { path, source } => Self::StoreError {
                 path: path.to_string_lossy().into_owned(),
-                source: source.to_string(),
+                source: source.clone(),
             },
             ExecuteOperationError::ParseYaml { path, source } => Self::InvalidContract {
                 reasons: vec![format!("{}: parse failed: {source}", path.display())],
@@ -390,14 +389,14 @@ pub fn run_execute_operation(
             let rules_yaml = fs::read_to_string(rules_path).map_err(|source| {
                 ExecuteOperationError::ReadFile {
                     path: rules_path.clone(),
-                    source,
+                    source: source.to_string(),
                 }
             })?;
             let ruleset: RiskAuditRuleSet =
                 yaml_serde::from_str(&rules_yaml).map_err(|source| {
                     ExecuteOperationError::ParseYaml {
                         path: rules_path.clone(),
-                        source,
+                        source: source.to_string(),
                     }
                 })?;
             // Surface structural errors before the kernel runs, mapping them to
@@ -605,11 +604,11 @@ fn read_yaml_result<T: serde::de::DeserializeOwned>(
 ) -> Result<T, ExecuteOperationError> {
     let text = fs::read_to_string(path).map_err(|source| ExecuteOperationError::ReadFile {
         path: path.to_path_buf(),
-        source,
+        source: source.to_string(),
     })?;
     yaml_serde::from_str(&text).map_err(|source| ExecuteOperationError::ParseYaml {
         path: path.to_path_buf(),
-        source,
+        source: source.to_string(),
     })
 }
 
@@ -622,7 +621,7 @@ fn runtime_payload_from_file(
     validate_payload_scope(root, &path, policy.allow_outside_root)?;
     let metadata = fs::metadata(&path).map_err(|source| ExecuteOperationError::ReadFile {
         path: path.clone(),
-        source,
+        source: source.to_string(),
     })?;
     let byte_len = metadata.len();
     if byte_len > policy.max_payload_bytes {
@@ -634,7 +633,7 @@ fn runtime_payload_from_file(
     }
     let content = fs::read(&path).map_err(|source| ExecuteOperationError::ReadFile {
         path: path.clone(),
-        source,
+        source: source.to_string(),
     })?;
     Ok(RuntimeOperationEffectPayload {
         target_ref: payload.target_ref.clone(),
@@ -647,7 +646,7 @@ fn runtime_payload_from_file(
 fn canonicalize_existing_path(path: &Path) -> Result<PathBuf, ExecuteOperationError> {
     fs::canonicalize(path).map_err(|source| ExecuteOperationError::ReadFile {
         path: path.to_path_buf(),
-        source,
+        source: source.to_string(),
     })
 }
 
@@ -707,7 +706,7 @@ fn load_operation_contract(
             if let Some(text) = forge_core_decisions::read_contract_text(root, &rel) {
                 yaml_serde::from_str(&text).map_err(|source| ExecuteOperationError::ParseYaml {
                     path: op_path.to_path_buf(),
-                    source,
+                    source: source.to_string(),
                 })
             } else {
                 Err(disk_err)
@@ -726,11 +725,11 @@ fn validate_payload_scope(
     }
     let root = fs::canonicalize(root).map_err(|source| ExecuteOperationError::ReadFile {
         path: root.to_path_buf(),
-        source,
+        source: source.to_string(),
     })?;
     let path = fs::canonicalize(path).map_err(|source| ExecuteOperationError::ReadFile {
         path: path.to_path_buf(),
-        source,
+        source: source.to_string(),
     })?;
     if path.starts_with(&root) {
         Ok(())

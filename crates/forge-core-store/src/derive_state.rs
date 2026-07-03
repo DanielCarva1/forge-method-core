@@ -144,11 +144,12 @@ pub fn derive_state_from_recovery(recovery: ClaimWalRecovery) -> ClaimWalProject
 /// wrapper so the three-step replay/repair/reread logic is testable in
 /// isolation and readable in one place.
 fn derive_state_inner(state_root: &Path) -> Result<ClaimWalProjection, DeriveStateError> {
-    let first = claim_wal::replay_claim_wal(state_root, false)
-        .map_err(|source| DeriveStateError::Read {
+    let first = claim_wal::replay_claim_wal(state_root, false).map_err(|source| {
+        DeriveStateError::Read {
             state_root: state_root.display().to_string(),
             source,
-        })?;
+        }
+    })?;
     match first.recovery.stop_reason {
         // Clean WAL: projection is authoritative.
         ClaimWalStopReason::CleanEof => Ok(first),
@@ -295,8 +296,13 @@ mod tests {
     fn state_root_with_one_acquire(test_name: &str) -> PathBuf {
         let root = temp_state(test_name);
         let claim = acquire_claim("S1", "alice", "src/lib.rs");
-        append_claim_wal_record(&root, ClaimWalOperation::Acquire, &claim, "2027-01-15T08:00:00Z")
-            .expect("append acquire");
+        append_claim_wal_record(
+            &root,
+            ClaimWalOperation::Acquire,
+            &claim,
+            "2027-01-15T08:00:00Z",
+        )
+        .expect("append acquire");
         root
     }
 
@@ -304,10 +310,15 @@ mod tests {
     fn derive_state_replays_wal_and_returns_projection() {
         let root = state_root_with_one_acquire("replays");
         let projection = derive_state(&root).expect("derive_state succeeds");
-        assert_eq!(projection.recovery.stop_reason, ClaimWalStopReason::CleanEof);
+        assert_eq!(
+            projection.recovery.stop_reason,
+            ClaimWalStopReason::CleanEof
+        );
         assert_eq!(projection.claims.len(), 1, "one acquire folded");
         assert!(
-            projection.active_by_claim_id.contains_key("claim.story.S1.S1"),
+            projection
+                .active_by_claim_id
+                .contains_key("claim.story.S1.S1"),
             "acquire lands in the active bucket"
         );
     }
@@ -319,8 +330,14 @@ mod tests {
         // clean-empty. Assert it does NOT fall back to any cache and returns
         // an empty projection cleanly.
         let projection = derive_state(&root).expect("empty WAL is clean-empty");
-        assert_eq!(projection.recovery.stop_reason, ClaimWalStopReason::CleanEof);
-        assert!(projection.claims.is_empty(), "no records → empty projection");
+        assert_eq!(
+            projection.recovery.stop_reason,
+            ClaimWalStopReason::CleanEof
+        );
+        assert!(
+            projection.claims.is_empty(),
+            "no records → empty projection"
+        );
     }
 
     #[test]

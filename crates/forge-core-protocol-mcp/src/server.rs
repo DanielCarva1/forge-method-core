@@ -943,7 +943,8 @@ mod tests {
         let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
         let bin = make_fake_forge_core(true, envelope);
         let server = ForgeMcpServer::new(config_with_fake_binary(bin));
-        let mut att = sign_test_attestation("preview", serde_json::json!({}), "n-tamper", 1_700_000_000);
+        let mut att =
+            sign_test_attestation("preview", serde_json::json!({}), "n-tamper", 1_700_000_000);
         // Flip one hex nibble in the signature: take the char at index 0 and
         // toggle its low bit, staying within valid hex digits.
         let mut sig_chars: Vec<char> = att.signature.chars().collect();

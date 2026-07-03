@@ -39,7 +39,9 @@ pub use catalog::{
     eligible_count, eligible_entries, find_entry, load_catalog, load_embedded_catalog,
     CatalogFileError, CatalogLoadReport,
 };
-pub use embedded_contracts::{embedded_exists, embedded_text, embedded_yaml_paths, read_contract_text};
+pub use embedded_contracts::{
+    embedded_exists, embedded_text, embedded_yaml_paths, read_contract_text,
+};
 
 pub use autonomy_router::{route_lane, LaneDecision, LaneKind, LaneRouteReason};
 pub use eval::{

@@ -299,7 +299,7 @@ where
         })?;
     let mut line = serde_json::to_vec(record).map_err(|source| AppendJsonLineError::Serialize {
         path: target.clone(),
-        source,
+        source: source.to_string(),
     })?;
     line.push(b'\n');
 
@@ -312,12 +312,12 @@ where
 
     fs::create_dir_all(parent).map_err(|source| AppendJsonLineError::CreateDir {
         path: parent.to_path_buf(),
-        source,
+        source: source.to_string(),
     })?;
     ensure_resolved_parent_within_root(root, &target).map_err(|source| {
         AppendJsonLineError::CreateDir {
             path: parent.to_path_buf(),
-            source,
+            source: source.to_string(),
         }
     })?;
 
@@ -327,23 +327,23 @@ where
         .open(&target)
         .map_err(|source| AppendJsonLineError::OpenFile {
             path: target.clone(),
-            source,
+            source: source.to_string(),
         })?;
 
     file.write_all(&line)
         .map_err(|source| AppendJsonLineError::Write {
             path: target.clone(),
-            source,
+            source: source.to_string(),
         })?;
     file.flush().map_err(|source| AppendJsonLineError::Write {
         path: target.clone(),
-        source,
+        source: source.to_string(),
     })?;
     if let WalDurability::SyncOnAppend = durability {
         file.sync_all()
             .map_err(|source| AppendJsonLineError::Write {
                 path: target.clone(),
-                source,
+                source: source.to_string(),
             })?;
     }
 
@@ -1002,12 +1002,12 @@ impl Drop for EffectStoreLock {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EffectStoreLockError {
     InvalidRelativePath { path: String },
-    CreateDir { path: PathBuf, source: io::Error },
-    OpenFile { path: PathBuf, source: io::Error },
-    Lock { path: PathBuf, source: io::Error },
+    CreateDir { path: PathBuf, source: String },
+    OpenFile { path: PathBuf, source: String },
+    Lock { path: PathBuf, source: String },
     WouldBlock { path: PathBuf },
 }
 
@@ -2131,24 +2131,12 @@ pub fn compact_effect_wal(
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ReferenceIndexBuildError {
-    PathOutsideRoot {
-        root: PathBuf,
-        path: PathBuf,
-    },
-    ReadDir {
-        path: PathBuf,
-        source: io::Error,
-    },
-    ReadFile {
-        path: PathBuf,
-        source: io::Error,
-    },
-    ParseYaml {
-        path: PathBuf,
-        source: yaml_serde::Error,
-    },
+    PathOutsideRoot { root: PathBuf, path: PathBuf },
+    ReadDir { path: PathBuf, source: String },
+    ReadFile { path: PathBuf, source: String },
+    ParseYaml { path: PathBuf, source: String },
 }
 
 impl fmt::Display for ReferenceIndexBuildError {
@@ -2177,31 +2165,14 @@ impl fmt::Display for ReferenceIndexBuildError {
 
 impl std::error::Error for ReferenceIndexBuildError {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AppendJsonLineError {
-    InvalidRelativePath {
-        path: String,
-    },
-    CreateDir {
-        path: PathBuf,
-        source: io::Error,
-    },
-    OpenFile {
-        path: PathBuf,
-        source: io::Error,
-    },
-    Serialize {
-        path: PathBuf,
-        source: serde_json::Error,
-    },
-    Write {
-        path: PathBuf,
-        source: io::Error,
-    },
-    Lock {
-        path: String,
-        source: String,
-    },
+    InvalidRelativePath { path: String },
+    CreateDir { path: PathBuf, source: String },
+    OpenFile { path: PathBuf, source: String },
+    Serialize { path: PathBuf, source: String },
+    Write { path: PathBuf, source: String },
+    Lock { path: String, source: String },
 }
 
 impl fmt::Display for AppendJsonLineError {
@@ -2478,13 +2449,13 @@ fn yaml_files(dir: &Path) -> Result<Vec<PathBuf>, ReferenceIndexBuildError> {
     }
     let entries = fs::read_dir(dir).map_err(|source| ReferenceIndexBuildError::ReadDir {
         path: dir.to_path_buf(),
-        source,
+        source: source.to_string(),
     })?;
     let mut files = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|source| ReferenceIndexBuildError::ReadDir {
             path: dir.to_path_buf(),
-            source,
+            source: source.to_string(),
         })?;
         let path = entry.path();
         if path.extension().and_then(|value| value.to_str()) == Some("yaml") {
@@ -2658,11 +2629,11 @@ fn collect_known_paths_recursive(
 fn read_yaml_value(path: &Path) -> Result<Value, ReferenceIndexBuildError> {
     let text = fs::read_to_string(path).map_err(|source| ReferenceIndexBuildError::ReadFile {
         path: path.to_path_buf(),
-        source,
+        source: source.to_string(),
     })?;
     yaml_serde::from_str(&text).map_err(|source| ReferenceIndexBuildError::ParseYaml {
         path: path.to_path_buf(),
-        source,
+        source: source.to_string(),
     })
 }
 
@@ -3993,12 +3964,12 @@ fn acquire_effect_store_lock_inner(
         })?;
     fs::create_dir_all(parent).map_err(|source| EffectStoreLockError::CreateDir {
         path: parent.to_path_buf(),
-        source,
+        source: source.to_string(),
     })?;
     ensure_resolved_parent_within_root(root, &path).map_err(|source| {
         EffectStoreLockError::CreateDir {
             path: parent.to_path_buf(),
-            source,
+            source: source.to_string(),
         }
     })?;
     let file = OpenOptions::new()
@@ -4009,7 +3980,7 @@ fn acquire_effect_store_lock_inner(
         .open(&path)
         .map_err(|source| EffectStoreLockError::OpenFile {
             path: path.clone(),
-            source,
+            source: source.to_string(),
         })?;
     if try_only {
         match file.try_lock() {
@@ -4018,7 +3989,10 @@ fn acquire_effect_store_lock_inner(
                 return Err(EffectStoreLockError::WouldBlock { path });
             }
             Err(TryLockError::Error(source)) => {
-                return Err(EffectStoreLockError::Lock { path, source });
+                return Err(EffectStoreLockError::Lock {
+                    path,
+                    source: source.to_string(),
+                });
             }
         }
     } else {
@@ -4044,7 +4018,7 @@ fn acquire_effect_store_lock_with_deadline(
             Err(TryLockError::Error(source)) => {
                 return Err(EffectStoreLockError::Lock {
                     path: path.to_path_buf(),
-                    source,
+                    source: source.to_string(),
                 });
             }
         }

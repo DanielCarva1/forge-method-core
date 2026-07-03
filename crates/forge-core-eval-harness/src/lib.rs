@@ -453,9 +453,9 @@ pub fn substitute_placeholders(
 /// harness — not the arm — is the sole producer of this document: the verdict
 /// comes from [`grade_output`], cost comes from the arm's self-reported usage
 /// plus the harness-measured wall time. Run id is stable because the design is
-    /// one run per (arm, task) (F05 eval-harness design, decision 4; see
-    /// `dev-journals/f05_eval_harness_design.md` in the Forge-method-archive
-    /// sibling repo).
+/// one run per (arm, task) (F05 eval-harness design, decision 4; see
+/// `dev-journals/f05_eval_harness_design.md` in the Forge-method-archive
+/// sibling repo).
 #[must_use]
 #[allow(clippy::too_many_arguments)]
 pub fn build_run_contract(

@@ -52,7 +52,7 @@ impl RiskAuditSummary {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum RiskAuditError {
     MissingRules,
     RulesUnreadable { path: String, source: String },

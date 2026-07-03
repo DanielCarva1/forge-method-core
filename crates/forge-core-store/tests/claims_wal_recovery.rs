@@ -120,10 +120,20 @@ fn tampered_payload_is_ignored_and_derive_state_errors() {
     let root = temp_state("tampered-payload");
     let first = claim("S1", "alice", "src/lib.rs", ClaimStatus::Active);
     let second = claim("S2", "bob", "src/other.rs", ClaimStatus::Active);
-    append_claim_wal_record(&root, ClaimWalOperation::Acquire, &first, "2027-01-15T08:00:00Z")
-        .expect("append first claim WAL record");
-    append_claim_wal_record(&root, ClaimWalOperation::Acquire, &second, "2027-01-15T08:01:00Z")
-        .expect("append second claim WAL record");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &first,
+        "2027-01-15T08:00:00Z",
+    )
+    .expect("append first claim WAL record");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &second,
+        "2027-01-15T08:01:00Z",
+    )
+    .expect("append second claim WAL record");
 
     let path = claim_wal_path(&root);
     let second_offset = second_record_offset(&root);
@@ -162,8 +172,13 @@ fn single_bit_flip_in_payload_stops_at_checksum_failure() {
     // derive_state stops at the checksum failure rather than trusting the byte.
     let root = temp_state("single-bit-flip");
     let active = claim("S1", "alice", "src/lib.rs", ClaimStatus::Active);
-    append_claim_wal_record(&root, ClaimWalOperation::Acquire, &active, "2027-01-15T08:00:00Z")
-        .expect("append claim WAL record");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &active,
+        "2027-01-15T08:00:00Z",
+    )
+    .expect("append claim WAL record");
 
     let path = claim_wal_path(&root);
     let mut bytes = fs::read(&path).expect("read WAL");
@@ -179,9 +194,7 @@ fn single_bit_flip_in_payload_stops_at_checksum_failure() {
                 "a single payload bit flip must surface as a checksum mismatch"
             );
         }
-        other => panic!(
-            "expected RecoveryStopped(PayloadChecksumMismatch), got {other:?}"
-        ),
+        other => panic!("expected RecoveryStopped(PayloadChecksumMismatch), got {other:?}"),
     }
 }
 
@@ -194,10 +207,20 @@ fn clean_wal_projects_all_records() {
     let s1_active = claim("S1", "alice", "src/lib.rs", ClaimStatus::Active);
     let s2_active = claim("S2", "bob", "src/other.rs", ClaimStatus::Active);
     let s2_released = claim("S2", "bob", "src/other.rs", ClaimStatus::Released);
-    append_claim_wal_record(&root, ClaimWalOperation::Acquire, &s1_active, "2027-01-15T08:00:00Z")
-        .expect("append S1 acquire");
-    append_claim_wal_record(&root, ClaimWalOperation::Acquire, &s2_active, "2027-01-15T08:01:00Z")
-        .expect("append S2 acquire");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &s1_active,
+        "2027-01-15T08:00:00Z",
+    )
+    .expect("append S1 acquire");
+    append_claim_wal_record(
+        &root,
+        ClaimWalOperation::Acquire,
+        &s2_active,
+        "2027-01-15T08:01:00Z",
+    )
+    .expect("append S2 acquire");
     append_claim_wal_record(
         &root,
         ClaimWalOperation::Release,
@@ -214,15 +237,21 @@ fn clean_wal_projects_all_records() {
     );
     assert_eq!(projection.claims.len(), 2, "two distinct claims projected");
     assert!(
-        projection.active_by_claim_id.contains_key("claim.story.S1.S1"),
+        projection
+            .active_by_claim_id
+            .contains_key("claim.story.S1.S1"),
         "S1 must be active"
     );
     assert!(
-        projection.released_by_claim_id.contains_key("claim.story.S2.S2"),
+        projection
+            .released_by_claim_id
+            .contains_key("claim.story.S2.S2"),
         "S2 must be released"
     );
     assert!(
-        !projection.active_by_claim_id.contains_key("claim.story.S2.S2"),
+        !projection
+            .active_by_claim_id
+            .contains_key("claim.story.S2.S2"),
         "released S2 must not appear active"
     );
 }

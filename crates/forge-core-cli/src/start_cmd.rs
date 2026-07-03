@@ -308,10 +308,7 @@ pub fn run_start(root: &Path, allow_bootstrap_core: bool) -> CliEnvelope<StartPa
                              governed by Forge."
                         .to_string(),
                     next_step: Some(NextStep {
-                        command: Some(format!(
-                            "forge-core project init --root {}",
-                            root.display()
-                        )),
+                        command: Some(format!("forge-core project init --root {}", root.display())),
                         description: "Create the Forge Project Link and the sibling \
                                       Runtime Sidecar so Forge can govern writes."
                             .to_string(),

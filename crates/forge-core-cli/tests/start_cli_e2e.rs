@@ -132,7 +132,10 @@ fn state_one_no_link_emits_ok_envelope_with_project_init_next_step() {
 
     let (exit_ok, env) = run_start(&app);
 
-    assert!(exit_ok, "no_link must exit zero (it is a diagnosis, not a failure)");
+    assert!(
+        exit_ok,
+        "no_link must exit zero (it is a diagnosis, not a failure)"
+    );
     assert_eq!(env["ok"], true, "no_link envelope ok must be true");
     assert_eq!(
         env["exit_reason"], "ok",

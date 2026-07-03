@@ -40,8 +40,7 @@ use std::path::Path;
 /// `include_dir!` stores the bytes compressed; access is lazy, so the runtime
 /// cost is bounded by what callers actually request, not by the tree size.
 /// The build fails if the source `contracts/` dir is absent.
-static EMBEDDED_CONTRACTS: Dir<'static> =
-    include_dir!("$CARGO_MANIFEST_DIR/../../contracts");
+static EMBEDDED_CONTRACTS: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../../contracts");
 
 /// Resolve a contract's text by repo-relative path, falling back to the
 /// embedded tree.
@@ -158,7 +157,9 @@ mod tests {
 
     #[test]
     fn embedded_operation_contract_definition_exists() {
-        assert!(embedded_exists("contracts/operations/operation-contract-v0.yaml"));
+        assert!(embedded_exists(
+            "contracts/operations/operation-contract-v0.yaml"
+        ));
     }
 
     #[test]
