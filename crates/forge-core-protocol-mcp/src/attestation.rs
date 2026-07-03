@@ -203,7 +203,7 @@ impl AttestationVerifier {
 
         let mut pk_bytes = [0u8; 32];
         let pk_decoded = hex_decode(&attestation.public_key_hex)
-            .map_err(|e| AttestationError::KeyDecode(e.clone()))?;
+            .map_err(|e| AttestationError::KeyDecode(e.to_string()))?;
         if pk_decoded.len() != 32 {
             return Err(AttestationError::KeyDecode(format!(
                 "expected 32 bytes, got {}",
@@ -216,7 +216,7 @@ impl AttestationVerifier {
 
         let mut sig_bytes = [0u8; 64];
         let sig_decoded = hex_decode(&attestation.signature)
-            .map_err(|e| AttestationError::SignatureDecode(e.clone()))?;
+            .map_err(|e| AttestationError::SignatureDecode(e.to_string()))?;
         if sig_decoded.len() != 64 {
             return Err(AttestationError::SignatureDecode(format!(
                 "expected 64 bytes, got {}",
@@ -232,16 +232,62 @@ impl AttestationVerifier {
     }
 }
 
+/// Failures decoding a hex string into bytes.
+///
+/// Hand-rolled per AGENTS.md (no `anyhow`/`thiserror`). Returned by
+/// [`hex_decode`]; callers convert into the public [`AttestationError`]
+/// variants via `to_string()` so the typed boundary stays stable.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum HexDecodeError {
+    /// The input length was not a multiple of two.
+    OddLength {
+        /// The offending length.
+        len: usize,
+    },
+    /// A nibble was not a valid hex digit.
+    InvalidNibble {
+        /// The underlying parse error.
+        source: std::num::ParseIntError,
+    },
+}
+
+impl std::fmt::Display for HexDecodeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::OddLength { len } => write!(f, "odd-length hex ({len})"),
+            Self::InvalidNibble { source } => write!(f, "invalid hex nibble: {source}"),
+        }
+    }
+}
+
+impl std::error::Error for HexDecodeError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidNibble { source } => Some(source),
+            Self::OddLength { .. } => None,
+        }
+    }
+}
+
 /// Minimal hex decoder (no extra dep). `hex` is not in the workspace; this
 /// keeps the dep surface minimal. Mirrors the inline hex helpers used in
 /// `forge-core-crypto` test paths.
-fn hex_decode(s: &str) -> Result<Vec<u8>, String> {
+///
+/// # Errors
+///
+/// Returns [`HexDecodeError::OddLength`] for an odd-length input, or
+/// [`HexDecodeError::InvalidNibble`] for a non-hex character.
+fn hex_decode(s: &str) -> Result<Vec<u8>, HexDecodeError> {
     if !s.len().is_multiple_of(2) {
-        return Err(format!("odd-length hex ({})", s.len()));
+        return Err(HexDecodeError::OddLength { len: s.len() });
     }
     let bytes = (0..s.len())
         .step_by(2)
-        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).map_err(|e| e.to_string()))
+        .map(|i| {
+            u8::from_str_radix(&s[i..i + 2], 16).map_err(|source| HexDecodeError::InvalidNibble {
+                source,
+            })
+        })
         .collect::<Result<Vec<_>, _>>()?;
     Ok(bytes)
 }
