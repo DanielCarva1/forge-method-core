@@ -474,6 +474,64 @@ that flag.
 All commands accept `--json` for machine consumption — that is how host agents
 call them.
 
+### Preflight — is this branch shippable?
+
+`forge-core preflight` is the single command that answers "is this branch
+shippable?" It is **project-agnostic**: it auto-detects the project profile
+from manifest markers and selects the gates accordingly, so it works on a
+Rust workspace, a Node service, a Python tool, or a QA-only repo without
+configuration.
+
+| Profile | Markers | Gates |
+|---|---|---|
+| `rust` | `Cargo.toml` | `type_check`, `format`, `clippy_pedantic`, `test`, `validate`, `regression_anchor` |
+| `node` | `package.json` | `validate`, `regression_anchor` (+ custom) |
+| `python` | `pyproject.toml` / `setup.py` / `requirements.txt` | `validate`, `regression_anchor` (+ custom) |
+| `go` | `go.mod` | `validate`, `regression_anchor` (+ custom) |
+| `generic` | none of the above | `validate`, `regression_anchor` (+ custom) |
+
+Cargo gates (`type_check`, `clippy_pedantic`, `test`, `format`) are **skipped**
+(not failed) under any non-Rust profile, so a Node or QA-only project never
+reports a misleading "Cargo.toml not found" error.
+
+```bash
+forge-core preflight                    # auto-detect profile, run default gates
+forge-core preflight --profile generic  # force a profile
+forge-core preflight --json             # machine-readable report
+```
+
+**Custom gates.** To encode project-specific checks (Bruno YAML parse, QA
+package validator, report linter, secret scan, fixture/data-safety validator,
+Testmo dry-run, …), run `forge-core preflight init` once — it writes
+`.forge-method/preflight.yaml` for the detected profile — then add shell-command
+gates. A gate's verdict is its exit code (0 = pass, non-zero = fail), mirroring
+how `pre-commit`'s `language: system` hooks and CI runners work:
+
+```yaml
+# .forge-method/preflight.yaml
+schema_version: forge_preflight_profile_v1
+profile: generic
+gates:
+  - name: validate
+    command: []
+    requirement: required
+  - name: bruno_yaml_parse
+    command: ["npx", "@bruno/api", "validate", "--strict"]
+    requirement: required
+  - name: qa_package_validate
+    command: ["python", "scripts/qa_validate.py"]
+    requirement: required
+  - name: secret_scan
+    command: ["trufflehog", "filesystem", "."]
+    requirement: optional
+```
+
+`forge-core preflight init [--root <path>] [--profile <name>]` writes this
+file for the detected (or forced) profile with the built-in defaults; the
+agent calls it during onboarding. A human never needs to edit anything by
+hand for the common case — the file exists so projects can add their own
+gates.
+
 ---
 
 ## Status (current)
