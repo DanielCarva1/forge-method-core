@@ -1,6 +1,6 @@
 # ADR-0008 - Fuzz runs on Linux CI, not Windows local
 
-Status: aceito
+- **Status**: Accepted
 
 ## Contexto
 

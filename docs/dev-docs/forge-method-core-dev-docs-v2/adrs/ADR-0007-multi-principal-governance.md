@@ -1,6 +1,6 @@
 # ADR-0007 - Multi-principal governance
 
-Status: **Accepted** (2026-07-01; expanded from `proposto`)
+- **Status**: Accepted (2026-07-01; expanded from `proposto`)
 
 ## Contexto
 

@@ -1,6 +1,6 @@
 # ADR-0004 - Trace e eval como parte do produto
 
-Status: proposto
+- **Status**: Proposed
 
 ## Contexto
 

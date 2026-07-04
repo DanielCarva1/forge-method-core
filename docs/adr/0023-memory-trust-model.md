@@ -8,6 +8,15 @@ sweep (newtype/type-driven-design consensus, serde non-breaking schema
 evolution, Rust enum-variant deprecation) — concluded in favour of **Model A,
 Opção A** (additive, zero migration cost). This ADR is now authoritative.
 
+**Partially superseded by [ADR 0007](../dev-docs/forge-method-core-dev-docs-v2/adrs/ADR-0007-multi-principal-governance.md)**
+(2026-07-01): the *prediction* in this ADR that "F07 does not introduce a
+rival `PrincipalId` type" is superseded. ADR 0007 introduces a typed
+`PrincipalId` newtype for the F07 authorization structures, on the same R8
+type-separation grounds this ADR itself cites (Cedar/Zanzibar). **Only that
+prediction is superseded**; the Model A/Opção A schema decision, the trust-axis
+orthogonality, and the rest of this ADR remain authoritative. See ADR 0007
+§2 ("PrincipalId tipado") for the full rationale.
+
 The schema delta below is implemented in `crates/forge-core-contracts/src/memory.rs`
 (F06.2). `PrincipalId` references in an earlier draft of this ADR were a
 mistake: the house identity type is `StableId` (`common.rs`, R8 discipline).

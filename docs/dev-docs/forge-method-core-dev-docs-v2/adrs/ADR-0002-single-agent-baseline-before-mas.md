@@ -1,6 +1,6 @@
 # ADR-0002 - Single-agent baseline antes de multi-agent
 
-Status: proposto
+- **Status**: Proposed
 
 ## Contexto
 

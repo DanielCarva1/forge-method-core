@@ -1,6 +1,6 @@
 # ADR-0001 - Rust como kernel deterministico, semantica viva declarativa
 
-Status: proposto
+- **Status**: Proposed
 
 ## Contexto
 

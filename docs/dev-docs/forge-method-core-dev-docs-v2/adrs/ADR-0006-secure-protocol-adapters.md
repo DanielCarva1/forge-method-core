@@ -1,6 +1,6 @@
 # ADR-0006 - MCP e A2A como adapters seguros
 
-Status: **Accepted** (2026-07-02; expandido de `proposto`)
+- **Status**: Accepted (2026-07-02; expandido de `proposto`)
 
 ## Contexto
 

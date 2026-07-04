@@ -1,6 +1,6 @@
 # ADR-0003 - WorkflowGraph como entidade de primeira classe
 
-Status: proposto
+- **Status**: Proposed
 
 ## Contexto
 

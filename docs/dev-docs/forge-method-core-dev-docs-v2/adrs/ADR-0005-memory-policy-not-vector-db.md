@@ -1,6 +1,6 @@
 # ADR-0005 - Memoria como policy, nao vector DB
 
-Status: proposto
+- **Status**: Proposed
 
 ## Contexto
 
