@@ -571,11 +571,10 @@ fn serialized_failure_cluster(cluster: EvalFailureCluster) -> String {
 }
 
 fn ratio_bps(numerator: usize, denominator: usize) -> u32 {
-    if denominator == 0 {
-        0
-    } else {
-        u32::try_from(numerator.saturating_mul(10_000) / denominator).unwrap_or(u32::MAX)
-    }
+    numerator
+        .saturating_mul(10_000)
+        .checked_div(denominator)
+        .map_or(0, |v| u32::try_from(v).unwrap_or(u32::MAX))
 }
 
 fn mean_u64(total: u64, count: usize) -> u64 {

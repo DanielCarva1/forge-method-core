@@ -244,7 +244,7 @@ mod tests {
     impl ScopedTempDir {
         fn new(label: &str) -> Self {
             let mut path = std::env::temp_dir();
-            path.push(format!("forge-tuf-test-{}-{}", label, std::process::id(),));
+            path.push(format!("forge-tuf-test-{}-{}", label, std::process::id()));
             fs::create_dir_all(&path).expect("create temp dir");
             ScopedTempDir(path)
         }

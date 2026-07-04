@@ -222,8 +222,7 @@ fn emit_trace_events(
     }
     let now_unix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_secs());
     let trace_id = format!("eval-harness-{config_id}-{now_unix}");
     let recorded_at = format!("unix:{now_unix}");
     let config_ref = config_path.to_string_lossy().to_string();
@@ -260,8 +259,7 @@ fn emit_trace_events(
 fn now_iso() -> String {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_secs());
     format!("unix:{secs}")
 }
 

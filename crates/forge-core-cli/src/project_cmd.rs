@@ -839,8 +839,7 @@ fn write_project_link_atomically(plan: &ProjectInitPlan) -> Result<(), ProjectIn
 fn temp_project_link_path(link_path: &Path) -> PathBuf {
     let suffix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or(0);
+        .map_or(0, |duration| duration.as_nanos());
     let temp_name = format!(
         ".{}.tmp-{}-{suffix}",
         PROJECT_LINK_FILE_NAME.trim_start_matches('.'),
@@ -1200,8 +1199,7 @@ mod tests {
     fn temp_root(label: &str) -> PathBuf {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|duration| duration.as_nanos())
-            .unwrap_or(0);
+            .map_or(0, |duration| duration.as_nanos());
         let root = std::env::temp_dir().join(format!(
             "forge-project-resolve-{label}-{}-{nanos}",
             std::process::id()

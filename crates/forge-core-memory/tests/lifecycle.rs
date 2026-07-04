@@ -20,8 +20,7 @@ fn temp_root(label: &str) -> PathBuf {
     let pid = std::process::id();
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_nanos());
     let path = std::env::temp_dir().join(format!("forge-memory-pep-{label}-{pid}-{nanos}"));
     std::fs::create_dir_all(&path).expect("create temp root");
     path

@@ -519,8 +519,7 @@ mod tests {
     fn temp_root(label: &str) -> PathBuf {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_nanos());
         let root = std::env::temp_dir().join(format!(
             "forge-start-{label}-{}-{nanos}",
             std::process::id()

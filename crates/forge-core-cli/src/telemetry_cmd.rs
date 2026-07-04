@@ -992,8 +992,7 @@ fn temp_output_path(path: &Path) -> PathBuf {
     );
     let suffix = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or(0);
+        .map_or(0, |duration| duration.as_nanos());
     path.with_file_name(format!(".{file_name}.tmp-{}-{suffix}", std::process::id()))
 }
 

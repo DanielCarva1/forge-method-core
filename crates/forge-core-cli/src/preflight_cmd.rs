@@ -681,7 +681,7 @@ fn print_human_summary(report: &PreflightReport) {
             (GateRequirement::Optional, GateStatus::Failed) => "[opt  ][FAIL ]",
             (GateRequirement::Optional, GateStatus::Skipped) => "[opt  ][skip ]",
         };
-        println!("  {tag} {:<18} {:>6} ms", gate.name, gate.duration_ms,);
+        println!("  {tag} {:<18} {:>6} ms", gate.name, gate.duration_ms);
         for line in &gate.log_tail {
             println!("        {line}");
         }

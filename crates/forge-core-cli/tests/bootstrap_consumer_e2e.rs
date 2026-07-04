@@ -153,8 +153,7 @@ fn fresh_consumer_repo_bootstraps_and_validates_clean_end_to_end() {
         .arg("init")
         .arg(&app)
         .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
+        .is_ok_and(|o| o.status.success());
     // `git init` is best-effort: the proof must still hold on minimal CI
     // images that don't ship git (the bootstrap logic keys off Forge state,
     // not git metadata).
