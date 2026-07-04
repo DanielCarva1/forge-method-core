@@ -617,9 +617,9 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("forge-core");
         let body = if success {
-            format!("#!/bin/sh\necho '{}'", envelope)
+            format!("#!/bin/sh\necho '{envelope}'")
         } else {
-            format!("#!/bin/sh\necho '{}'\nexit 2", envelope)
+            format!("#!/bin/sh\necho '{envelope}'\nexit 2")
         };
         std::fs::write(&path, body).unwrap();
         let mut perms = std::fs::metadata(&path).unwrap().permissions();
