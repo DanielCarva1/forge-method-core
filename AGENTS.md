@@ -21,10 +21,12 @@ Do not add those crates.
 - Convert with `.map_err(NamedError::from)` / explicit `From` impl at module
   boundaries. Since enums derive `Clone`, store a lossy `String` for the source
   when needed.
-- NEVER add new `Result<_, String>` signatures. The existing ones in parsers
-  (`parse_rekor_log_entry`, `required_string`, etc.) are legacy; do not
-  propagate the pattern. When you touch one, consider migrating it to a named
-  enum.
+- NEVER add new `Result<_, String>` signatures. The last residual sites
+  (`parse_rekor_log_entry`, `required_string`, `parse_signed_checkpoint`)
+  were migrated to typed errors (`RekorParseError` in
+  `crates/forge-core-crypto/src/rekor.rs`) and moved out of the CLI as
+  part of the R10 crypto-extraction. If you encounter a stray `Result<_, String>`
+  anywhere in the workspace, migrate it to a named enum.
 
 ## Validation = accumulating diagnostics (do NOT short-circuit)
 
