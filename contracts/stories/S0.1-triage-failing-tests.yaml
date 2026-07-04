@@ -24,7 +24,7 @@ context:
     - target: "forge-core-store"
     - target: "forge-core-validate"
   known_symptom: "deserializes_all_operation_fixtures panics at line ~105 (fixtures/code desync)"
-  cargo: "<user-home>/.cargo/bin/cargo.exe"
+  cargo: "cargo"  # resolved from PATH; no absolute path to avoid leaking host identity
 
 tasks:  # directional, not prescriptive
   - "run cargo test --workspace and capture the full failure output per target"

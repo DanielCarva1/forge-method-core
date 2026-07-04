@@ -4,7 +4,7 @@ created_at: "2026-06-25"
 status: "migrated_to_official_root"
 official_root: "C:/forge-method-rust"
 source_snapshot:
-  path: "<user-home>/.codex/.tmp/marketplaces/forge-method-core"
+  path: "<local workspace>/.codex/.tmp/marketplaces/forge-method-core"
   role: "source of previously created Rust-only Forge Core material"
 scope:
   purpose: "Rust-only Forge Core for borrowed shells such as Codex, Cursor, OpenCode, Claude, pi.dev, VS Code, and the future Forge app."
