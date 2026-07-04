@@ -146,9 +146,15 @@ jobs:
       # R-SCM.2: sign each archive with cosign keyless via GitHub OIDC.
       # Produces a .sigstore bundle (signature + cert + Rekor entry) that
       # users verify offline with `cosign verify-blob --bundle ...`.
+      #
+      # `shell: bash` is mandatory here: the command uses backslash line
+      # continuations (bash syntax), and the Windows runner default shell is
+      # PowerShell, which parses `--\` as a dangling unary operator and fails.
+      # Bash ships on all GitHub runners including windows-latest (via Git Bash).
       - name: Sign archive (sigstore keyless)
         env:
           COSIGN_EXPERIMENTAL: "1"
+        shell: bash
         run: |
           cosign sign-blob --yes \
             --bundle ${{ matrix.archive }}.sigstore \

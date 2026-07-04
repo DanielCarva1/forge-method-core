@@ -168,43 +168,10 @@ loop and the fast+quality lane:
 
 ## Install
 
-You need a Rust toolchain (1.85+, edition 2021) and `cargo`.
+Pick one option. The download path needs no Rust toolchain; the build path is
+for contributors and anyone who wants to compile from source.
 
-### Option A — build from source (recommended)
-
-```bash
-git clone https://github.com/Stable-Studio/forge-method-rust.git forge-method-rust
-cd forge-method-rust
-
-# install the forge-core binary into ~/.cargo/bin
-cargo install --path crates/forge-core-cli
-```
-
-Or, once a release is published, install directly without cloning:
-
-```bash
-cargo install forge-core-cli --locked
-```
-(This works as soon as the crate is published to crates.io; until then use
-Option A or Option B.)
-
-Verify it landed on your PATH:
-
-```bash
-forge-core validate
-# forge_core_validation_passed checks=NN diagnostics=0
-```
-
-### Option B — prebuilt binary
-
-If you already have a release build, copy it somewhere on your PATH:
-
-```bash
-cp target/release/forge-core* /usr/local/bin/   # Linux/macOS
-# on Windows/WSL the artifact is forge-core.exe
-```
-
-### Option C — download from GitHub Releases
+### Option 1 — download a prebuilt binary (recommended)
 
 Prebuilt binaries for Linux (x86_64, aarch64), macOS (Intel, Apple Silicon),
 and Windows are published on every tagged release at
@@ -217,6 +184,14 @@ install -m 0755 forge-core ~/.local/bin/
 
 # Windows (PowerShell)
 Expand-Archive forge-core-x86_64-windows.zip $env:LOCALAPPDATA\Programs\forge-core
+# then add $env:LOCALAPPDATA\Programs\forge-core to your PATH
+```
+
+Verify it landed on your PATH:
+
+```bash
+forge-core validate --root .
+# forge_core_validation_passed checks=NN diagnostics=0
 ```
 
 Every release asset ships with three siblings so the supply chain is auditable
@@ -251,6 +226,29 @@ or Trivy against the SBOM):
 ```bash
 grype sbom:./forge-core-<version>.cdx.json
 ```
+
+### Option 2 — build from source
+
+For contributors, or if you prefer to compile yourself. You need a Rust
+toolchain (1.85+, edition 2021) and `cargo`.
+
+```bash
+git clone https://github.com/Stable-Studio/forge-method-rust.git forge-method-rust
+cd forge-method-rust
+
+# install the forge-core binary into ~/.cargo/bin
+cargo install --path crates/forge-core-cli
+```
+
+Verify it landed on your PATH:
+
+```bash
+forge-core validate --root .
+# forge_core_validation_passed checks=NN diagnostics=0
+```
+
+> The crate is not yet published to crates.io, so `cargo install forge-core-cli`
+> (without `--path`) will not work yet. Use one of the two options above.
 
 ### What you get
 
