@@ -586,7 +586,6 @@ fn extract_exit_reason(envelope_json: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
     /// A tiny helper: build a config that points at a fake "forge-core"
     /// binary (a script) so `invoke_tool` can be exercised without the real
