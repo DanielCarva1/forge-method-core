@@ -418,6 +418,12 @@ fn process_may_be_alive_platform(pid: u32) -> bool {
         return true;
     }
 
+    // The EPERM (Some(1)) arm and the catch-all `_` arm both return true on
+    // purpose: EPERM means the process exists but we may not signal it, and an
+    // unknown errno is treated conservatively as "alive" so a stale lock never
+    // looks reusable. clippy::match_same_arms would merge them and lose the
+    // EPERM comment that documents this safety-relevant distinction.
+    #[allow(clippy::match_same_arms)]
     match std::io::Error::last_os_error().raw_os_error() {
         Some(1) => true,  // EPERM: process exists, but is not signalable.
         Some(3) => false, // ESRCH: no such process.
