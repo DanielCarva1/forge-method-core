@@ -258,7 +258,7 @@ jobs:
             forge-core validate --root .
             ```
 
-            See the [Quick Start](https://github.com/Stable-Studio/forge-method-rust#quick-start)
+            See the [Quick Start](https://github.com/DanielCarva1/forge-method-core#quick-start)
             section of the README for the first project init.
 
             ### Supported hosts
@@ -282,13 +282,13 @@ jobs:
             sha256sum -c forge-core-<arch>-<os>.tar.gz.sha256
             ```
 
-            **Verify identity** (proves the asset was built by Stable Studio's CI
+            **Verify identity** (proves the asset was built by the release CI
             and recorded in the public Rekor transparency log):
 
             ```bash
             cosign verify-blob \
               --bundle forge-core-<arch>-<os>.tar.gz.sigstore \
-              --certificate-identity-regexp 'https://github.com/Stable-Studio/forge-method-rust/.github/' \
+              --certificate-identity-regexp 'https://github.com/DanielCarva1/forge-method-core/.github/' \
               --certificate-oidc-issuer https://token.actions.githubusercontent.com \
               forge-core-<arch>-<os>.tar.gz
             ```

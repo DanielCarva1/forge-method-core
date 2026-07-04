@@ -175,7 +175,7 @@ for contributors and anyone who wants to compile from source.
 
 Prebuilt binaries for Linux (x86_64, aarch64), macOS (Intel, Apple Silicon),
 and Windows are published on every tagged release at
-<https://github.com/Stable-Studio/forge-method-rust/releases>.
+<https://github.com/DanielCarva1/forge-method-core/releases>.
 
 ```bash
 # Linux / macOS
@@ -199,7 +199,7 @@ end-to-end:
 
 - `.sha256` — SHA-256 checksum (integrity)
 - `.sigstore` — sigstore bundle: signature + Fulcio certificate + Rekor
-  transparency-log entry (proves the asset was built by Stable Studio's CI)
+  transparency-log entry (proves the asset was built by the release CI)
 - `forge-core-<version>.cdx.json` — CycloneDX SBOM (transitive dependency
   inventory for CVE scanning)
 
@@ -209,13 +209,13 @@ end-to-end:
 sha256sum -c forge-core-<arch>-<os>.tar.gz.sha256
 ```
 
-**Verify identity** (proves the asset was built by Stable Studio's CI and is
+**Verify identity** (proves the asset was built by the release CI and is
 recorded in the public Rekor transparency log):
 
 ```bash
 cosign verify-blob \
   --bundle forge-core-<arch>-<os>.tar.gz.sigstore \
-  --certificate-identity-regexp 'https://github.com/Stable-Studio/forge-method-rust/.github/' \
+  --certificate-identity-regexp 'https://github.com/DanielCarva1/forge-method-core/.github/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   forge-core-<arch>-<os>.tar.gz
 ```
@@ -233,8 +233,8 @@ For contributors, or if you prefer to compile yourself. You need a Rust
 toolchain (1.85+, edition 2021) and `cargo`.
 
 ```bash
-git clone https://github.com/Stable-Studio/forge-method-rust.git forge-method-rust
-cd forge-method-rust
+git clone https://github.com/DanielCarva1/forge-method-core.git forge-method-core
+cd forge-method-core
 
 # install the forge-core binary into ~/.cargo/bin
 cargo install --path crates/forge-core-cli
