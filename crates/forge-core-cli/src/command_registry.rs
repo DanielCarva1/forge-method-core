@@ -188,7 +188,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "preflight",
-        usage_lines: &["       forge-core preflight [--root <path>] [--allow-bootstrap-core] [--json|--no-json] [--gate <name>]... [--expected-anchor <count>]"],
+        usage_lines: &["       forge-core preflight [--root <path>] [--allow-bootstrap-core] [--json|--no-json] [--profile <name>] [--gate <name>]... [--expected-anchor <count>]"],
         handler: crate::preflight_cmd::run_preflight_command,
     },
     CommandSpec {
