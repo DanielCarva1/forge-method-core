@@ -698,6 +698,19 @@ fn load_operation_contract(
     ) {
         Ok(path) => read_yaml_result::<OperationContractDocument>(&path),
         Err(disk_err) => {
+            // A path that resolved OUTSIDE the project root is a hard boundary
+            // violation: it must propagate as-is, never fall through to the
+            // embedded lookup. Otherwise `read_contract_text` would re-read the
+            // outside-root file (because `PathBuf::join` with an absolute path
+            // discards `root`), defeating the very boundary check that
+            // `resolve_contract_input_path` enforced. Only "file not on disk"
+            // errors (NotFound/ReadFile) are eligible for the embedded fallback.
+            if matches!(
+                disk_err,
+                ExecuteOperationError::ContractPathOutsideRoot { .. }
+            ) {
+                return Err(disk_err);
+            }
             // 2. Embedded fallback: only when op_path is a repo-relative
             //    string that names a known embedded contract. Normalize
             //    backslashes to forward slashes so the lookup matches the
