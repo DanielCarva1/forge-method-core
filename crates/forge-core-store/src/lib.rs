@@ -2796,10 +2796,9 @@ fn resolved_parent_stays_within_root(canonical_root: &Path, resolved: &Path) -> 
         };
         ancestor = next;
     }
-    fs::canonicalize(ancestor)
-        .is_ok_and(|canonical_ancestor| {
-            canonical_ancestor.starts_with(canonical_root) || resolved.starts_with(canonical_root)
-        })
+    fs::canonicalize(ancestor).is_ok_and(|canonical_ancestor| {
+        canonical_ancestor.starts_with(canonical_root) || resolved.starts_with(canonical_root)
+    })
 }
 
 fn ensure_resolved_parent_within_root(root: &Path, target: &Path) -> io::Result<()> {
