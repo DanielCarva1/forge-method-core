@@ -193,11 +193,11 @@ impl std::fmt::Display for IsolationError {
             IsolationError::IllegalBranchName {
                 branch_name,
                 reason,
-            } => write!(f, "illegal branch name '{branch_name}': {reason}",),
+            } => write!(f, "illegal branch name '{branch_name}': {reason}"),
             IsolationError::IllegalWorktreePath {
                 worktree_path,
                 reason,
-            } => write!(f, "illegal worktree path '{worktree_path}': {reason}",),
+            } => write!(f, "illegal worktree path '{worktree_path}': {reason}"),
             IsolationError::DuplicateBranch { branch_name, owner } => write!(
                 f,
                 "branch '{branch_name}' already held by agent '{}'",

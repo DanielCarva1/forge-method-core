@@ -346,7 +346,7 @@ pub fn aggregate_costs(events: &[TraceEvent], scope: CostScope, scope_id: &str) 
                 .into_iter()
                 .map(|(key, totals)| CostBreakdownEntry { key, totals })
                 .collect();
-            entries.sort_by(|a, b| b.totals.estimated_tokens.cmp(&a.totals.estimated_tokens));
+            entries.sort_by_key(|entry| std::cmp::Reverse(entry.totals.estimated_tokens));
             entries
         };
     CostReport {
