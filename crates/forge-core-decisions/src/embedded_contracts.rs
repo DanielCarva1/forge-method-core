@@ -78,7 +78,17 @@ pub fn embedded_text(rel_path: &str) -> Option<&'static str> {
     // "contracts/claims/..."). Strip a leading "contracts/" (or any leading
     // separators) before the lookup.
     let within = strip_contracts_prefix(rel_path);
-    let file = EMBEDDED_CONTRACTS.get_file(within)?;
+    // include_dir stores internal paths with the host's native separator at
+    // build time, but the embedded bytes are baked into the binary, so a
+    // Windows-built artifact would carry '\' paths and a Linux-built one '/'.
+    // Callers may pass either separator (a repo-relative path written on one
+    // platform is often resolved on another), so normalise to '/' before the
+    // lookup and try both the normalised and the raw form. This keeps
+    // embedded_exists / embedded_text portable across build and runtime hosts.
+    let normalised = within.replace('\\', "/");
+    let file = EMBEDDED_CONTRACTS
+        .get_file(normalised.as_str())
+        .or_else(|| EMBEDDED_CONTRACTS.get_file(within))?;
     let contents = file.contents();
     std::str::from_utf8(contents).ok()
 }
