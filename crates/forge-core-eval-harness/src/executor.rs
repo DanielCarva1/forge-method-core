@@ -280,4 +280,177 @@ mod tests {
     fn yaml_escape_quotes_backslashes() {
         assert_eq!(yaml_escape("a\"b\\c"), "a\\\"b\\\\c");
     }
+
+    /// A unique temp dir per test so parallel `cargo test` threads do not
+    /// collide on `{run_dir}/{arm}` paths.
+    fn fresh_run_dir(label: &str) -> std::path::PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("eval-harness-{label}-{nanos}"));
+        let _ = std::fs::create_dir_all(&dir);
+        dir
+    }
+
+    fn reclaim(dir: &std::path::Path) {
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A nonzero-exit arm yields a `BuildFailure` Error contract, never a panic.
+    /// Cross-platform: `sh -c "exit 7"` on Unix, `cmd /C "exit /b 7"` on Windows.
+    #[cfg(unix)]
+    #[test]
+    fn execute_run_returns_build_failure_on_nonzero_exit() {
+        let dir = fresh_run_dir("buildfail");
+        let arm = EvalHarnessArm {
+            label: EvalArmLabel::SingleAgent,
+            command: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "exit 7".to_string(),
+                "{task_id}".to_string(),
+            ],
+            timeout_ms: Some(5_000),
+        };
+        let document = execute_run(&arm, &task(), &dir, "2026-07-01");
+        assert_eq!(
+            document.eval_run_contract.outcome.value,
+            forge_core_contracts::eval_run::EvalVerdict::Error
+        );
+        assert_eq!(
+            document.eval_run_contract.outcome.failure_cluster,
+            Some(EvalFailureCluster::BuildFailure)
+        );
+        reclaim(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn execute_run_returns_build_failure_on_nonzero_exit() {
+        let dir = fresh_run_dir("buildfail");
+        // cmd's `exit /b 7` sets the process exit code without closing the
+        // console host. `cmd /C` runs the command and returns its code.
+        let arm = EvalHarnessArm {
+            label: EvalArmLabel::SingleAgent,
+            command: vec![
+                "cmd".to_string(),
+                "/C".to_string(),
+                "exit /b 7".to_string(),
+                "{task_id}".to_string(),
+            ],
+            timeout_ms: Some(5_000),
+        };
+        let document = execute_run(&arm, &task(), &dir, "2026-07-01");
+        assert_eq!(
+            document.eval_run_contract.outcome.value,
+            forge_core_contracts::eval_run::EvalVerdict::Error
+        );
+        assert_eq!(
+            document.eval_run_contract.outcome.failure_cluster,
+            Some(EvalFailureCluster::BuildFailure)
+        );
+        reclaim(&dir);
+    }
+
+    /// A long-running arm killed after `timeout_ms` yields a `Timeout` Error
+    /// contract. The sleep must comfortably exceed POLL_INTERVAL (50ms) and the
+    /// timeout so the watchdog has at least one poll cycle to detect it.
+    ///
+    /// Unix-only: there is no reliable sub-second blocking builtin on Windows
+    /// that behaves identically under `Command` spawn with redirected stdio
+    /// (`ping` to an unroutable host exits non-zero before the budget, and
+    /// `timeout /t` rejects `Stdio::null()` stdin). CI runs Linux (ADR-0008),
+    /// so coverage is preserved where it matters; this mirrors the existing
+    /// `#[cfg(unix)]` gate on `execute_run_canonicalises_a_passing_shell_arm`.
+    #[cfg(unix)]
+    #[test]
+    fn execute_run_returns_timeout_when_arm_overruns_budget() {
+        let dir = fresh_run_dir("timeout");
+        let arm = EvalHarnessArm {
+            label: EvalArmLabel::Mas,
+            command: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "sleep 10".to_string(),
+                "{task_id}".to_string(),
+            ],
+            // 200ms budget: well above POLL_INTERVAL, well below the 10s sleep.
+            timeout_ms: Some(200),
+        };
+        let document = execute_run(&arm, &task(), &dir, "2026-07-01");
+        assert_eq!(
+            document.eval_run_contract.outcome.value,
+            forge_core_contracts::eval_run::EvalVerdict::Error
+        );
+        assert_eq!(
+            document.eval_run_contract.outcome.failure_cluster,
+            Some(EvalFailureCluster::Timeout)
+        );
+        reclaim(&dir);
+    }
+
+    /// A successful run that forgets to write the output file yields a
+    /// `ToolError` Error contract (the missing-output branch of
+    /// `read_and_canonicalize`). Distinct from the spawn-failure test above:
+    /// here the process exits zero, but the artifact is absent.
+    #[cfg(unix)]
+    #[test]
+    fn execute_run_returns_tool_error_when_output_file_missing() {
+        let dir = fresh_run_dir("nooutput");
+        let arm = EvalHarnessArm {
+            label: EvalArmLabel::SingleAgent,
+            command: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "true".to_string(), // exits 0, writes nothing
+                "{task_id}".to_string(),
+            ],
+            timeout_ms: Some(5_000),
+        };
+        let document = execute_run(&arm, &task(), &dir, "2026-07-01");
+        assert_eq!(
+            document.eval_run_contract.outcome.value,
+            forge_core_contracts::eval_run::EvalVerdict::Error
+        );
+        assert_eq!(
+            document.eval_run_contract.outcome.failure_cluster,
+            Some(EvalFailureCluster::ToolError)
+        );
+        assert!(
+            document.eval_run_contract.outcome.notes.is_some(),
+            "missing-output ToolError must carry a note"
+        );
+        reclaim(&dir);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn execute_run_returns_tool_error_when_output_file_missing() {
+        let dir = fresh_run_dir("nooutput");
+        let arm = EvalHarnessArm {
+            label: EvalArmLabel::SingleAgent,
+            command: vec![
+                "cmd".to_string(),
+                "/C".to_string(),
+                "rem noop".to_string(), // exits 0, writes nothing
+                "{task_id}".to_string(),
+            ],
+            timeout_ms: Some(5_000),
+        };
+        let document = execute_run(&arm, &task(), &dir, "2026-07-01");
+        assert_eq!(
+            document.eval_run_contract.outcome.value,
+            forge_core_contracts::eval_run::EvalVerdict::Error
+        );
+        assert_eq!(
+            document.eval_run_contract.outcome.failure_cluster,
+            Some(EvalFailureCluster::ToolError)
+        );
+        assert!(
+            document.eval_run_contract.outcome.notes.is_some(),
+            "missing-output ToolError must carry a note"
+        );
+        reclaim(&dir);
+    }
 }

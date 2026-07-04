@@ -267,4 +267,58 @@ mod tests {
         assert_eq!(projection.len(), 2);
         assert_eq!(projection.sequence, 2);
     }
+
+    /// The explicit-durability knob is wired through to `append_event`. This
+    /// pins the `NoSync` path (the documented test-mode durability) which the
+    /// default `admit_source` wrapper never exercises directly.
+    #[test]
+    fn admit_with_explicit_no_sync_durability_persists() {
+        let root = temp_root("admit-nosync");
+        let result = admit_source_with_durability(
+            &root,
+            sample_source("s.nosync"),
+            &permissive_policy(),
+            WalDurability::NoSync,
+        );
+        let AdmissionStatus::Admitted { sequence } = result.status else {
+            panic!("expected Admitted, got {:?}", result.status);
+        };
+        assert_eq!(sequence, 1);
+        // The event must have hit disk regardless of durability: a SyncOnAppend
+        // vs NoSync difference is invisible to a subsequent cold read in the
+        // same process. What we assert is that the *_with_durability entry
+        // point round-trips the event through the store, not that NoSync skips
+        // fsync (that is a store-level concern, not the PEP's).
+        let projection = project(&root).expect("project after NoSync admit");
+        assert!(projection.sources.contains_key("s.nosync"));
+    }
+
+    /// The `StoreError` arm of `AdmissionStatus` is exercised when the cold
+    /// read inside the critical section hits a hard `Parse` failure (schema
+    /// drift: valid JSON, wrong shape for `ResearchEvent`). This is the only
+    /// store-error path that is deterministic without a second process or
+    /// platform-specific permission tricks.
+    #[test]
+    fn admit_returns_store_error_when_log_has_schema_drift() {
+        let root = temp_root("admit-schema-drift");
+        // Seed the log with a line that is valid JSON but cannot deserialize
+        // as a ResearchEvent (no `sequence`/`at_unix`/variant tag). This is
+        // schema drift, which project_locked treats as a hard Parse error --
+        // distinct from a torn line (invalid JSON) which is a soft diagnostic.
+        fs::create_dir_all(root.join("research")).expect("mkdir research");
+        fs::write(
+            root.join(RESEARCH_LOG_RELATIVE_PATH),
+            serde_json::to_string(&serde_json::json!({"unrelated": "shape"}))
+                .expect("serialize drift"),
+        )
+        .expect("seed drift");
+
+        let result = admit_source(&root, sample_source("s.x"), &permissive_policy());
+        assert!(
+            matches!(result.status, AdmissionStatus::StoreError(_)),
+            "schema drift must surface as StoreError, got {:?}",
+            result.status
+        );
+        assert_eq!(result.source_id, SourceId("s.x".into()));
+    }
 }

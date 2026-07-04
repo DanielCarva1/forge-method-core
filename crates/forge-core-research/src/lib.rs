@@ -374,6 +374,107 @@ mod tests {
         );
     }
 
+    // --- project(): the cold-read-on-disk path. Its in-memory `replay` body is
+    // covered above; these tests exercise the file-reading half via a real
+    // state root (the documented three error/soft-diagnostic paths).
+
+    /// Hand-rolled temp dir (repo convention: no `tempfile` workspace dep).
+    fn temp_root(label: &str) -> std::path::PathBuf {
+        let pid = std::process::id();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let path = std::env::temp_dir().join(format!("forge-research-lib-{label}-{pid}-{nanos}"));
+        std::fs::create_dir_all(&path).expect("create temp root");
+        path
+    }
+
+    /// Helper: serialize a `SourceAdded` event to one JSONL line.
+    fn added_line(seq: u64, id: &str) -> String {
+        serde_json::to_string(&added(seq, id)).expect("serialize event")
+    }
+
+    /// A torn (truncated / invalid-JSON) FINAL line is a soft diagnostic: the
+    /// projection applies the good records above it and records a warning, but
+    /// the read is still `Ok`. This mirrors the memory PEP's tolerance and is
+    /// the documented contract of `project` / `project_locked`.
+    #[test]
+    fn project_tolerates_torn_final_line_on_disk() {
+        let root = temp_root("torn-final");
+        std::fs::create_dir_all(root.join("research")).expect("mkdir");
+        // Two good lines, then a truncated JSON fragment.
+        let log = format!(
+            "{}\n{}\n{{\"SourceAdded\":{{\"sequence\":3,\"at_uni",
+            added_line(1, "s.one"),
+            added_line(2, "s.two"),
+        );
+        std::fs::write(root.join(RESEARCH_LOG_RELATIVE_PATH), log).expect("write log");
+
+        let projection = project(&root).expect("torn tail is not a hard error");
+        assert_eq!(projection.sequence, 2, "good lines before the tear applied");
+        assert!(projection.sources.contains_key("s.one"));
+        assert!(projection.sources.contains_key("s.two"));
+        assert!(
+            !projection.diagnostics.is_empty(),
+            "a torn final line must emit at least one diagnostic"
+        );
+    }
+
+    /// Schema drift — a line that is valid JSON but does not deserialize as a
+    /// `ResearchEvent` — is a HARD `Parse` error. Distinct from the torn case:
+    /// here the bytes parse as JSON but the shape is wrong, which the design
+    /// treats as unrecoverable corruption.
+    #[test]
+    fn project_hard_fails_on_schema_drift_line() {
+        let root = temp_root("schema-drift");
+        std::fs::create_dir_all(root.join("research")).expect("mkdir");
+        let drift = serde_json::to_string(&serde_json::json!({"unrelated": "shape"}))
+            .expect("serialize drift");
+        std::fs::write(root.join(RESEARCH_LOG_RELATIVE_PATH), drift).expect("write log");
+
+        let result = project(&root);
+        let Err(err) = result else {
+            panic!("schema drift must be a hard Parse error, got {result:?}");
+        };
+        // EventLogError::Parse carries the path + 1-based line number.
+        assert!(
+            matches!(
+                err,
+                forge_core_eventlog::EventLogError::Parse { line_number: 1, .. }
+            ),
+            "expected Parse at line 1, got {err:?}"
+        );
+    }
+
+    /// Out-of-order sequence on disk is a soft diagnostic, not an error: the
+    /// stale event is ignored, the watermark does not regress. This pins the
+    /// file-reading variant of the guard (the in-memory variant is covered by
+    /// `replay_ignores_out_of_order_event_without_regressing`).
+    #[test]
+    fn project_ignores_out_of_order_event_on_disk_with_diagnostic() {
+        let root = temp_root("ooo");
+        std::fs::create_dir_all(root.join("research")).expect("mkdir");
+        // seq 5 then seq 2: the second is stale and must be ignored.
+        let log = format!("{}\n{}\n", added_line(5, "s.five"), added_line(2, "s.two"));
+        std::fs::write(root.join(RESEARCH_LOG_RELATIVE_PATH), log).expect("write log");
+
+        let projection = project(&root).expect("out-of-order is not a hard error");
+        assert_eq!(projection.sequence, 5, "watermark must not regress");
+        assert!(
+            projection.sources.contains_key("s.five"),
+            "the in-order event applied"
+        );
+        assert!(
+            !projection.sources.contains_key("s.two"),
+            "the stale event was ignored"
+        );
+        assert!(
+            !projection.diagnostics.is_empty(),
+            "an out-of-order event must emit a diagnostic"
+        );
+    }
+
     // --- proptest: the Fowler replay-determinism guarantee ---
     #[cfg(test)]
     mod proptests {

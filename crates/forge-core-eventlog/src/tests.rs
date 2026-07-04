@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     append_event, apply_event, event_envelope, next_sequence, now_unix, project_locked, replay,
-    EventLogError, EventLogLock, EventSourced, WalDurability,
+    resolve_lock_path, EventLogError, EventLogLock, EventSourced, WalDurability,
 };
 
 // ---------------------------------------------------------------------------
@@ -384,4 +384,179 @@ fn replay_is_deterministic() {
     let second = replay::<CounterDomain>(stream);
     assert_eq!(first, second, "replay must be deterministic");
     assert_eq!(first.sequence, 4);
+}
+
+// ---------------------------------------------------------------------------
+// resolve_lock_path: the only pub fn with no direct test.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn resolve_lock_path_joins_root_and_relative() {
+    let path = resolve_lock_path(std::path::Path::new("/state/root"), LOCK_REL);
+    assert_eq!(
+        path,
+        PathBuf::from("/state/root").join(LOCK_REL),
+        "resolve_lock_path must be a plain root.join(relative)"
+    );
+    assert!(
+        path.ends_with(LOCK_REL),
+        "the relative component must be preserved verbatim"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Out-of-order guard: the == boundary on a non-empty projection.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn apply_event_ignores_equal_sequence_on_non_empty_projection() {
+    // The guard is `event_seq <= current && current > 0`. seq=3 applied, then a
+    // second seq=3 must be ignored (the `<=` half of the guard, with `current >
+    // 0`). This pins the equality boundary that the existing tests left
+    // implicit: `apply_event_ignores_out_of_order_without_regressing` only
+    // exercises seq < current, and `..._allows_equal_sequence_on_empty_projection`
+    // only the empty case.
+    let mut projection = replay::<CounterDomain>([inc(3, "a", 5)]);
+    assert_eq!(projection.sequence, 3);
+
+    // A duplicate seq=3 for a different label: must NOT apply (guard rejects
+    // `==` on a non-empty projection) and must NOT regress the watermark.
+    apply_event::<CounterDomain>(&mut projection, &inc(3, "b", 99));
+
+    assert_eq!(
+        projection.sequence, 3,
+        "duplicate sequence must not advance"
+    );
+    assert!(
+        !projection.totals.contains_key("b"),
+        "duplicate-sequence event must not apply"
+    );
+    assert_eq!(
+        projection.diagnostics.len(),
+        1,
+        "the duplicate must record exactly one out-of-order diagnostic"
+    );
+    assert_eq!(
+        projection.diagnostics[0].code,
+        crate::CODE_OUT_OF_ORDER_EVENT_IGNORED
+    );
+}
+
+// ---------------------------------------------------------------------------
+// project_locked: the Read error path (a non-NotFound I/O failure).
+// ---------------------------------------------------------------------------
+
+#[test]
+fn project_locked_read_errors_when_log_path_is_a_directory() {
+    // The only NotFound-excluded read failure we can induce deterministically
+    // and cross-platform: make the log path itself a directory. `fs::read` then
+    // fails with `IsADirectory` (Unix) / `PermissionDenied` (Windows) — either
+    // way a non-NotFound error that exercises the `Read` arm.
+    let root = temp_root("read-is-dir");
+    let log_path = root.join(LOG_REL);
+    fs::create_dir_all(&log_path).expect("create the log path AS a directory");
+
+    let result = project_locked::<CounterDomain>(&root, LOG_REL);
+    match result {
+        Err(EventLogError::Read { path, .. }) => {
+            assert_eq!(path, log_path, "the Read error must carry the log path");
+        }
+        other => panic!("expected Read error (log is a dir), got {other:?}"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// append_event: the Append error path (store helper fails to write).
+// ---------------------------------------------------------------------------
+
+#[test]
+fn append_event_fails_when_a_path_component_is_a_file() {
+    // Induce a deterministic Append failure by making an ANCESTOR of the log
+    // file a regular file: the store must create `counter/events.ndjson`, but
+    // `counter` is a file, so descending into it fails (NotADirectory on Unix,
+    // an equivalent on Windows). This exercises the `Append` arm without a
+    // second process or platform-specific permission games.
+    let root = temp_root("append-notdir");
+    // Create `counter` as a plain file (the store would otherwise mkdir it).
+    fs::write(root.join("counter"), b"blocker").expect("seed file ancestor");
+
+    let lock = EventLogLock::acquire::<CounterDiagnostic>(&root, LOCK_REL).expect("acquire");
+    let result = append_event::<CounterDomain>(
+        &root,
+        LOG_REL,
+        &inc(1, "a", 1),
+        WalDurability::NoSync,
+        &lock,
+    );
+    match result {
+        Err(EventLogError::Append { .. }) => {}
+        other => panic!("expected Append error, got {other:?}"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// EventLogError::Display: every variant renders a non-empty message.
+// The Display impl is hand-rolled; a regression here would only surface in
+// operator-facing log lines, so we pin the format.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn eventlog_error_display_renders_every_variant() {
+    // Pin the hand-rolled Display format for each variant. These messages are
+    // what operators see in logs; a regression here only surfaces at runtime.
+    let lock = EventLogError::<CounterDiagnostic>::Lock {
+        path: PathBuf::from("/x/lock"),
+        source: "held".into(),
+    };
+    assert!(
+        lock.to_string()
+            .contains("acquire event-log lock at /x/lock"),
+        "Lock Display: {lock}"
+    );
+
+    let append = EventLogError::<CounterDiagnostic>::Append {
+        path: PathBuf::from("/x/log"),
+        source: "io".into(),
+    };
+    assert!(
+        append.to_string().contains("append event to /x/log"),
+        "Append Display: {append}"
+    );
+
+    let serialize = EventLogError::<CounterDiagnostic>::Serialize {
+        source: "json".into(),
+    };
+    assert!(
+        serialize.to_string().contains("serialize event failed"),
+        "Serialize Display: {serialize}"
+    );
+
+    let read = EventLogError::<CounterDiagnostic>::Read {
+        path: PathBuf::from("/x/log"),
+        source: "io".into(),
+    };
+    assert!(
+        read.to_string().contains("read event log at /x/log"),
+        "Read Display: {read}"
+    );
+
+    let parse = EventLogError::<CounterDiagnostic>::Parse {
+        path: PathBuf::from("/x/log"),
+        line_number: 7,
+        source: "shape".into(),
+    };
+    let parse_msg = parse.to_string();
+    assert!(
+        parse_msg.contains("parse event at /x/log:7"),
+        "Parse Display must include path:line, got: {parse_msg}"
+    );
+
+    let diag = EventLogError::ProjectionDiagnostic(CounterDiagnostic {
+        code: "torn_final_line_skipped",
+        message: "skipped".into(),
+    });
+    assert!(
+        diag.to_string().contains("projection diagnostic"),
+        "ProjectionDiagnostic Display: {diag}"
+    );
 }

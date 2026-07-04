@@ -887,4 +887,202 @@ mod tests {
             diagnostic.code == EvalDiagnosticCode::EvalUnsupportedRunSchemaVersion
         }));
     }
+
+    // ----- EvalArmLabel round-trip + aliases. as_str/Display/FromStr were
+    // entirely untested before this commit.
+    #[test]
+    fn eval_arm_label_as_str_matches_canonical_kebab() {
+        assert_eq!(EvalArmLabel::SingleAgent.as_str(), "single-agent");
+        assert_eq!(EvalArmLabel::Graph.as_str(), "graph");
+        assert_eq!(EvalArmLabel::Mas.as_str(), "mas");
+        assert_eq!(EvalArmLabel::Manual.as_str(), "manual");
+    }
+
+    #[test]
+    fn eval_arm_label_display_equals_as_str() {
+        // Display delegates to as_str; pin both so they cannot drift apart.
+        assert_eq!(format!("{}", EvalArmLabel::SingleAgent), "single-agent");
+        assert_eq!(format!("{}", EvalArmLabel::Graph), "graph");
+        assert_eq!(format!("{}", EvalArmLabel::Mas), "mas");
+        assert_eq!(format!("{}", EvalArmLabel::Manual), "manual");
+    }
+
+    #[test]
+    fn eval_arm_label_from_str_accepts_canonical_and_aliases() {
+        // Canonical kebab.
+        assert_eq!(
+            EvalArmLabel::from_str("single-agent").unwrap(),
+            EvalArmLabel::SingleAgent
+        );
+        assert_eq!(
+            EvalArmLabel::from_str("graph").unwrap(),
+            EvalArmLabel::Graph
+        );
+        assert_eq!(EvalArmLabel::from_str("mas").unwrap(), EvalArmLabel::Mas);
+        assert_eq!(
+            EvalArmLabel::from_str("manual").unwrap(),
+            EvalArmLabel::Manual
+        );
+        // Documented aliases (snake_case / long forms).
+        assert_eq!(
+            EvalArmLabel::from_str("single_agent").unwrap(),
+            EvalArmLabel::SingleAgent
+        );
+        assert_eq!(
+            EvalArmLabel::from_str("singleagent").unwrap(),
+            EvalArmLabel::SingleAgent
+        );
+        assert_eq!(
+            EvalArmLabel::from_str("workflow-graph").unwrap(),
+            EvalArmLabel::Graph
+        );
+        assert_eq!(
+            EvalArmLabel::from_str("workflow_graph").unwrap(),
+            EvalArmLabel::Graph
+        );
+        assert_eq!(
+            EvalArmLabel::from_str("multi-agent").unwrap(),
+            EvalArmLabel::Mas
+        );
+        assert_eq!(
+            EvalArmLabel::from_str("multi_agent").unwrap(),
+            EvalArmLabel::Mas
+        );
+        assert_eq!(
+            EvalArmLabel::from_str("human").unwrap(),
+            EvalArmLabel::Manual
+        );
+    }
+
+    #[test]
+    fn eval_arm_label_from_str_rejects_unknown_with_typed_error() {
+        let err = EvalArmLabel::from_str("bogus-arm").expect_err("unknown arm must error");
+        // The typed error preserves the offending value (no String-only loss).
+        assert_eq!(err.value, "bogus-arm");
+        // Display surfaces the accepted vocabulary so an operator can self-correct.
+        let msg = err.to_string();
+        assert!(
+            msg.contains("bogus-arm"),
+            "error message should echo the bad value: {msg}"
+        );
+        assert!(
+            msg.contains("single-agent"),
+            "error message should list accepted arms: {msg}"
+        );
+    }
+
+    #[test]
+    fn eval_arm_label_round_trips_through_str() {
+        // Asymmetric alias map means from_str(as_str(label)) == label for every
+        // canonical label (the canonical form is always an accepted input).
+        for label in [
+            EvalArmLabel::SingleAgent,
+            EvalArmLabel::Graph,
+            EvalArmLabel::Mas,
+            EvalArmLabel::Manual,
+        ] {
+            let parsed = EvalArmLabel::from_str(label.as_str()).expect("canonical round-trips");
+            assert_eq!(parsed, label);
+        }
+    }
+
+    // ----- compare_eval_runs_with_diagnostics: the extra_diagnostics path and
+    // the label-mismatch diagnostics were untested (only the empty-extras
+    // wrapper compare_eval_runs was exercised).
+    #[test]
+    fn compare_preserves_caller_supplied_boundary_diagnostics() {
+        // A clean comparison that would otherwise pass; we inject an extra
+        // boundary diagnostic and assert it lands in the report and blocks.
+        let mut extra = EvalDiagnostic::warning(
+            EvalDiagnosticCode::EvalMissingTraceRefs,
+            "boundary/sigstore",
+            "release bundle lacked a cluster attestation",
+        );
+        // Force it to an error so it flips the recommendation (warnings don't).
+        extra.severity = EvalDiagnosticSeverity::Error;
+
+        let report = compare_eval_runs_with_diagnostics(
+            &suite(),
+            EvalArmLabel::SingleAgent,
+            EvalArmLabel::Graph,
+            &[
+                run(
+                    "single/a.yaml",
+                    "sa-a",
+                    "task-a",
+                    fixture(EvalVerdict::Passed, None, 100, 1000, 4, 2),
+                ),
+                run(
+                    "single/b.yaml",
+                    "sa-b",
+                    "task-b",
+                    fixture(EvalVerdict::Passed, None, 100, 1000, 4, 2),
+                ),
+            ],
+            &[
+                run(
+                    "graph/a.yaml",
+                    "graph-a",
+                    "task-a",
+                    fixture(EvalVerdict::Passed, None, 80, 900, 3, 2),
+                ),
+                run(
+                    "graph/b.yaml",
+                    "graph-b",
+                    "task-b",
+                    fixture(EvalVerdict::Passed, None, 80, 900, 3, 2),
+                ),
+            ],
+            vec![extra],
+        );
+
+        assert_eq!(report.status, EvalCompareStatus::Blocked);
+        assert!(
+            report.diagnostics.iter().any(|d| {
+                d.code == EvalDiagnosticCode::EvalMissingTraceRefs && d.path == "boundary/sigstore"
+            }),
+            "the caller-supplied diagnostic must be preserved verbatim, got {:?}",
+            report.diagnostics
+        );
+    }
+
+    #[test]
+    fn compare_flags_baseline_label_mismatch() {
+        // The suite's baseline is SingleAgent; request Mas instead. This must
+        // emit EvalBaselineLabelMismatch (a path no prior test exercised).
+        let report = compare_eval_runs(
+            &suite(),
+            EvalArmLabel::Mas, // wrong — does not match suite.baseline.label
+            EvalArmLabel::Graph,
+            &[],
+            &[],
+        );
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|d| d.code == EvalDiagnosticCode::EvalBaselineLabelMismatch),
+            "baseline label mismatch must be flagged, got {:?}",
+            report.diagnostics
+        );
+    }
+
+    #[test]
+    fn compare_flags_candidate_label_mismatch() {
+        let report = compare_eval_runs(
+            &suite(),
+            EvalArmLabel::SingleAgent,
+            EvalArmLabel::Mas, // wrong — does not match suite.candidate.label
+            &[],
+            &[],
+        );
+        assert!(
+            report
+                .diagnostics
+                .iter()
+                .any(|d| d.code == EvalDiagnosticCode::EvalCandidateLabelMismatch),
+            "candidate label mismatch must be flagged, got {:?}",
+            report.diagnostics
+        );
+    }
 }

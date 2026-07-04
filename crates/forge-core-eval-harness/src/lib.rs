@@ -1085,4 +1085,192 @@ eval_corpus:
         assert!(suite.policy.require_evidence_refs);
         assert!(!suite.policy.require_trace_refs);
     }
+
+    // ----- validate_harness_config (inner) branches never hit by the
+    // fixture-backed tests. These construct a bare EvalHarnessConfig so the
+    // inner validator is exercised directly, not via the document wrapper.
+    fn bare_config() -> EvalHarnessConfig {
+        parse_harness_config(VALID_YAML)
+            .expect("valid yaml parses")
+            .eval_harness_config
+    }
+
+    #[test]
+    fn validate_inner_flags_empty_arms() {
+        let mut config = bare_config();
+        config.arms.clear();
+        let diagnostics = validate_harness_config(&config);
+        let has = diagnostics
+            .iter()
+            .any(|d| d.code == HarnessDiagnosticCode::HarnessEmptyArms);
+        assert!(
+            has,
+            "empty arms must flag HarnessEmptyArms, got {diagnostics:?}"
+        );
+        // EmptyArms is an earlier branch than FewerThanTwoArms; they are
+        // mutually exclusive by construction (else-if), so the latter must
+        // not also fire here.
+        let fewer = diagnostics
+            .iter()
+            .any(|d| d.code == HarnessDiagnosticCode::HarnessFewerThanTwoArms);
+        assert!(
+            !fewer,
+            "empty arms must not also emit FewerThanTwoArms, got {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn validate_inner_flags_empty_corpus_ref() {
+        let mut config = bare_config();
+        config.corpus_ref = RepoPath(String::new());
+        let diagnostics = validate_harness_config(&config);
+        let has = diagnostics
+            .iter()
+            .any(|d| d.code == HarnessDiagnosticCode::HarnessEmptyCorpusRef);
+        assert!(
+            has,
+            "empty corpus_ref must flag HarnessEmptyCorpusRef, got {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn validate_inner_flags_empty_run_dir() {
+        let mut config = bare_config();
+        config.run_dir = RepoPath(String::new());
+        let diagnostics = validate_harness_config(&config);
+        let has = diagnostics
+            .iter()
+            .any(|d| d.code == HarnessDiagnosticCode::HarnessEmptyRunDir);
+        assert!(
+            has,
+            "empty run_dir must flag HarnessEmptyRunDir, got {diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn validate_inner_accumulates_all_empties_at_once() {
+        // Cumulative contract (AGENTS.md): every empty field is reported in a
+        // single pass so the operator can fix the whole config without
+        // re-running N times.
+        let mut config = bare_config();
+        config.arms.clear();
+        config.corpus_ref = RepoPath(String::new());
+        config.run_dir = RepoPath(String::new());
+        let diagnostics = validate_harness_config(&config);
+        let codes: Vec<_> = diagnostics.iter().map(|d| d.code).collect();
+        assert!(
+            codes.contains(&HarnessDiagnosticCode::HarnessEmptyArms),
+            "expected HarnessEmptyArms in {codes:?}"
+        );
+        assert!(
+            codes.contains(&HarnessDiagnosticCode::HarnessEmptyCorpusRef),
+            "expected HarnessEmptyCorpusRef in {codes:?}"
+        );
+        assert!(
+            codes.contains(&HarnessDiagnosticCode::HarnessEmptyRunDir),
+            "expected HarnessEmptyRunDir in {codes:?}"
+        );
+    }
+
+    // ----- build_error_contract: directly assert the error-verdict structure
+    // for clusters that previously had NO direct unit test (only ToolError was
+    // covered indirectly through execute_run's missing-program path).
+    #[test]
+    fn build_error_contract_marks_timeout_with_zeroed_cost() {
+        let task = router_task("brainstorming");
+        let document = build_error_contract(
+            EvalArmLabel::Mas,
+            &task,
+            EvalFailureCluster::Timeout,
+            "arm exceeded timeout_ms (Some(5000))",
+            "2026-07-01T00:00:00Z",
+        );
+        let contract = &document.eval_run_contract;
+        assert_eq!(contract.outcome.value, EvalVerdict::Error);
+        assert_eq!(
+            contract.outcome.failure_cluster,
+            Some(EvalFailureCluster::Timeout)
+        );
+        assert_eq!(
+            contract.outcome.notes.as_deref(),
+            Some("arm exceeded timeout_ms (Some(5000))")
+        );
+        // An error contract never carries usage: cost is structurally zero so a
+        // crashed/timed-out arm is not credited with tokens it never burned.
+        assert_eq!(contract.cost.total_tokens, 0);
+        assert_eq!(contract.cost.wall_time_ms, 0);
+        assert_eq!(contract.cost.estimated_cost_usd_micros, 0);
+        assert!(contract.evidence_refs.is_empty());
+        // model_ref falls back to the harness-arm form (no self-report).
+        assert_eq!(contract.model_ref, "harness-arm:mas");
+        assert_eq!(contract.run_id.0, "eval.run.router-eval-000.mas");
+    }
+
+    #[test]
+    fn build_error_contract_marks_build_failure() {
+        let task = router_task("brainstorming");
+        let document = build_error_contract(
+            EvalArmLabel::SingleAgent,
+            &task,
+            EvalFailureCluster::BuildFailure,
+            "arm exited with status EXIT",
+            "2026-07-01T00:00:00Z",
+        );
+        assert_eq!(document.eval_run_contract.outcome.value, EvalVerdict::Error);
+        assert_eq!(
+            document.eval_run_contract.outcome.failure_cluster,
+            Some(EvalFailureCluster::BuildFailure)
+        );
+    }
+
+    // ----- build_run_contract: the FixturePass/Manual grader branches emit a
+    // deferral note; only ExactMatch was previously asserted.
+    #[test]
+    fn build_run_contract_defers_fixture_pass_verdict_with_note() {
+        let mut task = router_task("brainstorming");
+        task.grader_kind = GraderKind::FixturePass;
+        let report = RawArmReport {
+            output: "brainstorming".to_string(),
+            model_ref: None,
+            usage: RawUsage::default(),
+        };
+        let document = build_run_contract(
+            EvalArmLabel::SingleAgent,
+            &task,
+            &report,
+            1_000,
+            "2026-07-01T00:00:00Z",
+            None,
+        );
+        // FixturePass grader yields Error (deferred) per grade_output.
+        assert_eq!(document.eval_run_contract.outcome.value, EvalVerdict::Error);
+        assert!(
+            document.eval_run_contract.outcome.notes.is_some(),
+            "FixturePass run must carry a deferral note"
+        );
+    }
+
+    #[test]
+    fn build_run_contract_defers_manual_verdict_with_note() {
+        let mut task = router_task("brainstorming");
+        task.grader_kind = GraderKind::Manual;
+        let report = RawArmReport {
+            output: "brainstorming".to_string(),
+            model_ref: None,
+            usage: RawUsage::default(),
+        };
+        let document = build_run_contract(
+            EvalArmLabel::SingleAgent,
+            &task,
+            &report,
+            1_000,
+            "2026-07-01T00:00:00Z",
+            None,
+        );
+        assert_eq!(document.eval_run_contract.outcome.value, EvalVerdict::Error);
+        assert!(
+            document.eval_run_contract.outcome.notes.is_some(),
+            "Manual run must carry a deferral note"
+        );
+    }
 }

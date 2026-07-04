@@ -476,4 +476,170 @@ mod tests {
         assert_eq!(report.scope_id, "run.empty");
         assert_eq!(report.schema_version, CostReport::SCHEMA_VERSION);
     }
+
+    // ----- Builder / sentinel coverage gaps. These constructors were used
+    // internally by TraceEvent::new as defaults but never asserted on directly.
+
+    #[test]
+    fn trace_event_with_outputs_sets_outputs() {
+        // with_outputs was the only builder with no call site anywhere.
+        let event = TraceEvent::new(
+            "trace.out",
+            "run.example",
+            "evt.0001",
+            TraceEventKind::EffectApplied,
+            "2026-06-28T00:00:00Z",
+            "applied",
+        )
+        .with_outputs(vec![
+            TraceRef::new("effect", "effects/written.yaml"),
+            TraceRef::new("claim", "claims/c-0001.yaml"),
+        ]);
+        assert_eq!(event.outputs.len(), 2);
+        assert_eq!(event.outputs[0].ref_kind, "effect");
+        assert_eq!(event.outputs[1].reference, "claims/c-0001.yaml");
+        // Outputs survive a JSON round-trip (they are serialized, not skipped).
+        let json = serde_json::to_string(&event).expect("serialize");
+        let decoded: TraceEvent = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(decoded.outputs, event.outputs);
+    }
+
+    #[test]
+    fn trace_actor_unknown_is_non_destructive_sentinel() {
+        let actor = TraceActor::unknown();
+        // `unknown()` is the default TraceEvent::new actor; pin its shape so a
+        // future change can't silently alter the sentinel. The sentinel uses
+        // the typed principal.unknown / agent.unknown forms, NOT bare "unknown".
+        assert_eq!(actor.principal_id, "principal.unknown");
+        assert_eq!(actor.agent_id, "agent.unknown");
+        assert_eq!(actor.role, "unknown");
+    }
+
+    #[test]
+    fn trace_risk_unknown_is_non_destructive_const() {
+        let risk = TraceRisk::unknown();
+        assert_eq!(risk.risk_level, TraceRiskLevel::Unknown);
+        assert!(
+            !risk.destructive,
+            "the unknown-risk sentinel must default to non-destructive"
+        );
+    }
+
+    #[test]
+    fn trace_cost_zero_is_all_zero_const() {
+        let cost = TraceCost::zero();
+        assert_eq!(cost.model_calls, 0);
+        assert_eq!(cost.tool_calls, 0);
+        assert_eq!(cost.estimated_tokens, 0);
+    }
+
+    #[test]
+    fn cost_totals_add_accumulates_all_fields() {
+        // CostTotals::add was only exercised transitively through
+        // aggregate_costs; pin the direct accumulation semantics here so the
+        // contract is independent of the aggregation loop's structure.
+        let mut a = CostTotals {
+            model_calls: 10,
+            tool_calls: 5,
+            estimated_tokens: 1_000,
+            event_count: 3,
+        };
+        let b = CostTotals {
+            model_calls: 2,
+            tool_calls: 7,
+            estimated_tokens: 500,
+            event_count: 1,
+        };
+        a.add(&b);
+        assert_eq!(a.model_calls, 12);
+        assert_eq!(a.tool_calls, 12);
+        assert_eq!(a.estimated_tokens, 1_500);
+        assert_eq!(a.event_count, 4, "event_count must also accumulate");
+    }
+
+    #[test]
+    fn cost_totals_add_zero_is_identity() {
+        let mut a = CostTotals {
+            model_calls: 7,
+            tool_calls: 3,
+            estimated_tokens: 200,
+            event_count: 2,
+        };
+        a.add(&CostTotals::default());
+        assert_eq!(a.model_calls, 7);
+        assert_eq!(a.tool_calls, 3);
+        assert_eq!(a.estimated_tokens, 200);
+        assert_eq!(a.event_count, 2);
+    }
+
+    #[test]
+    fn trace_risk_levels_serialize_round_trip() {
+        // Variants beyond Low/Unknown were never asserted to round-trip.
+        for level in [
+            TraceRiskLevel::Unknown,
+            TraceRiskLevel::Low,
+            TraceRiskLevel::Medium,
+            TraceRiskLevel::High,
+            TraceRiskLevel::Blocked,
+        ] {
+            let risk = TraceRisk::new(level, true);
+            let json = serde_json::to_string(&risk).expect("serialize");
+            let decoded: TraceRisk = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(decoded, risk, "level {level:?} must round-trip via JSON");
+        }
+    }
+
+    #[test]
+    fn trace_event_kinds_serialize_round_trip() {
+        // Pin wire strings for every lifecycle + audit variant, including the
+        // F11.4 RiskAudit* and F05.6 EvalCompare* families that no prior test
+        // touched.
+        for (kind, expected_wire) in [
+            (TraceEventKind::RunStarted, "run_started"),
+            (TraceEventKind::OperationPlanned, "operation_planned"),
+            (TraceEventKind::PreviewCompleted, "preview_completed"),
+            (TraceEventKind::ReadyCompleted, "ready_completed"),
+            (TraceEventKind::GatePassed, "gate_passed"),
+            (TraceEventKind::GateBlocked, "gate_blocked"),
+            (TraceEventKind::EffectStaged, "effect_staged"),
+            (TraceEventKind::EffectApplied, "effect_applied"),
+            (TraceEventKind::RunCompleted, "run_completed"),
+            (TraceEventKind::RunFailed, "run_failed"),
+            (TraceEventKind::RiskAuditStarted, "risk_audit_started"),
+            (TraceEventKind::RiskAuditPassed, "risk_audit_passed"),
+            (TraceEventKind::RiskAuditFailed, "risk_audit_failed"),
+            (TraceEventKind::EvalCompareStarted, "eval_compare_started"),
+            (TraceEventKind::EvalComparePassed, "eval_compare_passed"),
+            (TraceEventKind::EvalCompareFailed, "eval_compare_failed"),
+        ] {
+            let event = TraceEvent::new(
+                "trace.kind",
+                "run.example",
+                format!("evt.{expected_wire}"),
+                kind,
+                "2026-06-28T00:00:00Z",
+                "kind wire pin",
+            );
+            let json = serde_json::to_string(&event).expect("serialize");
+            assert!(
+                json.contains(&format!("\"event_kind\":\"{expected_wire}\"")),
+                "variant {kind:?} must serialize to event_kind=\"{expected_wire}\", got: {json}"
+            );
+            let decoded: TraceEvent = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(decoded.event_kind, kind);
+        }
+    }
+
+    #[test]
+    fn cost_scope_graph_and_principal_round_trip() {
+        // Only All and Run were exercised by prior tests; pin Graph/Principal.
+        for scope in [CostScope::Graph, CostScope::Principal] {
+            let report = aggregate_costs(&[], scope, "scope-id");
+            assert_eq!(report.scope, scope);
+            // Round-trip the scope through JSON (it is serialized on the report).
+            let json = serde_json::to_string(&report.scope).expect("serialize scope");
+            let decoded: CostScope = serde_json::from_str(&json).expect("deserialize scope");
+            assert_eq!(decoded, scope);
+        }
+    }
 }
