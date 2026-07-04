@@ -310,7 +310,11 @@ advance jumps to the correct state:
 
 ## Remaining Bootstrap Gaps
 
-- The global Forge skill/start script now calls `forge-core project init --root <repo>` when a first-use consumer repo lacks a Project Link, unless `-NoInit` is passed.
+- First-use bootstrap of a repo without a Project Link is the host's
+  responsibility: `forge-core start --root .` emits the correct `next_step`
+  (typically `project init`), and the invoking agent/host is expected to
+  follow it. The core ships no global install/start script; that wiring lives
+  with the operator environment.
 - Product readiness still depends on verified clean install, init, project resolution, and state-bearing command flow from a consumer repo.
 
 ## Secure Protocol Adapters (F08)

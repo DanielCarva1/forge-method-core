@@ -18,7 +18,6 @@ aceite. Trabalhe um item por sessão; commit; próxima.
 | 1 | `derive_state` layer (v0.2) | Alto — fecha o gap real de roadmap | Alto (2-3 sessões) | Médio |
 | 2 | Migrar 5 `Result<_, String>` | Médio — consistência + safety | Baixo (1 sessão) | Baixo |
 | 3 | Cobertura de testes (4 crates) | Alto — governance/MCP sem testes | Alto (3-4 sessões) | Baixo |
-| 4 | First-use skill wiring | Médio — onboarding automático | Baixo (1 sessão) | Baixo |
 | 5 | Consolidação física dos ADRs | Baixo — cosmético | Baixo (1 sessão) | Baixo |
 | 6 | Parsers granulares (B5) | Médio — erros acionáveis | Médio (1 sessão) | Baixo |
 
@@ -332,28 +331,6 @@ caminhos críticos; `cargo test -p <crate>` verde.
 
 ---
 
-## 4. First-use skill wiring
-
-**Contexto.** `skill/forge-method/SKILL.md` documenta `project resolve` para
-repos já linkados mas **nunca chama `forge-core project init`** para um repo
-sem link. O `start` command agora emite o `next_step` correto (Fase B B4
-landed), mas o skill não o consome. Um repo novo fica sem bootstrap
-automatizado.
-
-**Arquivo.** `skill/forge-method/SKILL.md` (Step 0).
-
-**Abordagem.** Em "Step 0", quando o skill detecta que não há
-`.forge-method.yaml`, rodar `forge-core start --root .` e seguir o
-`next_step.command` retornado (que é `project init`). Isto fecha o loop:
-start já dá a resposta certa, o skill só precisa executá-la.
-
-**Gate de aceite.** Um repo virgem + skill instalado → skill roda `start` →
-segue `next_step` → `project init` → estado linkado, sem intervenção humana.
-
-**Estimativa.** 1 sessão.
-
----
-
 ## 5. Consolidação física dos ADRs
 
 **Contexto.** A colisão de numeração foi resolvida (Fase 3 landed: Registry A
@@ -398,6 +375,12 @@ parser devolve o usage dump global para um erro de valor único.
 
 ## Não-ítens (decisões tomadas, não reconsiderar)
 
+- **First-use skill wiring** fora do escopo deste repo. O `SKILL.md` Step 0
+  trata repos já linkados via `project resolve`; o bootstrap de um repo sem
+  link (rodar `forge-core start` e seguir o `next_step`) é responsabilidade do
+  host/operador que invoca o skill, não do skill em si. O `start` command já
+  emite o `next_step.command` correto — o consumo dessa saída é decisão do
+  agente/host, não uma lacuna do núcleo.
 - **110 workflows** ficam. Cada produto usa um punhado; o catálogo largo é
   intencional (atende gama maior de produtos).
 - **Repo URLs** (Stable-Studio/forge-method-rust é o canonical no README e

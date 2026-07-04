@@ -514,9 +514,6 @@ call them.
   no longer an authority path (inspect it via `claim status --from-cache`).
   The effect WAL is also implemented and tested. Snapshot/rotation as a read
   cache (P3.3) remains a later perf layer.
-- **First-use skill wiring** — the global Forge skill/start script still needs
-  to call or guide `forge-core project init --root <repo>` for repos that do not
-  yet have a Forge Project Link.
 - **Product-ready bootstrap proof** — ✅ Proven end-to-end. A fresh consumer
   repo (`git init` + README, no `contracts/` tree) runs the full flow:
   `forge-core start` → `project init` → `project resolve` → `claim acquire` →
