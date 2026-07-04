@@ -205,22 +205,28 @@ jobs:
       # because all share the same Cargo.lock dependency set.
       #
       # `continue-on-error: true` on BOTH steps: the SBOM is supply-chain
-      # enrichment, not a release blocker. cargo-cyclonedx is installed
-      # unpinned (its CLI has broken across versions — e.g. `-p` was removed),
-      # and a metadata-generation failure must never prevent the signed
-      # binaries from shipping. The release publish step below globs
-      # `*.cdx.json` only if it exists, so a missing SBOM degrades gracefully.
+      # enrichment, not a release blocker. cargo-cyclonedx is a third-party
+      # tool whose CLI has broken across versions, and a metadata-generation
+      # failure must never prevent the signed binaries from shipping. The
+      # release publish step below globs `*.cdx.json` only if it exists, so a
+      # missing SBOM degrades gracefully.
+      #
+      # Version pin: cargo-cyclonedx 0.5.x removed the legacy `-p <pkg>` and
+      # `--output-pattern` flags (0.5.0, Mar 2024). The invocation below uses
+      # the 0.5.x surface: package discovery is automatic via `cargo metadata`,
+      # and `--override-filename` controls the output name. Pinning to 0.5.9
+      # (the release current as of 2026-03-19, MSRV 1.85) keeps this stable.
       - name: Install cargo-cyclonedx
         continue-on-error: true
-        run: cargo install cargo-cyclonedx --locked --quiet || true
+        run: cargo install cargo-cyclonedx --version 0.5.9 --locked --quiet || true
 
       - name: Generate CycloneDX SBOM
         continue-on-error: true
         run: |
-          cargo cyclonedx -p forge-core-cli --format json --output-pattern package
-          # cargo-cyclonedx writes to target/<package>.cdx.json; surface it
-          # in release-assets with a stable name.
-          mv target/forge-core-cli-*.cdx.json release-assets/forge-core-${{ steps.tag.outputs.name }}.cdx.json
+          cargo cyclonedx --format json --override-filename forge-core-${{ steps.tag.outputs.name }}
+          # cargo-cyclonedx 0.5.x writes <override-filename>.cdx.json in the
+          # workspace root; surface it in release-assets.
+          mv forge-core-${{ steps.tag.outputs.name }}.cdx.json release-assets/forge-core-${{ steps.tag.outputs.name }}.cdx.json
 
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
@@ -258,7 +264,7 @@ jobs:
             forge-core validate --root .
             ```
 
-            See the [Quick Start](https://github.com/Stable-Studio/forge-method-rust#quick-start)
+            See the [Quick Start](https://github.com/DanielCarva1/forge-method-core#quick-start)
             section of the README for the first project init.
 
             ### Supported hosts
@@ -282,13 +288,13 @@ jobs:
             sha256sum -c forge-core-<arch>-<os>.tar.gz.sha256
             ```
 
-            **Verify identity** (proves the asset was built by Stable Studio's CI
+            **Verify identity** (proves the asset was built by the release CI
             and recorded in the public Rekor transparency log):
 
             ```bash
             cosign verify-blob \
               --bundle forge-core-<arch>-<os>.tar.gz.sigstore \
-              --certificate-identity-regexp 'https://github.com/Stable-Studio/forge-method-rust/.github/' \
+              --certificate-identity-regexp 'https://github.com/DanielCarva1/forge-method-core/.github/' \
               --certificate-oidc-issuer https://token.actions.githubusercontent.com \
               forge-core-<arch>-<os>.tar.gz
             ```
@@ -301,8 +307,8 @@ jobs:
 
       # Attach the SBOM separately, ONLY if cargo-cyclonedx produced one.
       # The install + generate steps above are continue-on-error
-      # (cargo-cyclonedx's CLI has broken across versions, e.g. `-p` was
-      # removed), so this glob may match nothing. action-gh-release without
+      # (cargo-cyclonedx is a third-party tool whose CLI has broken across
+      # versions), so this glob may match nothing. action-gh-release without
       # fail_on_unmatched_files treats a no-match as "upload nothing", not an
       # error — so the release ships without an SBOM rather than not shipping
       # at all. The signed binaries are the product; the SBOM is enrichment.

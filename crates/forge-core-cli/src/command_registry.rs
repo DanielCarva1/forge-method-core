@@ -358,21 +358,15 @@ pub fn dispatch(command: &str, args: &[String]) -> Result<(), ExitError> {
 
 /// The version line printed by `--version` / `-V`.
 ///
-/// Built from the Cargo package version (the source of truth for releases).
-/// A `VERSION` file at the repo root, if present, overrides the Cargo version
-/// so a release manager can bump the marketing version without a Cargo edit.
+/// Sourced exclusively from the Cargo package version baked in at compile
+/// time (`CARGO_PKG_VERSION`), which is the single source of truth for
+/// releases. There is deliberately no runtime override: an earlier revision
+/// read a `VERSION` file from the current working directory, which allowed a
+/// stray file to spoof the reported version depending on where the binary
+/// was invoked. That foot-gun was removed.
 #[must_use]
 pub fn version_string() -> String {
-    let cargo_version = env!("CARGO_PKG_VERSION");
-    // The VERSION file is optional and lives at the workspace root. Read it at
-    // runtime (not compile time) so a cargo build outside the repo does not
-    // fail when it is absent; fall back to the baked-in Cargo version.
-    let resolved = std::fs::read_to_string("VERSION")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| cargo_version.to_string());
-    format!("forge-core {resolved}")
+    format!("forge-core {}", env!("CARGO_PKG_VERSION"))
 }
 
 /// A short, framed hint shown above the full command list in `--help` and in
@@ -380,18 +374,17 @@ pub fn version_string() -> String {
 /// entry point.
 #[must_use]
 pub fn global_usage_hint() -> String {
-    // Resolve the version the same way `--version` does so the hint and the
-    // version flag never disagree (a VERSION file overrides the baked-in
-    // Cargo version at runtime).
-    let resolved_version = std::fs::read_to_string("VERSION")
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
+    // Reuse `version_string()` so the hint and `--version` can never disagree.
+    // `version_string()` returns "forge-core <version>"; strip the prefix to
+    // recover the bare version for the inline "Version <x>" sentence below.
+    let version_line = version_string();
+    let resolved_version = version_line
+        .strip_prefix("forge-core ")
+        .unwrap_or(env!("CARGO_PKG_VERSION"));
     let mut hint = String::with_capacity(512);
     hint.push_str("Forge Method Core — governance runtime for multi-agent builds.\n");
     hint.push_str("Version ");
-    hint.push_str(&resolved_version);
+    hint.push_str(resolved_version);
     hint.push_str(". Bring your own model; Forge coordinates many agents in one repo.\n\n");
     hint.push_str("First run? Start here:\n");
     hint.push_str("  forge-core start          diagnose a repo and get the next step\n");

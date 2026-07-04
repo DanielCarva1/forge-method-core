@@ -53,8 +53,8 @@ giving up:
 If missing, install from the core repo:
 
 ```bash
-git clone https://github.com/Stable-Studio/forge-method-rust.git
-cd forge-method-rust
+git clone https://github.com/DanielCarva1/forge-method-core.git
+cd forge-method-core
 cargo install --path crates/forge-core-cli
 ```
 

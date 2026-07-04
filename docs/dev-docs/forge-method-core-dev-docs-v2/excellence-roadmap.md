@@ -383,9 +383,9 @@ parser devolve o usage dump global para um erro de valor único.
   agente/host, não uma lacuna do núcleo.
 - **110 workflows** ficam. Cada produto usa um punhado; o catálogo largo é
   intencional (atende gama maior de produtos).
-- **Repo URLs** (Stable-Studio/forge-method-rust é o canonical no README e
-  SKILL; DanielCarva1/Forge-method-core é o fork pessoal open-source). Ambos
-  existem.
+- **Repo URLs** (DanielCarva1/forge-method-core é o canonical no README e
+  SKILL desde a migração de distribuição; Stable-Studio/forge-method-rust é
+  o mirror histórico da org).
 - **WAL de claims** é append-only por design (audit log). Não truncar.
 
 ## Histórico

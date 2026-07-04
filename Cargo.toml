@@ -28,8 +28,8 @@ rust-version = "1.85"
 license = "Apache-2.0"
 authors = ["Stable Studio"]
 description = "Agent-native protocol core that lets many people and many AI agents build the same product together."
-repository = "https://github.com/Stable-Studio/forge-method-rust"
-homepage = "https://github.com/Stable-Studio/forge-method-rust"
+repository = "https://github.com/DanielCarva1/forge-method-core"
+homepage = "https://github.com/DanielCarva1/forge-method-core"
 keywords = ["agent", "protocol", "llm", "workflow", "governance"]
 categories = ["command-line-utilities", "development-tools"]
 
