@@ -83,6 +83,55 @@ const OPERATION_VALIDATION_COMMAND: &str = "forge-core preview --operation <path
 const STARTER_FIXTURE_OBSERVE: &str = "observe-project-status.yaml";
 const STARTER_FIXTURE_EXECUTE: &str = "execute-trivial-write.yaml";
 
+/// Typed adapter output for `forge-core start` argv parsing.
+///
+/// Keeping this as a named module interface gives tests and future adapters a
+/// seam that is smaller than the full command handler: parse once into stable
+/// options, then run the read-only diagnostic core.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct StartCliOptions {
+    root: PathBuf,
+    allow_bootstrap_core: bool,
+    agent_id: Option<String>,
+    output: StartOutputMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StartOutputMode {
+    Json,
+    Text,
+}
+
+impl StartOutputMode {
+    const fn wants_json(self) -> bool {
+        matches!(self, Self::Json)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum StartParseOutcome {
+    Run(StartCliOptions),
+    Help,
+}
+
+/// Argument errors emitted by the typed `start` parser adapter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum StartParseError {
+    MissingValue { flag: &'static str },
+    UnknownArgument { argument: String },
+}
+
+impl std::fmt::Display for StartParseError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingValue { flag } => write!(formatter, "start: {flag} requires a value"),
+            Self::UnknownArgument { argument } => {
+                write!(formatter, "start: unrecognized argument '{argument}'")
+            }
+        }
+    }
+}
+
 /// The `start` success payload. Carries the diagnosed state, the resolved
 /// project context (when present), and the concrete next step for the agent
 /// to act on or surface to the human.
@@ -240,10 +289,28 @@ impl std::error::Error for StartError {}
 /// (via `emit`) when project resolution fails and the envelope carries a
 /// non-zero exit code.
 pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
+    let options =
+        match parse_start_args(args).map_err(|error| ExitError::usage(error.to_string()))? {
+            StartParseOutcome::Run(options) => options,
+            StartParseOutcome::Help => {
+                println!("{START_USAGE_LINE}");
+                return Ok(());
+            }
+        };
+
+    let env = run_start_with_agent(
+        &options.root,
+        options.allow_bootstrap_core,
+        options.agent_id,
+    );
+    crate::cli_util::emit_envelope(env, options.output.wants_json())
+}
+
+fn parse_start_args(args: &[String]) -> Result<StartParseOutcome, StartParseError> {
     let mut root = PathBuf::from(".");
     let mut allow_bootstrap_core = false;
     let mut agent_id: Option<String> = None;
-    let mut want_json = true;
+    let mut output = StartOutputMode::Json;
 
     // argv[0] is the command name ("start"); subcommand args start at index 1,
     // matching the established parse loop in `eval_harness_cmd` / `project_cmd`.
@@ -253,7 +320,7 @@ pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
             "--root" => {
                 index += 1;
                 let Some(value) = args.get(index) else {
-                    return Err(ExitError::usage("start: --root requires a value"));
+                    return Err(StartParseError::MissingValue { flag: "--root" });
                 };
                 root = PathBuf::from(value);
             }
@@ -261,27 +328,28 @@ pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
             "--agent-id" | "--agent" => {
                 index += 1;
                 let Some(value) = args.get(index) else {
-                    return Err(ExitError::usage("start: --agent-id requires a value"));
+                    return Err(StartParseError::MissingValue { flag: "--agent-id" });
                 };
                 agent_id = Some(value.clone());
             }
-            "--json" => want_json = true,
-            "--no-json" | "--text" => want_json = false,
-            "--help" | "-h" => {
-                println!("{START_USAGE_LINE}");
-                return Ok(());
-            }
+            "--json" => output = StartOutputMode::Json,
+            "--no-json" | "--text" => output = StartOutputMode::Text,
+            "--help" | "-h" => return Ok(StartParseOutcome::Help),
             other => {
-                return Err(ExitError::usage(format!(
-                    "start: unrecognized argument '{other}'"
-                )));
+                return Err(StartParseError::UnknownArgument {
+                    argument: other.to_string(),
+                });
             }
         }
         index += 1;
     }
 
-    let env = run_start_with_agent(&root, allow_bootstrap_core, agent_id);
-    crate::cli_util::emit_envelope(env, want_json)
+    Ok(StartParseOutcome::Run(StartCliOptions {
+        root,
+        allow_bootstrap_core,
+        agent_id,
+        output,
+    }))
 }
 
 /// Pure core: resolve the project, classify the bootstrap state, build the
@@ -618,6 +686,50 @@ mod tests {
         ] {
             fs::create_dir_all(state.join(d)).unwrap();
         }
+    }
+
+    fn argv(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(|part| (*part).to_string()).collect()
+    }
+
+    #[test]
+    fn typed_start_parser_returns_options() {
+        let parsed = parse_start_args(&argv(&[
+            "start",
+            "--root",
+            "app",
+            "--allow-bootstrap-core",
+            "--agent",
+            "codex-main",
+            "--no-json",
+        ]))
+        .expect("parse start args");
+
+        let StartParseOutcome::Run(options) = parsed else {
+            panic!("expected runnable start options");
+        };
+        assert_eq!(options.root, PathBuf::from("app"));
+        assert!(options.allow_bootstrap_core);
+        assert_eq!(options.agent_id.as_deref(), Some("codex-main"));
+        assert_eq!(options.output, StartOutputMode::Text);
+    }
+
+    #[test]
+    fn typed_start_parser_short_circuits_help() {
+        let parsed = parse_start_args(&argv(&["start", "--help"])).expect("parse help");
+        assert_eq!(parsed, StartParseOutcome::Help);
+    }
+
+    #[test]
+    fn typed_start_parser_reports_usage_errors() {
+        let missing = parse_start_args(&argv(&["start", "--root"])).unwrap_err();
+        assert_eq!(missing.to_string(), "start: --root requires a value");
+
+        let unknown = parse_start_args(&argv(&["start", "--surprise"])).unwrap_err();
+        assert_eq!(
+            unknown.to_string(),
+            "start: unrecognized argument '--surprise'"
+        );
     }
 
     #[test]

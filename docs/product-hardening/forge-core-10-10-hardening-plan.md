@@ -114,12 +114,28 @@ The third implementation slice completes the generated-docs part of Stage 4:
 - `CommandAuthority`, `JsonMode`, and `McpVisibility` now expose stable
   snake-case identifiers for generated docs and future adapter projections.
 
+## Fourth hardening changeset evidence
+
+The fourth implementation slice keeps the host-adapter manifest narrow while
+anchoring it to the shared Command Surface seam:
+
+- `host_command` now looks up each host-adapter command in
+  `forge_core_command_surface` and derives `json_supported` from `JsonMode`.
+  The manifest remains the richer host-security adapter for mutation class,
+  authority class, required contracts, safe triggers, and policy references.
+- This rejects the rival-registry failure mode without flattening host-specific
+  security metadata into the generic command table.
+- `start` now has a typed parser adapter (`StartCliOptions`,
+  `StartParseOutcome`, `StartParseError`) before the handler invokes the
+  read-only diagnostic core. This is the parser pilot requested by Stage 4 and
+  preserves the existing command behavior.
+
 Remaining Stage 4 work:
 
-- Decide whether host-adapter projection should consume the shared command
-  metadata directly or continue using its narrower host-command manifest.
-- Pilot a typed parser adapter for `start` after the shared metadata/docs seam
-  is fully green.
+- Extend the typed parser adapter pattern only to high-value shallow parsers
+  after `start` remains green under full gates.
+- Consider whether host-adapter projection should expose canonical usage text
+  from the Command Surface as non-authoritative display metadata.
 
 ## Research base
 

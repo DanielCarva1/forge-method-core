@@ -350,6 +350,11 @@ MCP adapter projects allowlist defaults and tool descriptors from it, and
 should continue migrating toward this Command Surface rather than growing rival
 hand-written lists.
 
+The host-adapter manifest remains a narrower security adapter for host-specific
+authority metadata, required contracts, safe triggers, and policy references,
+but each host command is anchored by name to the Command Surface and derives
+generic JSON capability from it.
+
 ## Allowlist
 
 The explicit, named set of MCPTools a given MCP server instance is permitted

@@ -4,6 +4,14 @@
 //! metadata struct and the four safety predicates used by the host-adapter
 //! invocation/distribution admission gates (`argv_has_shell_control`,
 //! `env_key_is_forbidden`, `source_ref_is_immutable`, `version_like`).
+//!
+//! The manifest keeps host-specific security metadata here, but top-level
+//! command identity and JSON capability are anchored in
+//! `forge-core-command-surface`. That makes the host-adapter manifest a narrow
+//! adapter over the shared Command Surface seam instead of a rival command
+//! registry.
+
+use forge_core_command_surface::{self as command_surface, JsonMode};
 
 use crate::host_adapter_types::{
     HostAdapterAuthorityClass, HostAdapterAutoTrigger, HostAdapterCommand, HostAdapterCommandKind,
@@ -30,12 +38,18 @@ pub(crate) struct HostCommandMetadata<'a> {
 /// promoting borrowed `&str` fields into owned `String` values and marking the
 /// command as JSON-capable (`json_supported: true`).
 pub(crate) fn host_command(metadata: HostCommandMetadata<'_>) -> HostAdapterCommand {
+    let surface = command_surface::command_by_name(metadata.name).unwrap_or_else(|| {
+        panic!(
+            "host adapter command '{}' is missing from forge-core-command-surface",
+            metadata.name
+        )
+    });
     HostAdapterCommand {
-        name: metadata.name.to_string(),
+        name: surface.name.to_string(),
         command_kind: metadata.command_kind,
         mutation_class: metadata.mutation_class,
         authority_class: metadata.authority_class,
-        json_supported: true,
+        json_supported: matches!(surface.json_mode, JsonMode::EnvelopeOptional),
         required_contracts: metadata
             .required_contracts
             .into_iter()
@@ -97,4 +111,32 @@ pub(crate) fn version_like(value: &str) -> bool {
         && trimmed
             .chars()
             .all(|item| item.is_ascii_alphanumeric() || matches!(item, '.' | '-' | '_' | '+'))
+}
+
+#[cfg(test)]
+mod tests {
+    use forge_core_command_surface::JsonMode;
+
+    use super::*;
+
+    #[test]
+    fn host_command_is_anchored_in_command_surface() {
+        let command = host_command(HostCommandMetadata {
+            name: "validate",
+            command_kind: HostAdapterCommandKind::Validation,
+            mutation_class: HostAdapterMutationClass::ReadOnly,
+            authority_class: HostAdapterAuthorityClass::NoWorkflowAuthority,
+            required_contracts: vec![],
+            safe_auto_invocation_triggers: vec![HostAdapterAutoTrigger::Diagnostics],
+            output_treatment: vec![HostAdapterOutputTreatment::ValidationEvidence],
+            policy_refs: vec![],
+            adapters_must_not: vec![],
+        });
+        let surface = command_surface::command_by_name("validate").expect("validate metadata");
+        assert_eq!(command.name, surface.name);
+        assert_eq!(
+            command.json_supported,
+            matches!(surface.json_mode, JsonMode::EnvelopeOptional)
+        );
+    }
 }
