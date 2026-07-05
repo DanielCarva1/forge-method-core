@@ -1019,14 +1019,41 @@ pub(crate) fn is_bootstrap_core_root(root: &Path) -> bool {
         && root.join(".forge-method").is_dir()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProjectArgs {
+    Init,
+    Resolve,
+    Help,
+}
+
+/// Top-level `forge-core project` parser errors. Hand-rolled per AGENTS.md.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ProjectArgsError {
+    UnknownSubcommand { subcommand: String },
+}
+
+fn parse_project_args(args: &[String]) -> Result<ProjectArgs, ProjectArgsError> {
+    match args.get(1).map_or("--help", String::as_str) {
+        "init" => Ok(ProjectArgs::Init),
+        "resolve" => Ok(ProjectArgs::Resolve),
+        "--help" | "-h" | "help" => Ok(ProjectArgs::Help),
+        other => Err(ProjectArgsError::UnknownSubcommand {
+            subcommand: other.to_string(),
+        }),
+    }
+}
+
+#[must_use]
 pub fn dispatch(args: &[String]) -> (String, i32) {
-    let sub = args.get(1).map_or("--help", String::as_str);
-    match sub {
-        "init" => dispatch_init(&args[2..]),
-        "resolve" => dispatch_resolve(&args[2..]),
-        "--help" | "-h" | "help" => (project_usage(), 0),
-        other => (
-            format!("forge-core project: unknown subcommand '{other}'. Try: init | resolve"),
+    match parse_project_args(args) {
+        Ok(ProjectArgs::Init) => dispatch_init(&args[2..]),
+        Ok(ProjectArgs::Resolve) => dispatch_resolve(&args[2..]),
+        Ok(ProjectArgs::Help) => (project_usage(), 0),
+        Err(ProjectArgsError::UnknownSubcommand { subcommand }) => (
+            format!(
+                "forge-core project: unknown subcommand '{subcommand}'. Try: {hint}",
+                hint = project_subcommand_hint()
+            ),
             2,
         ),
     }
@@ -1186,6 +1213,17 @@ fn project_subcommand_usage(line: &'static str) -> &'static str {
         .unwrap_or_else(|| line.trim_start())
 }
 
+fn project_subcommand_names() -> impl Iterator<Item = &'static str> {
+    COMMAND_PROJECT
+        .usage_lines
+        .iter()
+        .filter_map(|line| project_subcommand_usage(line).split_whitespace().next())
+}
+
+fn project_subcommand_hint() -> String {
+    project_subcommand_names().collect::<Vec<_>>().join(" | ")
+}
+
 /// Dispatch entrypoint for the `forge-core project` command tree
 /// (`init`, `resolve`, `link`, etc.).
 ///
@@ -1226,6 +1264,28 @@ mod tests {
     }
 
     #[test]
+    fn parse_project_args_routes_top_level_subcommands() {
+        assert_eq!(
+            parse_project_args(&argv(&["project", "init"])),
+            Ok(ProjectArgs::Init)
+        );
+        assert_eq!(
+            parse_project_args(&argv(&["project", "resolve"])),
+            Ok(ProjectArgs::Resolve)
+        );
+        assert_eq!(
+            parse_project_args(&argv(&["project", "--help"])),
+            Ok(ProjectArgs::Help)
+        );
+        assert_eq!(
+            parse_project_args(&argv(&["project", "bogus"])),
+            Err(ProjectArgsError::UnknownSubcommand {
+                subcommand: "bogus".to_string()
+            })
+        );
+    }
+
+    #[test]
     fn project_usage_projects_command_surface_lines() {
         let usage = project_usage();
         assert!(
@@ -1243,6 +1303,22 @@ mod tests {
             usage.contains("--allow-bootstrap-core"),
             "project resolve help must preserve the bootstrap-core flag: {usage}"
         );
+    }
+
+    #[test]
+    fn project_unknown_subcommand_hint_comes_from_command_surface() {
+        let (output, exit) = dispatch(&argv(&["project", "bogus"]));
+        assert_eq!(exit, 2);
+        assert!(
+            output.contains(&project_subcommand_hint()),
+            "unknown-subcommand hint should be projected from Command Surface: {output}"
+        );
+        for name in project_subcommand_names() {
+            assert!(
+                output.contains(name),
+                "unknown-subcommand hint should name projected subcommand {name:?}: {output}"
+            );
+        }
     }
 
     #[test]

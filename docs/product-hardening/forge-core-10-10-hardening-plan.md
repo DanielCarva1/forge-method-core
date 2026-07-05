@@ -185,6 +185,19 @@ help seam:
   `--allow-bootstrap-core`, keeping the `start`/`project resolve` bootstrap
   exception story visible from both entry points.
 
+## Ninth hardening changeset evidence
+
+The ninth implementation slice migrates the `project` command tree's
+top-level parser seam:
+
+- `dispatch()` now parses the top-level command into typed `ProjectArgs` /
+  `ProjectArgsError` before routing to `init`, `resolve`, or help.
+- Unknown-subcommand guidance now derives the `init | resolve` hint from
+  `forge_core_command_surface::COMMAND_PROJECT` instead of maintaining another
+  rival list beside the dispatcher.
+- Unit tests cover top-level parser routing, help routing, and
+  Command-Surface-derived unknown-subcommand hints.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

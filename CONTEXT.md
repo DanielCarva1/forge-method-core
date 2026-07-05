@@ -350,9 +350,10 @@ exposure. The current shared seam is the `forge-core-command-surface` crate.
 `forge-core-cli::command_registry` adds handler pointers to that metadata; the
 MCP adapter projects allowlist defaults and tool descriptors from it, and
 `docs/generated/command-surface.md` is generated from it. The `start`, `project`,
-and `mcp` CLI help paths project their usage lines from the same seam.
-Parser/handler lookup should continue migrating toward this Command Surface
-rather than growing rival hand-written lists.
+and `mcp` CLI help paths project their usage lines from the same seam. The
+`project` top-level parser also derives its unknown-subcommand hint from this
+seam. Parser/handler lookup should continue migrating toward this Command
+Surface rather than growing rival hand-written lists.
 
 The host-adapter manifest remains a narrower security adapter for host-specific
 authority metadata, required contracts, safe triggers, and policy references,
