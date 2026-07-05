@@ -237,6 +237,22 @@ The twelfth implementation slice migrates the `claim` help seam:
 - Unit tests lock the top-level and individual claim help projections to the
   shared Command Surface usage lines.
 
+## Thirteenth hardening changeset evidence
+
+The thirteenth implementation slice deepens the Command Surface projection
+interface:
+
+- `CommandSpec` now owns reusable projection helpers for local command-tree
+  usage lines, concrete subcommand name extraction, unknown-subcommand hints,
+  and full usage lookup for an individual subcommand.
+- `project` and `claim` now use that interface instead of each owning ad hoc
+  string slicing for `forge-core <command>` prefixes.
+- `claim` unknown-subcommand errors now derive their hint from
+  `COMMAND_CLAIM` instead of preserving a rival hard-coded subcommand list.
+- Command Surface tests cover prefix-stripping locality, concrete child-name
+  extraction, placeholder filtering, compact hint rendering, and full
+  subcommand usage lookup.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

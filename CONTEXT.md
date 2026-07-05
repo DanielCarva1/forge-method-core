@@ -351,8 +351,10 @@ exposure. The current shared seam is the `forge-core-command-surface` crate.
 MCP adapter projects allowlist defaults and tool descriptors from it, and
 `docs/generated/command-surface.md` is generated from it. The `start`, `project`,
 `mcp`, and `claim` CLI help paths project their usage lines from the same seam.
-The `project` top-level parser also derives its unknown-subcommand hint from
-this seam, and `project init` / `project resolve` parse into typed options
+Command-tree help and unknown-subcommand hints use `CommandSpec` projection
+helpers for local usage lines, concrete subcommand names, and full subcommand
+usage lookup instead of re-implementing `forge-core <command>` prefix slicing in
+each CLI module. `project init` / `project resolve` parse into typed options
 before initializing or resolving the Project Link. Parser/handler lookup should
 continue migrating toward this Command Surface rather than growing rival
 hand-written lists.

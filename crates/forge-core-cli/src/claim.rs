@@ -1593,7 +1593,7 @@ mod tests {
             "claim usage should keep the local command-tree header: {usage}"
         );
         for line in COMMAND_CLAIM.usage_lines {
-            let subcommand_usage = claim_subcommand_usage(line);
+            let subcommand_usage = COMMAND_CLAIM.local_usage_line(line);
             assert!(
                 usage.contains(subcommand_usage),
                 "claim usage should include projected Command Surface line {subcommand_usage:?}: {usage}"
@@ -1616,7 +1616,7 @@ mod tests {
     #[test]
     fn claim_subcommand_help_lookup_projects_full_command_surface_lines() {
         for line in COMMAND_CLAIM.usage_lines {
-            let subcommand_usage = claim_subcommand_usage(line);
+            let subcommand_usage = COMMAND_CLAIM.local_usage_line(line);
             let Some(subcommand) = subcommand_usage.split_whitespace().next() else {
                 panic!("claim Command Surface line must name a subcommand: {line}");
             };
@@ -1631,33 +1631,24 @@ mod tests {
 
 fn claim_usage() -> String {
     let mut usage = String::from("forge-core claim <subcommand> [options]");
-    for line in COMMAND_CLAIM.usage_lines {
+    for line in COMMAND_CLAIM.local_usage_lines() {
         usage.push('\n');
         usage.push_str("  ");
-        usage.push_str(claim_subcommand_usage(line));
+        usage.push_str(line);
     }
     usage.push('\n');
     usage.push_str("  Defaults: without --claims-dir, resolves --root as a Forge project and uses <state_root>/claims-active; --claims-dir is an explicit override.");
     usage
 }
 
-fn claim_subcommand_usage(line: &'static str) -> &'static str {
-    line.trim_start()
-        .strip_prefix("forge-core claim ")
-        .unwrap_or_else(|| line.trim_start())
+fn claim_subcommand_hint() -> String {
+    COMMAND_CLAIM.concrete_subcommand_hint()
 }
 
 fn claim_command_surface_usage_line_for(subcommand: &str) -> &'static str {
-    for line in COMMAND_CLAIM.usage_lines {
-        let trimmed = line.trim_start();
-        let Some(rest) = trimmed.strip_prefix("forge-core claim ") else {
-            continue;
-        };
-        if rest.split_whitespace().next() == Some(subcommand) {
-            return trimmed;
-        }
-    }
-    "forge-core claim <subcommand> [options]"
+    COMMAND_CLAIM
+        .usage_line_for_subcommand(subcommand)
+        .unwrap_or("forge-core claim <subcommand> [options]")
 }
 
 /// Dispatch entrypoint for the `forge-core claim` subcommand tree.
@@ -1686,7 +1677,8 @@ pub fn run_claim_command(args: &[String]) -> Result<(), ExitError> {
             Ok(())
         }
         other => Err(ExitError::usage(format!(
-            "forge-core claim: unknown subcommand '{other}'. Try: acquire | heartbeat | release | handoff | status | reconcile | check-write"
+            "forge-core claim: unknown subcommand '{other}'. Try: {hint}",
+            hint = claim_subcommand_hint()
         ))),
     }
 }

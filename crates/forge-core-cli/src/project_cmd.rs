@@ -1313,25 +1313,16 @@ fn dispatch_resolve(args: &[String]) -> (String, i32) {
 
 fn project_usage() -> String {
     let mut usage = String::from("forge-core project <subcommand> [options]");
-    for line in COMMAND_PROJECT.usage_lines {
+    for line in COMMAND_PROJECT.local_usage_lines() {
         usage.push('\n');
         usage.push_str("  ");
-        usage.push_str(project_subcommand_usage(line));
+        usage.push_str(line);
     }
     usage
 }
 
-fn project_subcommand_usage(line: &'static str) -> &'static str {
-    line.trim_start()
-        .strip_prefix("forge-core project ")
-        .unwrap_or_else(|| line.trim_start())
-}
-
 fn project_subcommand_names() -> impl Iterator<Item = &'static str> {
-    COMMAND_PROJECT
-        .usage_lines
-        .iter()
-        .filter_map(|line| project_subcommand_usage(line).split_whitespace().next())
+    COMMAND_PROJECT.concrete_subcommand_names()
 }
 
 fn project_subcommand_hint() -> String {
@@ -1407,7 +1398,7 @@ mod tests {
             "project usage should keep the local command-tree header: {usage}"
         );
         for line in COMMAND_PROJECT.usage_lines {
-            let subcommand_usage = project_subcommand_usage(line);
+            let subcommand_usage = COMMAND_PROJECT.local_usage_line(line);
             assert!(
                 usage.contains(subcommand_usage),
                 "project usage should include projected Command Surface line {subcommand_usage:?}: {usage}"

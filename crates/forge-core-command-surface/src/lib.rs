@@ -145,6 +145,66 @@ impl CommandSpec {
     pub fn canonical_usage(&self) -> &'static str {
         self.usage_lines.first().copied().unwrap_or("")
     }
+
+    /// Render a usage line for local command-tree help.
+    ///
+    /// Global help owns fully qualified lines (`forge-core claim acquire ...`).
+    /// Local help usually keeps a command-tree header (`forge-core claim
+    /// <subcommand> [options]`) and then renders child usage lines without the
+    /// repeated `forge-core <command>` prefix. Keeping that projection here
+    /// prevents every CLI module from hand-rolling the same string slicing.
+    #[must_use]
+    pub fn local_usage_line(&self, line: &'static str) -> &'static str {
+        let trimmed = line.trim_start();
+        let Some(rest) = trimmed.strip_prefix("forge-core ") else {
+            return trimmed;
+        };
+        let Some(rest) = rest.strip_prefix(self.name) else {
+            return trimmed;
+        };
+        rest.strip_prefix(' ').unwrap_or(trimmed)
+    }
+
+    /// Iterate over usage lines projected for local command-tree help.
+    #[must_use]
+    pub fn local_usage_lines(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.usage_lines
+            .iter()
+            .map(|line| self.local_usage_line(line))
+    }
+
+    /// Iterate over concrete subcommand names present in usage lines.
+    ///
+    /// Placeholder first tokens such as `<subcommand>`, `[--root ...]`, and
+    /// `(route|policy|...)` are deliberately ignored; this keeps unknown-
+    /// subcommand hints honest for command trees with real children.
+    #[must_use]
+    pub fn concrete_subcommand_names(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.local_usage_lines()
+            .filter_map(|line| line.split_whitespace().next())
+            .filter(|token| is_concrete_subcommand_token(token))
+    }
+
+    /// Lookup the fully qualified usage line for a concrete subcommand.
+    #[must_use]
+    pub fn usage_line_for_subcommand(&self, subcommand: &str) -> Option<&'static str> {
+        self.usage_lines
+            .iter()
+            .map(|line| line.trim_start())
+            .find(|line| self.local_usage_line(line).split_whitespace().next() == Some(subcommand))
+    }
+
+    /// Render a compact unknown-subcommand hint from concrete usage lines.
+    #[must_use]
+    pub fn concrete_subcommand_hint(&self) -> String {
+        self.concrete_subcommand_names()
+            .collect::<Vec<_>>()
+            .join(" | ")
+    }
+}
+
+fn is_concrete_subcommand_token(token: &str) -> bool {
+    !token.starts_with('<') && !token.starts_with('[') && !token.starts_with('(')
 }
 
 #[rustfmt::skip]
@@ -659,6 +719,67 @@ mod tests {
                 command.canonical_usage()
             );
         }
+    }
+
+    #[test]
+    fn local_usage_lines_strip_only_the_current_command_prefix() {
+        assert_eq!(
+            COMMAND_CLAIM.local_usage_line(COMMAND_CLAIM.usage_lines[0]),
+            "acquire [--root <path>] [--allow-bootstrap-core] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--heartbeat-interval 120] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]"
+        );
+        assert_eq!(
+            COMMAND_PROJECT.local_usage_line(COMMAND_PROJECT.usage_lines[0]),
+            "init [--root <path>] [--project-id <id>] [--sidecar-root <path>] [--state-root <path>] [--json|--no-json]"
+        );
+        assert_eq!(
+            COMMAND_PROJECT.local_usage_line(COMMAND_CLAIM.usage_lines[0]),
+            COMMAND_CLAIM.usage_lines[0].trim_start(),
+            "a command must not strip another command's prefix"
+        );
+    }
+
+    #[test]
+    fn concrete_subcommand_helpers_project_claim_and_project_children() {
+        assert_eq!(
+            COMMAND_CLAIM
+                .concrete_subcommand_names()
+                .collect::<Vec<_>>(),
+            vec![
+                "acquire",
+                "heartbeat",
+                "release",
+                "handoff",
+                "status",
+                "reconcile",
+                "check-write"
+            ]
+        );
+        assert_eq!(
+            COMMAND_PROJECT
+                .concrete_subcommand_names()
+                .collect::<Vec<_>>(),
+            vec!["init", "resolve"]
+        );
+        assert_eq!(
+            COMMAND_CLAIM.concrete_subcommand_hint(),
+            "acquire | heartbeat | release | handoff | status | reconcile | check-write"
+        );
+        assert_eq!(
+            COMMAND_AUTONOMY
+                .concrete_subcommand_names()
+                .collect::<Vec<_>>(),
+            Vec::<&str>::new(),
+            "placeholder usage should not become a concrete hint"
+        );
+    }
+
+    #[test]
+    fn subcommand_usage_lookup_returns_fully_qualified_usage() {
+        assert_eq!(
+            COMMAND_CLAIM.usage_line_for_subcommand("status"),
+            Some("forge-core claim status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--from-cache] [--json|--no-json]")
+        );
+        assert_eq!(COMMAND_CLAIM.usage_line_for_subcommand("missing"), None);
     }
 
     #[test]
