@@ -834,6 +834,8 @@ mod tests {
 
         let env = run_start(&root, false);
         let payload = env.data.as_ref().expect("payload on bootstrap core");
+        let resolved = resolve_project(&root, true).expect("bootstrap core resolves explicitly");
+        let expected_project = ProjectContext::from(resolved.clone());
         assert!(env.ok);
         assert_eq!(payload.state, BootstrapState::SidecarReadyNoContract);
         assert!(
@@ -841,6 +843,13 @@ mod tests {
             "reason should name the explicit exception: {}",
             payload.reason
         );
+        assert_eq!(
+            payload.project.as_ref(),
+            Some(&expected_project),
+            "start must mirror `project resolve --allow-bootstrap-core` so agents do not infer a different project context"
+        );
+        assert_eq!(resolved.layout, ProjectLayoutKind::BootstrapCoreLocal);
+        assert!(resolved.bootstrap_core_exception);
         let project = payload.project.as_ref().expect("project context");
         assert!(project.bootstrap_core_exception);
         assert_eq!(project.layout, ProjectLayoutKind::BootstrapCoreLocal);

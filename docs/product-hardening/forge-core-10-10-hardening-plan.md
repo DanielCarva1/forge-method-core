@@ -561,6 +561,25 @@ host-adapter verification adapter:
   assert command-specific numeric parse errors, and prove explicit `--no-json`
   reaches artifact verification instead of being treated as a usage error.
 
+## Thirty-first hardening changeset evidence
+
+The thirty-first implementation slice tightens the Stage 5 first-use proof for
+the Forge core Bootstrap Core Exception:
+
+- `start_cmd::tests::bootstrap_core_exception_is_diagnosed_without_consumer_link`
+  now compares the reported `StartPayload.project` against
+  `ProjectContext::from(resolve_project(root, true))`, proving `start` mirrors
+  `project resolve --allow-bootstrap-core` instead of carrying a parallel
+  project-context implementation.
+- The same regression still proves consumer safety: the exception path is only
+  reached for a Forge core-shaped root, and arbitrary local `.forge-method/`
+  state remains `no_link`.
+- Live smoke output from this repository now shows both
+  `forge-core project resolve --root . --allow-bootstrap-core --json` and
+  `forge-core start --root . --json` reporting `bootstrap_core_local` with the
+  same state root, while `start` preserves an explicit reference back to the
+  allowed resolve command.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
