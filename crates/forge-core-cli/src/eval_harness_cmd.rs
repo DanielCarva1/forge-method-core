@@ -67,10 +67,8 @@ pub fn run_eval_harness_command(args: &[String]) -> Result<(), ExitError> {
                 println!("{}", eval_harness_usage());
                 return Ok(());
             }
-            other => {
-                return Err(ExitError::usage(format!(
-                    "eval-harness: unknown flag '{other}'"
-                )));
+            _ => {
+                return Err(ExitError::usage(eval_harness_usage()));
             }
         }
         index += 1;
@@ -79,9 +77,7 @@ pub fn run_eval_harness_command(args: &[String]) -> Result<(), ExitError> {
     let _ = allow_bootstrap_core;
 
     let Some(config_path) = config_path else {
-        return Err(ExitError::usage(
-            "eval-harness: --config <yaml> is required",
-        ));
+        return Err(ExitError::usage(eval_harness_usage()));
     };
 
     let config_yaml = std::fs::read_to_string(&config_path).map_err(|source| {
@@ -265,9 +261,52 @@ fn next_path_or_err(args: &[String], index: usize) -> Result<PathBuf, ExitError>
 }
 
 fn next_arg_or_err(args: &[String], index: usize) -> Result<&str, ExitError> {
-    args.get(index).map(String::as_str).ok_or_else(|| {
-        ExitError::usage(format!(
-            "eval-harness: missing value for flag at position {index}"
-        ))
-    })
+    args.get(index)
+        .map(String::as_str)
+        .ok_or_else(|| ExitError::usage(eval_harness_usage()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use forge_core_command_surface::COMMAND_EVAL_HARNESS;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn missing_flag_value_reports_eval_harness_usage() {
+        let error = run_eval_harness_command(&args(&["eval-harness", "--config"]))
+            .expect_err("missing config value must fail before config I/O");
+        assert_eval_harness_usage_error(&error);
+    }
+
+    #[test]
+    fn missing_config_reports_eval_harness_usage() {
+        let error = run_eval_harness_command(&args(&["eval-harness"]))
+            .expect_err("missing required config must fail before config I/O");
+        assert_eval_harness_usage_error(&error);
+    }
+
+    #[test]
+    fn unknown_arg_reports_eval_harness_usage() {
+        let error = run_eval_harness_command(&args(&["eval-harness", "--frobnicate"]))
+            .expect_err("unknown argument must fail before config I/O");
+        assert_eval_harness_usage_error(&error);
+    }
+
+    fn assert_eval_harness_usage_error(error: &ExitError) {
+        for line in COMMAND_EVAL_HARNESS.usage_lines {
+            let projected = line.trim_start();
+            assert!(
+                error.message().contains(projected),
+                "eval-harness usage error should include projected Command Surface line {projected:?}: {error}"
+            );
+        }
+        assert!(
+            !error.message().contains("forge-core execute-operation"),
+            "eval-harness usage error must not include unrelated mutating command usage: {error}"
+        );
+    }
 }

@@ -704,6 +704,20 @@ in the cost accounting surface:
 - Unit coverage proves malformed `cost` argv reports the projected Command
   Surface line and does not leak unrelated command usage.
 
+## Thirty-ninth hardening changeset evidence
+
+The thirty-ninth implementation slice closes the remaining shallow malformed
+argv paths in the eval-harness execution surface:
+
+- `eval-harness` help already renders from the shared Command Surface, but
+  missing flag values, missing required `--config`, and unknown arguments still
+  emitted local ad hoc usage messages.
+- Those malformed argv paths now report the `eval-harness` command-specific
+  usage surface, keeping the execution adapter aligned with its generated
+  Command Surface contract before any config file or corpus I/O begins.
+- Unit coverage proves malformed `eval-harness` argv reports the projected
+  Command Surface line and does not leak unrelated command usage.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
