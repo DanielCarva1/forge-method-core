@@ -453,8 +453,11 @@ pub const COMMAND_VALIDATE: CommandSpec = CommandSpec {
 
 pub const COMMAND_PREFLIGHT: CommandSpec = CommandSpec {
     name: "preflight",
-    usage_lines:     &["       forge-core preflight [--root <path>] [--allow-bootstrap-core] [--json|--no-json] [--profile <name>] [--gate <name>]... [--expected-anchor <count>]"],
-    authority: CommandAuthority::ReadOnly,
+    usage_lines:     &[
+        "       forge-core preflight [--root <path>] [--allow-bootstrap-core] [--json|--no-json] [--profile <name>] [--gate <name>]... [--expected-anchor <count>]",
+        "       forge-core preflight init [--root <path>] [--profile <name>] [--json|--no-json]",
+    ],
+    authority: CommandAuthority::MixedBySubcommand,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::AllowlistOnly,
 };
@@ -863,6 +866,12 @@ mod tests {
             vec!["route"]
         );
         assert_eq!(
+            COMMAND_PREFLIGHT
+                .concrete_subcommand_names()
+                .collect::<Vec<_>>(),
+            vec!["init"]
+        );
+        assert_eq!(
             COMMAND_CLAIM.concrete_subcommand_hint(),
             "acquire | heartbeat | release | handoff | status | reconcile | check-write"
         );
@@ -875,6 +884,18 @@ mod tests {
             Some("forge-core claim status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--from-cache] [--json|--no-json]")
         );
         assert_eq!(COMMAND_CLAIM.usage_line_for_subcommand("missing"), None);
+    }
+
+    #[test]
+    fn preflight_surface_exposes_init_and_mixed_authority() {
+        assert_eq!(
+            COMMAND_PREFLIGHT.authority,
+            CommandAuthority::MixedBySubcommand
+        );
+        assert_eq!(
+            COMMAND_PREFLIGHT.usage_line_for_subcommand_path(&["init"]),
+            Some("forge-core preflight init [--root <path>] [--profile <name>] [--json|--no-json]")
+        );
     }
 
     #[test]

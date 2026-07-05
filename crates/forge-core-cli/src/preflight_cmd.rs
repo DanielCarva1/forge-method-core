@@ -33,6 +33,7 @@ use crate::cli_error::ExitError;
 use crate::project_profile::{
     PreflightProfileDocument, PREFLIGHT_PROFILE_FILE_NAME, PREFLIGHT_PROFILE_SCHEMA_VERSION,
 };
+use forge_core_command_surface::COMMAND_PREFLIGHT;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -245,6 +246,10 @@ pub fn run_preflight_command(args: &[String]) -> Result<(), ExitError> {
     let sub = args.get(1).map(String::as_str);
     if sub == Some("init") {
         return run_preflight_init_command(&args[2..]);
+    }
+    if matches!(sub, Some("--help" | "-h" | "help")) {
+        print_preflight_usage();
+        return Ok(());
     }
     // Otherwise treat the tail as the preflight run's flag list.
     let tail = args.iter().skip(1).cloned().collect::<Vec<_>>();
@@ -733,7 +738,7 @@ pub fn run_preflight_init_command(args: &[String]) -> Result<(), ExitError> {
             "--json" => json = true,
             "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", preflight_init_usage());
+                print_preflight_init_usage();
                 return Ok(());
             }
             other => {
@@ -803,13 +808,36 @@ fn canonicalize_root(root: &Path) -> Result<PathBuf, ExitError> {
 /// Usage for the `preflight init` subcommand.
 #[must_use]
 pub fn preflight_init_usage() -> &'static str {
-    "usage: forge-core preflight init [--root <path>] [--profile <name>] [--json|--no-json]\n  profiles: rust, node, python, go, generic"
+    COMMAND_PREFLIGHT
+        .usage_line_for_subcommand_path(&["init"])
+        .unwrap_or(
+            "forge-core preflight init [--root <path>] [--profile <name>] [--json|--no-json]",
+        )
 }
 
 /// Static usage string. Used by `main.rs` and `--help`.
 #[must_use]
-pub fn preflight_usage() -> &'static str {
-    "usage: forge-core preflight [--root <path>] [--allow-bootstrap-core] [--json|--no-json] [--profile <name>] [--gate <name>]... [--expected-anchor <count>]\n       forge-core preflight init [--root <path>] [--profile <name>] [--json|--no-json]\n  profiles: rust, node, python, go, generic\n  gates: type_check, clippy_pedantic, test, format, validate, regression_anchor"
+pub fn preflight_usage() -> String {
+    let mut usage = String::from("usage:");
+    for line in COMMAND_PREFLIGHT.usage_lines {
+        usage.push('\n');
+        usage.push_str("  ");
+        usage.push_str(line.trim_start());
+    }
+    usage.push_str("\n  profiles: rust, node, python, go, generic");
+    usage.push_str(
+        "\n  gates: type_check, clippy_pedantic, test, format, validate, regression_anchor",
+    );
+    usage
+}
+
+fn print_preflight_usage() {
+    println!("{}", preflight_usage());
+}
+
+fn print_preflight_init_usage() {
+    println!("{}", preflight_init_usage());
+    println!("  profiles: rust, node, python, go, generic");
 }
 
 #[cfg(test)]
@@ -930,5 +958,40 @@ mod tests {
         assert_eq!(summary.skipped, 1);
         assert_eq!(summary.required_failed, 1);
         assert_eq!(summary.optional_failed, 1);
+    }
+
+    #[test]
+    fn preflight_usage_projects_command_surface_lines() {
+        let usage = preflight_usage();
+        for line in COMMAND_PREFLIGHT.usage_lines {
+            let canonical = line.trim_start();
+            assert!(
+                usage.contains(canonical),
+                "preflight usage should include projected Command Surface line {canonical:?}: {usage}"
+            );
+        }
+        assert!(usage.contains("profiles: rust, node, python, go, generic"));
+        assert!(usage.contains("gates: type_check, clippy_pedantic, test, format"));
+    }
+
+    #[test]
+    fn preflight_init_usage_projects_command_surface_line() {
+        assert_eq!(
+            preflight_init_usage(),
+            "forge-core preflight init [--root <path>] [--profile <name>] [--json|--no-json]"
+        );
+        assert_eq!(
+            Some(preflight_init_usage()),
+            COMMAND_PREFLIGHT.usage_line_for_subcommand_path(&["init"])
+        );
+    }
+
+    #[test]
+    fn run_preflight_help_succeeds_without_running_gates() {
+        let result = run_preflight_command(&["preflight".to_string(), "--help".to_string()]);
+        assert!(
+            result.is_ok(),
+            "--help should print usage and exit successfully"
+        );
     }
 }

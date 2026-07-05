@@ -412,6 +412,25 @@ command-tree help adapter with the Command Surface and deepens the shared seam:
   hints, command-tree headers, full subcommand usage lookup, and explicit
   `--json` parsing to the Command Surface interface.
 
+## Twenty-second hardening changeset evidence
+
+The twenty-second implementation slice reconciles the `preflight` command
+Adapter with the Command Surface and fixes a user-facing help-path polish issue:
+
+- `COMMAND_PREFLIGHT` now advertises both implemented command paths:
+  `forge-core preflight ...` and `forge-core preflight init ...`.
+- Its authority class is now `mixed_by_subcommand` because the default
+  preflight run is read-only while `preflight init` writes the local
+  `.forge-method/preflight.yaml` profile document.
+- `preflight_usage()` and `preflight_init_usage()` now project canonical usage
+  lines from `COMMAND_PREFLIGHT` while preserving the human profile/gate detail
+  lines in the CLI help output.
+- `forge-core preflight --help` now prints usage and exits successfully instead
+  of being treated as an unknown argument by the run parser.
+- Unit tests lock the Command Surface authority, the `init` subcommand lookup,
+  the rendered usage lines, the retained profile/gate detail lines, and the
+  successful help short-circuit.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
