@@ -23,6 +23,7 @@ use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use forge_core_command_surface::{CommandSpec, COMMAND_EXECUTE_OPERATION};
 use forge_core_contracts::{
     CliEnvelope, CommandContractDocument, ExitReason, FieldEvidenceRegistry,
     OperationContractDocument, RepoPath, ToolEffectContractDocument, TypedFailure,
@@ -36,10 +37,7 @@ use forge_core_store::{build_reference_index, WalDurability};
 use forge_core_validate::risk_audit::{validate_risk_audit_rule_set, RiskAuditRuleSet};
 
 use crate::cli_error::ExitError;
-use crate::cli_util::{
-    next_arg_or_err, next_path_or_err, parse_payload_arg_or_err, parse_u64_or_err,
-    resolve_stateful_roots_or_err, usage,
-};
+use crate::cli_util::{command_surface_usage, resolve_stateful_roots_or_err};
 use crate::hex_sha256;
 
 /// All inputs required to drive one operation execution.
@@ -785,6 +783,7 @@ fn repo_relative_checked(root: &Path, path: &Path) -> Result<String, ExecuteOper
 /// result type derives `Serialize`, so this is a programming error and
 /// never occurs on valid input.
 pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
+    let command = &COMMAND_EXECUTE_OPERATION;
     let mut root = PathBuf::from(".");
     let mut operation_path: Option<PathBuf> = None;
     let mut command_paths = Vec::new();
@@ -803,27 +802,33 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
         match args[index].as_str() {
             "--root" => {
                 index += 1;
-                root = next_path_or_err(args, index)?;
+                root = next_execute_operation_path_or_err(args, index, command)?;
             }
             "--operation" => {
                 index += 1;
-                operation_path = Some(next_path_or_err(args, index)?);
+                operation_path = Some(next_execute_operation_path_or_err(args, index, command)?);
             }
             "--command" => {
                 index += 1;
-                command_paths.push(next_path_or_err(args, index)?);
+                command_paths.push(next_execute_operation_path_or_err(args, index, command)?);
             }
             "--effect" => {
                 index += 1;
-                effect_paths.push(next_path_or_err(args, index)?);
+                effect_paths.push(next_execute_operation_path_or_err(args, index, command)?);
             }
             "--payload" => {
                 index += 1;
-                payloads.push(parse_payload_arg_or_err(next_arg_or_err(args, index)?)?);
+                payloads.push(parse_execute_operation_payload_arg_or_err(
+                    next_execute_operation_arg_or_err(args, index, command)?,
+                    command,
+                )?);
             }
             "--max-payload-bytes" => {
                 index += 1;
-                payload_policy.max_payload_bytes = parse_u64_or_err(next_arg_or_err(args, index)?)?;
+                payload_policy.max_payload_bytes = parse_execute_operation_u64_or_err(
+                    next_execute_operation_arg_or_err(args, index, command)?,
+                    command,
+                )?;
             }
             "--allow-payload-outside-root" => {
                 payload_policy.allow_outside_root = true;
@@ -833,36 +838,37 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
             }
             "--recorded-at" => {
                 index += 1;
-                recorded_at = next_arg_or_err(args, index)?.to_string();
+                recorded_at = next_execute_operation_arg_or_err(args, index, command)?.to_string();
             }
             "--tx-id-prefix" => {
                 index += 1;
-                tx_id_prefix = next_arg_or_err(args, index)?.to_string();
+                tx_id_prefix = next_execute_operation_arg_or_err(args, index, command)?.to_string();
             }
             "--no-sync" => {
                 no_sync = true;
             }
             "--require-risk-audit" => {
                 index += 1;
-                risk_audit_rules = Some(next_path_or_err(args, index)?);
+                risk_audit_rules = Some(next_execute_operation_path_or_err(args, index, command)?);
             }
             "--require-citation" => {
                 require_citation = true;
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", execute_operation_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(execute_operation_usage(command)));
             }
         }
         index += 1;
     }
 
     let Some(operation_path) = operation_path else {
-        return Err(ExitError::usage(usage()));
+        return Err(ExitError::usage(execute_operation_usage(command)));
     };
     let roots = resolve_stateful_roots_or_err("execute-operation", &root, allow_bootstrap_core)?;
     let durability = if no_sync {
@@ -931,4 +937,111 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
         return Err(ExitError::failed("execution did not complete"));
     }
     Ok(())
+}
+
+#[must_use]
+fn execute_operation_usage(command: &CommandSpec) -> String {
+    command_surface_usage(command)
+}
+
+fn next_execute_operation_arg_or_err<'a>(
+    args: &'a [String],
+    index: usize,
+    command: &CommandSpec,
+) -> Result<&'a str, ExitError> {
+    args.get(index)
+        .map(String::as_str)
+        .ok_or_else(|| ExitError::usage(execute_operation_usage(command)))
+}
+
+fn next_execute_operation_path_or_err(
+    args: &[String],
+    index: usize,
+    command: &CommandSpec,
+) -> Result<PathBuf, ExitError> {
+    Ok(PathBuf::from(next_execute_operation_arg_or_err(
+        args, index, command,
+    )?))
+}
+
+fn parse_execute_operation_payload_arg_or_err(
+    value: &str,
+    command: &CommandSpec,
+) -> Result<PayloadFileSpec, ExitError> {
+    let (target_ref, path) = value
+        .split_once('=')
+        .ok_or_else(|| ExitError::usage(execute_operation_usage(command)))?;
+    Ok(PayloadFileSpec {
+        target_ref: target_ref.to_string(),
+        path: PathBuf::from(path),
+    })
+}
+
+fn parse_execute_operation_u64_or_err(
+    value: &str,
+    command: &CommandSpec,
+) -> Result<u64, ExitError> {
+    value
+        .parse::<u64>()
+        .map_err(|_| ExitError::usage(execute_operation_usage(command)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn execute_operation_usage_projects_command_surface_line() {
+        let usage = execute_operation_usage(&COMMAND_EXECUTE_OPERATION);
+        assert!(usage.starts_with("usage:\n"));
+        for line in COMMAND_EXECUTE_OPERATION.usage_lines {
+            let projected = format!("  {}", line.trim_start());
+            assert!(
+                usage.contains(&projected),
+                "execute-operation usage should include projected Command Surface line {projected:?}: {usage}"
+            );
+        }
+    }
+
+    #[test]
+    fn explicit_no_json_is_accepted_by_execute_operation_help_path() {
+        run_execute_operation_command(&args(&["execute-operation", "--no-json", "--help"]))
+            .expect("execute-operation accepts explicit --no-json");
+    }
+
+    #[test]
+    fn missing_operation_reports_execute_operation_usage() {
+        let error = run_execute_operation_command(&args(&["execute-operation"]))
+            .expect_err("missing operation path must fail before project resolution");
+        assert!(
+            error.message().contains("forge-core execute-operation"),
+            "missing operation should report execute-operation usage: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core query-effect-index"),
+            "execute-operation usage must not include unrelated global commands: {error}"
+        );
+    }
+
+    #[test]
+    fn invalid_payload_reports_execute_operation_usage() {
+        let error = run_execute_operation_command(&args(&[
+            "execute-operation",
+            "--payload",
+            "not-a-binding",
+        ]))
+        .expect_err("malformed payload binding must fail");
+        assert!(
+            error.message().contains("forge-core execute-operation"),
+            "invalid payload should report execute-operation usage: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core rebuild-effect-index"),
+            "execute-operation usage must not include sibling/global command usage: {error}"
+        );
+    }
 }

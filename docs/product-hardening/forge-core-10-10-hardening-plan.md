@@ -641,6 +641,24 @@ from the effect-target metadata index command family:
   and proves sibling command usage does not leak into command-specific error
   messages.
 
+## Thirty-fifth hardening changeset evidence
+
+The thirty-fifth implementation slice removes the shallow help adapter from
+the main mutating operation surface:
+
+- `execute-operation` help now renders command-specific usage from the shared
+  Command Surface instead of falling back to the global CLI usage table.
+- Missing `--operation`, missing flag values, malformed `--payload`, invalid
+  `--max-payload-bytes`, and unknown-argument usage errors now report the
+  `execute-operation` command surface, preserving locality at the most
+  important mutating CLI Adapter.
+- `execute-operation` now accepts explicit `--no-json` as the text-mode
+  counterpart to `--json`, matching the generated Command Surface
+  `[--json|--no-json]` contract and the MCP descriptor projection.
+- Unit coverage locks the command to its projected Command Surface line and
+  proves unrelated command usage does not leak into mutating-path error
+  messages.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
