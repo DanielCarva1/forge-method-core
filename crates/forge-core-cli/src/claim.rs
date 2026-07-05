@@ -21,6 +21,7 @@
 
 use crate::cli_error::ExitError;
 use crate::cli_util::{parse_strict_or_err, require_value_or_err, resolve_now_unix};
+use forge_core_command_surface::COMMAND_CLAIM;
 use forge_core_contracts::claim::{
     ActorRole, ClaimContract, ClaimContractDocument, ClaimScopeKind, ClaimStatus,
 };
@@ -1583,7 +1584,82 @@ mod tests {
         assert_eq!(payload.ungoverned, vec!["README.md"]);
         assert!(payload.blocks.is_empty());
     }
+
+    #[test]
+    fn claim_usage_projects_command_surface_lines() {
+        let usage = claim_usage();
+        assert!(
+            usage.starts_with("forge-core claim <subcommand> [options]"),
+            "claim usage should keep the local command-tree header: {usage}"
+        );
+        for line in COMMAND_CLAIM.usage_lines {
+            let subcommand_usage = claim_subcommand_usage(line);
+            assert!(
+                usage.contains(subcommand_usage),
+                "claim usage should include projected Command Surface line {subcommand_usage:?}: {usage}"
+            );
+        }
+        assert!(
+            usage.contains("--allow-bootstrap-core"),
+            "claim help must preserve the bootstrap-core flag: {usage}"
+        );
+        assert!(
+            usage.contains("--now-unix <epoch>"),
+            "claim help must preserve deterministic replay flags: {usage}"
+        );
+        assert!(
+            usage.contains("Defaults:"),
+            "claim help must preserve claims-dir default explanation: {usage}"
+        );
+    }
+
+    #[test]
+    fn claim_subcommand_help_lookup_projects_full_command_surface_lines() {
+        for line in COMMAND_CLAIM.usage_lines {
+            let subcommand_usage = claim_subcommand_usage(line);
+            let Some(subcommand) = subcommand_usage.split_whitespace().next() else {
+                panic!("claim Command Surface line must name a subcommand: {line}");
+            };
+            assert_eq!(
+                claim_command_surface_usage_line_for(subcommand),
+                line.trim_start(),
+                "subcommand help should project the full Command Surface line for {subcommand}"
+            );
+        }
+    }
 }
+
+fn claim_usage() -> String {
+    let mut usage = String::from("forge-core claim <subcommand> [options]");
+    for line in COMMAND_CLAIM.usage_lines {
+        usage.push('\n');
+        usage.push_str("  ");
+        usage.push_str(claim_subcommand_usage(line));
+    }
+    usage.push('\n');
+    usage.push_str("  Defaults: without --claims-dir, resolves --root as a Forge project and uses <state_root>/claims-active; --claims-dir is an explicit override.");
+    usage
+}
+
+fn claim_subcommand_usage(line: &'static str) -> &'static str {
+    line.trim_start()
+        .strip_prefix("forge-core claim ")
+        .unwrap_or_else(|| line.trim_start())
+}
+
+fn claim_command_surface_usage_line_for(subcommand: &str) -> &'static str {
+    for line in COMMAND_CLAIM.usage_lines {
+        let trimmed = line.trim_start();
+        let Some(rest) = trimmed.strip_prefix("forge-core claim ") else {
+            continue;
+        };
+        if rest.split_whitespace().next() == Some(subcommand) {
+            return trimmed;
+        }
+    }
+    "forge-core claim <subcommand> [options]"
+}
+
 /// Dispatch entrypoint for the `forge-core claim` subcommand tree.
 ///
 /// Routes to `acquire`, `heartbeat`, `release`, `handoff`, `status`,
@@ -1606,15 +1682,7 @@ pub fn run_claim_command(args: &[String]) -> Result<(), ExitError> {
         "reconcile" => run_claim_reconcile(&args[2..]),
         "check-write" => run_claim_check_write(&args[2..]),
         "--help" | "-h" | "help" => {
-            println!("forge-core claim <subcommand> [options]");
-            println!("  acquire [--root <path>] [--allow-bootstrap-core] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--no-json]");
-            println!("  heartbeat [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--no-json]");
-            println!("  release [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--no-json]");
-            println!("  handoff [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> --summary <text> [--evidence <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--no-json]");
-            println!("  status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
-            println!("  reconcile [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--loop] [--interval-ms 30000] [--max-ticks <n>] [--no-sync] [--no-json]");
-            println!("  check-write [--root <path>] [--allow-bootstrap-core] --agent <id> --target <path> [--target <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
-            println!("  Defaults: without --claims-dir, resolves --root as a Forge project and uses <state_root>/claims-active; --claims-dir is an explicit override.");
+            println!("{}", claim_usage());
             Ok(())
         }
         other => Err(ExitError::usage(format!(
@@ -1760,7 +1828,7 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
             "--no-sync" => no_sync = true,
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core claim acquire [--root <path>] [--allow-bootstrap-core] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--no-json]");
+                println!("{}", claim_command_surface_usage_line_for("acquire"));
                 println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
                 return Ok(());
             }
@@ -1919,7 +1987,7 @@ pub fn run_claim_single_target(
             "--no-sync" => no_sync = true,
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core claim {sub} [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--no-json]");
+                println!("{}", claim_command_surface_usage_line_for(sub));
                 println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
                 return Ok(());
             }
@@ -2024,7 +2092,7 @@ pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
             "--no-sync" => no_sync = true,
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core claim handoff [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> --summary <text> [--evidence <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--no-json]");
+                println!("{}", claim_command_surface_usage_line_for("handoff"));
                 println!("  Records official context for an expired handoff-required claim, writes <state_root>/handoffs/expired-claims, marks the old claim handoff_recorded, and reopens the scope.");
                 println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
                 return Ok(());
@@ -2113,7 +2181,7 @@ pub fn run_claim_status(args: &[String]) -> Result<(), ExitError> {
             "--from-cache" => from_cache = true,
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core claim status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--from-cache] [--json|--no-json]");
+                println!("{}", claim_command_surface_usage_line_for("status"));
                 println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
                 println!("  --from-cache reads the legacy YAML cache (debug) instead of the WAL authority.");
                 return Ok(());
@@ -2200,7 +2268,7 @@ pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
             "--no-sync" => no_sync = true,
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core claim reconcile [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--loop] [--interval-ms 30000] [--max-ticks <n>] [--no-sync] [--no-json]");
+                println!("{}", claim_command_surface_usage_line_for("reconcile"));
                 println!("  One-shot mode is deterministic and materializes stale/expired claim statuses once.");
                 println!("  --loop runs a foreground Tokio interval reconciler; missed ticks use Skip and no filesystem watcher/notify is used.");
                 println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
@@ -2386,7 +2454,7 @@ pub fn run_claim_check_write(args: &[String]) -> Result<(), ExitError> {
             }
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core claim check-write [--root <path>] [--allow-bootstrap-core] --agent <id> --target <path> [--target <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("{}", claim_command_surface_usage_line_for("check-write"));
                 println!("  Without --claims-dir, resolves --root and uses <state_root>/claims-active; --claims-dir preserves the explicit override.");
                 return Ok(());
             }

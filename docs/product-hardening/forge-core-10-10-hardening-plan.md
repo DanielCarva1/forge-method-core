@@ -222,6 +222,21 @@ The eleventh implementation slice migrates the `project init` parser seam:
 - Unit tests cover typed option parsing, help short-circuiting, and exact
   missing-value / unknown-argument error variants.
 
+## Twelfth hardening changeset evidence
+
+The twelfth implementation slice migrates the `claim` help seam:
+
+- `claim --help` keeps the local command-tree header but projects all
+  subcommand usage lines from `forge-core-command-surface::COMMAND_CLAIM`.
+- Individual `claim acquire|heartbeat|release|handoff|status|reconcile|check-write`
+  help paths now render their first usage line from the same Command Surface
+  seam instead of preserving rival hand-written strings.
+- `COMMAND_CLAIM` now advertises parser-supported flags that were previously
+  local-only (`--now-unix`, `--role`, `--ttl`, `--heartbeat-interval`, repeated
+  `--target`) and regenerates `docs/generated/command-surface.md`.
+- Unit tests lock the top-level and individual claim help projections to the
+  shared Command Surface usage lines.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
