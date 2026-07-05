@@ -505,6 +505,21 @@ Adapter from the risk-audit help path and reconciles a parser/help drift:
   `COMMAND_RISK_AUDIT.usage_lines` entry and prove `--no-json` is treated as
   an explicit text-mode flag rather than an unknown argument.
 
+## Twenty-eighth hardening changeset evidence
+
+The twenty-eighth implementation slice removes the next local CLI usage
+Adapter from the eval-harness help path:
+
+- `cli_util::eval_harness_usage()` now renders from `COMMAND_EVAL_HARNESS`
+  instead of a local `EVAL_HARNESS_USAGE_LINE` in the eval-harness command
+  module.
+- `forge-core eval-harness --help` now uses the same Command Surface projection
+  formatter as graph, eval, telemetry, cost, and risk-audit while preserving the
+  existing `usage:` help shape and JSON/text contract.
+- Unit tests lock `eval_harness_usage()` to every
+  `COMMAND_EVAL_HARNESS.usage_lines` entry and assert `[--json|--no-json]`
+  remains visible.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

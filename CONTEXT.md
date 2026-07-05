@@ -351,8 +351,8 @@ exposure. The current shared seam is the `forge-core-command-surface` crate.
 MCP adapter projects allowlist defaults and tool descriptors from it, and
 `docs/generated/command-surface.md` is generated from it. The `start`, `project`,
 `guide`, `mcp`, `claim`, `autonomy`, `contract`, `isolation`, `research`,
-`preflight`, `graph`, `eval`, `telemetry`, `cost`, `risk-audit`, `memory`,
-`governance`, and `coordination` CLI help
+`preflight`, `graph`, `eval`, `eval-harness`, `telemetry`, `cost`,
+`risk-audit`, `memory`, `governance`, and `coordination` CLI help
 paths project their usage lines from the same seam.
 Command-tree help and
 unknown-subcommand hints use `CommandSpec` projection helpers for local usage

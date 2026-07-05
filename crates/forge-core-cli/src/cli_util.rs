@@ -19,8 +19,8 @@ use crate::{
     PayloadFileSpec,
 };
 use forge_core_command_surface::{
-    CommandSpec, COMMAND_COST, COMMAND_EVAL, COMMAND_EVAL_DEFAULT_SUITE, COMMAND_GRAPH,
-    COMMAND_RISK_AUDIT, COMMAND_TELEMETRY, COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH,
+    CommandSpec, COMMAND_COST, COMMAND_EVAL, COMMAND_EVAL_DEFAULT_SUITE, COMMAND_EVAL_HARNESS,
+    COMMAND_GRAPH, COMMAND_RISK_AUDIT, COMMAND_TELEMETRY, COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH,
     COMMAND_TELEMETRY_DEFAULT_TRACE_SOURCE,
 };
 use forge_core_contracts::runtime::RuntimeKind;
@@ -146,6 +146,11 @@ pub fn eval_usage() -> String {
     usage.push_str("default suite: ");
     usage.push_str(COMMAND_EVAL_DEFAULT_SUITE);
     usage
+}
+
+#[must_use]
+pub fn eval_harness_usage() -> String {
+    format_command_surface_usage("usage:", &COMMAND_EVAL_HARNESS)
 }
 
 #[must_use]
@@ -749,6 +754,22 @@ mod argv_cursor_tests {
         assert!(
             usage.contains(COMMAND_EVAL_DEFAULT_SUITE),
             "eval usage should keep the shared default suite path: {usage}"
+        );
+    }
+
+    #[test]
+    fn eval_harness_usage_projects_command_surface_lines() {
+        let usage = eval_harness_usage();
+        for line in COMMAND_EVAL_HARNESS.usage_lines {
+            let canonical = line.trim_start();
+            assert!(
+                usage.contains(canonical),
+                "eval-harness usage should include projected Command Surface line {canonical:?}: {usage}"
+            );
+        }
+        assert!(
+            usage.contains("[--json|--no-json]"),
+            "eval-harness usage should keep the shared JSON/text contract: {usage}"
         );
     }
 

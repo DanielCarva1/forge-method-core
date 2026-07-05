@@ -25,10 +25,7 @@ use forge_core_eval_harness::{
 };
 
 use crate::cli_error::ExitError;
-
-/// Usage line for `forge-core eval-harness`.
-pub const EVAL_HARNESS_USAGE_LINE: &str =
-    "forge-core eval-harness --config <yaml> [--root <path>] [--corpus <yaml>] [--allow-bootstrap-core] [--json|--no-json]";
+use crate::cli_util::eval_harness_usage;
 
 /// Runs the `forge-core eval-harness` subcommand.
 ///
@@ -67,7 +64,7 @@ pub fn run_eval_harness_command(args: &[String]) -> Result<(), ExitError> {
             "--no-json" | "--text" => want_json = false,
             "--json" => want_json = true,
             "--help" | "-h" => {
-                println!("{EVAL_HARNESS_USAGE_LINE}");
+                println!("{}", eval_harness_usage());
                 return Ok(());
             }
             other => {
