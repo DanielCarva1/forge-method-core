@@ -17,16 +17,15 @@
 use std::path::PathBuf;
 
 use crate::cli_error::ExitError;
-use crate::cli_util::{
-    next_arg_or_err, next_path_or_err, parse_metadata_adapter_trigger_or_err,
-    parse_metadata_consumer_use_or_err, parse_runtime_kind_or_err, parse_target_kind_or_err,
-    parse_usize_or_err, resolve_stateful_roots_or_err, usage,
+use crate::cli_util::{command_surface_usage, resolve_stateful_roots_or_err};
+use forge_core_command_surface::{
+    CommandSpec, COMMAND_QUERY_EFFECT_INDEX, COMMAND_REBUILD_EFFECT_INDEX,
 };
-use forge_core_contracts::{tool_effect::EffectTargetKind, StableId};
+use forge_core_contracts::{runtime::RuntimeKind, tool_effect::EffectTargetKind, StableId};
 use forge_core_store::{
     build_effect_metadata_context, query_effect_target_metadata_index,
-    rebuild_effect_target_metadata_index_with_lock_with_durability, EffectMetadataConsumerUse,
-    EffectMetadataContextBuildOptions, EffectMetadataContextBuildResult,
+    rebuild_effect_target_metadata_index_with_lock_with_durability, EffectMetadataAdapterTrigger,
+    EffectMetadataConsumerUse, EffectMetadataContextBuildOptions, EffectMetadataContextBuildResult,
     EffectTargetMetadataIndexQuery, EffectTargetMetadataIndexQueryResult,
     EffectTargetMetadataIndexRebuildResult, WalDurability,
 };
@@ -143,6 +142,7 @@ pub fn run_query_effect_index_context(
 /// result type derives `Serialize`, so this is a programming error and
 /// never occurs on valid input.
 pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError> {
+    let command = &COMMAND_REBUILD_EFFECT_INDEX;
     let mut input = RebuildEffectIndexInput::default();
     let mut allow_bootstrap_core = false;
     let mut json = false;
@@ -152,37 +152,42 @@ pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError
         match args[index].as_str() {
             "--root" => {
                 index += 1;
-                input.root = next_path_or_err(args, index)?;
+                input.root = next_effect_index_path_or_err(args, index, command)?;
             }
             "--wal" => {
                 index += 1;
-                input.wal_relative_path = next_arg_or_err(args, index)?.to_string();
+                input.wal_relative_path =
+                    next_effect_index_arg_or_err(args, index, command)?.to_string();
             }
             "--index" => {
                 index += 1;
-                input.index_relative_path = next_arg_or_err(args, index)?.to_string();
+                input.index_relative_path =
+                    next_effect_index_arg_or_err(args, index, command)?.to_string();
             }
             "--lock" => {
                 index += 1;
-                input.lock_relative_path = next_arg_or_err(args, index)?.to_string();
+                input.lock_relative_path =
+                    next_effect_index_arg_or_err(args, index, command)?.to_string();
             }
             "--allow-bootstrap-core" => {
                 allow_bootstrap_core = true;
             }
             "--recorded-at" => {
                 index += 1;
-                input.recorded_at = Some(next_arg_or_err(args, index)?.to_string());
+                input.recorded_at =
+                    Some(next_effect_index_arg_or_err(args, index, command)?.to_string());
             }
             "--no-sync" => {
                 no_sync = true;
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", effect_index_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(effect_index_usage(command)));
             }
         }
         index += 1;
@@ -231,6 +236,7 @@ pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError
 /// helper reports a missing/malformed argument, `ExitError::failed` when
 /// project resolution or the underlying query reports a failure.
 pub fn run_query_effect_index_command(args: &[String]) -> Result<(), ExitError> {
+    let command = &COMMAND_QUERY_EFFECT_INDEX;
     let mut input = QueryEffectIndexInput::default();
     let mut allow_bootstrap_core = false;
     let mut json = false;
@@ -240,32 +246,41 @@ pub fn run_query_effect_index_command(args: &[String]) -> Result<(), ExitError> 
         match args[index].as_str() {
             "--root" => {
                 index += 1;
-                input.root = next_path_or_err(args, index)?;
+                input.root = next_effect_index_path_or_err(args, index, command)?;
             }
             "--index" => {
                 index += 1;
-                input.index_relative_path = next_arg_or_err(args, index)?.to_string();
+                input.index_relative_path =
+                    next_effect_index_arg_or_err(args, index, command)?.to_string();
             }
             "--logical-ref" => {
                 index += 1;
-                input.logical_ref = Some(next_arg_or_err(args, index)?.to_string());
+                input.logical_ref =
+                    Some(next_effect_index_arg_or_err(args, index, command)?.to_string());
             }
             "--effect-id" => {
                 index += 1;
-                input.effect_id = Some(next_arg_or_err(args, index)?.to_string());
+                input.effect_id =
+                    Some(next_effect_index_arg_or_err(args, index, command)?.to_string());
             }
             "--operation-id" => {
                 index += 1;
-                input.operation_id = Some(next_arg_or_err(args, index)?.to_string());
+                input.operation_id =
+                    Some(next_effect_index_arg_or_err(args, index, command)?.to_string());
             }
             "--target-kind" => {
                 index += 1;
-                input.target_kind = Some(parse_target_kind_or_err(next_arg_or_err(args, index)?)?);
+                input.target_kind = Some(parse_effect_target_kind_or_err(
+                    next_effect_index_arg_or_err(args, index, command)?,
+                    command,
+                )?);
             }
             "--consumer-use" => {
                 index += 1;
-                input.consumer_use =
-                    parse_metadata_consumer_use_or_err(next_arg_or_err(args, index)?)?;
+                input.consumer_use = parse_effect_metadata_consumer_use_or_err(
+                    next_effect_index_arg_or_err(args, index, command)?,
+                    command,
+                )?;
             }
             "--context" => context = true,
             "--allow-bootstrap-core" => {
@@ -273,27 +288,35 @@ pub fn run_query_effect_index_command(args: &[String]) -> Result<(), ExitError> 
             }
             "--max-context-groups" => {
                 index += 1;
-                input.context_options.max_groups =
-                    parse_usize_or_err(next_arg_or_err(args, index)?)?;
+                input.context_options.max_groups = parse_effect_index_usize_or_err(
+                    next_effect_index_arg_or_err(args, index, command)?,
+                    command,
+                )?;
             }
             "--adapter-kind" => {
                 index += 1;
-                input.context_options.adapter_kind =
-                    Some(parse_runtime_kind_or_err(next_arg_or_err(args, index)?)?);
+                input.context_options.adapter_kind = Some(parse_effect_index_runtime_kind_or_err(
+                    next_effect_index_arg_or_err(args, index, command)?,
+                    command,
+                )?);
             }
             "--adapter-trigger" => {
                 index += 1;
                 input.context_options.adapter_trigger =
-                    parse_metadata_adapter_trigger_or_err(next_arg_or_err(args, index)?)?;
+                    parse_effect_metadata_adapter_trigger_or_err(
+                        next_effect_index_arg_or_err(args, index, command)?,
+                        command,
+                    )?;
             }
             "--latest" => input.latest_per_target = true,
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", effect_index_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(effect_index_usage(command)));
             }
         }
         index += 1;
@@ -303,6 +326,96 @@ pub fn run_query_effect_index_command(args: &[String]) -> Result<(), ExitError> 
         resolve_stateful_roots_or_err("query-effect-index", &input.root, allow_bootstrap_core)?;
     input.root = roots.effect_store_root;
     emit_query_effect_index_result(input, context, json)
+}
+
+#[must_use]
+fn effect_index_usage(command: &CommandSpec) -> String {
+    command_surface_usage(command)
+}
+
+fn next_effect_index_arg_or_err<'a>(
+    args: &'a [String],
+    index: usize,
+    command: &CommandSpec,
+) -> Result<&'a str, ExitError> {
+    args.get(index)
+        .map(String::as_str)
+        .ok_or_else(|| ExitError::usage(effect_index_usage(command)))
+}
+
+fn next_effect_index_path_or_err(
+    args: &[String],
+    index: usize,
+    command: &CommandSpec,
+) -> Result<PathBuf, ExitError> {
+    Ok(PathBuf::from(next_effect_index_arg_or_err(
+        args, index, command,
+    )?))
+}
+
+fn parse_effect_index_usize_or_err(value: &str, command: &CommandSpec) -> Result<usize, ExitError> {
+    value
+        .parse::<usize>()
+        .map_err(|_| ExitError::usage(effect_index_usage(command)))
+}
+
+fn parse_effect_target_kind_or_err(
+    value: &str,
+    command: &CommandSpec,
+) -> Result<EffectTargetKind, ExitError> {
+    match value {
+        "file_path" => Ok(EffectTargetKind::FilePath),
+        "glob" => Ok(EffectTargetKind::Glob),
+        "state_key" => Ok(EffectTargetKind::StateKey),
+        "artifact_id" => Ok(EffectTargetKind::ArtifactId),
+        "evidence_id" => Ok(EffectTargetKind::EvidenceId),
+        "ledger_stream" => Ok(EffectTargetKind::LedgerStream),
+        "request_stream" => Ok(EffectTargetKind::RequestStream),
+        "completion_id" => Ok(EffectTargetKind::CompletionId),
+        _ => Err(ExitError::usage(effect_index_usage(command))),
+    }
+}
+
+fn parse_effect_index_runtime_kind_or_err(
+    value: &str,
+    command: &CommandSpec,
+) -> Result<RuntimeKind, ExitError> {
+    match value {
+        "codex" => Ok(RuntimeKind::Codex),
+        "cursor" => Ok(RuntimeKind::Cursor),
+        "claude" => Ok(RuntimeKind::Claude),
+        "opencode" => Ok(RuntimeKind::Opencode),
+        "vscode" => Ok(RuntimeKind::Vscode),
+        "pidev" => Ok(RuntimeKind::Pidev),
+        "forge_standalone" => Ok(RuntimeKind::ForgeStandalone),
+        "custom" => Ok(RuntimeKind::Custom),
+        _ => Err(ExitError::usage(effect_index_usage(command))),
+    }
+}
+
+fn parse_effect_metadata_consumer_use_or_err(
+    value: &str,
+    command: &CommandSpec,
+) -> Result<EffectMetadataConsumerUse, ExitError> {
+    match value {
+        "discovery" => Ok(EffectMetadataConsumerUse::Discovery),
+        "diagnostics" => Ok(EffectMetadataConsumerUse::Diagnostics),
+        "handoff_context" => Ok(EffectMetadataConsumerUse::HandoffContext),
+        _ => Err(ExitError::usage(effect_index_usage(command))),
+    }
+}
+
+fn parse_effect_metadata_adapter_trigger_or_err(
+    value: &str,
+    command: &CommandSpec,
+) -> Result<EffectMetadataAdapterTrigger, ExitError> {
+    match value {
+        "evidence_discovery" => Ok(EffectMetadataAdapterTrigger::EvidenceDiscovery),
+        "diagnostics" => Ok(EffectMetadataAdapterTrigger::Diagnostics),
+        "handoff_preparation" => Ok(EffectMetadataAdapterTrigger::HandoffPreparation),
+        "manual_inspection" => Ok(EffectMetadataAdapterTrigger::ManualInspection),
+        _ => Err(ExitError::usage(effect_index_usage(command))),
+    }
 }
 
 /// Executes the resolved query (plain or context mode) and prints the
@@ -362,4 +475,69 @@ pub fn emit_query_effect_index_result(
         return Err(ExitError::failed("effect index query failed"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn effect_index_usage_projects_command_surface_lines() {
+        for command in [&COMMAND_REBUILD_EFFECT_INDEX, &COMMAND_QUERY_EFFECT_INDEX] {
+            let usage = effect_index_usage(command);
+            assert!(usage.starts_with("usage:\n"));
+            for line in command.usage_lines {
+                let projected = format!("  {}", line.trim_start());
+                assert!(
+                    usage.contains(&projected),
+                    "effect-index usage for {:?} should include projected Command Surface line {projected:?}: {usage}",
+                    command.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn explicit_no_json_is_accepted_by_effect_index_help_paths() {
+        run_rebuild_effect_index_command(&args(&["rebuild-effect-index", "--no-json", "--help"]))
+            .expect("rebuild-effect-index accepts explicit --no-json");
+        run_query_effect_index_command(&args(&["query-effect-index", "--no-json", "--help"]))
+            .expect("query-effect-index accepts explicit --no-json");
+    }
+
+    #[test]
+    fn rebuild_missing_value_reports_rebuild_usage() {
+        let error = run_rebuild_effect_index_command(&args(&["rebuild-effect-index", "--root"]))
+            .expect_err("missing root value must fail");
+        assert!(
+            error.message().contains("forge-core rebuild-effect-index"),
+            "missing rebuild value should report rebuild-specific usage: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core query-effect-index"),
+            "rebuild usage must not include sibling query usage: {error}"
+        );
+    }
+
+    #[test]
+    fn query_invalid_value_reports_query_usage() {
+        let error = run_query_effect_index_command(&args(&[
+            "query-effect-index",
+            "--target-kind",
+            "not-a-target-kind",
+        ]))
+        .expect_err("invalid target kind must fail");
+        assert!(
+            error.message().contains("forge-core query-effect-index"),
+            "invalid query value should report query-specific usage: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core rebuild-effect-index"),
+            "query usage must not include sibling rebuild usage: {error}"
+        );
+    }
 }

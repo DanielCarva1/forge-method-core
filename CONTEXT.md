@@ -354,7 +354,8 @@ MCP adapter projects allowlist defaults and tool descriptors from it, and
 `docs/generated/command-surface.md` is generated from it. The `start`, `project`,
 `guide`, `mcp`, `claim`, `autonomy`, `contract`, `isolation`, `research`,
 `preflight`, `preview`, `ready`, `explain`, `graph`, `eval`, `eval-harness`,
-`telemetry`, `cost`, `risk-audit`, `memory`, `governance`, `coordination`, and
+`telemetry`, `cost`, `risk-audit`, `memory`, `governance`, `coordination`,
+`execute-operation`, `rebuild-effect-index`, `query-effect-index`, and
 host-adapter policy/admission/projection/manifest/verification CLI help paths
 project their usage lines from the same seam.
 Command-tree help and

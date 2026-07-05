@@ -622,6 +622,25 @@ from the M1 read-only command family:
   lines and proves the unknown `explain` flag no longer falls back to unrelated
   global or sibling-command usage.
 
+## Thirty-fourth hardening changeset evidence
+
+The thirty-fourth implementation slice removes the next shallow help adapter
+from the effect-target metadata index command family:
+
+- `rebuild-effect-index` and `query-effect-index` help now render
+  command-specific usage from the shared Command Surface instead of falling
+  back to the global CLI usage table.
+- Missing-value, unknown-argument, and invalid-value usage errors in the
+  effect-index parser now report the relevant command surface, preserving
+  locality for the mutating rebuild adapter and the MCP default read-only query
+  adapter.
+- Both commands now accept explicit `--no-json` as the text-mode counterpart to
+  `--json`, matching the generated Command Surface `[--json|--no-json]`
+  contract.
+- Unit coverage locks both commands to their projected Command Surface lines
+  and proves sibling command usage does not leak into command-specific error
+  messages.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
