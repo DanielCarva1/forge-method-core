@@ -289,7 +289,7 @@ pub const COMMAND_GOVERNANCE: CommandSpec = CommandSpec {
 
 pub const COMMAND_COORDINATION: CommandSpec = CommandSpec {
     name: "coordination",
-    usage_lines:     &["       forge-core coordination [--root <path>] [--allow-bootstrap-core] [--json|--no-json]"],
+    usage_lines:     &["       forge-core coordination validate [--suite <path>] [--repo-root <path>] [--json|--no-json]"],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::AllowlistOnly,
@@ -762,6 +762,12 @@ mod tests {
         );
         assert_eq!(
             COMMAND_CONTRACT
+                .concrete_subcommand_names()
+                .collect::<Vec<_>>(),
+            vec!["validate"]
+        );
+        assert_eq!(
+            COMMAND_COORDINATION
                 .concrete_subcommand_names()
                 .collect::<Vec<_>>(),
             vec!["validate"]

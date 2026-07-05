@@ -13,6 +13,7 @@
 //! `score_router`): the host supplies outcomes (file-backed, DC10) and the
 //! engine is the deterministic gate. A future MCP surface (slice 6) exposes it.
 
+use forge_core_command_surface::COMMAND_COORDINATION;
 use forge_core_contracts::coordination_eval::CoordinationEvalContractDocument;
 use forge_core_contracts::{CliEnvelope, ExitReason};
 use forge_core_decisions::{coordination_fixture_gaps, validate_coordination_contract};
@@ -165,6 +166,7 @@ pub fn dispatch(args: &[String]) -> Result<(), ExitError> {
                         };
                         repo_root = PathBuf::from(val);
                     }
+                    "--json" => want_json = true,
                     "--no-json" => want_json = false,
                     "--help" | "-h" => {
                         print_validate_help();
@@ -183,8 +185,7 @@ pub fn dispatch(args: &[String]) -> Result<(), ExitError> {
             crate::cli_util::emit_envelope_with(env, want_json, Some(&report))
         }
         "--help" | "-h" | "help" | "" => {
-            println!("forge-core coordination <subcommand> [options]");
-            println!("  validate --suite <path> [--repo-root <path>] [--no-json]");
+            println!("{}", coordination_usage());
             println!();
             println!("    Loads + structurally validates a coordination-eval suite and reports");
             println!("    dangling fixture/evidence refs. Exit 0 = suite is REAL (all refs");
@@ -192,14 +193,40 @@ pub fn dispatch(args: &[String]) -> Result<(), ExitError> {
             Ok(())
         }
         other => {
-            eprintln!("forge-core coordination: unknown subcommand '{other}'. Try: validate");
+            eprintln!(
+                "forge-core coordination: unknown subcommand '{other}'. Try: {hint}",
+                hint = coordination_subcommand_hint()
+            );
             Err(ExitError::with_code(2, String::new()))
         }
     }
 }
 
+fn coordination_usage() -> String {
+    let mut usage = String::from("forge-core coordination <subcommand> [options]");
+    for line in COMMAND_COORDINATION.local_usage_lines() {
+        usage.push('\n');
+        usage.push_str("  ");
+        usage.push_str(line);
+    }
+    usage
+}
+
+fn coordination_subcommand_hint() -> String {
+    COMMAND_COORDINATION.concrete_subcommand_hint()
+}
+
+fn coordination_command_surface_usage_line_for(subcommand: &str) -> &'static str {
+    COMMAND_COORDINATION
+        .usage_line_for_subcommand(subcommand)
+        .unwrap_or("forge-core coordination <subcommand> [options]")
+}
+
 fn print_validate_help() {
-    println!("forge-core coordination validate --suite <path> [--repo-root <path>] [--no-json]");
+    println!(
+        "{}",
+        coordination_command_surface_usage_line_for("validate")
+    );
 }
 
 /// Build the multi-line text-mode success report for `coordination validate`.
@@ -332,6 +359,46 @@ mod tests {
         let args: Vec<String> = vec!["coordination".into(), "bogus".into()];
         let result = dispatch(&args);
         assert_eq!(exit_of(result), 2);
+    }
+
+    #[test]
+    fn coordination_usage_projects_command_surface_lines() {
+        let usage = coordination_usage();
+        assert!(
+            usage.starts_with("forge-core coordination <subcommand> [options]"),
+            "coordination usage should keep the local command-tree header: {usage}"
+        );
+        for line in COMMAND_COORDINATION.usage_lines {
+            let subcommand_usage = COMMAND_COORDINATION.local_usage_line(line);
+            assert!(
+                usage.contains(subcommand_usage),
+                "coordination usage should include projected Command Surface line {subcommand_usage:?}: {usage}"
+            );
+        }
+        assert_eq!(coordination_subcommand_hint(), "validate");
+    }
+
+    #[test]
+    fn coordination_subcommand_help_lookup_projects_full_command_surface_lines() {
+        assert_eq!(
+            coordination_command_surface_usage_line_for("validate"),
+            COMMAND_COORDINATION.canonical_usage().trim_start()
+        );
+    }
+
+    #[test]
+    fn dispatch_validate_accepts_explicit_json_flag() {
+        let args: Vec<String> = vec![
+            "coordination".into(),
+            "validate".into(),
+            "--suite".into(),
+            real_suite().to_string_lossy().into_owned(),
+            "--repo-root".into(),
+            repo_root().to_string_lossy().into_owned(),
+            "--json".into(),
+        ];
+        let result = dispatch(&args);
+        assert_eq!(exit_of(result), 0);
     }
 
     #[test]

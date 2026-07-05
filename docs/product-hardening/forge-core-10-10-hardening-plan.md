@@ -287,6 +287,25 @@ adapter to the Command Surface:
   lines, full subcommand usage lookup, and concrete child-name extraction to
   the shared `CommandSpec` projection interface.
 
+## Sixteenth hardening changeset evidence
+
+The sixteenth implementation slice reconciles the `coordination` command with
+the Command Surface:
+
+- `COMMAND_COORDINATION` now advertises the real handler surface,
+  `forge-core coordination validate [--suite <path>] [--repo-root <path>] [--json|--no-json]`,
+  instead of stale top-level `--root` / `--allow-bootstrap-core` flags that the
+  coordination suite validator does not parse.
+- `coordination --help`, `coordination validate --help`, and
+  unknown-subcommand hints now project from `COMMAND_COORDINATION` through the
+  shared `CommandSpec` projection interface.
+- `coordination validate` now accepts explicit `--json` as the no-op
+  counterpart to `--no-json`, matching the advertised JSON/text selection
+  contract.
+- Unit tests lock the local command-tree header, projected usage line, compact
+  `validate` hint, full subcommand usage lookup, and explicit `--json` parsing
+  to the Command Surface.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
