@@ -541,6 +541,26 @@ host-adapter policy/admission/projection/manifest adapter:
   `CommandSpec::usage_lines` entry and assert command-specific usage on
   required-input and unknown-flag errors.
 
+## Thirtieth hardening changeset evidence
+
+The thirtieth implementation slice deepens the Command Surface seam for the
+host-adapter verification adapter:
+
+- `host_adapter_verify_cmd.rs` now renders command-specific usage from the
+  corresponding `COMMAND_HOST_ADAPTER_VERIFY_*` `CommandSpec` instead of
+  falling back to global `forge-core --help` output.
+- All host-adapter verification help paths now use the reusable
+  `cli_util::command_surface_usage(&CommandSpec)` projection helper, keeping
+  the command meaning in `forge-core-command-surface` and the verification
+  adapter as a thin parser/executor.
+- The same adapter now accepts explicit `--no-json` wherever the Command
+  Surface advertises `[--json|--no-json]`, and numeric parse errors report the
+  command-specific usage rather than the global command list.
+- Unit tests lock every host-adapter verification command to its projected
+  `CommandSpec::usage_lines`, assert command-specific required-input errors,
+  assert command-specific numeric parse errors, and prove explicit `--no-json`
+  reaches artifact verification instead of being treated as a usage error.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

@@ -9,7 +9,7 @@
 //! (see `docs/dev-docs/forge-method-core-dev-docs-v2/09_system_design_roadmap.md`).
 
 use crate::cli_error::ExitError;
-use crate::cli_util::{next_arg_or_err, parse_i64_or_err, usage};
+use crate::cli_util::command_surface_usage;
 use crate::{
     run_host_adapter_artifact_verification, run_host_adapter_certificate_crl_status_verification,
     run_host_adapter_certificate_ocsp_status_verification,
@@ -44,7 +44,47 @@ use crate::{
     HostAdapterTufTrustedRootFreshnessVerificationInput,
     HostAdapterTufTrustedRootFreshnessVerificationStatus, OcspNonceHex,
 };
+use forge_core_command_surface::{
+    CommandSpec, COMMAND_HOST_ADAPTER_VERIFY_ARTIFACT,
+    COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_CRL_STATUS,
+    COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_OCSP_STATUS,
+    COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_REVOCATION_POLICY,
+    COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_TRANSPARENCY_SCT,
+    COMMAND_HOST_ADAPTER_VERIFY_FULCIO_CERTIFICATE_IDENTITY,
+    COMMAND_HOST_ADAPTER_VERIFY_PROVENANCE, COMMAND_HOST_ADAPTER_VERIFY_REKOR_ENTRY,
+    COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_BUNDLE_SUBJECT,
+    COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_DSSE_IN_TOTO_SUBJECT,
+    COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_TIMESTAMP_AUTHORITY,
+    COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_TRUST_POLICY,
+    COMMAND_HOST_ADAPTER_VERIFY_TUF_TRUSTED_ROOT_FRESHNESS,
+};
 use std::path::PathBuf;
+
+fn host_adapter_verify_usage(command: &CommandSpec) -> String {
+    command_surface_usage(command)
+}
+
+fn next_arg_or_verify_usage<'a>(
+    args: &'a [String],
+    index: usize,
+    command: &CommandSpec,
+) -> Result<&'a str, ExitError> {
+    args.get(index)
+        .map(String::as_str)
+        .ok_or_else(|| ExitError::usage(host_adapter_verify_usage(command)))
+}
+
+fn parse_i64_or_verify_usage(value: &str, command: &CommandSpec) -> Result<i64, ExitError> {
+    value
+        .parse::<i64>()
+        .map_err(|_| ExitError::usage(host_adapter_verify_usage(command)))
+}
+
+fn parse_u64_or_verify_usage(value: &str, command: &CommandSpec) -> Result<u64, ExitError> {
+    value
+        .parse::<u64>()
+        .map_err(|_| ExitError::usage(host_adapter_verify_usage(command)))
+}
 
 /// Runs the `host-adapter-verify-artifact` command.
 ///
@@ -60,6 +100,7 @@ use std::path::PathBuf;
 /// result type derives `Serialize`, so this is a programming error and
 /// never occurs on valid input.
 pub fn run_host_adapter_verify_artifact_command(args: &[String]) -> Result<(), ExitError> {
+    let command = &COMMAND_HOST_ADAPTER_VERIFY_ARTIFACT;
     let mut artifact_path: Option<PathBuf> = None;
     let mut expected_sha256: Option<String> = None;
     let mut signature_ref = None;
@@ -75,54 +116,59 @@ pub fn run_host_adapter_verify_artifact_command(args: &[String]) -> Result<(), E
         match args[index].as_str() {
             "--artifact-path" => {
                 index += 1;
-                artifact_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                artifact_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--sha256" => {
                 index += 1;
-                expected_sha256 = Some(next_arg_or_err(args, index)?.to_string());
+                expected_sha256 = Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--signature-ref" => {
                 index += 1;
-                signature_ref = Some(next_arg_or_err(args, index)?.to_string());
+                signature_ref = Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--provenance-ref" => {
                 index += 1;
-                provenance_ref = Some(next_arg_or_err(args, index)?.to_string());
+                provenance_ref = Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--source-ref" => {
                 index += 1;
-                source_ref = Some(next_arg_or_err(args, index)?.to_string());
+                source_ref = Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--version" => {
                 index += 1;
-                version = Some(next_arg_or_err(args, index)?.to_string());
+                version = Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--compatible-core-version" => {
                 index += 1;
-                compatible_core_version = Some(next_arg_or_err(args, index)?.to_string());
+                compatible_core_version =
+                    Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--rollback-ref" => {
                 index += 1;
-                rollback_ref = Some(next_arg_or_err(args, index)?.to_string());
+                rollback_ref = Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--update-summary-ref" => {
                 index += 1;
-                update_summary_ref = Some(next_arg_or_err(args, index)?.to_string());
+                update_summary_ref =
+                    Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", host_adapter_verify_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(host_adapter_verify_usage(command)));
             }
         }
         index += 1;
     }
 
     let (Some(artifact_path), Some(expected_sha256)) = (artifact_path, expected_sha256) else {
-        return Err(ExitError::usage(usage()));
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
     };
     let verification =
         run_host_adapter_artifact_verification(HostAdapterArtifactVerificationInput {
@@ -168,6 +214,7 @@ pub fn run_host_adapter_verify_artifact_command(args: &[String]) -> Result<(), E
 /// result type derives `Serialize`, so this is a programming error and
 /// never occurs on valid input.
 pub fn run_host_adapter_verify_provenance_command(args: &[String]) -> Result<(), ExitError> {
+    let command = &COMMAND_HOST_ADAPTER_VERIFY_PROVENANCE;
     let mut artifact_path: Option<PathBuf> = None;
     let mut provenance_path: Option<PathBuf> = None;
     let mut signature_path: Option<PathBuf> = None;
@@ -183,47 +230,61 @@ pub fn run_host_adapter_verify_provenance_command(args: &[String]) -> Result<(),
         match args[index].as_str() {
             "--artifact-path" => {
                 index += 1;
-                artifact_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                artifact_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--provenance-path" => {
                 index += 1;
-                provenance_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                provenance_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--signature-path" => {
                 index += 1;
-                signature_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                signature_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--public-key-path" => {
                 index += 1;
-                public_key_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                public_key_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--transparency-log-path" => {
                 index += 1;
-                transparency_log_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                transparency_log_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--sha256" => {
                 index += 1;
-                expected_sha256 = Some(next_arg_or_err(args, index)?.to_string());
+                expected_sha256 = Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--expected-builder-id" => {
                 index += 1;
-                expected_builder_id = Some(next_arg_or_err(args, index)?.to_string());
+                expected_builder_id =
+                    Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--expected-source-uri" => {
                 index += 1;
-                expected_source_uri = Some(next_arg_or_err(args, index)?.to_string());
+                expected_source_uri =
+                    Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--expected-source-ref" => {
                 index += 1;
-                expected_source_ref = Some(next_arg_or_err(args, index)?.to_string());
+                expected_source_ref =
+                    Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", host_adapter_verify_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(host_adapter_verify_usage(command)));
             }
         }
         index += 1;
@@ -251,7 +312,7 @@ pub fn run_host_adapter_verify_provenance_command(args: &[String]) -> Result<(),
         expected_source_ref,
     )
     else {
-        return Err(ExitError::usage(usage()));
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
     };
 
     let verification =
@@ -298,6 +359,7 @@ pub fn run_host_adapter_verify_provenance_command(args: &[String]) -> Result<(),
 /// result type derives `Serialize`, so this is a programming error and
 /// never occurs on valid input.
 pub fn run_host_adapter_verify_rekor_entry_command(args: &[String]) -> Result<(), ExitError> {
+    let command = &COMMAND_HOST_ADAPTER_VERIFY_REKOR_ENTRY;
     let mut log_entry_path: Option<PathBuf> = None;
     let mut public_key_path: Option<PathBuf> = None;
     let mut expected_log_id: Option<String> = None;
@@ -307,23 +369,28 @@ pub fn run_host_adapter_verify_rekor_entry_command(args: &[String]) -> Result<()
         match args[index].as_str() {
             "--log-entry-path" => {
                 index += 1;
-                log_entry_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                log_entry_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--public-key-path" => {
                 index += 1;
-                public_key_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                public_key_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--expected-log-id" => {
                 index += 1;
-                expected_log_id = Some(next_arg_or_err(args, index)?.to_string());
+                expected_log_id = Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", host_adapter_verify_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(host_adapter_verify_usage(command)));
             }
         }
         index += 1;
@@ -332,7 +399,7 @@ pub fn run_host_adapter_verify_rekor_entry_command(args: &[String]) -> Result<()
     let (Some(log_entry_path), Some(public_key_path), Some(expected_log_id)) =
         (log_entry_path, public_key_path, expected_log_id)
     else {
-        return Err(ExitError::usage(usage()));
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
     };
 
     let verification = run_host_adapter_rekor_verification(HostAdapterRekorVerificationInput {
@@ -374,6 +441,7 @@ pub fn run_host_adapter_verify_rekor_entry_command(args: &[String]) -> Result<()
 pub fn run_host_adapter_verify_sigstore_trust_policy_command(
     args: &[String],
 ) -> Result<(), ExitError> {
+    let command = &COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_TRUST_POLICY;
     let mut policy_path: Option<PathBuf> = None;
     let mut json = false;
     let mut index = 1usize;
@@ -381,22 +449,25 @@ pub fn run_host_adapter_verify_sigstore_trust_policy_command(
         match args[index].as_str() {
             "--policy-path" => {
                 index += 1;
-                policy_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                policy_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", host_adapter_verify_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(host_adapter_verify_usage(command)));
             }
         }
         index += 1;
     }
 
     let Some(policy_path) = policy_path else {
-        return Err(ExitError::usage(usage()));
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
     };
 
     let verification = run_host_adapter_sigstore_trust_policy_verification(
@@ -436,6 +507,7 @@ pub fn run_host_adapter_verify_sigstore_trust_policy_command(
 pub fn run_host_adapter_verify_fulcio_certificate_identity_command(
     args: &[String],
 ) -> Result<(), ExitError> {
+    let command = &COMMAND_HOST_ADAPTER_VERIFY_FULCIO_CERTIFICATE_IDENTITY;
     let mut trust_policy_path: Option<PathBuf> = None;
     let mut certificate_path: Option<PathBuf> = None;
     let mut issuer_certificate_paths = Vec::new();
@@ -446,27 +518,37 @@ pub fn run_host_adapter_verify_fulcio_certificate_identity_command(
         match args[index].as_str() {
             "--trust-policy-path" => {
                 index += 1;
-                trust_policy_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                trust_policy_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--certificate-path" => {
                 index += 1;
-                certificate_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                certificate_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--issuer-certificate-path" => {
                 index += 1;
-                issuer_certificate_paths.push(PathBuf::from(next_arg_or_err(args, index)?));
+                issuer_certificate_paths.push(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--verification-time-unix" => {
                 index += 1;
-                verification_time_unix = Some(parse_i64_or_err(next_arg_or_err(args, index)?)?);
+                verification_time_unix = Some(parse_i64_or_verify_usage(
+                    next_arg_or_verify_usage(args, index, command)?,
+                    command,
+                )?);
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", host_adapter_verify_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(host_adapter_verify_usage(command)));
             }
         }
         index += 1;
@@ -475,7 +557,7 @@ pub fn run_host_adapter_verify_fulcio_certificate_identity_command(
     let (Some(trust_policy_path), Some(certificate_path), Some(verification_time_unix)) =
         (trust_policy_path, certificate_path, verification_time_unix)
     else {
-        return Err(ExitError::usage(usage()));
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
     };
 
     let verification = run_host_adapter_fulcio_certificate_identity_verification(
@@ -520,6 +602,7 @@ pub fn run_host_adapter_verify_fulcio_certificate_identity_command(
 pub fn run_host_adapter_verify_sigstore_bundle_subject_command(
     args: &[String],
 ) -> Result<(), ExitError> {
+    let command = &COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_BUNDLE_SUBJECT;
     let mut bundle_path: Option<PathBuf> = None;
     let mut artifact_path: Option<PathBuf> = None;
     let mut trust_policy_path: Option<PathBuf> = None;
@@ -534,43 +617,59 @@ pub fn run_host_adapter_verify_sigstore_bundle_subject_command(
         match args[index].as_str() {
             "--bundle-path" => {
                 index += 1;
-                bundle_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                bundle_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--artifact-path" => {
                 index += 1;
-                artifact_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                artifact_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--trust-policy-path" => {
                 index += 1;
-                trust_policy_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                trust_policy_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--certificate-path" => {
                 index += 1;
-                certificate_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                certificate_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--issuer-certificate-path" => {
                 index += 1;
-                issuer_certificate_paths.push(PathBuf::from(next_arg_or_err(args, index)?));
+                issuer_certificate_paths.push(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--rekor-log-entry-path" => {
                 index += 1;
-                rekor_log_entry_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                rekor_log_entry_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--rekor-public-key-path" => {
                 index += 1;
-                rekor_public_key_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                rekor_public_key_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--expected-rekor-log-id" => {
                 index += 1;
-                expected_rekor_log_id = Some(next_arg_or_err(args, index)?.to_string());
+                expected_rekor_log_id =
+                    Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", host_adapter_verify_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(host_adapter_verify_usage(command)));
             }
         }
         index += 1;
@@ -594,7 +693,7 @@ pub fn run_host_adapter_verify_sigstore_bundle_subject_command(
         expected_rekor_log_id,
     )
     else {
-        return Err(ExitError::usage(usage()));
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
     };
 
     let verification = run_host_adapter_sigstore_bundle_subject_verification(
@@ -643,6 +742,7 @@ pub fn run_host_adapter_verify_sigstore_bundle_subject_command(
 pub fn run_host_adapter_verify_sigstore_dsse_in_toto_subject_command(
     args: &[String],
 ) -> Result<(), ExitError> {
+    let command = &COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_DSSE_IN_TOTO_SUBJECT;
     let mut bundle_path: Option<PathBuf> = None;
     let mut artifact_path: Option<PathBuf> = None;
     let mut trust_policy_path: Option<PathBuf> = None;
@@ -658,47 +758,64 @@ pub fn run_host_adapter_verify_sigstore_dsse_in_toto_subject_command(
         match args[index].as_str() {
             "--bundle-path" => {
                 index += 1;
-                bundle_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                bundle_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--artifact-path" => {
                 index += 1;
-                artifact_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                artifact_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--trust-policy-path" => {
                 index += 1;
-                trust_policy_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                trust_policy_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--certificate-path" => {
                 index += 1;
-                certificate_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                certificate_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--issuer-certificate-path" => {
                 index += 1;
-                issuer_certificate_paths.push(PathBuf::from(next_arg_or_err(args, index)?));
+                issuer_certificate_paths.push(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--rekor-log-entry-path" => {
                 index += 1;
-                rekor_log_entry_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                rekor_log_entry_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--rekor-public-key-path" => {
                 index += 1;
-                rekor_public_key_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                rekor_public_key_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--expected-rekor-log-id" => {
                 index += 1;
-                expected_rekor_log_id = Some(next_arg_or_err(args, index)?.to_string());
+                expected_rekor_log_id =
+                    Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--expected-predicate-type" => {
                 index += 1;
-                expected_predicate_type = Some(next_arg_or_err(args, index)?.to_string());
+                expected_predicate_type =
+                    Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", host_adapter_verify_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(host_adapter_verify_usage(command)));
             }
         }
         index += 1;
@@ -722,7 +839,7 @@ pub fn run_host_adapter_verify_sigstore_dsse_in_toto_subject_command(
         expected_rekor_log_id,
     )
     else {
-        return Err(ExitError::usage(usage()));
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
     };
 
     let verification = run_host_adapter_sigstore_dsse_in_toto_subject_verification(
@@ -772,6 +889,7 @@ pub fn run_host_adapter_verify_sigstore_dsse_in_toto_subject_command(
 pub fn run_host_adapter_verify_sigstore_timestamp_authority_command(
     args: &[String],
 ) -> Result<(), ExitError> {
+    let command = &COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_TIMESTAMP_AUTHORITY;
     let mut trust_policy_path: Option<PathBuf> = None;
     let mut certificate_path: Option<PathBuf> = None;
     let mut rekor_log_entry_path: Option<PathBuf> = None;
@@ -785,40 +903,53 @@ pub fn run_host_adapter_verify_sigstore_timestamp_authority_command(
         match args[index].as_str() {
             "--trust-policy-path" => {
                 index += 1;
-                trust_policy_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                trust_policy_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--certificate-path" => {
                 index += 1;
-                certificate_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                certificate_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--rekor-log-entry-path" => {
                 index += 1;
-                rekor_log_entry_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                rekor_log_entry_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--rekor-public-key-path" => {
                 index += 1;
-                rekor_public_key_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                rekor_public_key_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--expected-rekor-log-id" => {
                 index += 1;
-                expected_rekor_log_id = Some(next_arg_or_err(args, index)?.to_string());
+                expected_rekor_log_id =
+                    Some(next_arg_or_verify_usage(args, index, command)?.to_string());
             }
             "--rfc3161-timestamp-token-path" => {
                 index += 1;
-                rfc3161_timestamp_token_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                rfc3161_timestamp_token_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--rfc3161-timestamped-signature-path" => {
                 index += 1;
-                rfc3161_timestamped_signature_path =
-                    Some(PathBuf::from(next_arg_or_err(args, index)?));
+                rfc3161_timestamped_signature_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", host_adapter_verify_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(host_adapter_verify_usage(command)));
             }
         }
         index += 1;
@@ -826,7 +957,7 @@ pub fn run_host_adapter_verify_sigstore_timestamp_authority_command(
 
     let (Some(trust_policy_path), Some(certificate_path)) = (trust_policy_path, certificate_path)
     else {
-        return Err(ExitError::usage(usage()));
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
     };
 
     let verification = run_host_adapter_sigstore_timestamp_authority_verification(
@@ -874,6 +1005,7 @@ pub fn run_host_adapter_verify_sigstore_timestamp_authority_command(
 pub fn run_host_adapter_verify_certificate_transparency_sct_command(
     args: &[String],
 ) -> Result<(), ExitError> {
+    let command = &COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_TRANSPARENCY_SCT;
     let mut trust_policy_path: Option<PathBuf> = None;
     let mut certificate_path: Option<PathBuf> = None;
     let mut sct_paths: Vec<PathBuf> = Vec::new();
@@ -884,27 +1016,37 @@ pub fn run_host_adapter_verify_certificate_transparency_sct_command(
         match args[index].as_str() {
             "--trust-policy-path" => {
                 index += 1;
-                trust_policy_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                trust_policy_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--certificate-path" => {
                 index += 1;
-                certificate_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                certificate_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--sct-path" => {
                 index += 1;
-                sct_paths.push(PathBuf::from(next_arg_or_err(args, index)?));
+                sct_paths.push(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--verification-time-unix-ms" => {
                 index += 1;
-                verification_time_unix_ms = next_arg_or_err(args, index)?.parse::<u64>().ok();
+                verification_time_unix_ms = Some(parse_u64_or_verify_usage(
+                    next_arg_or_verify_usage(args, index, command)?,
+                    command,
+                )?);
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", host_adapter_verify_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(host_adapter_verify_usage(command)));
             }
         }
         index += 1;
@@ -915,7 +1057,7 @@ pub fn run_host_adapter_verify_certificate_transparency_sct_command(
         certificate_path,
         verification_time_unix_ms,
     ) else {
-        return Err(ExitError::usage(usage()));
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
     };
 
     let verification = run_host_adapter_certificate_transparency_sct_verification(
@@ -960,6 +1102,7 @@ pub fn run_host_adapter_verify_certificate_transparency_sct_command(
 pub fn run_host_adapter_verify_certificate_revocation_policy_command(
     args: &[String],
 ) -> Result<(), ExitError> {
+    let command = &COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_REVOCATION_POLICY;
     let mut trust_policy_path: Option<PathBuf> = None;
     let mut certificate_path: Option<PathBuf> = None;
     let mut trusted_signing_time_unix: Option<i64> = None;
@@ -969,23 +1112,31 @@ pub fn run_host_adapter_verify_certificate_revocation_policy_command(
         match args[index].as_str() {
             "--trust-policy-path" => {
                 index += 1;
-                trust_policy_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                trust_policy_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--certificate-path" => {
                 index += 1;
-                certificate_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                certificate_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--trusted-signing-time-unix" => {
                 index += 1;
-                trusted_signing_time_unix = Some(parse_i64_or_err(next_arg_or_err(args, index)?)?);
+                trusted_signing_time_unix = Some(parse_i64_or_verify_usage(
+                    next_arg_or_verify_usage(args, index, command)?,
+                    command,
+                )?);
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", host_adapter_verify_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(host_adapter_verify_usage(command)));
             }
         }
         index += 1;
@@ -996,7 +1147,7 @@ pub fn run_host_adapter_verify_certificate_revocation_policy_command(
         certificate_path,
         trusted_signing_time_unix,
     ) else {
-        return Err(ExitError::usage(usage()));
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
     };
 
     let verification = run_host_adapter_certificate_revocation_policy_verification(
@@ -1040,6 +1191,7 @@ pub fn run_host_adapter_verify_certificate_revocation_policy_command(
 pub fn run_host_adapter_verify_tuf_trusted_root_freshness_command(
     args: &[String],
 ) -> Result<(), ExitError> {
+    let command = &COMMAND_HOST_ADAPTER_VERIFY_TUF_TRUSTED_ROOT_FRESHNESS;
     let mut trust_policy_path: Option<PathBuf> = None;
     let mut root_metadata_path: Option<PathBuf> = None;
     let mut timestamp_metadata_path: Option<PathBuf> = None;
@@ -1056,51 +1208,77 @@ pub fn run_host_adapter_verify_tuf_trusted_root_freshness_command(
         match args[index].as_str() {
             "--trust-policy-path" => {
                 index += 1;
-                trust_policy_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                trust_policy_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--root-metadata-path" => {
                 index += 1;
-                root_metadata_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                root_metadata_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--timestamp-metadata-path" => {
                 index += 1;
-                timestamp_metadata_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                timestamp_metadata_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--snapshot-metadata-path" => {
                 index += 1;
-                snapshot_metadata_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                snapshot_metadata_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--targets-metadata-path" => {
                 index += 1;
-                targets_metadata_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                targets_metadata_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--update-start-time-unix" => {
                 index += 1;
-                update_start_time_unix = Some(parse_i64_or_err(next_arg_or_err(args, index)?)?);
+                update_start_time_unix = Some(parse_i64_or_verify_usage(
+                    next_arg_or_verify_usage(args, index, command)?,
+                    command,
+                )?);
             }
             "--min-root-version" => {
                 index += 1;
-                min_root_version = Some(parse_i64_or_err(next_arg_or_err(args, index)?)?);
+                min_root_version = Some(parse_i64_or_verify_usage(
+                    next_arg_or_verify_usage(args, index, command)?,
+                    command,
+                )?);
             }
             "--min-timestamp-version" => {
                 index += 1;
-                min_timestamp_version = Some(parse_i64_or_err(next_arg_or_err(args, index)?)?);
+                min_timestamp_version = Some(parse_i64_or_verify_usage(
+                    next_arg_or_verify_usage(args, index, command)?,
+                    command,
+                )?);
             }
             "--min-snapshot-version" => {
                 index += 1;
-                min_snapshot_version = Some(parse_i64_or_err(next_arg_or_err(args, index)?)?);
+                min_snapshot_version = Some(parse_i64_or_verify_usage(
+                    next_arg_or_verify_usage(args, index, command)?,
+                    command,
+                )?);
             }
             "--min-targets-version" => {
                 index += 1;
-                min_targets_version = Some(parse_i64_or_err(next_arg_or_err(args, index)?)?);
+                min_targets_version = Some(parse_i64_or_verify_usage(
+                    next_arg_or_verify_usage(args, index, command)?,
+                    command,
+                )?);
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", host_adapter_verify_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(host_adapter_verify_usage(command)));
             }
         }
         index += 1;
@@ -1111,7 +1289,7 @@ pub fn run_host_adapter_verify_tuf_trusted_root_freshness_command(
         root_metadata_path,
         update_start_time_unix,
     ) else {
-        return Err(ExitError::usage(usage()));
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
     };
 
     let verification = run_host_adapter_tuf_trusted_root_freshness_verification(
@@ -1162,6 +1340,7 @@ pub fn run_host_adapter_verify_tuf_trusted_root_freshness_command(
 pub fn run_host_adapter_verify_certificate_crl_status_command(
     args: &[String],
 ) -> Result<(), ExitError> {
+    let command = &COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_CRL_STATUS;
     let mut trust_policy_path: Option<PathBuf> = None;
     let mut certificate_path: Option<PathBuf> = None;
     let mut issuer_certificate_path: Option<PathBuf> = None;
@@ -1173,31 +1352,43 @@ pub fn run_host_adapter_verify_certificate_crl_status_command(
         match args[index].as_str() {
             "--trust-policy-path" => {
                 index += 1;
-                trust_policy_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                trust_policy_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--certificate-path" => {
                 index += 1;
-                certificate_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                certificate_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--issuer-certificate-path" => {
                 index += 1;
-                issuer_certificate_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                issuer_certificate_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--crl-path" => {
                 index += 1;
-                crl_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                crl_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--verification-time-unix" => {
                 index += 1;
-                verification_time_unix = Some(parse_i64_or_err(next_arg_or_err(args, index)?)?);
+                verification_time_unix = Some(parse_i64_or_verify_usage(
+                    next_arg_or_verify_usage(args, index, command)?,
+                    command,
+                )?);
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", host_adapter_verify_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(host_adapter_verify_usage(command)));
             }
         }
         index += 1;
@@ -1217,7 +1408,7 @@ pub fn run_host_adapter_verify_certificate_crl_status_command(
         verification_time_unix,
     )
     else {
-        return Err(ExitError::usage(usage()));
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
     };
 
     let verification = run_host_adapter_certificate_crl_status_verification(
@@ -1266,6 +1457,7 @@ pub fn run_host_adapter_verify_certificate_crl_status_command(
 pub fn run_host_adapter_verify_certificate_ocsp_status_command(
     args: &[String],
 ) -> Result<(), ExitError> {
+    let command = &COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_OCSP_STATUS;
     let mut trust_policy_path: Option<PathBuf> = None;
     let mut certificate_path: Option<PathBuf> = None;
     let mut issuer_certificate_path: Option<PathBuf> = None;
@@ -1278,35 +1470,49 @@ pub fn run_host_adapter_verify_certificate_ocsp_status_command(
         match args[index].as_str() {
             "--trust-policy-path" => {
                 index += 1;
-                trust_policy_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                trust_policy_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--certificate-path" => {
                 index += 1;
-                certificate_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                certificate_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--issuer-certificate-path" => {
                 index += 1;
-                issuer_certificate_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                issuer_certificate_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--ocsp-response-path" => {
                 index += 1;
-                ocsp_response_path = Some(PathBuf::from(next_arg_or_err(args, index)?));
+                ocsp_response_path = Some(PathBuf::from(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--verification-time-unix" => {
                 index += 1;
-                verification_time_unix = Some(parse_i64_or_err(next_arg_or_err(args, index)?)?);
+                verification_time_unix = Some(parse_i64_or_verify_usage(
+                    next_arg_or_verify_usage(args, index, command)?,
+                    command,
+                )?);
             }
             "--expected-nonce-hex" => {
                 index += 1;
-                expected_nonce_hex = Some(OcspNonceHex::new(next_arg_or_err(args, index)?));
+                expected_nonce_hex = Some(OcspNonceHex::new(next_arg_or_verify_usage(
+                    args, index, command,
+                )?));
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", host_adapter_verify_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(host_adapter_verify_usage(command)));
             }
         }
         index += 1;
@@ -1326,7 +1532,7 @@ pub fn run_host_adapter_verify_certificate_ocsp_status_command(
         verification_time_unix,
     )
     else {
-        return Err(ExitError::usage(usage()));
+        return Err(ExitError::usage(host_adapter_verify_usage(command)));
     };
 
     let verification = run_host_adapter_certificate_ocsp_status_verification(
@@ -1358,4 +1564,163 @@ pub fn run_host_adapter_verify_certificate_ocsp_status_command(
         return Err(ExitError::failed("verification failed"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type VerifyRunner = fn(&[String]) -> Result<(), ExitError>;
+
+    fn args(slice: &[&str]) -> Vec<String> {
+        slice.iter().map(std::string::ToString::to_string).collect()
+    }
+
+    fn verify_command_cases() -> [(&'static CommandSpec, VerifyRunner, &'static str); 13] {
+        [
+            (
+                &COMMAND_HOST_ADAPTER_VERIFY_ARTIFACT,
+                run_host_adapter_verify_artifact_command,
+                "host-adapter-verify-artifact",
+            ),
+            (
+                &COMMAND_HOST_ADAPTER_VERIFY_PROVENANCE,
+                run_host_adapter_verify_provenance_command,
+                "host-adapter-verify-provenance",
+            ),
+            (
+                &COMMAND_HOST_ADAPTER_VERIFY_REKOR_ENTRY,
+                run_host_adapter_verify_rekor_entry_command,
+                "host-adapter-verify-rekor-entry",
+            ),
+            (
+                &COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_TRUST_POLICY,
+                run_host_adapter_verify_sigstore_trust_policy_command,
+                "host-adapter-verify-sigstore-trust-policy",
+            ),
+            (
+                &COMMAND_HOST_ADAPTER_VERIFY_FULCIO_CERTIFICATE_IDENTITY,
+                run_host_adapter_verify_fulcio_certificate_identity_command,
+                "host-adapter-verify-fulcio-certificate-identity",
+            ),
+            (
+                &COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_BUNDLE_SUBJECT,
+                run_host_adapter_verify_sigstore_bundle_subject_command,
+                "host-adapter-verify-sigstore-bundle-subject",
+            ),
+            (
+                &COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_DSSE_IN_TOTO_SUBJECT,
+                run_host_adapter_verify_sigstore_dsse_in_toto_subject_command,
+                "host-adapter-verify-sigstore-dsse-in-toto-subject",
+            ),
+            (
+                &COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_TIMESTAMP_AUTHORITY,
+                run_host_adapter_verify_sigstore_timestamp_authority_command,
+                "host-adapter-verify-sigstore-timestamp-authority",
+            ),
+            (
+                &COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_TRANSPARENCY_SCT,
+                run_host_adapter_verify_certificate_transparency_sct_command,
+                "host-adapter-verify-certificate-transparency-sct",
+            ),
+            (
+                &COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_REVOCATION_POLICY,
+                run_host_adapter_verify_certificate_revocation_policy_command,
+                "host-adapter-verify-certificate-revocation-policy",
+            ),
+            (
+                &COMMAND_HOST_ADAPTER_VERIFY_TUF_TRUSTED_ROOT_FRESHNESS,
+                run_host_adapter_verify_tuf_trusted_root_freshness_command,
+                "host-adapter-verify-tuf-trusted-root-freshness",
+            ),
+            (
+                &COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_CRL_STATUS,
+                run_host_adapter_verify_certificate_crl_status_command,
+                "host-adapter-verify-certificate-crl-status",
+            ),
+            (
+                &COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_OCSP_STATUS,
+                run_host_adapter_verify_certificate_ocsp_status_command,
+                "host-adapter-verify-certificate-ocsp-status",
+            ),
+        ]
+    }
+
+    #[test]
+    fn host_adapter_verify_usage_projects_command_surface_lines() {
+        for (command, _, _) in verify_command_cases() {
+            let usage = host_adapter_verify_usage(command);
+            for line in command.usage_lines {
+                let canonical = line.trim_start();
+                assert!(
+                    usage.contains(canonical),
+                    "{} usage should include projected Command Surface line {canonical:?}: {usage}",
+                    command.name
+                );
+            }
+            assert!(
+                usage.contains("[--json|--no-json]"),
+                "{} usage should preserve the shared JSON/text contract: {usage}",
+                command.name
+            );
+        }
+    }
+
+    #[test]
+    fn missing_inputs_report_command_specific_verify_usage() {
+        for (command, runner, argv0) in verify_command_cases() {
+            let error = runner(&args(&[argv0, "--no-json"]))
+                .expect_err("missing required inputs should be usage");
+            assert_eq!(
+                error.message(),
+                host_adapter_verify_usage(command),
+                "{} should report its own Command Surface usage",
+                command.name
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_numeric_input_reports_command_specific_verify_usage() {
+        let error = run_host_adapter_verify_certificate_transparency_sct_command(&args(&[
+            "host-adapter-verify-certificate-transparency-sct",
+            "--trust-policy-path",
+            "policy.yaml",
+            "--certificate-path",
+            "cert.pem",
+            "--sct-path",
+            "sct.bin",
+            "--verification-time-unix-ms",
+            "not-a-number",
+            "--no-json",
+        ]))
+        .expect_err("invalid timestamp should be usage");
+        assert_eq!(
+            error.message(),
+            host_adapter_verify_usage(&COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_TRANSPARENCY_SCT)
+        );
+    }
+
+    #[test]
+    fn explicit_no_json_reaches_artifact_verification_instead_of_usage() {
+        let path = std::env::temp_dir().join(format!(
+            "forge-core-host-adapter-verify-artifact-{}.bin",
+            std::process::id()
+        ));
+        std::fs::write(&path, b"artifact").expect("write temp artifact");
+        let path_string = path.to_string_lossy().to_string();
+        let result = run_host_adapter_verify_artifact_command(&args(&[
+            "host-adapter-verify-artifact",
+            "--artifact-path",
+            &path_string,
+            "--sha256",
+            "not-a-real-sha256",
+            "--no-json",
+        ]));
+        let _ = std::fs::remove_file(&path);
+        assert!(
+            !matches!(result, Err(ExitError::Usage { .. })),
+            "explicit --no-json should parse and reach verification, got {result:?}"
+        );
+    }
 }

@@ -353,8 +353,8 @@ MCP adapter projects allowlist defaults and tool descriptors from it, and
 `guide`, `mcp`, `claim`, `autonomy`, `contract`, `isolation`, `research`,
 `preflight`, `graph`, `eval`, `eval-harness`, `telemetry`, `cost`,
 `risk-audit`, `memory`, `governance`, `coordination`, and host-adapter
-policy/admission/projection/manifest CLI help paths project their usage lines
-from the same seam.
+policy/admission/projection/manifest/verification CLI help paths project their
+usage lines from the same seam.
 Command-tree help and
 unknown-subcommand hints use `CommandSpec` projection helpers for local usage
 lines, concrete subcommand names, nested subcommand-path lookup, and full
