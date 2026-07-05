@@ -14,7 +14,7 @@
 //! awareness, symlinks, etc.) without touching the rule engine.
 
 use crate::cli_error::ExitError;
-use crate::cli_util::{resolve_now_unix, risk_audit_usage, usage};
+use crate::cli_util::{resolve_now_unix, risk_audit_usage};
 use forge_core_contracts::{CliEnvelope, ExitReason};
 use forge_core_store::append_trace_event;
 use forge_core_validate::risk_audit::{
@@ -114,14 +114,14 @@ pub fn run_risk_audit_command(args: &[String]) -> Result<(), ExitError> {
             "--root" => {
                 index += 1;
                 let Some(value) = args.get(index) else {
-                    return Err(ExitError::usage(usage()));
+                    return Err(ExitError::usage(risk_audit_usage()));
                 };
                 root = PathBuf::from(value);
             }
             "--rules" => {
                 index += 1;
                 let Some(value) = args.get(index) else {
-                    return Err(ExitError::usage(usage()));
+                    return Err(ExitError::usage(risk_audit_usage()));
                 };
                 rules_path = Some(PathBuf::from(value));
             }
@@ -131,7 +131,7 @@ pub fn run_risk_audit_command(args: &[String]) -> Result<(), ExitError> {
                 println!("{}", risk_audit_usage());
                 return Ok(());
             }
-            _ => return Err(ExitError::usage(usage())),
+            _ => return Err(ExitError::usage(risk_audit_usage())),
         }
         index += 1;
     }
@@ -416,5 +416,47 @@ mod tests {
 
         assert_eq!(error.exit_code(), 5);
         assert_eq!(error.message(), "risk-audit requires --rules <path>");
+    }
+
+    #[test]
+    fn missing_root_value_reports_risk_audit_usage() {
+        let error = run_risk_audit_command(&args(&["risk-audit", "--root"]))
+            .expect_err("missing root value must fail before audit execution");
+        assert!(
+            error.message().contains("forge-core risk-audit"),
+            "missing root should report risk-audit usage: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core validate"),
+            "risk-audit usage must not include unrelated command usage: {error}"
+        );
+    }
+
+    #[test]
+    fn missing_rules_value_reports_risk_audit_usage() {
+        let error = run_risk_audit_command(&args(&["risk-audit", "--rules"]))
+            .expect_err("missing rules value must fail before audit execution");
+        assert!(
+            error.message().contains("forge-core risk-audit"),
+            "missing rules should report risk-audit usage: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core execute-operation"),
+            "risk-audit usage must not include mutating sibling usage: {error}"
+        );
+    }
+
+    #[test]
+    fn unknown_arg_reports_risk_audit_usage() {
+        let error = run_risk_audit_command(&args(&["risk-audit", "--frobnicate"]))
+            .expect_err("unknown argument must fail before audit execution");
+        assert!(
+            error.message().contains("forge-core risk-audit"),
+            "unknown argument should report risk-audit usage: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core start"),
+            "risk-audit usage must not include unrelated global command usage: {error}"
+        );
     }
 }

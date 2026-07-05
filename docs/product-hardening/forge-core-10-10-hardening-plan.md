@@ -676,6 +676,21 @@ the repository validation surface:
   proves unrelated command usage does not leak into validation-path error
   messages.
 
+## Thirty-seventh hardening changeset evidence
+
+The thirty-seventh implementation slice closes the remaining shallow usage
+paths in the standalone risk-audit gate:
+
+- `risk-audit` already projected its help text from the shared Command Surface,
+  but missing `--root` values, missing `--rules` values, and unknown arguments
+  still fell back to the global CLI usage table.
+- The parser now reports `risk-audit` command-specific usage for those malformed
+  argv paths, matching the same single-source-of-truth pattern used by the
+  other Stage 4 parser adapters.
+- Unit coverage proves each malformed argv path reports the projected
+  `risk-audit` surface and does not leak unrelated command usage into the
+  standalone gate diagnostics.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
