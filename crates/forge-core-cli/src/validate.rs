@@ -9,7 +9,7 @@
 //! stable; refactors here are behavior-preserving.
 
 use crate::cli_error::ExitError;
-use crate::cli_util::usage;
+use crate::cli_util::command_surface_usage;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -17,6 +17,7 @@ use serde::Serialize;
 
 use tracing::instrument;
 
+use forge_core_command_surface::{CommandSpec, COMMAND_VALIDATE};
 use forge_core_contracts::{
     ClaimContractDocument, CommandContractDocument, CompletionContractDocument,
     ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
@@ -661,6 +662,11 @@ fn repo_relative(root: &Path, path: &Path) -> String {
         .to_string_lossy()
         .replace('\\', "/")
 }
+#[must_use]
+fn validate_usage(command: &CommandSpec) -> String {
+    command_surface_usage(command)
+}
+
 #[instrument(skip_all, fields(root = tracing::field::Empty, json = tracing::field::Empty, diagnostic_count = tracing::field::Empty), level = "info")]
 /// Dispatch entrypoint for the `forge-core validate` command.
 ///
@@ -678,6 +684,7 @@ fn repo_relative(root: &Path, path: &Path) -> String {
 /// summary type derives `Serialize`, so this is a programming error and
 /// never occurs on valid input.
 pub fn run_validate_command(args: &[String]) -> Result<(), ExitError> {
+    let command = &COMMAND_VALIDATE;
     let mut root = PathBuf::from(".");
     let mut json = false;
     let mut index = 1usize;
@@ -686,17 +693,18 @@ pub fn run_validate_command(args: &[String]) -> Result<(), ExitError> {
             "--root" => {
                 index += 1;
                 let Some(value) = args.get(index) else {
-                    return Err(ExitError::usage(usage()));
+                    return Err(ExitError::usage(validate_usage(command)));
                 };
                 root = PathBuf::from(value);
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{}", usage());
+                println!("{}", validate_usage(command));
                 return Ok(());
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(validate_usage(command)));
             }
         }
         index += 1;
@@ -740,4 +748,60 @@ pub fn run_validate_command(args: &[String]) -> Result<(), ExitError> {
         return Err(ExitError::failed("validation reported errors"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn validate_usage_projects_command_surface_line() {
+        let usage = validate_usage(&COMMAND_VALIDATE);
+        assert!(usage.starts_with("usage:\n"));
+        for line in COMMAND_VALIDATE.usage_lines {
+            let projected = format!("  {}", line.trim_start());
+            assert!(
+                usage.contains(&projected),
+                "validate usage should include projected Command Surface line {projected:?}: {usage}"
+            );
+        }
+    }
+
+    #[test]
+    fn explicit_no_json_is_accepted_by_validate_help_path() {
+        run_validate_command(&args(&["validate", "--no-json", "--help"]))
+            .expect("validate accepts explicit --no-json");
+    }
+
+    #[test]
+    fn missing_root_reports_validate_usage() {
+        let error = run_validate_command(&args(&["validate", "--root"]))
+            .expect_err("missing root value must fail before validation");
+        assert!(
+            error.message().contains("forge-core validate"),
+            "missing root should report validate usage: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core execute-operation"),
+            "validate usage must not include unrelated global commands: {error}"
+        );
+    }
+
+    #[test]
+    fn unknown_arg_reports_validate_usage() {
+        let error = run_validate_command(&args(&["validate", "--frobnicate"]))
+            .expect_err("unknown validate argument must fail before validation");
+        assert!(
+            error.message().contains("forge-core validate"),
+            "unknown argument should report validate usage: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core start"),
+            "validate usage must not include unrelated global commands: {error}"
+        );
+    }
 }

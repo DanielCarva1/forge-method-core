@@ -659,6 +659,23 @@ the main mutating operation surface:
   proves unrelated command usage does not leak into mutating-path error
   messages.
 
+## Thirty-sixth hardening changeset evidence
+
+The thirty-sixth implementation slice removes the shallow help adapter from
+the repository validation surface:
+
+- `validate` help renders command-specific usage from the shared Command
+  Surface instead of falling back to the global CLI usage table.
+- Missing `--root` values and unknown-argument usage errors report the
+  `validate` command surface, keeping the local acceptance gate easy to
+  diagnose without unrelated command noise.
+- `validate` accepts explicit `--no-json` as the text-mode counterpart to
+  `--json`, matching the generated Command Surface `[--json|--no-json]`
+  contract.
+- Unit coverage locks the command to its projected Command Surface line and
+  proves unrelated command usage does not leak into validation-path error
+  messages.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
