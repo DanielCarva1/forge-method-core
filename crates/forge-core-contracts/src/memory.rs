@@ -724,7 +724,7 @@ memory_contract:
     #[test]
     fn bridge_legacy_approved_maps_to_provisional() {
         // Approved is the only legacy rung that earns any authority — but only
-        // Provisional, never Authority (NFR: promote exige evidence).
+        // Provisional, never Authority (NFR: promote requires evidence).
         let e = entry("e", ApprovalState::Approved, "100");
         assert_eq!(e.authority_level_effective(), AuthorityLevel::Provisional);
     }
