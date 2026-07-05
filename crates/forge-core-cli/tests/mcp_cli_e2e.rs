@@ -14,6 +14,7 @@
 //! `command_registry::COMMANDS`. Mirrors the `memory_cli_e2e` structure.
 
 use assert_cmd::Command;
+use forge_core_command_surface::COMMAND_MCP;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -67,6 +68,10 @@ fn mcp_help_lists_serve_subcommand() {
     assert!(
         stdout.contains("serve"),
         "help must mention serve: {stdout}"
+    );
+    assert!(
+        stdout.contains(COMMAND_MCP.canonical_usage().trim_start()),
+        "help must project canonical Command Surface usage: {stdout}"
     );
     assert!(
         stdout.contains("--allowlist"),

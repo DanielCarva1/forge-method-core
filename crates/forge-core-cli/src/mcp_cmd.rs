@@ -18,7 +18,7 @@
 
 use std::path::PathBuf;
 
-use forge_core_command_surface::command_names;
+use forge_core_command_surface::{command_names, COMMAND_MCP};
 use forge_core_contracts::{CliEnvelope, ExitReason};
 use forge_core_protocol_mcp::{
     Allowlist, AttestationPolicy, AttestationVerifier, ForgeMcpServer, McpServerConfig,
@@ -37,29 +37,64 @@ const SERVE_COMMAND: &str = "mcp serve";
 /// unknown or argument parsing fails. `serve` returns `ExitError` if the
 /// MCP server loop fails to start.
 pub fn run_mcp_command(args: &[String]) -> Result<(), ExitError> {
-    let sub = args.get(1).map_or("--help", String::as_str);
-    match sub {
-        "serve" => run_serve(&args[2..]),
-        "--help" | "-h" | "help" => {
+    match parse_mcp_args(args) {
+        Ok(McpArgs::Serve(parsed)) => run_serve(parsed),
+        Ok(McpArgs::Help) => {
             print_mcp_usage();
             Ok(())
         }
-        other => {
-            let want_json = json_output_unless_text_selected(&args[2..]);
-            emit_err(
-                MCP_COMMAND,
-                &format!("unknown subcommand '{other}'. Try: serve"),
-                want_json,
-            )
+        Err(McpArgsError::UnknownSubcommand {
+            subcommand,
+            want_json,
+        }) => emit_err(
+            MCP_COMMAND,
+            &format!("unknown subcommand '{subcommand}'. Try: serve"),
+            want_json,
+        ),
+        Err(McpArgsError::Serve { error, want_json }) => {
+            emit_err(SERVE_COMMAND, &error.to_string(), want_json)
         }
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum McpArgs {
+    Serve(ServeArgs),
+    Help,
+}
+
+/// Top-level `forge-core mcp` parser errors. Hand-rolled per AGENTS.md.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum McpArgsError {
+    UnknownSubcommand {
+        subcommand: String,
+        want_json: bool,
+    },
+    Serve {
+        error: ServeArgsError,
+        want_json: bool,
+    },
+}
+
+fn parse_mcp_args(args: &[String]) -> Result<McpArgs, McpArgsError> {
+    let sub = args.get(1).map_or("--help", String::as_str);
+    match sub {
+        "serve" => parse_serve_args(&args[2..])
+            .map(McpArgs::Serve)
+            .map_err(|error| McpArgsError::Serve {
+                error,
+                want_json: json_output_unless_text_selected(&args[2..]),
+            }),
+        "--help" | "-h" | "help" => Ok(McpArgs::Help),
+        other => Err(McpArgsError::UnknownSubcommand {
+            subcommand: other.to_string(),
+            want_json: json_output_unless_text_selected(&args[2..]),
+        }),
+    }
+}
+
 fn print_mcp_usage() {
-    println!("forge-core mcp <subcommand> [options]");
-    println!(
-        "  serve [--allowlist <yaml>] [--root <path>] [--allow-bootstrap-core] [--json|--no-json]"
-    );
+    println!("{}", COMMAND_MCP.canonical_usage().trim_start());
     println!();
     println!("  serve runs the stdio JSON-RPC MCP server (ADR-0006). Default Allowlist");
     println!("  is read-only; --allowlist overrides with the named YAML file.");
@@ -144,18 +179,7 @@ impl std::fmt::Display for ServeArgsError {
 
 impl std::error::Error for ServeArgsError {}
 
-fn run_serve(args: &[String]) -> Result<(), ExitError> {
-    let parsed = match parse_serve_args(args) {
-        Ok(p) => p,
-        Err(error) => {
-            return emit_err(
-                SERVE_COMMAND,
-                &error.to_string(),
-                json_output_unless_text_selected(args),
-            );
-        }
-    };
-
+fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
     // Build the Allowlist: from --allowlist <yaml> if given, else default
     // read-only (the safe surface).
     let allowlist = match parsed.allowlist.as_ref() {
@@ -224,6 +248,61 @@ fn emit_err(command: &str, message: &str, want_json: bool) -> Result<(), ExitErr
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn args(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(|part| (*part).to_string()).collect()
+    }
+
+    #[test]
+    fn parse_mcp_args_routes_serve_to_typed_serve_args() {
+        let parsed = parse_mcp_args(&args(&[
+            "mcp",
+            "serve",
+            "--root",
+            "/proj",
+            "--allow-bootstrap-core",
+            "--no-json",
+        ]))
+        .expect("parse mcp serve");
+
+        let McpArgs::Serve(serve) = parsed else {
+            panic!("expected serve args");
+        };
+        assert_eq!(
+            serve.root.as_ref().map(|p| p.to_str().unwrap()),
+            Some("/proj")
+        );
+        assert!(serve.allow_bootstrap_core);
+        assert!(!serve.want_json);
+    }
+
+    #[test]
+    fn parse_mcp_args_short_circuits_help() {
+        let parsed = parse_mcp_args(&args(&["mcp", "--help"])).expect("parse help");
+        assert_eq!(parsed, McpArgs::Help);
+    }
+
+    #[test]
+    fn parse_mcp_args_preserves_json_preference_on_errors() {
+        let serve_error =
+            parse_mcp_args(&args(&["mcp", "serve", "--no-json", "--allowlist"])).unwrap_err();
+        assert_eq!(
+            serve_error,
+            McpArgsError::Serve {
+                error: ServeArgsError::MissingValue("--allowlist <yaml>"),
+                want_json: false,
+            }
+        );
+
+        let unknown = parse_mcp_args(&args(&["mcp", "bogus", "--json"])).unwrap_err();
+        assert_eq!(
+            unknown,
+            McpArgsError::UnknownSubcommand {
+                subcommand: "bogus".to_string(),
+                want_json: true,
+            }
+        );
+    }
 
     #[test]
     fn parse_serve_defaults_to_no_allowlist() {

@@ -145,6 +145,20 @@ host-adapter projection:
   `execute-operation` and `query-effect-index` equals the shared Command
   Surface value.
 
+## Sixth hardening changeset evidence
+
+The sixth implementation slice migrates the MCP CLI adapter's parser/help seam:
+
+- `mcp_cmd` now parses the top-level `mcp` command into typed `McpArgs` /
+  `McpArgsError` before starting `serve` or emitting help/errors.
+- `mcp --help` now projects the `mcp serve` usage line from
+  `forge_core_command_surface::COMMAND_MCP` instead of maintaining another
+  hand-written usage line in the adapter.
+- Unit tests cover top-level MCP parser routing, help short-circuiting, and
+  JSON/text preference preservation on parser errors.
+- The MCP CLI E2E help test asserts that binary help includes the canonical
+  Command Surface usage line.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
