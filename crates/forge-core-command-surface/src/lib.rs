@@ -767,6 +767,12 @@ mod tests {
             vec!["validate"]
         );
         assert_eq!(
+            COMMAND_MEMORY
+                .concrete_subcommand_names()
+                .collect::<Vec<_>>(),
+            vec!["ingest", "list", "forget", "promote", "review"]
+        );
+        assert_eq!(
             COMMAND_CLAIM.concrete_subcommand_hint(),
             "acquire | heartbeat | release | handoff | status | reconcile | check-write"
         );

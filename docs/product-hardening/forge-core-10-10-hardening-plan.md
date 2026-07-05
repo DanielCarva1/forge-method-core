@@ -269,6 +269,24 @@ Command Surface:
 - Unit tests lock the local command-tree header, projected usage line, and
   compact `validate` hint to the Command Surface.
 
+## Fifteenth hardening changeset evidence
+
+The fifteenth implementation slice migrates the `memory` command-tree help
+adapter to the Command Surface:
+
+- `memory --help` now keeps the local command-tree header and state-directory
+  explanation, but projects every subcommand usage line from
+  `forge-core-command-surface::COMMAND_MEMORY`.
+- `memory ingest|list|forget|promote --help` now render their first usage line
+  from the same Command Surface seam, including the explicit
+  `[--json|--no-json]` contract that the parser already accepts.
+- `memory` unknown-subcommand errors now derive the compact
+  `ingest | list | forget | promote | review` hint from `COMMAND_MEMORY`
+  instead of preserving a rival hard-coded list.
+- Unit tests lock the local command-tree header, projected subcommand usage
+  lines, full subcommand usage lookup, and concrete child-name extraction to
+  the shared `CommandSpec` projection interface.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

@@ -21,6 +21,7 @@
 
 use std::path::{Path, PathBuf};
 
+use forge_core_command_surface::COMMAND_MEMORY;
 use forge_core_contracts::{
     AdmissionEvidence, CliEnvelope, ExitReason, MemoryEntry, MemoryPolicy, StableId,
 };
@@ -60,7 +61,8 @@ pub fn run_memory_command(args: &[String]) -> Result<(), ExitError> {
             emit_err(
                 MEMORY_COMMAND,
                 &format!(
-                    "unknown subcommand '{other}'. Try: ingest, list, forget, promote, review"
+                    "unknown subcommand '{other}'. Try: {hint}",
+                    hint = memory_subcommand_hint()
                 ),
                 want_json,
             )
@@ -70,13 +72,21 @@ pub fn run_memory_command(args: &[String]) -> Result<(), ExitError> {
 
 fn print_memory_usage() {
     println!("forge-core memory <subcommand> [options]");
-    println!("  ingest  --entry-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--no-json]");
-    println!("  list    [--root <path>] [--allow-bootstrap-core] [--now-unix <epoch>] [--memory-dir <path>] [--no-json]");
-    println!("  forget  --entry-id <id> [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--no-json]");
-    println!("  promote --entry-id <id> --policy-file <path> --evidence <ref>... [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--no-json]");
-    println!("  review  (deferred — requires F07 governance for reviewer authorization)");
+    for line in COMMAND_MEMORY.local_usage_lines() {
+        println!("  {line}");
+    }
     println!();
     println!("  State writes land under <state_root>/memory/ (resolved from --root). --memory-dir overrides the directory.");
+}
+
+fn memory_subcommand_hint() -> String {
+    COMMAND_MEMORY.concrete_subcommand_hint()
+}
+
+fn memory_command_surface_usage_line_for(subcommand: &str) -> &'static str {
+    COMMAND_MEMORY
+        .usage_line_for_subcommand(subcommand)
+        .unwrap_or("forge-core memory <subcommand> [options]")
 }
 
 // --- shared resolution -------------------------------------------------------
@@ -197,7 +207,7 @@ fn parse_common_flag(
 fn run_ingest(args: &[String]) -> Result<(), ExitError> {
     let outcome = match parse_ingest_args(args) {
         Ok(MemoryParseOutcome::Help) => {
-            println!("forge-core memory ingest --entry-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--no-json]");
+            println!("{}", memory_command_surface_usage_line_for("ingest"));
             return Ok(());
         }
         Ok(MemoryParseOutcome::Run(opts)) => opts,
@@ -256,7 +266,7 @@ struct IngestOkData {
 fn run_list(args: &[String]) -> Result<(), ExitError> {
     let outcome = match parse_list_args(args) {
         Ok(MemoryParseOutcome::Help) => {
-            println!("forge-core memory list [--root <path>] [--allow-bootstrap-core] [--now-unix <epoch>] [--memory-dir <path>] [--no-json]");
+            println!("{}", memory_command_surface_usage_line_for("list"));
             return Ok(());
         }
         Ok(MemoryParseOutcome::Run(opts)) => opts,
@@ -326,7 +336,7 @@ fn list_entry_view(entry: MemoryEntry) -> ListEntryView {
 fn run_forget(args: &[String]) -> Result<(), ExitError> {
     let outcome = match parse_forget_args(args) {
         Ok(MemoryParseOutcome::Help) => {
-            println!("forge-core memory forget --entry-id <id> [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--no-json]");
+            println!("{}", memory_command_surface_usage_line_for("forget"));
             return Ok(());
         }
         Ok(MemoryParseOutcome::Run(opts)) => opts,
@@ -384,7 +394,7 @@ struct ForgetOkData {
 fn run_promote(args: &[String]) -> Result<(), ExitError> {
     let outcome = match parse_promote_args(args) {
         Ok(MemoryParseOutcome::Help) => {
-            println!("forge-core memory promote --entry-id <id> --policy-file <path> --evidence <ref>... [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--no-json]");
+            println!("{}", memory_command_surface_usage_line_for("promote"));
             return Ok(());
         }
         Ok(MemoryParseOutcome::Run(opts)) => opts,
@@ -1079,5 +1089,43 @@ mod tests {
     fn run_memory_help_prints_usage_and_succeeds() {
         let result = run_memory_command(&args(&["memory", "--help"]));
         assert!(result.is_ok(), "--help must succeed");
+    }
+
+    #[test]
+    fn memory_usage_projects_command_surface_lines() {
+        let mut usage = String::from("forge-core memory <subcommand> [options]");
+        for line in COMMAND_MEMORY.local_usage_lines() {
+            usage.push('\n');
+            usage.push_str("  ");
+            usage.push_str(line);
+        }
+
+        assert!(
+            usage.starts_with("forge-core memory <subcommand> [options]"),
+            "memory usage should keep the local command-tree header: {usage}"
+        );
+        for line in COMMAND_MEMORY.usage_lines {
+            let subcommand_usage = COMMAND_MEMORY.local_usage_line(line);
+            assert!(
+                usage.contains(subcommand_usage),
+                "memory usage should include projected Command Surface line {subcommand_usage:?}: {usage}"
+            );
+        }
+        assert_eq!(
+            memory_subcommand_hint(),
+            "ingest | list | forget | promote | review"
+        );
+    }
+
+    #[test]
+    fn memory_subcommand_help_lookup_projects_full_command_surface_lines() {
+        for subcommand in ["ingest", "list", "forget", "promote", "review"] {
+            let usage = memory_command_surface_usage_line_for(subcommand);
+            assert_eq!(
+                Some(usage),
+                COMMAND_MEMORY.usage_line_for_subcommand(subcommand),
+                "memory {subcommand} help should come from the Command Surface"
+            );
+        }
     }
 }
