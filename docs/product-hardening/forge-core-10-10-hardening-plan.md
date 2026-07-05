@@ -520,6 +520,27 @@ Adapter from the eval-harness help path:
   `COMMAND_EVAL_HARNESS.usage_lines` entry and assert `[--json|--no-json]`
   remains visible.
 
+## Twenty-ninth hardening changeset evidence
+
+The twenty-ninth implementation slice deepens the Command Surface seam for the
+host-adapter policy/admission/projection/manifest adapter:
+
+- `cli_util::command_surface_usage(&CommandSpec)` is now a reusable projection
+  helper, so command-specific adapters can render the canonical `usage:` shape
+  without growing one helper per command.
+- `host_adapter_policy_cmd.rs` now renders command-specific usage from
+  `COMMAND_HOST_ADAPTER_DISTRIBUTION_POLICY`,
+  `COMMAND_HOST_ADAPTER_ADMIT_DISTRIBUTION`,
+  `COMMAND_HOST_ADAPTER_PROCESS_POLICY`,
+  `COMMAND_HOST_ADAPTER_ADMIT_INVOCATION`, `COMMAND_HOST_ADAPTER_PROJECTION`,
+  and `COMMAND_HOST_ADAPTER_MANIFEST` instead of falling back to global
+  `forge-core --help` output.
+- The same adapter now accepts explicit `--no-json` wherever the Command
+  Surface advertises `[--json|--no-json]`, preserving parser/help alignment.
+- Unit tests lock the host-adapter policy family to every projected
+  `CommandSpec::usage_lines` entry and assert command-specific usage on
+  required-input and unknown-flag errors.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

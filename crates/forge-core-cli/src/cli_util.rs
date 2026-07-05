@@ -136,12 +136,12 @@ pub fn usage() -> String {
 
 #[must_use]
 pub fn graph_usage() -> String {
-    format_command_surface_usage("usage:", &COMMAND_GRAPH)
+    command_surface_usage(&COMMAND_GRAPH)
 }
 
 #[must_use]
 pub fn eval_usage() -> String {
-    let mut usage = format_command_surface_usage("usage:", &COMMAND_EVAL);
+    let mut usage = command_surface_usage(&COMMAND_EVAL);
     usage.push('\n');
     usage.push_str("default suite: ");
     usage.push_str(COMMAND_EVAL_DEFAULT_SUITE);
@@ -150,12 +150,12 @@ pub fn eval_usage() -> String {
 
 #[must_use]
 pub fn eval_harness_usage() -> String {
-    format_command_surface_usage("usage:", &COMMAND_EVAL_HARNESS)
+    command_surface_usage(&COMMAND_EVAL_HARNESS)
 }
 
 #[must_use]
 pub fn telemetry_usage() -> String {
-    let mut usage = format_command_surface_usage("usage:", &COMMAND_TELEMETRY);
+    let mut usage = command_surface_usage(&COMMAND_TELEMETRY);
     usage.push('\n');
     usage.push_str("default contract: ");
     usage.push_str(COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH);
@@ -167,12 +167,17 @@ pub fn telemetry_usage() -> String {
 
 #[must_use]
 pub fn cost_usage() -> String {
-    format_command_surface_usage("usage:", &COMMAND_COST)
+    command_surface_usage(&COMMAND_COST)
 }
 
 #[must_use]
 pub fn risk_audit_usage() -> String {
-    format_command_surface_usage("usage:", &COMMAND_RISK_AUDIT)
+    command_surface_usage(&COMMAND_RISK_AUDIT)
+}
+
+#[must_use]
+pub fn command_surface_usage(command: &CommandSpec) -> String {
+    format_command_surface_usage("usage:", command)
 }
 
 fn format_command_surface_usage(header: &str, command: &CommandSpec) -> String {
