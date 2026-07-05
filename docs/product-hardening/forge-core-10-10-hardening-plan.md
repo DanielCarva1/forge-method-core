@@ -691,6 +691,19 @@ paths in the standalone risk-audit gate:
   `risk-audit` surface and does not leak unrelated command usage into the
   standalone gate diagnostics.
 
+## Thirty-eighth hardening changeset evidence
+
+The thirty-eighth implementation slice closes the remaining shallow usage path
+in the cost accounting surface:
+
+- `cost` help already renders from the shared Command Surface, but malformed
+  argv paths still diverged between global usage and local ad hoc messages.
+- Missing flag values and unknown-argument errors now report the `cost`
+  command-specific usage surface, preserving locality for the read-only
+  accounting adapter and keeping diagnostics aligned with the accepted flag set.
+- Unit coverage proves malformed `cost` argv reports the projected Command
+  Surface line and does not leak unrelated command usage.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

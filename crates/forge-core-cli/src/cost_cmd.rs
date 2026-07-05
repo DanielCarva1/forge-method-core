@@ -15,7 +15,7 @@
 //! - (none)              -> `CostScope::All`    (every scanned event)
 
 use crate::cli_error::ExitError;
-use crate::cli_util::{cost_usage, usage};
+use crate::cli_util::cost_usage;
 use crate::project_cmd::{resolve_project, ProjectResolvePayload};
 use forge_core_contracts::CliEnvelope;
 use forge_core_store::{query_trace_events, TraceEventQuery};
@@ -69,7 +69,7 @@ pub fn run_cost_command(args: &[String]) -> Result<(), ExitError> {
                 println!("{}", cost_usage());
                 return Ok(());
             }
-            _ => return Err(ExitError::usage(usage())),
+            _ => return Err(ExitError::usage(cost_usage())),
         }
         index += 1;
     }
@@ -179,7 +179,45 @@ fn next_path_or_err(args: &[String], index: usize) -> Result<PathBuf, ExitError>
 }
 
 fn next_arg_or_err(args: &[String], index: usize) -> Result<&str, ExitError> {
-    args.get(index).map(String::as_str).ok_or_else(|| {
-        ExitError::usage(format!("cost: missing value for flag at position {index}"))
-    })
+    args.get(index)
+        .map(String::as_str)
+        .ok_or_else(|| ExitError::usage(cost_usage()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use forge_core_command_surface::COMMAND_COST;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn missing_flag_value_reports_cost_usage() {
+        let error = run_cost_command(&args(&["cost", "--run-id"]))
+            .expect_err("missing run id value must fail before project resolution");
+        assert_cost_usage_error(&error);
+    }
+
+    #[test]
+    fn unknown_arg_reports_cost_usage() {
+        let error = run_cost_command(&args(&["cost", "--frobnicate"]))
+            .expect_err("unknown argument must fail before project resolution");
+        assert_cost_usage_error(&error);
+    }
+
+    fn assert_cost_usage_error(error: &ExitError) {
+        for line in COMMAND_COST.usage_lines {
+            let projected = line.trim_start();
+            assert!(
+                error.message().contains(projected),
+                "cost usage error should include projected Command Surface line {projected:?}: {error}"
+            );
+        }
+        assert!(
+            !error.message().contains("forge-core execute-operation"),
+            "cost usage error must not include unrelated mutating command usage: {error}"
+        );
+    }
 }
