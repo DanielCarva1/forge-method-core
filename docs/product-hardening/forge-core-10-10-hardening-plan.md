@@ -198,6 +198,18 @@ top-level parser seam:
 - Unit tests cover top-level parser routing, help routing, and
   Command-Surface-derived unknown-subcommand hints.
 
+## Tenth hardening changeset evidence
+
+The tenth implementation slice migrates the `project resolve` parser seam:
+
+- `project resolve` now parses into typed `ProjectResolveArgs` /
+  `ProjectResolveArgsError` before calling `run_resolve`.
+- The parser preserves the `--allow-bootstrap-core` flag as an explicit typed
+  option, keeping the Bootstrap Core Exception path testable before runtime
+  resolution starts.
+- Unit tests cover typed option parsing, help short-circuiting, and exact
+  missing-value / unknown-argument error variants.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
