@@ -389,6 +389,29 @@ adapter with the actual Command Surface:
   extraction, explicit `--json` parsing, and unknown-argument rejection to the
   same Command Surface seam.
 
+## Twenty-first hardening changeset evidence
+
+The twenty-first implementation slice reconciles the nested `research`
+command-tree help adapter with the Command Surface and deepens the shared seam:
+
+- `CommandSpec` now exposes nested subcommand-path projection helpers:
+  `local_usage_lines_under_subcommand_path`,
+  `usage_line_for_subcommand_path`, and
+  `concrete_child_hint_under_subcommand_path`.
+- The new helpers keep `research source add|list` prefix stripping, child-hint
+  generation, and full usage lookup in the Command Surface module instead of in
+  the CLI adapter.
+- `research --help`, `research source --help`, and
+  `research source add|list|check|graph|cite --help` now project their usage
+  lines from `COMMAND_RESEARCH`, including the explicit `--json|--no-json`
+  contract.
+- Unknown top-level research subcommands now use the deduplicated
+  `source | check | graph | cite` hint; unknown `research source` subcommands
+  use the nested `add | list` hint from the same seam.
+- Unit tests lock nested path lookup, source-child projection, deduplicated
+  hints, command-tree headers, full subcommand usage lookup, and explicit
+  `--json` parsing to the Command Surface interface.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

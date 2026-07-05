@@ -26,6 +26,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
+use forge_core_command_surface::COMMAND_RESEARCH;
 use forge_core_contracts::{
     CliEnvelope, ExitReason, FieldEvidenceRegistry, ResearchPolicy, ResearchSource,
 };
@@ -66,7 +67,10 @@ pub fn run_research_command(args: &[String]) -> Result<(), ExitError> {
                     let want_json = json_output_unless_text_selected(&args[3..]);
                     emit_err(
                         RESEARCH_COMMAND,
-                        &format!("unknown source subcommand '{other}'. Try: add, list"),
+                        &format!(
+                            "unknown source subcommand '{other}'. Try: {hint}",
+                            hint = research_source_subcommand_hint()
+                        ),
                         want_json,
                     )
                 }
@@ -83,7 +87,10 @@ pub fn run_research_command(args: &[String]) -> Result<(), ExitError> {
             let want_json = json_output_unless_text_selected(&args[2..]);
             emit_err(
                 RESEARCH_COMMAND,
-                &format!("unknown subcommand '{other}'. Try: source add|list, check, graph, cite"),
+                &format!(
+                    "unknown subcommand '{other}'. Try: {hint}",
+                    hint = research_subcommand_hint()
+                ),
                 want_json,
             )
         }
@@ -92,19 +99,32 @@ pub fn run_research_command(args: &[String]) -> Result<(), ExitError> {
 
 fn print_research_usage() {
     println!("forge-core research <subcommand> [options]");
-    println!("  source add  --source-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--no-json]");
-    println!("  source list [--root <path>] [--allow-bootstrap-core] [--no-json]");
-    println!("  check       [--root <path>] [--allow-bootstrap-core] [--evidence-file <path>] [--no-json]");
-    println!("  graph       [--root <path>] [--allow-bootstrap-core] [--no-json]");
-    println!("  cite        --source-id <id> [--root <path>] [--allow-bootstrap-core] [--evidence-file <path>] [--no-json]");
+    for line in COMMAND_RESEARCH.local_usage_lines() {
+        println!("  {line}");
+    }
     println!();
     println!("  State writes land under <state_root>/research/ (resolved from --root).");
 }
 
 fn print_source_usage() {
     println!("forge-core research source <subcommand> [options]");
-    println!("  add  --source-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--no-json]");
-    println!("  list [--root <path>] [--allow-bootstrap-core] [--no-json]");
+    for line in COMMAND_RESEARCH.local_usage_lines_under_subcommand_path(&["source"]) {
+        println!("  {line}");
+    }
+}
+
+fn research_subcommand_hint() -> String {
+    COMMAND_RESEARCH.concrete_child_hint_under_subcommand_path(&[])
+}
+
+fn research_source_subcommand_hint() -> String {
+    COMMAND_RESEARCH.concrete_child_hint_under_subcommand_path(&["source"])
+}
+
+fn research_command_surface_usage_line_for(path: &[&str]) -> &'static str {
+    COMMAND_RESEARCH
+        .usage_line_for_subcommand_path(path)
+        .unwrap_or("forge-core research <subcommand> [options]")
 }
 
 // --- shared resolution -------------------------------------------------------
@@ -200,7 +220,10 @@ fn parse_common_flag(
 fn run_source_add(args: &[String]) -> Result<(), ExitError> {
     let outcome = match parse_source_add_args(args) {
         Ok(ResearchParseOutcome::Help) => {
-            println!("forge-core research source add --source-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--no-json]");
+            println!(
+                "{}",
+                research_command_surface_usage_line_for(&["source", "add"])
+            );
             return Ok(());
         }
         Ok(ResearchParseOutcome::Run(opts)) => opts,
@@ -276,7 +299,10 @@ struct SourceAddOkData {
 fn run_source_list(args: &[String]) -> Result<(), ExitError> {
     let outcome = match parse_common_only_args(args) {
         Ok(ResearchParseOutcome::Help) => {
-            println!("forge-core research source list [--root <path>] [--allow-bootstrap-core] [--no-json]");
+            println!(
+                "{}",
+                research_command_surface_usage_line_for(&["source", "list"])
+            );
             return Ok(());
         }
         Ok(ResearchParseOutcome::Run(common)) => common,
@@ -346,7 +372,7 @@ fn source_view(source: &ResearchSource) -> SourceView {
 fn run_check(args: &[String]) -> Result<(), ExitError> {
     let outcome = match parse_common_only_args(args) {
         Ok(ResearchParseOutcome::Help) => {
-            println!("forge-core research check [--root <path>] [--allow-bootstrap-core] [--evidence-file <path>] [--no-json]");
+            println!("{}", research_command_surface_usage_line_for(&["check"]));
             return Ok(());
         }
         Ok(ResearchParseOutcome::Run(common)) => common,
@@ -429,9 +455,7 @@ impl CheckDiagnosticView {
 fn run_graph(args: &[String]) -> Result<(), ExitError> {
     let outcome = match parse_common_only_args(args) {
         Ok(ResearchParseOutcome::Help) => {
-            println!(
-                "forge-core research graph [--root <path>] [--allow-bootstrap-core] [--no-json]"
-            );
+            println!("{}", research_command_surface_usage_line_for(&["graph"]));
             return Ok(());
         }
         Ok(ResearchParseOutcome::Run(common)) => common,
@@ -480,7 +504,7 @@ struct GraphEntry {
 fn run_cite(args: &[String]) -> Result<(), ExitError> {
     let outcome = match parse_cite_args(args) {
         Ok(ResearchParseOutcome::Help) => {
-            println!("forge-core research cite --source-id <id> [--root <path>] [--allow-bootstrap-core] [--evidence-file <path>] [--no-json]");
+            println!("{}", research_command_surface_usage_line_for(&["cite"]));
             return Ok(());
         }
         Ok(ResearchParseOutcome::Run(opts)) => opts,
@@ -999,6 +1023,87 @@ mod tests {
         let result =
             run_research_command(&args(&["research", "source", "frobnicate", "--no-json"]));
         assert!(result.is_err(), "unknown source subcommand must error");
+    }
+
+    #[test]
+    fn research_usage_projects_command_surface_lines() {
+        let mut usage = String::from("forge-core research <subcommand> [options]");
+        for line in COMMAND_RESEARCH.local_usage_lines() {
+            usage.push('\n');
+            usage.push_str("  ");
+            usage.push_str(line);
+        }
+
+        assert!(
+            usage.starts_with("forge-core research <subcommand> [options]"),
+            "research usage should keep the local command-tree header: {usage}"
+        );
+        for line in COMMAND_RESEARCH.usage_lines {
+            let subcommand_usage = COMMAND_RESEARCH.local_usage_line(line);
+            assert!(
+                usage.contains(subcommand_usage),
+                "research usage should include projected Command Surface line {subcommand_usage:?}: {usage}"
+            );
+        }
+        assert_eq!(research_subcommand_hint(), "source | check | graph | cite");
+    }
+
+    #[test]
+    fn research_source_usage_projects_command_surface_lines() {
+        let mut usage = String::from("forge-core research source <subcommand> [options]");
+        for line in COMMAND_RESEARCH.local_usage_lines_under_subcommand_path(&["source"]) {
+            usage.push('\n');
+            usage.push_str("  ");
+            usage.push_str(line);
+        }
+
+        assert!(
+            usage.contains(
+                "add  --source-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--json|--no-json]"
+            ),
+            "research source usage should include projected add line: {usage}"
+        );
+        assert!(
+            usage.contains("list [--root <path>] [--allow-bootstrap-core] [--json|--no-json]"),
+            "research source usage should include projected list line: {usage}"
+        );
+        assert_eq!(research_source_subcommand_hint(), "add | list");
+    }
+
+    #[test]
+    fn research_subcommand_help_lookup_projects_full_command_surface_lines() {
+        for path in [
+            &["source", "add"][..],
+            &["source", "list"][..],
+            &["check"][..],
+            &["graph"][..],
+            &["cite"][..],
+        ] {
+            let usage = research_command_surface_usage_line_for(path);
+            assert_eq!(
+                Some(usage),
+                COMMAND_RESEARCH.usage_line_for_subcommand_path(path),
+                "research {path:?} help should come from the Command Surface"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_source_add_accepts_explicit_json_mode() {
+        let outcome = parse_source_add_args(&args(&[
+            "--json",
+            "--source-file",
+            "source.yaml",
+            "--policy-file",
+            "policy.yaml",
+        ]))
+        .expect("parse");
+        let ResearchParseOutcome::Run(opts) = outcome else {
+            panic!("expected Run");
+        };
+        assert!(opts.common.want_json);
+        assert_eq!(opts.source_file, PathBuf::from("source.yaml"));
+        assert_eq!(opts.policy_file, PathBuf::from("policy.yaml"));
     }
 
     #[test]

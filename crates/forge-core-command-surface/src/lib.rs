@@ -185,6 +185,20 @@ impl CommandSpec {
             .filter(|token| is_concrete_subcommand_token(token))
     }
 
+    /// Iterate over local usage lines below a concrete subcommand path.
+    ///
+    /// This supports nested command trees such as `research source add` while
+    /// keeping prefix stripping and path matching owned by the Command Surface
+    /// seam instead of re-implemented by each CLI adapter.
+    #[must_use = "iterators are lazy; consume the iterator to render projected usage lines"]
+    pub fn local_usage_lines_under_subcommand_path<'a>(
+        &'a self,
+        path: &'a [&'a str],
+    ) -> impl Iterator<Item = &'static str> + 'a {
+        self.local_usage_lines()
+            .filter_map(move |line| strip_local_usage_path(line, path))
+    }
+
     /// Lookup the fully qualified usage line for a concrete subcommand.
     #[must_use]
     pub fn usage_line_for_subcommand(&self, subcommand: &str) -> Option<&'static str> {
@@ -194,17 +208,56 @@ impl CommandSpec {
             .find(|line| self.local_usage_line(line).split_whitespace().next() == Some(subcommand))
     }
 
+    /// Lookup the fully qualified usage line for a concrete subcommand path.
+    #[must_use]
+    pub fn usage_line_for_subcommand_path(&self, path: &[&str]) -> Option<&'static str> {
+        if path.is_empty() {
+            return None;
+        }
+        self.usage_lines
+            .iter()
+            .map(|line| line.trim_start())
+            .find(|line| strip_local_usage_path(self.local_usage_line(line), path).is_some())
+    }
+
+    /// Render a compact unknown-subcommand hint below a concrete path.
+    #[must_use]
+    pub fn concrete_child_hint_under_subcommand_path(&self, path: &[&str]) -> String {
+        let mut names = Vec::new();
+        for name in self
+            .local_usage_lines_under_subcommand_path(path)
+            .filter_map(|line| line.split_whitespace().next())
+            .filter(|token| is_concrete_subcommand_token(token))
+        {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+        names.join(" | ")
+    }
+
     /// Render a compact unknown-subcommand hint from concrete usage lines.
     #[must_use]
     pub fn concrete_subcommand_hint(&self) -> String {
-        self.concrete_subcommand_names()
-            .collect::<Vec<_>>()
-            .join(" | ")
+        self.concrete_child_hint_under_subcommand_path(&[])
     }
 }
 
 fn is_concrete_subcommand_token(token: &str) -> bool {
     !token.starts_with('<') && !token.starts_with('[') && !token.starts_with('(')
+}
+
+fn strip_local_usage_path<'a>(line: &'a str, path: &[&str]) -> Option<&'a str> {
+    let mut rest = line.trim_start();
+    for expected in path {
+        let mut parts = rest.splitn(2, char::is_whitespace);
+        let token = parts.next()?;
+        if token != *expected {
+            return None;
+        }
+        rest = parts.next().unwrap_or_default().trim_start();
+    }
+    Some(rest)
 }
 
 #[rustfmt::skip]
@@ -822,6 +875,35 @@ mod tests {
             Some("forge-core claim status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--from-cache] [--json|--no-json]")
         );
         assert_eq!(COMMAND_CLAIM.usage_line_for_subcommand("missing"), None);
+    }
+
+    #[test]
+    fn nested_subcommand_path_helpers_project_research_source_children() {
+        assert_eq!(
+            COMMAND_RESEARCH
+                .local_usage_lines_under_subcommand_path(&["source"])
+                .collect::<Vec<_>>(),
+            vec![
+                "add  --source-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
+                "list [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
+            ]
+        );
+        assert_eq!(
+            COMMAND_RESEARCH.usage_line_for_subcommand_path(&["source", "list"]),
+            Some("forge-core research source list [--root <path>] [--allow-bootstrap-core] [--json|--no-json]")
+        );
+        assert_eq!(
+            COMMAND_RESEARCH.usage_line_for_subcommand_path(&["missing"]),
+            None
+        );
+        assert_eq!(
+            COMMAND_RESEARCH.concrete_child_hint_under_subcommand_path(&[]),
+            "source | check | graph | cite"
+        );
+        assert_eq!(
+            COMMAND_RESEARCH.concrete_child_hint_under_subcommand_path(&["source"]),
+            "add | list"
+        );
     }
 
     #[test]
