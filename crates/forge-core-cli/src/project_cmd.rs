@@ -1059,7 +1059,48 @@ pub fn dispatch(args: &[String]) -> (String, i32) {
     }
 }
 
-fn dispatch_init(args: &[String]) -> (String, i32) {
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProjectInitArgs {
+    root: PathBuf,
+    project_id: Option<String>,
+    sidecar_root: Option<PathBuf>,
+    state_root: Option<PathBuf>,
+    want_json: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ProjectInitArgsError {
+    MissingValue { flag: &'static str },
+    UnknownArgument { argument: String },
+}
+
+impl std::fmt::Display for ProjectInitArgsError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingValue { flag } => {
+                write!(formatter, "project init: {flag} requires a value")
+            }
+            Self::UnknownArgument { argument } => {
+                write!(
+                    formatter,
+                    "project init: unrecognized argument '{argument}'"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for ProjectInitArgsError {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ProjectInitParseOutcome {
+    Run(ProjectInitArgs),
+    Help,
+}
+
+fn parse_project_init_args(
+    args: &[String],
+) -> Result<ProjectInitParseOutcome, ProjectInitArgsError> {
     let mut root = PathBuf::from(".");
     let mut project_id: Option<String> = None;
     let mut sidecar_root: Option<PathBuf> = None;
@@ -1071,52 +1112,73 @@ fn dispatch_init(args: &[String]) -> (String, i32) {
             "--root" => {
                 index += 1;
                 let Some(value) = args.get(index) else {
-                    return ("project init: --root requires a value".to_string(), 3);
+                    return Err(ProjectInitArgsError::MissingValue { flag: "--root" });
                 };
                 root = PathBuf::from(value);
             }
             "--project-id" => {
                 index += 1;
                 let Some(value) = args.get(index) else {
-                    return ("project init: --project-id requires a value".to_string(), 3);
+                    return Err(ProjectInitArgsError::MissingValue {
+                        flag: "--project-id",
+                    });
                 };
                 project_id = Some(value.clone());
             }
             "--sidecar-root" => {
                 index += 1;
                 let Some(value) = args.get(index) else {
-                    return (
-                        "project init: --sidecar-root requires a value".to_string(),
-                        3,
-                    );
+                    return Err(ProjectInitArgsError::MissingValue {
+                        flag: "--sidecar-root",
+                    });
                 };
                 sidecar_root = Some(PathBuf::from(value));
             }
             "--state-root" => {
                 index += 1;
                 let Some(value) = args.get(index) else {
-                    return ("project init: --state-root requires a value".to_string(), 3);
+                    return Err(ProjectInitArgsError::MissingValue {
+                        flag: "--state-root",
+                    });
                 };
                 state_root = Some(PathBuf::from(value));
             }
             "--json" => want_json = true,
             "--no-json" => want_json = false,
-            "--help" | "-h" => return (project_usage(), 0),
+            "--help" | "-h" => return Ok(ProjectInitParseOutcome::Help),
             other => {
-                return (format!("project init: unrecognized argument '{other}'"), 3);
+                return Err(ProjectInitArgsError::UnknownArgument {
+                    argument: other.to_string(),
+                });
             }
         }
         index += 1;
     }
 
+    Ok(ProjectInitParseOutcome::Run(ProjectInitArgs {
+        root,
+        project_id,
+        sidecar_root,
+        state_root,
+        want_json,
+    }))
+}
+
+fn dispatch_init(args: &[String]) -> (String, i32) {
+    let parsed = match parse_project_init_args(args) {
+        Ok(ProjectInitParseOutcome::Run(parsed)) => parsed,
+        Ok(ProjectInitParseOutcome::Help) => return (project_usage(), 0),
+        Err(error) => return (error.to_string(), 3),
+    };
+
     let envelope = run_init(
-        &root,
-        project_id.as_deref(),
-        sidecar_root.as_deref(),
-        state_root.as_deref(),
+        &parsed.root,
+        parsed.project_id.as_deref(),
+        parsed.sidecar_root.as_deref(),
+        parsed.state_root.as_deref(),
     );
     let exit_code = envelope.exit_code();
-    if want_json {
+    if parsed.want_json {
         (
             serde_json::to_string_pretty(&envelope).expect("serialize project init envelope"),
             exit_code,
@@ -1384,6 +1446,70 @@ mod tests {
             assert_eq!(exit, 0, "help path should succeed for args {args:?}");
             assert_eq!(output, project_usage());
         }
+    }
+
+    #[test]
+    fn parse_project_init_args_returns_typed_options() {
+        let parsed = parse_project_init_args(&argv(&[
+            "--root",
+            "app",
+            "--project-id",
+            "custom",
+            "--sidecar-root",
+            "../forge-app",
+            "--state-root",
+            "../forge-app/.forge-method",
+            "--no-json",
+        ]))
+        .expect("parse init args");
+
+        let ProjectInitParseOutcome::Run(options) = parsed else {
+            panic!("expected runnable init options");
+        };
+        assert_eq!(options.root, PathBuf::from("app"));
+        assert_eq!(options.project_id.as_deref(), Some("custom"));
+        assert_eq!(
+            options.sidecar_root.as_deref(),
+            Some(Path::new("../forge-app"))
+        );
+        assert_eq!(
+            options.state_root.as_deref(),
+            Some(Path::new("../forge-app/.forge-method"))
+        );
+        assert!(!options.want_json);
+    }
+
+    #[test]
+    fn parse_project_init_args_short_circuits_help() {
+        let parsed = parse_project_init_args(&argv(&["--help"])).expect("parse init help");
+        assert_eq!(parsed, ProjectInitParseOutcome::Help);
+    }
+
+    #[test]
+    fn parse_project_init_args_reports_typed_errors() {
+        let missing = parse_project_init_args(&argv(&["--sidecar-root"])).unwrap_err();
+        assert_eq!(
+            missing,
+            ProjectInitArgsError::MissingValue {
+                flag: "--sidecar-root"
+            }
+        );
+        assert_eq!(
+            missing.to_string(),
+            "project init: --sidecar-root requires a value"
+        );
+
+        let unknown = parse_project_init_args(&argv(&["--surprise"])).unwrap_err();
+        assert_eq!(
+            unknown,
+            ProjectInitArgsError::UnknownArgument {
+                argument: "--surprise".to_string()
+            }
+        );
+        assert_eq!(
+            unknown.to_string(),
+            "project init: unrecognized argument '--surprise'"
+        );
     }
 
     #[test]

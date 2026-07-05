@@ -210,6 +210,18 @@ The tenth implementation slice migrates the `project resolve` parser seam:
 - Unit tests cover typed option parsing, help short-circuiting, and exact
   missing-value / unknown-argument error variants.
 
+## Eleventh hardening changeset evidence
+
+The eleventh implementation slice migrates the `project init` parser seam:
+
+- `project init` now parses into typed `ProjectInitArgs` /
+  `ProjectInitArgsError` before calling `run_init`.
+- The parser preserves `--root`, `--project-id`, `--sidecar-root`,
+  `--state-root`, and JSON/text selection as explicit typed options instead of
+  leaking raw argv handling into the init dispatcher.
+- Unit tests cover typed option parsing, help short-circuiting, and exact
+  missing-value / unknown-argument error variants.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

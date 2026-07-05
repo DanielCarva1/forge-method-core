@@ -352,9 +352,10 @@ MCP adapter projects allowlist defaults and tool descriptors from it, and
 `docs/generated/command-surface.md` is generated from it. The `start`, `project`,
 and `mcp` CLI help paths project their usage lines from the same seam. The
 `project` top-level parser also derives its unknown-subcommand hint from this
-seam, and `project resolve` parses into typed options before resolving the
-Project Link. Parser/handler lookup should continue migrating toward this
-Command Surface rather than growing rival hand-written lists.
+seam, and `project init` / `project resolve` parse into typed options before
+initializing or resolving the Project Link. Parser/handler lookup should
+continue migrating toward this Command Surface rather than growing rival
+hand-written lists.
 
 The host-adapter manifest remains a narrower security adapter for host-specific
 authority metadata, required contracts, safe triggers, and policy references,
