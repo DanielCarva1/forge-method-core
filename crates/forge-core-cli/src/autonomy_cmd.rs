@@ -8,6 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
+use forge_core_command_surface::COMMAND_AUTONOMY;
 use forge_core_contracts::autonomy_policy::{
     AutonomyPolicyContract, AutonomyPolicyContractDocument, ToolClass,
 };
@@ -36,10 +37,7 @@ pub fn run_autonomy_command(args: &[String]) -> Result<(), ExitError> {
     match sub {
         "route" => run_route(&args[2..]),
         "--help" | "-h" | "help" => {
-            println!("forge-core autonomy <subcommand> [options]");
-            println!(
-                "  route --policy-file <path> [--goal-file <path>] [--tool-class <snake_case>]... [--failure-streak <n>] [--no-json]"
-            );
+            print_autonomy_usage();
             Ok(())
         }
         other => {
@@ -59,9 +57,7 @@ pub fn run_autonomy_command(args: &[String]) -> Result<(), ExitError> {
 pub fn run_route(args: &[String]) -> Result<(), ExitError> {
     let options = match parse_route_args(args) {
         Ok(RouteParseOutcome::Help) => {
-            println!(
-                "forge-core autonomy route --policy-file <path> [--goal-file <path>] [--tool-class <snake_case>]... [--failure-streak <n>] [--no-json]"
-            );
+            println!("{}", autonomy_command_surface_usage_line_for("route"));
             return Ok(());
         }
         Ok(RouteParseOutcome::Run(options)) => options,
@@ -91,6 +87,23 @@ pub fn run_route(args: &[String]) -> Result<(), ExitError> {
     };
     let env = CliEnvelope::ok(ROUTE_COMMAND, decision);
     emit_autonomy(env, options.want_json)
+}
+
+fn print_autonomy_usage() {
+    println!("forge-core autonomy <subcommand> [options]");
+    for line in COMMAND_AUTONOMY.local_usage_lines() {
+        println!("  {line}");
+    }
+}
+
+fn autonomy_subcommand_hint() -> String {
+    COMMAND_AUTONOMY.concrete_subcommand_hint()
+}
+
+fn autonomy_command_surface_usage_line_for(subcommand: &str) -> &'static str {
+    COMMAND_AUTONOMY
+        .usage_line_for_subcommand(subcommand)
+        .unwrap_or("forge-core autonomy <subcommand> [options]")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -227,7 +240,10 @@ impl AutonomySubcommandError {
     fn message(&self) -> String {
         match self {
             Self::UnknownSubcommand { subcommand, .. } => {
-                format!("unknown subcommand '{subcommand}'. Try: route")
+                format!(
+                    "unknown subcommand '{subcommand}'. Try: {hint}",
+                    hint = autonomy_subcommand_hint()
+                )
             }
         }
     }
@@ -304,6 +320,7 @@ fn parse_route_args(args: &[String]) -> Result<RouteParseOutcome, RouteParseErro
                 tool_classes.push(tool_class);
             }
             "--no-json" | "--text" => want_json = false,
+            "--json" => want_json = true,
             "--help" | "-h" => return Ok(RouteParseOutcome::Help),
             other => {
                 return Err(RouteParseError::UnknownArgument {
@@ -553,6 +570,22 @@ mod tests {
     }
 
     #[test]
+    fn parse_route_args_accepts_explicit_json_mode() {
+        let parsed = parse_route_args(&args(&[
+            "--no-json",
+            "--json",
+            "--policy-file",
+            "policy.yaml",
+        ]))
+        .expect("explicit json should parse");
+
+        let RouteParseOutcome::Run(options) = parsed else {
+            panic!("expected route options");
+        };
+        assert!(options.want_json);
+    }
+
+    #[test]
     fn unknown_subcommand_uses_autonomy_envelope_by_default() {
         let error = unknown_subcommand_error("frobnicate", &[]);
         let envelope = error_envelope(error.command(), &error.message());
@@ -566,6 +599,7 @@ mod tests {
             .expect("error")
             .message
             .contains("unknown subcommand 'frobnicate'"));
+        assert!(error.message().contains("Try: route"));
     }
 
     #[test]
@@ -573,6 +607,39 @@ mod tests {
         let error = unknown_subcommand_error("frobnicate", &args(&["--text"]));
 
         assert!(!error.want_json());
+    }
+
+    #[test]
+    fn autonomy_usage_projects_command_surface_lines() {
+        let mut usage = String::from("forge-core autonomy <subcommand> [options]");
+        for line in COMMAND_AUTONOMY.local_usage_lines() {
+            usage.push('\n');
+            usage.push_str("  ");
+            usage.push_str(line);
+        }
+
+        assert!(
+            usage.starts_with("forge-core autonomy <subcommand> [options]"),
+            "autonomy usage should keep the local command-tree header: {usage}"
+        );
+        for line in COMMAND_AUTONOMY.usage_lines {
+            let subcommand_usage = COMMAND_AUTONOMY.local_usage_line(line);
+            assert!(
+                usage.contains(subcommand_usage),
+                "autonomy usage should include projected Command Surface line {subcommand_usage:?}: {usage}"
+            );
+        }
+        assert_eq!(autonomy_subcommand_hint(), "route");
+    }
+
+    #[test]
+    fn autonomy_subcommand_help_lookup_projects_full_command_surface_lines() {
+        let usage = autonomy_command_surface_usage_line_for("route");
+        assert_eq!(
+            Some(usage),
+            COMMAND_AUTONOMY.usage_line_for_subcommand("route"),
+            "autonomy route help should come from the Command Surface"
+        );
     }
 
     #[test]

@@ -17,14 +17,21 @@ use forge_core_contracts::{
 };
 use forge_core_decisions::AcquireRequest;
 use forge_core_store::WalDurability;
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 fn tmp_claims_dir(label: &str) -> PathBuf {
     static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let timestamp_nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("test clock must be after unix epoch")
+        .as_nanos();
     let dir = std::env::temp_dir().join(format!(
-        "forge-claim-e2e-{label}-{}-{n}",
-        std::process::id()
+        "forge-claim-e2e-{label}-{}-{timestamp_nanos}-{n}",
+        std::process::id(),
     ));
     std::fs::create_dir_all(&dir).unwrap();
     dir

@@ -324,6 +324,27 @@ help adapter to the Command Surface:
   lines, full subcommand usage lookup, and concrete child-name extraction to
   the shared `CommandSpec` projection interface.
 
+## Eighteenth hardening changeset evidence
+
+The eighteenth implementation slice reconciles the `autonomy` command-tree
+help adapter with the actual Command Surface:
+
+- `COMMAND_AUTONOMY` now advertises the real implemented handler,
+  `forge-core autonomy route --policy-file <path> [--goal-file <path>] [--tool-class <snake_case>]... [--failure-streak <n>] [--json|--no-json]`,
+  instead of stale placeholder children (`policy`, `admit`, `decision`) that do
+  not exist as CLI adapters.
+- `autonomy --help`, `autonomy route --help`, and unknown-subcommand hints now
+  project from `COMMAND_AUTONOMY` through the shared `CommandSpec` projection
+  interface.
+- `autonomy route` now accepts explicit `--json` as the no-op counterpart to
+  `--no-json`, matching the advertised JSON/text selection contract.
+- Unit tests lock the local command-tree header, projected `route` usage line,
+  compact `route` hint, full subcommand usage lookup, concrete child-name
+  extraction, and explicit `--json` parsing to the same Command Surface seam.
+- The `claim_e2e` fixture temp directory helper now includes a timestamp in
+  addition to process id and sequence number, preventing recycled Windows PIDs
+  from reusing stale `%TEMP%` claim ledgers and producing false red gates.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

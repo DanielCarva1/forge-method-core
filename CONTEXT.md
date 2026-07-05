@@ -350,8 +350,9 @@ exposure. The current shared seam is the `forge-core-command-surface` crate.
 `forge-core-cli::command_registry` adds handler pointers to that metadata; the
 MCP adapter projects allowlist defaults and tool descriptors from it, and
 `docs/generated/command-surface.md` is generated from it. The `start`, `project`,
-`mcp`, `claim`, `contract`, `memory`, `governance`, and `coordination` CLI help
-paths project their usage lines from the same seam. Command-tree help and
+`mcp`, `claim`, `autonomy`, `contract`, `memory`, `governance`, and
+`coordination` CLI help paths project their usage lines from the same seam.
+Command-tree help and
 unknown-subcommand hints use `CommandSpec` projection helpers for local usage
 lines, concrete subcommand names, and full subcommand usage lookup instead of
 re-implementing `forge-core <command>` prefix slicing in each CLI module.

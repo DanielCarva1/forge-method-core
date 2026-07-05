@@ -234,7 +234,7 @@ pub const COMMAND_CLAIM: CommandSpec = CommandSpec {
 
 pub const COMMAND_AUTONOMY: CommandSpec = CommandSpec {
     name: "autonomy",
-    usage_lines:     &["       forge-core autonomy <subcommand> [flags]   (route|policy|admit|decision) [--json|--no-json]"],
+    usage_lines:     &["       forge-core autonomy route --policy-file <path> [--goal-file <path>] [--tool-class <snake_case>]... [--failure-streak <n>] [--json|--no-json]"],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::AllowlistOnly,
@@ -785,15 +785,14 @@ mod tests {
             vec!["ingest", "list", "forget", "promote", "review"]
         );
         assert_eq!(
-            COMMAND_CLAIM.concrete_subcommand_hint(),
-            "acquire | heartbeat | release | handoff | status | reconcile | check-write"
-        );
-        assert_eq!(
             COMMAND_AUTONOMY
                 .concrete_subcommand_names()
                 .collect::<Vec<_>>(),
-            Vec::<&str>::new(),
-            "placeholder usage should not become a concrete hint"
+            vec!["route"]
+        );
+        assert_eq!(
+            COMMAND_CLAIM.concrete_subcommand_hint(),
+            "acquire | heartbeat | release | handoff | status | reconcile | check-write"
         );
     }
 
