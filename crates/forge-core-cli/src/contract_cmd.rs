@@ -4,6 +4,7 @@
 //! documents and reports whether it deserializes as the requested kind. The
 //! driver wires this module into the top-level CLI dispatch.
 
+use forge_core_command_surface::COMMAND_CONTRACT;
 use forge_core_contracts::{
     AgentRunContractDocument, AutonomyPolicyContractDocument, CheckpointContractDocument,
     CliEnvelope, EvalRunContractDocument, ExitReason, MemoryContractDocument,
@@ -73,15 +74,35 @@ pub fn run_contract_command(args: &[String]) -> Result<(), ExitError> {
     match sub {
         "validate" => run_validate(&args[2..]),
         "--help" | "-h" | "help" => {
-            println!("forge-core contract <subcommand> [options]");
-            println!("  validate --kind <kind> --file <path> [--no-json]");
+            println!("{}", contract_usage());
             println!("  supported kinds: {}", SUPPORTED_KINDS.join(", "));
             Ok(())
         }
         other => Err(ExitError::usage(format!(
-            "forge-core contract: unknown subcommand '{other}'. Try: validate"
+            "forge-core contract: unknown subcommand '{other}'. Try: {hint}",
+            hint = contract_subcommand_hint()
         ))),
     }
+}
+
+fn contract_usage() -> String {
+    let mut usage = String::from("forge-core contract <subcommand> [options]");
+    for line in COMMAND_CONTRACT.local_usage_lines() {
+        usage.push('\n');
+        usage.push_str("  ");
+        usage.push_str(line);
+    }
+    usage
+}
+
+fn contract_subcommand_hint() -> String {
+    COMMAND_CONTRACT.concrete_subcommand_hint()
+}
+
+fn contract_command_surface_usage_line_for(subcommand: &str) -> &'static str {
+    COMMAND_CONTRACT
+        .usage_line_for_subcommand(subcommand)
+        .unwrap_or("forge-core contract <subcommand> [options]")
 }
 
 /// Handler for `forge-core contract validate`.
@@ -109,9 +130,10 @@ pub fn run_validate(args: &[String]) -> Result<(), ExitError> {
                     args, idx, "validate", "file",
                 )?));
             }
+            "--json" => want_json = true,
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
-                println!("forge-core contract validate --kind <kind> --file <path> [--no-json]");
+                println!("{}", contract_command_surface_usage_line_for("validate"));
                 println!("supported kinds: {}", SUPPORTED_KINDS.join(", "));
                 return Ok(());
             }
@@ -336,6 +358,31 @@ autonomy_policy_contract:
             err.to_string()
                 .contains("autonomy_policy file is not valid YAML"),
             "got: {err}"
+        );
+    }
+
+    #[test]
+    fn contract_usage_projects_command_surface_lines() {
+        let usage = contract_usage();
+        assert!(
+            usage.starts_with("forge-core contract <subcommand> [options]"),
+            "contract usage should keep the local command-tree header: {usage}"
+        );
+        for line in COMMAND_CONTRACT.usage_lines {
+            let subcommand_usage = COMMAND_CONTRACT.local_usage_line(line);
+            assert!(
+                usage.contains(subcommand_usage),
+                "contract usage should include projected Command Surface line {subcommand_usage:?}: {usage}"
+            );
+        }
+        assert_eq!(contract_subcommand_hint(), "validate");
+    }
+
+    #[test]
+    fn contract_subcommand_help_lookup_projects_full_command_surface_lines() {
+        assert_eq!(
+            contract_command_surface_usage_line_for("validate"),
+            COMMAND_CONTRACT.canonical_usage().trim_start()
         );
     }
 }

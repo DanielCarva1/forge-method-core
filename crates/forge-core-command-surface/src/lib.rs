@@ -243,7 +243,7 @@ pub const COMMAND_AUTONOMY: CommandSpec = CommandSpec {
 pub const COMMAND_CONTRACT: CommandSpec = CommandSpec {
     name: "contract",
     usage_lines: &[
-        "       forge-core contract <subcommand>   (catalog|snapshot|explain) [--json|--no-json]",
+        "       forge-core contract validate --kind <kind> --file <path> [--json|--no-json]",
     ],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
@@ -759,6 +759,12 @@ mod tests {
                 .concrete_subcommand_names()
                 .collect::<Vec<_>>(),
             vec!["init", "resolve"]
+        );
+        assert_eq!(
+            COMMAND_CONTRACT
+                .concrete_subcommand_names()
+                .collect::<Vec<_>>(),
+            vec!["validate"]
         );
         assert_eq!(
             COMMAND_CLAIM.concrete_subcommand_hint(),

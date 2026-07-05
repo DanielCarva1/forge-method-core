@@ -253,6 +253,22 @@ interface:
   extraction, placeholder filtering, compact hint rendering, and full
   subcommand usage lookup.
 
+## Fourteenth hardening changeset evidence
+
+The fourteenth implementation slice reconciles the `contract` command with the
+Command Surface:
+
+- `COMMAND_CONTRACT` now advertises the real handler surface,
+  `forge-core contract validate --kind <kind> --file <path> [--json|--no-json]`,
+  instead of stale `catalog|snapshot|explain` placeholders.
+- `contract --help`, `contract validate --help`, and unknown-subcommand hints
+  now project from `COMMAND_CONTRACT` through the shared `CommandSpec`
+  projection interface.
+- `contract validate` now accepts explicit `--json` as the no-op counterpart to
+  `--no-json`, matching the advertised JSON/text selection contract.
+- Unit tests lock the local command-tree header, projected usage line, and
+  compact `validate` hint to the Command Surface.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
