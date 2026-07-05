@@ -355,7 +355,7 @@ impl MemoryEntry {
     /// [`AuthorityLevel`] (Trust Axis 1). Co-localised with the enum so the
     /// coexistence rule lives in one place, not in N callers.
     ///
-    /// # Mapping (Opção A, ADR 0023)
+    /// # Mapping (Option A, ADR 0023)
     ///
     /// | legacy `approval`     | `authority_level` field | effective result      |
     /// |-----------------------|-------------------------|-----------------------|
@@ -369,7 +369,7 @@ impl MemoryEntry {
     /// An explicit `authority_level` field always wins over the legacy
     /// `approval` mapping — this is how a migrated record opts into the new
     /// axis. `AutoPromoted` collapses to `Raw` (never `Authority`), honouring
-    /// the F06 NFR that promote exige policy e evidência raw.
+    /// the F06 NFR that promote requires policy and raw evidence.
     #[must_use]
     pub fn authority_level_effective(&self) -> AuthorityLevel {
         if let Some(explicit) = self.authority_level {
@@ -452,11 +452,11 @@ pub enum ReviewState {
 
 /// Legacy single-axis approval state. Superseded by the two-axis model
 /// ([`AuthorityLevel`] + [`ReviewState`]) in ADR 0023. Retained for
-/// zero-migration-cost backwards compatibility (Opção A); bridged to the
+/// zero-migration-cost backwards compatibility (Option A); bridged to the
 /// new axes by [`MemoryEntry::authority_level_effective`].
 ///
 /// `AutoPromoted` is a **deprecated anti-pattern**: it violates the F06 NFR
-/// ("nenhuma memória vira authority automaticamente"). It is NOT marked with
+/// ("no memory becomes an authority automatically"). It is NOT marked with
 /// `#[deprecated]` because the six derives on this enum would trip clippy
 /// (rust-lang/rust#92313); enforcement is instead via the
 /// `deny_auto_promoted` risk-audit rule, which fails closed on the YAML
@@ -719,7 +719,7 @@ memory_contract:
         );
     }
 
-    // --- F06 trust-axis bridge tests (ADR 0023, Opção A) ---
+    // --- F06 trust-axis bridge tests (ADR 0023, Option A) ---
 
     #[test]
     fn bridge_legacy_approved_maps_to_provisional() {
@@ -798,7 +798,7 @@ memory_contract:
     fn legacy_yaml_without_axes_still_deserializes() {
         // A pre-F06.2 YAML (no authority_level/review_state fields) must still
         // parse under deny_unknown_fields + serde(default). This is the
-        // zero-migration-cost guarantee (Opção A).
+        // zero-migration-cost guarantee (Option A).
         let yaml = r#"schema_version: "0.1"
 memory_contract:
   id: memory.project.forge

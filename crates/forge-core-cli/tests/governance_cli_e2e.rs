@@ -3,8 +3,8 @@
 //! Drives the REAL `forge-core` binary through the arbitration lifecycle
 //! (record → conflicts[pending] → arbitrate → conflicts[resolved]) using the
 //! permanent F07 fixtures in `contracts/examples/`. This is the E2E acceptance
-//! test the F07 spec names: "2 principals disputando mesmo ref → `ConflictContract`
-//! emitido → resolução manual → ledger atualizado".
+//! test the F07 spec names: "2 principals disputing the same ref → `ConflictContract`
+//! emitted → manual resolution → ledger updated".
 //!
 //! No mocks: the binary writes to a fresh `--governance-dir`, the PEP appends to
 //! a real JSONL log, the projection replays it, and assertions check the wire
@@ -61,7 +61,7 @@ fn output_json(output: &Output) -> Value {
 
 /// The canonical F07 E2E: record → conflicts(pending) → arbitrate →
 /// conflicts(resolved). Each step asserts the wire envelope; the arbitrate
-/// step proves "resolução manual → ledger atualizado" (the F07.7 acceptance
+/// step proves "manual resolution → ledger updated" (the F07.7 acceptance
 /// criterion).
 #[test]
 fn governance_lifecycle_record_conflicts_arbitrate() {

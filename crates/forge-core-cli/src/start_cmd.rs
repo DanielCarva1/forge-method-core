@@ -11,7 +11,7 @@
 //!
 //! ## Why read-only
 //!
-//! Per the F12 grill (Opção A on every question), the agent is the
+//! Per the F12 grill (Option A on every question), the agent is the
 //! bidirectional interpreter between human and product. The CLI emits a
 //! payload; the agent decides the action. `start` carrying an effect side
 //! (running `init`, writing a scaffold) would hide authority behind a

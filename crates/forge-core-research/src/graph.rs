@@ -1,7 +1,8 @@
 //! F14 Evidence Graph — the derived projection `SourceId → citing claims`
-//! (ADR-0010 §"Consequencias": *"`EvidenceGraph` nao e tipo first-class nem
-//! populado pelo agent: e projecao `SourceId` -> claims citantes, computada por
-//! walk sobre artifacts (mesmo padrao do `reference_index` do forge-core-store)"*).
+//! (ADR-0010 §"Consequences": *"`EvidenceGraph` is not a first-class type nor
+//! populated by the agent: it is a projection `SourceId` -> citing claims,
+//! computed by walking artifacts (same pattern as the `reference_index` in
+//! forge-core-store)"*).
 //!
 //! # Why a projection, not a stored type
 //!

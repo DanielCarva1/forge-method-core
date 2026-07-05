@@ -1,8 +1,8 @@
 //! Rekor log entry parsing and inclusion proof verification.
 //!
-//! Extraído de `lib.rs` como parte da recomendação R1 (decompor god-file).
-//! Mantém a mesma API interna; funções são `pub(crate)` para uso pelo
-//! `lib.rs` e demais módulos do crate.
+//! Extracted from `lib.rs` as part of recommendation R1 (decompose the
+//! god-file). Retains the same internal API; functions are `pub(crate)` for
+//! use by `lib.rs` and the other modules of the crate.
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use ed25519_dalek::Verifier as _;

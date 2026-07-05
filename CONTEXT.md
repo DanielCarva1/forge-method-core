@@ -179,7 +179,7 @@ truth for autonomous action. The three rungs:
 - **Authority** — the agent may act on it as ground truth. **Reaching
   `Authority` requires non-empty `evidence_refs` AND a satisfied promote
   policy.** It does not require review (the axes are orthogonal). This is the
-  F06 NFR: *promote exige policy e evidência raw — nunca automático.*
+  F06 NFR: *promote requires policy and raw evidence — never automatic.*
 
 The legacy single-axis `ApprovalState` (`Proposed/InReview/Approved/Rejected/
 AutoPromoted`) is bridged, not deleted: `Approved` maps to `Provisional`,
@@ -241,7 +241,7 @@ The legacy `ApprovalState::AutoPromoted` variant (and the YAML token
 `approval: auto_promoted`) is forbidden because it violates the F06 NFR:
 it lets a record reach the top of trust with no policy and no evidence —
 the exact surface memory/retrieval poisoning attacks exploit (AgentPoison,
-MINJA, PoisonedRAG). The variant is **deprecated, not removed** (Opção A:
+MINJA, PoisonedRAG). The variant is **deprecated, not removed** (Option A:
 zero migration cost). It is detected and failed-closed by the
 `deny_auto_promoted` risk-audit rule (`contracts/risk-audits/`), a parametric
 YAML detector — no Rust change required to enforce it. The canonical example
@@ -283,7 +283,7 @@ contract scenarios that inform the spec live in
 `docs/fixtures/operation-contract-v0/`. `start` composes with `project init`
 and `guide`; it does not duplicate either. It does not recommend workflows or
 phases: once a project has the prerequisites for `guide` to operate, `start`
-hands off to `guide` (Opção A from the F12 grill). Because `start` is
+hands off to `guide` (Option A from the F12 grill). Because `start` is
 read-only, it requires no claim and performs no check-write.
 
 ## Start Bootstrap State
