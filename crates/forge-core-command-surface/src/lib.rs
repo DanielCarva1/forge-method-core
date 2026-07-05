@@ -385,6 +385,13 @@ pub const COMMAND_EVAL: CommandSpec = CommandSpec {
     mcp_visibility: McpVisibility::AllowlistOnly,
 };
 
+/// Default suite used by `forge-core eval compare` when `--suite` is omitted.
+///
+/// This is command-surface metadata because both the eval implementation and
+/// help text must describe the same default path.
+pub const COMMAND_EVAL_DEFAULT_SUITE: &str =
+    "docs/fixtures/eval-run-v0/eval-compare-smoke-suite.yaml";
+
 pub const COMMAND_EVAL_HARNESS: CommandSpec = CommandSpec {
     name: "eval-harness",
     usage_lines:     &["       forge-core eval-harness --config <yaml> [--root <path>] [--corpus <yaml>] [--allow-bootstrap-core] [--json|--no-json]"],

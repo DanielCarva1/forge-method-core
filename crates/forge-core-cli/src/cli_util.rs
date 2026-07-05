@@ -18,7 +18,9 @@ use crate::{
     HostAdapterProcessTarget, HostAdapterProjectionTarget, HostAdapterUpdateChannel,
     PayloadFileSpec,
 };
-use forge_core_command_surface::{CommandSpec, COMMAND_GRAPH};
+use forge_core_command_surface::{
+    CommandSpec, COMMAND_EVAL, COMMAND_EVAL_DEFAULT_SUITE, COMMAND_GRAPH,
+};
 use forge_core_contracts::runtime::RuntimeKind;
 use forge_core_contracts::tool_effect::EffectTargetKind;
 use forge_core_store::{EffectMetadataAdapterTrigger, EffectMetadataConsumerUse};
@@ -136,15 +138,12 @@ pub fn graph_usage() -> String {
 }
 
 #[must_use]
-pub fn eval_usage() -> &'static str {
-    concat!(
-        "usage: forge-core eval compare [--root <project>] [--suite <path>] ",
-        "--baseline <single-agent|graph|mas|manual> ",
-        "--candidate <single-agent|graph|mas|manual> ",
-        "[--allow-bootstrap-core] [--json|--no-json]\n",
-        "default suite: ",
-        "docs/fixtures/eval-run-v0/eval-compare-smoke-suite.yaml"
-    )
+pub fn eval_usage() -> String {
+    let mut usage = format_command_surface_usage("usage:", &COMMAND_EVAL);
+    usage.push('\n');
+    usage.push_str("default suite: ");
+    usage.push_str(COMMAND_EVAL_DEFAULT_SUITE);
+    usage
 }
 
 #[must_use]
@@ -722,6 +721,22 @@ mod argv_cursor_tests {
         assert!(
             usage.contains("[--json|--no-json]"),
             "graph usage should keep the shared JSON/text contract: {usage}"
+        );
+    }
+
+    #[test]
+    fn eval_usage_projects_command_surface_lines() {
+        let usage = eval_usage();
+        for line in COMMAND_EVAL.usage_lines {
+            let canonical = line.trim_start();
+            assert!(
+                usage.contains(canonical),
+                "eval usage should include projected Command Surface line {canonical:?}: {usage}"
+            );
+        }
+        assert!(
+            usage.contains(COMMAND_EVAL_DEFAULT_SUITE),
+            "eval usage should keep the shared default suite path: {usage}"
         );
     }
 

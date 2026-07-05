@@ -447,6 +447,21 @@ from the command help path:
 - Unit tests lock `graph_usage()` to every `COMMAND_GRAPH.usage_lines` entry and
   assert the shared JSON/text contract remains visible.
 
+## Twenty-fourth hardening changeset evidence
+
+The twenty-fourth implementation slice removes the next local CLI usage Adapter
+from the eval help path:
+
+- `cli_util::eval_usage()` now renders its usage line from `COMMAND_EVAL`
+  instead of a local `concat!(...)` string.
+- The eval default suite path moved to `COMMAND_EVAL_DEFAULT_SUITE`, so the
+  eval implementation and help text share the same command-surface fact.
+- The helper preserves the eval-specific `default suite:` detail while keeping
+  the canonical usage line, including `[--json|--no-json]`, owned by the shared
+  Command Surface seam.
+- Unit tests lock `eval_usage()` to every `COMMAND_EVAL.usage_lines` entry and
+  assert the shared default suite path remains visible.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

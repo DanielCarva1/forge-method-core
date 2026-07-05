@@ -1,6 +1,7 @@
 use crate::cli_error::ExitError;
 use crate::cli_util::eval_usage;
 use crate::project_cmd::{resolve_project, ProjectResolveError};
+use forge_core_command_surface::COMMAND_EVAL_DEFAULT_SUITE;
 use forge_core_contracts::{EvalRunContractDocument, RepoPath};
 use forge_core_eval::{
     compare_eval_runs_with_diagnostics, EvalArmLabel, EvalCompareStatus, EvalCompareSuiteDocument,
@@ -9,9 +10,6 @@ use forge_core_eval::{
 use std::fmt;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-
-pub const DEFAULT_EVAL_COMPARE_SUITE: &str =
-    "docs/fixtures/eval-run-v0/eval-compare-smoke-suite.yaml";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvalCompareCommandInput {
@@ -128,7 +126,7 @@ pub fn run_compare(
         input
             .suite_path
             .as_deref()
-            .unwrap_or_else(|| Path::new(DEFAULT_EVAL_COMPARE_SUITE)),
+            .unwrap_or_else(|| Path::new(COMMAND_EVAL_DEFAULT_SUITE)),
     )?;
     let suite_document = read_suite(&suite_path)?;
     let suite = suite_document.eval_compare_suite;
