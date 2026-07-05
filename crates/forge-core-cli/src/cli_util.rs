@@ -20,7 +20,7 @@ use crate::{
 };
 use forge_core_command_surface::{
     CommandSpec, COMMAND_COST, COMMAND_EVAL, COMMAND_EVAL_DEFAULT_SUITE, COMMAND_GRAPH,
-    COMMAND_TELEMETRY, COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH,
+    COMMAND_RISK_AUDIT, COMMAND_TELEMETRY, COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH,
     COMMAND_TELEMETRY_DEFAULT_TRACE_SOURCE,
 };
 use forge_core_contracts::runtime::RuntimeKind;
@@ -163,6 +163,11 @@ pub fn telemetry_usage() -> String {
 #[must_use]
 pub fn cost_usage() -> String {
     format_command_surface_usage("usage:", &COMMAND_COST)
+}
+
+#[must_use]
+pub fn risk_audit_usage() -> String {
+    format_command_surface_usage("usage:", &COMMAND_RISK_AUDIT)
 }
 
 fn format_command_surface_usage(header: &str, command: &CommandSpec) -> String {
@@ -780,6 +785,22 @@ mod argv_cursor_tests {
         assert!(
             usage.contains("[--json|--no-json]"),
             "cost usage should keep the shared JSON/text contract: {usage}"
+        );
+    }
+
+    #[test]
+    fn risk_audit_usage_projects_command_surface_lines() {
+        let usage = risk_audit_usage();
+        for line in COMMAND_RISK_AUDIT.usage_lines {
+            let canonical = line.trim_start();
+            assert!(
+                usage.contains(canonical),
+                "risk-audit usage should include projected Command Surface line {canonical:?}: {usage}"
+            );
+        }
+        assert!(
+            usage.contains("[--json|--no-json]"),
+            "risk-audit usage should keep the shared JSON/text contract: {usage}"
         );
     }
 

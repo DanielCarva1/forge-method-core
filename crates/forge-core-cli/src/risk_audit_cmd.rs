@@ -14,7 +14,7 @@
 //! awareness, symlinks, etc.) without touching the rule engine.
 
 use crate::cli_error::ExitError;
-use crate::cli_util::{resolve_now_unix, usage};
+use crate::cli_util::{resolve_now_unix, risk_audit_usage, usage};
 use forge_core_contracts::{CliEnvelope, ExitReason};
 use forge_core_store::append_trace_event;
 use forge_core_validate::risk_audit::{
@@ -24,9 +24,6 @@ use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::instrument;
-
-const RISK_AUDIT_USAGE_LINE: &str =
-    "       forge-core risk-audit [--root <path>] --rules <path> [--json]";
 
 #[derive(Debug, Clone, Serialize)]
 struct RiskAuditDiagnosticView {
@@ -129,8 +126,9 @@ pub fn run_risk_audit_command(args: &[String]) -> Result<(), ExitError> {
                 rules_path = Some(PathBuf::from(value));
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
-                println!("{RISK_AUDIT_USAGE_LINE}");
+                println!("{}", risk_audit_usage());
                 return Ok(());
             }
             _ => return Err(ExitError::usage(usage())),
@@ -401,5 +399,22 @@ fn run_risk_audit(root: &Path, rules_path: Option<&Path>) -> CliEnvelope<RiskAud
             format!("risk-audit failed with {} errors", summary.error_count),
             summary,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(slice: &[&str]) -> Vec<String> {
+        slice.iter().map(std::string::ToString::to_string).collect()
+    }
+
+    #[test]
+    fn no_json_is_an_explicit_text_mode_flag() {
+        let error = run_risk_audit_command(&args(&["risk-audit", "--no-json"])).unwrap_err();
+
+        assert_eq!(error.exit_code(), 5);
+        assert_eq!(error.message(), "risk-audit requires --rules <path>");
     }
 }

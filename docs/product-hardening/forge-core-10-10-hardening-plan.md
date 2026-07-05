@@ -491,6 +491,20 @@ from the cost help path:
 - Unit tests lock `cost_usage()` to every `COMMAND_COST.usage_lines` entry and
   assert `[--json|--no-json]` remains visible.
 
+## Twenty-seventh hardening changeset evidence
+
+The twenty-seventh implementation slice removes the next local CLI usage
+Adapter from the risk-audit help path and reconciles a parser/help drift:
+
+- `cli_util::risk_audit_usage()` now renders from `COMMAND_RISK_AUDIT` instead
+  of a local `RISK_AUDIT_USAGE_LINE` in the risk-audit command module.
+- The risk-audit parser now accepts explicit `--no-json` as the text-mode
+  counterpart to `--json`, matching the Command Surface `[--json|--no-json]`
+  contract.
+- Unit tests lock `risk_audit_usage()` to every
+  `COMMAND_RISK_AUDIT.usage_lines` entry and prove `--no-json` is treated as
+  an explicit text-mode flag rather than an unknown argument.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
