@@ -257,9 +257,12 @@ pub const COMMAND_CONTRACT: CommandSpec = CommandSpec {
 pub const COMMAND_ISOLATION: CommandSpec = CommandSpec {
     name: "isolation",
     usage_lines: &[
-        "       forge-core isolation [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
+        "       forge-core isolation propose [--root <path>] [--allow-bootstrap-core] --agent <id> --branch <name> --worktree-path <path> --base-ref <ref> [--id <id>] [--merge-policy rebase|merge|squash] [--claim <claim-id>] [--isolation-dir <path>] [--now-unix <epoch>] [--json|--no-json]",
+        "       forge-core isolation status [--root <path>] [--allow-bootstrap-core] [--agent <id>] [--isolation-dir <path>] [--json|--no-json]",
+        "       forge-core isolation merge-plan [--root <path>] [--allow-bootstrap-core] --id <isolation-id> [--isolation-dir <path>] [--now-unix <epoch>] [--json|--no-json]",
+        "       forge-core isolation transition [--root <path>] [--allow-bootstrap-core] --id <isolation-id> --to proposed|active|merging|merged|abandoned [--isolation-dir <path>] [--now-unix <epoch>] [--json|--no-json]",
     ],
-    authority: CommandAuthority::ReadOnly,
+    authority: CommandAuthority::MixedBySubcommand,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::AllowlistOnly,
 };
@@ -787,6 +790,12 @@ mod tests {
                 .concrete_subcommand_names()
                 .collect::<Vec<_>>(),
             vec!["record", "conflicts", "arbitrate", "escalate"]
+        );
+        assert_eq!(
+            COMMAND_ISOLATION
+                .concrete_subcommand_names()
+                .collect::<Vec<_>>(),
+            vec!["propose", "status", "merge-plan", "transition"]
         );
         assert_eq!(
             COMMAND_MEMORY

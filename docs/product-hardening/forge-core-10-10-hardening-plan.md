@@ -365,6 +365,30 @@ adapter with the actual Command Surface:
   hint, concrete child-name extraction, and explicit `--json` parsing to the
   same Command Surface seam.
 
+## Twentieth hardening changeset evidence
+
+The twentieth implementation slice reconciles the `isolation` command-tree help
+adapter with the actual Command Surface:
+
+- `COMMAND_ISOLATION` now advertises the real implemented command tree,
+  `forge-core isolation propose|status|merge-plan|transition`, instead of a
+  stale top-level usage line. Its authority class is now `mixed_by_subcommand`
+  because `status` is read-only while `propose` and `transition` write
+  isolation contracts.
+- `isolation --help`, `isolation propose|status|merge-plan|transition --help`,
+  and unknown-subcommand hints now project from `COMMAND_ISOLATION` through the
+  shared `CommandSpec` projection interface.
+- `isolation propose|status|merge-plan|transition` now accept explicit `--json`
+  as the no-op counterpart to `--no-json`, matching the advertised JSON/text
+  selection contract.
+- Unknown arguments in isolation subcommands now fail closed instead of being
+  silently ignored by the parser adapter.
+- Unit tests lock the local command-tree header, projected subcommand usage
+  lines, full subcommand usage lookup, compact
+  `propose | status | merge-plan | transition` hint, concrete child-name
+  extraction, explicit `--json` parsing, and unknown-argument rejection to the
+  same Command Surface seam.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

@@ -16,6 +16,7 @@ use crate::cli_util::{
     emit_envelope_or_err, parse_strict_or_err, require_value_or_err, resolve_now_unix,
 };
 use crate::io_util::{atomic_write, DirLock};
+use forge_core_command_surface::COMMAND_ISOLATION;
 use forge_core_contracts::common::StableId;
 use forge_core_contracts::isolation::{
     IsolationContract, IsolationContractDocument, IsolationError, IsolationStatus, MergePlan,
@@ -561,18 +562,40 @@ pub fn run_isolation_command(args: &[String]) -> Result<(), ExitError> {
         "merge-plan" => run_isolation_merge_plan(&args[2..]),
         "transition" => run_isolation_transition(&args[2..]),
         "--help" | "-h" | "help" => {
-            println!("forge-core isolation <subcommand> [options]");
-            println!("  propose [--root <path>] [--allow-bootstrap-core] --agent <id> --branch <name> --worktree-path <path> --base-ref <ref> [--id <isolation-id>] [--merge-policy rebase|merge|squash] [--claim <claim-id>] [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
-            println!("  status [--root <path>] [--allow-bootstrap-core] [--agent <id>] [--isolation-dir <path>] [--no-json]");
-            println!("  merge-plan [--root <path>] [--allow-bootstrap-core] --id <isolation-id> [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
-            println!("  transition [--root <path>] [--allow-bootstrap-core] --id <isolation-id> --to proposed|active|merging|merged|abandoned [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+            print_isolation_usage();
             println!("  Defaults: without --isolation-dir, resolves --root as a Forge project and uses <state_root>/contracts/isolations; --isolation-dir is an explicit override.");
             Ok(())
         }
         other => Err(ExitError::usage(format!(
-            "forge-core isolation: unknown subcommand '{other}'. Try: propose | status | merge-plan | transition"
+            "forge-core isolation: unknown subcommand '{other}'. Try: {hint}",
+            hint = isolation_subcommand_hint()
         ))),
     }
+}
+
+fn print_isolation_usage() {
+    println!("forge-core isolation <subcommand> [options]");
+    for line in COMMAND_ISOLATION.local_usage_lines() {
+        println!("  {line}");
+    }
+}
+
+fn isolation_subcommand_hint() -> String {
+    COMMAND_ISOLATION.concrete_subcommand_hint()
+}
+
+fn isolation_command_surface_usage_line_for(subcommand: &str) -> &'static str {
+    COMMAND_ISOLATION
+        .usage_line_for_subcommand(subcommand)
+        .unwrap_or("forge-core isolation <subcommand> [options]")
+}
+
+#[must_use]
+fn unknown_isolation_arg(subcommand: &str, arg: &str) -> ExitError {
+    eprintln!("isolation {subcommand}: unrecognized argument '{arg}'");
+    ExitError::invalid_value(format!(
+        "isolation {subcommand}: unrecognized argument '{arg}'"
+    ))
 }
 
 #[must_use]
@@ -736,12 +759,13 @@ pub fn run_isolation_propose(args: &[String]) -> Result<(), ExitError> {
                 )?);
             }
             "--no-json" | "--text" => want_json = false,
+            "--json" => want_json = true,
             "--help" | "-h" => {
-                println!("forge-core isolation propose [--root <path>] [--allow-bootstrap-core] --agent <id> --branch <name> --worktree-path <path> --base-ref <ref> [--id <id>] [--merge-policy rebase|merge|squash] [--claim <claim-id>] [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("{}", isolation_command_surface_usage_line_for("propose"));
                 println!("  Without --isolation-dir, resolves --root and uses <state_root>/contracts/isolations; --isolation-dir preserves the explicit override.");
                 return Ok(());
             }
-            _ => {}
+            other => return Err(unknown_isolation_arg("propose", other)),
         }
         idx += 1;
     }
@@ -809,12 +833,13 @@ pub fn run_isolation_status(args: &[String]) -> Result<(), ExitError> {
                 )?));
             }
             "--no-json" | "--text" => want_json = false,
+            "--json" => want_json = true,
             "--help" | "-h" => {
-                println!("forge-core isolation status [--root <path>] [--allow-bootstrap-core] [--agent <id>] [--isolation-dir <path>] [--no-json]");
+                println!("{}", isolation_command_surface_usage_line_for("status"));
                 println!("  Without --isolation-dir, resolves --root and uses <state_root>/contracts/isolations; --isolation-dir preserves the explicit override.");
                 return Ok(());
             }
-            _ => {}
+            other => return Err(unknown_isolation_arg("status", other)),
         }
         idx += 1;
     }
@@ -875,12 +900,13 @@ pub fn run_isolation_merge_plan(args: &[String]) -> Result<(), ExitError> {
                 )?);
             }
             "--no-json" | "--text" => want_json = false,
+            "--json" => want_json = true,
             "--help" | "-h" => {
-                println!("forge-core isolation merge-plan [--root <path>] [--allow-bootstrap-core] --id <isolation-id> [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("{}", isolation_command_surface_usage_line_for("merge-plan"));
                 println!("  Without --isolation-dir, resolves --root and uses <state_root>/contracts/isolations; --isolation-dir preserves the explicit override.");
                 return Ok(());
             }
-            _ => {}
+            other => return Err(unknown_isolation_arg("merge-plan", other)),
         }
         idx += 1;
     }
@@ -950,12 +976,13 @@ pub fn run_isolation_transition(args: &[String]) -> Result<(), ExitError> {
                 )?);
             }
             "--no-json" | "--text" => want_json = false,
+            "--json" => want_json = true,
             "--help" | "-h" => {
-                println!("forge-core isolation transition [--root <path>] [--allow-bootstrap-core] --id <isolation-id> --to proposed|active|merging|merged|abandoned [--isolation-dir <path>] [--now-unix <epoch>] [--no-json]");
+                println!("{}", isolation_command_surface_usage_line_for("transition"));
                 println!("  Without --isolation-dir, resolves --root and uses <state_root>/contracts/isolations; --isolation-dir preserves the explicit override.");
                 return Ok(());
             }
-            _ => {}
+            other => return Err(unknown_isolation_arg("transition", other)),
         }
         idx += 1;
     }
@@ -994,6 +1021,10 @@ pub fn run_isolation_transition(args: &[String]) -> Result<(), ExitError> {
 mod tests {
     use super::*;
     use std::fs;
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
 
     fn dir() -> PathBuf {
         use std::sync::atomic::{AtomicU64, Ordering};
@@ -1300,5 +1331,62 @@ mod tests {
         assert!(yaml.contains("squash"));
         let parsed: MergePolicy = yaml_serde::from_str("squash").unwrap();
         assert_eq!(parsed, MergePolicy::Squash);
+    }
+
+    #[test]
+    fn isolation_usage_projects_command_surface_lines() {
+        let mut usage = String::from("forge-core isolation <subcommand> [options]");
+        for line in COMMAND_ISOLATION.local_usage_lines() {
+            usage.push('\n');
+            usage.push_str("  ");
+            usage.push_str(line);
+        }
+
+        assert!(
+            usage.starts_with("forge-core isolation <subcommand> [options]"),
+            "isolation usage should keep the local command-tree header: {usage}"
+        );
+        for line in COMMAND_ISOLATION.usage_lines {
+            let subcommand_usage = COMMAND_ISOLATION.local_usage_line(line);
+            assert!(
+                usage.contains(subcommand_usage),
+                "isolation usage should include projected Command Surface line {subcommand_usage:?}: {usage}"
+            );
+        }
+        assert_eq!(
+            isolation_subcommand_hint(),
+            "propose | status | merge-plan | transition"
+        );
+    }
+
+    #[test]
+    fn isolation_subcommand_help_lookup_projects_full_command_surface_lines() {
+        for subcommand in ["propose", "status", "merge-plan", "transition"] {
+            let usage = isolation_command_surface_usage_line_for(subcommand);
+            assert_eq!(
+                Some(usage),
+                COMMAND_ISOLATION.usage_line_for_subcommand(subcommand),
+                "isolation {subcommand} help should come from the Command Surface"
+            );
+        }
+    }
+
+    #[test]
+    fn isolation_status_accepts_explicit_json_mode() {
+        let d = dir();
+        let d_str = d.to_str().expect("isolation dir path utf-8");
+        let result = run_isolation_status(&args(&["--json", "--isolation-dir", d_str]));
+
+        assert!(result.is_ok(), "explicit --json should parse");
+    }
+
+    #[test]
+    fn isolation_status_rejects_unknown_argument() {
+        let result = run_isolation_status(&args(&["--definitely-unknown"]));
+
+        assert!(
+            result.is_err(),
+            "unknown isolation status arguments should fail closed"
+        );
     }
 }
