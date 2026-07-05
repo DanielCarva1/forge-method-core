@@ -345,6 +345,26 @@ help adapter with the actual Command Surface:
   addition to process id and sequence number, preventing recycled Windows PIDs
   from reusing stale `%TEMP%` claim ledgers and producing false red gates.
 
+## Nineteenth hardening changeset evidence
+
+The nineteenth implementation slice reconciles the `guide` command-tree help
+adapter with the actual Command Surface:
+
+- `COMMAND_GUIDE` now advertises the real implemented command tree,
+  `forge-core guide describe`, `forge-core guide decide`, and
+  `forge-core guide status`, instead of stale top-level `--root` /
+  `--allow-bootstrap-core` flags that the guide adapter does not parse.
+- `guide --help`, `guide describe|decide|status --help`, and
+  unknown-subcommand hints now project from `COMMAND_GUIDE` through the shared
+  `CommandSpec` projection interface.
+- `guide describe|decide|status` now accept explicit `--json` as the no-op
+  counterpart to `--no-json`, matching the advertised JSON/text selection
+  contract.
+- Unit tests lock the local command-tree header, projected subcommand usage
+  lines, full subcommand usage lookup, compact `describe | decide | status`
+  hint, concrete child-name extraction, and explicit `--json` parsing to the
+  same Command Surface seam.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

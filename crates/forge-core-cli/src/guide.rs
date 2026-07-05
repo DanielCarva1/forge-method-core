@@ -4,6 +4,7 @@
 //! single [`CliEnvelope`] as JSON to stdout; diagnostics go to stderr.
 //! Implements R1/R3/R4 from the slice-3 spec.
 
+use forge_core_command_surface::COMMAND_GUIDE;
 use forge_core_contracts::{
     Catalog, CatalogEntry, CliEnvelope, ExitReason, Phase, ENVELOPE_SCHEMA_VERSION,
 };
@@ -394,16 +395,31 @@ pub fn run_guide_command(args: &[String]) -> Result<(), ExitError> {
         "decide" => run_guide_decide(&args[2..]),
         "status" => run_guide_status(&args[2..]),
         "--help" | "-h" | "help" => {
-            println!("forge-core guide <subcommand> [options]");
-            println!("  describe [--catalog-dir <path>] [--no-json]");
-            println!("  decide --decision-file <path> [--catalog-dir <path>] [--gates-file <path>] [--no-json]");
-            println!("  status --phase <phase> [--catalog-dir <path>] [--no-json]");
+            print_guide_usage();
             Ok(())
         }
         other => Err(ExitError::usage(format!(
-            "forge-core guide: unknown subcommand '{other}'. Try: describe | decide"
+            "forge-core guide: unknown subcommand '{other}'. Try: {hint}",
+            hint = guide_subcommand_hint()
         ))),
     }
+}
+
+fn print_guide_usage() {
+    println!("forge-core guide <subcommand> [options]");
+    for line in COMMAND_GUIDE.local_usage_lines() {
+        println!("  {line}");
+    }
+}
+
+fn guide_subcommand_hint() -> String {
+    COMMAND_GUIDE.concrete_subcommand_hint()
+}
+
+fn guide_command_surface_usage_line_for(subcommand: &str) -> &'static str {
+    COMMAND_GUIDE
+        .usage_line_for_subcommand(subcommand)
+        .unwrap_or("forge-core guide <subcommand> [options]")
 }
 
 pub fn guide_value(args: &[String], idx: usize) -> Option<&str> {
@@ -464,8 +480,9 @@ pub fn run_guide_describe(args: &[String]) -> Result<(), ExitError> {
                 )?));
             }
             "--no-json" | "--text" => want_json = false,
+            "--json" => want_json = true,
             "--help" | "-h" => {
-                println!("forge-core guide describe [--catalog-dir <path>] [--no-json]");
+                println!("{}", guide_command_surface_usage_line_for("describe"));
                 return Ok(());
             }
             other => return Err(reject_unknown_guide_arg("describe", other)),
@@ -522,8 +539,9 @@ pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
                 )?));
             }
             "--no-json" | "--text" => want_json = false,
+            "--json" => want_json = true,
             "--help" | "-h" => {
-                println!("forge-core guide decide --decision-file <path> [--catalog-dir <path>] [--gates-file <path>] [--no-json]");
+                println!("{}", guide_command_surface_usage_line_for("decide"));
                 return Ok(());
             }
             other => return Err(reject_unknown_guide_arg("decide", other)),
@@ -575,10 +593,9 @@ pub fn run_guide_status(args: &[String]) -> Result<(), ExitError> {
                 )?));
             }
             "--no-json" | "--text" => want_json = false,
+            "--json" => want_json = true,
             "--help" | "-h" => {
-                println!(
-                    "forge-core guide status --phase <phase> [--catalog-dir <path>] [--no-json]"
-                );
+                println!("{}", guide_command_surface_usage_line_for("status"));
                 return Ok(());
             }
             other => return Err(reject_unknown_guide_arg("status", other)),
@@ -687,6 +704,10 @@ mod tests {
         p
     }
     use forge_core_contracts::{CatalogEntry, StableId};
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
 
     fn real_catalog_dir() -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -884,5 +905,54 @@ mod tests {
             .map(ToString::to_string)
             .collect();
         assert_eq!(guide_value(&next_flag, 1), None);
+    }
+
+    #[test]
+    fn guide_usage_projects_command_surface_lines() {
+        let mut usage = String::from("forge-core guide <subcommand> [options]");
+        for line in COMMAND_GUIDE.local_usage_lines() {
+            usage.push('\n');
+            usage.push_str("  ");
+            usage.push_str(line);
+        }
+
+        assert!(
+            usage.starts_with("forge-core guide <subcommand> [options]"),
+            "guide usage should keep the local command-tree header: {usage}"
+        );
+        for line in COMMAND_GUIDE.usage_lines {
+            let subcommand_usage = COMMAND_GUIDE.local_usage_line(line);
+            assert!(
+                usage.contains(subcommand_usage),
+                "guide usage should include projected Command Surface line {subcommand_usage:?}: {usage}"
+            );
+        }
+        assert_eq!(guide_subcommand_hint(), "describe | decide | status");
+    }
+
+    #[test]
+    fn guide_subcommand_help_lookup_projects_full_command_surface_lines() {
+        for subcommand in ["describe", "decide", "status"] {
+            let usage = guide_command_surface_usage_line_for(subcommand);
+            assert_eq!(
+                Some(usage),
+                COMMAND_GUIDE.usage_line_for_subcommand(subcommand),
+                "guide {subcommand} help should come from the Command Surface"
+            );
+        }
+    }
+
+    #[test]
+    fn guide_status_accepts_explicit_json_mode() {
+        let status_args = args(&[
+            "--json",
+            "--phase",
+            "3-plan",
+            "--catalog-dir",
+            real_catalog_dir().to_str().expect("catalog path utf-8"),
+        ]);
+        let result = run_guide_status(&status_args);
+
+        assert!(result.is_ok(), "explicit --json should parse");
     }
 }

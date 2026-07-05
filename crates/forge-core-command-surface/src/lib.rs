@@ -210,7 +210,11 @@ fn is_concrete_subcommand_token(token: &str) -> bool {
 #[rustfmt::skip]
 pub const COMMAND_GUIDE: CommandSpec = CommandSpec {
     name: "guide",
-    usage_lines:     &["       forge-core guide [--root <path>] [--allow-bootstrap-core] [--json|--no-json]"],
+    usage_lines:     &[
+                "       forge-core guide describe [--catalog-dir <path>] [--json|--no-json]",
+                "       forge-core guide decide --decision-file <path> [--catalog-dir <path>] [--gates-file <path>] [--json|--no-json]",
+                "       forge-core guide status --phase <phase> [--catalog-dir <path>] [--json|--no-json]",
+            ],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::AllowlistOnly,
@@ -759,6 +763,12 @@ mod tests {
                 .concrete_subcommand_names()
                 .collect::<Vec<_>>(),
             vec!["init", "resolve"]
+        );
+        assert_eq!(
+            COMMAND_GUIDE
+                .concrete_subcommand_names()
+                .collect::<Vec<_>>(),
+            vec!["describe", "decide", "status"]
         );
         assert_eq!(
             COMMAND_CONTRACT
