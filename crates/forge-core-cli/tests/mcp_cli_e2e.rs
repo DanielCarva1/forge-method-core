@@ -214,7 +214,12 @@ fn canonical_mcp_allowlist_fixture_is_valid() {
     );
     // The canonical fixture includes both read-only and mutate tools.
     assert!(allowlist.get("preview").is_some());
-    assert!(allowlist.get("execute-operation").is_some());
+    assert!(allowlist
+        .get("execute-operation")
+        .is_some_and(|t| t.policy.is_mutate()));
+    assert!(allowlist
+        .get("memory")
+        .is_some_and(|t| t.policy.is_mutate()));
 }
 
 /// Read-only default Allowlist has no mutate tools (the safe surface).
@@ -225,6 +230,10 @@ fn default_allowlist_is_read_only() {
     let al = forge_core_protocol_mcp::Allowlist::default_read_only();
     assert!(al.iter().all(|t| !t.policy.is_mutate()));
     assert!(al.get("execute-operation").is_none());
+    assert!(
+        al.get("memory").is_none(),
+        "top-level memory has mutating subcommands and must not be in the read-only MCP default"
+    );
 }
 
 /// The global usage text mentions the `mcp` command (the registry test

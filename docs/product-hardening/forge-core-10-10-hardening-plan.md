@@ -580,6 +580,30 @@ the Forge core Bootstrap Core Exception:
   same state root, while `start` preserves an explicit reference back to the
   allowed resolve command.
 
+## Thirty-second hardening changeset evidence
+
+The thirty-second implementation slice closes an MCP policy-downgrade gap in
+the Command Surface seam:
+
+- Explicit `mcp-allowlist.yaml` loading now treats the shared
+  `CommandAuthority` as an authority floor: a command whose authority may mutate
+  cannot be admitted with `policy: read-only`.
+- Unsafe declarations are accumulated as
+  `DiagnosticCode::McpAllowlistUnsafeReadOnlyPolicy` diagnostics and the
+  offending tool is dropped, preserving the project's validation style while
+  keeping the MCP adapter fail-closed.
+- Regression coverage proves both `execute-operation` (mutating authority) and
+  `claim` (mixed authority at the top-level MCPTool seam) are rejected when an
+  explicit allowlist tries to downgrade them to read-only, while independent
+  safe entries continue to load.
+- Command Surface tests now reject any default read-only MCP projection whose
+  command authority is not `ReadOnly`; this moved the mixed top-level `memory`
+  MCPTool out of the read-only default and into mutate-gated exposure until a
+  future subcommand-level MCPTool seam exists.
+- `CONTEXT.md` and ADR-0006 now state the rule in product language: the
+  Allowlist is capability data, not a way to weaken the Command Surface,
+  MutateGate, or Tool-Call Attestation.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

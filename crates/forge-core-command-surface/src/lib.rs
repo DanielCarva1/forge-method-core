@@ -331,7 +331,7 @@ pub const COMMAND_MEMORY: CommandSpec = CommandSpec {
             ],
     authority: CommandAuthority::MixedBySubcommand,
     json_mode: JsonMode::EnvelopeOptional,
-    mcp_visibility: McpVisibility::DefaultReadOnly,
+    mcp_visibility: McpVisibility::DefaultMutate,
 };
 
 pub const COMMAND_GOVERNANCE: CommandSpec = CommandSpec {
@@ -372,7 +372,7 @@ pub const COMMAND_GRAPH: CommandSpec = CommandSpec {
                 "       forge-core graph validate --root <project> --graph <path> [--allow-bootstrap-core] [--json|--no-json]",
                 "       forge-core graph run --root <project> --graph <path> --dry-run [--agent <id>] [--claims-dir <path>] [--now-unix <epoch>] [--allow-bootstrap-core] [--json|--no-json]",
             ],
-    authority: CommandAuthority::MixedBySubcommand,
+    authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::DefaultReadOnly,
 };
@@ -973,6 +973,18 @@ mod tests {
             assert!(
                 command.authority.may_mutate(),
                 "default mutate MCP tool {name:?} must have mutating authority metadata"
+            );
+        }
+    }
+
+    #[test]
+    fn default_read_only_projection_uses_read_only_authority() {
+        for name in mcp_default_read_only_tool_names() {
+            let command = command_by_name(name).expect("registered default read-only command");
+            assert_eq!(
+                command.authority,
+                CommandAuthority::ReadOnly,
+                "default read-only MCP tool {name:?} must not expose mutating or mixed-authority argv through the pass-through adapter"
             );
         }
     }

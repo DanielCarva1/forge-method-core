@@ -94,6 +94,12 @@ may request X": it is the capability boundary.
 The Allowlist is **data, not code** (mirrors the `risk-audit-v0` risk-audit
 model in `CONTEXT.md:25`): adding a tool to a server does not require a Rust
 change. Declaring an empty or restricted Allowlist is the safe default state.
+The Allowlist cannot downgrade the shared Command Surface authority: any
+command whose `CommandAuthority` may mutate must be declared with `policy:
+mutate` in `mcp-allowlist.yaml`. A `read-only` declaration for a mutating or
+mixed-authority command is rejected during allowlist validation, before
+`tools/list` or `tools/call`, so operator configuration cannot accidentally
+bypass the MutateGate or Tool-Call Attestation.
 
 **Rejected: exposing all commands by default.** This breaks the principle of
 least privilege and makes the MCP server a full mirror of the CLI — the attack
@@ -127,8 +133,11 @@ against an authorized public key configured on the server (reuses
 - **Mutate MCPTools** (`execute-operation`, `claim acquire`): Tool-Call
   Attestation **mandatory**. No valid signature = rejected at the MutateGate.
 - **Read-only MCPTools** (`preview`, `ready`, `graph`, `explain`,
-  `memory list`, `query-effect-index`): attestation **optional** under the
-  default policy (the server may harden via configuration).
+  `query-effect-index`): attestation **optional** under the default policy (the
+  server may harden via configuration).
+- **Mixed top-level MCPTools** (`memory`, `claim`) are mutate-gated until the
+  adapter grows subcommand-level MCPTools. A pass-through top-level tool can
+  carry mutating argv, so it must never be admitted as read-only.
 
 The signature proves origin (who); the `OperationContract` proves authorized
 intent (what). Both are required for a mutation — neither alone is sufficient.
@@ -185,8 +194,8 @@ crates depend on.
 - ⏳ F08.2: create crate `forge-core-protocol-mcp` (`lib/server/allowlist/
   attestation.rs`); pin `rmcp` in `[workspace.dependencies]`.
 - ⏳ F08.3: MCP server over `COMMANDS` (read-only: preview/ready/graph/
-  explain/memory list/query-effect-index; mutate: execute-operation/
-  claim acquire).
+  explain/query-effect-index; mutate-gated top-level tools:
+  execute-operation/claim/memory).
 - ⏳ F08.4: Allowlist enforcement (`mcp-allowlist.yaml`); MutateGate
   fail-closed without `OperationContract`; validator with typed diagnostics.
 - ⏳ F08.5: Tool-Call Attestation (verify ed25519 via `forge-core-crypto`);

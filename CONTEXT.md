@@ -338,9 +338,11 @@ to an argv `&[String]`, invokes the matching `CommandSpec::handler` in
 the tool result. The set of MCPTools is a *projection* of `COMMANDS` filtered
 by the Allowlist — adding a tool never duplicates command logic, and removing
 the adapter costs callers programmatic access, not functionality (the deletion
-test). Read-only MCPTools (preview, ready, graph, explain, memory list,
-query-effect-index) and mutate MCPTools (execute-operation, claim acquire)
-share the same wrapper shape; only the gate differs.
+test). Read-only MCPTools (preview, ready, graph, explain,
+query-effect-index) and mutate-gated MCPTools (execute-operation, claim,
+memory) share the same wrapper shape; only the gate differs. The current MCP
+adapter exposes top-level commands as tools, so mixed command families such as
+memory cannot be read-only defaults until a subcommand-level MCPTool seam exists.
 
 ## Command Surface
 
@@ -380,6 +382,12 @@ is invisible to `tools/list` and rejected on `tools/call` — fail-closed. The
 Allowlist is the capability surface: it separates "Forge can do X" from "this
 MCP client may ask Forge to do X". It is data, not code (adding a tool to a
 server requires no Rust change), mirroring the risk-audit contract model.
+The Allowlist cannot lower the Command Surface authority floor: a command whose
+`CommandAuthority` may mutate must be declared as `mutate` in explicit YAML.
+Declaring it as `read-only` is rejected during allowlist validation so a mixed
+or mutating MCPTool cannot bypass the MutateGate or Tool-Call Attestation. The
+default read-only MCP projection is restricted to `CommandAuthority::ReadOnly`
+commands.
 
 ## MutateGate
 

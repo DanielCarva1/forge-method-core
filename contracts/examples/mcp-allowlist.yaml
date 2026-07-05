@@ -5,9 +5,9 @@
 # OperationContract; `policy: mutate` tools require an OperationContract
 # (--operation/--command/--effect) AND a Tool-Call Attestation at call time.
 #
-# This is the safe-by-default surface: read-only exploration plus explicit
-# mutate verbs. Copy and trim to lock a server down further (e.g. drop the
-# mutate tools for a pure read-only deployment).
+# This is an example mixed surface: read-only exploration plus explicit mutate
+# verbs. Copy and trim to lock a server down further (e.g. use the built-in
+# read-only default or drop the mutate tools for a pure read-only deployment).
 
 tools:
   - name: preview
@@ -19,7 +19,7 @@ tools:
   - name: explain
     policy: read-only
   - name: memory
-    policy: read-only
+    policy: mutate
   - name: query-effect-index
     policy: read-only
   - name: execute-operation

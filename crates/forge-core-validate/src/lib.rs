@@ -253,6 +253,7 @@ pub enum DiagnosticCode {
     McpAllowlistUnknownTool,
     McpAllowlistDuplicateTool,
     McpAllowlistEmpty,
+    McpAllowlistUnsafeReadOnlyPolicy,
     McpMutateGateMissingOperationContract,
     McpAttestationRequiredMissing,
     McpAttestationInvalid,

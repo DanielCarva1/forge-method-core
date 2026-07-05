@@ -22,14 +22,18 @@
 //!     policy: mutate
 //! ```
 //!
-//! `policy` is `read-only` (default) or `mutate`. An unknown `name` (one that
-//! does not match any registered command) is reported as a typed `Diagnostic`
-//! but does not short-circuit — validation accumulates all problems so the
+//! `policy` is `read-only` (default) or `mutate`. The shared Command Surface is
+//! the authority floor: a command whose `CommandAuthority` may mutate cannot be
+//! admitted with `read-only` policy, because that would bypass the
+//! `MutateGate` and Tool-Call Attestation. Unknown names and unsafe policies
+//! are reported as typed `Diagnostic`s without short-circuiting, so the
 //! operator sees every issue at once (the project convention).
 
 use std::fmt;
 
-use forge_core_command_surface::{mcp_default_mutate_tool_names, mcp_default_read_only_tool_names};
+use forge_core_command_surface::{
+    command_by_name, mcp_default_mutate_tool_names, mcp_default_read_only_tool_names,
+};
 use forge_core_validate::{Diagnostic, DiagnosticCode, ValidationReport};
 use serde::{Deserialize, Serialize};
 
@@ -37,9 +41,10 @@ use serde::{Deserialize, Serialize};
 /// `OperationContract`) or mutate (gated by the `MutateGate` + Tool-Call
 /// Attestation, ADR-0006 Decisions 2 & 4).
 ///
-/// This is the policy classification that drives the `MutateGate`. It is
-/// declared per-tool-name, not derived from the command, so the Allowlist is
-/// the single source for "is this tool a mutation?".
+/// This is the policy classification that drives the `MutateGate`. The Command
+/// Surface is still the authority floor: explicit YAML can make a read-only
+/// command stricter by declaring `mutate`, but it cannot make a mutating or
+/// mixed-authority command weaker by declaring `read-only`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AllowlistPolicy {
     /// Read-only: no store mutation. Tool-Call Attestation optional under the
@@ -207,8 +212,9 @@ impl Allowlist {
     /// Validation accumulates typed diagnostics (project convention: never
     /// short-circuit on the first problem). The returned `ValidationReport`
     /// lets the caller decide via `report.has_errors()`. An unknown tool name
-    /// (one not matching any registered command) is an error; a duplicate is
-    /// an error; an empty tools list is an error.
+    /// (one not matching any registered command) is an error; declaring a
+    /// command whose `CommandAuthority` may mutate as `read-only` is an error;
+    /// a duplicate is an error; an empty tools list is an error.
     ///
     /// `known_commands` is the set of registered command names from
     /// `forge_core_command_surface::COMMANDS` — the validator checks each
@@ -271,9 +277,23 @@ impl Allowlist {
                 ));
                 continue;
             }
+            let policy = entry.policy();
+            if let Some(command) = command_by_name(&entry.name) {
+                if policy == AllowlistPolicy::ReadOnly && command.authority.may_mutate() {
+                    report.push(Diagnostic::error(
+                        DiagnosticCode::McpAllowlistUnsafeReadOnlyPolicy,
+                        path,
+                        format!(
+                            "tool {:?} has command authority {} and must be declared with policy: mutate; read-only would bypass the MutateGate and Tool-Call Attestation",
+                            entry.name, command.authority
+                        ),
+                    ));
+                    continue;
+                }
+            }
             tools.push(AllowedTool {
                 name: entry.name.clone(),
-                policy: entry.policy(),
+                policy,
             });
         }
         (Self { tools }, report)
@@ -400,6 +420,33 @@ tools:
         assert!(al
             .get("execute-operation")
             .is_some_and(|t| t.policy.is_mutate()));
+    }
+
+    #[test]
+    fn yaml_rejects_read_only_policy_for_mutating_command_surface_authority() {
+        let yaml = "\
+tools:
+  - name: preview
+  - name: execute-operation
+    policy: read-only
+  - name: claim
+";
+        let (al, report) = Allowlist::from_yaml_str(yaml, &known_commands());
+
+        assert!(report.has_errors());
+        assert!(al.get("preview").is_some_and(|t| !t.policy.is_mutate()));
+        assert!(al.get("execute-operation").is_none());
+        assert!(al.get("claim").is_none());
+        let unsafe_policy_count = report
+            .diagnostics()
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::McpAllowlistUnsafeReadOnlyPolicy)
+            .count();
+        assert_eq!(
+            unsafe_policy_count, 2,
+            "mutating and mixed-authority commands must both fail closed when declared read-only: {:?}",
+            report.diagnostics()
+        );
     }
 
     #[test]
