@@ -47,6 +47,7 @@
 
 use std::path::{Path, PathBuf};
 
+use forge_core_command_surface::COMMAND_START;
 use forge_core_contracts::{CliEnvelope, ExitReason, ENVELOPE_SCHEMA_VERSION};
 
 use crate::cli_error::ExitError;
@@ -55,9 +56,16 @@ use crate::project_cmd::{
     ProjectResolvePayload,
 };
 
-/// Usage line for `forge-core start`.
-pub const START_USAGE_LINE: &str =
-    "forge-core start [--root <path>] [--allow-bootstrap-core] [--agent-id <id>] [--json|--no-json]";
+/// Usage line for `forge-core start`, projected from the shared Command Surface.
+///
+/// `start` used to keep a second hand-written usage constant here while the
+/// global registry projected help from `forge-core-command-surface`. Keeping
+/// this as a function instead of a rival constant preserves the parser/help
+/// seam: one shared command fact, rendered by both global help and local help.
+#[must_use]
+pub fn start_usage_line() -> &'static str {
+    COMMAND_START.canonical_usage().trim_start()
+}
 
 /// Canonical reference scenarios shown in the `sidecar_ready_no_contract`
 /// state. These are structural references, not templates to copy verbatim:
@@ -293,7 +301,7 @@ pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
         match parse_start_args(args).map_err(|error| ExitError::usage(error.to_string()))? {
             StartParseOutcome::Run(options) => options,
             StartParseOutcome::Help => {
-                println!("{START_USAGE_LINE}");
+                println!("{}", start_usage_line());
                 return Ok(());
             }
         };
@@ -455,6 +463,7 @@ fn bootstrap_core_start_payload(
 ) -> CliEnvelope<StartPayload> {
     let project = ProjectContext::from(resolved.clone());
     let (state, reason, next_step) = classify(&resolved, root);
+    let next_step = add_bootstrap_core_reference(next_step, root);
     CliEnvelope::ok(
         "start",
         StartPayload {
@@ -470,6 +479,17 @@ fn bootstrap_core_start_payload(
             project: Some(project),
         },
     )
+}
+
+fn add_bootstrap_core_reference(next_step: Option<NextStep>, root: &Path) -> Option<NextStep> {
+    next_step.map(|mut step| {
+        step.references.push(format!(
+            "verify bootstrap core resolution: forge-core project resolve --root {} \
+             --allow-bootstrap-core --json",
+            root.display()
+        ));
+        step
+    })
 }
 
 /// Classify the bootstrap state from the resolved project. The ordering is
@@ -733,6 +753,14 @@ mod tests {
     }
 
     #[test]
+    fn start_usage_line_projects_command_surface() {
+        assert_eq!(
+            start_usage_line(),
+            COMMAND_START.canonical_usage().trim_start()
+        );
+    }
+
+    #[test]
     fn bootstrap_state_wire_form_is_snake_case() {
         // Lock the wire contract: states serialize to snake_case to match the
         // rest of the CLI. Renaming a variant without updating CONTEXT.md /
@@ -816,6 +844,15 @@ mod tests {
         let project = payload.project.as_ref().expect("project context");
         assert!(project.bootstrap_core_exception);
         assert_eq!(project.layout, ProjectLayoutKind::BootstrapCoreLocal);
+        let next = payload.next_step.as_ref().expect("next step");
+        assert!(
+            next.references
+                .iter()
+                .any(|reference| reference.contains("project resolve")
+                    && reference.contains("--allow-bootstrap-core")),
+            "bootstrap-core next step should preserve the explicit resolve flag: {:?}",
+            next.references
+        );
     }
 
     #[test]

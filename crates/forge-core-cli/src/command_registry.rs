@@ -373,15 +373,19 @@ mod tests {
     }
 
     #[test]
-    fn start_usage_line_matches_start_command_constant() {
+    fn start_usage_line_projects_command_surface() {
         let start = COMMANDS
             .iter()
             .find(|spec| spec.name == "start")
             .expect("start command registered");
         assert_eq!(start.usage_lines.len(), 1);
         assert_eq!(
-            start.usage_lines[0].trim_start(),
-            crate::start_cmd::START_USAGE_LINE
+            crate::start_cmd::start_usage_line(),
+            surface::COMMAND_START.canonical_usage().trim_start()
+        );
+        assert_eq!(
+            start.usage_lines[0],
+            surface::COMMAND_START.canonical_usage()
         );
     }
 }

@@ -159,6 +159,18 @@ The sixth implementation slice migrates the MCP CLI adapter's parser/help seam:
 - The MCP CLI E2E help test asserts that binary help includes the canonical
   Command Surface usage line.
 
+## Seventh hardening changeset evidence
+
+The seventh implementation slice closes two remaining `start` drift points:
+
+- `start` local help now projects its usage line from
+  `forge_core_command_surface::COMMAND_START` instead of maintaining a rival
+  `START_USAGE_LINE` constant beside the parser.
+- Command-registry and start-command unit tests assert that the local help seam
+  and global Command Surface seam stay aligned.
+- Bootstrap Core Exception payloads now include an explicit diagnostic
+  reference (`forge-core project resolve --root <root> --allow-bootstrap-core --json`), so the `start` next step preserves the same exception context that made resolution succeed.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
@@ -413,8 +425,8 @@ local `.forge-method/` state for arbitrary repos.
   `project init`.
 - A consumer repo with unsafe local `.forge-method/` state still fails closed
   or points at explicit repair; it must not be normalized as safe.
-- `START_USAGE_LINE` and `command_registry` agree on
-  `[--allow-bootstrap-core]` and do not advertise unsupported flags.
+- `start` local help and `command_registry` project `[--allow-bootstrap-core]`
+  from the shared Command Surface and do not advertise unsupported flags.
 
 ## Stage 6 — Preserve product essence while raising the score
 

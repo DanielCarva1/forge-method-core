@@ -284,7 +284,10 @@ contract scenarios that inform the spec live in
 and `guide`; it does not duplicate either. It does not recommend workflows or
 phases: once a project has the prerequisites for `guide` to operate, `start`
 hands off to `guide` (Option A from the F12 grill). Because `start` is
-read-only, it requires no claim and performs no check-write.
+read-only, it requires no claim and performs no check-write. When `start`
+diagnoses the Forge core Bootstrap Core Exception, its payload must preserve an
+explicit `project resolve --allow-bootstrap-core` reference so the agent sees
+the same exception context that resolution used.
 
 ## Start Bootstrap State
 
@@ -346,10 +349,10 @@ its path, usage metadata, authority class, JSON/text support, and adapter
 exposure. The current shared seam is the `forge-core-command-surface` crate.
 `forge-core-cli::command_registry` adds handler pointers to that metadata; the
 MCP adapter projects allowlist defaults and tool descriptors from it, and
-`docs/generated/command-surface.md` is generated from it. The `mcp` CLI help
-projects its serve usage from the same seam. Parser/handler lookup should
-continue migrating toward this Command Surface rather than growing rival
-hand-written lists.
+`docs/generated/command-surface.md` is generated from it. The `start` and `mcp`
+CLI help paths project their usage lines from the same seam. Parser/handler
+lookup should continue migrating toward this Command Surface rather than
+growing rival hand-written lists.
 
 The host-adapter manifest remains a narrower security adapter for host-specific
 authority metadata, required contracts, safe triggers, and policy references,
