@@ -408,6 +408,17 @@ pub const COMMAND_TELEMETRY: CommandSpec = CommandSpec {
     mcp_visibility: McpVisibility::AllowlistOnly,
 };
 
+/// Default telemetry contract used by `forge-core telemetry export` when
+/// `--contract` is omitted.
+///
+/// This is command-surface metadata because both the telemetry implementation
+/// and help text must describe the same default path.
+pub const COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH: &str = "contracts/examples/telemetry.yaml";
+
+/// Human-readable description of the implicit telemetry trace source.
+pub const COMMAND_TELEMETRY_DEFAULT_TRACE_SOURCE: &str =
+    "resolved <state_root>/traces/events.ndjson";
+
 pub const COMMAND_PREVIEW: CommandSpec = CommandSpec {
     name: "preview",
     usage_lines:     &["       forge-core preview [--root <path>] --operation <path> [--allow-bootstrap-core] [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json|--no-json]"],

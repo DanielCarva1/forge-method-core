@@ -1,6 +1,7 @@
 use crate::cli_error::ExitError;
 use crate::cli_util::telemetry_usage;
 use crate::project_cmd::{resolve_project, ProjectResolveError, ProjectResolvePayload};
+use forge_core_command_surface::COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH;
 use forge_core_contracts::telemetry::{
     PrivacyPolicy, TelemetryContract, TelemetryContractDocument, TelemetryEventKind,
     TelemetryEventSpec, TelemetrySink,
@@ -19,7 +20,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub const DEFAULT_TELEMETRY_CONTRACT_PATH: &str = "contracts/examples/telemetry.yaml";
 const TELEMETRY_EXPORT_RECORD_SCHEMA_VERSION: &str = "0.1";
 const TELEMETRY_EXPORT_RECORD_KIND: &str = "telemetry_export_record";
 const OTEL_JSON_SCHEMA_VERSION: &str = "forge_otel_json_v0";
@@ -308,7 +308,7 @@ pub fn run_export(
         input
             .contract_path
             .as_deref()
-            .unwrap_or_else(|| Path::new(DEFAULT_TELEMETRY_CONTRACT_PATH)),
+            .unwrap_or_else(|| Path::new(COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH)),
     );
     let contract_path =
         resolve_contract_path_under_project_root(&project_root, &raw_contract_path)?;

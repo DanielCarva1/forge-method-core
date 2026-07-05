@@ -462,6 +462,22 @@ from the eval help path:
 - Unit tests lock `eval_usage()` to every `COMMAND_EVAL.usage_lines` entry and
   assert the shared default suite path remains visible.
 
+## Twenty-fifth hardening changeset evidence
+
+The twenty-fifth implementation slice removes the next local CLI usage Adapter
+from the telemetry help path:
+
+- `cli_util::telemetry_usage()` now renders its usage line from
+  `COMMAND_TELEMETRY` instead of a local `concat!(...)` string.
+- The telemetry default contract path moved to
+  `COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH`, so runtime behavior and help text
+  share the same command-surface fact.
+- The implicit trace-source help detail moved to
+  `COMMAND_TELEMETRY_DEFAULT_TRACE_SOURCE`, keeping telemetry-specific detail
+  behind the same Command Surface seam.
+- Unit tests lock `telemetry_usage()` to every `COMMAND_TELEMETRY.usage_lines`
+  entry and assert both telemetry default details remain visible.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

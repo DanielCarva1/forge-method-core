@@ -19,7 +19,8 @@ use crate::{
     PayloadFileSpec,
 };
 use forge_core_command_surface::{
-    CommandSpec, COMMAND_EVAL, COMMAND_EVAL_DEFAULT_SUITE, COMMAND_GRAPH,
+    CommandSpec, COMMAND_EVAL, COMMAND_EVAL_DEFAULT_SUITE, COMMAND_GRAPH, COMMAND_TELEMETRY,
+    COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH, COMMAND_TELEMETRY_DEFAULT_TRACE_SOURCE,
 };
 use forge_core_contracts::runtime::RuntimeKind;
 use forge_core_contracts::tool_effect::EffectTargetKind;
@@ -147,15 +148,15 @@ pub fn eval_usage() -> String {
 }
 
 #[must_use]
-pub fn telemetry_usage() -> &'static str {
-    concat!(
-        "usage: forge-core telemetry export [--root <project>] ",
-        "[--contract <path>] [--output <path>] [--format jsonl|otel-json] ",
-        "[--trace-id <id>|--run-id <id>|--latest-run] ",
-        "[--allow-bootstrap-core] [--json|--no-json]\n",
-        "default contract: contracts/examples/telemetry.yaml\n",
-        "default trace source: resolved <state_root>/traces/events.ndjson"
-    )
+pub fn telemetry_usage() -> String {
+    let mut usage = format_command_surface_usage("usage:", &COMMAND_TELEMETRY);
+    usage.push('\n');
+    usage.push_str("default contract: ");
+    usage.push_str(COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH);
+    usage.push('\n');
+    usage.push_str("default trace source: ");
+    usage.push_str(COMMAND_TELEMETRY_DEFAULT_TRACE_SOURCE);
+    usage
 }
 
 fn format_command_surface_usage(header: &str, command: &CommandSpec) -> String {
@@ -737,6 +738,26 @@ mod argv_cursor_tests {
         assert!(
             usage.contains(COMMAND_EVAL_DEFAULT_SUITE),
             "eval usage should keep the shared default suite path: {usage}"
+        );
+    }
+
+    #[test]
+    fn telemetry_usage_projects_command_surface_lines() {
+        let usage = telemetry_usage();
+        for line in COMMAND_TELEMETRY.usage_lines {
+            let canonical = line.trim_start();
+            assert!(
+                usage.contains(canonical),
+                "telemetry usage should include projected Command Surface line {canonical:?}: {usage}"
+            );
+        }
+        assert!(
+            usage.contains(COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH),
+            "telemetry usage should keep the shared default contract path: {usage}"
+        );
+        assert!(
+            usage.contains(COMMAND_TELEMETRY_DEFAULT_TRACE_SOURCE),
+            "telemetry usage should keep the shared default trace source detail: {usage}"
         );
     }
 
