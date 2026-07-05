@@ -19,8 +19,9 @@ use crate::{
     PayloadFileSpec,
 };
 use forge_core_command_surface::{
-    CommandSpec, COMMAND_EVAL, COMMAND_EVAL_DEFAULT_SUITE, COMMAND_GRAPH, COMMAND_TELEMETRY,
-    COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH, COMMAND_TELEMETRY_DEFAULT_TRACE_SOURCE,
+    CommandSpec, COMMAND_COST, COMMAND_EVAL, COMMAND_EVAL_DEFAULT_SUITE, COMMAND_GRAPH,
+    COMMAND_TELEMETRY, COMMAND_TELEMETRY_DEFAULT_CONTRACT_PATH,
+    COMMAND_TELEMETRY_DEFAULT_TRACE_SOURCE,
 };
 use forge_core_contracts::runtime::RuntimeKind;
 use forge_core_contracts::tool_effect::EffectTargetKind;
@@ -157,6 +158,11 @@ pub fn telemetry_usage() -> String {
     usage.push_str("default trace source: ");
     usage.push_str(COMMAND_TELEMETRY_DEFAULT_TRACE_SOURCE);
     usage
+}
+
+#[must_use]
+pub fn cost_usage() -> String {
+    format_command_surface_usage("usage:", &COMMAND_COST)
 }
 
 fn format_command_surface_usage(header: &str, command: &CommandSpec) -> String {
@@ -758,6 +764,22 @@ mod argv_cursor_tests {
         assert!(
             usage.contains(COMMAND_TELEMETRY_DEFAULT_TRACE_SOURCE),
             "telemetry usage should keep the shared default trace source detail: {usage}"
+        );
+    }
+
+    #[test]
+    fn cost_usage_projects_command_surface_lines() {
+        let usage = cost_usage();
+        for line in COMMAND_COST.usage_lines {
+            let canonical = line.trim_start();
+            assert!(
+                usage.contains(canonical),
+                "cost usage should include projected Command Surface line {canonical:?}: {usage}"
+            );
+        }
+        assert!(
+            usage.contains("[--json|--no-json]"),
+            "cost usage should keep the shared JSON/text contract: {usage}"
         );
     }
 

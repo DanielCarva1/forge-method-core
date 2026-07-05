@@ -15,16 +15,12 @@
 //! - (none)              -> `CostScope::All`    (every scanned event)
 
 use crate::cli_error::ExitError;
-use crate::cli_util::usage;
+use crate::cli_util::{cost_usage, usage};
 use crate::project_cmd::{resolve_project, ProjectResolvePayload};
 use forge_core_contracts::CliEnvelope;
 use forge_core_store::{query_trace_events, TraceEventQuery};
 use forge_core_trace::{aggregate_costs, CostReport, CostScope};
 use std::path::PathBuf;
-
-/// Usage line for `forge-core cost`.
-pub const COST_USAGE_LINE: &str =
-    "forge-core cost [--root <path>] [--run-id <id> | --last-run] [--graph-id <id>] [--principal <id>] [--allow-bootstrap-core] [--json|--no-json]";
 
 /// Runs the `forge-core cost` subcommand.
 ///
@@ -70,7 +66,7 @@ pub fn run_cost_command(args: &[String]) -> Result<(), ExitError> {
             "--no-json" | "--text" => want_json = false,
             "--json" => want_json = true,
             "--help" | "-h" => {
-                println!("{COST_USAGE_LINE}");
+                println!("{}", cost_usage());
                 return Ok(());
             }
             _ => return Err(ExitError::usage(usage())),

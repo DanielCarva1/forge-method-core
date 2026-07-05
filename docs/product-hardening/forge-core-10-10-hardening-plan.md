@@ -478,6 +478,19 @@ from the telemetry help path:
 - Unit tests lock `telemetry_usage()` to every `COMMAND_TELEMETRY.usage_lines`
   entry and assert both telemetry default details remain visible.
 
+## Twenty-sixth hardening changeset evidence
+
+The twenty-sixth implementation slice removes the next local CLI usage Adapter
+from the cost help path:
+
+- `cli_util::cost_usage()` now renders from `COMMAND_COST` instead of relying
+  on a local `COST_USAGE_LINE` in the cost command module.
+- The cost command help path now uses the same Command Surface projection
+  formatter as graph, eval, and telemetry while preserving the existing usage
+  shape and JSON/text contract.
+- Unit tests lock `cost_usage()` to every `COMMAND_COST.usage_lines` entry and
+  assert `[--json|--no-json]` remains visible.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
