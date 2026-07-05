@@ -6,7 +6,8 @@ on:
   pull_request:
 
 jobs:
-  test:
+  quality:
+    name: Linux quality gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -20,21 +21,17 @@ jobs:
       - name: Cache Rust artifacts
         uses: Swatinem/rust-cache@v2
 
+      - name: Check generated workspace layout
+        run: python scripts/generate-workspace-layout.py --check
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-      - name: Type-check workspace
-        run: cargo check --workspace --all-targets
-
-      # clippy pedantic runs as `-D` (deny) — the codebase is lint-clean as of
-      # R-LINT.2 (2026-07-01). Adding new pedantic warnings will fail CI,
-      # which is intentional: each new lint must be either fixed or accompanied
-      # by a documented #[allow] with a justification comment.
+      # clippy pedantic runs as `-D` (deny). Adding new pedantic warnings will
+      # fail CI, which is intentional: each new lint must be either fixed or
+      # accompanied by a documented #[allow] with a justification comment.
       - name: Clippy (pedantic, deny)
         run: cargo clippy --workspace --all-targets -- -D clippy::pedantic
-
-      - name: Test workspace
-        run: cargo test --workspace
 
       - name: Validate contracts
         run: cargo run -p forge-core-cli -- validate --root .
@@ -44,3 +41,26 @@ jobs:
           count=$(cargo run --quiet -p forge-core-cli -- validate --root . --json 2>/dev/null | grep -c '"diagnostics": 0')
           echo "Anchor count: $count (expected 122)"
           test "$count" = "122"
+
+  platform:
+    name: ${{ matrix.os }} cargo all-targets
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Type-check workspace all targets
+        run: cargo check --workspace --all-targets
+
+      - name: Test workspace
+        run: cargo test --workspace

@@ -1012,7 +1012,7 @@ fn strip_utf8_bom(raw: &str) -> &str {
     raw.strip_prefix('\u{feff}').unwrap_or(raw)
 }
 
-fn is_bootstrap_core_root(root: &Path) -> bool {
+pub(crate) fn is_bootstrap_core_root(root: &Path) -> bool {
     root.join("Cargo.toml").is_file()
         && root.join("crates").join("forge-core-cli").is_dir()
         && root.join(".forge-method").is_dir()

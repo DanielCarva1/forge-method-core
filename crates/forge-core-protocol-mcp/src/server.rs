@@ -629,6 +629,7 @@ mod tests {
 
     #[cfg(windows)]
     fn make_fake_forge_core(success: bool, envelope: &str) -> PathBuf {
+        use std::io::Write;
         use std::sync::atomic::{AtomicU64, Ordering};
         static COUNTER: AtomicU64 = AtomicU64::new(0);
         let n = COUNTER.fetch_add(1, Ordering::SeqCst);

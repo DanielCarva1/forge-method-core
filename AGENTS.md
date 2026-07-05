@@ -1,8 +1,10 @@
 # forge-method-core — Project Conventions
 
-This is a Rust workspace (10 crates under `crates/`, edition 2021, resolver 2)
-for the forge-method core. It uses heavy crypto (ed25519-dalek, p256,
-sigstore-tsa, rcgen, x509-parser) and canonical serde.
+This is a Rust workspace for the forge-method core (edition 2021, resolver 2).
+The live crate list is generated from `cargo metadata --format-version=1` in
+`docs/generated/workspace-layout.md`; do not hand-maintain crate counts here.
+It uses heavy crypto (ed25519-dalek, p256, sigstore-tsa, rcgen, x509-parser)
+and canonical serde.
 
 These conventions are **project-specific** and override the generic
 `rust-conventions` skill. They are always loaded when working in this repo.

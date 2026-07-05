@@ -303,7 +303,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "start",
-        usage_lines: &["       forge-core start [--root <path>] [--agent-id <id>] [--json|--no-json]"],
+        usage_lines: &["       forge-core start [--root <path>] [--allow-bootstrap-core] [--agent-id <id>] [--json|--no-json]"],
         handler: crate::start_cmd::run_start_command,
     },
     CommandSpec {
@@ -525,5 +525,18 @@ mod tests {
             let result = dispatch(flag, &[]);
             assert!(result.is_ok(), "dispatch({flag:?}) should succeed");
         }
+    }
+
+    #[test]
+    fn start_usage_line_matches_start_command_constant() {
+        let start = COMMANDS
+            .iter()
+            .find(|spec| spec.name == "start")
+            .expect("start command registered");
+        assert_eq!(start.usage_lines.len(), 1);
+        assert_eq!(
+            start.usage_lines[0].trim_start(),
+            crate::start_cmd::START_USAGE_LINE
+        );
     }
 }

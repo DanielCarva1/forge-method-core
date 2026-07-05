@@ -622,22 +622,24 @@ gates.
 
 ## Repository layout
 
+The Rust workspace layout is generated from Cargo metadata and checked in CI:
+[`docs/generated/workspace-layout.md`](docs/generated/workspace-layout.md).
+Regenerate it with:
+
+```bash
+python scripts/generate-workspace-layout.py
+python scripts/generate-workspace-layout.py --check
 ```
-crates/
-  forge-core-contracts/   typed YAML contract types (the vocabulary)
-  forge-core-decisions/      guide, claims, conflict detection, phase transitions
-  forge-core-store/       reference index + validation store
-  forge-core-validate/    schema + semantic validator
-  forge-core-schema/      JSON-schema projections
-  forge-core-kernel/     operation planning + execution
-  forge-core-cli/         the forge-core binary
-contracts/
-  workflows/              the 110-workflow catalog (the method)
-  spec/  plan/  stories/  discovery artifacts (typed YAML)
-  claims/                 claim fixtures + schemas
-skill/forge-method/        host skill wiring
-docs/                      live ADRs + design specs (code-cited)
-```
+
+Other top-level authority surfaces:
+
+- `contracts/workflows/` — the 110-workflow catalog (the method).
+- `contracts/spec/`, `contracts/plan/`, `contracts/stories/` — typed discovery
+  and delivery artifacts.
+- `contracts/claims/` — claim fixtures and schemas.
+- `skill/forge-method/` — host skill wiring.
+- `docs/` — live ADRs, design specs, fixtures, generated layout, and hardening
+  plans.
 
 The authority is always the `contracts/` tree plus the running `forge-core`
 binary. Historical research digests, agent session journals, milestone plans,

@@ -51,12 +51,13 @@ use forge_core_contracts::{CliEnvelope, ExitReason, ENVELOPE_SCHEMA_VERSION};
 
 use crate::cli_error::ExitError;
 use crate::project_cmd::{
-    resolve_project, ProjectLayoutKind, ProjectResolveError, ProjectResolvePayload,
+    is_bootstrap_core_root, resolve_project, ProjectLayoutKind, ProjectResolveError,
+    ProjectResolvePayload,
 };
 
 /// Usage line for `forge-core start`.
 pub const START_USAGE_LINE: &str =
-    "forge-core start [--root <path>] [--allow-bootstrap-core] [--json|--no-json]";
+    "forge-core start [--root <path>] [--allow-bootstrap-core] [--agent-id <id>] [--json|--no-json]";
 
 /// Canonical reference scenarios shown in the `sidecar_ready_no_contract`
 /// state. These are structural references, not templates to copy verbatim:
@@ -92,6 +93,11 @@ const STARTER_FIXTURE_EXECUTE: &str = "execute-trivial-write.yaml";
 pub struct StartPayload {
     /// Envelope contract version (matches the rest of the CLI).
     pub schema_version: String,
+    /// Optional host-supplied agent identifier. `start` is read-only and does
+    /// not acquire a claim; this field exists so host surfaces can correlate
+    /// diagnostics without changing the bootstrap state machine.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<String>,
     /// Where the project is on the bootstrap path. See [`BootstrapState`].
     pub state: BootstrapState,
     /// Human-legible explanation of why this state was diagnosed, so the
@@ -222,9 +228,10 @@ impl std::error::Error for StartError {}
 
 /// Runs the `forge-core start` subcommand.
 ///
-/// Parses `--root` (default `.`), `--allow-bootstrap-core`, and the standard
-/// `--json`/`--no-json` dual-output flags, resolves the project, classifies
-/// the bootstrap state, and emits a [`CliEnvelope<StartPayload>`] via
+/// Parses `--root` (default `.`), `--allow-bootstrap-core`, optional
+/// `--agent-id`, and the standard `--json`/`--no-json` dual-output flags,
+/// resolves the project, classifies the bootstrap state, and emits a
+/// [`CliEnvelope<StartPayload>`] via
 /// `emit`.
 ///
 /// # Errors
@@ -235,6 +242,7 @@ impl std::error::Error for StartError {}
 pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
     let mut root = PathBuf::from(".");
     let mut allow_bootstrap_core = false;
+    let mut agent_id: Option<String> = None;
     let mut want_json = true;
 
     // argv[0] is the command name ("start"); subcommand args start at index 1,
@@ -250,6 +258,13 @@ pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
                 root = PathBuf::from(value);
             }
             "--allow-bootstrap-core" => allow_bootstrap_core = true,
+            "--agent-id" | "--agent" => {
+                index += 1;
+                let Some(value) = args.get(index) else {
+                    return Err(ExitError::usage("start: --agent-id requires a value"));
+                };
+                agent_id = Some(value.clone());
+            }
             "--json" => want_json = true,
             "--no-json" | "--text" => want_json = false,
             "--help" | "-h" => {
@@ -265,7 +280,7 @@ pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
         index += 1;
     }
 
-    let env = run_start(&root, allow_bootstrap_core);
+    let env = run_start_with_agent(&root, allow_bootstrap_core, agent_id);
     crate::cli_util::emit_envelope(env, want_json)
 }
 
@@ -293,9 +308,34 @@ pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
 /// into the envelope exit code.
 #[must_use]
 pub fn run_start(root: &Path, allow_bootstrap_core: bool) -> CliEnvelope<StartPayload> {
+    run_start_with_agent(root, allow_bootstrap_core, None)
+}
+
+/// Variant of [`run_start`] that preserves an optional host-supplied agent id
+/// in the read-only diagnostic payload.
+#[must_use]
+pub fn run_start_with_agent(
+    root: &Path,
+    allow_bootstrap_core: bool,
+    agent_id: Option<String>,
+) -> CliEnvelope<StartPayload> {
     let resolved = match resolve_project(root, allow_bootstrap_core) {
         Ok(payload) => payload,
         Err(ProjectResolveError::MissingProjectLink { .. }) => {
+            if is_bootstrap_core_root(root) {
+                match resolve_project(root, true) {
+                    Ok(payload) => {
+                        return bootstrap_core_start_payload(root, payload, agent_id);
+                    }
+                    Err(err) => {
+                        return CliEnvelope::err(
+                            "start",
+                            resolve_error_exit_reason(&err),
+                            err.to_string(),
+                        );
+                    }
+                }
+            }
             // The repo has no `.forge-method.yaml`. This is the canonical
             // "brand new user" state — surface it as an actionable ok
             // envelope rather than an opaque env-config error.
@@ -303,6 +343,7 @@ pub fn run_start(root: &Path, allow_bootstrap_core: bool) -> CliEnvelope<StartPa
                 "start",
                 StartPayload {
                     schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
+                    agent_id,
                     state: BootstrapState::NoLink,
                     reason: "No Forge Project Link found; the repo is not yet \
                              governed by Forge."
@@ -330,8 +371,33 @@ pub fn run_start(root: &Path, allow_bootstrap_core: bool) -> CliEnvelope<StartPa
         "start",
         StartPayload {
             schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
+            agent_id,
             state,
             reason,
+            next_step,
+            project: Some(project),
+        },
+    )
+}
+
+fn bootstrap_core_start_payload(
+    root: &Path,
+    resolved: ProjectResolvePayload,
+    agent_id: Option<String>,
+) -> CliEnvelope<StartPayload> {
+    let project = ProjectContext::from(resolved.clone());
+    let (state, reason, next_step) = classify(&resolved, root);
+    CliEnvelope::ok(
+        "start",
+        StartPayload {
+            schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
+            agent_id,
+            state,
+            reason: format!(
+                "Bootstrap Core Exception detected: no consumer Project Link is present, \
+                 but this repository carries Forge core local state that resolves only \
+                 with --allow-bootstrap-core. {reason}"
+            ),
             next_step,
             project: Some(project),
         },
@@ -603,6 +669,55 @@ mod tests {
         assert!(
             payload.project.is_none(),
             "no_link has no project context to report"
+        );
+    }
+
+    #[test]
+    fn agent_id_is_preserved_as_read_only_context() {
+        let root = temp_root("agent-id");
+        let env = run_start_with_agent(&root, false, Some("codex-main".to_string()));
+        let payload = env.data.as_ref().expect("payload on no_link");
+        assert_eq!(payload.agent_id.as_deref(), Some("codex-main"));
+        assert_eq!(payload.state, BootstrapState::NoLink);
+    }
+
+    #[test]
+    fn bootstrap_core_exception_is_diagnosed_without_consumer_link() {
+        let root = temp_root("bootstrap-core");
+        fs::write(
+            root.join("Cargo.toml"),
+            "[workspace]\nmembers = [\"crates/forge-core-cli\"]\n",
+        )
+        .unwrap();
+        fs::create_dir_all(root.join("crates").join("forge-core-cli")).unwrap();
+        make_state_tree(&root.join(".forge-method"));
+
+        let env = run_start(&root, false);
+        let payload = env.data.as_ref().expect("payload on bootstrap core");
+        assert!(env.ok);
+        assert_eq!(payload.state, BootstrapState::SidecarReadyNoContract);
+        assert!(
+            payload.reason.contains("Bootstrap Core Exception"),
+            "reason should name the explicit exception: {}",
+            payload.reason
+        );
+        let project = payload.project.as_ref().expect("project context");
+        assert!(project.bootstrap_core_exception);
+        assert_eq!(project.layout, ProjectLayoutKind::BootstrapCoreLocal);
+    }
+
+    #[test]
+    fn arbitrary_local_forge_method_without_core_markers_remains_no_link() {
+        let root = temp_root("local-state-not-core");
+        make_state_tree(&root.join(".forge-method"));
+
+        let env = run_start(&root, false);
+        let payload = env.data.as_ref().expect("payload on no_link");
+        assert!(env.ok);
+        assert_eq!(payload.state, BootstrapState::NoLink);
+        assert!(
+            payload.project.is_none(),
+            "local .forge-method alone must not be treated as a safe sidecar"
         );
     }
 
