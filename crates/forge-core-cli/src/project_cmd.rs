@@ -4,6 +4,7 @@
 //! bootstrap exception. Consumer projects should carry a small
 //! `.forge-method.yaml` pointer to a sibling Forge Runtime Sidecar.
 
+use forge_core_command_surface::COMMAND_PROJECT;
 use forge_core_contracts::{
     CliEnvelope, ExitReason, ProjectLinkDocument, RepoPath, StableId, PROJECT_LINK_FILE_NAME,
     PROJECT_LINK_SCHEMA_VERSION,
@@ -1023,7 +1024,7 @@ pub fn dispatch(args: &[String]) -> (String, i32) {
     match sub {
         "init" => dispatch_init(&args[2..]),
         "resolve" => dispatch_resolve(&args[2..]),
-        "--help" | "-h" | "help" => (project_usage().to_string(), 0),
+        "--help" | "-h" | "help" => (project_usage(), 0),
         other => (
             format!("forge-core project: unknown subcommand '{other}'. Try: init | resolve"),
             2,
@@ -1073,7 +1074,7 @@ fn dispatch_init(args: &[String]) -> (String, i32) {
             }
             "--json" => want_json = true,
             "--no-json" => want_json = false,
-            "--help" | "-h" => return (project_usage().to_string(), 0),
+            "--help" | "-h" => return (project_usage(), 0),
             other => {
                 return (format!("project init: unrecognized argument '{other}'"), 3);
             }
@@ -1132,7 +1133,7 @@ fn dispatch_resolve(args: &[String]) -> (String, i32) {
             "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--json" => want_json = true,
             "--no-json" => want_json = false,
-            "--help" | "-h" => return (project_usage().to_string(), 0),
+            "--help" | "-h" => return (project_usage(), 0),
             other => {
                 return (
                     format!("project resolve: unrecognized argument '{other}'"),
@@ -1169,8 +1170,20 @@ fn dispatch_resolve(args: &[String]) -> (String, i32) {
     }
 }
 
-fn project_usage() -> &'static str {
-    "forge-core project <subcommand> [options]\n  init [--root <path>] [--project-id <id>] [--sidecar-root <path>] [--state-root <path>] [--json|--no-json]\n  resolve [--root <path>] [--allow-bootstrap-core] [--json|--no-json]"
+fn project_usage() -> String {
+    let mut usage = String::from("forge-core project <subcommand> [options]");
+    for line in COMMAND_PROJECT.usage_lines {
+        usage.push('\n');
+        usage.push_str("  ");
+        usage.push_str(project_subcommand_usage(line));
+    }
+    usage
+}
+
+fn project_subcommand_usage(line: &'static str) -> &'static str {
+    line.trim_start()
+        .strip_prefix("forge-core project ")
+        .unwrap_or_else(|| line.trim_start())
 }
 
 /// Dispatch entrypoint for the `forge-core project` command tree
@@ -1206,6 +1219,43 @@ mod tests {
         ));
         fs::create_dir_all(&root).expect("create temp root");
         root
+    }
+
+    fn argv(parts: &[&str]) -> Vec<String> {
+        parts.iter().map(|part| (*part).to_string()).collect()
+    }
+
+    #[test]
+    fn project_usage_projects_command_surface_lines() {
+        let usage = project_usage();
+        assert!(
+            usage.starts_with("forge-core project <subcommand> [options]"),
+            "project usage should keep the local command-tree header: {usage}"
+        );
+        for line in COMMAND_PROJECT.usage_lines {
+            let subcommand_usage = project_subcommand_usage(line);
+            assert!(
+                usage.contains(subcommand_usage),
+                "project usage should include projected Command Surface line {subcommand_usage:?}: {usage}"
+            );
+        }
+        assert!(
+            usage.contains("--allow-bootstrap-core"),
+            "project resolve help must preserve the bootstrap-core flag: {usage}"
+        );
+    }
+
+    #[test]
+    fn project_help_paths_use_project_usage() {
+        for args in [
+            argv(&["project", "--help"]),
+            argv(&["project", "init", "--help"]),
+            argv(&["project", "resolve", "--help"]),
+        ] {
+            let (output, exit) = dispatch(&args);
+            assert_eq!(exit, 0, "help path should succeed for args {args:?}");
+            assert_eq!(output, project_usage());
+        }
     }
 
     #[test]

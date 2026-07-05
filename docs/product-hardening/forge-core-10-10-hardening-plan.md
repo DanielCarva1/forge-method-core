@@ -171,6 +171,20 @@ The seventh implementation slice closes two remaining `start` drift points:
 - Bootstrap Core Exception payloads now include an explicit diagnostic
   reference (`forge-core project resolve --root <root> --allow-bootstrap-core --json`), so the `start` next step preserves the same exception context that made resolution succeed.
 
+## Eighth hardening changeset evidence
+
+The eighth implementation slice migrates the `project` command tree's local
+help seam:
+
+- `project_usage()` now keeps the local command-tree header but projects its
+  `init` and `resolve` lines from `forge_core_command_surface::COMMAND_PROJECT`
+  instead of maintaining a rival hand-written string.
+- Unit tests lock all three help paths (`project --help`, `project init --help`,
+  and `project resolve --help`) to the same projected usage text.
+- The test asserts that `project resolve` help preserves
+  `--allow-bootstrap-core`, keeping the `start`/`project resolve` bootstrap
+  exception story visible from both entry points.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
