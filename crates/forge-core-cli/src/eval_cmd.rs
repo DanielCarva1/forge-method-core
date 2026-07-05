@@ -452,9 +452,9 @@ pub fn run_eval_command(args: &[String]) -> Result<(), ExitError> {
 ///
 /// # Errors
 ///
-/// Returns `ExitError::usage` when an unknown flag is present, or
-/// `ExitError::invalid_value` when `--baseline` or `--candidate` is missing,
-/// or when any underlying value helper reports a missing or malformed value.
+/// Returns `ExitError::usage` when an unknown flag is present or when a
+/// required comparison arm is missing. Returns `ExitError::invalid_value` when
+/// any underlying value helper reports a missing or malformed value.
 pub fn parse_eval_compare_args(
     args: &[String],
 ) -> Result<(EvalCompareCommandInput, bool), ExitError> {
@@ -498,17 +498,11 @@ pub fn parse_eval_compare_args(
                 cursor.advance();
             }
             "--help" | "-h" => break,
-            _ => return Err(ExitError::usage(eval_usage())),
+            _ => return Err(eval_compare_usage_error()),
         }
     }
-    let baseline = baseline.ok_or_else(|| {
-        ExitError::invalid_value("eval compare requires --baseline <single-agent|graph|mas|manual>")
-    })?;
-    let candidate = candidate.ok_or_else(|| {
-        ExitError::invalid_value(
-            "eval compare requires --candidate <single-agent|graph|mas|manual>",
-        )
-    })?;
+    let baseline = baseline.ok_or_else(eval_compare_usage_error)?;
+    let candidate = candidate.ok_or_else(eval_compare_usage_error)?;
 
     Ok((
         EvalCompareCommandInput {
@@ -520,6 +514,10 @@ pub fn parse_eval_compare_args(
         },
         json,
     ))
+}
+
+fn eval_compare_usage_error() -> ExitError {
+    ExitError::usage(eval_usage())
 }
 
 /// Parses a CLI string into an [`EvalArmLabel`].
@@ -579,5 +577,58 @@ pub fn run_eval_compare(input: &EvalCompareCommandInput, json: bool) -> Result<(
         Err(error) => Err(ExitError::env_config(format!(
             "eval compare failed: {error}"
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use forge_core_command_surface::COMMAND_EVAL;
+
+    #[test]
+    fn missing_baseline_reports_eval_compare_usage() {
+        let error = parse_eval_compare_args(&args(&[
+            "eval",
+            "compare",
+            "--candidate",
+            "graph",
+            "--json",
+        ]))
+        .expect_err("missing baseline should fail before project resolution");
+
+        assert_eval_compare_usage_error(&error);
+    }
+
+    #[test]
+    fn missing_candidate_reports_eval_compare_usage() {
+        let error = parse_eval_compare_args(&args(&[
+            "eval",
+            "compare",
+            "--baseline",
+            "manual",
+            "--json",
+        ]))
+        .expect_err("missing candidate should fail before project resolution");
+
+        assert_eval_compare_usage_error(&error);
+    }
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    fn assert_eval_compare_usage_error(error: &ExitError) {
+        assert_eq!(error.exit_code(), 2);
+        for line in COMMAND_EVAL.usage_lines {
+            let projected = line.trim_start();
+            assert!(
+                error.message().contains(projected),
+                "eval compare usage error should include projected Command Surface line {projected:?}: {error}"
+            );
+        }
+        assert!(
+            !error.message().contains("forge-core execute-operation"),
+            "eval compare usage error must not include unrelated mutating command usage: {error}"
+        );
     }
 }

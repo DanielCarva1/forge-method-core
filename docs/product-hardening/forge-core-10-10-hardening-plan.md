@@ -747,6 +747,21 @@ paths in the coordination validation gate:
 - Unit coverage proves malformed `coordination validate` argv reports the
   projected Command Surface line and does not leak unrelated command usage.
 
+## Forty-second hardening changeset evidence
+
+The forty-second implementation slice closes the remaining shallow
+required-argument paths in the eval comparison surface:
+
+- `eval compare` already reports unknown flags through `eval_usage()`, but
+  missing required `--baseline` and `--candidate` flags still emitted local ad
+  hoc invalid-value messages without the command-specific usage surface.
+- Missing required comparison arms now report the `eval compare` Command
+  Surface usage before any project or suite work begins, aligning the manual
+  parser with the same subcommand-specific usage contract used for malformed
+  argv paths.
+- Unit coverage proves those required-argument paths report the projected
+  Command Surface line and do not leak unrelated command usage.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
