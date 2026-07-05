@@ -718,6 +718,20 @@ argv paths in the eval-harness execution surface:
 - Unit coverage proves malformed `eval-harness` argv reports the projected
   Command Surface line and does not leak unrelated command usage.
 
+## Fortieth hardening changeset evidence
+
+The fortieth implementation slice closes the remaining shallow malformed argv
+paths in the typed contract validation surface:
+
+- `contract validate` help already projects the `validate` subcommand usage from
+  the shared Command Surface, but missing flag values, missing required flags,
+  and unknown arguments still emitted local ad hoc messages.
+- Those malformed argv paths now report the `contract validate`
+  command-specific usage surface before file I/O or typed YAML validation,
+  keeping the adapter aligned with the generated Command Surface contract.
+- Unit coverage proves malformed `contract validate` argv reports the projected
+  Command Surface line and does not leak unrelated command usage.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

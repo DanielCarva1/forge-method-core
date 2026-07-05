@@ -105,6 +105,13 @@ fn contract_command_surface_usage_line_for(subcommand: &str) -> &'static str {
         .unwrap_or("forge-core contract <subcommand> [options]")
 }
 
+fn contract_validate_usage() -> String {
+    format!(
+        "usage:\n  {}",
+        contract_command_surface_usage_line_for("validate")
+    )
+}
+
 /// Handler for `forge-core contract validate`.
 ///
 /// # Errors
@@ -122,13 +129,11 @@ pub fn run_validate(args: &[String]) -> Result<(), ExitError> {
         match args[idx].as_str() {
             "--kind" => {
                 idx += 1;
-                kind = Some(require_value(args, idx, "validate", "kind")?);
+                kind = Some(require_value(args, idx)?);
             }
             "--file" => {
                 idx += 1;
-                file = Some(std::path::PathBuf::from(require_value(
-                    args, idx, "validate", "file",
-                )?));
+                file = Some(std::path::PathBuf::from(require_value(args, idx)?));
             }
             "--json" => want_json = true,
             "--no-json" | "--text" => want_json = false,
@@ -137,19 +142,15 @@ pub fn run_validate(args: &[String]) -> Result<(), ExitError> {
                 println!("supported kinds: {}", SUPPORTED_KINDS.join(", "));
                 return Ok(());
             }
-            other => {
-                return Err(ExitError::invalid_value(format!(
-                    "forge-core contract validate: unknown argument '{other}'"
-                )));
+            _ => {
+                return Err(ExitError::usage(contract_validate_usage()));
             }
         }
         idx += 1;
     }
 
-    let kind =
-        kind.ok_or_else(|| emit_err("contract validate", "--kind is required", want_json))?;
-    let file =
-        file.ok_or_else(|| emit_err("contract validate", "--file is required", want_json))?;
+    let kind = kind.ok_or_else(|| ExitError::usage(contract_validate_usage()))?;
+    let file = file.ok_or_else(|| ExitError::usage(contract_validate_usage()))?;
 
     let text = match std::fs::read_to_string(&file) {
         Ok(text) => text,
@@ -268,18 +269,10 @@ impl HasSchemaVersion for TelemetryContractDocument {
     }
 }
 
-fn require_value(
-    args: &[String],
-    idx: usize,
-    subcommand: &str,
-    flag: &str,
-) -> Result<String, ExitError> {
-    match args.get(idx) {
-        Some(v) => Ok(v.clone()),
-        None => Err(ExitError::invalid_value(format!(
-            "forge-core contract {subcommand}: --{flag} requires a value"
-        ))),
-    }
+fn require_value(args: &[String], idx: usize) -> Result<String, ExitError> {
+    args.get(idx)
+        .cloned()
+        .ok_or_else(|| ExitError::usage(contract_validate_usage()))
 }
 
 fn emit_err(command: &str, message: &str, want_json: bool) -> ExitError {
@@ -383,6 +376,43 @@ autonomy_policy_contract:
         assert_eq!(
             contract_command_surface_usage_line_for("validate"),
             COMMAND_CONTRACT.canonical_usage().trim_start()
+        );
+    }
+
+    #[test]
+    fn missing_contract_validate_flag_value_reports_command_surface_usage() {
+        let error =
+            run_validate(&args(&["--kind"])).expect_err("missing kind value must fail before I/O");
+        assert_contract_validate_usage_error(&error);
+    }
+
+    #[test]
+    fn missing_contract_validate_required_flags_report_command_surface_usage() {
+        let error =
+            run_validate(&args(&[])).expect_err("missing kind and file must fail before I/O");
+        assert_contract_validate_usage_error(&error);
+    }
+
+    #[test]
+    fn unknown_contract_validate_arg_reports_command_surface_usage() {
+        let error = run_validate(&args(&["--frobnicate"]))
+            .expect_err("unknown argument must fail before I/O");
+        assert_contract_validate_usage_error(&error);
+    }
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    fn assert_contract_validate_usage_error(error: &ExitError) {
+        let projected = COMMAND_CONTRACT.canonical_usage().trim_start();
+        assert!(
+            error.message().contains(projected),
+            "contract validate usage error should include projected Command Surface line {projected:?}: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core execute-operation"),
+            "contract validate usage error must not include unrelated mutating command usage: {error}"
         );
     }
 }
