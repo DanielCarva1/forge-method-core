@@ -6,61 +6,61 @@ artifact:
   closed: 2026-06-27
 
   problem: |
-    pi-subagents async runner morria em ~1s ("process exited or disappeared before
-    writing a result") em 100% das tentativas. Bloqueava todo background work.
+    pi-subagents async runner died in ~1s ("process exited or disappeared before
+    writing a result") in 100% of attempts. Blocked all background work.
 
   root_cause: |
-    MODULE_NOT_FOUND ao spawnar o runner.ts via jiti. O async spawn cria um processo
-    Node NOVO (separado do pi principal) que recarrega runner.ts; esse processo não
-    enxergava a peerDependency @earendil-works/pi-coding-agent.
+    MODULE_NOT_FOUND when spawning runner.ts via jiti. The async spawn creates a
+    NEW Node process (separate from the main pi) that reloads runner.ts; that
+    process could not see the peerDependency @earendil-works/pi-coding-agent.
 
-    Layout quebrado na árvore de extensões do WSL:
-      ~/.pi/agent/npm/node_modules/@earendil-works/  tinha: pi-ai, pi-tui
-                                                       FALTAVA: pi-coding-agent
+    Broken layout in the WSL extensions tree:
+      ~/.pi/agent/npm/node_modules/@earendil-works/  had: pi-ai, pi-tui
+                                                       MISSING: pi-coding-agent
 
-    O pi-coding-agent mora em ~/.local/lib/node_modules/ (árvore global), mas a
-    árvore de extensões não o referenciava. Instalação WSL ficou incompleta.
+    pi-coding-agent lives in ~/.local/lib/node_modules/ (global tree), but the
+    extensions tree did not reference it. WSL installation was left incomplete.
 
   diagnosis_method: |
-    1. Reproduzi o spawn exato do spawnRunner() manualmente com stderr capturado
-       (o spawnRunner usa stdio:"ignore", escondendo o erro).
-    2. Capturei: "Cannot find module '@earendil-works/pi-coding-agent'".
-    3. Mapeei o layout: pi-subagents declara pi-coding-agent como peerDependency.
-    4. Confirmei que o módulo existe em ~/.local/lib/node_modules/.
+    1. Reproduced the exact spawn of spawnRunner() manually with stderr captured
+       (spawnRunner uses stdio:"ignore", which hides the error).
+    2. Captured: "Cannot find module '@earendil-works/pi-coding-agent'".
+    3. Mapped the layout: pi-subagents declares pi-coding-agent as peerDependency.
+    4. Confirmed the module exists in ~/.local/lib/node_modules/.
 
   fix: |
-    1 symlink (apontando o módulo existente pra dentro da árvore onde o runner procura):
+    1 symlink (pointing the existing module into the tree where the runner looks for it):
       ln -sfn ~/.local/lib/node_modules/@earendil-works/pi-coding-agent \
               ~/.pi/agent/npm/node_modules/@earendil-works/pi-coding-agent
 
-    Re-spawn manual do runner.ts: ANTES morria em 1s (exit 1), DEPOIS rodou os 12s
-    completos (timeout 124). Hipótese confirmada.
+    Manual re-spawn of runner.ts: BEFORE it died in 1s (exit 1), AFTER it ran the
+    full 12s (timeout 124). Hypothesis confirmed.
 
   proof: |
-    Smoke test async (delegate, tarefa trivial): completou, 5 turns, processo vivo
-    ~76s, resultado entregue de volta pelo pi. Primeiro async COMPLETO deste projeto.
+    Smoke test async (delegate, trivial task): completed, 5 turns, process alive
+    ~76s, result delivered back by pi. First COMPLETE async in this project.
 
-    Parallel test (3 delegates async simultâneos, tarefas independentes):
-      - W1 count-contracts:  DONE, 110.5s, 323 contratos
+    Parallel test (3 simultaneous async delegates, independent tasks):
+      - W1 count-contracts:  DONE, 110.5s, 323 contracts
       - W2 crate-inventory:  DONE,  86.4s, 8 crates
       - W3 test-inventory:   DONE, 175.6s, 382 test fns
-      - OVERLAP window: 24.8s (todos simultâneos) => PARALELO CONFIRMADO
-      - 0 stale, 0 intervenção, resultados validados contra cargo test real
+      - OVERLAP window: 24.8s (all simultaneous) => PARALLEL CONFIRMED
+      - 0 stale, 0 intervention, results validated against real cargo test
 
   caveat: |
-    O symlink é FRÁGIL — um `pi update` que reinstalar node_modules pode apagá-lo.
-    Se async voltar a morrer em 1s, recriar o symlink. Solução permanente exigiria
-    upstream fix no instalador do pi (declarar pi-coding-agent como dep real ou
-    auto-symlink na instalação).
+    The symlink is FRAGILE — a `pi update` that reinstalls node_modules may wipe it.
+    If async dies again in 1s, recreate the symlink. A permanent fix would require
+    an upstream fix in the pi installer (declare pi-coding-agent as a real dep or
+    auto-symlink on install).
 
   non_causes: |
-    - OneDrive off: NÃO tem relação (caminhos não passam por OneDrive).
-    - WSL em si: NÃO (seria o mesmo erro em Linux nativo).
-    - pi duplo (Windows+WSL): PARCIAL — não causa direta, mas a instalação WSL
-      ficou incompleta possivelmente por interação com o ambiente duplo. A
-      instalação Windows estava correta (pi-coding-agent co-localizado).
+    - OneDrive off: NOT related (paths do not go through OneDrive).
+    - WSL itself: NO (would be the same error on native Linux).
+    - Duplicate pi (Windows+WSL): PARTIAL — not the direct cause, but the WSL
+      installation was left incomplete, possibly due to interaction with the dual
+      environment. The Windows install was correct (pi-coding-agent co-located).
 
   impact: |
-    Desbloqueia o modelo master/worker: agora posso disparar N subagentes async em
-    tarefas genuinamente independentes sem bloquear o turno do driver, e o pi
-    entrega os resultados de volta. Slice 6 Frente B/C podem usar paralelismo real.
+    Unblocks the master/worker model: now I can fire N async subagents on
+    genuinely independent tasks without blocking the driver turn, and pi delivers
+    the results back. Slice 6 Front B/C can use real parallelism.

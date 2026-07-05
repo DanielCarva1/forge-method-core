@@ -1,6 +1,6 @@
 meta:
-  topic: "WAL append-only hand-rolled em Rust para claims multi-agente file-backed: formato, CRC, prefix recovery"
-  query: "Projetar formato de registro WAL + CRC32C + prefix-recovery + atomicidade append + rotação + concorrência multi-processo"
+  topic: "Hand-rolled append-only WAL in Rust for file-backed multi-agent claims: format, CRC, prefix recovery"
+  query: "Design WAL record format + CRC32C + prefix-recovery + append atomicity + rotation + multi-process concurrency"
   date: "2026-06-27"
   researcher_model: "OpenAI API research subagent"
   confidence: "high"
@@ -8,71 +8,71 @@ meta:
 
 design_decisions:
   - id: D1
-    decision: "Usar framing binário self-delimiting por registro: magic(4) + version(1) + record_type(1) + flags(2) + seq(8) + payload_len(4) + header_crc32c(4) + payload + payload_crc32c(4). Todos inteiros little-endian."
-    rationale: "WALs práticos usam registros variáveis com header pequeno contendo checksum, length e type: LevelDB/RocksDB usam checksum(4), length(2), type(1), data; PostgreSQL inclui total length, resource-manager/type e CRC; SQLite usa frame header fixo com checksum. Para este domínio, u32 payload_len evita fragmentação obrigatória de payloads >64KiB, seq u64 simplifica replay/idempotência/checkpoints, e magic+version tornam resync acidental menos provável e permitem evolução controlada."
+    decision: "Use self-delimiting binary framing per record: magic(4) + version(1) + record_type(1) + flags(2) + seq(8) + payload_len(4) + header_crc32c(4) + payload + payload_crc32c(4). All integers little-endian."
+    rationale: "Practical WALs use variable records with a small header containing checksum, length, and type: LevelDB/RocksDB use checksum(4), length(2), type(1), data; PostgreSQL includes total length, resource-manager/type and CRC; SQLite uses a fixed frame header with checksum. For this domain, a u32 payload_len avoids mandatory fragmentation for payloads >64KiB, a u64 seq simplifies replay/idempotency/checkpoints, and magic+version make accidental resync less likely and allow controlled evolution."
     sources:
       - "https://chromium.googlesource.com/external/leveldb/+/HEAD/doc/log_format.md"
       - "https://github.com/facebook/rocksdb/wiki/Write-Ahead-Log-File-Format"
       - "https://doxygen.postgresql.org/structXLogRecord.html"
       - "https://www.sqlite.org/fileformat.html#the_wal_file"
   - id: D2
-    decision: "Não fragmentar registros na primeira versão; impor max_payload_len configurável, recomendado 1 MiB, hard cap 16 MiB."
-    rationale: "LevelDB/RocksDB fragmentam para blocos de 32KiB para DB log de alto throughput; claims/heartbeats/checkpoints de agentes são pequenos e se beneficiam de implementação mais auditável. Um u32 permite evolução, mas o cap impede OOM/corrupção maliciosa. Se snapshots/checkpoints crescerem, gravar snapshot em arquivo separado e emitir WAL record de checkpoint apontando para ele."
+    decision: "Do not fragment records in the first version; impose a configurable max_payload_len, recommended 1 MiB, hard cap 16 MiB."
+    rationale: "LevelDB/RocksDB fragment into 32KiB blocks for high-throughput DB logs; agent claims/heartbeats/checkpoints are small and benefit from a more auditable implementation. A u32 allows evolution, but the cap prevents OOM/malicious corruption. If snapshots/checkpoints grow, write the snapshot to a separate file and emit a WAL checkpoint record pointing to it."
     sources:
       - "https://chromium.googlesource.com/external/leveldb/+/HEAD/doc/log_format.md"
       - "https://github.com/facebook/rocksdb/wiki/Write-Ahead-Log-File-Format"
   - id: D3
-    decision: "Tipos de registro v1: 1=claim_acquire, 2=claim_release, 3=heartbeat, 4=checkpoint_ref, 5=tombstone, 6=wal_rotate_marker; tipos desconhecidos com flag skippable podem ser ignorados, sem flag devem parar recovery como incompatíveis."
-    rationale: "Campos de tipo são prática comum em WALs; PostgreSQL usa resource-manager id e info para despachar redo, LevelDB/RocksDB usam type para FULL/FIRST/MIDDLE/LAST. Separar tipo do payload permite evolução sem depender de introspecção JSON/CBOR."
+    decision: "v1 record types: 1=claim_acquire, 2=claim_release, 3=heartbeat, 4=checkpoint_ref, 5=tombstone, 6=wal_rotate_marker; unknown types with the skippable flag can be ignored, without the flag they must stop recovery as incompatible."
+    rationale: "Type fields are common practice in WALs; PostgreSQL uses a resource-manager id and info to dispatch redo, LevelDB/RocksDB use type for FULL/FIRST/MIDDLE/LAST. Separating type from the payload allows evolution without relying on JSON/CBOR introspection."
     sources:
       - "https://doxygen.postgresql.org/structXLogRecord.html"
       - "https://chromium.googlesource.com/external/leveldb/+/HEAD/doc/log_format.md"
   - id: D4
-    decision: "Usar CRC-32C/Castagnoli, não CRC-32/IEEE nem xxHash nem SHA, para integridade acidental de storage."
-    rationale: "LevelDB/RocksDB usam CRC32C para registros de log; PostgreSQL WAL usa pg_crc32c. CRC32C tem distância/erro-detection melhor para tamanhos comuns de blocos de storage e suporte de hardware em x86 SSE4.2/ARM, enquanto xxHash é hash não-criptográfico rápido sem propriedades CRC padronizadas para storage, e SHA é excessivo para corrupção acidental e não necessário contra adversário."
+    decision: "Use CRC-32C/Castagnoli, not CRC-32/IEEE, xxHash, or SHA, for accidental storage integrity."
+    rationale: "LevelDB/RocksDB use CRC32C for log records; the PostgreSQL WAL uses pg_crc32c. CRC32C has better error-detection distance for common storage block sizes and hardware support on x86 SSE4.2/ARM, while xxHash is a fast non-cryptographic hash without standardized CRC properties for storage, and SHA is excessive for accidental corruption and unnecessary against an adversary."
     sources:
       - "https://chromium.googlesource.com/external/leveldb/+/HEAD/doc/log_format.md"
       - "https://github.com/facebook/rocksdb/wiki/Write-Ahead-Log-File-Format"
       - "https://doxygen.postgresql.org/structXLogRecord.html"
       - "https://docs.rs/crc32c/latest/crc32c/"
   - id: D5
-    decision: "Usar crate Rust `crc32c` para CRC-32C dedicado; alternativa aceitável é `crc` com algoritmo CRC_32_ISCSI/CASTAGNOLI. Não usar `crc32fast` se a exigência é Castagnoli."
-    rationale: "A crate `crc32c` documenta explicitamente CRC-32-Castagnoli e implementações software/hardware. `crc32fast` é CRC-32 genérico/IEEE-oriented e não é a escolha correta para compatibilidade CRC32C. `crc` é mais genérica e reduz dependência especializada, mas exige fixar corretamente o algoritmo."
+    decision: "Use the Rust crate `crc32c` for dedicated CRC-32C; an acceptable alternative is `crc` with the CRC_32_ISCSI/CASTAGNOLI algorithm. Do not use `crc32fast` if the requirement is Castagnoli."
+    rationale: "The `crc32c` crate explicitly documents CRC-32-Castagnoli and software/hardware implementations. `crc32fast` is a generic/IEEE-oriented CRC-32 and is not the correct choice for CRC32C compatibility. `crc` is more generic and reduces a specialized dependency, but requires pinning the algorithm correctly."
     sources:
       - "https://docs.rs/crc32c/latest/crc32c/"
       - "https://docs.rs/crate/crc32fast/latest"
       - "https://docs.rs/crc/latest/crc/"
   - id: D6
-    decision: "Calcular payload_crc32c sobre header_sem_crcs + payload; calcular header_crc32c sobre bytes 0..20 do header (magic..payload_len), excluindo ambos CRCs."
-    rationale: "CRC cobrindo type+data é usado em LevelDB/RocksDB para detectar corrupção que muda semântica do record type; PostgreSQL guarda CRC no header do record. Header CRC separado permite rejeitar payload_len absurdo antes de alocar/ler payload inteiro; payload CRC cobrindo header_sem_crcs também detecta corrupção coordenada em type/seq/len mais payload."
+    decision: "Compute payload_crc32c over header_without_crcs + payload; compute header_crc32c over header bytes 0..20 (magic..payload_len), excluding both CRCs."
+    rationale: "A CRC covering type+data is used in LevelDB/RocksDB to detect corruption that changes the record-type semantics; PostgreSQL stores the CRC in the record header. A separate header CRC allows rejecting an absurd payload_len before allocating/reading the entire payload; a payload CRC covering header_without_crcs also detects coordinated corruption in type/seq/len plus payload."
     sources:
       - "https://chromium.googlesource.com/external/leveldb/+/HEAD/doc/log_format.md"
       - "https://github.com/facebook/rocksdb/wiki/Write-Ahead-Log-File-Format"
       - "https://doxygen.postgresql.org/structXLogRecord.html"
   - id: D7
-    decision: "Recovery é prefix recovery estrito: scan sequencial, aceitar apenas prefixo contíguo de registros válidos, parar no primeiro truncado/inválido, truncar para o offset do último registro válido sob lock exclusivo, depois replayar somente o prefixo."
-    rationale: "WALs assumem replay ordenado até ponto consistente; RocksDB lê WALs em ordem de sequence number e LevelDB observa que o tail pode conter bloco parcial. Esse modelo evita heurísticas frágeis após corrupção e torna crash no meio do último append recuperável: o último record parcial é descartado."
+    decision: "Recovery is strict prefix recovery: sequential scan, accept only the contiguous prefix of valid records, stop at the first truncated/invalid record, truncate to the offset of the last valid record under exclusive lock, then replay only the prefix."
+    rationale: "WALs assume ordered replay up to a consistent point; RocksDB reads WALs in sequence-number order and LevelDB notes the tail may contain a partial block. This model avoids fragile heuristics after corruption and makes a crash in the middle of the last append recoverable: the last partial record is discarded."
     sources:
       - "https://github.com/facebook/rocksdb/wiki/Write-Ahead-Log-File-Format"
       - "https://chromium.googlesource.com/external/leveldb/+/HEAD/doc/log_format.md"
       - "https://www.postgresql.org/docs/current/wal-internals.html"
   - id: D8
-    decision: "Append durável: adquirir fs4 lock exclusivo, abrir arquivo com append(true)+create(true), serializar record completo em Vec, chamar um único write_all para o buffer, sync_data ou sync_all antes de liberar lock quando a operação precisa ser committed."
-    rationale: "POSIX especifica que com O_APPEND o offset é movido ao EOF antes de cada write sem modificação interveniente; Rust OpenOptions::append documenta posicionamento no fim para writes. Entretanto write pode ser parcial, então `write_all` é necessário; o lock fs4 serializa writers cooperativos e reduz risco de interleaving ou ordem indefinida entre 50 processos. fsync/sync_data é a fronteira de durabilidade."
+    decision: "Durable append: acquire an exclusive fs4 lock, open the file with append(true)+create(true), serialize the full record into a Vec, call a single write_all for the buffer, sync_data or sync_all before releasing the lock when the operation must be committed."
+    rationale: "POSIX specifies that with O_APPEND the offset is moved to EOF before each write with no intervening modification; Rust OpenOptions::append documents positioning at the end for writes. However, a write can be partial, so `write_all` is necessary; the fs4 lock serializes cooperative writers and reduces the risk of interleaving or undefined ordering among 50 processes. fsync/sync_data is the durability boundary."
     sources:
       - "https://pubs.opengroup.org/onlinepubs/9699919799/functions/write.html"
       - "https://doc.rust-lang.org/std/fs/struct.OpenOptions.html"
       - "https://docs.rs/fs4/latest/fs4/trait.FileExt.html"
   - id: D9
-    decision: "Para criação/rotação/snapshot por rename, fsync do arquivo novo e fsync do diretório pai; para append normal em arquivo já existente, sync_data/sync_all do WAL basta para bytes do WAL."
-    rationale: "Durabilidade de conteúdo de arquivo não implica durabilidade da entrada de diretório em Unix/Linux; protocolos crash-safe de rename precisam fsync do arquivo e do diretório. Isso importa para rotação e instalação de snapshot/checkpoint."
+    decision: "For creation/rotation/snapshot by rename, fsync the new file and fsync the parent directory; for a normal append to an already existing file, sync_data/sync_all of the WAL is enough for the WAL bytes."
+    rationale: "File-content durability does not imply directory-entry durability on Unix/Linux; crash-safe rename protocols require fsync of the file and of the directory. This matters for rotation and snapshot/checkpoint installation."
     sources:
       - "https://man7.org/linux/man-pages/man2/fsync.2.html"
       - "https://www2.sqlite.org/atomiccommit.html"
       - "https://man7.org/linux/man-pages/man2/rename.2.html"
   - id: D10
-    decision: "Replayers sem mutação podem usar lock compartilhado; qualquer recovery que trunque, append, rotação ou snapshot deve usar lock exclusivo."
-    rationale: "fs4 fornece locks whole-file shared/exclusive e documenta que são advisory. Leitura lock-free pode ver EOF antes de um append completar ou ver record parcial; o parser prefix-valid lida com isso, mas não deve truncar sem lock exclusivo porque poderia cortar um append em andamento."
+    decision: "Mutation-free replayers can use a shared lock; any recovery that truncates, appends, rotates, or snapshots must use an exclusive lock."
+    rationale: "fs4 provides whole-file shared/exclusive locks and documents that they are advisory. Lock-free reads may see EOF before an append completes or see a partial record; the prefix-valid parser handles this, but must not truncate without an exclusive lock because it could cut an in-progress append."
     sources:
       - "https://docs.rs/fs4/latest/fs4/trait.FileExt.html"
       - "https://pubs.opengroup.org/onlinepubs/9699919799/functions/write.html"
@@ -147,7 +147,7 @@ append_atomicity_strategy:
     - "Call file.sync_data() after each claim state transition that must survive crash before acknowledgement. Use sync_all() if file metadata changes matter; for new WAL/rotation also fsync parent directory."
     - "Release lock only after sync succeeds. On sync/write error, report append failure and force next opener through recovery."
   atomicity_notes:
-    - "O_APPEND/POSIX makes seek-to-EOF plus write atomic, but does not replace application-level concurrency control; fs4 lock is the serialization mechanism for 50 agents."
+    - "O_APPEND/POSIX makes seek-to-EOF plus write atomic, but does not replace application-level concurrency control; the fs4 lock is the serialization mechanism for 50 agents."
     - "PIPE_BUF applies to pipes/FIFOs, not as a regular-file WAL record atomicity limit. Do not rely on PIPE_BUF for WAL."
     - "On NFS/network filesystems, O_APPEND and advisory locks can have weaker semantics; repository should document local filesystem requirement for authoritative claim WAL."
 

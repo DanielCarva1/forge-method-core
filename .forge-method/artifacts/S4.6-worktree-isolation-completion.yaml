@@ -24,10 +24,10 @@ delivered:
   e2e_tests: "crates/forge-core-cli/tests/isolation_e2e.rs (9 tests)"
 
 decisions_locked:
-  DD31: "Engine DESCRIBES/VALIDATES isolation; NEVER shells out to git. The host agent (DC9) executes `git worktree add`. MergePlan + suggested_git_commands are descriptive strings only. Raciocínio: mantém engine pura/determinística/testável; não acopla a subprocesso git; consistente com claims (agent declara, engine valida)."
+  DD31: "Engine DESCRIBES/VALIDATES isolation; NEVER shells out to git. The host agent (DC9) executes `git worktree add`. MergePlan + suggested_git_commands are descriptive strings only. Reasoning: keeps the engine pure/deterministic/testable; does not couple to a git subprocess; consistent with claims (agent declares, engine validates)."
   DD32: "Branch naming + uniqueness validation (git-ref legality: blocks `..`, whitespace, `:`, control chars, leading `-`/`.`, `.lock` suffix)."
   DD33: "Worktree path uniqueness validation (empty + leading-dash + shell-metachar blocked)."
-  DD34: "Merge policy default = rebase. Engine GERA plano determinístico (checkout→fetch→rebase→checkout | checkout→merge --no-ff | checkout→merge --squash); never executes."
+  DD34: "Merge policy default = rebase. Engine GENERATES deterministic plan (checkout→fetch→rebase→checkout | checkout→merge --no-ff | checkout→merge --squash); never executes."
   DD35: "Status state machine Proposed→Active→Merging→Merged|Abandoned. Illegal transitions rejected (same pattern as claim_engine + phase_transition). Terminal states reject all outgoing. Merging→Active (abort) allowed."
   DD36: "Isolation↔Claim linkage OPTIONAL (claim_id). When present, engine cross-checks agent consistency."
   DD37: "Command-injection defense is TWO layers: (1) engine rejects shell metacharacters (`; & | $ \` ( ) < > \n { }`) in branch_name/worktree_path/base_ref at validation; (2) CLI shell_quote (POSIX single-quote) at emission. Both must pass. Even if a hand-crafted contract bypassed layer 1, layer 2 guarantees safety."

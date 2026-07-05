@@ -18,15 +18,15 @@ authority:
 source_input:
   human: "creator of forge-method"
   verbatim_framing:
-    - "um outro agente (codex) fodeu meu projeto"
-    - "queria contratos em yaml simples; o agente criou um milhao de linhas em markdown ditando comportamento"
-    - "agentes ja tem capacidade de entender que se o yaml diz pra ser gentil, ele e gentil; nao precisa de roteiro de novela"
-    - "o forge method e um protocolo que da direcoes pra o agente navegar; ditar passo a passo emburrece"
-    - "o agente vira interprete; o humano nunca le os docs diretamente, sempre via agente"
-    - "nenhum documento pra humanos, exceto um unico README de GH (intro + novidades + install)"
-    - "agents comecaram a editar state/contratos pra continuar sem respeitar os protocolos"
-    - "to criando app proprio do forge em rust tbm; este aqui e compativel/emprestado, o outro tem casca propria; quero reuso"
-    - "correcao: o que eu MAIS quero e um produto usavel; resolver state virou prioridade so porque estraga o resto"
+    - "another agent (codex) fucked up my project"
+    - "I wanted simple yaml contracts; the agent created a million lines of markdown dictating behavior"
+    - "agents already have the ability to understand that if the yaml says to be polite, it is polite; no need for a soap-opera script"
+    - "the forge method is a protocol that gives directions for the agent to navigate; dictating step by step makes it dumber"
+    - "the agent becomes an interpreter; the human never reads the docs directly, always through the agent"
+    - "no documents for humans, except a single GH README (intro + news + install)"
+    - "agents started editing state/contracts to continue without respecting the protocols"
+    - "I'm building my own forge app in rust too; this one is compatible/borrowed, the other has its own shell; I want reuse"
+    - "correction: what I want MOST is a usable product; fixing state became a priority only because it ruins everything else"
 
 # ---------------------------------------------------------------------------
 # source_answer: what pi concluded, distilled

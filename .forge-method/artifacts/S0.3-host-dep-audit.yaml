@@ -184,7 +184,7 @@ raw_grep_appendix: |
   crates/forge-core-runtime/src/lib.rs:867:    let mut process = Command::new(executor_program(command_contract.executor));
 
   # === [2] tokio (runtime coupling) ===
-  (nenhum hit) — zero async runtime coupling in any library crate
+  (no hits) — zero async runtime coupling in any library crate
 
   # === [3] codex/cursor/mcp/adapter (shell-specific) ===
   crates/forge-core-contracts/src/completion.rs:128:    McpService,                    # enum variant — (a)
@@ -200,7 +200,7 @@ raw_grep_appendix: |
   (zero in any library src/lib.rs)
 
   # === [5] async/.await ===
-  (nenhum hit) — library crates are fully synchronous
+  (no hits) — library crates are fully synchronous
 
   # === workspace [workspace.dependencies] host/UI/shell/network check ===
   ZERO matches for: tokio crossterm ratatui tui egui iced reqwest hyper axum warp tauri mcp-server duct subprocess

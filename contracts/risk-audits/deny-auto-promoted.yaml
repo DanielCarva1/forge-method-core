@@ -1,13 +1,13 @@
 # F06 Risk Audit Gate — deny_auto_promoted anti-pattern.
 #
 # Detects the deprecated `approval: auto_promoted` token in Memory Contract
-# YAML. The F06 NFR states: "nenhuma memória vira authority automatically;
-# promote exige policy e evidência raw." `AutoPromoted` is the exact surface
+# YAML. The F06 NFR states: "no memory becomes an authority automatically;
+# promote requires policy and raw evidence." `AutoPromoted` is the exact surface
 # memory/retrieval poisoning attacks exploit (AgentPoison, MINJA, PoisonedRAG):
 # a record reaches the top of trust with no policy and no evidence.
 #
 # The variant is retained in `ApprovalState` for zero-migration-cost backwards
-# compatibility (ADR 0023, Opção A), but its use is forbidden. This detector
+# compatibility (ADR 0023, Option A), but its use is forbidden. This detector
 # fails closed on the YAML token — a stronger gate than a `#[deprecated]`
 # compile warning (which is avoided to keep the six derives clippy-clean; see
 # rust-lang/rust#92313).

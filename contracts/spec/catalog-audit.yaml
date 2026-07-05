@@ -64,15 +64,15 @@ bug_implication: "a router that keys on filename vs canonical id will fail to re
 module_coverage:
   domains_shipped: 9
   modules:
-    core-runtime: {fluxos: 20, role: "the method operating itself; routing, context, recovery"}
-    software-builder: {fluxos: 38, role: "general software: spec->arch->story->build->release"}
-    game-studio: {fluxos: 30, role: "games: GDD, MDA, mechanics, playtest"}
-    creative-studio: {fluxos: 16, role: "creative/narrative/storytelling"}
-    enterprise: {fluxos: 23, role: "compliance, team-operating-model, governance"}
-    platform-ops: {fluxos: 22, role: "devops, observability, ci, security"}
-    launch-ops: {fluxos: 16, role: "release/readiness/launch"}
-    test-architect: {fluxos: 25, role: "test strategy, framework, eval"}
-    runtime-builder: {fluxos: 35, role: "meta: build new forge modules/workflows/agents"}
+    core-runtime: {workflows: 20, role: "the method operating itself; routing, context, recovery"}
+    software-builder: {workflows: 38, role: "general software: spec->arch->story->build->release"}
+    game-studio: {workflows: 30, role: "games: GDD, MDA, mechanics, playtest"}
+    creative-studio: {workflows: 16, role: "creative/narrative/storytelling"}
+    enterprise: {workflows: 23, role: "compliance, team-operating-model, governance"}
+    platform-ops: {workflows: 22, role: "devops, observability, ci, security"}
+    launch-ops: {workflows: 16, role: "release/readiness/launch"}
+    test-architect: {workflows: 25, role: "test strategy, framework, eval"}
+    runtime-builder: {workflows: 35, role: "meta: build new forge modules/workflows/agents"}
   orphan_workflows_no_module: ["start", "validate", "analyze", "builder", "collaboration-handoff", "product-area-map", "team-operating-model", "hook-event-plan", "isolated-eval-runner", "repo-split-plan", "trunk-based-plan", "api-browser-utility"]
   orphan_implication: "12 workflows have no module home; either assign them to core-runtime or retire. Mostly cross-cutting utilities."
 
@@ -80,7 +80,7 @@ module_coverage:
 # the 'build anything' promise - assessed honestly
 # ---------------------------------------------------------------------------
 build_anything_assessment:
-  verdict: "promessa SERÁ sustentável via extensibilidade, NÃO por cobertura universal embarcada"
+  verdict: "the promise WILL BE sustained via extensibility, NOT via universal embedded coverage"
   extensibility_mechanism:
     - "module-builder + module-ideation + module-distribution: scaffold a new domain module"
     - "workflow-builder + workflow-analyze + workflow-validate: add a new workflow"
@@ -108,7 +108,7 @@ system_design_gate:
   required_fix: "make a system-design GATE mandatory in the spec->plan transition for all serious product builds (DC6). The architecture workflow content is the seed; promote it to a gate."
 
 # ---------------------------------------------------------------------------
-# persona-venom (the 'contexto venenoso' the codex left)
+# persona-venom (the 'poisonous context' the codex left)
 # ---------------------------------------------------------------------------
 persona_venom:
   facilitation_md_files_with_presence_script: 34

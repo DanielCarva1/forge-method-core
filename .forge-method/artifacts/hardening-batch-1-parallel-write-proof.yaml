@@ -7,15 +7,15 @@ artifact:
   git_commit: "f5a454e"
 
   purpose: |
-    Provar com EVIDÊNCIA que múltiplos subagentes gpt-5.5 podem escrever código
-    em paralelo no mesmo repo, mantendo excelência (protocolo + green-loop + zero
-    conflito). Responde à pergunta do usuário: "dá pra multiplicar produtividade
-    com muitos workers mantendo excelência?"
+    Prove with EVIDENCE that multiple gpt-5.5 subagents can write code in
+    parallel in the same repo while maintaining excellence (protocol + green-loop
+    + zero conflict). Answers the user's question: "is it possible to multiply
+    productivity with many workers while maintaining excellence?"
 
   setup: |
-    3 workers gpt-5.5, PARALLEL foreground, worktree isolation (cada worker numa
-    git worktree própria branched from HEAD). Arquivos 100% disjuntos por design.
-    Governo: 3 claims de story ativas (H1.1/H1.2/H1.3) em claims-dir compartilhado.
+    3 gpt-5.5 workers, PARALLEL foreground, worktree isolation (each worker in its
+    own git worktree branched from HEAD). Files 100% disjoint by design.
+    Governance: 3 active story claims (H1.1/H1.2/H1.3) in a shared claims-dir.
 
   workers:
     - worker: H1.1
@@ -23,17 +23,17 @@ artifact:
       model: gpt-5.5
       owned_file: crates/forge-core-engine/src/claim_engine.rs
       outcome: SUCCEEDED
-      changes: "+128 linhas (3 fixes HIGH: TTL overflow, rfc3339 validation, validator-consistent policy)"
+      changes: "+128 lines (3 HIGH fixes: TTL overflow, rfc3339 validation, validator-consistent policy)"
       tests_added: 6
       green_loop: "check+clippy+test pass (119 tests)"
-      note: "fez 1 edição mínima em claim.rs (fora owned) por exaustividade de enum — justificada, auditada"
+      note: "made 1 minimal edit in claim.rs (outside owned) due to enum exhaustiveness — justified, audited"
 
     - worker: H1.2
       agent: worker
       model: gpt-5.5
       owned_file: crates/forge-core-engine/src/conflict_detection.rs
       outcome: SUCCEEDED
-      changes: "+76 linhas (root-path coverage + Unicode case fold)"
+      changes: "+76 lines (root-path coverage + Unicode case fold)"
       tests_added: 2
       green_loop: "check+clippy+test pass (115 tests)"
 
@@ -42,60 +42,60 @@ artifact:
       model: gpt-5.5
       owned_file: crates/forge-core-cli/src/io_util.rs
       outcome: SUCCEEDED
-      changes: "+326 linhas (lockfile pid+timestamp+owner token, stale reclaim, remediation)"
+      changes: "+326 lines (lockfile pid+timestamp+owner token, stale reclaim, remediation)"
       tests_added: 4
       green_loop: "check+clippy+test pass (68+ tests)"
 
   merge_result: |
-    3 patches aplicados via git apply no repo principal. Dry-run check: 3/3 clean.
-    Zero conflito (arquivos disjuntos por design). Merge trivial.
+    3 patches applied via git apply on the main repo. Dry-run check: 3/3 clean.
+    Zero conflict (files disjoint by design). Trivial merge.
 
   final_green_loop:
     cargo_check_workspace: pass
     cargo_clippy_workspace: pass
-    cargo_test_workspace: "394 tests passed, 0 failed (era 382, +12 dos workers)"
+    cargo_test_workspace: "394 tests passed, 0 failed (was 382, +12 from workers)"
     cargo_fmt_check: pass
     verdict: GREEN
 
   verdict:
-    question: "Dá pra multiplicar produtividade com muitos workers gpt-5.5 mantendo excelência?"
+    question: "Is it possible to multiply productivity with many gpt-5.5 workers while maintaining excellence?"
     answer: |
-      SIM — provado para ESCRITA PARALELA com pré-condições:
-      1. Arquivos DISJUNTOS por design (cada worker = seu arquivo, designado na story)
-      2. Worktree ISOLADA por worker (target/ próprio, sem cargo contention)
-      3. Government via claims (acquire com scope de story + paths)
-      4. Cada worker roda green-loop no SEU crate antes de declarar done
-      5. Driver faz green-loop de INTEGRAÇÃO depois do merge
+      YES — proven for PARALLEL WRITING with preconditions:
+      1. DISJOINT files by design (each worker = its file, designated in the story)
+      2. ISOLATED worktree per worker (its own target/, no cargo contention)
+      3. Governance via claims (acquire with story scope + paths)
+      4. Each worker runs green-loop on ITS crate before declaring done
+      5. Driver runs the INTEGRATION green-loop after merge
 
-      Com essas 5 condições, 3 workers escreveram código correto em paralelo,
-      cada um verde isoladamente, e o merge ficou verde sem intervenção.
+      With these 5 conditions, 3 workers wrote correct code in parallel, each
+      green in isolation, and the merge went green without intervention.
 
     what_scale_means: |
-      - 3 workers disjuntos: PROVADO (este batch).
-      - 20 workers: viável SE houver 20 arquivos disjuntos. A governance via claims
-        + conflict detection escala; o gargalo real é ter escopos disjuntos.
-      - Workers no MESMO arquivo: requer single-writer pattern (skill recomenda
-        1 writer + N read-only reviewers), NÃO parallel writers no mesmo arquivo.
+      - 3 disjoint workers: PROVEN (this batch).
+      - 20 workers: viable IF there are 20 disjoint files. Governance via claims
+        + conflict detection scales; the real bottleneck is having disjoint scopes.
+      - Workers on the SAME file: requires a single-writer pattern (the skill
+        recommends 1 writer + N read-only reviewers), NOT parallel writers on the
+        same file.
 
-    resiliência_observada: |
-      Bônus: os 3 workers encontraram SOZINHOS o bug do Windows cargo/UNC target-dir
-      (incremental lock falha em /tmp worktree) e contornaram com --target-dir em C:
-      ou --config build.incremental=false. Zero intervenção do driver. LLMs
-      competentes resolvem problemas de toolchain quando o objetivo é claro.
+    observed_resilience: |
+      Bonus: the 3 workers found ON THEIR OWN the Windows cargo/UNC target-dir bug
+      (incremental lock fails on /tmp worktree) and worked around it with --target-dir
+      on C: or --config build.incremental=false. Zero driver intervention. Competent
+      LLMs solve toolchain problems when the goal is clear.
 
   open_items:
-    - "H1.1 editou claim.rs (fora owned) por exaustividade de enum. Justificada,
-      mas revela que owned-files estrito pode quebrar compilação cross-crate quando
-      um worker adiciona variants de enum público. Considerar: contrato de 'owned
-      files' deve permitir edições de compatibilidade mínimas, OU designar arquivos
-      de enum compartilhados como co-owned."
-    - "Bug do release com id slugificado (claim-story-H1-1-H1-1 'not found' mas
-      claim.story.H1.1.H1.1 funciona) — inconsistência id-resolve. Backlog."
-    - "Bug H1.1 claim expirou cedo (ttl 1200 do teste inicial) — release requereu
-      handoff. Comportamento correto do protocolo mas mostrou que claims de teste
-      e claims de produção não devem compartilhar claims-dir."
+    - "H1.1 edited claim.rs (outside owned) due to enum exhaustiveness. Justified,
+      but reveals that strict owned-files can break cross-crate compilation when a
+      worker adds public enum variants. Consider: the 'owned files' contract should
+      allow minimal compatibility edits, OR designate shared enum files as co-owned."
+    - "Release bug with slugified id (claim-story-H1-1-H1-1 'not found' but
+      claim.story.H1.1.H1.1 works) — id-resolve inconsistency. Backlog."
+    - "H1.1 claim expired early bug (ttl 1200 from the initial test) — release
+      required handoff. Correct protocol behavior but showed that test claims
+      and production claims must not share the claims-dir."
 
   next: |
-    Padrão provado. Próximo batch pode escalar (mais workers, mais arquivos
-    disjuntos) OU evoluir pra async (driver pesquisa enquanto workers escrevem).
-    Modelo master/worker validado.
+    Pattern proven. The next batch can scale (more workers, more disjoint files)
+    OR evolve to async (driver researches while workers write). Master/worker
+    model validated.
