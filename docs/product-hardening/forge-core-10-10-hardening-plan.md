@@ -732,6 +732,21 @@ paths in the typed contract validation surface:
 - Unit coverage proves malformed `contract validate` argv reports the projected
   Command Surface line and does not leak unrelated command usage.
 
+## Forty-first hardening changeset evidence
+
+The forty-first implementation slice closes the remaining shallow malformed argv
+paths in the coordination validation gate:
+
+- `coordination validate` help already projects the `validate` subcommand usage
+  from the shared Command Surface, but missing `--suite` values, missing
+  `--repo-root` values, and unknown flags still printed ad hoc stderr and
+  returned an empty dynamic exit error.
+- Those malformed argv paths now return a typed invalid-value error carrying the
+  `coordination validate` command-specific usage surface while preserving the
+  historical exit code 3 for argv-shape failures.
+- Unit coverage proves malformed `coordination validate` argv reports the
+  projected Command Surface line and does not leak unrelated command usage.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

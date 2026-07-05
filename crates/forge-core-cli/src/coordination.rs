@@ -153,16 +153,14 @@ pub fn dispatch(args: &[String]) -> Result<(), ExitError> {
                         // believe they validated their own suite. Fail loud.
                         idx += 1;
                         let Some(val) = args.get(idx) else {
-                            eprintln!("coordination validate: --suite requires a value");
-                            return Err(ExitError::with_code(3, String::new()));
+                            return Err(coordination_validate_usage_error());
                         };
                         suite = PathBuf::from(val);
                     }
                     "--repo-root" => {
                         idx += 1;
                         let Some(val) = args.get(idx) else {
-                            eprintln!("coordination validate: --repo-root requires a value");
-                            return Err(ExitError::with_code(3, String::new()));
+                            return Err(coordination_validate_usage_error());
                         };
                         repo_root = PathBuf::from(val);
                     }
@@ -172,9 +170,8 @@ pub fn dispatch(args: &[String]) -> Result<(), ExitError> {
                         print_validate_help();
                         return Ok(());
                     }
-                    other => {
-                        eprintln!("coordination validate: unknown flag '{other}'");
-                        return Err(ExitError::with_code(3, String::new()));
+                    _ => {
+                        return Err(coordination_validate_usage_error());
                     }
                 }
                 idx += 1;
@@ -220,6 +217,17 @@ fn coordination_command_surface_usage_line_for(subcommand: &str) -> &'static str
     COMMAND_COORDINATION
         .usage_line_for_subcommand(subcommand)
         .unwrap_or("forge-core coordination <subcommand> [options]")
+}
+
+fn coordination_validate_usage() -> String {
+    format!(
+        "usage:\n  {}",
+        coordination_command_surface_usage_line_for("validate")
+    )
+}
+
+fn coordination_validate_usage_error() -> ExitError {
+    ExitError::invalid_value(coordination_validate_usage())
 }
 
 fn print_validate_help() {
@@ -408,6 +416,13 @@ mod tests {
         assert_eq!(exit_of(result), 3);
     }
 
+    #[test]
+    fn dispatch_unknown_flag_reports_validate_usage() {
+        let args: Vec<String> = vec!["coordination".into(), "validate".into(), "--bogus".into()];
+        let error = dispatch(&args).expect_err("unknown flag should be invalid-value usage");
+        assert_coordination_validate_usage_error(&error);
+    }
+
     // --- review S4.7 fixes (CLI) ------------------------------------------
 
     #[test]
@@ -419,8 +434,9 @@ mod tests {
             "validate".into(),
             "--suite".into(), // no value follows
         ];
-        let result = dispatch(&args);
-        assert_eq!(exit_of(result), 3);
+        let error = dispatch(&args).expect_err("missing suite value should be invalid-value usage");
+        assert_eq!(error.exit_code(), 3);
+        assert_coordination_validate_usage_error(&error);
     }
 
     #[test]
@@ -431,8 +447,10 @@ mod tests {
             "validate".into(),
             "--repo-root".into(),
         ];
-        let result = dispatch(&args);
-        assert_eq!(exit_of(result), 3);
+        let error =
+            dispatch(&args).expect_err("missing repo-root value should be invalid-value usage");
+        assert_eq!(error.exit_code(), 3);
+        assert_coordination_validate_usage_error(&error);
     }
 
     #[test]
@@ -484,5 +502,17 @@ mod tests {
         assert!(json.contains("\"ok\":false"));
         assert!(json.contains("\"is_real\":false"));
         let _ = std::fs::remove_file(&tmp);
+    }
+
+    fn assert_coordination_validate_usage_error(error: &ExitError) {
+        let projected = COMMAND_COORDINATION.canonical_usage().trim_start();
+        assert!(
+            error.message().contains(projected),
+            "coordination validate usage error should include projected Command Surface line {projected:?}: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core execute-operation"),
+            "coordination validate usage error must not include unrelated mutating command usage: {error}"
+        );
     }
 }
