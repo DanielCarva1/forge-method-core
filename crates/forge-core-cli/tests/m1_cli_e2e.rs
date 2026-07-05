@@ -75,6 +75,50 @@ fn copy_dir(source: &Path, target: &Path) {
 }
 
 #[test]
+fn m1_help_paths_project_command_surface_usage() {
+    for (command, expected_usage, sibling_usage) in [
+        (
+            "preview",
+            "forge-core preview [--root <path>] --operation <path>",
+            "forge-core ready [--root <path>] --operation <path>",
+        ),
+        (
+            "ready",
+            "forge-core ready [--root <path>] --operation <path>",
+            "forge-core preview [--root <path>] --operation <path>",
+        ),
+        (
+            "explain",
+            "forge-core explain [--root <path>] (--last-run | --run-id <id>)",
+            "forge-core preview [--root <path>] --operation <path>",
+        ),
+    ] {
+        let output = bin()
+            .args([command, "--help"])
+            .output()
+            .expect("run M1 help");
+        assert!(output.status.success(), "{command} --help should pass");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains(expected_usage),
+            "{command} help should include its Command Surface usage: {stdout}"
+        );
+        assert!(
+            stdout.contains("[--json|--no-json]"),
+            "{command} help should expose the shared JSON/text contract: {stdout}"
+        );
+        assert!(
+            !stdout.contains(sibling_usage),
+            "{command} help must not fall back to the global usage table: {stdout}"
+        );
+        assert!(
+            !stdout.contains("forge-core execute-operation"),
+            "{command} help must not include unrelated global commands: {stdout}"
+        );
+    }
+}
+
+#[test]
 fn m1_preview_missing_sidecar_state_fails_without_creating_state() {
     let (app, sidecar_root, state_root) = fresh_project_missing_sidecar("preview-missing-sidecar");
 

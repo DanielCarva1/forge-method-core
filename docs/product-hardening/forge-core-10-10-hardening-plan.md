@@ -604,6 +604,24 @@ the Command Surface seam:
   Allowlist is capability data, not a way to weaken the Command Surface,
   MutateGate, or Tool-Call Attestation.
 
+## Thirty-third hardening changeset evidence
+
+The thirty-third implementation slice removes the next shallow help adapter
+from the M1 read-only command family:
+
+- `preview`, `ready`, and `explain` help now render command-specific usage from
+  the shared Command Surface instead of falling back to the global CLI usage
+  table.
+- Missing-value and unknown-argument usage errors in the M1 parser now report
+  the relevant command surface (`forge-core preview`, `forge-core ready`, or
+  `forge-core explain`), improving locality for agents and humans.
+- The M1 parser now accepts explicit `--no-json` as the text-mode counterpart
+  to `--json`, matching the Command Surface `[--json|--no-json]` contract used
+  by CLI help, generated docs, and MCP descriptors.
+- Unit coverage locks the three M1 commands to their projected Command Surface
+  lines and proves the unknown `explain` flag no longer falls back to unrelated
+  global or sibling-command usage.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

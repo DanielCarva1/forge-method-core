@@ -1,6 +1,7 @@
 use crate::cli_error::ExitError;
-use crate::cli_util::{next_arg_or_err, next_path_or_err, usage};
+use crate::cli_util::command_surface_usage;
 use crate::project_cmd::{resolve_project, ProjectResolveError};
+use forge_core_command_surface::{CommandSpec, COMMAND_EXPLAIN, COMMAND_PREVIEW, COMMAND_READY};
 use forge_core_contracts::OperationContractDocument;
 use forge_core_kernel::{
     preview_operation_with_snapshot, ready_operation_with_snapshot, RuntimePreviewReport,
@@ -26,6 +27,17 @@ pub enum M1CommandKind {
     Preview,
     Ready,
     Explain,
+}
+
+impl M1CommandKind {
+    #[must_use]
+    fn command_spec(self) -> &'static CommandSpec {
+        match self {
+            Self::Preview => &COMMAND_PREVIEW,
+            Self::Ready => &COMMAND_READY,
+            Self::Explain => &COMMAND_EXPLAIN,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -736,7 +748,7 @@ pub fn run_m1_command(args: &[String], kind: M1CommandKind) -> Result<(), ExitEr
     // --help short-circuits before parsing so the parser can return a
     // fully-formed M1CommandInput on the success path.
     if args.iter().any(|a| matches!(a.as_str(), "--help" | "-h")) {
-        println!("{}", usage());
+        println!("{}", m1_usage(kind));
         return Ok(());
     }
     let (input, json) = parse_m1_command_args(args, kind)?;
@@ -773,38 +785,39 @@ pub fn parse_m1_command_args(
         match args[index].as_str() {
             "--root" => {
                 index += 1;
-                root = next_path_or_err(args, index)?;
+                root = next_m1_path_or_err(args, index, kind)?;
             }
             "--operation" => {
                 index += 1;
-                operation_path = Some(next_path_or_err(args, index)?);
+                operation_path = Some(next_m1_path_or_err(args, index, kind)?);
             }
             "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--recorded-at" => {
                 index += 1;
-                recorded_at = next_arg_or_err(args, index)?.to_string();
+                recorded_at = next_m1_arg_or_err(args, index, kind)?.to_string();
             }
             "--agent-id" => {
                 index += 1;
-                agent_id = next_arg_or_err(args, index)?.to_string();
+                agent_id = next_m1_arg_or_err(args, index, kind)?.to_string();
             }
             "--principal-id" => {
                 index += 1;
-                principal_id = next_arg_or_err(args, index)?.to_string();
+                principal_id = next_m1_arg_or_err(args, index, kind)?.to_string();
             }
             "--last-run" => last_run = true,
             "--run-id" => {
                 index += 1;
-                run_id = Some(next_arg_or_err(args, index)?.to_string());
+                run_id = Some(next_m1_arg_or_err(args, index, kind)?.to_string());
             }
             "--json" => json = true,
+            "--no-json" => json = false,
             "--help" | "-h" => {
                 // Already handled by run_m1_command; if we somehow reach here,
                 // treat as success.
                 break;
             }
             _ => {
-                return Err(ExitError::usage(usage()));
+                return Err(ExitError::usage(m1_usage(kind)));
             }
         }
         index += 1;
@@ -834,6 +847,29 @@ pub fn parse_m1_command_args(
         },
         json,
     ))
+}
+
+#[must_use]
+fn m1_usage(kind: M1CommandKind) -> String {
+    command_surface_usage(kind.command_spec())
+}
+
+fn next_m1_arg_or_err(
+    args: &[String],
+    index: usize,
+    kind: M1CommandKind,
+) -> Result<&str, ExitError> {
+    args.get(index)
+        .map(String::as_str)
+        .ok_or_else(|| ExitError::usage(m1_usage(kind)))
+}
+
+fn next_m1_path_or_err(
+    args: &[String],
+    index: usize,
+    kind: M1CommandKind,
+) -> Result<PathBuf, ExitError> {
+    Ok(PathBuf::from(next_m1_arg_or_err(args, index, kind)?))
 }
 
 /// Runs the `forge-core preview` command body.
@@ -983,6 +1019,25 @@ mod tests {
             events,
             reasons: vec![TraceEventQueryReason::Matched],
             diagnostics: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn m1_usage_projects_command_surface_lines() {
+        for (kind, command) in [
+            (M1CommandKind::Preview, &COMMAND_PREVIEW),
+            (M1CommandKind::Ready, &COMMAND_READY),
+            (M1CommandKind::Explain, &COMMAND_EXPLAIN),
+        ] {
+            let usage = m1_usage(kind);
+            assert!(usage.starts_with("usage:\n"));
+            for line in command.usage_lines {
+                let projected = format!("  {}", line.trim_start());
+                assert!(
+                    usage.contains(&projected),
+                    "M1 usage for {kind:?} should include projected Command Surface line {projected:?}: {usage}"
+                );
+            }
         }
     }
 
@@ -1161,6 +1216,18 @@ mod tests {
     }
 
     #[test]
+    fn parser_accepts_explicit_no_json_mode() {
+        let args = vec![
+            "preview".to_string(),
+            "--json".to_string(),
+            "--no-json".to_string(),
+        ];
+        let (_input, json) =
+            parse_m1_command_args(&args, M1CommandKind::Preview).expect("--no-json is valid");
+        assert!(!json, "--no-json must override explicit --json");
+    }
+
+    #[test]
     fn parser_rejects_explain_without_selector() {
         let args = vec!["explain".to_string()];
         let result = parse_m1_command_args(&args, M1CommandKind::Explain);
@@ -1186,6 +1253,14 @@ mod tests {
     fn parser_rejects_unknown_explain_flag() {
         let args = vec!["explain".to_string(), "--frobnicate".to_string()];
         let result = parse_m1_command_args(&args, M1CommandKind::Explain);
-        assert!(result.is_err());
+        let error = result.expect_err("unknown explain flag must fail");
+        assert!(
+            error.message().contains("forge-core explain"),
+            "unknown explain flags should report command-specific usage: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core preview"),
+            "explain usage must not fall back to the global M1/global surface: {error}"
+        );
     }
 }
