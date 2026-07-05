@@ -22,6 +22,7 @@
 
 use std::path::{Path, PathBuf};
 
+use forge_core_command_surface::COMMAND_GOVERNANCE;
 use forge_core_contracts::{
     CliEnvelope, ConflictContract, ConflictResolutionState, ExitReason, GovernancePolicy,
     PrincipalId, ResolutionDecision, StableId,
@@ -60,7 +61,8 @@ pub fn run_governance_command(args: &[String]) -> Result<(), ExitError> {
             emit_err(
                 GOVERNANCE_COMMAND,
                 &format!(
-                    "unknown subcommand '{other}'. Try: record, conflicts, arbitrate, escalate"
+                    "unknown subcommand '{other}'. Try: {hint}",
+                    hint = governance_subcommand_hint()
                 ),
                 want_json,
             )
@@ -70,12 +72,21 @@ pub fn run_governance_command(args: &[String]) -> Result<(), ExitError> {
 
 fn print_governance_usage() {
     println!("forge-core governance <subcommand> [options]");
-    println!("  record    --conflict-file <path> [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--no-json]");
-    println!("  conflicts [--status pending|resolved|escalated] [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--no-json]");
-    println!("  arbitrate --conflict-id <id> --policy-file <path> --arbiter <principal> (--awarded-to <principal> | --both-released | --split-scope) [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--no-json]");
-    println!("  escalate  --conflict-id <id> --policy-file <path> --principal <principal> [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--no-json]");
+    for line in COMMAND_GOVERNANCE.local_usage_lines() {
+        println!("  {line}");
+    }
     println!();
     println!("  State writes land under <state_root>/governance/ (resolved from --root). --governance-dir overrides the directory.");
+}
+
+fn governance_subcommand_hint() -> String {
+    COMMAND_GOVERNANCE.concrete_subcommand_hint()
+}
+
+fn governance_command_surface_usage_line_for(subcommand: &str) -> &'static str {
+    COMMAND_GOVERNANCE
+        .usage_line_for_subcommand(subcommand)
+        .unwrap_or("forge-core governance <subcommand> [options]")
 }
 
 // --- shared resolution -------------------------------------------------------
@@ -182,7 +193,7 @@ fn parse_common_flag(
 fn run_record(args: &[String]) -> Result<(), ExitError> {
     let outcome = match parse_record_args(args) {
         Ok(GovernanceParseOutcome::Help) => {
-            println!("forge-core governance record --conflict-file <path> [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--no-json]");
+            println!("{}", governance_command_surface_usage_line_for("record"));
             return Ok(());
         }
         Ok(GovernanceParseOutcome::Run(opts)) => opts,
@@ -239,7 +250,7 @@ struct RecordOkData {
 fn run_conflicts(args: &[String]) -> Result<(), ExitError> {
     let outcome = match parse_conflicts_args(args) {
         Ok(GovernanceParseOutcome::Help) => {
-            println!("forge-core governance conflicts [--status pending|resolved|escalated] [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--no-json]");
+            println!("{}", governance_command_surface_usage_line_for("conflicts"));
             return Ok(());
         }
         Ok(GovernanceParseOutcome::Run(opts)) => opts,
@@ -345,7 +356,7 @@ fn conflict_view(c: ConflictContract) -> ConflictView {
 fn run_arbitrate(args: &[String]) -> Result<(), ExitError> {
     let outcome = match parse_arbitrate_args(args) {
         Ok(GovernanceParseOutcome::Help) => {
-            println!("forge-core governance arbitrate --conflict-id <id> --policy-file <path> --arbiter <principal> (--awarded-to <principal> | --both-released | --split-scope) [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--no-json]");
+            println!("{}", governance_command_surface_usage_line_for("arbitrate"));
             return Ok(());
         }
         Ok(GovernanceParseOutcome::Run(opts)) => opts,
@@ -464,7 +475,7 @@ struct ArbitrateDenialData {
 fn run_escalate(args: &[String]) -> Result<(), ExitError> {
     let outcome = match parse_escalate_args(args) {
         Ok(GovernanceParseOutcome::Help) => {
-            println!("forge-core governance escalate --conflict-id <id> --policy-file <path> --principal <principal> [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--no-json]");
+            println!("{}", governance_command_surface_usage_line_for("escalate"));
             return Ok(());
         }
         Ok(GovernanceParseOutcome::Run(opts)) => opts,
@@ -1056,5 +1067,43 @@ mod tests {
     fn run_governance_help_prints_usage_and_succeeds() {
         let result = run_governance_command(&args(&["governance", "--help"]));
         assert!(result.is_ok(), "--help must succeed");
+    }
+
+    #[test]
+    fn governance_usage_projects_command_surface_lines() {
+        let mut usage = String::from("forge-core governance <subcommand> [options]");
+        for line in COMMAND_GOVERNANCE.local_usage_lines() {
+            usage.push('\n');
+            usage.push_str("  ");
+            usage.push_str(line);
+        }
+
+        assert!(
+            usage.starts_with("forge-core governance <subcommand> [options]"),
+            "governance usage should keep the local command-tree header: {usage}"
+        );
+        for line in COMMAND_GOVERNANCE.usage_lines {
+            let subcommand_usage = COMMAND_GOVERNANCE.local_usage_line(line);
+            assert!(
+                usage.contains(subcommand_usage),
+                "governance usage should include projected Command Surface line {subcommand_usage:?}: {usage}"
+            );
+        }
+        assert_eq!(
+            governance_subcommand_hint(),
+            "record | conflicts | arbitrate | escalate"
+        );
+    }
+
+    #[test]
+    fn governance_subcommand_help_lookup_projects_full_command_surface_lines() {
+        for subcommand in ["record", "conflicts", "arbitrate", "escalate"] {
+            let usage = governance_command_surface_usage_line_for(subcommand);
+            assert_eq!(
+                Some(usage),
+                COMMAND_GOVERNANCE.usage_line_for_subcommand(subcommand),
+                "governance {subcommand} help should come from the Command Surface"
+            );
+        }
     }
 }

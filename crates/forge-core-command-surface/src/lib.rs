@@ -166,7 +166,7 @@ impl CommandSpec {
     }
 
     /// Iterate over usage lines projected for local command-tree help.
-    #[must_use]
+    #[must_use = "iterators are lazy; consume the iterator to render projected usage lines"]
     pub fn local_usage_lines(&self) -> impl Iterator<Item = &'static str> + '_ {
         self.usage_lines
             .iter()
@@ -178,7 +178,7 @@ impl CommandSpec {
     /// Placeholder first tokens such as `<subcommand>`, `[--root ...]`, and
     /// `(route|policy|...)` are deliberately ignored; this keeps unknown-
     /// subcommand hints honest for command trees with real children.
-    #[must_use]
+    #[must_use = "iterators are lazy; consume the iterator to render concrete subcommand names"]
     pub fn concrete_subcommand_names(&self) -> impl Iterator<Item = &'static str> + '_ {
         self.local_usage_lines()
             .filter_map(|line| line.split_whitespace().next())
@@ -771,6 +771,12 @@ mod tests {
                 .concrete_subcommand_names()
                 .collect::<Vec<_>>(),
             vec!["validate"]
+        );
+        assert_eq!(
+            COMMAND_GOVERNANCE
+                .concrete_subcommand_names()
+                .collect::<Vec<_>>(),
+            vec!["record", "conflicts", "arbitrate", "escalate"]
         );
         assert_eq!(
             COMMAND_MEMORY

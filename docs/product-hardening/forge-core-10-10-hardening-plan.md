@@ -306,6 +306,24 @@ the Command Surface:
   `validate` hint, full subcommand usage lookup, and explicit `--json` parsing
   to the Command Surface.
 
+## Seventeenth hardening changeset evidence
+
+The seventeenth implementation slice migrates the `governance` command-tree
+help adapter to the Command Surface:
+
+- `governance --help` now keeps the local command-tree header and state-directory
+  explanation, but projects every subcommand usage line from
+  `forge-core-command-surface::COMMAND_GOVERNANCE`.
+- `governance record|conflicts|arbitrate|escalate --help` now render their first
+  usage line from the same Command Surface seam, including the explicit
+  `[--json|--no-json]` contract that the parser already accepts.
+- `governance` unknown-subcommand errors now derive the compact
+  `record | conflicts | arbitrate | escalate` hint from `COMMAND_GOVERNANCE`
+  instead of preserving a rival hard-coded list.
+- Unit tests lock the local command-tree header, projected subcommand usage
+  lines, full subcommand usage lookup, and concrete child-name extraction to
+  the shared `CommandSpec` projection interface.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
