@@ -1,35 +1,35 @@
-# Forge Method Core v2 - guia de refatoracao Rust
+# Forge Method Core v2 - Rust refactor guide
 
 > Aligned with AGENTS.md on 2026-06-29 (R13.1). Forge rolls error enums by hand — no thiserror, no clap derive, no anyhow.
 
-## Problema atual
+## Current problem
 
-O repo ja tem boa separacao conceitual em crates, mas algumas areas concentram muitas responsabilidades e aumentam a chance de agentes escreverem Rust ruim. O principal objetivo aqui e reduzir o contexto necessario para cada alteracao.
+The repo already has good conceptual separation into crates, but some areas concentrate many responsibilities and increase the chance of agents writing bad Rust. The main goal here is to reduce the context needed for each change.
 
-## Regras de ouro
+## Golden rules
 
-1. Rust protege invariantes, nao experimenta semantica viva.
-2. Todo comando novo deve entrar pelo argv handling manual de `main.rs` (sem `clap`, sem derive).
-3. Todo erro publico deve ser enum tipado.
-4. Todo caminho critico deve emitir `tracing` span ou event.
-5. Todo contrato grande precisa de builder de fixture.
-6. Todo output JSON de CLI precisa de snapshot test.
-7. Nenhum adapter externo pode mutar store diretamente.
-8. Evitar `String` crua para ids quando houver semantica de dominio.
-9. Preferir `BTreeMap` para outputs deterministicos.
-10. Evitar `expect` em paths de runtime, exceto invariantes internas provadas por preflight.
+1. Rust protects invariants, it does not experiment with live semantics.
+2. Every new command must enter through the manual argv handling of `main.rs` (no `clap`, no derive).
+3. Every public error must be a typed enum.
+4. Every critical path must emit a `tracing` span or event.
+5. Every large contract needs a fixture builder.
+6. Every CLI JSON output needs a snapshot test.
+7. No external adapter can mutate the store directly.
+8. Avoid raw `String` for ids when there is domain semantics.
+9. Prefer `BTreeMap` for deterministic outputs.
+10. Avoid `expect` on runtime paths, except for internal invariants proven by preflight.
 
-## CLI com argv manual (sem `clap`)
+## CLI with manual argv (no `clap`)
 
-Forge NAO usa `clap` nem derive macros. O argv handling e manual e vive em `main.rs`, conforme `crates/forge-core-cli/src/main.rs`. O padrao estabelecido e:
+Forge does NOT use `clap` or derive macros. The argv handling is manual and lives in `main.rs`, per `crates/forge-core-cli/src/main.rs`. The established pattern is:
 
-- `main()` coleta `env::args().skip(1).collect::<Vec<String>>()`.
-- Faz match no primeiro argumento (subcomando) e despacha para uma funcao `run_<command>(&args)`.
-- Cada `run_<command>` faz parsing manual de flags (`--foo`, `--bar valor`) sobre `&[String]`.
-- Erros de uso imprimem `usage()` em stderr e chamam `std::process::exit(2)`.
-- Erros de runtime propagam um enum tipado (ver secao seguinte), nao `String`.
+- `main()` collects `env::args().skip(1).collect::<Vec<String>>()`.
+- It matches on the first argument (subcommand) and dispatches to a `run_<command>(&args)` function.
+- Each `run_<command>` does manual parsing of flags (`--foo`, `--bar value`) over `&[String]`.
+- Usage errors print `usage()` to stderr and call `std::process::exit(2)`.
+- Runtime errors propagate a typed enum (see next section), not `String`.
 
-Esqueleto:
+Skeleton:
 
 ```rust
 fn main() {
@@ -47,13 +47,13 @@ fn main() {
 }
 ```
 
-Novos subcomandos entram adicionando um braco no `match` de `main.rs` e uma funcao `run_<command>(&[String])`. NAO introduzir `clap`, `clap_derive`, `structopt` ou qualquer derive macro de CLI.
+New subcommands enter by adding an arm to the `match` in `main.rs` and a `run_<command>(&[String])` function. Do NOT introduce `clap`, `clap_derive`, `structopt`, or any CLI derive macro.
 
-## Erros com enum tipado feito a mao (sem `thiserror`)
+## Errors with a hand-written typed enum (no `thiserror`)
 
-Forge NAO usa `thiserror` nem `anyhow`. Cada operacao falhavel define um enum de erro nominal ao lado da operacao, derivando `Debug, Clone, PartialEq, Eq`. Conversoes em fronteiras de modulo usam `.map_err(NamedError::from)` ou um `impl From` explicito. Como enums derivam `Clone`, guarde a fonte como `String` (lossy) quando precisar — nunca como `Box<dyn Error>`.
+Forge does NOT use `thiserror` or `anyhow`. Each fallible operation defines a nominal error enum next to the operation, deriving `Debug, Clone, PartialEq, Eq`. Conversions at module boundaries use `.map_err(NamedError::from)` or an explicit `impl From`. Since enums derive `Clone`, store the source as `String` (lossy) when needed — never as `Box<dyn Error>`.
 
-Exemplo espelhando `ExecuteOperationError` (`crates/forge-core-cli/src/execute_operation.rs`) e `ReferenceIndexBuildError` (`crates/forge-core-store/src/lib.rs`):
+Example mirroring `ExecuteOperationError` (`crates/forge-core-cli/src/execute_operation.rs`) and `ReferenceIndexBuildError` (`crates/forge-core-store/src/lib.rs`):
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,12 +87,12 @@ impl From<forge_core_store::ReferenceIndexBuildError> for PreviewError {
 }
 ```
 
-Regras:
+Rules:
 
-- Derivar `Debug, Clone, PartialEq, Eq` no enum de erro.
-- Implementar `Display` a mao (sem `#[error(...)]`).
-- NUNCA `Result<_, String>` em assinaturas novas. Use `Result<T, NamedError>`.
-- NUNCA `Box<dyn std::error::Error>` em assinaturas publicas.
+- Derive `Debug, Clone, PartialEq, Eq` on the error enum.
+- Implement `Display` by hand (no `#[error(...)]`).
+- NEVER `Result<_, String>` in new signatures. Use `Result<T, NamedError>`.
+- NEVER `Box<dyn std::error::Error>` in public signatures.
 
 ## Tracing
 
@@ -107,7 +107,7 @@ pub fn plan_operation_with_snapshot(
 }
 ```
 
-## Module split proposto para store
+## Proposed module split for store
 
 ```txt
 crates/forge-core-store/src/
@@ -124,7 +124,7 @@ crates/forge-core-store/src/
   locks.rs
 ```
 
-## Builders para reduzir sofrimento dos agentes
+## Builders to reduce agent suffering
 
 ```rust
 let op = OperationContractFixture::ready_mutation()
@@ -136,13 +136,13 @@ let op = OperationContractFixture::ready_mutation()
 
 ## Snapshot tests
 
-Usar snapshots para CLI JSON, RuntimePlan, PreviewReport, ReadyReport, TraceEvent e EvalComparison. Isso reduz regressao invisivel e ajuda agentes a corrigirem output sem entender todo o sistema.
+Use snapshots for CLI JSON, RuntimePlan, PreviewReport, ReadyReport, TraceEvent, and EvalComparison. This reduces invisible regression and helps agents correct output without understanding the whole system.
 
-## Codegen recomendado
+## Recommended codegen
 
-O padrao ideal e escolher uma fonte canonica:
+The ideal pattern is to choose a single canonical source:
 
-- Se contratos nascem em YAML/JSON Schema: gerar Rust structs, docs e fixtures base.
-- Se contratos nascem em Rust: gerar JSON Schema e docs automaticamente.
+- If contracts are born in YAML/JSON Schema: generate Rust structs, docs, and base fixtures.
+- If contracts are born in Rust: generate JSON Schema and docs automatically.
 
-Evitar manter manualmente Rust struct, schema YAML, docs, fixtures e validator sem geracao. Isso multiplica erro de agente.
+Avoid maintaining a Rust struct, YAML schema, docs, fixtures, and validator manually without generation. This multiplies agent error.

@@ -1,18 +1,18 @@
-# ADR-0005 - Memoria como policy, nao vector DB
+# ADR-0005 - Memory as policy, not a vector DB
 
 - **Status**: Proposed
 
-## Contexto
+## Context
 
-Papers recentes mostram que memoria depende de admission, routing, compression level e evidence support.
+Recent papers show that memory depends on admission, routing, compression level, and evidence support.
 
-## Decisao
+## Decision
 
-Criar `MemoryPolicy` antes de storage rico. Summary nao cria autoridade. Promotion exige boundary.
+Create `MemoryPolicy` before rich storage. A summary does not create authority. Promotion requires a boundary.
 
-## Consequencias
+## Consequences
 
-- Reduz memory poisoning.
-- Permite forget e redaction.
-- Mantem raw evidence.
-- Separa memoria episodica, skill e regra.
+- Reduces memory poisoning.
+- Enables forget and redaction.
+- Keeps raw evidence.
+- Separates episodic memory, skills, and rules.

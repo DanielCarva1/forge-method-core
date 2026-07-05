@@ -1,16 +1,16 @@
-# Forge Method Core v2 - arquitetura e contratos
+# Forge Method Core v2 - architecture and contracts
 
-## Arquitetura alvo
+## Target architecture
 
 ```txt
-camada de produto
+product layer
   guided start
   preview
   ready
   explain
   control plane
 
-camada declarativa
+declarative layer
   workflow graph
   operation contracts
   memory policy
@@ -18,7 +18,7 @@ camada declarativa
   eval cases
   protocol projections
 
-kernel Rust deterministico
+deterministic Rust kernel
   validate
   runtime planner
   graph executor
@@ -31,7 +31,7 @@ kernel Rust deterministico
   memory admission
   protocol adapters
 
-mundo externo
+external world
   MCP tools
   A2A agents
   GitHub/Jira/Slack/Linear
@@ -39,13 +39,13 @@ mundo externo
   local filesystem
 ```
 
-## Contratos novos
+## New contracts
 
 ### WorkflowGraph
 
-Responsabilidade: representar workflow executavel. Nao substitui `OperationContract`; coordena multiplas operacoes e verificadores.
+Responsibility: represent an executable workflow. Does not replace `OperationContract`; it coordinates multiple operations and verifiers.
 
-Campos obrigatorios:
+Mandatory fields:
 
 - `graph_id`
 - `schema_version`
@@ -55,7 +55,7 @@ Campos obrigatorios:
 - `stop_conditions`
 - `authority_boundary`
 
-Tipos de node v0:
+v0 node types:
 
 - `operation`
 - `verifier`
@@ -67,9 +67,9 @@ Tipos de node v0:
 
 ### TraceEvent
 
-Responsabilidade: registrar comportamento real de runtime.
+Responsibility: record actual runtime behavior.
 
-Eventos v0:
+v0 events:
 
 - `run_started`
 - `node_planned`
@@ -88,21 +88,21 @@ Eventos v0:
 
 ### MemoryPolicy
 
-Responsabilidade: decidir o que pode ser lembrado, lido, esquecido e promovido.
+Responsibility: decide what can be remembered, read, forgotten, and promoted.
 
-Regras v0:
+v0 rules:
 
-- Summary nao cria autoridade.
-- Raw evidence precisa ser preservada ou referenciada.
-- Promotion de memoria para skill/regra exige contrato de autoridade.
-- Forget e redaction sao comandos de primeira classe.
-- Memoria tem consumer_use: discovery, diagnostics, handoff_context, product_personalization.
+- Summary does not create authority.
+- Raw evidence must be preserved or referenced.
+- Promotion of memory to a skill/rule requires an authority contract.
+- Forget and redaction are first-class commands.
+- Memory has consumer_use: discovery, diagnostics, handoff_context, product_personalization.
 
 ### GovernancePolicy
 
-Responsabilidade: resolver shared state com varios principals.
+Responsibility: resolve shared state with multiple principals.
 
-Entidades v0:
+v0 entities:
 
 - `PrincipalId`
 - `IntentContract`
@@ -111,15 +111,15 @@ Entidades v0:
 - `ArbitrationRecord`
 - `GovernanceDecision`
 
-## Regra de autoridade
+## Authority rule
 
-Adapters, agentes externos, context files, memory summaries e tool outputs nao sao fonte de verdade de workflow. Eles podem sugerir, reportar ou carregar contexto. Apenas contratos validados pelo kernel podem mutar estado.
+Adapters, external agents, context files, memory summaries, and tool outputs are not the source of truth for workflow. They can suggest, report, or carry context. Only contracts validated by the kernel can mutate state.
 
-## Onde encaixa no repo atual
+## Where it fits in the current repo
 
-- `forge-core-contracts`: structs e schemas para contratos novos.
-- `forge-core-validate`: validators e cross-reference checks.
-- `forge-core-kernel`: planner e executor de graph.
+- `forge-core-contracts`: structs and schemas for new contracts.
+- `forge-core-validate`: validators and cross-reference checks.
+- `forge-core-kernel`: planner and graph executor.
 - `forge-core-store`: WAL, effects, trace append, metadata index.
-- `forge-core-cli`: comandos de usuario.
-- Novos crates: `forge-core-trace`, `forge-core-graph`, `forge-core-eval`, `forge-core-memory`, `forge-core-protocol-mcp`, `forge-core-protocol-a2a`.
+- `forge-core-cli`: user commands.
+- New crates: `forge-core-trace`, `forge-core-graph`, `forge-core-eval`, `forge-core-memory`, `forge-core-protocol-mcp`, `forge-core-protocol-a2a`.

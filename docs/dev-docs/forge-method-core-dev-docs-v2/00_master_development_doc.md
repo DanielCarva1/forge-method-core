@@ -1,148 +1,148 @@
-# Forge Method Core v2 - documento de desenvolvimento auditado
+# Forge Method Core v2 - audited development document
 
-Data: 2026-06-28  
-Janela cientifica para papers: 2025-10-28 a 2026-06-28
+Date: 2026-06-28  
+Scientific window for papers: 2025-10-28 to 2026-06-28
 
-## 1. Objetivo
+## 1. Objective
 
-Este documento converte a revisao cientifica recente, os sinais de mercado/comunidade, as fontes oficiais de protocolo e a leitura da codebase atual em um plano de desenvolvimento para o Forge Method Core.
+This document converts recent scientific review, market/community signals, official protocol sources, and the reading of the current codebase into a development plan for the Forge Method Core.
 
-A decisao principal e simples: o Forge deve virar uma camada deterministica de coordenacao para trabalho com agentes. O produto deve expor poder de agente sem abrir mao de preview, verificacao, trace, rollback, memoria governada, seguranca de protocolo e controle de conflito.
+The main decision is simple: Forge should become a deterministic coordination layer for work with agents. The product must expose agent power without giving up preview, verification, trace, rollback, governed memory, protocol security, and conflict control.
 
-## 2. Regras de auditoria
+## 2. Audit rules
 
-Papers cientificos entram como base principal apenas se estiverem dentro da janela de oito meses: 2025-10-28 a 2026-06-28. Fontes oficiais atuais entram como estado de ecossistema, nao como prova empirica. Rust docs entram como engenharia estavel. Sinais de comunidade/cases entram como demanda, nao como prova de eficacia.
+Scientific papers enter as the primary basis only if they fall within the eight-month window: 2025-10-28 to 2026-06-28. Current official sources enter as ecosystem state, not as empirical proof. Rust docs enter as stable engineering. Community signals and cases enter as demand, not as proof of efficacy.
 
-Niveis de forca usados no ledger:
+Strength levels used in the ledger:
 
-- A: evidencia principal para decisao de produto ou arquitetura.
-- B: evidencia complementar ou fonte oficial atual.
-- C: contexto util, mas nao suficiente para decisao central.
+- A: primary evidence for a product or architecture decision.
+- B: complementary evidence or a current official source.
+- C: useful context, but not sufficient for a central decision.
 
-## 3. Leitura atual do campo
+## 3. Current reading of the field
 
-### 3.1 Multi-agent homogeneo nao deve ser default
+### 3.1 Homogeneous multi-agent should not be the default
 
-OneFlow, BenchAgent e o estudo de incerteza em MAS convergem em uma conclusao: varios agentes com o mesmo modelo base, mudando so prompt, role ou posicao, nao vencem automaticamente um single-agent bem controlado. O Forge deve tratar single-agent como anchor obrigatorio e exigir evidencia para ativar MAS. Isso vira feature de produto em `forge eval compare`.
+OneFlow, BenchAgent, and the uncertainty study in MAS converge on one conclusion: several agents with the same base model, changing only the prompt, role, or position, do not automatically beat a well-controlled single-agent. Forge must treat single-agent as a mandatory anchor and require evidence to activate MAS. This becomes a product feature in `forge eval compare`.
 
-Decisao: toda feature multi-agent precisa informar qual vantagem esta buscando: heterogeneidade de modelos, ferramentas diferentes, permissoes diferentes, principals diferentes, multimodalidade, isolamento de contexto ou paralelismo real.
+Decision: every multi-agent feature must state which advantage it is seeking: model heterogeneity, different tools, different permissions, different principals, multimodality, context isolation, or real parallelism.
 
-### 3.2 Orquestracao por grafo virou a forma mais defensavel
+### 3.2 Graph orchestration has become the most defensible form
 
-O survey de workflow optimization separa template, realized graph e execution trace. GraphBit e VMAO reforcam DAG explicito, execucao deterministica, verificador e replanejamento. Isso encaixa diretamente no Forge porque o `OperationContract` atual ja modela autoridade, execucao, gates e efeitos, mas precisa virar node dentro de um grafo maior.
+The workflow optimization survey separates template, realized graph, and execution trace. GraphBit and VMAO reinforce explicit DAG, deterministic execution, verifier, and replanning. This fits Forge directly because the current `OperationContract` already models authority, execution, gates, and effects, but needs to become a node within a larger graph.
 
-Decisao: criar `WorkflowGraph` como entidade de primeira classe e manter `OperationContract` como um tipo de node ou contrato de operacao. Prompt nao decide routing estrutural sozinho.
+Decision: create `WorkflowGraph` as a first-class entity and keep `OperationContract` as a node type or operation contract. Prompt does not decide structural routing on its own.
 
-### 3.3 Trace e eval precisam ser produto
+### 3.3 Trace and eval need to be a product
 
-AgentBeats mostra que avaliacao de agentes esta indo para interfaces padronizadas, judge agents e reproducibilidade via protocolos. O Forge ja tem evidence logs e reasons tipados, mas precisa formalizar `TraceEvent` canonico e um harness de eval.
+AgentBeats shows that agent evaluation is moving toward standardized interfaces, judge agents, and reproducibility via protocols. Forge already has evidence logs and typed reasons, but needs to formalize a canonical `TraceEvent` and an eval harness.
 
-Decisao: nenhum run sem trace. Nenhuma arquitetura nova sem comparacao contra baseline.
+Decision: no run without trace. No new architecture without comparison against a baseline.
 
-### 3.4 Memoria precisa de policy, nao so retrieval
+### 3.4 Memory needs policy, not just retrieval
 
-MemFlow, MemRouter e Experience Compression Spectrum mostram que memoria boa depende de write policy, read routing, nivel de compressao, budget e validacao de suporte. Memoria nao deve criar autoridade automaticamente.
+MemFlow, MemRouter, and Experience Compression Spectrum show that good memory depends on write policy, read routing, compression level, budget, and support validation. Memory must not create authority automatically.
 
-Decisao: criar `MemoryPolicy`, `MemoryRecord`, `MemoryPromotion` e `MemoryAuthorityBoundary` antes de qualquer memoria persistente rica.
+Decision: create `MemoryPolicy`, `MemoryRecord`, `MemoryPromotion`, and `MemoryAuthorityBoundary` before any rich persistent memory.
 
-### 3.5 Protocolo precisa de identidade e capability binding
+### 3.5 Protocol needs identity and capability binding
 
-MCP e A2A sao importantes para ecossistema. Mas os papers de security threat modeling, MCP security, AIP e AgentRFC mostram riscos de attestation ausente, trust propagation, composicao insegura, delegacao sem identidade e gaps de conformance.
+MCP and A2A are important for the ecosystem. But the security threat modeling, MCP security, AIP, and AgentRFC papers show risks of missing attestation, trust propagation, unsafe composition, delegation without identity, and conformance gaps.
 
-Decisao: adapters MCP/A2A do Forge sao projections do kernel, nao fontes de verdade. Toda chamada mutavel precisa ser vinculada a PrincipalId, capability, scope, OperationContract e trace.
+Decision: Forge's MCP/A2A adapters are projections of the kernel, not sources of truth. Every mutable call must be bound to PrincipalId, capability, scope, OperationContract, and trace.
 
-### 3.6 Demanda de comunidade esta em controle, integracao e governanca
+### 3.6 Community demand is in control, integration, and governance
 
-O paper de Stack Overflow sobre agentes mostra dores em runtime integration, dependency management, orchestration complexity e evaluation reliability. A documentacao atual de plataformas agentic mostra demanda por custom agents, hooks, skills, sandboxes, memory, budgets, MCP, rollback e audit logs. Papers de usuarios comuns mostram que transparencia de seguranca e privacidade precisa ser acionavel e on-demand.
+The Stack Overflow paper on agents shows pain points in runtime integration, dependency management, orchestration complexity, and evaluation reliability. Current agentic platform documentation shows demand for custom agents, hooks, skills, sandboxes, memory, budgets, MCP, rollback, and audit logs. Papers on common users show that security and privacy transparency needs to be actionable and on-demand.
 
-Decisao: Forge deve vender `build safely with agents`, nao `mais agentes conversando`.
+Decision: Forge must sell `build safely with agents`, not `more agents talking`.
 
-## 4. Evidencia da codebase atual
+## 4. Evidence from the current codebase
 
-| ID | Local | Achado |
+| ID | Location | Finding |
 |---|---|---|
-| C01 | `README.md:52-70` | Forge v2 ja define .forge-method como camada de coordenacao para humanos e agentes, com registry, lane claims, handoffs append-only e optimistic concurrency. |
-| C02 | `Cargo.toml:3-12` | Workspace Rust separado em forge-contract-validator, forge-core-contracts, forge-core-schema, forge-core-cli, forge-core-store, forge-core-validate e forge-core-kernel. |
-| C03 | `crates/forge-core-contracts/src/operation.rs:13-44` | OperationContract modela autonomia, autoridade, coordenação, execucao, stop policy, comandos, efeitos, gates e diagnostics. |
-| C04 | `crates/forge-core-store/src/lib.rs:21-34,127-177,299-324` | Store concentra indexacao, coleta de YAML, append JSONL, efeito transacional, WAL, lock e metadata. |
-| C05 | `crates/forge-core-cli/src/main.rs:47-93` | CLI atual usa parsing manual por env::args, match command, loops de indice e process::exit. |
-| C06 | `crates/forge-core-kernel/src/lib.rs:43-98,244-365` | RuntimePlan ja calcula status e reasons tipados com validacao, gates, human input, review e mutation policy. |
+| C01 | `README.md:52-70` | Forge v2 already defines .forge-method as a coordination layer for humans and agents, with registry, lane claims, append-only handoffs, and optimistic concurrency. |
+| C02 | `Cargo.toml:3-12` | Rust workspace split into forge-contract-validator, forge-core-contracts, forge-core-schema, forge-core-cli, forge-core-store, forge-core-validate, and forge-core-kernel. |
+| C03 | `crates/forge-core-contracts/src/operation.rs:13-44` | OperationContract models autonomy, authority, coordination, execution, stop policy, commands, effects, gates, and diagnostics. |
+| C04 | `crates/forge-core-store/src/lib.rs:21-34,127-177,299-324` | Store concentrates indexing, YAML collection, JSONL append, transactional effect, WAL, lock, and metadata. |
+| C05 | `crates/forge-core-cli/src/main.rs:47-93` | Current CLI uses manual parsing via env::args, match command, index loops, and process::exit. |
+| C06 | `crates/forge-core-kernel/src/lib.rs:43-98,244-365` | RuntimePlan already computes status and typed reasons with validation, gates, human input, review, and mutation policy. |
 
-## 5. Feature map prioritario
+## 5. Priority feature map
 
-| ID | Prioridade | Feature | Usuarios | Evidencias |
+| ID | Priority | Feature | Users | Evidence |
 |---|---|---|---|---|
-| F01 | P0 | forge preview | todos | P21,P22,P28,O03,C06 |
-| F02 | P0 | forge ready | usuario comum, QA, dev, empresa | P22,P23,P30,C06 |
-| F03 | P0 | TraceEvent canonico e forge explain | todos | P04,P07,P17,P24,P26,C06 |
-| F04 | P0 | WorkflowGraph v0 | power user, empresa | P04,P05,P06,C03,C06 |
-| F05 | P1 | Eval Compare single-agent baseline | power user, pesquisa, empresa | P01,P02,P03,P07 |
-| F06 | P1 | Memory Policy | todos | P09,P10,P11,P28,O03 |
-| F07 | P1 | Multi-principal governance | times, empresas, open source | P08,P24,P25,P26,C01 |
-| F08 | P1 | Secure MCP adapter | power user, empresas | O01,P17,P18,P19,P20,O03 |
-| F09 | P2 | Secure A2A adapter | power user, empresas | O02,P08,P17,P19,P20 |
-| F10 | P2 | Control Plane local | power user, QA, times | P06,P07,P21,P28,O03,C01 |
-| F11 | P1 | Risk Audit Gate para codigo de IA | QA, dev, empresas | P22,P23,P30 |
-| F12 | P2 | Guided Start e Product UX | usuario comum, founder, dev iniciante | P28,P29,O03 |
-| F13 | P2 | Budget and Cost Accounting | power user, empresas | P01,P02,P16,O03 |
-| F14 | P3 | Knowledge Orchestration mode | pesquisa, produto, analistas | P13,P14,P15 |
-| F15 | P0 | Rust ergonomics and codegen track | maintainers e agentes de codigo | O04,O05,O06,O07,P31,C04,C05 |
+| F01 | P0 | forge preview | all | P21,P22,P28,O03,C06 |
+| F02 | P0 | forge ready | common user, QA, dev, company | P22,P23,P30,C06 |
+| F03 | P0 | Canonical TraceEvent and forge explain | all | P04,P07,P17,P24,P26,C06 |
+| F04 | P0 | WorkflowGraph v0 | power user, company | P04,P05,P06,C03,C06 |
+| F05 | P1 | Eval Compare single-agent baseline | power user, research, company | P01,P02,P03,P07 |
+| F06 | P1 | Memory Policy | all | P09,P10,P11,P28,O03 |
+| F07 | P1 | Multi-principal governance | teams, companies, open source | P08,P24,P25,P26,C01 |
+| F08 | P1 | Secure MCP adapter | power user, companies | O01,P17,P18,P19,P20,O03 |
+| F09 | P2 | Secure A2A adapter | power user, companies | O02,P08,P17,P19,P20 |
+| F10 | P2 | Local Control Plane | power user, QA, teams | P06,P07,P21,P28,O03,C01 |
+| F11 | P1 | Risk Audit Gate for AI code | QA, dev, companies | P22,P23,P30 |
+| F12 | P2 | Guided Start and Product UX | common user, founder, beginner dev | P28,P29,O03 |
+| F13 | P2 | Budget and Cost Accounting | power user, companies | P01,P02,P16,O03 |
+| F14 | P3 | Knowledge Orchestration mode | research, product, analysts | P13,P14,P15 |
+| F15 | P0 | Rust ergonomics and codegen track | maintainers and code agents | O04,O05,O06,O07,P31,C04,C05 |
 
-## 6. Produto final esperado
+## 6. Expected final product
 
-### Para usuario comum
+### For the common user
 
-O Forge deve parecer um modo seguro de construir com IA. A pessoa nao precisa saber o que e MCP, A2A, WAL ou WorkflowGraph. A experiencia precisa ser:
+Forge should feel like a safe mode to build with AI. The person does not need to know what MCP, A2A, WAL, or WorkflowGraph is. The experience needs to be:
 
-1. Comecar guiado.
-2. Entender o plano.
-3. Ver preview antes de mutacao.
-4. Rodar verificacao.
-5. Receber explicacao curta.
-6. Desfazer quando algo der errado.
+1. Get started guided.
+2. Understand the plan.
+3. See a preview before mutation.
+4. Run verification.
+5. Receive a short explanation.
+6. Undo when something goes wrong.
 
-Features traduzidas: `forge start --guided`, `forge preview`, `forge ready`, `forge explain`, `forge undo`.
+Translated features: `forge start --guided`, `forge preview`, `forge ready`, `forge explain`, `forge undo`.
 
-### Para vibe coder, indie maker e founder
+### For the vibe coder, indie maker, and founder
 
-O maior risco e publicar algo que parece funcionar, mas tem auth ruim, dados expostos, teste falso, dependencia insegura ou falha silenciosa. O Forge deve ser o cinto de seguranca.
+The biggest risk is publishing something that appears to work, but has bad auth, exposed data, a fake test, an unsafe dependency, or a silent failure. Forge must be the seatbelt.
 
-Features traduzidas: security checklist, secrets gate, deploy gate, data risk gate, risk audit gate, ready gate e rollback.
+Translated features: security checklist, secrets gate, deploy gate, data risk gate, risk audit gate, ready gate, and rollback.
 
-### Para dev/QA profissional
+### For the professional dev/QA
 
-A dor nao e gerar codigo. A dor e revisar, validar, rastrear, testar e explicar o que o agente fez. Forge deve virar control layer para agentes de codigo.
+The pain is not generating code. The pain is reviewing, validating, tracking, testing, and explaining what the agent did. Forge must become a control layer for code agents.
 
-Features traduzidas: trace, eval, readiness report, AI risk audit, policy-as-code, CI integration, failure taxonomy e evidence ledger.
+Translated features: trace, eval, readiness report, AI risk audit, policy-as-code, CI integration, failure taxonomy, and evidence ledger.
 
-### Para power user de IA
+### For the AI power user
 
-Esse usuario quer controlar grafo, nodes, tools, budgets, memory, protocols, replay e evals. Ele aceita declaratividade e arquivos.
+This user wants to control graph, nodes, tools, budgets, memory, protocols, replay, and evals. They accept declarativeness and files.
 
-Features traduzidas: `forge graph`, `forge eval`, `forge memory`, `forge protocol mcp`, `forge protocol a2a`, control plane local.
+Translated features: `forge graph`, `forge eval`, `forge memory`, `forge protocol mcp`, `forge protocol a2a`, local control plane.
 
-### Para time/empresa
+### For teams/companies
 
-O valor e governanca de trabalho gerado por IA. O time precisa saber quem fez, com qual permissao, qual evidencia, qual risco e qual rollback.
+The value is governance of AI-generated work. The team needs to know who did it, with which permission, which evidence, which risk, and which rollback.
 
-Features traduzidas: PrincipalId, IntentContract, ConflictContract, GovernancePolicy, audit ledger, allowed capabilities, budgets e approval gates.
+Translated features: PrincipalId, IntentContract, ConflictContract, GovernancePolicy, audit ledger, allowed capabilities, budgets, and approval gates.
 
-## 7. Decisoes de arquitetura
+## 7. Architecture decisions
 
-1. Rust fica no kernel deterministico.
-2. Semantica viva fica declarativa ate estabilizar.
-3. `OperationContract` vira node ou payload dentro de `WorkflowGraph`.
-4. Todo run gera `TraceEvent`.
-5. Toda feature multi-agent precisa de baseline single-agent.
-6. MCP e A2A entram como adapters seguros, nao como autoridade.
-7. Memoria precisa de policy e source evidence.
-8. Multi-principal governance vira diferencial do Forge.
-9. CLI usa argv manual em `main.rs` (sem `clap`, sem derive macros). Cada subcomando novo adiciona um braço no `match` de `main.rs` e uma fn `run_<command>(&[String])`. Ver `04_rust_refactor_guide.md`.
-10. Erros e diagnostics devem ser enums tipados feitos à mão (sem `thiserror`, sem `anyhow`), derivando `Debug, Clone, PartialEq, Eq`.
+1. Rust stays in the deterministic kernel.
+2. Live semantics stay declarative until stabilized.
+3. `OperationContract` becomes a node or payload within `WorkflowGraph`.
+4. Every run generates a `TraceEvent`.
+5. Every multi-agent feature needs a single-agent baseline.
+6. MCP and A2A enter as secure adapters, not as authority.
+7. Memory needs policy and source evidence.
+8. Multi-principal governance becomes Forge's differentiator.
+9. CLI uses manual argv in `main.rs` (no `clap`, no derive macros). Each new subcommand adds an arm to the `match` in `main.rs` and a `run_<command>(&[String])` fn. See `04_rust_refactor_guide.md`.
+10. Errors and diagnostics must be hand-written typed enums (no `thiserror`, no `anyhow`), deriving `Debug, Clone, PartialEq, Eq`.
 
-## 8. Fonte ledger resumido
+## 8. Summary source ledger
 
-| ID | Data | Forca | Titulo | Area |
+| ID | Date | Strength | Title | Area |
 |---|---|---|---|---|
 | P01 | 2026-01-18 | A | Rethinking the Value of Multi-Agent Workflow: A Strong Single Agent Baseline | multi-agent baseline |
 | P02 | 2026-06-04 | A | Do More Agents Help? Controlled and Protocol-Aligned Evaluation of LLM Agent Workflows | multi-agent evaluation |
@@ -183,4 +183,4 @@ Features traduzidas: PrincipalId, IntentContract, ConflictContract, GovernancePo
 | O06 | current-2026 | B | thiserror crate docs | Rust errors |
 | O07 | current-2026 | B | Rust API Guidelines | Rust API |
 
-O ledger completo esta em `data/evidence_ledger.csv`.
+The complete ledger is in `data/evidence_ledger.csv`.

@@ -1,154 +1,154 @@
-# Forge Method Core v2 - plano de implementacao
+# Forge Method Core v2 - implementation plan
 
-## Principio de sequenciamento
+## Sequencing principle
 
-A ordem abaixo evita construir features de alto nivel em cima de um runtime sem trace, sem preview e sem readiness gate. Primeiro estabiliza o kernel observavel. Depois vem graph, eval, memory, protocolos e governance.
+The order below avoids building high-level features on top of a runtime without trace, without preview, and without a readiness gate. First stabilize the observable kernel. Then come graph, eval, memory, protocols, and governance.
 
-## Milestone 0 - higiene e ergonomia Rust
+## Milestone 0 - Rust hygiene and ergonomics
 
-Objetivo: reduzir custo de alteracao para agentes e maintainers.
+Goal: reduce the cost of change for agents and maintainers.
 
-Escopo:
+Scope:
 
-- **Manter CLI com argv manual em `main.rs`** (sem `clap`, sem derive macros). Decisão projetual em `AGENTS.md` — ver `04_rust_refactor_guide.md` para o padrão estabelecido. (Original: "Migrar CLI para `clap` derive" — revisado em R13.2.)
-- Separar `forge-core-store/src/lib.rs` em modulos: `paths`, `jsonl`, `reference_index`, `effect_apply`, `effect_wal`, `effect_recovery`, `effect_metadata`, `locks`.
-- **Roller error enums à mão** (sem `thiserror`, sem `anyhow`), derivando `Debug, Clone, PartialEq, Eq`. (Original: "Introduzir `thiserror`" — revisado em R13.2.)
-- Introduzir `tracing` spans nos caminhos de runtime, validation, store e CLI.
-- Criar builders de fixtures para `OperationContract`, `ToolEffectContract`, `CommandContract` e `RuntimePlan`.
-- Adicionar snapshot tests para outputs JSON estaveis.
-- Definir regra: cada subcomando novo adiciona um braço no `match` de `main.rs` e uma fn `run_<command>(&[String])` em `lib.rs`.
+- **Keep CLI with manual argv in `main.rs`** (no `clap`, no derive macros). Design decision in `AGENTS.md` — see `04_rust_refactor_guide.md` for the established pattern. (Original: "Migrate CLI to `clap` derive" — revised in R13.2.)
+- Split `forge-core-store/src/lib.rs` into modules: `paths`, `jsonl`, `reference_index`, `effect_apply`, `effect_wal`, `effect_recovery`, `effect_metadata`, `locks`.
+- **Hand-rolled error enums** (no `thiserror`, no `anyhow`), deriving `Debug, Clone, PartialEq, Eq`. (Original: "Introduce `thiserror`" — revised in R13.2.)
+- Introduce `tracing` spans in runtime, validation, store, and CLI paths.
+- Create fixture builders for `OperationContract`, `ToolEffectContract`, `CommandContract`, and `RuntimePlan`.
+- Add snapshot tests for stable JSON outputs.
+- Define a rule: each new subcommand adds an arm to the `match` in `main.rs` and a `run_<command>(&[String])` fn in `lib.rs`.
 
-Entregas:
+Deliverables:
 
-- ADR-0001 aceito.
-- `forge-core-cli` mantém argv manual (sem Parser/Subcommand de `clap`).
-- Modulos separados em store.
-- Clippy e fmt no CI.
+- ADR-0001 accepted.
+- `forge-core-cli` keeps manual argv (no `clap` Parser/Subcommand).
+- Modules split in store.
+- Clippy and fmt in CI.
 
-## Milestone 1 - preview, ready e trace
+## Milestone 1 - preview, ready, and trace
 
-Objetivo: todo run deve ser previsivel, verificavel e explicavel.
+Goal: every run must be predictable, verifiable, and explainable.
 
-Escopo:
+Scope:
 
-- Criar crate `forge-core-trace`.
-- Definir `TraceEvent` v0.
-- Adicionar `forge preview` baseado no runtime planner atual.
-- Adicionar `forge ready` como agregador de gates.
-- Adicionar `forge explain --last-run` para explicacao humana curta.
-- Ligar command evidence e effect metadata ao trace_id.
+- Create crate `forge-core-trace`.
+- Define `TraceEvent` v0.
+- Add `forge preview` based on the current runtime planner.
+- Add `forge ready` as a gate aggregator.
+- Add `forge explain --last-run` for a short human explanation.
+- Link command evidence and effect metadata to the trace_id.
 
-Entregas:
+Deliverables:
 
-- `schemas/trace_event_v0.yaml` implementado.
-- Snapshot tests de preview.
-- E2E fixture: operation mutavel com gate pendente, operation pronta, operation bloqueada.
+- `schemas/trace_event_v0.yaml` implemented.
+- Snapshot tests for preview.
+- E2E fixture: mutable operation with a pending gate, ready operation, blocked operation.
 
 ## Milestone 2 - WorkflowGraph v0
 
-Objetivo: parar de depender de routing solto por prompt para workflows compostos.
+Goal: stop relying on loose prompt-based routing for composite workflows.
 
-Escopo:
+Scope:
 
-- Criar crate `forge-core-graph`.
-- Definir `WorkflowGraph`, `GraphNode`, `GraphEdge`, `GraphBudget`, `GraphStopCondition`.
-- Implementar `forge graph validate`.
-- Implementar `forge graph run --dry-run`.
-- Integrar `OperationContract` como node type.
-- Adicionar verifier node e replan boundary simples.
+- Create crate `forge-core-graph`.
+- Define `WorkflowGraph`, `GraphNode`, `GraphEdge`, `GraphBudget`, `GraphStopCondition`.
+- Implement `forge graph validate`.
+- Implement `forge graph run --dry-run`.
+- Integrate `OperationContract` as a node type.
+- Add a verifier node and a simple replan boundary.
 
-Entregas:
+Deliverables:
 
-- `schemas/workflow_graph_v0.yaml` implementado.
-- Graph fixture com parallel read-only branches.
-- Graph fixture com verifier bloqueando mutation.
+- `schemas/workflow_graph_v0.yaml` implemented.
+- Graph fixture with parallel read-only branches.
+- Graph fixture with a verifier blocking a mutation.
 
 ## Milestone 3 - eval baseline
 
-Objetivo: transformar arquitetura em decisao mensuravel.
+Goal: turn architecture into a measurable decision.
 
-Escopo:
+Scope:
 
-- Criar crate `forge-core-eval`.
-- Definir `EvalCase`, `EvalRun`, `EvalMetric`, `EvalComparison`.
-- Implementar `forge eval run`.
-- Implementar `forge eval compare --baseline single-agent --candidate graph`.
-- Medir accuracy, latency, cost proxy, tool calls, failure reasons e human interventions.
+- Create crate `forge-core-eval`.
+- Define `EvalCase`, `EvalRun`, `EvalMetric`, `EvalComparison`.
+- Implement `forge eval run`.
+- Implement `forge eval compare --baseline single-agent --candidate graph`.
+- Measure accuracy, latency, cost proxy, tool calls, failure reasons, and human interventions.
 
-Entregas:
+Deliverables:
 
-- Harness minimo com fixtures locais.
-- Report JSON e Markdown.
-- Regra de produto: MAS so vira recommended se vencer baseline em qualidade ou custo para a tarefa alvo.
+- Minimal harness with local fixtures.
+- JSON and Markdown report.
+- Product rule: MAS only becomes recommended if it beats the baseline in quality or cost for the target task.
 
 ## Milestone 4 - memory policy
 
-Objetivo: permitir memoria sem criar autoridade invisivel.
+Goal: allow memory without creating invisible authority.
 
-Escopo:
+Scope:
 
-- Criar crate `forge-core-memory`.
-- Definir `MemoryRecord`, `MemoryPolicy`, `MemoryAdmission`, `MemoryPromotion`, `MemoryReadRequest`.
-- Implementar `forge memory inspect`.
-- Implementar `forge memory forget`.
-- Implementar `forge memory promote` com approval boundary.
-- Ligar memoria a source evidence e trace.
+- Create crate `forge-core-memory`.
+- Define `MemoryRecord`, `MemoryPolicy`, `MemoryAdmission`, `MemoryPromotion`, `MemoryReadRequest`.
+- Implement `forge memory inspect`.
+- Implement `forge memory forget`.
+- Implement `forge memory promote` with an approval boundary.
+- Link memory to source evidence and trace.
 
-Entregas:
+Deliverables:
 
-- Nenhuma summary vira regra sem promotion.
-- Raw evidence fica recuperavel.
-- Retention e redaction sao policy, nao prompt.
+- No summary becomes a rule without promotion.
+- Raw evidence stays recoverable.
+- Retention and redaction are policy, not prompt.
 
-## Milestone 5 - protocol adapters seguros
+## Milestone 5 - secure protocol adapters
 
-Objetivo: expor Forge para ecossistema sem entregar autoridade para o adapter.
+Goal: expose Forge to the ecosystem without handing authority to the adapter.
 
-Escopo:
+Scope:
 
-- Criar `forge-core-protocol-mcp`.
-- Criar `forge protocol mcp serve` com tools read-only primeiro.
-- Adicionar mutation tools apenas por OperationContract validado.
-- Criar `forge-core-protocol-a2a` depois do MCP estabilizar.
-- Definir Agent Card A2A com capabilities restritas.
-- Modelar identity, capability e delegation chain.
+- Create `forge-core-protocol-mcp`.
+- Create `forge protocol mcp serve` with read-only tools first.
+- Add mutation tools only through a validated OperationContract.
+- Create `forge-core-protocol-a2a` after MCP stabilizes.
+- Define an A2A Agent Card with restricted capabilities.
+- Model identity, capability, and delegation chain.
 
-Entregas:
+Deliverables:
 
 - MCP tools: preview, ready, explain, graph validate, trace query, memory inspect.
-- Mutation tool bloqueada sem authority.
-- A2A task surface sem acesso direto ao store.
+- Mutation tool blocked without authority.
+- A2A task surface without direct access to the store.
 
 ## Milestone 6 - multi-principal governance
 
-Objetivo: fazer o Forge lidar com agentes e pessoas de principals diferentes no mesmo shared state.
+Goal: make Forge handle agents and people from different principals in the same shared state.
 
-Escopo:
+Scope:
 
-- Definir `PrincipalId`, `IntentContract`, `ConflictContract`, `GovernancePolicy`.
-- Implementar conflict detection por lane, target_ref, operation e state_version.
-- Implementar `forge conflict list`.
-- Implementar `forge conflict resolve` com arbitration record.
-- Registrar principal_id em trace, effect metadata e ledger.
+- Define `PrincipalId`, `IntentContract`, `ConflictContract`, `GovernancePolicy`.
+- Implement conflict detection by lane, target_ref, operation, and state_version.
+- Implement `forge conflict list`.
+- Implement `forge conflict resolve` with an arbitration record.
+- Register principal_id in trace, effect metadata, and ledger.
 
-Entregas:
+Deliverables:
 
-- Conflito nao vira overwrite silencioso.
-- Worker de outro principal nao consegue mutar sem intent aceito.
-- Arbitration fica auditavel.
+- Conflict does not become a silent overwrite.
+- A worker from another principal cannot mutate without an accepted intent.
+- Arbitration stays auditable.
 
-## Milestone 7 - control plane local
+## Milestone 7 - local control plane
 
-Objetivo: dar uma superficie de produto para o kernel.
+Goal: give a product surface to the kernel.
 
-Escopo:
+Scope:
 
-- Comecar com HTML estatico ou TUI lendo `.forge-method`.
-- Mostrar active agents, lane claims, stale claims, gates, conflicts, ready status, costs e traces.
-- Adicionar links para `forge explain` e reports.
+- Start with static HTML or TUI reading `.forge-method`.
+- Show active agents, lane claims, stale claims, gates, conflicts, ready status, costs, and traces.
+- Add links to `forge explain` and reports.
 
-Entregas:
+Deliverables:
 
-- Sem SaaS obrigatorio.
-- Funciona offline no repo.
-- Serve tanto power user quanto QA.
+- No mandatory SaaS.
+- Works offline in the repo.
+- Serves both power users and QA.

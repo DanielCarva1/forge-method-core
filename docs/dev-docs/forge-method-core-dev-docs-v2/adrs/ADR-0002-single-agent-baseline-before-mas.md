@@ -1,17 +1,17 @@
-# ADR-0002 - Single-agent baseline antes de multi-agent
+# ADR-0002 - Single-agent baseline before multi-agent
 
 - **Status**: Proposed
 
-## Contexto
+## Context
 
-Papers recentes mostram que MAS homogeneo nao vence automaticamente um single-agent bem controlado.
+Recent papers show that a homogeneous MAS does not automatically beat a well-controlled single-agent.
 
-## Decisao
+## Decision
 
-Toda arquitetura multi-agent precisa ser comparada contra single-agent anchor com mesmo loader, tools, answer contract e usage accounting.
+Every multi-agent architecture must be compared against a single-agent anchor with the same loader, tools, answer contract, and usage accounting.
 
-## Consequencias
+## Consequences
 
-- Multi-agent deixa de ser marketing e vira decisao medida.
-- `forge eval compare` vira feature central.
-- MAS so e recomendado quando ha heterogeneidade, paralelismo, isolamento ou governance real.
+- Multi-agent stops being marketing and becomes a measured decision.
+- `forge eval compare` becomes a central feature.
+- MAS is only recommended when there is heterogeneity, parallelism, isolation, or real governance.

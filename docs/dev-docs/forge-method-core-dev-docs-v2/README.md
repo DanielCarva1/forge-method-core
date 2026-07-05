@@ -1,31 +1,31 @@
-# Forge Method Core v2 - pacote de desenvolvimento auditado
+# Forge Method Core v2 - audited development package
 
-Data: 2026-06-28
-Janela cientifica aplicada para papers: 2025-10-28 a 2026-06-28
+Date: 2026-06-28
+Scientific window applied for papers: 2025-10-28 to 2026-06-28
 
-Este pacote transforma a pesquisa auditada, as fontes usadas e as recomendacoes arquiteturais em documentacao de desenvolvimento para o `forge-method-core`.
+This package transforms the audited research, the sources used, and the architectural recommendations into development documentation for `forge-method-core`.
 
-## Como usar
+## How to use
 
-1. Leia `00_master_development_doc.md` para a direcao geral.
-2. Use `01_feature_specs.md` como backlog de produto e engenharia.
-3. Use `02_implementation_plan.md` para sequenciar a implementacao.
-4. Use `03_architecture_and_contracts.md` para os contratos novos.
-5. Use `04_rust_refactor_guide.md` antes de pedir para agentes mexerem no Rust.
-6. Use `05_eval_and_quality_plan.md` para transformar pesquisa em gates, evals e CI.
-7. Use `06_protocol_security_plan.md` para MCP, A2A, identidade e governance.
-8. Use `adrs/` para registrar decisoes tecnicas iniciais.
-9. Use `data/` para importar backlog e evidence ledger em issue tracker, planilha ou dashboard.
-10. Use `schemas/` como rascunho de contratos YAML v0.
+1. Read `00_master_development_doc.md` for the general direction.
+2. Use `01_feature_specs.md` as the product and engineering backlog.
+3. Use `02_implementation_plan.md` to sequence the implementation.
+4. Use `03_architecture_and_contracts.md` for the new contracts.
+5. Use `04_rust_refactor_guide.md` before asking agents to touch the Rust.
+6. Use `05_eval_and_quality_plan.md` to turn research into gates, evals, and CI.
+7. Use `06_protocol_security_plan.md` for MCP, A2A, identity, and governance.
+8. Use `adrs/` to record initial technical decisions.
+9. Use `data/` to import the backlog and evidence ledger into an issue tracker, spreadsheet, or dashboard.
+10. Use `schemas/` as a draft of v0 YAML contracts.
 
-## Premissa central
+## Central premise
 
-Forge nao deve tentar ser o melhor agente. Forge deve ser o kernel de coordenacao, verificacao e governanca que permite usar qualquer agente com contrato, evidencia, gates, rollback, trace e auditoria.
+Forge should not try to be the best agent. Forge should be the kernel of coordination, verification, and governance that allows using any agent with contract, evidence, gates, rollback, trace, and audit.
 
-## Nao objetivos
+## Non-objectives
 
-- Nao transformar multi-agent em default de produto.
-- Nao mover semantica viva para Rust manual antes de estabilizar contrato.
-- Nao aceitar MCP/A2A como seguro por default.
-- Nao tratar memoria como vector DB sem policy.
-- Nao vender velocidade sem preview, verify e undo.
+- Do not turn multi-agent into a product default.
+- Do not move live semantics into hand-written Rust before stabilizing the contract.
+- Do not accept MCP/A2A as safe by default.
+- Do not treat memory as a vector DB without a policy.
+- Do not sell speed without preview, verify, and undo.

@@ -1,449 +1,449 @@
-# Plano de Ação — 9 Recomendações Prioritárias
+# Action Plan — 9 Priority Recommendations
 
-Data: 2026-06-29
-Status: Planejado, execução iniciando pela R1
-Origem: análise crítica do projeto em 2026-06-29
-Vínculo: `AGENTS.md` (regras do projeto), `04_rust_refactor_guide.md`, `01_feature_specs.md`,
+Date: 2026-06-29
+Status: Planned, execution starting with R1
+Origin: critical analysis of the project on 2026-06-29
+Link: `AGENTS.md` (project rules), `04_rust_refactor_guide.md`, `01_feature_specs.md`,
 `contracts/research/community-trends-and-requested-features-v1.yaml`,
 `contracts/research/best-features-from-papers-and-cases-v1.yaml`
 
-## Conflito de fontes (resolvido em R13.2, 2026-06-30)
+## Source conflict (resolved in R13.2, 2026-06-30)
 
-Originalmente o `04_rust_refactor_guide.md` sugeria `thiserror` e `clap` derive.
-Após auditoria R13.2, todos os dev-docs foram alinhados com `AGENTS.md`:
-- **`thiserror` e `anyhow` são proibidos** — error enums são rolados à mão,
-  derivando `Debug, Clone, PartialEq, Eq`.
-- **`clap` derive não é usado** — Forge mantém argv parsing manual em
-  `main.rs` (padrão estabelecido). `clap` não está proibido pelo `AGENTS.md`,
-  mas o projeto optou por não adotá-lo; novos subcomandos seguem o padrão
-  existente de `match` + `run_<command>(&[String])`.
+Originally `04_rust_refactor_guide.md` suggested `thiserror` and `clap` derive.
+After the R13.2 audit, all dev-docs were aligned with `AGENTS.md`:
+- **`thiserror` and `anyhow` are forbidden** — error enums are rolled by hand,
+  deriving `Debug, Clone, PartialEq, Eq`.
+- **`clap` derive is not used** — Forge keeps manual argv parsing in
+  `main.rs` (established pattern). `clap` is not forbidden by `AGENTS.md`,
+  but the project chose not to adopt it; new subcommands follow the existing
+  pattern of `match` + `run_<command>(&[String])`.
 
-Ver `04_rust_refactor_guide.md` para o padrão canônico.
+See `04_rust_refactor_guide.md` for the canonical pattern.
 
-## Princípios orientadores
+## Guiding principles
 
-1. **Rust ou Rust-compatível em tudo**: nenhuma nova dep non-Rust. Fuzz com
-   `cargo-fuzz` (Rust), benchmarks com `criterion` (Rust), observabilidade com
+1. **Rust or Rust-compatible in everything**: no new non-Rust dep. Fuzz with
+   `cargo-fuzz` (Rust), benchmarks with `criterion` (Rust), observability with
    `tracing` (Rust).
-2. **Melhores práticas e papers**: cada recomendação cita o paper/caso que
-   justifica a prática (RADAR, AutoCodeRover, SLSA, CSA, CodeCRDT, etc.).
-3. **Não pisar no WIP do Codex**: branch `codex/forge-frust-052-ocsp-boundary`
-   tem mudanças não commitadas em `Cargo.toml`, `forge-core-cli/src/lib.rs`,
-   `main.rs`, `tests/validate.rs`. Trabalho novo vai em arquivos novos ou em
-   arquivos não tocados por ele.
-4. **Green-loop automático**: cada etapa deve manter `cargo check`, `clippy
-   pedantic`, `cargo test`, `cargo fmt --check` verdes.
-5. **Passos pequenos**: cada sub-tarefa é ~1 commit, ~1 arquivo principal,
-   validável isoladamente.
+2. **Best practices and papers**: each recommendation cites the paper/case that
+   justifies the practice (RADAR, AutoCodeRover, SLSA, CSA, CodeCRDT, etc.).
+3. **Do not step on Codex WIP**: branch `codex/forge-frust-052-ocsp-boundary`
+   has uncommitted changes in `Cargo.toml`, `forge-core-cli/src/lib.rs`,
+   `main.rs`, `tests/validate.rs`. New work goes into new files or into files
+   not touched by it.
+4. **Automatic green-loop**: each step must keep `cargo check`, `clippy
+   pedantic`, `cargo test`, `cargo fmt --check` green.
+5. **Small steps**: each sub-task is ~1 commit, ~1 main file, validatable in
+   isolation.
 
-## Mapa de recomendações → papers/features
+## Map of recommendations → papers/features
 
-| Recomendação | Paper/caso de apoio | Feature do backlog |
+| Recommendation | Supporting paper/case | Backlog feature |
 |---|---|---|
-| R1 Decompor god-file | F15 (Rust ergonomics) | — |
-| R2 Migrar `Result<_, String>` | F15 | — |
-| R3 Adicionar `tracing` | F03 (TraceEvent canonico) | DEM-06 (evals/cost telemetry) |
-| R4 Adicionar `cargo-fuzz` | AutoCodeRover (fault localization) | F11 (Risk Audit Gate) |
-| R5 Adicionar `zeroize` | SLSA AI-agent (FEAT-14) | FEAT-13 (sandbox policy) |
+| R1 Decompose god-file | F15 (Rust ergonomics) | — |
+| R2 Migrate `Result<_, String>` | F15 | — |
+| R3 Add `tracing` | F03 (canonical TraceEvent) | DEM-06 (evals/cost telemetry) |
+| R4 Add `cargo-fuzz` | AutoCodeRover (fault localization) | F11 (Risk Audit Gate) |
+| R5 Add `zeroize` | SLSA AI-agent (FEAT-14) | FEAT-13 (sandbox policy) |
 | R6 Benchmark `criterion` | DEM-06, FEAT-07 (eval bank) | F13 (Budget/Cost) |
-| R7 Migrar `serde_yaml` → `serde_yml` | — (depreciação de ecossistema) | — |
-| R8 Remover `process::exit` de lib | F15 | — |
-| R9 Fechar Bootstrap Exception | `CONTEXT.md` "Remaining Bootstrap Gaps" | F12 (Guided Start) |
+| R7 Migrate `serde_yaml` → `serde_yml` | — (ecosystem deprecation) | — |
+| R8 Remove `process::exit` from lib | F15 | — |
+| R9 Close Bootstrap Exception | `CONTEXT.md` "Remaining Bootstrap Gaps" | F12 (Guided Start) |
 
 ---
 
-## R1 — Decompor `forge-core-cli/src/lib.rs` (7463 linhas)
+## R1 — Decompose `forge-core-cli/src/lib.rs` (7463 lines)
 
-**Por que**: god-file concentra 30% do código do CLI. Aumenta contexto que o
-agente precisa ler pra mudar qualquer coisa. Viola "reduzir contexto necessário"
-(F15).
+**Why**: the god-file concentrates 30% of the CLI code. It increases the context
+the agent needs to read to change anything. It violates "reduce required
+context" (F15).
 
-**Papers/casos**: F15 do `feature_backlog.csv`; AutoCodeRover mostra que
-estrutura de programa é fator de resolução (FEAT-04).
+**Papers/cases**: F15 from `feature_backlog.csv`; AutoCodeRover shows that
+program structure is a resolution factor (FEAT-04).
 
-**Meta**: `lib.rs` ≤ 1500 linhas, módulos ≤ 1500 linhas cada, sem mudança de
-behavior.
+**Goal**: `lib.rs` ≤ 1500 lines, modules ≤ 1500 lines each, with no behavior
+change.
 
-### R1.1 — Inventariar `lib.rs`
-- [ ] Listar todos os `pub fn`/`pub struct`/`pub enum` com linha
-- [ ] Agrupar por domínio (crypto/verify, rekor, project link, claim, etc.)
-- [ ] Identificar dependências entre grupos
-- [ ] Documentar em `docs/dev-docs/.../r1_lib_inventory.md`
+### R1.1 — Inventory `lib.rs`
+- [ ] List all `pub fn`/`pub struct`/`pub enum` with line numbers
+- [ ] Group by domain (crypto/verify, rekor, project link, claim, etc.)
+- [ ] Identify dependencies between groups
+- [ ] Document in `docs/dev-docs/.../r1_lib_inventory.md`
 
-### R1.2 — Criar módulos-alvo (esqueleto)
+### R1.2 — Create target modules (skeleton)
 - [ ] `crates/forge-core-cli/src/crypto_rekor.rs` (parse_rekor, verify_rekor)
 - [ ] `crates/forge-core-cli/src/crypto_x509.rs` (cert/crl/ocsp verify)
 - [ ] `crates/forge-core-cli/src/project_link.rs` (resolve, init helpers)
 - [ ] `crates/forge-core-cli/src/execute_operation.rs` (ExecuteOperationError + flow)
-- [ ] Cada módulo: só `pub use` no `lib.rs`, sem lógica
+- [ ] Each module: only `pub use` in `lib.rs`, no logic
 
-### R1.3 — Mover `parse_rekor_log_entry` e helpers
-- [ ] Mover `parse_rekor_log_entry`, `required_string`, `required_i64`,
-      `required_u64`, `parse_signed_checkpoint` para `crypto_rekor.rs`
-- [ ] Manter `pub use` em `lib.rs` pra não quebrar callers
-- [ ] Rodar `cargo test --workspace`
+### R1.3 — Move `parse_rekor_log_entry` and helpers
+- [ ] Move `parse_rekor_log_entry`, `required_string`, `required_i64`,
+      `required_u64`, `parse_signed_checkpoint` to `crypto_rekor.rs`
+- [ ] Keep `pub use` in `lib.rs` so as not to break callers
+- [ ] Run `cargo test --workspace`
 
-### R1.4 — Mover verificação X.509/CRL/OCSP
-- [ ] Mover funções de `verify_signature`, `verify_crl`, `verify_ocsp` para
+### R1.4 — Move X.509/CRL/OCSP verification
+- [ ] Move functions `verify_signature`, `verify_crl`, `verify_ocsp` to
       `crypto_x509.rs`
-- [ ] `pub use` em `lib.rs`
-- [ ] Rodar testes
+- [ ] `pub use` in `lib.rs`
+- [ ] Run tests
 
-### R1.5 — Mover `execute_operation` flow
-- [ ] Mover `ExecuteOperationError` e função principal para
+### R1.5 — Move `execute_operation` flow
+- [ ] Move `ExecuteOperationError` and main function to
       `execute_operation.rs`
-- [ ] `pub use` em `lib.rs`
-- [ ] Rodar testes
+- [ ] `pub use` in `lib.rs`
+- [ ] Run tests
 
-### R1.6 — Mover project link resolve/init
-- [ ] Para `project_link.rs` (cuidado: `project_cmd.rs` já existe — coordenar)
-- [ ] Rodar testes
+### R1.6 — Move project link resolve/init
+- [ ] To `project_link.rs` (careful: `project_cmd.rs` already exists — coordinate)
+- [ ] Run tests
 
-### R1.7 — Validar
-- [ ] `lib.rs` ≤ 1500 linhas
-- [ ] `cargo clippy --workspace --all-targets -- -W clippy::pedantic` verde
-- [ ] `cargo test --workspace` verde
-- [ ] Snapshot de output de CLI inalterado
+### R1.7 — Validate
+- [ ] `lib.rs` ≤ 1500 lines
+- [ ] `cargo clippy --workspace --all-targets -- -W clippy::pedantic` green
+- [ ] `cargo test --workspace` green
+- [ ] Snapshot of CLI output unchanged
 
 ---
 
-## R2 — Migrar 17 `Result<_, String>` para enums nomeados
+## R2 — Migrate 17 `Result<_, String>` to named enums
 
-**Por que**: `AGENTS.md` proíbe explicitamente. Erros `String` não são
-exaustivos, não carregam contexto estruturado, quebram `?` em boundaries.
+**Why**: `AGENTS.md` forbids it explicitly. `String` errors are not
+exhaustive, do not carry structured context, break `?` at boundaries.
 
-**Papers/casos**: F15; "structural bug prevention type-level"
+**Papers/cases**: F15; "structural bug prevention type-level"
 (`structural-bug-prevention-typelevel-v1.yaml`).
 
-**Meta**: zero `Result<_, String>` em código de produção (exclui `#[cfg(test)]`).
+**Goal**: zero `Result<_, String>` in production code (excludes `#[cfg(test)]`).
 
-### R2.1 — Inventariar
-- [ ] Listar 17 sites com arquivo:linha:assinatura
-- [ ] Classificar por domínio (parse, validate, isolation, store, engine)
-- [ ] Documentar em `docs/dev-docs/.../r2_string_result_inventory.md`
+### R2.1 — Inventory
+- [ ] List 17 sites with file:line:signature
+- [ ] Classify by domain (parse, validate, isolation, store, engine)
+- [ ] Document in `docs/dev-docs/.../r2_string_result_inventory.md`
 
 ### R2.2 — `contract_cmd.rs` (3 sites)
 - [ ] `validate_kind` → `ContractValidationError` enum
-- [ ] `parse_document` → reusar `ContractValidationError`
-- [ ] Atualizar callers em `contract_cmd.rs` e `main.rs`
-- [ ] Testes
+- [ ] `parse_document` → reuse `ContractValidationError`
+- [ ] Update callers in `contract_cmd.rs` and `main.rs`
+- [ ] Tests
 
 ### R2.3 — `isolation.rs` (2 sites)
 - [ ] `parse_merge_policy` → `MergePolicyParseError`
 - [ ] `parse_status` → `IsolationStatusParseError`
-- [ ] Atualizar callers
-- [ ] Testes
+- [ ] Update callers
+- [ ] Tests
 
 ### R2.4 — `lib.rs` rekor parsers (5 sites)
 - [ ] `parse_rekor_log_entry` → `RekorParseError`
 - [ ] `required_string`/`required_i64`/`required_u64` → `RekorFieldError`
 - [ ] `parse_signed_checkpoint` → `CheckpointParseError`
-- [ ] `verify_rekor_*` (2 sites com `Result<(), String>`) → reusar
-- [ ] Atualizar callers
-- [ ] Testes
+- [ ] `verify_rekor_*` (2 sites with `Result<(), String>`) → reuse
+- [ ] Update callers
+- [ ] Tests
 
 ### R2.5 — `main.rs` (1 site)
 - [ ] `StatefulCommandRoots` builder → `StatefulCommandRootsError`
-- [ ] Testes
+- [ ] Tests
 
 ### R2.6 — `forge-core-decisions` (3 sites)
 - [ ] `catalog.rs::load_one` → `CatalogLoadError`
-- [ ] `catalog.rs::parse_workflow_yaml` → reusar
+- [ ] `catalog.rs::parse_workflow_yaml` → reuse
 - [ ] `eval.rs::load_eval_corpus` → `EvalCorpusLoadError`
 - [ ] `isolation.rs::shell_metachar_check` → `ShellMetacharError`
-- [ ] Testes
+- [ ] Tests
 
 ### R2.7 — `forge-core-store` (1 site)
-- [ ] `lib.rs:1371` → `EffectWalReadError` (já existe `ReferenceIndexBuildError`
-      como padrão)
-- [ ] Testes
+- [ ] `lib.rs:1371` → `EffectWalReadError` (`ReferenceIndexBuildError` already
+      exists as the pattern)
+- [ ] Tests
 
-### R2.8 — Validar
+### R2.8 — Validate
 - [ ] `grep -rn "Result<.*String>" crates --include="*.rs" | grep -v /tests/`
-      retorna 0
-- [ ] `cargo test --workspace` verde
+      returns 0
+- [ ] `cargo test --workspace` green
 
 ---
 
-## R3 — Adicionar `tracing` estruturado
+## R3 — Add structured `tracing`
 
-**Por que**: `eprintln!` não é observabilidade. Multi-agente em CI precisa de
-spans correlacionados. Paper: F03 (TraceEvent canonico); DEM-06 (evals/cost
-telemetry); FEAT-15 (prompt-injection detection telemetry exige runtime
-observability).
+**Why**: `eprintln!` is not observability. Multi-agent in CI needs correlated
+spans. Paper: F03 (canonical TraceEvent); DEM-06 (evals/cost telemetry);
+FEAT-15 (prompt-injection detection telemetry requires runtime observability).
 
-**Papers/casos**: F03, DEM-06, FEAT-15, `rust-observability-selfhealing-v1.yaml`.
+**Papers/cases**: F03, DEM-06, FEAT-15, `rust-observability-selfhealing-v1.yaml`.
 
-**Meta**: spans em todo caminho crítico (claim acquire/release, WAL append,
-execute_operation, verify_rekor). Default `tracing_subscriber` com env-filter.
-Sem `eprintln!` em lib code (exceção: `main.rs` antes de subscriber init).
+**Goal**: spans on every critical path (claim acquire/release, WAL append,
+execute_operation, verify_rekor). Default `tracing_subscriber` with env-filter.
+No `eprintln!` in lib code (exception: `main.rs` before subscriber init).
 
-### R3.1 — Adicionar deps
-- [ ] `tracing`, `tracing-subscriber` em `[workspace.dependencies]`
-- [ ] Adicionar às deps de `forge-core-store`, `forge-core-kernel`,
+### R3.1 — Add deps
+- [ ] `tracing`, `tracing-subscriber` in `[workspace.dependencies]`
+- [ ] Add to deps of `forge-core-store`, `forge-core-kernel`,
       `forge-core-cli`, `forge-core-validate`
 - [ ] `cargo check`
 
-### R3.2 — Init subscriber em `main.rs`
+### R3.2 — Init subscriber in `main.rs`
 - [ ] `tracing_subscriber::fmt().with_env_filter().with_writer(std::io::stderr).init()`
-- [ ] Gatear com feature `tracing` (sempre on por enquanto)
-- [ ] Teste: rodar CLI com `RUST_LOG=info` e ver spans
+- [ ] Gate with feature `tracing` (always on for now)
+- [ ] Test: run CLI with `RUST_LOG=info` and see spans
 
-### R3.3 — Spans em `claim_wal.rs`
-- [ ] `#[instrument(skip(self), fields(claim_id, seq))]` em `append`,
+### R3.3 — Spans in `claim_wal.rs`
+- [ ] `#[instrument(skip(self), fields(claim_id, seq))]` in `append`,
       `read`, `rotate`
-- [ ] Eventos em erros de CRC, lock contention
-- [ ] Teste
+- [ ] Events on CRC errors, lock contention
+- [ ] Test
 
-### R3.4 — Spans em `execute_operation`
-- [ ] Span em torno de spawn, validate, verify
-- [ ] Eventos em `RuntimeCommandExecutionStatus::Blocked`/`Failed`
-- [ ] Teste
+### R3.4 — Spans in `execute_operation`
+- [ ] Span around spawn, validate, verify
+- [ ] Events on `RuntimeCommandEvaluationStatus::Blocked`/`Failed`
+- [ ] Test
 
-### R3.5 — Spans em `verify_rekor`/`verify_x509`
-- [ ] `#[instrument(skip(...))]` em cada função pública
-- [ ] Eventos em mismatch de assinatura
-- [ ] Teste
+### R3.5 — Spans in `verify_rekor`/`verify_x509`
+- [ ] `#[instrument(skip(...))]` on each public function
+- [ ] Events on signature mismatch
+- [ ] Test
 
-### R3.6 — Remover `eprintln!` de lib code
-- [ ] Substituir por `tracing::warn!`/`tracing::error!`
-- [ ] Manter `eprintln!` só em `main.rs` pré-init
+### R3.6 — Remove `eprintln!` from lib code
+- [ ] Replace with `tracing::warn!`/`tracing::error!`
+- [ ] Keep `eprintln!` only in pre-init `main.rs`
 - [ ] `cargo test`
 
-### R3.7 — Validar
+### R3.7 — Validate
 - [ ] `grep -rn "eprintln!" crates --include="*.rs" | grep -v /tests/ | grep -v main.rs`
-      retorna 0
-- [ ] `cargo test --workspace` verde
-- [ ] Snapshot de CLI output inalterado (logs vão pra stderr, não stdout)
+      returns 0
+- [ ] `cargo test --workspace` green
+- [ ] Snapshot of CLI output unchanged (logs go to stderr, not stdout)
 
 ---
 
-## R4 — Adicionar `cargo-fuzz`
+## R4 — Add `cargo-fuzz`
 
-**Por que**: parsers de YAML não-confiável (`parse_rekor_log_entry`,
-`parse_signed_checkpoint`) e decode de WAL binário são superfície de ataque
-clássica pra panic/DoS. Sem fuzz, "excelência em segurança" é alegação.
+**Why**: parsers of untrusted YAML (`parse_rekor_log_entry`,
+`parse_signed_checkpoint`) and binary WAL decoding are a classic attack
+surface for panic/DoS. Without fuzz, "security excellence" is just a claim.
 
-**Papers/casos**: AutoCodeRover (fault localization, FEAT-05); CSA/ARMO (FEAT-15);
+**Papers/cases**: AutoCodeRover (fault localization, FEAT-05); CSA/ARMO (FEAT-15);
 `rust-testing-defenses-v1.yaml`.
 
-**Meta**: 3 fuzz targets rodando 60s sem panic.
+**Goal**: 3 fuzz targets running 60s without panic.
 
 ### R4.1 — Setup
-- [ ] `cargo install cargo-fuzz` (instrução no README, não no CI)
-- [ ] Criar `crates/fuzz/` como workspace member separado (não atrapalha build
-      normal)
-- [ ] `Cargo.toml` com `cargo-fuzz` e `libfuzzer-sys`
-- [ ] Adicionar ao workspace com `default-members` excluindo `fuzz`
+- [ ] `cargo install cargo-fuzz` (instruction in README, not in CI)
+- [ ] Create `crates/fuzz/` as a separate workspace member (does not get in the
+      way of normal build)
+- [ ] `Cargo.toml` with `cargo-fuzz` and `libfuzzer-sys`
+- [ ] Add to workspace with `default-members` excluding `fuzz`
 
 ### R4.2 — Fuzz target 1: `parse_rekor_log_entry`
 - [ ] `fuzz_targets/parse_rekor.rs`
-- [ ] Seed corpus com 3 entradas reais (válida, malformada, adversarial)
-- [ ] Rodar 60s, sem panic
+- [ ] Seed corpus with 3 real entries (valid, malformed, adversarial)
+- [ ] Run 60s, no panic
 
 ### R4.3 — Fuzz target 2: `parse_signed_checkpoint`
 - [ ] `fuzz_targets/parse_checkpoint.rs`
-- [ ] Seed com checkpoint real do Rekor
-- [ ] Rodar 60s, sem panic
+- [ ] Seed with a real Rekor checkpoint
+- [ ] Run 60s, no panic
 
 ### R4.4 — Fuzz target 3: `claim_wal` decode
 - [ ] `fuzz_targets/claim_wal_decode.rs`
-- [ ] Feed de bytes arbitrários no decoder
-- [ ] Rodar 60s, sem panic (erros tipados ok, panic não)
+- [ ] Feed arbitrary bytes to the decoder
+- [ ] Run 60s, no panic (typed errors ok, panic not)
 
-### R4.5 — Documentar
-- [ ] Seção no README de como rodar fuzz
-- [ ] Adicionar ao `06_protocol_security_plan.md`
+### R4.5 — Document
+- [ ] Section in README on how to run fuzz
+- [ ] Add to `06_protocol_security_plan.md`
 
 ---
 
-## R5 — Adicionar `zeroize` para material cripto
+## R5 — Add `zeroize` for crypto material
 
-**Por que**: chaves/assinaturas ficam na memória até GC. Pra um runtime que
-verifica assinaturas de agentes externos, isso é higiene mínima. SLSA AI-agent
-(FEAT-14) exige proveniência de material cripto.
+**Why**: keys/signatures stay in memory until GC. For a runtime that verifies
+signatures of external agents, this is minimum hygiene. SLSA AI-agent
+(FEAT-14) requires provenance of crypto material.
 
-**Papers/casos**: SLSA AI-agent proposal (FEAT-14); ARMO/CSA (FEAT-13, FEAT-15).
+**Papers/cases**: SLSA AI-agent proposal (FEAT-14); ARMO/CSA (FEAT-13, FEAT-15).
 
-**Meta**: qualquer `SigningKey`/`VerifyingKey`/`Signature` que entre em escopo
-de função é `Zeroize`-on-drop.
+**Goal**: any `SigningKey`/`VerifyingKey`/`Signature` that enters a function
+scope is `Zeroize`-on-drop.
 
-### R5.1 — Inventariar material cripto
-- [ ] Listar todos os sites de `SigningKey`, `VerifyingKey`, `Signature`,
-      `SecretKey` em `crates/`
-- [ ] Confirmar: Forge só verifica (não assina)? Se sim, `VerifyingKey`/`Signature`
-      são públicas — `zeroize` é nice-to-have, não crítico
-- [ ] Documentar em `docs/dev-docs/.../r5_crypto_inventory.md`
+### R5.1 — Inventory crypto material
+- [ ] List all sites of `SigningKey`, `VerifyingKey`, `Signature`,
+      `SecretKey` in `crates/`
+- [ ] Confirm: Forge only verifies (does not sign)? If so, `VerifyingKey`/`Signature`
+      are public — `zeroize` is nice-to-have, not critical
+- [ ] Document in `docs/dev-docs/.../r5_crypto_inventory.md`
 
-### R5.2 — Adicionar dep
-- [ ] `zeroize = { version = "1.8", features = ["derive"] }` em
+### R5.2 — Add dep
+- [ ] `zeroize = { version = "1.8", features = ["derive"] }` in
       `[workspace.dependencies]`
-- [ ] Adicionar a `forge-core-cli`
+- [ ] Add to `forge-core-cli`
 - [ ] `cargo check`
 
-### R5.3 — Wrap em `Zeroizing<>`
-- [ ] Em `verify_rekor_*`, `verify_x509_*`: wrap `VerifyingKey` temporários em
+### R5.3 — Wrap in `Zeroizing<>`
+- [ ] In `verify_rekor_*`, `verify_x509_*`: wrap temporary `VerifyingKey` in
       `Zeroizing`
-- [ ] Em `parse_rekor_log_entry`: `Signature` parsed em `Zeroizing`
-- [ ] Testes existentes continuam verdes
+- [ ] In `parse_rekor_log_entry`: parsed `Signature` in `Zeroizing`
+- [ ] Existing tests stay green
 
-### R5.4 — Constant-time em comparações manuais
-- [ ] Procurar `==` em bytes cripto (fora de `verify()` das crates)
-- [ ] Substituir por `subtle::ConstantTimeEq` se houver
-- [ ] Se não houver (provável), documentar no plano
+### R5.4 — Constant-time in manual comparisons
+- [ ] Look for `==` on crypto bytes (outside crates' `verify()`)
+- [ ] Replace with `subtle::ConstantTimeEq` if any
+- [ ] If none (likely), document in the plan
 
-### R5.5 — Validar
-- [ ] `cargo test --workspace` verde
-- [ ] Seção no `06_protocol_security_plan.md`
+### R5.5 — Validate
+- [ ] `cargo test --workspace` green
+- [ ] Section in `06_protocol_security_plan.md`
 
 ---
 
-## R6 — Benchmark `criterion`
+## R6 — `criterion` benchmark
 
-**Por que**: alegação de "performance" sem métrica é marketing. DEM-06 pede
-evals com cost/latency. FEAT-07 pede eval bank com latency.
+**Why**: a "performance" claim without a metric is marketing. DEM-06 asks for
+evals with cost/latency. FEAT-07 asks for an eval bank with latency.
 
-**Papers/casos**: DEM-06, FEAT-07, `agentic-throughput-and-fast-quality-mode-v1.yaml`.
+**Papers/cases**: DEM-06, FEAT-07, `agentic-throughput-and-fast-quality-mode-v1.yaml`.
 
-**Meta**: 3 benchmarks rodando em <30s, números no README.
+**Goal**: 3 benchmarks running in <30s, numbers in README.
 
 ### R6.1 — Setup
-- [ ] `criterion = "0.5"` em `[workspace.dependencies]`
-- [ ] `[[bench]]` em `forge-core-store`, `forge-core-validate`
-- [ ] `benches/` dir com harness
-- [ ] `cargo bench --no-run` compila
+- [ ] `criterion = "0.5"` in `[workspace.dependencies]`
+- [ ] `[[bench]]` in `forge-core-store`, `forge-core-validate`
+- [ ] `benches/` dir with harness
+- [ ] `cargo bench --no-run` compiles
 
 ### R6.2 — Bench WAL append
 - [ ] `benches/claim_wal_append.rs`
-- [ ] Cenários: 100, 1000, 10000 records
-- [ ] Medir: append + fsync + projection
-- [ ] Rodar, registrar baseline em `docs/dev-docs/.../r6_bench_baseline.md`
+- [ ] Scenarios: 100, 1000, 10000 records
+- [ ] Measure: append + fsync + projection
+- [ ] Run, record baseline in `docs/dev-docs/.../r6_bench_baseline.md`
 
 ### R6.3 — Bench validate
 - [ ] `benches/validate_report.rs`
-- [ ] Cenários: 10, 100, 1000 diagnostics
-- [ ] Medir: build + serialize
-- [ ] Rodar, registrar baseline
+- [ ] Scenarios: 10, 100, 1000 diagnostics
+- [ ] Measure: build + serialize
+- [ ] Run, record baseline
 
 ### R6.4 — Bench rekor verify
 - [ ] `benches/rekor_verify.rs`
-- [ ] Cenário: 1 entry real
-- [ ] Medir: parse + verify
-- [ ] Rodar, registrar baseline
+- [ ] Scenario: 1 real entry
+- [ ] Measure: parse + verify
+- [ ] Run, record baseline
 
-### R6.5 — Documentar
-- [ ] Seção no README com números
-- [ ] Adicionar ao `05_eval_and_quality_plan.md`
+### R6.5 — Document
+- [ ] Section in README with the numbers
+- [ ] Add to `05_eval_and_quality_plan.md`
 
 ---
 
-## R7 — Migrar `serde_yaml` → `serde_yml`
+## R7 — Migrate `serde_yaml` → `serde_yml`
 
-**Por que**: `serde_yaml` 0.9.34 está em maintenance mode, descontinuado pelo
-dtolnay. `serde_yml` é o sucessor mantido.
+**Why**: `serde_yaml` 0.9.34 is in maintenance mode, discontinued by
+dtolnay. `serde_yml` is the maintained successor.
 
-**Meta**: zero `serde_yaml` no `Cargo.lock`, todos os `use serde_yaml` viram
+**Goal**: zero `serde_yaml` in `Cargo.lock`, all `use serde_yaml` become
 `use serde_yml`.
 
-### R7.1 — Inventariar
+### R7.1 — Inventory
 - [ ] `grep -rn "serde_yaml" crates --include="*.rs" --include="Cargo.toml"`
-- [ ] Listar APIs usadas (`from_str`, `to_string`, `Value`, etc.)
-- [ ] Confirmar compatibilidade em `serde_yml` 0.0.12+
+- [ ] List APIs used (`from_str`, `to_string`, `Value`, etc.)
+- [ ] Confirm compatibility in `serde_yml` 0.0.12+
 
-### R7.2 — Adicionar `serde_yml` e remover `serde_yaml`
-- [ ] `serde_yml = "0.0.12"` em `[workspace.dependencies]`
-- [ ] Remover `serde_yaml` de `[workspace.dependencies]`
-- [ ] Atualizar cada crate `Cargo.toml`
+### R7.2 — Add `serde_yml` and remove `serde_yaml`
+- [ ] `serde_yml = "0.0.12"` in `[workspace.dependencies]`
+- [ ] Remove `serde_yaml` from `[workspace.dependencies]`
+- [ ] Update each crate `Cargo.toml`
 - [ ] `cargo check`
 
-### R7.3 — Migrar imports
-- [ ] `sed -i 's/serde_yaml/serde_yml/g'` em cada `.rs` (cuidado com
+### R7.3 — Migrate imports
+- [ ] `sed -i 's/serde_yaml/serde_yml/g'` in each `.rs` (careful with
       `serde_yaml::Value` vs `serde_yml::Value`)
-- [ ] Rodar `cargo check --workspace`
-- [ ] Rodar `cargo test --workspace`
+- [ ] Run `cargo check --workspace`
+- [ ] Run `cargo test --workspace`
 
-### R7.4 — Validar
-- [ ] `grep -rn "serde_yaml" crates` retorna 0
-- [ ] Snapshot de output inalterado
+### R7.4 — Validate
+- [ ] `grep -rn "serde_yaml" crates` returns 0
+- [ ] Snapshot of output unchanged
 
 ---
 
-## R8 — Remover `std::process::exit` de lib code
+## R8 — Remove `std::process::exit` from lib code
 
-**Por que**: `exit` em lib code quebra testes, impõe controle de fluxo
-não-local, impede composição. Anti-pattern em Rust.
+**Why**: `exit` in lib code breaks tests, imposes non-local flow control,
+prevents composition. Anti-pattern in Rust.
 
-**Meta**: `std::process::exit` só em `main.rs` e `bin/`.
+**Goal**: `std::process::exit` only in `main.rs` and `bin/`.
 
-### R8.1 — Inventariar
+### R8.1 — Inventory
 - [ ] `grep -rn "process::exit" crates --include="*.rs" | grep -v /tests/ | grep -v main.rs`
-- [ ] Lista: `autonomy_cmd.rs:404,426`, `contract_cmd.rs:43,75,187,215`
+- [ ] List: `autonomy_cmd.rs:404,426`, `contract_cmd.rs:43,75,187,215`
 
 ### R8.2 — `contract_cmd.rs`
-- [ ] Trocar `process::exit(2)` por `return Err(...)` propagado
-- [ ] Caller em `main.rs` decide exit code
-- [ ] Testes
+- [ ] Replace `process::exit(2)` with propagated `return Err(...)`
+- [ ] Caller in `main.rs` decides exit code
+- [ ] Tests
 
 ### R8.3 — `autonomy_cmd.rs`
-- [ ] Mesma abordagem
-- [ ] Testes
+- [ ] Same approach
+- [ ] Tests
 
-### R8.4 — Validar
+### R8.4 — Validate
 - [ ] `grep -rn "process::exit" crates --include="*.rs" | grep -v /tests/ | grep -v main.rs`
-      retorna 0
-- [ ] `cargo test --workspace` verde
-- [ ] Exit codes de CLI inalterados (testar com `assert_cmd`)
+      returns 0
+- [ ] `cargo test --workspace` green
+- [ ] CLI exit codes unchanged (test with `assert_cmd`)
 
 ---
 
-## R9 — Fechar Bootstrap Core Exception
+## R9 — Close Bootstrap Core Exception
 
-**Por que**: `CONTEXT.md` admite gap. Promessa "consumer-ready" depende disso.
-Sem fechar, todo consumer repo precisa da exceção, o que viola isolamento.
+**Why**: `CONTEXT.md` admits the gap. The "consumer-ready" promise depends on
+it. Without closing it, every consumer repo needs the exception, which
+violates isolation.
 
-**Papers/casos**: `CONTEXT.md` "Remaining Bootstrap Gaps"; F12 (Guided Start).
+**Papers/cases**: `CONTEXT.md` "Remaining Bootstrap Gaps"; F12 (Guided Start).
 
-**Meta**: `--allow-bootstrap-core` removido (ou só pra testes internos),
-consumer repo init funciona sem state local.
+**Goal**: `--allow-bootstrap-core` removed (or only for internal tests),
+consumer repo init works without local state.
 
-### R9.1 — Inventariar uso da exceção
+### R9.1 — Inventory use of the exception
 - [ ] `grep -rn "allow_bootstrap_core\|allow-bootstrap-core" crates contracts`
-- [ ] Listar todos os sites que dependem da exceção
-- [ ] Documentar em `docs/dev-docs/.../r9_bootstrap_inventory.md`
+- [ ] List all sites that depend on the exception
+- [ ] Document in `docs/dev-docs/.../r9_bootstrap_inventory.md`
 
-### R9.2 — Confirmar sidecar init funciona
-- [ ] Rodar `forge-core project init --root <tmp consumer>` num repo limpo
-- [ ] Verificar se `.forge-method.yaml` aponta pra sidecar
-- [ ] Verificar se state-bearing commands resolvem sem `--allow-bootstrap-core`
+### R9.2 — Confirm sidecar init works
+- [ ] Run `forge-core project init --root <tmp consumer>` in a clean repo
+- [ ] Check that `.forge-method.yaml` points to the sidecar
+- [ ] Check that state-bearing commands resolve without `--allow-bootstrap-core`
 
-### R9.3 — Migrar tests que usam a exceção
-- [ ] Para cada teste com `--allow-bootstrap-core`, criar versão sidecar
-- [ ] Manter a exceção só em `#[cfg(test)]` interno do forge-core
+### R9.3 — Migrate tests that use the exception
+- [ ] For each test with `--allow-bootstrap-core`, create a sidecar version
+- [ ] Keep the exception only in forge-core's internal `#[cfg(test)]`
 
-### R9.4 — Remover exceção de paths de produção
-- [ ] `project_cmd.rs`: negar `state_root` consumer-local sem flag de teste
-- [ ] Runtime/claim commands: fail-closed sem sidecar
-- [ ] Atualizar `CONTEXT.md` removendo "Remaining Bootstrap Gaps"
+### R9.4 — Remove the exception from production paths
+- [ ] `project_cmd.rs`: deny consumer-local `state_root` without test flag
+- [ ] Runtime/claim commands: fail-closed without sidecar
+- [ ] Update `CONTEXT.md` removing "Remaining Bootstrap Gaps"
 
-### R9.5 — Validar
-- [ ] `cargo test --workspace` verde
-- [ ] E2E: consumer repo limpo → init → execute-operation → sem exceção
+### R9.5 — Validate
+- [ ] `cargo test --workspace` green
+- [ ] E2E: clean consumer repo → init → execute-operation → no exception
 
 ---
 
-## Ordem de execução
+## Execution order
 
-1. **R1** (decompor god-file) — libera contexto pra todas as outras
-2. **R2** (migrar `Result<_, String>`) — mais fácil depois de R1
-3. **R8** (remover `process::exit`) — mais fácil depois de R1
-4. **R7** (migrar `serde_yaml`) — mecânico, independente
-5. **R3** (adicionar `tracing`) — depois de R1/R8
-6. **R6** (benchmark) — depois de R3 pra medir com spans
-7. **R4** (fuzz) — depois de R2 (erros tipados)
-8. **R5** (zeroize) — independente, mas depois de R1
-9. **R9** (bootstrap) — mais estrutural, por último
+1. **R1** (decompose god-file) — frees up context for all the others
+2. **R2** (migrate `Result<_, String>`) — easier after R1
+3. **R8** (remove `process::exit`) — easier after R1
+4. **R7** (migrate `serde_yaml`) — mechanical, independent
+5. **R3** (add `tracing`) — after R1/R8
+6. **R6** (benchmark) — after R3 to measure with spans
+7. **R4** (fuzz) — after R2 (typed errors)
+8. **R5** (zeroize) — independent, but after R1
+9. **R9** (bootstrap) — more structural, last
 
 ## Tracking
 
-Cada recomendação tem um arquivo de progresso em `dev-journals/` no sibling
-repo `Forge-method-archive` conforme for iniciada.
+Each recommendation has a progress file in `dev-journals/` in the sibling
+repo `Forge-method-archive` as it is started.

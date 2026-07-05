@@ -1,18 +1,18 @@
-# ADR-0001 - Rust como kernel deterministico, semantica viva declarativa
+# ADR-0001 - Rust as deterministic kernel, declarative living semantics
 
 - **Status**: Proposed
 
-## Contexto
+## Context
 
-O Forge esta sofrendo quando agentes precisam editar Rust manual para cada mudanca semantica. A codebase ja mostra valor de Rust para contracts, runtime, store, WAL e validation, mas tambem mostra boilerplate crescente.
+Forge suffers when agents have to edit hand-written Rust for every semantic change. The codebase already shows the value of Rust for contracts, runtime, store, WAL, and validation, but it also shows growing boilerplate.
 
-## Decisao
+## Decision
 
-Rust fica no kernel deterministico. Prompts, policies em fluxo, templates, workflows experimentais e docs ficam declarativos ate estabilizar.
+Rust stays in the deterministic kernel. Prompts, in-flow policies, templates, experimental workflows, and docs stay declarative until they stabilize.
 
-## Consequencias
+## Consequences
 
-- Menos sofrimento para agentes de codigo.
-- Mais codegen e builders.
-- Menos duplicacao entre YAML, Rust, docs e tests.
-- Kernel continua seguro e auditavel.
+- Less pain for code agents.
+- More codegen and builders.
+- Less duplication between YAML, Rust, docs, and tests.
+- The kernel stays safe and auditable.

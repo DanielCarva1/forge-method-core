@@ -1,18 +1,18 @@
-# ADR-0003 - WorkflowGraph como entidade de primeira classe
+# ADR-0003 - WorkflowGraph as a first-class entity
 
 - **Status**: Proposed
 
-## Contexto
+## Context
 
-Prompt routing solto gera loops, routing alucinado e execucao nao reproduzivel. A literatura recente aponta para grafos executaveis.
+Loose prompt routing produces loops, hallucinated routing, and non-reproducible execution. Recent literature points toward executable graphs.
 
-## Decisao
+## Decision
 
-Criar `WorkflowGraph` v0. `OperationContract` continua existindo, mas entra como node ou payload de node.
+Create `WorkflowGraph` v0. `OperationContract` continues to exist, but enters as a node or as a node payload.
 
-## Consequencias
+## Consequences
 
-- Melhor dry-run.
-- Melhor parallelismo.
-- Verifier e replan ficam estruturais.
-- Trace passa a se ligar a node_id e graph_id.
+- Better dry-run.
+- Better parallelism.
+- Verifier and replan become structural.
+- Trace now binds to node_id and graph_id.

@@ -1,71 +1,71 @@
 # Excellence Roadmap — forge-method-core
 
-**Estado:** v0.1.0 quick-wins landed (integrity, CLI/UX, docs consistency).
-Este documento mapeia o trabalho restante para "100% e excelente" que **não
-cabe numa sessão**. Cada item tem contexto, arquivos, estimativa e gate de
-aceite. Trabalhe um item por sessão; commit; próxima.
+**Status:** v0.1.0 quick-wins landed (integrity, CLI/UX, docs consistency).
+This document maps the remaining work toward "100% and excellent" that **does
+not fit in one session**. Each item has context, files, an estimate, and an
+acceptance gate. Work one item per session; commit; next.
 
-> **Autoria:** Este roadmap foi produzido após uma auditoria técnica brutal
-> (dois agents exploraram dívida técnica + UX de primeiro-contato). Os itens
-> abaixo são os genuinamente pendentes, priorizados por impacto.
+> **Authorship:** This roadmap was produced after a brutal technical audit
+> (two agents explored technical debt + first-contact UX). The items below are
+> the genuinely pending ones, prioritized by impact.
 
 ---
 
-## Prioridades em resumo
+## Priorities in summary
 
-| # | Item | Impacto | Esforço | Risco |
+| # | Item | Impact | Effort | Risk |
 |---|------|---------|---------|-------|
-| 1 | `derive_state` layer (v0.2) | Alto — fecha o gap real de roadmap | Alto (2-3 sessões) | Médio |
-| 2 | Migrar 5 `Result<_, String>` | Médio — consistência + safety | Baixo (1 sessão) | Baixo |
-| 3 | Cobertura de testes (4 crates) | Alto — governance/MCP sem testes | Alto (3-4 sessões) | Baixo |
-| 5 | Consolidação física dos ADRs | Baixo — cosmético | Baixo (1 sessão) | Baixo |
-| 6 | Parsers granulares (B5) | Médio — erros acionáveis | Médio (1 sessão) | Baixo |
+| 1 | `derive_state` layer (v0.2) | High — closes the real roadmap gap | High (2-3 sessions) | Medium |
+| 2 | Migrate 5 `Result<_, String>` | Medium — consistency + safety | Low (1 session) | Low |
+| 3 | Test coverage (4 crates) | High — governance/MCP without tests | High (3-4 sessions) | Low |
+| 5 | Physical consolidation of ADRs | Low — cosmetic | Low (1 session) | Low |
+| 6 | Granular parsers (B5) | Medium — actionable errors | Medium (1 session) | Low |
 
 ---
 
-## Handoff para o próximo agente (Commit 3.1 — governance: fechar lacunas)
+## Handoff to the next agent (Commit 3.1 — governance: close gaps)
 
-> **Leia isto primeiro.** É a tarefa corrente, auto-contida, com tudo o que
-> um agente fresco precisa para continuar sem redescobrir o que esta sessão
-> já mapeou.
+> **Read this first.** This is the current, self-contained task, with
+> everything a fresh agent needs to continue without rediscovering what this
+> session already mapped.
 
-### Histórico da sessão: Commit 2.4 ✅ LANDED (Fase 2 completa)
+### Session history: Commit 2.4 ✅ LANDED (Phase 2 complete)
 
-Commit 2.4 cobriu as 6 funções de `tuf.rs` (1 `pub(crate)` + 5 privadas)
-com **41 testes inline**, zero churn de produção. Detalhes na seção Fase 2
-abaixo. **A Fase 2 (`forge-core-crypto`) está 100% completa** — 4 commits,
-119 lib tests + 7 zeroize_smoke + 1 KAT ignored. Próximo agente pega a
-Fase 3.
+Commit 2.4 covered the 6 functions of `tuf.rs` (1 `pub(crate)` + 5 private)
+with **41 inline tests**, zero production churn. Details in the Phase 2
+section below. **Phase 2 (`forge-core-crypto`) is 100% complete** — 4 commits,
+119 lib tests + 7 zeroize_smoke + 1 KAT ignored. The next agent picks up
+Phase 3.
 
-### Próxima tarefa: Commit 3.1 — fechar lacunas em `forge-core-governance`
+### Next task: Commit 3.1 — close gaps in `forge-core-governance`
 
-**Crate-alvo:** `crates/forge-core-governance` (1447 LOC, 5 arquivos em `src/`).
+**Target crate:** `crates/forge-core-governance` (1447 LOC, 5 files in `src/`).
 
-**⚠️ Surpresa do reconhecimento:** o roadmap original dizia que governance
-tinha "zero testes". **ESTAVA ERRADO.** O crate **já tem 22 `#[test]` + 2
-`proptest!` inline** (44% do LOC de `lib.rs` é teste). As PEPs `record`/
-`arbitrate`/`escalate` têm happy-path + gate + double-resolve cobertos, e
-`replay`/`project`/`apply` têm cobertura boa. **Commit 3.1 NÃO é escrever
-testes do zero — é fechar lacunas específicas** que o reconhecimento
-identificou.
+**⚠️ Reconnaissance surprise:** the original roadmap said governance had
+"zero tests". **THAT WAS WRONG.** The crate **already has 22 `#[test]` + 2
+`proptest!` inline** (44% of `lib.rs` LOC is tests). The `record`/
+`arbitrate`/`escalate` PEPs have happy-path + gate + double-resolve covered, and
+`replay`/`project`/`apply` have good coverage. **Commit 3.1 is NOT writing
+tests from scratch — it is closing specific gaps** that reconnaissance
+identified.
 
-**Lacunas a cobrir (priorizadas):**
+**Gaps to cover (prioritized):**
 
-| # | Lacuna | Arquivo | Por quê |
+| # | Gap | File | Why |
 |---|--------|---------|---------|
-| 1 | `list(root, filter)` sem teste | `lib.rs:321` | Púb., sem nenhuma cobertura. Testar filter `None` vs `Some(ConflictResolutionState::*)` |
-| 2 | `project` cold-read sem teste direto | `lib.rs:302` | Só exercitado via PEPs. Testar isolado: lock + replay |
-| 3 | Paths `StoreError(...)` das 3 PEPs | `arbitrate.rs`/`escalate.rs`/`record.rs` | Nenhum teste força `RecordError`/`ArbitrateError`/`EscalateError`. Hard sem injetar falha de fs — pode skipar ou usar root inexistente |
-| 4 | Variantes `_with_durability` não chamadas | `*.rs:71-85` | As 3 PEPs `*_with_durability` explícitas nunca testadas. Testar com `WalDurability::default()` + valor explícito |
-| 5 | `EventSourced` trait methods em `GovernanceDomain` | `lib.rs:186-266` | `apply`/`record_diagnostic`/`sequence_of`/`advance_sequence`/diagnostics — alguns cobertos via replay, mas não isolados |
+| 1 | `list(root, filter)` without test | `lib.rs:321` | Public, with no coverage. Test filter `None` vs `Some(ConflictResolutionState::*)` |
+| 2 | `project` cold-read without direct test | `lib.rs:302` | Only exercised via PEPs. Test it isolated: lock + replay |
+| 3 | `StoreError(...)` paths of the 3 PEPs | `arbitrate.rs`/`escalate.rs`/`record.rs` | No test forces `RecordError`/`ArbitrateError`/`EscalateError`. Hard without injecting fs failure — can skip or use a nonexistent root |
+| 4 | `_with_durability` variants not called | `*.rs:71-85` | The 3 explicit `*_with_durability` PEPs never tested. Test with `WalDurability::default()` + explicit value |
+| 5 | `EventSourced` trait methods on `GovernanceDomain` | `lib.rs:186-266` | `apply`/`record_diagnostic`/`sequence_of`/`advance_sequence`/diagnostics — some covered via replay, but not isolated |
 
-**Padrão das PEPs (importante — DIFFERE de crypto):**
+**PEP pattern (important — DIFFERS from crypto):**
 
-- As 3 PEPs **NÃO retornam `Result`, NÃO acumulam em `Vec<String>`**.
-  Retornam um struct (`RecordResult`/`ArbitrateResult`/`EscalateResult`)
-  carregando um `status: <Foo>Status` enum. Erros de storage são uma
-  **variante do enum de status** (`StoreError(RecordError)`), não `Err`.
-- `RecordStatus` variantes: `Recorded{sequence}`, `AlreadyRecorded`,
+- The 3 PEPs **do NOT return `Result`, do NOT accumulate in `Vec<String>`**.
+  They return a struct (`RecordResult`/`ArbitrateResult`/`EscalateResult`)
+  carrying a `status: <Foo>Status` enum. Storage errors are a
+  **variant of the status enum** (`StoreError(RecordError)`), not `Err`.
+- `RecordStatus` variants: `Recorded{sequence}`, `AlreadyRecorded`,
   `StoreError(RecordError)` (`record.rs:33`).
 - `ArbitrateStatus`: `Resolved{sequence}`, `DeniedByGate`,
   `ConflictNotFound`, `NotPending`, `StoreError(ArbitrateError)`
@@ -73,96 +73,96 @@ identificou.
 - `EscalateStatus`: `Escalated{sequence}`, `DeniedByGate`,
   `ConflictNotFound`, `NotPending`, `StoreError(EscalateError)`
   (`escalate.rs:28`).
-- `project`/`list` **sim** retornam `Result` (`ProjectionResult`,
+- `project`/`list` **do** return `Result` (`ProjectionResult`,
   `lib.rs:282`).
-- Testes fazem `match` sobre `result.status` e assertam a variante.
-  Espelhar o padrão existente (ver `arbitrate.rs:222`).
+- Tests do `match` on `result.status` and assert the variant.
+  Mirror the existing pattern (see `arbitrate.rs:222`).
 
-**Erros:** governance **não define enums de erro próprios**. `error.rs:27-44`
-define 4 type aliases todos `= forge_core_eventlog::EventLogError<ArbitrationProjectionDiagnostic>`.
-Os erros reais moram em `forge-core-eventlog`. Convenção do projeto (sem
-`anyhow`/`thiserror`) é seguida.
+**Errors:** governance **does not define its own error enums**. `error.rs:27-44`
+defines 4 type aliases all `= forge_core_eventlog::EventLogError<ArbitrationProjectionDiagnostic>`.
+The real errors live in `forge-core-eventlog`. The project convention (no
+`anyhow`/`thiserror`) is followed.
 
-**Cargo.toml:** `[dev-dependencies]` só tem `proptest` (já em uso). Para
-testes de fs que precisam de temp dir, **NÃO adicionar `tempfile`** — os
-testes existentes usam `forge-core-store` helpers ou `std::env::temp_dir()`.
-Espelhar o padrão dos testes já presentes no crate (ver como
-`arbitrate.rs:222` cria o `root`). **Sem `chrono`, sem `rcgen`, sem `rasn`.**
+**Cargo.toml:** `[dev-dependencies]` only has `proptest` (already in use). For
+fs tests that need a temp dir, **do NOT add `tempfile`** — existing tests use
+`forge-core-store` helpers or `std::env::temp_dir()`. Mirror the pattern of the
+tests already present in the crate (see how `arbitrate.rs:222` creates the
+`root`). **No `chrono`, no `rcgen`, no `rasn`.**
 
-**Caller:** único caller é `crates/forge-core-cli/src/governance_cmd.rs:29`
-(4 subcomandos: record/conflicts/arbitrate/escalate). Sem uso no kernel.
+**Caller:** the only caller is `crates/forge-core-cli/src/governance_cmd.rs:29`
+(4 subcommands: record/conflicts/arbitrate/escalate). No use in the kernel.
 
-**Gate de aceite (Commit 3.1):**
+**Acceptance gate (Commit 3.1):**
 
-- `cargo test -p forge-core-governance` verde.
-- Clippy pedantic + fmt limpos (auto via `pi-green-loop` hook).
-- Lacunas #1 (`list`) e #4 (`_with_durability`) **obrigatórias**. #2 (`project`)
-  recomendada. #3 (`StoreError`) opcional se injetar falha de fs for caro.
-- Zero churn em produção (só `#[cfg(test)]`).
+- `cargo test -p forge-core-governance` green.
+- Clippy pedantic + fmt clean (auto via the `pi-green-loop` hook).
+- Gaps #1 (`list`) and #4 (`_with_durability`) **mandatory**. #2 (`project`)
+  recommended. #3 (`StoreError`) optional if injecting fs failure is costly.
+- Zero production churn (only `#[cfg(test)]`).
 
-**Decisões de design já tomadas (NÃO reconsiderar):**
+**Design decisions already made (do NOT reconsider):**
 
-- **Não criar enums de erro novos** — governance delega ao eventlog.
-- **Manter o padrão struct-result + status enum** das PEPs.
-- **Visibilidade:** todas as PEPs e `project`/`list` são `pub` → teste
-  inline OU em `tests/`. Os testes existentes são inline (`mod tests` em
-  cada arquivo) — espelhar.
+- **Do not create new error enums** — governance delegates to the eventlog.
+- **Keep the struct-result + status enum pattern** of the PEPs.
+- **Visibility:** all PEPs and `project`/`list` are `pub` → inline test
+  OR in `tests/`. Existing tests are inline (`mod tests` in each file) —
+  mirror that.
 
-**Convenções do repo a respeitar** (em `AGENTS.md`, sempre carregadas):
+**Repo conventions to respect** (in `AGENTS.md`, always loaded):
 
-- **Sem `anyhow`/`thiserror`.**
-- **Editor stability (WSL+Windows+r-a):** nunca dois cargos em paralelo.
-- **Context hygiene:** uma story por sessão. Commit 3.1 = uma sessão.
-- **Commits:** o usuário commita explicitamente quando pede.
+- **No `anyhow`/`thiserror`.**
+- **Editor stability (WSL+Windows+r-a):** never two cargos in parallel.
+- **Context hygiene:** one story per session. Commit 3.1 = one session.
+- **Commits:** the user commits explicitly when asked.
 
-**Depois do 3.1 (Fase 3 continua):**
+**After 3.1 (Phase 3 continues):**
 
 - 3.2 — `forge-core-eval-harness` (decide baseline vs candidate, ADR-0023)
-- 3.3 — `forge-core-research` (admission/graph; `proptest` já dev-dep)
+- 3.3 — `forge-core-research` (admission/graph; `proptest` already dev-dep)
 - 3.4 — `forge-core-eventlog` (EventSourced trait mechanics)
-- 3.5 — `forge-core-eval` / `forge-core-trace` (baixo risco)
+- 3.5 — `forge-core-eval` / `forge-core-trace` (low risk)
 
 ---
 
-## 1. `derive_state` layer (o gap real de v0.2) — ✅ LANDED
+## 1. `derive_state` layer (the real v0.2 gap) — ✅ LANDED
 
-**Status:** concluído em 3 commits (`f94eac45`, `d8a36c1d`, `d8a36c1d`+tests).
+**Status:** completed in 3 commits (`f94eac45`, `d8a36c1d`, `d8a36c1d`+tests).
 
-**O que landed:**
-- `crates/forge-core-store/src/derive_state.rs` — o único construtor de
-  autoridade para claim state. Enrola a projeção já existente
-  (`replay_claim_wal`) e incorpora a dança de auto-repair de torn-tail que
-  vivia inline em `claim.rs`.
-- `load_claims()` em `claim.rs` agora roteia por `derive_state` internamente
-  (zero churn nos 7 call sites: acquire/heartbeat/release/handoff/status/
-  reconcile/check-write + graph_cmd.rs migraram transparentemente).
-- `forge-core claim status --from-cache` adicionado (debug/diagnóstico, lê o
-  YAML legado; spec AC5).
-- 5 testes novos provam os ACs: tamper-fail-closed (ac1/ac4),
+**What landed:**
+- `crates/forge-core-store/src/derive_state.rs` — the single authority
+  constructor for claim state. It wraps the already-existing projection
+  (`replay_claim_wal`) and incorporates the torn-tail auto-repair dance that
+  lived inline in `claim.rs`.
+- `load_claims()` in `claim.rs` now routes through `derive_state` internally
+  (zero churn across the 7 call sites: acquire/heartbeat/release/handoff/status/
+  reconcile/check-write + graph_cmd.rs migrated transparently).
+- `forge-core claim status --from-cache` added (debug/diagnostic, reads the
+  legacy YAML; spec AC5).
+- 5 new tests prove the ACs: tamper-fail-closed (ac1/ac4),
   cache-mutation-inert (ac7), from-cache-flag (ac5).
-- Toda a rede de regressão verde: 66 store + 204 CLI lib + 22 claim E2E.
+- The entire regression net green: 66 store + 204 CLI lib + 22 claim E2E.
 
-**O que NÃO landed (follow-up opcional):**
-- Snapshot/rotation como cache de leitura (P3.3, "later perf layer" no spec).
-- Tipo opaco `ClaimState` com seal compile-time (defense-in-depth, opção b).
-
----
-
-## 1-OLD (arquivo histórico — substituído por ✅ acima)
-
-**Contexto.** Hoje o estado de coordenação é reconstruído lendo os YAMLs de
-claim a cada invocação (`load_claims()` em `claim.rs:823`). O WAL
-(`.forge-method/wal/claims.fmw1`) já é a autoridade para mutação, mas a
-leitura ainda faz replay completo em cada chamada. A spec
-`contracts/spec/claims-integrity-spine-spec.yaml:56` manda existir um
-`crates/forge-core-store/src/derive_state.rs` como **único construtor de
-estado** — ele **não existe**.
+**What did NOT land (optional follow-up):**
+- Snapshot/rotation as a read cache (P3.3, "later perf layer" in the spec).
+- Opaque `ClaimState` type with compile-time seal (defense-in-depth, option b).
 
 ---
 
-## 2. Migrar `Result<_, String>` (AGENTS.md manda) — ✅ LANDED (5/5)
+## 1-OLD (historical archive — replaced by ✅ above)
 
-Todos os 5 sites migrados para enums tipados (Debug, Clone, PartialEq, Eq):
+**Context.** Today the coordination state is reconstructed by reading the claim
+YAMLs on every invocation (`load_claims()` in `claim.rs:823`). The WAL
+(`.forge-method/wal/claims.fmw1`) is already the authority for mutation, but
+the read path still does a full replay on every call. The spec
+`contracts/spec/claims-integrity-spine-spec.yaml:56` requires a
+`crates/forge-core-store/src/derive_state.rs` as the **single state
+constructor** — it **does not exist**.
+
+---
+
+## 2. Migrate `Result<_, String>` (AGENTS.md mandates it) — ✅ LANDED (5/5)
+
+All 5 sites migrated to typed enums (Debug, Clone, PartialEq, Eq):
 
 1. ~~`store/lib.rs` `parse_effect_wal_records_for_recovery`~~ → `EffectWalRecoveryParseError`
 2. ~~`cli/mcp_cmd.rs` `parse_serve_args`~~ → `ServeArgsError`
@@ -170,283 +170,281 @@ Todos os 5 sites migrados para enums tipados (Debug, Clone, PartialEq, Eq):
 4. ~~`protocol-mcp/attestation.rs` `hex_decode`~~ → `HexDecodeError`
 5. ~~`protocol-mcp/server.rs` `extract_attestation`~~ → `AttestationExtractError`
 
-**Zero `Result<_, String>` em `crates/*/src/`** (grep confirma). Gate de
-aceite cumprido: clippy pedantic verde, testes verde.
+**Zero `Result<_, String>` in `crates/*/src/`** (grep confirms). Acceptance gate
+met: clippy pedantic green, tests green.
 
 ---
 
-## 3. Cobertura de testes — 4 crates sem testes
+## 3. Test coverage — 4 crates without tests
 
-**Contexto.** O spine é bem testado (store, validate, decisions, kernel,
-cli têm suites E2E + unit). O audit inicial dizia que 4 crates tinham zero
-testes, mas isso estava **errado para o MCP** — ele já tinha ~33 testes
-inline. O gap real do MCP era vetores de ataque específicos não cobertos.
+**Context.** The spine is well tested (store, validate, decisions, kernel,
+cli have E2E + unit suites). The initial audit said 4 crates had zero tests,
+but that was **wrong for MCP** — it already had ~33 inline tests. The real MCP
+gap was specific attack vectors not covered.
 
-| Crate | LOC | Risco | Estado |
+| Crate | LOC | Risk | Status |
 |-------|-----|-------|--------|
-| `forge-core-crypto` | 5812 | **P0 — security-critical** | ✅ **Fase 2 completa** (4 commits: ed25519/p256/rekor/OCSP/TUF; 119 lib + 7 smoke + 1 KAT) |
-| `forge-core-protocol-mcp` | 2016 | Alto | ✅ **Attestation gaps fechados** (44 testes) |
-| `forge-core-governance` | 1447 | Alto | Pendente — arbitrate/escalate/record sem prova |
-| `forge-core-eval-harness` | 1371 | Alto | Pendente — decide baseline vs candidate (ADR-0023) |
-| `forge-core-research` | 1025 | Médio | Pendente — admission/graph; `proptest` dev-dep mas 0 testes |
-| `forge-core-eventlog` | 1132 | Médio | Pendente — EventSourced trait mechanics |
-| `forge-core-eval` | 890 | Baixo | Pendente — contract types |
-| `forge-core-trace` | 479 | Baixo | Pendente — trivial |
+| `forge-core-crypto` | 5812 | **P0 — security-critical** | ✅ **Phase 2 complete** (4 commits: ed25519/p256/rekor/OCSP/TUF; 119 lib + 7 smoke + 1 KAT) |
+| `forge-core-protocol-mcp` | 2016 | High | ✅ **Attestation gaps closed** (44 tests) |
+| `forge-core-governance` | 1447 | High | Pending — arbitrate/escalate/record without proof |
+| `forge-core-eval-harness` | 1371 | High | Pending — decides baseline vs candidate (ADR-0023) |
+| `forge-core-research` | 1025 | Medium | Pending — admission/graph; `proptest` dev-dep but 0 tests |
+| `forge-core-eventlog` | 1132 | Medium | Pending — EventSourced trait mechanics |
+| `forge-core-eval` | 890 | Low | Pending — contract types |
+| `forge-core-trace` | 479 | Low | Pending — trivial |
 
-### Fase 2 — `forge-core-crypto` (P0, prioridade máxima) — Commits 2.1-2.2 ✅ LANDED
+### Phase 2 — `forge-core-crypto` (P0, top priority) — Commits 2.1-2.2 ✅ LANDED
 
-O crate de maior risco: 5812 LOC de verificação criptográfica com cobertura
-essencialmente zero. Um bug aqui é silencioso e catastrófico. Cobertura
-ampla por commit:
+The highest-risk crate: 5812 LOC of cryptographic verification with essentially
+zero coverage. A bug here is silent and catastrophic. Broad coverage per commit:
 
 - **Commit 2.1 — ed25519/p256 signature verification.** ✅ LANDED (14
-  testes). Round-trip sign→verify (Ok), tampered sig→verify (Invalid),
-  wrong key→verify (Invalid). KAT determinístico com seed fixa pinando
-  verifying key + assinatura ed25519 (espelha o padrão do MCP
-  `attestation.rs:568`). p256 bundle + DSSE verify testados ponta-a-ponta
-  com a signing key extraída do certificado de teste (ponte
-  rcgen `KeyPair::serialize_der()` → `p256::ecdsa::SigningKey::from_pkcs8_der`).
-  Cobertura dos 3 sites: `verify_ed25519_signature`,
+  tests). Round-trip sign→verify (Ok), tampered sig→verify (Invalid),
+  wrong key→verify (Invalid). Deterministic KAT with a fixed seed pinning the
+  verifying key + ed25519 signature (mirrors the MCP pattern
+  `attestation.rs:568`). p256 bundle + DSSE verify tested end-to-end with the
+  signing key extracted from the test certificate (rcgen bridge
+  `KeyPair::serialize_der()` → `p256::ecdsa::SigningKey::from_pkcs8_der`).
+  Coverage of the 3 sites: `verify_ed25519_signature`,
   `verify_bundle_signature_with_certificate`,
   `verify_dsse_signature_with_certificate`. Proptest sign/verify+tamper
-  em ambos os algoritmos. `cargo test -p forge-core-crypto` verde (14 lib
-  + 7 zeroize_smoke), clippy pedantic limpo.
+  on both algorithms. `cargo test -p forge-core-crypto` green (14 lib
+  + 7 zeroize_smoke), clippy pedantic clean.
 - **Commit 2.2 — rekor log entry parse + inclusion proof verify.** ✅
-  LANDED (30 testes lib + 1 KAT regenerator `#[ignore]`d). Cobertura direta
-  dos 4 entrypoints de `rekor.rs` (397 LOC), todos inline `#[cfg(test)]`
-  (os 2 `pub(crate)` exigem):
-  - `parse_rekor_log_entry` — happy path + cada variante de
-    `RekorParseError` (8 variantes: JSON inválido, body base64 inválido,
-    body não-JSON, `verification`/`inclusionProof`/`hashes` ausentes,
-    hash não-string, e cada `MissingField` via remoção de campo por path).
-  - `parse_signed_checkpoint` — happy-path KAT (pina `tree_size` + root
-    hash), extensão de note lines, e 6 variantes de erro de formato
+  LANDED (30 lib tests + 1 KAT regenerator `#[ignore]`d). Direct coverage
+  of the 4 entrypoints of `rekor.rs` (397 LOC), all inline `#[cfg(test)]`
+  (the 2 `pub(crate)` require it):
+  - `parse_rekor_log_entry` — happy path + each variant of
+    `RekorParseError` (8 variants: invalid JSON, invalid base64 body,
+    non-JSON body, missing `verification`/`inclusionProof`/`hashes`,
+    non-string hash, and each `MissingField` via field removal by path).
+  - `parse_signed_checkpoint` — happy-path KAT (pins `tree_size` + root
+    hash), note lines extension, and 6 format-error variants
     (`CheckpointFormatInvalid`, `NoteInvalid`, `OriginMissing`,
     `TreeSizeInvalid`, `RootHashBase64Invalid`).
-  - `verify_rekor_checkpoint` — Ok + 4 variantes (`TreeSizeMismatch`,
-    `RootHashMismatch`, `SignatureMissing`, `SignatureInvalid` via key
-    errada). KAT p256 pina o verifying key sec1-hex derivado da seed
-    `[8u8;32]` (regenerador `#[ignore]`d).
+  - `verify_rekor_checkpoint` — Ok + 4 variants (`TreeSizeMismatch`,
+    `RootHashMismatch`, `SignatureMissing`, `SignatureInvalid` via wrong
+    key). The p256 KAT pins the verifying key sec1-hex derived from the seed
+    `[8u8;32]` (regenerator `#[ignore]`d).
   - `verify_merkle_inclusion` — tree_size=1 trivial match/mismatch,
-    tree_size=0 / log_index≥tree_size reject, árvore 2-leaf (ambos
-    índices), árvore 4-leaf (todos índices + tamper + hash malformado),
-    proptest sobre árvores 4-leaf aleatórias (fail-closed para impostor
-    leaf e root errado).
-  - Plus: regression guard do `RekorParseError::display()` (legacy strings).
-  Zero churn de produção (+752 LOC, só `#[cfg(test)]`). `cargo test -p
-  forge-core-crypto` verde (44 lib + 7 zeroize_smoke + 1 ignored KAT),
-  clippy pedantic limpo, fmt limpo. Workspace: 1 falha pré-existente
+    tree_size=0 / log_index≥tree_size reject, 2-leaf tree (both
+    indices), 4-leaf tree (all indices + tamper + malformed hash),
+    proptest over random 4-leaf trees (fail-closed for impostor
+    leaf and wrong root).
+  - Plus: regression guard of `RekorParseError::display()` (legacy strings).
+  Zero production churn (+752 LOC, only `#[cfg(test)]`). `cargo test -p
+  forge-core-crypto` green (44 lib + 7 zeroize_smoke + 1 ignored KAT),
+  clippy pedantic clean, fmt clean. Workspace: 1 pre-existing failure
   (`operation_sidecar_e2e::execute_operation_rejects_outside_root_operation_path_before_read`)
-  já falha em `b46d0bf2` — não regressão deste commit.
-- **Commit 2.3 — OCSP helpers: cobertura unitária direta dos `pub(crate)`.**
-  ✅ LANDED (34 testes inline). O crate já tinha cobertura E2E completa do
-  entrypoint público OCSP (17 integration tests em `validate.rs` cobrindo
-  good/revoked/unknown/expired/future/nonce/sig/responder-mismatch via DER
-  assinado rcgen). O gap era cobertura unitária direta dos 11 helpers
-  `pub(crate)` de `ocsp.rs` — só exercitados indiretamente. Cobertura por
-  construção de structs `rasn-ocsp` em Rust puro (sem DER assinado):
+  already fails at `b46d0bf2` — not a regression from this commit.
+- **Commit 2.3 — OCSP helpers: direct unit coverage of the `pub(crate)`.**
+  ✅ LANDED (34 inline tests). The crate already had complete E2E coverage of
+  the public OCSP entrypoint (17 integration tests in `validate.rs` covering
+  good/revoked/unknown/expired/future/nonce/sig/responder-mismatch via signed
+  rcgen DER). The gap was direct unit coverage of the 11 `pub(crate)` helpers
+  of `ocsp.rs` — only exercised indirectly. Coverage by constructing
+  `rasn-ocsp` structs in pure Rust (no signed DER):
   - `decode_ocsp_response`/`decode_basic_ocsp_response` — round-trip
-    (encode→decode) + DER inválido → `None` + reason.
-  - `verify_ocsp_single_response_freshness` — janela válida, this_update no
-    futuro, next_update expirado, next_update ausente.
+    (encode→decode) + invalid DER → `None` + reason.
+  - `verify_ocsp_single_response_freshness` — valid window, this_update in the
+    future, next_update expired, next_update absent.
   - `apply_ocsp_cert_status` — Good/Revoked (revoked_at + reason Debug)/Unknown.
-  - `extract_ocsp_response_nonce_hex` — nonce presente (double-wrapped
-    OCTET STRING), extensões ausentes, OID não-nonce.
+  - `extract_ocsp_response_nonce_hex` — nonce present (double-wrapped
+    OCTET STRING), extensions absent, non-nonce OID.
   - `verify_ocsp_nonce` — match/mismatch/missing/present-without-expectation/
-    neither-supplied (todos os 5 ramos).
-  - `normalize_expected_ocsp_nonce_hex` — lowercase, separadores (`:`/`-`/
-    espaço), odd-length, caractere inválido, vazio.
-  - `rasn_oid_matches` — match, prefix-only, arcos diferentes.
+    neither-supplied (all 5 branches).
+  - `normalize_expected_ocsp_nonce_hex` — lowercase, separators (`:`/`-`/
+    space), odd-length, invalid character, empty.
+  - `rasn_oid_matches` — match, prefix-only, different arcs.
   - `ocsp_responder_id_matches_issuer` (ByKey) + `find_matching_ocsp_single_response`
-    — match, serial mismatch, hash algorithm unsupported (com issuer cert
-    rcgen real).
-  - `verify_basic_ocsp_signature_with_issuer` — caminho negativo (sig sintética;
-    happy-path já coberto no E2E).
-  Adicionadas dev-deps `chrono` + `rasn-pkix` (workspace). Zero churn de
-  produção. `cargo test -p forge-core-crypto` verde (78 lib + 7 zeroize_smoke
-  + 1 ignored KAT), clippy pedantic limpo, fmt limpo.
-- **Commit 2.4 — TUF trusted-root freshness.** ✅ LANDED (41 testes
-  inline). Cobertura das 6 funções de `tuf.rs` (207 LOC): 1 `pub(crate)`
-  (`verify_tuf_metadata_freshness_role`) + 5 helpers privadas
+    — match, serial mismatch, unsupported hash algorithm (with a real rcgen issuer
+    cert).
+  - `verify_basic_ocsp_signature_with_issuer` — negative path (synthetic sig;
+    happy-path already covered in E2E).
+  Added dev-deps `chrono` + `rasn-pkix` (workspace). Zero production churn.
+  `cargo test -p forge-core-crypto` green (78 lib + 7 zeroize_smoke
+  + 1 ignored KAT), clippy pedantic clean, fmt clean.
+- **Commit 2.4 — TUF trusted-root freshness.** ✅ LANDED (41 inline
+  tests). Coverage of the 6 functions of `tuf.rs` (207 LOC): 1 `pub(crate)`
+  (`verify_tuf_metadata_freshness_role`) + 5 private helpers
   (`parse_tuf_datetime_utc_to_unix`, `parse_fixed_i32`, `days_in_month`,
-  `is_leap_year`, `days_from_civil`). O crate já tinha 6 integration tests
-  E2E em `validate.rs` (linhas 4576-4742) cobrindo o entrypoint público;
-  Commit 2.4 = cobertura unitária direta dos helpers, focando em edge cases
-  de datetime parsing que o E2E não isola:
-  - `verify_tuf_metadata_freshness_role` — fresh (evidence correta),
+  `is_leap_year`, `days_from_civil`). The crate already had 6 E2E integration
+  tests in `validate.rs` (lines 4576-4742) covering the public entrypoint;
+  Commit 2.4 = direct unit coverage of the helpers, focusing on datetime
+  parsing edge cases that E2E does not isolate:
+  - `verify_tuf_metadata_freshness_role` — fresh (correct evidence),
     expired (expires < update_start), rollback (version < floor),
-    version missing, version present sem floor, role type mismatch,
-    expires missing, expires format inválido (partial entry), read failure
-    (partial entry, label `tuf_metadata_read_failed`), JSON inválido,
-    sem envelope `signed` (todos os campos missing).
+    version missing, version present without floor, role type mismatch,
+    expires missing, invalid expires format (partial entry), read failure
+    (partial entry, label `tuf_metadata_read_failed`), invalid JSON,
+    no `signed` envelope (all fields missing).
   - `parse_tuf_datetime_utc_to_unix` — KATs (epoch=0, 2030-01-01=
-    1893456000, 2020-01-01T12:30:45Z=1577881845, pré-epoch=-1), rejeição
-    de length errada, Z faltante, separadores errados, não-numéricos,
-    mês 0/13, dia fora do mês (incl. feb-29 em ano comum), feb-29 em ano
-    bissexto (2024), overflow de H/M/S, reason com role-scope correto.
-  - `parse_fixed_i32` — decimal, não-dígito, out-of-range, negativo.
-  - `days_in_month` — meses 31/30, feb comum/bissexto (1900 não-bissexto,
-    2000 bissexto), mês inválido = 0.
-  - `is_leap_year` — div-by-4 comum, century não-div-by-400 (1900/2100),
+    1893456000, 2020-01-01T12:30:45Z=1577881845, pre-epoch=-1), rejection
+    of wrong length, missing Z, wrong separators, non-numeric,
+    month 0/13, day out of month (incl. feb-29 in a common year), feb-29 in a
+    leap year (2024), H/M/S overflow, reason with correct role-scope.
+  - `parse_fixed_i32` — decimal, non-digit, out-of-range, negative.
+  - `days_in_month` — 31/30-day months, feb common/leap (1900 non-leap,
+    2000 leap), invalid month = 0.
+  - `is_leap_year` — common div-by-4, century non-div-by-400 (1900/2100),
     century div-by-400 (1600/2000).
-  - `days_from_civil` — KAT table de 10 datas (epoch, pré-epoch, 1900,
-    2000 leap day, 2024 leap day, 2030 root date) + spans de ano completo
-    (365 comum, 366 bissexto).
-  KATs de calendário computados independentemente (Python `datetime`) e
-  pinados como regression guards. ScopedTempDir RAII para fixtures de fs
-  (sem dev-dep `tempfile`). Zero churn de produção (+~500 LOC, só
-  `#[cfg(test)]`). `cargo test -p forge-core-crypto` verde (119 lib +
-  7 zeroize_smoke + 1 ignored KAT), clippy pedantic limpo, fmt limpo.
-  **Fase 2 completa.**
+  - `days_from_civil` — KAT table of 10 dates (epoch, pre-epoch, 1900,
+    2000 leap day, 2024 leap day, 2030 root date) + full-year spans
+    (365 common, 366 leap).
+  Calendar KATs computed independently (Python `datetime`) and
+  pinned as regression guards. ScopedTempDir RAII for fs fixtures
+  (no `tempfile` dev-dep). Zero production churn (+~500 LOC, only
+  `#[cfg(test)]`). `cargo test -p forge-core-crypto` green (119 lib +
+  7 zeroize_smoke + 1 ignored KAT), clippy pedantic clean, fmt clean.
+  **Phase 2 complete.**
 
-Cada commit: `cargo test -p forge-core-crypto` a passar.
+Each commit: `cargo test -p forge-core-crypto` passing.
 
-### Fase 3 — crates sem testes (SESSÕES seguintes, ordem por risco)
+### Phase 3 — crates without tests (FOLLOWING sessions, order by risk)
 
 1. `forge-core-governance` (arbitrate/escalate/record)
 2. `forge-core-eval-harness` (decide baseline vs candidate)
-3. `forge-core-research` (admission/graph; `proptest` dev-dep disponível)
+3. `forge-core-research` (admission/graph; `proptest` dev-dep available)
 4. `forge-core-eventlog` (EventSourced trait mechanics)
-5. `forge-core-eval` / `forge-core-trace` (baixo risco)
+5. `forge-core-eval` / `forge-core-trace` (low risk)
 
-### `forge-core-protocol-mcp` — ✅ LANDED (parcial)
+### `forge-core-protocol-mcp` — ✅ LANDED (partial)
 
-Os gaps de attestation/authorization foram fechados (3 commits, sessão
-seguinte ao derive_state):
-- 7 testes novo: RequireAll gate, present-but-invalid no read-only
+The attestation/authorization gaps were closed (3 commits, session
+after derive_state):
+- 7 new tests: RequireAll gate, present-but-invalid on read-only
   (defense-in-depth), malformed `_meta.attestation`, unauthorized-key
-  pin do contrato documentado, proptest sign/verify+tamper.
-- KAT determinístico (seed fixa) que pin canonical bytes + assinatura
-  ed25519 — apanha regressões de canonicalização que eram flaky em OsRng.
-- `hex_decode` migrado de `Result<_, String>` para `HexDecodeError` tipado
-  (também fecha item #2 parcialmente para o crate MCP).
+  pin of the documented contract, proptest sign/verify+tamper.
+- Deterministic KAT (fixed seed) pinning canonical bytes + ed25519
+  signature — catches canonicalization regressions that were flaky on OsRng.
+- `hex_decode` migrated from `Result<_, String>` to typed `HexDecodeError`
+  (also closes item #2 partially for the MCP crate).
 
-**O que NÃO landed:** allowlist tem 11 testes (cobertura boa); server.rs
-tem 17 testes (gate coberto). O `run_stdio` live loop fica implícito.
+**What did NOT land:** allowlist has 11 tests (good coverage); server.rs
+has 17 tests (gate covered). The `run_stdio` live loop stays implicit.
 
-**Gate de aceite.** Cada crate tem ≥1 teste E2E + cobertura unitária nos
-caminhos críticos; `cargo test -p <crate>` verde.
+**Acceptance gate.** Each crate has ≥1 E2E test + unit coverage on
+critical paths; `cargo test -p <crate>` green.
 
-**Estimativa.** Fase 2: 1-2 sessões. Fase 3: 4-5 sessões (1 por crate).
-
----
-
-## 5. Consolidação física dos ADRs
-
-**Contexto.** A colisão de numeração foi resolvida (Fase 3 landed: Registry A
-em `docs/adr/` 0022-0024, Registry B em `docs/dev-docs/.../adrs/` 0001-0014,
-documentado em `docs/adr/README.md`). Mas os 14 ADRs de Registry B estão
-fisicamente separados dos 3 de Registry A. Mover todos para `docs/adr/`
-unifica o registro fisicamente.
-
-**Arquivo.** `git mv docs/dev-docs/forge-method-core-dev-docs-v2/adrs/*.md docs/adr/`
-
-**Risco.** Baixo. Os ADRs são citados por número (não por path) em código.
-Mas verificar: grep por `dev-docs/.../adrs/` em `crates/` e `contracts/` —
-se houver path refs, atualizar.
-
-**Gate de aceite.** Todos os ADRs em `docs/adr/`; `docs/adr/README.md`
-atualizado para refletir uma só localização; nenhum path ref quebrado.
-
-**Estimativa.** 1 sessão (cosmético).
+**Estimate.** Phase 2: 1-2 sessions. Phase 3: 4-5 sessions (1 per crate).
 
 ---
 
-## 6. Parsers granulares (B5 do plano CLI/UX)
+## 5. Physical consolidation of the ADRs
 
-**Contexto.** Os 10+ helpers `parse_*_or_err` em
-`crates/forge-core-cli/src/cli_util.rs` (linhas 196-405) devolvem o usage
-dump de 10KB para um valor de enum inválido. Ex: `--target-kind foo` devolve
-toda a usage em vez de `"unknown --target-kind 'foo'; expected
+**Context.** The numbering collision was resolved (Phase 3 landed: Registry A
+in `docs/adr/` 0022-0024, Registry B in `docs/dev-docs/.../adrs/` 0001-0014,
+documented in `docs/adr/README.md`). But the 14 Registry B ADRs are physically
+separate from the 3 of Registry A. Moving all of them to `docs/adr/`
+unifies the registry physically.
+
+**File.** `git mv docs/dev-docs/forge-method-core-dev-docs-v2/adrs/*.md docs/adr/`
+
+**Risk.** Low. ADRs are cited by number (not by path) in code.
+But verify: grep for `dev-docs/.../adrs/` in `crates/` and `contracts/` —
+if there are path refs, update them.
+
+**Acceptance gate.** All ADRs in `docs/adr/`; `docs/adr/README.md`
+updated to reflect a single location; no broken path ref.
+
+**Estimate.** 1 session (cosmetic).
+
+---
+
+## 6. Granular parsers (B5 of the CLI/UX plan)
+
+**Context.** The 10+ `parse_*_or_err` helpers in
+`crates/forge-core-cli/src/cli_util.rs` (lines 196-405) return the 10KB usage
+dump for an invalid enum value. E.g.: `--target-kind foo` returns the entire
+usage instead of `"unknown --target-kind 'foo'; expected
 file_path|glob|state_key|..."`.
 
-**Arquivo.** `crates/forge-core-cli/src/cli_util.rs`.
+**File.** `crates/forge-core-cli/src/cli_util.rs`.
 
-**Abordagem.** Para cada parser de enum, listar as variantes válidas na
-mensagem de erro. O helper genérico `parse_strict_or_err` (linha 405) já faz
-isso parcialmente — espelhar o padrão.
+**Approach.** For each enum parser, list the valid variants in the error
+message. The generic helper `parse_strict_or_err` (line 405) already does
+this partially — mirror the pattern.
 
-**Gate de aceite.** Cada enum inválido mostra as opções válidas; nenhum
-parser devolve o usage dump global para um erro de valor único.
+**Acceptance gate.** Each invalid enum shows the valid options; no
+parser returns the global usage dump for a single-value error.
 
-**Estimativa.** 1 sessão.
+**Estimate.** 1 session.
 
 ---
 
-## Não-ítens (decisões tomadas, não reconsiderar)
+## Non-items (decisions made, do not reconsider)
 
-- **First-use skill wiring** fora do escopo deste repo. O `SKILL.md` Step 0
-  trata repos já linkados via `project resolve`; o bootstrap de um repo sem
-  link (rodar `forge-core start` e seguir o `next_step`) é responsabilidade do
-  host/operador que invoca o skill, não do skill em si. O `start` command já
-  emite o `next_step.command` correto — o consumo dessa saída é decisão do
-  agente/host, não uma lacuna do núcleo.
-- **110 workflows** ficam. Cada produto usa um punhado; o catálogo largo é
-  intencional (atende gama maior de produtos).
-- **Repo URLs** (DanielCarva1/forge-method-core é o canonical no README e
-  SKILL desde a migração de distribuição; Stable-Studio/forge-method-rust é
-  o mirror histórico da org).
-- **WAL de claims** é append-only por design (audit log). Não truncar.
+- **First-use skill wiring** is out of scope for this repo. The `SKILL.md` Step 0
+  handles repos already linked via `project resolve`; bootstrapping a repo without
+  a link (running `forge-core start` and following the `next_step`) is the
+  responsibility of the host/operator that invokes the skill, not the skill itself. The `start` command already
+  emits the correct `next_step.command` — consuming that output is an agent/host
+  decision, not a core gap.
+- **110 workflows** stay. Each product uses a handful; the wide catalog is
+  intentional (it serves a broader range of products).
+- **Repo URLs** (DanielCarva1/forge-method-core is the canonical in the README and
+  SKILL since the distribution migration; Stable-Studio/forge-method-rust is
+  the org's historical mirror).
+- **The claims WAL** is append-only by design (audit log). Do not truncate.
 
-## Histórico
+## History
 
-### Sessão Fase 2 / Commit 2.4 (TUF trusted-root freshness tests)
+### Session Phase 2 / Commit 2.4 (TUF trusted-root freshness tests)
 
-Último commit da Fase 2. Cobriu as 6 funções de `tuf.rs` (207 LOC, zero
-testes inline antes) com 41 testes, zero churn de produção.
+Last commit of Phase 2. Covered the 6 functions of `tuf.rs` (207 LOC, zero
+inline tests before) with 41 tests, zero production churn.
 
-**Descoberta técnica:** o label real do `read_required_file` no path de
-read failure é o literal `"tuf_metadata"` (não `"tuf_root"`) — o reason
-produzido é `tuf_metadata_read_failed:...`. Os reasons role-scoped só
-aparecem após o parse bem-sucedido. Teste de read-failure deve assertar
-contra `tuf_metadata_read_failed`, não `tuf_{role}_read_failed`.
+**Technical finding:** the real label of `read_required_file` on the read-failure
+path is the literal `"tuf_metadata"` (not `"tuf_root"`) — the reason
+produced is `tuf_metadata_read_failed:...`. The role-scoped reasons only
+appear after successful parse. A read-failure test must assert
+against `tuf_metadata_read_failed`, not `tuf_{role}_read_failed`.
 
-**Abordagem:** KAT table de calendário (10 datas) computada
-independentemente via Python `datetime` e pinada como regression guard do
-algoritmo `days_from_civil`. ScopedTempDir RAII caseiro (sem `tempfile`
-dev-dep) para fixtures de fs, isolando cada teste com
-`forge-tuf-test-<label>-<pid>` e limpando no `Drop`.
+**Approach:** calendar KAT table (10 dates) computed
+independently via Python `datetime` and pinned as a regression guard of the
+`days_from_civil` algorithm. Homemade ScopedTempDir RAII (no `tempfile`
+dev-dep) for fs fixtures, isolating each test with
+`forge-tuf-test-<label>-<pid>` and cleaning up on `Drop`.
 
-Gate: `cargo test -p forge-core-crypto` verde (119 lib + 7 zeroize_smoke
-+ 1 ignored KAT), clippy pedantic limpo, fmt limpo. **Fase 2 completa.**
+Gate: `cargo test -p forge-core-crypto` green (119 lib + 7 zeroize_smoke
++ 1 ignored KAT), clippy pedantic clean, fmt clean. **Phase 2 complete.**
 
-### Sessão Fase 2 / Commit 2.1 (ed25519/p256 signature tests) — `21f0840d`
+### Session Phase 2 / Commit 2.1 (ed25519/p256 signature tests) — `21f0840d`
 
-Quebrou a cobertura zero do `forge-core-crypto` nos 3 sites de verificação
-de assinatura. 14 testes novos, zero churn em produção:
+Broke the zero coverage of `forge-core-crypto` at the 3 signature verification
+sites. 14 new tests, zero production churn:
 
-- **`slsa_transparency.rs`** (ed25519, 7 testes): round-trip Ok, tampered
-  signature, tampered message, wrong key, malformed lengths, KAT
-  determinístico (seed `[7u8;32]`, pin verifying key + assinatura em hex),
+- **`slsa_transparency.rs`** (ed25519, 7 tests): round-trip Ok, tampered
+  signature, tampered message, wrong key, malformed lengths, deterministic KAT
+  (seed `[7u8;32]`, pin verifying key + signature in hex),
   proptest sign/verify+tamper.
-- **`sigstore.rs`** (p256 ECDSA, 7 testes): bundle + DSSE verify
-  ponta-a-ponta com signing key extraída do cert de teste via ponte
-  rcgen `KeyPair::serialize_der()` (PKCS#8) →
+- **`sigstore.rs`** (p256 ECDSA, 7 tests): bundle + DSSE verify
+  end-to-end with the signing key extracted from the test cert via the rcgen
+  bridge `KeyPair::serialize_der()` (PKCS#8) →
   `p256::ecdsa::SigningKey::from_pkcs8_der`. Round-trip Ok, tampered DER,
   wrong-message, single-byte digest mutation, DSSE tampered payload,
   proptest.
 
-**Descoberta técnica:** o `validate.rs` (CLI E2E) assinava com
-`P256SigningKey::from_slice(&[8u8;32])` *não relacionada* à chave pública
-do certificado — os testes unitários agora cobrem o caminho real onde as
-chaves correspondem.
+**Technical finding:** `validate.rs` (CLI E2E) signed with
+`P256SigningKey::from_slice(&[8u8;32])` *unrelated* to the certificate's public
+key — the unit tests now cover the real path where the keys match.
 
-**Descoberta de contrato:** `verify_ed25519_signature` só promete
-fail-closed em erros *estruturais* (tamanho de key/sig). Keys degeneradas
-(all-zero) codificam um ponto válido em ed25519 e NÃO são rejeitadas —
-testado e documentado honestamente no teste `ed25519_malformed_*`.
+**Contract finding:** `verify_ed25519_signature` only promises
+fail-closed on *structural* errors (key/sig length). Degenerate keys
+(all-zero) encode a valid point in ed25519 and are NOT rejected —
+tested and documented honestly in the `ed25519_malformed_*` test.
 
-Gate: `cargo test -p forge-core-crypto` verde (14 lib + 7 zeroize_smoke),
-clippy pedantic limpo, fmt limpo.
+Gate: `cargo test -p forge-core-crypto` green (14 lib + 7 zeroize_smoke),
+clippy pedantic clean, fmt clean.
 
-### Sessão original (Fases A–D)
+### Original session (Phases A–D)
 
-Ver `git log` entre `1ebcdc06` (Fase A) e `d9dbe1d9` (Fase C). As 4 fases
+See `git log` between `1ebcdc06` (Phase A) and `d9dbe1d9` (Phase C). The 4 phases
 landed:
-- **A:** 89 claims órfãos limpos + AGENTS.md handoff removido + 12 ponteiros
-  reparados.
+- **A:** 89 orphan claims cleaned + AGENTS.md handoff removed + 12 pointers
+  repaired.
 - **B:** CLI/UX — `--version`, no-args→help, `--help` framing, `start`
-  no_link guidance, unknown-command diagnosis, `--no-sync` stderr em JSON.
-- **C:** README MCP corrigido, VERSION alinhado, inventory reescrito,
+  no_link guidance, unknown-command diagnosis, `--no-sync` stderr in JSON.
+- **C:** README MCP corrected, VERSION aligned, inventory rewritten,
   `--json` consistency, SKILL URL.
-- **D:** este documento.
+- **D:** this document.

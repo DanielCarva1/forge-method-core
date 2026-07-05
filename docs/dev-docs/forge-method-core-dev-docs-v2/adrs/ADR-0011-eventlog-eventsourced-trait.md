@@ -1,37 +1,38 @@
-# ADR-0011 - `forge-core-eventlog` e o trait `EventSourced`
+# ADR-0011 - `forge-core-eventlog` and the `EventSourced` trait
 
-- **Status**: Accepted (V1.A implementada — crate `forge-core-eventlog` com `trait EventSourced`, `EventEnvelope`, `event_envelope!`; V2.A migrou `forge-core-memory`/`-research`/`-governance`/`-store` JSONL half)
+- **Status**: Accepted (V1.A implemented — crate `forge-core-eventlog` with `trait EventSourced`, `EventEnvelope`, `event_envelope!`; V2.A migrated `forge-core-memory`/`-research`/`-governance`/`-store` JSONL half)
 - **Date**: 2026-07-02
-- **Track**: V1.A / V2.A — collapse de boilerplate event-sourcing
+- **Track**: V1.A / V2.A — event-sourcing boilerplate collapse
 - **Supersedes**: none
 - **Superseded by**: none
 
-## Contexto
+## Context
 
-Quatro crates no workspace copiaram boilerplate de event-sourcing quase idêntico:
-`forge-core-memory`, `forge-core-research`, `forge-core-governance`, e a metade JSONL de
-`forge-core-store`. Cada um tinha: um `<X>Event` enum com envelope `sequence`/`at_unix`, um
-`<X>Projection { sequence, BTreeMap, superseded, diagnostics }`, um `apply_event` com guarda
-de out-of-order, um `replay` fold livre, `project`/`project_locked` (cold-read NDJSON com
-tolerância a torn-tail), `next_sequence`, `now_unix`, um shim `append_bytes`, e um quarteto
-de erros `{Lock, Append, Serialize, Read}`. O measurement em `forge-core-research` mostrou
-que ~62% da crate era o template, não o domínio.
+Four crates in the workspace had copied nearly identical event-sourcing boilerplate:
+`forge-core-memory`, `forge-core-research`, `forge-core-governance`, and the JSONL
+half of `forge-core-store`. Each had: an `<X>Event` enum with a `sequence`/`at_unix`
+envelope, an `<X>Projection { sequence, BTreeMap, superseded, diagnostics }`, an
+`apply_event` with an out-of-order guard, a free `replay` fold,
+`project`/`project_locked` (cold-read NDJSON with torn-tail tolerance),
+`next_sequence`, `now_unix`, an `append_bytes` shim, and a quartet of
+`{Lock, Append, Serialize, Read}` errors. Measurement in `forge-core-research`
+showed that ~62% of the crate was the template, not the domain.
 
-A tentação seria fundir os logs num único log compartilhado para economizar código. Mas
-ADR-0010 cravou que os **logs devem permanecer separados** — fundir trust domains distintos
-(memory = confiança; research = proveniência de citação) num único event-sourced log
-reabre a classe de bug Model B que ADR-0023 tornou irrepresentável. O que estava duplicado
-eram as **mecânicas**, não a **separação**.
+The temptation would be to merge the logs into a single shared log to save code. But
+ADR-0010 pinned that **logs must remain separate** — merging distinct trust domains
+(memory = trust; research = citation provenance) into a single event-sourced log
+reopens the Model B bug class that ADR-0023 made unrepresentable. What was duplicated
+were the **mechanics**, not the **separation**.
 
-Havia também um bug latente: a cópia do `forge-core-memory` recomputava
-`text.lines().count()` dentro do loop de parse, em cada erro — O(n²) quando o tail estava
-torn e toda linha erro. A cópia do `forge-core-research` já havia hoisted o count para fora;
-as duas cópias divergiam silenciosamente.
+There was also a latent bug: the `forge-core-memory` copy recomputed
+`text.lines().count()` inside the parse loop, on every error — O(n²) when the tail
+was torn and every line errored. The `forge-core-research` copy had already hoisted
+the count outside; the two copies diverged silently.
 
-## Decisao
+## Decision
 
-Nova crate `forge-core-eventlog` que absorve as mecânicas (não a separação). O coração é o
-trait `EventSourced`:
+A new crate `forge-core-eventlog` that absorbs the mechanics (not the separation). The
+heart is the `EventSourced` trait:
 
 ```rust
 pub trait EventSourced {
@@ -47,74 +48,76 @@ pub trait EventSourced {
 }
 ```
 
-A crate provê as mecânicas genéricas sobre esse trait:
+The crate provides the generic mechanics over this trait:
 
-- `replay` — o fold puro de Fowler (discard e rebuild).
-- `project_locked` — cold-read NDJSON com tolerância a torn-tail, sem lock.
-- `apply_event` — o corpo compartilhado do fold com guarda out-of-order.
-- `next_sequence` / `now_unix` — alocação de sequência e wall-clock.
-- `append_event` — serialize → `append_json_line_with_durability` (reuso de `forge-core-store`).
-- `EventLogLock` — wrapper RAII sobre `acquire_effect_store_lock`.
-- `EventLogError<D>` — o sexteto `{Lock, Append, Serialize, Read, Parse, ProjectionDiagnostic}`, genérico sobre o tipo `Diagnostic` do domínio (default `String`).
+- `replay` — Fowler's pure fold (discard and rebuild).
+- `project_locked` — cold-read NDJSON with torn-tail tolerance, no lock.
+- `apply_event` — the shared fold body with an out-of-order guard.
+- `next_sequence` / `now_unix` — sequence allocation and wall-clock.
+- `append_event` — serialize → `append_json_line_with_durability` (reuse of `forge-core-store`).
+- `EventLogLock` — RAII wrapper over `acquire_effect_store_lock`.
+- `EventLogError<D>` — the sextet `{Lock, Append, Serialize, Read, Parse, ProjectionDiagnostic}`, generic over the domain's `Diagnostic` type (default `String`).
 
-Os **associated types são plain `type` aliases, não GATs** — o trait funciona em stable Rust
-1.85 sem ginástica de lifetimes. Isto é o padrão eventsourced/evented (o `eventsourced` de
-hseeberger é o modelo, mas deliberadamente mais simples: sem tipo `Command`, sem async, sem
-persistência de estado evoluído).
+The **associated types are plain `type` aliases, not GATs** — the trait works on stable Rust
+1.85 with no lifetime gymnastics. This is the eventsourced/evented pattern (hseeberger's
+`eventsourced` is the model, but deliberately simpler: no `Command` type, no async, no
+evolved-state persistence).
 
-A macro `event_envelope!` gera os accessors `sequence()`/`at_unix()` + o impl de
-`EventEnvelope` para o enum `Event` do domínio. É `macro_rules!`, **não proc-macro** — zero
-build-time cost, nenhuma crate `*-derive` extra, alinhado com a direção Rust Project Goal
-2025H1 de reduzir o custo de build de proc-macros. O fold `apply` fica escrito à mão (é
-específico do domínio).
+The `event_envelope!` macro generates the `sequence()`/`at_unix()` accessors + the
+`EventEnvelope` impl for the domain's `Event` enum. It is `macro_rules!`, **not a
+proc-macro** — zero build-time cost, no extra `*-derive` crate, aligned with the Rust
+Project Goal 2025H1 direction of reducing proc-macro build cost. The `apply` fold stays
+hand-written (it is domain-specific).
 
-## Rationale (o trade-off real)
+## Rationale (the real trade-off)
 
-A alternativa — fundir os logs num só — foi rejeitada por ADR-0010: a fronteira semântica
-entre trust domains é o produto inteiro do F14. Esta ADR collapse as **mecânicas**
-(`project_locked` triplicado, o quarteto de erros ×7, `event_envelope` ×N) enquanto deixa
-cada domínio com seu próprio arquivo de log, lock e projeção. O `project_locked` genérico é
-parametrizado por `log_relative_path`/`lock_relative_path` por chamada — nunca assume um
-log compartilhado.
+The alternative — merging the logs into one — was rejected by ADR-0010: the semantic
+boundary between trust domains is the entire product of F14. This ADR collapses the
+**mechanics**
+(triplicated `project_locked`, the error quartet ×7, `event_envelope` ×N) while leaving
+each domain with its own log file, lock, and projection. The generic `project_locked` is
+parameterized by `log_relative_path`/`lock_relative_path` per call — it never assumes a
+shared log.
 
-O bug O(n²) do memory é corrigido no `project_locked` único: o `total_lines` count fica
-hoisted fora do loop. As quatro cópias não podem mais divergir sobre como contar linhas ou
-como tratar o tail torn.
+The memory O(n²) bug is fixed in the single `project_locked`: the `total_lines` count is
+hoisted outside the loop. The four copies can no longer diverge on how to count lines or
+how to handle the torn tail.
 
-## Consequencias
+## Consequences
 
-**Positivas:**
+**Positive:**
 
-- As mecânicas colapsam num só lugar. Um 5º PEP (Policy Enforcement Point) passa a ser um
-  PDP (a função `apply`) + 2 braços de `apply_event`, não uma crate de ~1200 linhas.
-- O bug O(n²) do memory é corrigido na única cópia `project_locked`; todos os domínios
-  migrados herdam o fix.
-- Os quartetos de erro ×7 viram um sexteto genérico; o tipo `Diagnostic` do domínio viaja
-  pelo `EventLogError<D>` até a fronteira.
-- ADR-0010 é honrado byte a byte: cada domínio mantém seu log, lock e projeção. Esta crate
-  colapsa mecânicas, não separação.
+- The mechanics collapse into a single place. A 5th PEP (Policy Enforcement Point) becomes
+  a PDP (the `apply` function) + 2 arms of `apply_event`, not a ~1200-line crate.
+- The memory O(n²) bug is fixed in the single `project_locked` copy; all migrated domains
+  inherit the fix.
+- The error quartets ×7 become a single generic sextet; the domain's `Diagnostic` type
+  travels through `EventLogError<D>` to the boundary.
+- ADR-0010 is honored byte for byte: each domain keeps its log, lock, and projection. This
+  crate collapses mechanics, not separation.
 
-**Negativas:**
+**Negative:**
 
-- `EventSourced` tem métodos "factored out" (`sequence_of`, `advance_sequence`, os
-  `diagnostic_*`) que expõem detalhes da projeção ao trait. Aceito porque a `Projection` é
-  um associated type opaco; o domínio sabe qual campo é o watermark, o trait não.
-- `append_event` faz um serialize duplo (event → bytes → `Value` → store helper). Trade
-  documentado: corretude e aderência às convenções do store sobre micro-otimização (logs
-  de evento são baixo-volume, escala humana).
+- `EventSourced` has "factored out" methods (`sequence_of`, `advance_sequence`, the
+  `diagnostic_*`) that expose projection details to the trait. Accepted because the
+  `Projection` is an opaque associated type; the domain knows which field is the watermark,
+  the trait does not.
+- `append_event` does a double serialize (event → bytes → `Value` → store helper). Documented
+  trade-off: correctness and adherence to store conventions over micro-optimization (event
+  logs are low-volume, human-scale).
 
-## Anti-objetivos
+## Anti-goals
 
-- **Não** funde logs: cada domínio continua com seu arquivo, lock e projeção (ADR-0010).
-- **Não** introduz `Command` tipo nem async — o kernel permanece determinístico (ADR-0001).
-- **Não** é proc-macro: `event_envelope!` é `macro_rules!` por design.
+- **Does not** merge logs: each domain keeps its file, lock, and projection (ADR-0010).
+- **Does not** introduce a `Command` type or async — the kernel stays deterministic (ADR-0001).
+- **Is not** a proc-macro: `event_envelope!` is `macro_rules!` by design.
 
-## Referencias
+## References
 
 - `eventsourced` (Heiko Seeberger): https://docs.rs/eventsourced
-- `evented` (successor de eventsourced): https://docs.rs/evented
+- `evented` (successor to eventsourced): https://docs.rs/evented
 - Capital One — building an event-sourcing crate (case study):
   https://www.capitalone.com/tech/software-engineering/event-sourcing-implementation/
 - Rust Project Goals 2025H1 (reduce proc-macro build cost).
-- In-repo: ADR-0010 (log separation honrado), ADR-0001 (kernel determinístico, sem async),
+- In-repo: ADR-0010 (log separation honored), ADR-0001 (deterministic kernel, no async),
   `crates/forge-core-eventlog/src/{lib,projection,error,lock,macros}.rs`.

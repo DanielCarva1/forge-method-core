@@ -1,501 +1,501 @@
 # Forge Method Core v2 - feature specs
 
-Data: 2026-06-28
+Date: 2026-06-28
 
-Este arquivo detalha cada feature recomendada. Use como base para epics, issues e acceptance criteria.
+This file details each recommended feature. Use it as a basis for epics, issues, and acceptance criteria.
 
 
 ## F01 - forge preview
 
-Prioridade: P0  
-Usuarios: todos  
-Evidencias: P21,P22,P28,O03,C06  
-Crates principais: forge-core-kernel, forge-core-store, forge-core-cli
+Priority: P0  
+Users: all  
+Evidence: P21,P22,P28,O03,C06  
+Main crates: forge-core-kernel, forge-core-store, forge-core-cli
 
-Demanda: Medo de mutacao errada, necessidade de entender impacto antes da acao.
+Demand: Fear of wrong mutation, need to understand impact before action.
 
-Produto: Comando e API que mostram plano, arquivos, comandos, authority, gates, efeitos e rollback antes de aplicar.
+Product: Command and API that show plan, files, commands, authority, gates, effects, and rollback before applying.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- Dado um OperationContract mutavel, preview retorna JSON deterministico com status, touched_refs, risk, gates, rollback_available e next_human_action.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- Given a mutable OperationContract, preview returns deterministic JSON with status, touched_refs, risk, gates, rollback_available, and next_human_action.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.
 
 ## F02 - forge ready
 
-Prioridade: P0  
-Usuarios: usuario comum, QA, dev, empresa  
-Evidencias: P22,P23,P30,C06  
-Crates principais: forge-core-kernel, forge-core-validate, forge-core-cli
+Priority: P0  
+Users: common user, QA, dev, company  
+Evidence: P22,P23,P30,C06  
+Main crates: forge-core-kernel, forge-core-validate, forge-core-cli
 
-Demanda: Confianca operacional e validacao antes de declarar pronto.
+Demand: Operational confidence and validation before declaring ready.
 
-Produto: Gate unificado para tests, lint, typecheck, evals, security checks e readiness report.
+Product: Unified gate for tests, lint, typecheck, evals, security checks, and readiness report.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- Um run so passa se todos os gates obrigatorios passarem; falhas retornam reasons tipadas e evidencias.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- A run only passes if all mandatory gates pass; failures return typed reasons and evidence.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.
 
-## F03 - TraceEvent canonico e forge explain
+## F03 - Canonical TraceEvent and forge explain
 
-Prioridade: P0  
-Usuarios: todos  
-Evidencias: P04,P07,P17,P24,P26,C06  
-Crates principais: novo forge-core-trace, runtime, cli
+Priority: P0  
+Users: all  
+Evidence: P04,P07,P17,P24,P26,C06  
+Main crates: new forge-core-trace, runtime, cli
 
-Demanda: Saber o que aconteceu, por que aconteceu e como auditar.
+Demand: Know what happened, why it happened, and how to audit it.
 
-Produto: Trace NDJSON machine-readable e explicacao humana por run.
+Product: Machine-readable NDJSON trace and human explanation per run.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- Toda operacao gera trace_id, node_id, actor_agent_id, principal_id, input_refs, output_refs, decision_reason e cost.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- Every operation generates trace_id, node_id, actor_agent_id, principal_id, input_refs, output_refs, decision_reason, and cost.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.
 
 ## F04 - WorkflowGraph v0
 
-Prioridade: P0  
-Usuarios: power user, empresa  
-Evidencias: P04,P05,P06,C03,C06  
-Crates principais: novo forge-core-graph, runtime
+Priority: P0  
+Users: power user, company  
+Evidence: P04,P05,P06,C03,C06  
+Main crates: new forge-core-graph, runtime
 
-Demanda: Orquestrar sem routing solto por prompt.
+Demand: Orchestrate without loose prompt-based routing.
 
-Produto: Grafo declarativo com nodes, edges, budgets, verifier nodes e replan boundaries.
+Product: Declarative graph with nodes, edges, budgets, verifier nodes, and replan boundaries.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- forge graph validate e forge graph run --dry-run funcionam sem executar efeitos; executor respeita dependencias e stop conditions.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- forge graph validate and forge graph run --dry-run work without executing effects; the executor respects dependencies and stop conditions.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.
 
 ## F05 - Eval Compare single-agent baseline
 
-Prioridade: P1  
-Usuarios: power user, pesquisa, empresa  
-Evidencias: P01,P02,P03,P07  
-Crates principais: novo forge-core-eval
+Priority: P1  
+Users: power user, research, company  
+Evidence: P01,P02,P03,P07  
+Main crates: new forge-core-eval
 
-Demanda: Provar quando multi-agent vale o custo.
+Demand: Prove when multi-agent is worth the cost.
 
-Produto: Harness para comparar single-agent anchor, graph workflow e MAS sob mesmo loader, tools, output contract e usage accounting.
+Product: Harness to compare single-agent anchor, graph workflow, and MAS under the same loader, tools, output contract, and usage accounting.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- Relatorio mostra accuracy, cost, latency, trajectory length, failures e delta contra baseline.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- Report shows accuracy, cost, latency, trajectory length, failures, and delta against baseline.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.
 
 ## F06 - Memory Policy
 
-Prioridade: P1  
-Usuarios: todos  
-Evidencias: P09,P10,P11,P28,O03  
-Crates principais: novo forge-core-memory
+Priority: P1  
+Users: all  
+Evidence: P09,P10,P11,P28,O03  
+Main crates: new forge-core-memory
 
-Demanda: Personalizacao sem memoria opaca ou perigosa.
+Demand: Personalization without opaque or dangerous memory.
 
-Produto: Memory admission, retention, forget, promote, raw evidence e authority boundary.
+Product: Memory admission, retention, forget, promote, raw evidence, and authority boundary.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- Nenhuma memoria vira authority automaticamente; promote exige policy e evidencia raw.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- No memory becomes authority automatically; promote requires policy and raw evidence.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.
 
 ## F07 - Multi-principal governance
 
-Prioridade: P1  
-Usuarios: times, empresas, open source  
-Evidencias: P08,P24,P25,P26,C01  
-Crates principais: contracts, validate, runtime, store
+Priority: P1  
+Users: teams, companies, open source  
+Evidence: P08,P24,P25,P26,C01  
+Main crates: contracts, validate, runtime, store
 
-Demanda: Varios agentes e pessoas no mesmo estado sem overwrites silenciosos.
+Demand: Several agents and people in the same state without silent overwrites.
 
-Produto: PrincipalId, IntentContract, ConflictContract, GovernancePolicy e arbitration ledger.
+Product: PrincipalId, IntentContract, ConflictContract, GovernancePolicy, and arbitration ledger.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- Conflito entre principals vira objeto estruturado, nao merge manual silencioso.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- Conflict between principals becomes a structured object, not a silent manual merge.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.
 
 ## F08 - Secure MCP adapter
 
-Prioridade: P1  
-Usuarios: power user, empresas  
-Evidencias: O01,P17,P18,P19,P20,O03  
-Crates principais: novo forge-core-protocol-mcp
+Priority: P1  
+Users: power user, companies  
+Evidence: O01,P17,P18,P19,P20,O03  
+Main crates: new forge-core-protocol-mcp
 
-Demanda: Conectar ferramentas reais com seguranca.
+Demand: Connect real tools securely.
 
-Produto: MCP server para preview, ready, graph, trace, memory e effect application com allowlist e attestation.
+Product: MCP server for preview, ready, graph, trace, memory, and effect application with allowlist and attestation.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- Nenhuma tool MCP muta estado sem OperationContract e authority validada.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- No MCP tool mutates state without an OperationContract and validated authority.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.
 
 ## F09 - Secure A2A adapter
 
-Prioridade: P2  
-Usuarios: power user, empresas  
-Evidencias: O02,P08,P17,P19,P20  
-Crates principais: novo forge-core-protocol-a2a
+Priority: P2  
+Users: power user, companies  
+Evidence: O02,P08,P17,P19,P20  
+Main crates: new forge-core-protocol-a2a
 
-Demanda: Interoperabilidade entre agentes de vendors diferentes.
+Demand: Interoperability between agents from different vendors.
 
-Produto: A2A agent card e task surface para delegacao controlada.
+Product: A2A agent card and task surface for controlled delegation.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- A2A nao substitui MCP nem vira subagent protocol interno; tarefa externa sempre tem PrincipalId e delegation chain.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- A2A does not replace MCP or become an internal subagent protocol; an external task always has PrincipalId and a delegation chain.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.
 
-## F10 - Control Plane local
+## F10 - Local Control Plane
 
-Prioridade: P2  
-Usuarios: power user, QA, times  
-Evidencias: P06,P07,P21,P28,O03,C01  
-Crates principais: novo forge-core-ui ou cli
+Priority: P2  
+Users: power user, QA, teams  
+Evidence: P06,P07,P21,P28,O03,C01  
+Main crates: new forge-core-ui or cli
 
-Demanda: Ver lanes, claims, traces, gates e risco em uma tela.
+Demand: See lanes, claims, traces, gates, and risk on a single screen.
 
-Produto: TUI ou HTML estatico lendo .forge-method sem SaaS obrigatorio.
+Product: TUI or static HTML reading .forge-method without a mandatory SaaS.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- Mostra run status, active claims, stale claims, conflicts, gates, cost e next action.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- Shows run status, active claims, stale claims, conflicts, gates, cost, and next action.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.
 
-## F11 - Risk Audit Gate para codigo de IA
+## F11 - Risk Audit Gate for AI code
 
-Prioridade: P1  
-Usuarios: QA, dev, empresas  
-Evidencias: P22,P23,P30  
-Crates principais: validate, runtime, cli
+Priority: P1  
+Users: QA, dev, companies  
+Evidence: P22,P23,P30  
+Main crates: validate, runtime, cli
 
-Demanda: Detectar fail-soft, exception swallowing, security slop e teste falso.
+Demand: Detect fail-soft, exception swallowing, security slop, and fake tests.
 
-Produto: Gate com checks deterministios e extensao para SAST/linters.
+Product: Gate with deterministic checks and extension for SAST/linters.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- Risk gate falha fechado em padroes proibidos e gera report com evidencia por arquivo.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- Risk gate fails closed on prohibited patterns and generates a report with evidence per file.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.
 
-## F12 - Guided Start e Product UX
+## F12 - Guided Start and Product UX
 
-Prioridade: P2  
-Usuarios: usuario comum, founder, dev iniciante  
-Evidencias: P28,P29,O03  
-Crates principais: cli, docs, templates
+Priority: P2  
+Users: common user, founder, beginner dev  
+Evidence: P28,P29,O03  
+Main crates: cli, docs, templates
 
-Demanda: Entrar no produto sem entender agentes, YAML ou protocolo.
+Demand: Enter the product without understanding agents, YAML, or protocol.
 
-Produto: Fluxo guiado com escolha de objetivo, risco, scaffold e primeiro preview.
+Product: Guided flow with choice of objective, risk, scaffold, and first preview.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- Usuario cria projeto Forge, ve spec minima, preview e ready sem editar YAML manualmente.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- User creates a Forge project, sees a minimal spec, preview, and ready without editing YAML manually.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.
 
 ## F13 - Budget and Cost Accounting
 
-Prioridade: P2  
-Usuarios: power user, empresas  
-Evidencias: P01,P02,P16,O03  
-Crates principais: trace, eval, runtime
+Priority: P2  
+Users: power user, companies  
+Evidence: P01,P02,P16,O03  
+Main crates: trace, eval, runtime
 
-Demanda: Controlar custo, rounds, model calls e tool calls.
+Demand: Control cost, rounds, model calls, and tool calls.
 
-Produto: Budget por run, graph node, agent, principal e tool.
+Product: Budget per run, graph node, agent, principal, and tool.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- Run bloqueia ou pede confirmacao quando budget threshold e atingido.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- Run blocks or asks for confirmation when a budget threshold is reached.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.
 
 ## F14 - Knowledge Orchestration mode
 
-Prioridade: P3  
-Usuarios: pesquisa, produto, analistas  
-Evidencias: P13,P14,P15  
-Crates principais: memory, trace, eval
+Priority: P3  
+Users: research, product, analysts  
+Evidence: P13,P14,P15  
+Main crates: memory, trace, eval
 
-Demanda: Research agents precisam de fontes, claims e evidencias, nao so resumo.
+Demand: Research agents need sources, claims, and evidence, not just a summary.
 
-Produto: Modo research com evidence graph, source ledger e citation checks.
+Product: Research mode with evidence graph, source ledger, and citation checks.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- Cada claim importante aponta para source_id e evidencia local ou web registrada.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- Each important claim points to a source_id and local or registered web evidence.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.
 
 ## F15 - Rust ergonomics and codegen track
 
-Prioridade: P0  
-Usuarios: maintainers e agentes de codigo  
-Evidencias: O04,O05,O06,O07,P31,C04,C05  
-Crates principais: todos
+Priority: P0  
+Users: maintainers and code agents  
+Evidence: O04,O05,O06,O07,P31,C04,C05  
+Main crates: all
 
-Demanda: Reduzir sofrimento do agente escrevendo Rust manual repetitivo.
+Demand: Reduce the suffering of the agent writing repetitive hand-written Rust.
 
-Produto: argv manual em `main.rs` (sem `clap`, sem derive macros — decisão projetual em `AGENTS.md`), error enums rolados à mão (sem `thiserror`, sem `anyhow`), `tracing`, builders, fixtures, module split, codegen de contratos e snapshots.
+Product: manual argv in `main.rs` (no `clap`, no derive macros — design decision in `AGENTS.md`), hand-rolled error enums (no `thiserror`, no `anyhow`), `tracing`, builders, fixtures, module split, contract codegen, and snapshots.
 
-Criterios de aceite:
+Acceptance criteria:
 
-- Novo comando ou contrato nao exige editar mais de dois pontos manuais fora de tests e docs.
-- Deve produzir output JSON para uso por agentes e output humano para CLI.
-- Deve registrar trace_id quando participar de run mutavel ou avaliavel.
-- Deve falhar fechado quando faltar autoridade, input obrigatorio, evidencia ou gate.
+- A new command or contract does not require editing more than two manual points outside of tests and docs.
+- Must produce JSON output for use by agents and human output for the CLI.
+- Must register trace_id when participating in a mutable or evaluable run.
+- Must fail closed when missing authority, required input, evidence, or gate.
 
-Riscos:
+Risks:
 
-- Criar UX bonita sem authority boundary real.
-- Aumentar boilerplate Rust sem codegen ou builders.
-- Permitir que adapter externo reinterprete o estado do Forge.
+- Creating pretty UX without a real authority boundary.
+- Increasing Rust boilerplate without codegen or builders.
+- Allowing an external adapter to reinterpret Forge state.
 
-Implementacao minima:
+Minimum implementation:
 
-1. Definir contrato YAML ou struct Rust com schema.
-2. Criar fixture valida e fixture invalida.
-3. Criar validator com diagnostics tipados.
-4. Expor CLI ou API interna.
-5. Adicionar snapshot de output.
-6. Registrar evento no trace quando aplicavel.
+1. Define the YAML contract or Rust struct with schema.
+2. Create a valid fixture and an invalid fixture.
+3. Create a validator with typed diagnostics.
+4. Expose a CLI or internal API.
+5. Add an output snapshot.
+6. Register an event in the trace when applicable.

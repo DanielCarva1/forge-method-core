@@ -1,17 +1,17 @@
-# Forge Method Core v2 - perfis de usuario e demandas
+# Forge Method Core v2 - user profiles and demands
 
-## Perfil 1 - usuario comum descobrindo IA
+## Profile 1 - everyday user discovering AI
 
-Quer resultado sem entender agentes. Precisa de:
+Wants a result without understanding agents. Needs:
 
-- Comeco guiado.
-- Linguagem simples.
-- Preview antes de mexer.
-- Explicacao curta.
-- Botao de desfazer.
-- Transparencia de seguranca e privacidade.
+- Guided start.
+- Simple language.
+- Preview before changing anything.
+- Short explanation.
+- Undo button.
+- Security and privacy transparency.
 
-Traducao no produto:
+Translation in the product:
 
 - `forge start --guided`
 - `forge preview`
@@ -19,24 +19,24 @@ Traducao no produto:
 - `forge explain`
 - `forge undo`
 
-## Perfil 2 - vibe coder, indie maker, founder
+## Profile 2 - vibe coder, indie maker, founder
 
-Quer velocidade, mas tende a subestimar auth, dados, secrets, deploy e risco. Precisa de guardrails sem matar fluxo.
+Wants speed, but tends to underestimate auth, data, secrets, deploy and risk. Needs guardrails without killing the flow.
 
-Traducao no produto:
+Translation in the product:
 
 - ready gate
 - secrets gate
 - data risk gate
 - deploy gate
 - rollback
-- templates seguros
+- secure templates
 
-## Perfil 3 - dev e QA profissional
+## Profile 3 - professional dev and QA
 
-Ja usa agentes de codigo. Precisa revisar, validar, rastrear e explicar. O valor do Forge e governar trabalho gerado por IA.
+Already uses code agents. Needs to review, validate, track and explain. The value of Forge is governing AI-generated work.
 
-Traducao no produto:
+Translation in the product:
 
 - trace event
 - evidence ledger
@@ -45,11 +45,11 @@ Traducao no produto:
 - CI integration
 - failure taxonomy
 
-## Perfil 4 - power user de IA
+## Profile 4 - AI power user
 
-Quer grafo, tools, budgets, memory, custom agents, hooks, protocols, replay e metrics. Aceita YAML e CLI.
+Wants graph, tools, budgets, memory, custom agents, hooks, protocols, replay and metrics. Accepts YAML and CLI.
 
-Traducao no produto:
+Translation in the product:
 
 - workflow graph
 - graph run dry-run
@@ -59,11 +59,11 @@ Traducao no produto:
 - control plane
 - budgets
 
-## Perfil 5 - time e empresa
+## Profile 5 - team and company
 
-Precisa de governanca, policy, audit, aprovacao e integracao com SDLC.
+Needs governance, policy, audit, approval and integration with the SDLC.
 
-Traducao no produto:
+Translation in the product:
 
 - PrincipalId
 - GovernancePolicy
@@ -74,15 +74,15 @@ Traducao no produto:
 - budgets
 - approval gates
 
-## Demanda agregada mais forte
+## Strongest aggregated demand
 
-1. Preview antes de mutacao.
-2. Verificacao de pronto.
-3. Trace e explicacao.
-4. Integracao com ferramentas reais.
+1. Preview before mutation.
+2. Readiness check.
+3. Trace and explanation.
+4. Integration with real tools.
 5. Rollback.
-6. Memory com controle.
-7. Customizacao por projeto.
-8. Evals e metrics.
-9. Protocolos seguros.
-10. Governance multi-principal.
+6. Memory with control.
+7. Customization per project.
+8. Evals and metrics.
+9. Secure protocols.
+10. Multi-principal governance.

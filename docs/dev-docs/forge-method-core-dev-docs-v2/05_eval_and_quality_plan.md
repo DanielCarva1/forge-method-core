@@ -1,17 +1,17 @@
-# Forge Method Core v2 - plano de eval, QA e qualidade
+# Forge Method Core v2 - eval, QA and quality plan
 
-## Objetivo
+## Goal
 
-Transformar decisoes de arquitetura em evidencias. Se uma feature nao melhora qualidade, custo, seguranca, explicabilidade ou confiabilidade, ela nao deve virar default.
+Turn architecture decisions into evidence. If a feature does not improve quality, cost, security, explainability or reliability, it must not become default.
 
-## Baselines obrigatorios
+## Mandatory baselines
 
 1. Single-agent anchor.
 2. WorkflowGraph single-agent.
-3. WorkflowGraph multi-agent com heterogeneidade real.
-4. Manual human-mediated flow quando fizer sentido.
+3. WorkflowGraph multi-agent with real heterogeneity.
+4. Manual human-mediated flow when it makes sense.
 
-## Metricas
+## Metrics
 
 - Task success.
 - Gate pass rate.
@@ -24,90 +24,90 @@ Transformar decisoes de arquitetura em evidencias. Se uma feature nao melhora qu
 - Rollback success.
 - Conflict detection rate.
 - Risk audit findings.
-- User comprehension para explain/preview.
+- User comprehension for explain/preview.
 
-## Evals iniciais
+## Initial evals
 
 ### Eval 1 - Preview safety
 
-Pergunta: o preview detecta corretamente mutacoes, side effects, comandos e gates antes da execucao?
+Question: does the preview correctly detect mutations, side effects, commands and gates before execution?
 
 Fixtures:
 
 - Operation read-only.
-- Operation mutavel com gate pass.
-- Operation mutavel com gate pending.
-- Operation com effect ref ausente.
-- Operation com lane claim invalida.
+- Operation mutable with gate pass.
+- Operation mutable with gate pending.
+- Operation with absent effect ref.
+- Operation with invalid lane claim.
 
 ### Eval 2 - Ready truthfulness
 
-Pergunta: o ready gate evita falso positivo?
+Question: does the ready gate avoid false positives?
 
 Fixtures:
 
-- Test pass real.
-- Test fail real.
-- Test ausente tratado como warning ou fail conforme policy.
-- Comando que falha mas tenta esconder erro.
-- Arquivo com padrao fail-soft.
+- Real test pass.
+- Real test fail.
+- Missing test treated as warning or fail per policy.
+- Command that fails but tries to hide the error.
+- File with fail-soft pattern.
 
 ### Eval 3 - Graph vs single-agent
 
-Pergunta: graph workflow melhora qualidade ou custo contra single-agent anchor?
+Question: does graph workflow improve quality or cost against the single-agent anchor?
 
-Comparar:
+Compare:
 
 - Single-agent plain.
-- Single-agent com OperationContract.
-- WorkflowGraph com verifier.
-- WorkflowGraph com replan.
+- Single-agent with OperationContract.
+- WorkflowGraph with verifier.
+- WorkflowGraph with replan.
 
 ### Eval 4 - Memory governance
 
-Pergunta: memoria ajuda sem virar autoridade falsa?
+Question: does memory help without becoming false authority?
 
-Casos:
+Cases:
 
-- Memory raw evidence correta.
-- Summary contradiz raw evidence.
-- Memory tenta promover regra sem approval.
-- Forget request remove record e impede future retrieval.
+- Memory raw evidence correct.
+- Summary contradicts raw evidence.
+- Memory tries to promote a rule without approval.
+- Forget request removes record and prevents future retrieval.
 
 ### Eval 5 - Protocol security
 
-Pergunta: MCP/A2A nao conseguem mutar estado fora de scope?
+Question: can MCP/A2A not mutate state outside of scope?
 
-Casos:
+Cases:
 
-- Tool sem capability.
-- Tool com wrong provider.
-- Delegation chain acima de depth.
+- Tool without capability.
+- Tool with wrong provider.
+- Delegation chain above depth.
 - Prompt injection via tool output.
-- A2A task sem PrincipalId.
+- A2A task without PrincipalId.
 
 ## AI Risk Audit Gate
 
-Checks iniciais:
+Initial checks:
 
-1. Exception swallowed sem log ou return fail.
-2. Test que sempre passa.
-3. Mock substituindo caminho critico sem assertion.
-4. Error convertido em success status.
-5. Security check tratado como warning quando policy exige fail.
+1. Exception swallowed without log or return fail.
+2. Test that always passes.
+3. Mock replacing a critical path without assertion.
+4. Error converted into success status.
+5. Security check treated as warning when policy requires fail.
 6. Secret hardcoded.
-7. Shell command sem argv policy.
-8. Network access sem policy.
-9. File write fora do root.
-10. Destructive operation sem inverse ou rollback.
+7. Shell command without argv policy.
+8. Network access without policy.
+9. File write outside the root.
+10. Destructive operation without inverse or rollback.
 
 ## Reports
 
-Cada eval deve gerar:
+Each eval must produce:
 
 - JSON machine-readable.
-- Markdown humano.
+- Markdown human-readable.
 - Evidence refs.
 - Trace refs.
 - Failure taxonomy.
-- Recommendation: keep, change, block ou remove.
+- Recommendation: keep, change, block or remove.

@@ -1,18 +1,18 @@
-# ADR-0004 - Trace e eval como parte do produto
+# ADR-0004 - Trace and eval as part of the product
 
 - **Status**: Proposed
 
-## Contexto
+## Context
 
-Sem trace, nao ha reproducibilidade, debug, governance ou eval confiavel.
+Without trace, there is no reproducibility, debug, governance, or reliable eval.
 
-## Decisao
+## Decision
 
-Todo run relevante gera `TraceEvent`. Toda feature de arquitetura deve ter eval comparavel.
+Every relevant run generates a `TraceEvent`. Every architecture feature must have comparable eval.
 
-## Consequencias
+## Consequences
 
-- Debug melhora.
-- QA fica mensuravel.
-- Agents externos podem ser auditados.
-- Power users ganham replay e metrics.
+- Debug improves.
+- QA becomes measurable.
+- External agents can be audited.
+- Power users gain replay and metrics.

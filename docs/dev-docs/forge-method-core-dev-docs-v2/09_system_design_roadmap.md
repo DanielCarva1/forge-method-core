@@ -1,462 +1,462 @@
-# System Design Roadmap — Saneamento Estrutural do Forge Method Core
+# System Design Roadmap — Structural Cleanup of Forge Method Core
 
-**Data**: 2026-06-29
-**Status**: Planejamento (após conversa crítica com Daniel)
-**Substitui/estende**: `08_priority_recommendations_plan.md` (R1-R9) — R1-R9 fica como
-"quick wins", este roadmap endereça os débitos estruturais que R1-R9 não cobre.
+**Date**: 2026-06-29
+**Status**: Planning (after the critical conversation with Daniel)
+**Replaces/extends**: `08_priority_recommendations_plan.md` (R1-R9) — R1-R9 stays as
+"quick wins", this roadmap addresses the structural debt that R1-R9 does not cover.
 
-## Contexto
+## Context
 
-A análise crítica do system design (2026-06-29) identificou que o design *de caixa-preta*
-(crates, contratos tipados, project link/sidecar) é sólido (~7-8/10), mas o design
-*interno* tem quatro débitos estruturais que comprometem a narrativa de "excelência
-em Rust":
+The critical analysis of the system design (2026-06-29) identified that the *black-box*
+design (crates, typed contracts, project link/sidecar) is solid (~7-8/10), but the
+*internal* design has four structural debts that compromise the "excellence
+in Rust" narrative:
 
-1. **God-file** — `forge-core-cli/src/lib.rs` com 6771 linhas, 113 funções, função
-   mais longa de 493 linhas. Mistura 7 domínios.
-2. **Cripto-na-CLI** — 14 funções de verificação criptográfica pesada
+1. **God-file** — `forge-core-cli/src/lib.rs` with 6771 lines, 113 functions, longest
+   function of 493 lines. It mixes 7 domains.
+2. **Crypto-in-the-CLI** — 14 heavy cryptographic verification functions
    (`run_host_adapter_*_verification`: sigstore, fulcio, rekor, CT, CRL, OCSP, TUF,
-   timestamp authority) vivem em `forge-core-cli`, que deveria ser só presentation.
-3. **`main.rs` monolítico** — 4116 linhas com 141 `process::exit`, tornando o
-   entrypoint não-testável como unidade.
-4. **Testes acoplados à CLI** — `tests/validate.rs` com 5215 linhas importa lógica
-   criptográfica da CLI pra testar; mudança de formato quebra teste de cripto e
-   vice-versa.
+   timestamp authority) live in `forge-core-cli`, which should be presentation only.
+3. **Monolithic `main.rs`** — 4116 lines with 141 `process::exit`, making the
+   entrypoint non-testable as a unit.
+4. **Tests coupled to the CLI** — `tests/validate.rs` with 5215 lines imports
+   cryptographic logic from the CLI to test it; a format change breaks the crypto test
+   and vice-versa.
 
-R1-R9 do plano original endereça **parcialmente** R1 (god-file), mas:
-- R1 para em "≤1500 linhas" (ainda é god-file)
-- R8 só cobre `process::exit` em **lib code**, não em `main.rs`
-- Não há recomendação para mover cripto pra fora da CLI
-- Não há recomendação para desconectar `tests/validate.rs` da CLI
+R1-R9 of the original plan **partially** addresses R1 (god-file), but:
+- R1 stops at "≤1500 lines" (still a god-file)
+- R8 only covers `process::exit` in **lib code**, not in `main.rs`
+- There is no recommendation to move crypto out of the CLI
+- There is no recommendation to disconnect `tests/validate.rs` from the CLI
 
-Este roadmap completa R1-R9 com 4 novas faixas (R10-R13) e reordena a execução.
+This roadmap completes R1-R9 with 4 new tracks (R10-R13) and reorders execution.
 
 ---
 
-## Princípios
+## Principles
 
-1. **Behavior preservation first** — nenhuma etapa muda o output observável da CLI.
-   Snapshots de `--json` são âncora de regressão.
-2. **Testes migram com o código** — quando código sai da CLI, teste correspondente
-   sai de `tests/validate.rs`.
-3. **Uma camada por vez** — refactor estrutural antes de adicionário
-   instrumentação (tracing, bench, fuzz). Caso contrário, tracing vira churn num
+1. **Behavior preservation first** — no step changes the observable output of the CLI.
+   Snapshots of `--json` are the regression anchor.
+2. **Tests migrate with the code** — when code leaves the CLI, the corresponding test
+   leaves `tests/validate.rs`.
+3. **One layer at a time** — structural refactor before adding
+   instrumentation (tracing, bench, fuzz). Otherwise, tracing becomes churn in a
    god-file.
-4. **Cada commit compila e testa verde** — sem big-bang refactors.
-5. **Crates são a unidade de isolamento** — quando um domínio (crypto, runtime,
-   store) tem >3000 linhas, é candidato a crate próprio.
-6. **Papers são evidência, não decoração** — cada recomendação cita o paper; quando
-   o código que implementa o paper existe, o link é bidirecional.
+4. **Each commit compiles and tests green** — no big-bang refactors.
+5. **Crates are the unit of isolation** — when a domain (crypto, runtime,
+   store) has >3000 lines, it is a candidate for its own crate.
+6. **Papers are evidence, not decoration** — each recommendation cites the paper; when
+   the code that implements the paper exists, the link is bidirectional.
 
 ---
 
-## Mapa de débitos → papers/features
+## Map of debts → papers/features
 
-| Débito | Papers/casos de apoio | Feature do backlog | Faixa |
+| Debt | Supporting papers/cases | Backlog feature | Track |
 |---|---|---|---|
 | God-file `lib.rs` | F15 (Rust ergonomics); AutoCodeRover (FEAT-04) | — | R1 |
-| Cripto na CLI | SLSA AI-agent (FEAT-14); F11 (Risk Audit Gate) | FEAT-13 sandbox | **R10** |
-| `main.rs` monolítico + exits | F15; "Testing in Production" (Torres) | F12 (Guided Start) | **R11** |
-| Testes acoplados à CLI | AutoCodeRover (test isolation) | F11 | **R12** |
+| Crypto in the CLI | SLSA AI-agent (FEAT-14); F11 (Risk Audit Gate) | FEAT-13 sandbox | **R10** |
+| Monolithic `main.rs` + exits | F15; "Testing in Production" (Torres) | F12 (Guided Start) | **R11** |
+| Tests coupled to the CLI | AutoCodeRover (test isolation) | F11 | **R12** |
 | Doc divergence (`04_rust_refactor_guide`) | — (housekeeping) | — | **R13** |
-| Protocolo cego para dívida Rust | F15; dogfood CLI (2026-06-29) | — | **R14** |
+| Blind protocol for Rust debt | F15; dogfood CLI (2026-06-29) | — | **R14** |
 | `Result<_, String>` legacy | F15 | — | R2 |
-| Sem `tracing` | F03 (TraceEvent canônico); DEM-06 | FEAT-07 eval bank | R3 |
-| Sem fuzz | AutoCodeRover (fault localization) | F11 | R4 |
-| Sem `zeroize` | SLSA AI-agent (FEAT-14) | FEAT-13 | R5 |
-| Sem benchmark | DEM-06; FEAT-07 | F13 (Budget/Cost) | R6 |
-| `serde_yaml` deprecated | — (ecossistema) | — | R7 |
-| `process::exit` em lib | F15 | — | R8 |
+| No `tracing` | F03 (canonical TraceEvent); DEM-06 | FEAT-07 eval bank | R3 |
+| No fuzz | AutoCodeRover (fault localization) | F11 | R4 |
+| No `zeroize` | SLSA AI-agent (FEAT-14) | FEAT-13 | R5 |
+| No benchmark | DEM-06; FEAT-07 | F13 (Budget/Cost) | R6 |
+| `serde_yaml` deprecated | — (ecosystem) | — | R7 |
+| `process::exit` in lib | F15 | — | R8 |
 | Bootstrap Exception | `CONTEXT.md` | F12 | R9 |
 
 ---
 
-## Fases (ordem de execução)
+## Phases (execution order)
 
-### Fase 0 — Decomposição estrutural (R1 estendido + R12)
+### Phase 0 — Structural decomposition (R1 extended + R12)
 
-**Meta**: `lib.rs ≤ 500 linhas`, todos os módulos ≤ 1500, `tests/validate.rs` ≤ 2000.
-**Risco**: médio (mexer em código criptográfico é delicado, mas é move puro).
-**Duração estimada**: 8-12 commits.
+**Goal**: `lib.rs ≤ 500 lines`, all modules ≤ 1500, `tests/validate.rs` ≤ 2000.
+**Risk**: medium (touching cryptographic code is delicate, but it is a pure move).
+**Estimated duration**: 8-12 commits.
 
-#### R1.A — Completar split do `lib.rs` (já em andamento)
+#### R1.A — Complete the `lib.rs` split (already in progress)
 
-Sub-faixas restantes (em ordem de risco crescente):
+Remaining sub-tracks (in order of increasing risk):
 
 - [x] R1.3 — `crypto_rekor.rs` ✓
 - [x] R1.5 — `execute_operation.rs` ✓
 - [x] R1.EffectIndex — `effect_index.rs` ✓
 - [x] R1.CryptoHashing — `crypto_hashing.rs` ✓
-- [ ] **R1.HostAdapterTypes** — linhas 81-900 (~70 tipos `HostAdapter*`, sem lógica).
-      Baixo risco, alto valor: −820 linhas.
+- [ ] **R1.HostAdapterTypes** — lines 81-900 (~70 `HostAdapter*` types, no logic).
+      Low risk, high value: −820 lines.
 - [ ] **R1.HostCommand** — `host_command`, `command_process_admission`,
       `argv_has_shell_control`, `env_key_is_forbidden`, `source_ref_is_immutable`,
-      `version_like`. ~200 linhas.
-- [ ] **R1.HostAdapterManifest** — `run_host_adapter_manifest` (493 linhas!).
-      **Dividir antes de mover**: quebrar em `build_command_section`,
+      `version_like`. ~200 lines.
+- [ ] **R1.HostAdapterManifest** — `run_host_adapter_manifest` (493 lines!).
+      **Split before moving**: break into `build_command_section`,
       `build_distribution_section`, `build_security_section` etc.
 - [ ] **R1.HostAdapterProjection** — `run_host_adapter_projection`,
       `process_security_policy`, `invocation_admission`, `project_host_command`,
       `mcp_annotations`, `command_input_schema`.
 - [ ] **R1.Validate** — `run_validate`, `validate_operation_fixtures`,
-      `validate_side_contracts`, `validate_runtime_contracts`, helpers. ~400 linhas.
-      Vai junto com `validate_helpers.rs` (`read_yaml`, `yaml_files`).
-- [ ] **R1.CryptoOCSP** — `decode_ocsp_response` + 12 helpers OCSP.
-      **Cuidado**: WIP do Codex (FRUST-052) tocou aqui. Confirmar estado estável
-      antes.
+      `validate_side_contracts`, `validate_runtime_contracts`, helpers. ~400 lines.
+      Goes together with `validate_helpers.rs` (`read_yaml`, `yaml_files`).
+- [ ] **R1.CryptoOCSP** — `decode_ocsp_response` + 12 OCSP helpers.
+      **Careful**: Codex WIP (FRUST-052) touched here. Confirm stable state
+      before.
 - [ ] **R1.CryptoTUFDateTime** — `verify_tuf_metadata_freshness_role`,
-      `parse_tuf_datetime_utc_to_unix`, helpers de calendário gregoriano.
+      `parse_tuf_datetime_utc_to_unix`, Gregorian calendar helpers.
 - [ ] **R1.CryptoSigstore** — `verify_sigstore_*`, `verify_fulcio_chain`, etc.
-      ~1270 linhas. **Maior faixa isolada** — provável candidato a crate próprio
-      (ver R10).
+      ~1270 lines. **Largest isolated track** — likely candidate for its own crate
+      (see R10).
 - [ ] **R1.CryptoSLSATransparency** — `verify_slsa_statement`,
       `verify_transparency_log_proof`, `verify_merkle_inclusion`.
-- [ ] **R1.HostAdapterVerification** — as 14 `run_host_adapter_*_verification`
-      públicas. **Estas vão para o crate novo em R10**, não ficam na CLI.
+- [ ] **R1.HostAdapterVerification** — the 14 public `run_host_adapter_*_verification`.
+      **These go to the new crate in R10**, they do not stay in the CLI.
 
-#### R12 — Desacoplar `tests/validate.rs` da CLI
+#### R12 — Decouple `tests/validate.rs` from the CLI
 
-`tests/validate.rs` (5215 linhas) importa da CLI coisas que não são de CLI:
-contrato parsing, cripto verify, etc.
+`tests/validate.rs` (5215 lines) imports from the CLI things that are not CLI:
+contract parsing, crypto verify, etc.
 
-- [ ] **R12.1** — Inventariar o que `tests/validate.rs` realmente testa:
-      contract flows (deve ir pra `forge-core-contracts`), crypto flows (vai pra
-      `forge-core-crypto` em R10), CLI flows (fica).
-- [ ] **R12.2** — Mover testes de contract parsing para
-      `crates/forge-core-contracts/tests/` ou `forge-core-validate/tests/`.
-- [ ] **R12.3** — Mover testes de crypto verification para o futuro
-      `forge-core-crypto/tests/` (após R10).
-- [ ] **R12.4** — Reduzir `tests/validate.rs` a testes de **apresentação da CLI**:
+- [ ] **R12.1** — Inventory what `tests/validate.rs` actually tests:
+      contract flows (should go to `forge-core-contracts`), crypto flows (go to
+      `forge-core-crypto` in R10), CLI flows (stay).
+- [ ] **R12.2** — Move contract parsing tests to
+      `crates/forge-core-contracts/tests/` or `forge-core-validate/tests/`.
+- [ ] **R12.3** — Move crypto verification tests to the future
+      `forge-core-crypto/tests/` (after R10).
+- [ ] **R12.4** — Reduce `tests/validate.rs` to tests of **CLI presentation**:
       JSON shape, exit codes, help text, argv parsing.
-- [ ] **R12.5** — Snapshot test da saída `--json` de cada subcomando como
-      âncora de regressão.
+- [ ] **R12.5** — Snapshot test of the `--json` output of each subcommand as a
+      regression anchor.
 
-**DoD Fase 0**: `lib.rs ≤ 500 linhas`, `tests/validate.rs ≤ 2000 linhas`, todos os
-gates verdes, snapshot de CLI output inalterado.
+**Phase 0 DoD**: `lib.rs ≤ 500 lines`, `tests/validate.rs ≤ 2000 lines`, all
+gates green, CLI output snapshot unchanged.
 
 ---
 
-### Fase 1 — Mover cripto para fora da CLI (R10)
+### Phase 1 — Move crypto out of the CLI (R10)
 
-**Meta**: criar `forge-core-crypto` crate e mover as 14 funções de verificação +
-helpers OCSP/CRL/sigstore/CT/TSA.
-**Risco**: alto (maior refactor estrutural; toca testes, main.rs, lib.rs).
-**Duração estimada**: 6-10 commits.
+**Goal**: create the `forge-core-crypto` crate and move the 14 verification
+functions + OCSP/CRL/sigstore/CT/TSA helpers.
+**Risk**: high (largest structural refactor; touches tests, main.rs, lib.rs).
+**Estimated duration**: 6-10 commits.
 
-#### R10.1 — Criar `crates/forge-core-crypto/` esqueleto
+#### R10.1 — Create `crates/forge-core-crypto/` skeleton
 
-- [ ] `Cargo.toml` com deps cripto (`asn1-rs`, `base64`, `ed25519-dalek`, `p256`,
+- [ ] `Cargo.toml` with crypto deps (`asn1-rs`, `base64`, `ed25519-dalek`, `p256`,
       `rasn`, `rasn-ocsp`, `sha1`, `sha2`, `sct`, `sigstore-tsa`,
       `rustls-pki-types`, `x509-parser`).
-- [ ] Depende de `forge-core-contracts` (para tipos de contrato de verificação).
-- [ ] Não depende de `forge-core-cli` nem de `forge-core-kernel`.
-- [ ] Adicionar ao workspace `members`.
+- [ ] Depends on `forge-core-contracts` (for verification contract types).
+- [ ] Does not depend on `forge-core-cli` or `forge-core-kernel`.
+- [ ] Add to workspace `members`.
 
-#### R10.2 — Mover módulos crypto da CLI
+#### R10.2 — Move crypto modules from the CLI
 
-Em ordem:
+In order:
 
-- [ ] `crypto_hashing.rs` (já isolado na CLI) → `forge-core-crypto/src/hashing.rs`
+- [ ] `crypto_hashing.rs` (already isolated in the CLI) → `forge-core-crypto/src/hashing.rs`
 - [ ] `crypto_rekor.rs` → `forge-core-crypto/src/rekor.rs`
-- [ ] `crypto_ocsp.rs` (a criar em R1.CryptoOCSP) → `forge-core-crypto/src/ocsp.rs`
-- [ ] `crypto_sigstore.rs` (a criar em R1.CryptoSigstore) →
+- [ ] `crypto_ocsp.rs` (to be created in R1.CryptoOCSP) → `forge-core-crypto/src/ocsp.rs`
+- [ ] `crypto_sigstore.rs` (to be created in R1.CryptoSigstore) →
       `forge-core-crypto/src/sigstore.rs`
 - [ ] `crypto_slsa_transparency.rs` → `forge-core-crypto/src/slsa.rs`
-- [ ] As 14 `run_host_adapter_*_verification` →
+- [ ] The 14 `run_host_adapter_*_verification` →
       `forge-core-crypto/src/host_adapter_verification.rs`
 
-#### R10.3 — Mover testes correspondentes
+#### R10.3 — Move corresponding tests
 
-- [ ] De `tests/validate.rs` para `crates/forge-core-crypto/tests/`.
-- [ ] Atualizar imports nos testes: de `forge_core_cli::*` para
+- [ ] From `tests/validate.rs` to `crates/forge-core-crypto/tests/`.
+- [ ] Update imports in tests: from `forge_core_cli::*` to
       `forge_core_crypto::*`.
 
-#### R10.4 — CLI vira cliente fino
+#### R10.4 — CLI becomes a thin client
 
-- [ ] `forge-core-cli/Cargo.toml` adiciona `forge-core-crypto` como dep.
-- [ ] `lib.rs` faz `pub use forge_core_crypto::*` (transitivo) ou call sites
-      atualizados.
-- [ ] `main.rs` chama `forge_core_crypto::run_host_adapter_*_verification`.
+- [ ] `forge-core-cli/Cargo.toml` adds `forge-core-crypto` as a dep.
+- [ ] `lib.rs` does `pub use forge_core_crypto::*` (transitive) or call sites
+      updated.
+- [ ] `main.rs` calls `forge_core_crypto::run_host_adapter_*_verification`.
 
 #### R10.5 — DoD
 
-- [ ] `forge-core-cli/src/lib.rs` < 1500 linhas (só host adapter types + manifest
+- [ ] `forge-core-cli/src/lib.rs` < 1500 lines (only host adapter types + manifest
       + validate).
-- [ ] `forge-core-crypto` tem zero deps em `forge-core-cli` ou `forge-core-kernel`.
-- [ ] Todos os gates verdes.
-- [ ] CLI output snapshot inalterado.
+- [ ] `forge-core-crypto` has zero deps on `forge-core-cli` or `forge-core-kernel`.
+- [ ] All gates green.
+- [ ] CLI output snapshot unchanged.
 
 ---
 
-### Fase 2 — Disciplina de erro (R2 + R8 + R11 parcial)
+### Phase 2 — Error discipline (R2 + R8 + R11 partial)
 
-**Meta**: zero `Result<_, String>` novo, zero `process::exit` em lib **e** em
-main.rs, erros propagam por `Result` até o topo.
-**Risco**: médio (R11 muda fluxo de erro mas não behavior).
-**Duração estimada**: 8-12 commits.
+**Goal**: zero new `Result<_, String>`, zero `process::exit` in lib **and** in
+main.rs, errors propagate via `Result` to the top.
+**Risk**: medium (R11 changes error flow but not behavior).
+**Estimated duration**: 8-12 commits.
 
-#### R2 — Migrar `Result<_, String>` residuais
+#### R2 — Migrate residual `Result<_, String>`
 
-Inventário recente mostrou que só **1 site** sobra em `forge-core-store/src/lib.rs`.
-Os 17 originais do plano foram parcialmente migrados por trabalho anterior.
+A recent inventory showed that only **1 site** remains in `forge-core-store/src/lib.rs`.
+The original 17 from the plan were partially migrated by previous work.
 
-- [ ] **R2.1** — Confirmar inventário atual (grep por `Result<.*, String>`).
-- [ ] **R2.2** — Migrar o site em `forge-core-store`.
-- [ ] **R2.3** — Adicionar lint `clippy::result_large_err` ou custom check CI
-      rejeitando novos `Result<_, String>`.
+- [ ] **R2.1** — Confirm the current inventory (grep for `Result<.*, String>`).
+- [ ] **R2.2** — Migrate the site in `forge-core-store`.
+- [ ] **R2.3** — Add a `clippy::result_large_err` lint or custom CI check
+      rejecting new `Result<_, String>`.
 
-#### R8 — Remover `process::exit` de lib code
+#### R8 — Remove `process::exit` from lib code
 
-- [ ] **R8.1** — Inventariar (grep `process::exit` em `crates/*/src/`).
-- [ ] **R8.2** — `contract_cmd.rs`, `autonomy_cmd.rs` (mencionados no plano).
-- [ ] **R8.3** — Substituir por `Result<T, CliError>` propagando até `main.rs`.
+- [ ] **R8.1** — Inventory (grep `process::exit` in `crates/*/src/`).
+- [ ] **R8.2** — `contract_cmd.rs`, `autonomy_cmd.rs` (mentioned in the plan).
+- [ ] **R8.3** — Replace with `Result<T, CliError>` propagating up to `main.rs`.
 
-#### R11 — Decompor `main.rs` (4116 linhas, 141 exits)
+#### R11 — Decompose `main.rs` (4116 lines, 141 exits)
 
-`main.rs` é o **entrypoint monolítico**: parse argv, dispatch, format output,
-exit. Hoje tudo num arquivo só.
+`main.rs` is the **monolithic entrypoint**: parse argv, dispatch, format output,
+exit. Today everything is in a single file.
 
-- [ ] **R11.1** — Inventariar sub-comandos em `main.rs`.
-- [ ] **R11.2** — Criar `crates/forge-core-cli/src/commands/` com um módulo por
-      família: `validate_cmd.rs`, `execute_operation_cmd.rs`,
+- [ ] **R11.1** — Inventory sub-commands in `main.rs`.
+- [ ] **R11.2** — Create `crates/forge-core-cli/src/commands/` with one module per
+      family: `validate_cmd.rs`, `execute_operation_cmd.rs`,
       `claim_cmd.rs`, `host_adapter_cmd.rs`, etc.
-- [ ] **R11.3** — Cada `*_cmd.rs` expõe `fn run(args: &[String]) -> Result<ExitCode,
+- [ ] **R11.3** — Each `*_cmd.rs` exposes `fn run(args: &[String]) -> Result<ExitCode,
       CliError>`.
-- [ ] **R11.4** — `main.rs` reduz a: init tracing → parse top-level → dispatch →
-      match error → `process::exit(code)`. **Único** `process::exit` do crate fica
-      aqui.
-- [ ] **R11.5** — Define `CliError` enum tipado (hand-rolled, sem thiserror):
+- [ ] **R11.4** — `main.rs` is reduced to: init tracing → parse top-level → dispatch →
+      match error → `process::exit(code)`. The **only** `process::exit` in the crate
+      stays here.
+- [ ] **R11.5** — Define a typed `CliError` enum (hand-rolled, no thiserror):
       `InvalidArgs(String)`, `SubcommandFailed(any error)`, `Io(std::io::Error)`.
-- [ ] **R11.6** — `tests/cli_smoke.rs` testa cada subcomando via `assert_cmd` e
-      verifica exit code + stderr shape (não conteúdo criptográfico).
+- [ ] **R11.6** — `tests/cli_smoke.rs` tests each subcommand via `assert_cmd` and
+      checks exit code + stderr shape (not cryptographic content).
 
-**DoD Fase 2**: zero `process::exit` em `crates/*/src/` (exceto 1 no `main.rs`
-topo), zero `Result<_, String>` em código novo, `main.rs < 200` linhas, cada
-`*_cmd.rs < 500` linhas.
+**Phase 2 DoD**: zero `process::exit` in `crates/*/src/` (except 1 in the top-level
+`main.rs`), zero `Result<_, String>` in new code, `main.rs < 200` lines, each
+`*_cmd.rs < 500` lines.
 
 ---
 
-### Fase 3 — Observabilidade (R3)
+### Phase 3 — Observability (R3)
 
-**Meta**: `tracing` estruturado em todo caminho crítico, JSON subscriber default
-para consumo por agentes.
-**Risco**: baixo (additivo).
-**Duração estimada**: 5-8 commits.
+**Goal**: structured `tracing` on every critical path, JSON subscriber default
+for consumption by agents.
+**Risk**: low (additive).
+**Estimated duration**: 5-8 commits.
 
-#### R3.1 — Deps e init
+#### R3.1 — Deps and init
 
-- [ ] Adicionar `tracing`, `tracing-subscriber` ao workspace deps.
-- [ ] `main.rs` init subscriber com `EnvFilter` e JSON formatter default.
-- [ ] Flag `--log-format human|json` (default json para agentes).
+- [ ] Add `tracing`, `tracing-subscriber` to workspace deps.
+- [ ] `main.rs` init subscriber with `EnvFilter` and JSON formatter default.
+- [ ] Flag `--log-format human|json` (default json for agents).
 
-#### R3.2 — Spans em caminhos críticos
+#### R3.2 — Spans on critical paths
 
-Em ordem de valor:
+In order of value:
 
-- [ ] `forge-core-store::claim_wal` (append, rotate, replay) — span por operação
-      com `tx_id`, `claim_id`.
-- [ ] `forge-core-kernel::execute_operation` — span com `operation_id`,
+- [ ] `forge-core-store::claim_wal` (append, rotate, replay) — span per operation
+      with `tx_id`, `claim_id`.
+- [ ] `forge-core-kernel::execute_operation` — span with `operation_id`,
       `effect_count`.
-- [ ] `forge-core-crypto::run_host_adapter_*_verification` — span com
+- [ ] `forge-core-crypto::run_host_adapter_*_verification` — span with
       `verification_kind`, `subject_ref`, `result`.
-- [ ] `forge-core-validate::run_validate` — span com `root`, `diagnostic_count`.
-- [ ] `forge-core-cli::run_execute_operation` — span com `root`, `payload_count`.
+- [ ] `forge-core-validate::run_validate` — span with `root`, `diagnostic_count`.
+- [ ] `forge-core-cli::run_execute_operation` — span with `root`, `payload_count`.
 
-#### R3.3 — Correlação multi-agente
+#### R3.3 — Multi-agent correlation
 
-- [ ] Cada agent session recebe um `agent_id` (de claim ou CLI arg).
-- [ ] Spans carregam `agent_id` como field.
-- [ ] JSON log permite filtrar `agent_id=X` para ver só o que um agente fez.
+- [ ] Each agent session receives an `agent_id` (from claim or CLI arg).
+- [ ] Spans carry `agent_id` as a field.
+- [ ] JSON log allows filtering `agent_id=X` to see only what one agent did.
 
-#### R3.4 — Remover `eprintln!` de lib code
+#### R3.4 — Remove `eprintln!` from lib code
 
-- [ ] grep `eprintln!` em `crates/*/src/`, migrar para `tracing::warn!`/`error!`.
-- [ ] `println!` em lib code só onde é o contrato de output (JSON para stdout).
+- [ ] grep `eprintln!` in `crates/*/src/`, migrate to `tracing::warn!`/`error!`.
+- [ ] `println!` in lib code only where it is the output contract (JSON to stdout).
 
-**DoD Fase 3**: logs estruturados JSON em todos os caminhos críticos, zero
-`eprintln!` em `crates/*/src/` (exceto main.rs fallback sem subscriber).
+**Phase 3 DoD**: structured JSON logs on all critical paths, zero
+`eprintln!` in `crates/*/src/` (except main.rs fallback without subscriber).
 
 ---
 
-### Fase 4 — Evidência de qualidade (R6 + R4)
+### Phase 4 — Quality evidence (R6 + R4)
 
-**Meta**: benchmarks para hot paths, fuzz harness para parsers.
-**Risco**: muito baixo (additivo, não toca em código de produção).
-**Duração estimada**: 4-6 commits.
+**Goal**: benchmarks for hot paths, fuzz harness for parsers.
+**Risk**: very low (additive, does not touch production code).
+**Estimated duration**: 4-6 commits.
 
 #### R6 — `criterion` benchmarks
 
-- [ ] **R6.1** — Adicionar `criterion` ao workspace. Criar
+- [ ] **R6.1** — Add `criterion` to the workspace. Create
       `crates/forge-core-store/benches/claim_wal.rs`.
 - [ ] **R6.2** — Bench: WAL append (1, 100, 1000 entries), WAL replay, CRC verify.
-- [ ] **R6.3** — Bench: `build_reference_index` em repo de tamanho variado.
-- [ ] **R6.4** — Bench: `serde_yaml::from_str` vs `serde_yml::from_str` (após R7)
-      de contract documento.
+- [ ] **R6.3** — Bench: `build_reference_index` on a repo of varying size.
+- [ ] **R6.4** — Bench: `serde_yaml::from_str` vs `serde_yml::from_str` (after R7)
+      of a contract document.
 - [ ] **R6.5** — Bench: `verify_rekor_checkpoint`, `verify_merkle_inclusion`.
-- [ ] **R6.6** — CI roda bench em PR com label `perf` e compara com `main`.
+- [ ] **R6.6** — CI runs bench on PR with label `perf` and compares with `main`.
 
 #### R4 — `cargo-fuzz`
 
-- [ ] **R4.1** — Criar `fuzz/` diretório no workspace (cargo-fuzz exige isso).
-- [ ] **R4.2** — Target: `parse_rekor_log_entry` (parse de JSON adversarial).
-- [ ] **R4.3** — Target: `parse_signed_checkpoint` (decode de base64 adversarial).
-- [ ] **R4.4** — Target: `claim_wal_decode` (NDJSON adversarial).
-- [ ] **R4.5** — Target: `ocsp_response_decode` (DER adversarial).
-- [ ] **R4.6** — Documentar execução em `docs/dev-docs/.../fuzzing.md` com
-      comando `cargo fuzz run <target> -- -max_total_time=60`.
+- [ ] **R4.1** — Create `fuzz/` directory in the workspace (cargo-fuzz requires this).
+- [ ] **R4.2** — Target: `parse_rekor_log_entry` (parse of adversarial JSON).
+- [ ] **R4.3** — Target: `parse_signed_checkpoint` (decode of adversarial base64).
+- [ ] **R4.4** — Target: `claim_wal_decode` (adversarial NDJSON).
+- [ ] **R4.5** — Target: `ocsp_response_decode` (adversarial DER).
+- [ ] **R4.6** — Document execution in `docs/dev-docs/.../fuzzing.md` with
+      command `cargo fuzz run <target> -- -max_total_time=60`.
 
-**DoD Fase 4**: `cargo bench` roda sem erro, `cargo fuzz run` em cada target por
-≥1 min sem panic.
+**Phase 4 DoD**: `cargo bench` runs without error, `cargo fuzz run` on each target
+for ≥1 min without panic.
 
 ---
 
-### Fase 5 — Supply chain e segurança (R7 + R5)
+### Phase 5 — Supply chain and security (R7 + R5)
 
-**Meta**: `serde_yaml` removido, material cripto zeroizado.
-**Risco**: R7 médio (API diff), R5 baixo.
-**Duração estimada**: 4-6 commits.
+**Goal**: `serde_yaml` removed, crypto material zeroized.
+**Risk**: R7 medium (API diff), R5 low.
+**Estimated duration**: 4-6 commits.
 
 #### R7 — `serde_yaml` → `serde_yml`
 
-- [ ] **R7.1** — Inventariar todos os usos (`grep -r "serde_yaml"` em crates/).
-- [ ] **R7.2** — Trocar dep no workspace `Cargo.toml`. `serde_yml` é fork ativo
-      API-compatível na maioria dos casos.
-- [ ] **R7.3** — Migrar imports `serde_yaml::` → `serde_yml::`.
-- [ ] **R7.4** — Rodar fuzz (R4) e bench (R6) para validar equivalência.
-- [ ] **R7.5** — Remover `serde_yaml` do workspace.
+- [ ] **R7.1** — Inventory all uses (`grep -r "serde_yaml"` in crates/).
+- [ ] **R7.2** — Swap the dep in the workspace `Cargo.toml`. `serde_yml` is an active
+      API-compatible fork in most cases.
+- [ ] **R7.3** — Migrate imports `serde_yaml::` → `serde_yml::`.
+- [ ] **R7.4** — Run fuzz (R4) and bench (R6) to validate equivalence.
+- [ ] **R7.5** — Remove `serde_yaml` from the workspace.
 
 #### R5 — `zeroize`
 
-- [ ] **R5.1** — Inventariar material cripto: chaves públicas decodificadas
-      (`VerifyingKey`, `ed25519_dalek::VerifyingKey`), assinaturas brutas, nonces
-      OCSP, conteúdo de payload antes do hash.
-- [ ] **R5.2** — Adicionar `zeroize` (1.x) ao workspace.
-- [ ] **R5.3** — Wrap em `Zeroizing<Vec<u8>>` onde aplicável. Para tipos de crate
-      externo (ed25519, p256), usar `Zeroizing<Box<[u8]>>` pra bytes intermediários.
-- [ ] **R5.4** — Comparações manuais de hash/nonce em constant-time
-      (`subtle::ConstantTimeEq` se já não estiver).
-- [ ] **R5.5** — Fuzz (R4) re-rodado para confirmar zero panics após wraps.
+- [ ] **R5.1** — Inventory crypto material: decoded public keys
+      (`VerifyingKey`, `ed25519_dalek::VerifyingKey`), raw signatures, OCSP
+      nonces, payload content before hashing.
+- [ ] **R5.2** — Add `zeroize` (1.x) to the workspace.
+- [ ] **R5.3** — Wrap in `Zeroizing<Vec<u8>>` where applicable. For external crate
+      types (ed25519, p256), use `Zeroizing<Box<[u8]>>` for intermediate bytes.
+- [ ] **R5.4** — Manual hash/nonce comparisons in constant-time
+      (`subtle::ConstantTimeEq` if not already).
+- [ ] **R5.5** — Fuzz (R4) re-run to confirm zero panics after wraps.
 
-**DoD Fase 5**: `cargo tree | grep serde_yaml` vazio, zero `Vec<u8>` com material
-cripto sem `Zeroizing<>`.
+**Phase 5 DoD**: `cargo tree | grep serde_yaml` empty, zero `Vec<u8>` with crypto
+material without `Zeroizing<>`.
 
 ---
 
-### Fase 6 — Documentação e rastreabilidade (R13 + R14 + R9)
+### Phase 6 — Documentation and traceability (R13 + R14 + R9)
 
-**Meta**: docs alinhadas com `AGENTS.md`, papers rastreáveis, Bootstrap Exception
-removido.
-**Risco**: baixo.
-**Duração estimada**: 3-5 commits.
+**Goal**: docs aligned with `AGENTS.md`, traceable papers, Bootstrap Exception
+removed.
+**Risk**: low.
+**Estimated duration**: 3-5 commits.
 
-#### R13 — Alinhar docs com realidade
+#### R13 — Align docs with reality
 
-- [ ] **R13.1** — `04_rust_refactor_guide.md`: remover menções a `thiserror` e
-      `clap` derive (proibidos por `AGENTS.md`). Substituir por "roll error enums
+- [ ] **R13.1** — `04_rust_refactor_guide.md`: remove mentions of `thiserror` and
+      `clap` derive (forbidden by `AGENTS.md`). Replace with "roll error enums
       by hand, derive `Debug, Clone, PartialEq, Eq`".
-- [ ] **R13.2** — Auditar todos os dev-docs por recomendações que contrariam
+- [ ] **R13.2** — Audit all dev-docs for recommendations that contradict
       `AGENTS.md`.
-- [ ] **R13.3** — Para cada paper em `contracts/research/`, criar entrada em
+- [ ] **R13.3** — For each paper in `contracts/research/`, create an entry in
       `docs/dev-docs/.../paper_implementation_status.md`:
       ```
-      | Paper | Status | Onde no código | Próximo passo |
+      | Paper | Status | Where in code | Next step |
       |---|---|---|---|
-      | selfhealing-wal-crc-design-v1 | ✅ implementado | claim_wal.rs L400-500 | — |
-      | AutoCodeRover | 🟡 parcial | — | Fuzz targets (R4) |
-      | rust-observability-selfhealing | 🔴 não iniciado | — | R3 tracing |
+      | selfhealing-wal-crc-design-v1 | ✅ implemented | claim_wal.rs L400-500 | — |
+      | AutoCodeRover | 🟡 partial | — | Fuzz targets (R4) |
+      | rust-observability-selfhealing | 🔴 not started | — | R3 tracing |
       ```
-- [ ] **R13.4** — `README.md`: revisitar "best practices and scientific papers"
-      claim. Adicionar seção "Evidence" linkando para
+- [ ] **R13.4** — `README.md`: revisit the "best practices and scientific papers"
+      claim. Add an "Evidence" section linking to
       `paper_implementation_status.md`.
 
-#### R14 — Auditoria de dívida técnica Rust (auto-dogfood)
+#### R14 — Rust technical debt audit (self-dogfood)
 
-**Contexto**: o dogfood via CLI (`forge-core-cli validate --root .` no próprio
-repo) revelou um gap estrutural: o Forge só valida **contratos YAML**, não audita
-**qualidade estrutural do código Rust**. Hoje `lib.rs` com 6782 linhas,
-`Result<_, String>` legado, `serde_yaml` em maintenance, funções de 493 linhas —
-tudo passa no `validate` com zero diagnósticos. O protocolo é cego para o que mais
-dói.
+**Context**: the dogfood via CLI (`forge-core-cli validate --root .` on the repo
+itself) revealed a structural gap: Forge only validates **YAML contracts**, it does not
+audit the **structural quality of Rust code**. Today `lib.rs` with 6782 lines,
+legacy `Result<_, String>`, `serde_yaml` in maintenance, functions of 493 lines —
+all pass `validate` with zero diagnostics. The protocol is blind to what hurts
+most.
 
-- [ ] **R14.1** — Inventariar categorias de dívida que o Forge deveria flaggear:
-      god-files (>1500 linhas), god-functions (>200 linhas), `Result<_, String>`,
-      `process::exit` em lib code, deps em maintenance mode, ausência de
-      `tracing`/`zeroize` em caminhos sensíveis.
-- [ ] **R14.2** — Projetar um validator `rust_structural_health` em
-      `forge-core-validate` que emita `Diagnostic::warning`/`error` para cada
-      categoria. Usar `syn` para parsing (já é dep transitiva via `serde_derive`).
-- [ ] **R14.3** — Adicionar o validator ao pipeline de `run_validate` como
-      *opt-in* (gate `--include-rust-health` ou policy YAML), para não quebrar
-      consumers que só querem validar contratos YAML.
-- [ ] **R14.4** — Dogfood: rodar o novo validator no próprio repo. O objetivo é
-      que ele emita diagnósticos sobre o próprio Forge — vira prova viva do
-      protocolo.
-- [ ] **R14.5** — Documentar em `README.md` (seção Evidence) que o Forge audita a
-      própria saúde estrutural, com screenshot do output.
+- [ ] **R14.1** — Inventory the categories of debt Forge should flag:
+      god-files (>1500 lines), god-functions (>200 lines), `Result<_, String>`,
+      `process::exit` in lib code, deps in maintenance mode, absence of
+      `tracing`/`zeroize` on sensitive paths.
+- [ ] **R14.2** — Design a `rust_structural_health` validator in
+      `forge-core-validate` that emits `Diagnostic::warning`/`error` for each
+      category. Use `syn` for parsing (already a transitive dep via `serde_derive`).
+- [ ] **R14.3** — Add the validator to the `run_validate` pipeline as
+      *opt-in* (gate `--include-rust-health` or YAML policy), so as not to break
+      consumers who only want to validate YAML contracts.
+- [ ] **R14.4** — Dogfood: run the new validator on the repo itself. The goal is
+      that it emits diagnostics about Forge itself — it becomes living proof of
+      the protocol.
+- [ ] **R14.5** — Document in `README.md` (Evidence section) that Forge audits its
+      own structural health, with a screenshot of the output.
 
-**DoD R14**: existe validator `rust_structural_health` em `forge-core-validate`,
-rodando no próprio repo, emitindo pelo menos 1 warning por categoria conhecida.
+**R14 DoD**: there is a `rust_structural_health` validator in `forge-core-validate`,
+running on the repo itself, emitting at least 1 warning per known category.
 
-#### R9 — Fechar Bootstrap Core Exception
+#### R9 — Close Bootstrap Core Exception
 
-- [ ] **R9.1** — Inventariar uso de `--allow-bootstrap-core` em testes e scripts.
-- [ ] **R9.2** — Configurar sidecar real para o repo do Forge (`<repo-root>`
-      aponta pra sidecar separado).
-- [ ] **R9.3** — Migrar testes que usam `--allow-bootstrap-core` para resolver
-      sidecar real.
-- [ ] **R9.4** — Remover flag de production code paths.
-- [ ] **R9.5** — Atualizar `CONTEXT.md` "Bootstrap Gaps" → mark as resolved.
+- [ ] **R9.1** — Inventory use of `--allow-bootstrap-core` in tests and scripts.
+- [ ] **R9.2** — Configure a real sidecar for the Forge repo (`<repo-root>`
+      points to a separate sidecar).
+- [ ] **R9.3** — Migrate tests that use `--allow-bootstrap-core` to resolve a
+      real sidecar.
+- [ ] **R9.4** — Remove the flag from production code paths.
+- [ ] **R9.5** — Update `CONTEXT.md` "Bootstrap Gaps" → mark as resolved.
 
-**DoD Fase 6**: dev-docs 100% alinhadas com `AGENTS.md`, every paper has status,
-`--allow-bootstrap-core` removido de production paths, validator de saúde
-estrutural (`R14`) rodando no próprio repo.
-
----
-
-## Ordem de execução consolidada
-
-```
-Fase 0  ── R1 estendido + R12     (decomposição estrutural)
-            │
-            ▼
-Fase 1  ── R10                    (criar forge-core-crypto)
-            │
-            ▼
-Fase 2  ── R2 + R8 + R11          (disciplina de erro)
-            │
-            ▼
-Fase 3  ── R3                     (tracing)
-            │
-            ▼
-Fase 4  ── R6 + R4                (bench + fuzz)
-            │
-            ▼
-Fase 5  ── R7 + R5                (deps + zeroize)
-            │
-            ▼
-Fase 6  ── R13 + R9               (docs + bootstrap)
-```
-
-**Rationale da ordem**:
-1. Fase 0 primeiro: decompõe god-file para que as fases seguintes apliquem
-   mudanças em módulos pequenos, não num monólito.
-2. Fase 1 (R10) depois de Fase 0: move cripto para seu crate **antes** de
-   adicionar tracing/fuzz — caso contrário, instrumentação fica na CLI e tem que
-   migrar de novo.
-3. Fase 2 antes de Fase 3: remover `process::exit` permite que tracing captures
-   erros propagados, em vez de silenciados por exit.
-4. Fase 3 antes de Fase 4: tracing permite que benchmarks tenham spans;
-   fuzzing beneficia de error types tipados (Fase 2).
-5. Fase 5 independente, mas depois de Fase 0 pra reduzir churn.
-6. Fase 6 por último: docs refletem realidade final, não intermediária.
+**Phase 6 DoD**: dev-docs 100% aligned with `AGENTS.md`, every paper has status,
+`--allow-bootstrap-core` removed from production paths, structural health
+validator (`R14`) running on the repo itself.
 
 ---
 
-## Estimativa total
+## Consolidated execution order
 
-| Fase | Faixas | Commits | Sessões (~2h) |
+```
+Phase 0  ── R1 extended + R12     (structural decomposition)
+            │
+            ▼
+Phase 1  ── R10                    (create forge-core-crypto)
+            │
+            ▼
+Phase 2  ── R2 + R8 + R11          (error discipline)
+            │
+            ▼
+Phase 3  ── R3                     (tracing)
+            │
+            ▼
+Phase 4  ── R6 + R4                (bench + fuzz)
+            │
+            ▼
+Phase 5  ── R7 + R5                (deps + zeroize)
+            │
+            ▼
+Phase 6  ── R13 + R9               (docs + bootstrap)
+```
+
+**Rationale for the order**:
+1. Phase 0 first: decomposes the god-file so that the following phases apply
+   changes to small modules, not to a monolith.
+2. Phase 1 (R10) after Phase 0: moves crypto to its crate **before**
+   adding tracing/fuzz — otherwise, instrumentation stays in the CLI and has to
+   migrate again.
+3. Phase 2 before Phase 3: removing `process::exit` allows tracing to capture
+   propagated errors, instead of silencing them via exit.
+4. Phase 3 before Phase 4: tracing allows benchmarks to have spans;
+   fuzzing benefits from typed error types (Phase 2).
+5. Phase 5 independent, but after Phase 0 to reduce churn.
+6. Phase 6 last: docs reflect the final reality, not the intermediate one.
+
+---
+
+## Total estimate
+
+| Phase | Tracks | Commits | Sessions (~2h) |
 |---|---|---|---|
-| 0 | R1 estendido + R12 | 8-12 | 4-6 |
+| 0 | R1 extended + R12 | 8-12 | 4-6 |
 | 1 | R10 | 6-10 | 3-5 |
 | 2 | R2 + R8 + R11 | 8-12 | 4-6 |
 | 3 | R3 | 5-8 | 2-4 |
@@ -465,44 +465,44 @@ Fase 6  ── R13 + R9               (docs + bootstrap)
 | 6 | R13 + R14 + R9 | 5-8 | 2-3 |
 | **Total** | R1-R14 | **40-64** | **19-31** |
 
-**Trade-off**: dá pra paralelizar Fase 4 (bench/fuzz) e Fase 5 (deps/zeroize)
-com Fase 2-3, mas **não** dá pra paralelizar nada com Fase 0 ou Fase 1.
+**Trade-off**: it is possible to parallelize Phase 4 (bench/fuzz) and Phase 5 (deps/zeroize)
+with Phase 2-3, but it is **not** possible to parallelize anything with Phase 0 or Phase 1.
 
 ---
 
 ## Tracking
 
-Cada faixa (R1-R13) tem um arquivo de progresso em `dev-journals/` no sibling
-repo `Forge-method-archive`. Convenção:
+Each track (R1-R13) has a progress file in `dev-journals/` in the sibling
+repo `Forge-method-archive`. Convention:
 
-- `r1_lib_inventory.md` (existe)
+- `r1_lib_inventory.md` (exists)
 - `r10_crypto_crate.md`
 - `r11_main_rs_decomposition.md`
 - `r12_test_decoupling.md`
 - etc.
 
-Status de cada sub-tarefa marcado em linha com commits. Quando uma fase termina,
-atualizar este doc com data e link para commits.
+Status of each sub-task is marked inline with commits. When a phase ends,
+update this doc with date and link to commits.
 
 ---
 
-## Riscos e mitigações
+## Risks and mitigations
 
-| Risco | Probabilidade | Impacto | Mitigação |
+| Risk | Probability | Impact | Mitigation |
 |---|---|---|---|
-| R1.CryptoOCSP pisa em WIP Codex | Média | Alto | Confirmar `37aa52d` estável; esperar Codex confirmar antes |
-| R10 quebra callers externos | Baixa | Alto | Re-exports preservam API; smoke test de CLI output |
-| R11 muda exit codes | Média | Médio | Snapshot de exit code antes/depois; documentar mudanças |
-| R7 `serde_yml` drop-in falha | Baixa | Médio | Fazer em branch separada; fuzz valida equivalência |
-| Fuzz encontra panic | Alta | Médio | **Esperado** — é o objetivo. Documentar como bug separado |
-| Scope creep em R13 | Alta | Baixo | Limitar a 1 sessão; papers sem código viram issue, não trabalho |
+| R1.CryptoOCSP steps on Codex WIP | Medium | High | Confirm `37aa52d` stable; wait for Codex to confirm before |
+| R10 breaks external callers | Low | High | Re-exports preserve the API; CLI output smoke test |
+| R11 changes exit codes | Medium | Medium | Snapshot of exit code before/after; document changes |
+| R7 `serde_yml` drop-in fails | Low | Medium | Do it in a separate branch; fuzz validates equivalence |
+| Fuzz finds a panic | High | Medium | **Expected** — that is the goal. Document as a separate bug |
+| Scope creep in R13 | High | Low | Limit to 1 session; papers without code become an issue, not work |
 
 ---
 
-## Não-escopo (explicitamente fora)
+## Non-scope (explicitly out)
 
-- Rewriting `forge-core-store` em DB real (SQLite/LMDB) — não agora.
-- Async runtime em todo lugar — `tokio` só onde já está (reconcile loop).
-- GUI/observability dashboard — Forge é CLI/library only.
-- Multi-tenancy no sidecar — um sidecar por consumer repo, por design.
-- Substituir `ed25519-dalek`/`p256` por `RustCrypto` unified — sem benefício claro.
+- Rewriting `forge-core-store` into a real DB (SQLite/LMDB) — not now.
+- Async runtime everywhere — `tokio` only where it already is (reconcile loop).
+- GUI/observability dashboard — Forge is CLI/library only.
+- Multi-tenancy in the sidecar — one sidecar per consumer repo, by design.
+- Replacing `ed25519-dalek`/`p256` with unified `RustCrypto` — no clear benefit.

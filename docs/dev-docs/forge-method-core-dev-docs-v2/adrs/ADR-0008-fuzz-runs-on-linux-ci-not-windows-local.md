@@ -2,60 +2,60 @@
 
 - **Status**: Accepted
 
-## Contexto
+## Context
 
-O track R4 (`cargo-fuzz`) precisa de um ambiente onde o fuzz rode de forma
-reproduzível e contínua. Tentativas no host de desenvolvimento Windows-MSVC
-mostraram duas limitações conhecidas do cargo-fuzz nessa plataforma:
+The R4 track (`cargo-fuzz`) needs an environment where fuzz runs in a
+reproducible and continuous way. Attempts on the Windows-MSVC development host
+showed two known limitations of cargo-fuzz on that platform:
 
-1. **ASAN default (`-Zsanitizer=address`)** falha em runtime com
-   `STATUS_DLL_NOT_FOUND (0xc0000135)`. O toolchain `nightly-x86_64-pc-windows-msvc`
-   não embarca `clang_rt.asan_dynamic.dll`; apenas a static lib existe, e o
-   linker MSVC não consegue resolver a DLL dinâmica esperada pelo binário
-   instrumentado.
+1. **Default ASAN (`-Zsanitizer=address`)** fails at runtime with
+   `STATUS_DLL_NOT_FOUND (0xc0000135)`. The `nightly-x86_64-pc-windows-msvc`
+   toolchain does not ship `clang_rt.asan_dynamic.dll`; only the static lib
+   exists, and the MSVC linker cannot resolve the dynamic DLL expected by the
+   instrumented binary.
 
-2. **Coverage-only (`-s none`)** falha em link com erros
-   `LNK2001: __stop___sancov_pcs` indefinido. O `-Zbuild-std` rebuilda a
-   stdlib sem coverage instrumentation, mas os crates externos (tokio, hyper,
-   reqwest, etc.) ainda assim são compilados com coverage e referenciam os
-   símbolos de seção que não existem mais no link final.
+2. **Coverage-only (`-s none`)** fails at link with undefined
+   `LNK2001: __stop___sancov_pcs` errors. `-Zbuild-std` rebuilds the
+   stdlib without coverage instrumentation, but external crates (tokio, hyper,
+   reqwest, etc.) are still compiled with coverage and reference the section
+   symbols that no longer exist at final link.
 
-WSL2 Ubuntu está disponível no host mas não tem toolchain Rust instalado;
-instalar Rust/nightly lá só para rodar fuzz adicionaria um ambiente extra a
-manter sem trazer benefício sobre um CI GitHub Actions Linux.
+WSL2 Ubuntu is available on the host but has no Rust toolchain installed;
+installing Rust/nightly there just to run fuzz would add an extra environment
+to maintain with no benefit over a GitHub Actions Linux CI.
 
-## Decisao
+## Decision
 
-Fuzz é executado em **CI GitHub Actions Linux (`ubuntu-latest`)**, não
-localmente em Windows. A configuração vive em
-`.github/workflows/fuzz.yml` e roda:
+Fuzz runs on **GitHub Actions Linux CI (`ubuntu-latest`)**, not
+locally on Windows. The configuration lives in
+`.github/workflows/fuzz.yml` and runs:
 
-- Schedule noturno (cron) — captura regressões silenciosas
-- `workflow_dispatch` — execução manual sob demanda
-- Pull requests com label `fuzz` — gate opcional quando um PR mexe em
-  parsers críticos
+- Nightly schedule (cron) — catches silent regressions
+- `workflow_dispatch` — manual on-demand execution
+- Pull requests with the `fuzz` label — optional gate when a PR touches
+  critical parsers
 
-Cada um dos 4 targets (`parse_signed_checkpoint`,
-`parse_rekor_log_entry`, `decode_ocsp_response`, `decode_prefix`) roda por
-um tempo limitado (5 min cada no CI) com os seeds commitados em
+Each of the 4 targets (`parse_signed_checkpoint`,
+`parse_rekor_log_entry`, `decode_ocsp_response`, `decode_prefix`) runs for
+a limited time (5 min each on CI) with the seeds committed in
 `fuzz/corpus/<target>/`.
 
 Harnesses `.rs` + `fuzz/Cargo.toml` + `fuzz/.gitignore` + corpus seeds
-permanecem commitados no repo. Desenvolvedores em Linux/WSL podem rodar
-`cargo +nightly fuzz run <target>` localmente; desenvolvedores em Windows
-devem usar o CI ou um ambiente Linux.
+remain committed in the repo. Developers on Linux/WSL can run
+`cargo +nightly fuzz run <target>` locally; developers on Windows
+should use the CI or a Linux environment.
 
-## Consequencias
+## Consequences
 
-- **Adoção madura**: cargo-fuzz é upstream Linux-first; essa escolha
-  alinha com a manutenção do upstream.
-- **Custo CI**: workflow noturno consome ~20 min de GitHub Actions por dia.
-  Aceitável dado o valor de regressão contínua.
-- **Feedback loop**: PRs normais não bloqueiam em fuzz (apenas com label
-  `fuzz`). Bug encontrado no cron vira issue separado.
-- **Documentação**: README de dev-docs precisa explicar "como rodar fuzz
-  localmente em Linux" e "como interpretar um artefato de crash".
-- **Reversibilidade**: se o suporte Windows do cargo-fuzz amadurecer (DLL
-  ASAN embarcada, fix do `__stop___sancov_pcs` em `-s none`), este ADR pode
-  ser revertido sem mudança de código — apenas removendo a documentação da
-  limitação.
+- **Mature adoption**: cargo-fuzz is upstream Linux-first; this choice
+  aligns with upstream maintenance.
+- **CI cost**: the nightly workflow consumes ~20 min of GitHub Actions per day.
+  Acceptable given the value of continuous regression.
+- **Feedback loop**: normal PRs do not block on fuzz (only with the `fuzz`
+  label). A bug found in cron becomes a separate issue.
+- **Documentation**: the dev-docs README needs to explain "how to run fuzz
+  locally on Linux" and "how to interpret a crash artifact".
+- **Reversibility**: if cargo-fuzz Windows support matures (shipped ASAN
+  DLL, fix for `__stop___sancov_pcs` in `-s none`), this ADR can be
+  reverted with no code change — only by removing the documentation of the
+  limitation.
