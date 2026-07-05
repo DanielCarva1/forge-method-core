@@ -838,6 +838,7 @@ pub struct HostAdapterCertificateOcspStatusVerification {
 pub struct HostAdapterProjectedCommand {
     pub name: String,
     pub source_command: String,
+    pub canonical_usage: String,
     pub title: String,
     pub description: String,
     pub mutation_class: HostAdapterMutationClass,

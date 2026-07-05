@@ -55,6 +55,7 @@ use forge_core_cli::{
     PayloadFileSpec, PayloadLoadPolicy, QueryEffectIndexInput, RebuildEffectIndexInput,
     ValidationStatus,
 };
+use forge_core_command_surface as command_surface;
 use forge_core_contracts::claim::ActorRole;
 use forge_core_contracts::runtime::RuntimeKind;
 use forge_core_contracts::tool_effect::{AccessMode, EffectTargetKind};
@@ -1831,6 +1832,12 @@ fn host_adapter_projection_library_preserves_non_authority_boundary() {
         HostAdapterAuthorityClass::RequiresOperationAuthority
     );
     let execute_mcp = execute.mcp_tool.as_ref().expect("execute mcp projection");
+    assert_eq!(
+        execute.canonical_usage,
+        command_surface::COMMAND_EXECUTE_OPERATION
+            .canonical_usage()
+            .trim_start()
+    );
     assert!(!execute_mcp.annotations.read_only_hint);
     assert!(execute_mcp.annotations.destructive_hint);
     assert!(!execute_mcp.annotations.idempotent_hint);
@@ -1840,6 +1847,12 @@ fn host_adapter_projection_library_preserves_non_authority_boundary() {
         .iter()
         .find(|command| command.name == "query-effect-index")
         .expect("query projection");
+    assert_eq!(
+        query.canonical_usage,
+        command_surface::COMMAND_QUERY_EFFECT_INDEX
+            .canonical_usage()
+            .trim_start()
+    );
     let query_mcp = query.mcp_tool.as_ref().expect("query mcp projection");
     assert!(query_mcp.annotations.read_only_hint);
     assert!(!query_mcp.annotations.destructive_hint);
@@ -1867,6 +1880,12 @@ fn host_adapter_projection_binary_outputs_mcp_json() {
         .iter()
         .find(|item| item["name"] == "execute-operation")
         .expect("execute projection");
+    assert_eq!(
+        execute["canonical_usage"],
+        command_surface::COMMAND_EXECUTE_OPERATION
+            .canonical_usage()
+            .trim_start()
+    );
     assert_eq!(execute["mcp_tool"]["annotations"]["destructiveHint"], true);
     assert_eq!(execute["mcp_tool"]["annotations"]["readOnlyHint"], false);
 }

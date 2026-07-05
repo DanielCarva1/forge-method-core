@@ -20,6 +20,7 @@
 //! `mcp_tool_name`, `command_title`, `command_description`, `mcp_annotations`,
 //! `command_input_schema`) are used only by the five public builders above.
 
+use forge_core_command_surface as command_surface;
 use forge_core_contracts::RuntimeKind;
 use serde_json::{json, Value};
 
@@ -63,6 +64,7 @@ pub fn run_host_adapter_projection(target: HostAdapterProjectionTarget) -> HostA
             source_of_truth: "forge_core_host_adapter_manifest_v0".to_string(),
             projection_rule: "Projection may adapt metadata for a host surface, but the Rust manifest and validated Forge contracts remain authoritative.".to_string(),
             projected_metadata_must_preserve: vec![
+                "canonical_usage".to_string(),
                 "command_kind".to_string(),
                 "mutation_class".to_string(),
                 "authority_class".to_string(),
@@ -401,11 +403,18 @@ fn project_host_command(
     command: &HostAdapterCommand,
     target: HostAdapterProjectionTarget,
 ) -> HostAdapterProjectedCommand {
+    let surface = command_surface::command_by_name(&command.name).unwrap_or_else(|| {
+        panic!(
+            "host adapter command '{}' is missing from forge-core-command-surface",
+            command.name
+        )
+    });
     let title = command_title(&command.name);
     let description = command_description(command);
     HostAdapterProjectedCommand {
         name: command.name.clone(),
         source_command: command.name.clone(),
+        canonical_usage: surface.canonical_usage().trim_start().to_string(),
         title: title.clone(),
         description: description.clone(),
         mutation_class: command.mutation_class,

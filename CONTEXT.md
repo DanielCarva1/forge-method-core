@@ -353,7 +353,10 @@ hand-written lists.
 The host-adapter manifest remains a narrower security adapter for host-specific
 authority metadata, required contracts, safe triggers, and policy references,
 but each host command is anchored by name to the Command Surface and derives
-generic JSON capability from it.
+generic JSON capability from it. Host-adapter projection may expose
+`canonical_usage` as non-authoritative display metadata, but command meaning
+and authority remain owned by the Command Surface plus validated Forge
+contracts.
 
 ## Allowlist
 

@@ -130,12 +130,26 @@ anchoring it to the shared Command Surface seam:
   read-only diagnostic core. This is the parser pilot requested by Stage 4 and
   preserves the existing command behavior.
 
+## Fifth hardening changeset evidence
+
+The fifth implementation slice completes the non-authoritative display side of
+host-adapter projection:
+
+- `HostAdapterProjectedCommand` now carries `canonical_usage` projected from
+  `forge_core_command_surface`, so host UIs and MCP-facing surfaces do not need
+  to invent or duplicate command usage strings.
+- `run_host_adapter_projection` records `canonical_usage` in
+  `projected_metadata_must_preserve`, making display metadata drift a testable
+  projection concern while leaving authority in the manifest/contracts.
+- Library and binary tests assert that projected usage for
+  `execute-operation` and `query-effect-index` equals the shared Command
+  Surface value.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
   after `start` remains green under full gates.
-- Consider whether host-adapter projection should expose canonical usage text
-  from the Command Surface as non-authoritative display metadata.
+- Audit the next high-value parser/help seam before migrating another command.
 
 ## Research base
 
