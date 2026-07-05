@@ -345,9 +345,10 @@ The canonical command-language module that owns what a `forge-core` command is:
 its path, usage metadata, authority class, JSON/text support, and adapter
 exposure. The current shared seam is the `forge-core-command-surface` crate.
 `forge-core-cli::command_registry` adds handler pointers to that metadata; the
-MCP adapter projects allowlist defaults and tool descriptors from it. Generated
-command docs and parser/handler lookup should continue migrating toward this
-Command Surface rather than growing rival hand-written lists.
+MCP adapter projects allowlist defaults and tool descriptors from it, and
+`docs/generated/command-surface.md` is generated from it. Parser/handler lookup
+should continue migrating toward this Command Surface rather than growing rival
+hand-written lists.
 
 ## Allowlist
 

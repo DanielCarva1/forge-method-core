@@ -100,13 +100,26 @@ big-bang parser rewrite:
   - `cargo run -p forge-core-cli -- validate --root . --json`
   - `git diff --check`
 
+## Third hardening changeset evidence
+
+The third implementation slice completes the generated-docs part of Stage 4:
+
+- `cargo run -p forge-core-command-surface --example generate_command_surface_docs`
+  renders `docs/generated/command-surface.md` directly from
+  `forge_core_command_surface::COMMANDS`.
+- The generator supports `--check`, uses hand-rolled typed errors, and is wired
+  into CI so command documentation cannot drift silently.
+- `README.md` now points users and agents at both generated references:
+  workspace layout and command surface.
+- `CommandAuthority`, `JsonMode`, and `McpVisibility` now expose stable
+  snake-case identifiers for generated docs and future adapter projections.
+
 Remaining Stage 4 work:
 
-- Move generated command documentation to this same seam.
 - Decide whether host-adapter projection should consume the shared command
   metadata directly or continue using its narrower host-command manifest.
-- Pilot a typed parser adapter for `start` after the shared metadata seam is
-  fully green.
+- Pilot a typed parser adapter for `start` after the shared metadata/docs seam
+  is fully green.
 
 ## Research base
 

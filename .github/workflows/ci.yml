@@ -24,6 +24,9 @@ jobs:
       - name: Check generated workspace layout
         run: python scripts/generate-workspace-layout.py --check
 
+      - name: Check generated command surface docs
+        run: cargo run -p forge-core-command-surface --example generate_command_surface_docs -- --check
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 

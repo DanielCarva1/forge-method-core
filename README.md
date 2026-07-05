@@ -624,11 +624,16 @@ gates.
 
 The Rust workspace layout is generated from Cargo metadata and checked in CI:
 [`docs/generated/workspace-layout.md`](docs/generated/workspace-layout.md).
-Regenerate it with:
+The command surface reference is generated from
+`forge_core_command_surface::COMMANDS` and checked in CI:
+[`docs/generated/command-surface.md`](docs/generated/command-surface.md).
+Regenerate them with:
 
 ```bash
 python scripts/generate-workspace-layout.py
 python scripts/generate-workspace-layout.py --check
+cargo run -p forge-core-command-surface --example generate_command_surface_docs
+cargo run -p forge-core-command-surface --example generate_command_surface_docs -- --check
 ```
 
 Other top-level authority surfaces:
@@ -638,8 +643,8 @@ Other top-level authority surfaces:
   and delivery artifacts.
 - `contracts/claims/` — claim fixtures and schemas.
 - `skill/forge-method/` — host skill wiring.
-- `docs/` — live ADRs, design specs, fixtures, generated layout, and hardening
-  plans.
+- `docs/` — live ADRs, design specs, fixtures, generated layout/command
+  references, and hardening plans.
 
 The authority is always the `contracts/` tree plus the running `forge-core`
 binary. Historical research digests, agent session journals, milestone plans,

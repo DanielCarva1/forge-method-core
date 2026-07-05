@@ -1,11 +1,13 @@
 //! Canonical command surface metadata for `forge-core`.
 //!
 //! This crate owns command facts that are shared by CLI help, CLI dispatch
-//! metadata, and MCP tool projection. Host adapter projection and generated
-//! command documentation can migrate to this same seam in later slices. It
+//! metadata, MCP tool projection, and generated command documentation. Host
+//! adapter projection can migrate to this same seam in a later slice. It
 //! deliberately does **not** own command handlers or parsing implementation;
 //! those remain behind the CLI module seam so the surface metadata can stay
 //! dependency-free and reusable.
+
+use core::fmt;
 
 /// Coarse authority class for a top-level command path.
 ///
@@ -31,6 +33,23 @@ impl CommandAuthority {
     pub const fn may_mutate(self) -> bool {
         matches!(self, Self::MutatesForgeState | Self::MixedBySubcommand)
     }
+
+    /// Stable snake-case identifier used by generated docs and adapters.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ReadOnly => "read_only",
+            Self::MutatesForgeState => "mutates_forge_state",
+            Self::MixedBySubcommand => "mixed_by_subcommand",
+            Self::AdapterProtocol => "adapter_protocol",
+        }
+    }
+}
+
+impl fmt::Display for CommandAuthority {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 /// How a command path emits machine-readable output.
@@ -40,6 +59,23 @@ pub enum JsonMode {
     EnvelopeOptional,
     /// The command owns a protocol stream on stdout and cannot print normal envelopes there.
     ProtocolStream,
+}
+
+impl JsonMode {
+    /// Stable snake-case identifier used by generated docs and adapters.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::EnvelopeOptional => "envelope_optional",
+            Self::ProtocolStream => "protocol_stream",
+        }
+    }
+}
+
+impl fmt::Display for JsonMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 /// How the command path is visible to MCP and future adapters.
@@ -64,6 +100,22 @@ impl McpVisibility {
     #[must_use]
     pub const fn is_default_mutate(self) -> bool {
         matches!(self, Self::DefaultMutate)
+    }
+
+    /// Stable snake-case identifier used by generated docs and adapters.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::AllowlistOnly => "allowlist_only",
+            Self::DefaultReadOnly => "default_read_only",
+            Self::DefaultMutate => "default_mutate",
+        }
+    }
+}
+
+impl fmt::Display for McpVisibility {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -639,5 +691,27 @@ mod tests {
                 "default mutate MCP tool {name:?} must have mutating authority metadata"
             );
         }
+    }
+
+    #[test]
+    fn metadata_identifiers_are_stable_snake_case() {
+        assert_eq!(CommandAuthority::ReadOnly.as_str(), "read_only");
+        assert_eq!(
+            CommandAuthority::MutatesForgeState.as_str(),
+            "mutates_forge_state"
+        );
+        assert_eq!(
+            CommandAuthority::MixedBySubcommand.as_str(),
+            "mixed_by_subcommand"
+        );
+        assert_eq!(
+            CommandAuthority::AdapterProtocol.as_str(),
+            "adapter_protocol"
+        );
+        assert_eq!(JsonMode::EnvelopeOptional.as_str(), "envelope_optional");
+        assert_eq!(JsonMode::ProtocolStream.as_str(), "protocol_stream");
+        assert_eq!(McpVisibility::AllowlistOnly.as_str(), "allowlist_only");
+        assert_eq!(McpVisibility::DefaultReadOnly.as_str(), "default_read_only");
+        assert_eq!(McpVisibility::DefaultMutate.as_str(), "default_mutate");
     }
 }
