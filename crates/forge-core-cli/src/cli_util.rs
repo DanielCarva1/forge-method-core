@@ -18,6 +18,7 @@ use crate::{
     HostAdapterProcessTarget, HostAdapterProjectionTarget, HostAdapterUpdateChannel,
     PayloadFileSpec,
 };
+use forge_core_command_surface::{CommandSpec, COMMAND_GRAPH};
 use forge_core_contracts::runtime::RuntimeKind;
 use forge_core_contracts::tool_effect::EffectTargetKind;
 use forge_core_store::{EffectMetadataAdapterTrigger, EffectMetadataConsumerUse};
@@ -130,11 +131,8 @@ pub fn usage() -> String {
 }
 
 #[must_use]
-pub fn graph_usage() -> &'static str {
-    concat!(
-        "usage: forge-core graph validate --root <project> --graph <path> [--allow-bootstrap-core] [--json]\n",
-        "       forge-core graph run --root <project> --graph <path> --dry-run [--agent <id>] [--claims-dir <path>] [--now-unix <epoch>] [--allow-bootstrap-core] [--json]"
-    )
+pub fn graph_usage() -> String {
+    format_command_surface_usage("usage:", &COMMAND_GRAPH)
 }
 
 #[must_use]
@@ -159,6 +157,16 @@ pub fn telemetry_usage() -> &'static str {
         "default contract: contracts/examples/telemetry.yaml\n",
         "default trace source: resolved <state_root>/traces/events.ndjson"
     )
+}
+
+fn format_command_surface_usage(header: &str, command: &CommandSpec) -> String {
+    let mut usage = String::from(header);
+    for line in command.usage_lines {
+        usage.push('\n');
+        usage.push_str("  ");
+        usage.push_str(line.trim_start());
+    }
+    usage
 }
 
 #[must_use]
@@ -699,6 +707,22 @@ mod argv_cursor_tests {
 
     fn args(slice: &[&str]) -> Vec<String> {
         slice.iter().map(std::string::ToString::to_string).collect()
+    }
+
+    #[test]
+    fn graph_usage_projects_command_surface_lines() {
+        let usage = graph_usage();
+        for line in COMMAND_GRAPH.usage_lines {
+            let canonical = line.trim_start();
+            assert!(
+                usage.contains(canonical),
+                "graph usage should include projected Command Surface line {canonical:?}: {usage}"
+            );
+        }
+        assert!(
+            usage.contains("[--json|--no-json]"),
+            "graph usage should keep the shared JSON/text contract: {usage}"
+        );
     }
 
     #[test]

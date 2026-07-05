@@ -431,6 +431,22 @@ Adapter with the Command Surface and fixes a user-facing help-path polish issue:
   the rendered usage lines, the retained profile/gate detail lines, and the
   successful help short-circuit.
 
+## Twenty-third hardening changeset evidence
+
+The twenty-third implementation slice removes another stale CLI usage Adapter
+from the command help path:
+
+- `cli_util::graph_usage()` now renders from `COMMAND_GRAPH` instead of a
+  local `concat!(...)` string.
+- This fixes the stale graph help contract that advertised only `[--json]`
+  while the Command Surface and parser support the full `[--json|--no-json]`
+  selection contract.
+- The helper uses the same Command Surface projection formatter pattern as the
+  broader registry/help migration while preserving the existing `usage:` header
+  expected by the `graph` command tree.
+- Unit tests lock `graph_usage()` to every `COMMAND_GRAPH.usage_lines` entry and
+  assert the shared JSON/text contract remains visible.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
