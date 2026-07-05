@@ -8,9 +8,9 @@
 //! risk-audit contract model.
 //!
 //! The Allowlist separates "Forge can do X" (every entry in
-//! `command_registry::COMMANDS`) from "this MCP client may ask Forge to do X"
-//! (the Allowlist subset). Declaring an empty or read-only Allowlist is the
-//! safe default.
+//! `forge_core_command_surface::COMMANDS`) from "this MCP client may ask Forge
+//! to do X" (the Allowlist subset). Declaring an empty or read-only Allowlist
+//! is the safe default.
 //!
 //! # YAML format
 //!
@@ -29,6 +29,7 @@
 
 use std::fmt;
 
+use forge_core_command_surface::{mcp_default_mutate_tool_names, mcp_default_read_only_tool_names};
 use forge_core_validate::{Diagnostic, DiagnosticCode, ValidationReport};
 use serde::{Deserialize, Serialize};
 
@@ -66,12 +67,13 @@ impl fmt::Display for AllowlistPolicy {
 }
 
 /// One row in the Allowlist: a tool name (matching the MCP tool name AND the
-/// underlying `command_registry::COMMANDS` entry name) plus its policy
+/// underlying shared Command Surface entry name) plus its policy
 /// classification.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AllowedTool {
     /// The MCP tool name. Matches a `CommandSpec::name` in
-    /// `command_registry::COMMANDS` (e.g. `"preview"`, `"execute-operation"`).
+    /// `forge_core_command_surface::COMMANDS` (e.g. `"preview"`,
+    /// `"execute-operation"`).
     pub name: String,
     /// Whether this tool mutates the store.
     pub policy: AllowlistPolicy,
@@ -107,32 +109,24 @@ impl fmt::Display for AllowlistError {
 
 impl std::error::Error for AllowlistError {}
 
-/// Canonical read-only tool names exposed by default. Each entry MUST match a
-/// `CommandSpec::name` in `command_registry::COMMANDS`; the
-/// `default_tools_are_registered_commands` test asserts this, so renaming a
-/// command in COMMANDS without updating this list is a test failure.
+/// Canonical read-only tool names exposed by default.
 ///
-/// This is NOT the policy layer (ADR-0006 Decision 3 keeps that as YAML
-/// data). It is the curated default surface — the projection of COMMANDS that
-/// performs no store mutation. `explain` is the "trace" surface;
-/// `query-effect-index` is the read side of the effect index; `memory list` is
-/// the read verb of the memory PEP.
-pub const DEFAULT_READONLY_TOOLS: &[&str] = &[
-    "preview",
-    "ready",
-    "graph",
-    "explain",
-    "memory",
-    "query-effect-index",
-];
+/// This is a projection of `forge_core_command_surface::COMMANDS`, not a
+/// second hand-maintained list. Renaming a command or changing its MCP
+/// visibility now changes the default adapter surface through the shared
+/// Command Surface seam.
+pub fn default_read_only_tool_names() -> impl Iterator<Item = &'static str> {
+    mcp_default_read_only_tool_names()
+}
 
-/// Canonical mutate tool names exposed by default. Each entry MUST match a
-/// `CommandSpec::name` in `command_registry::COMMANDS`; the
-/// `default_tools_are_registered_commands` test asserts this.
+/// Canonical mutate tool names exposed by the opt-in default mutate surface.
 ///
 /// These require an `OperationContract` + Tool-Call Attestation at the
-/// `MutateGate` (ADR-0006 Decisions 2 & 4).
-pub const DEFAULT_MUTATE_TOOLS: &[&str] = &["execute-operation", "claim"];
+/// `MutateGate` (ADR-0006 Decisions 2 & 4). The names are projected from the
+/// shared Command Surface seam.
+pub fn default_mutate_tool_names() -> impl Iterator<Item = &'static str> {
+    mcp_default_mutate_tool_names()
+}
 
 impl Allowlist {
     /// Build an Allowlist from an explicit list of tools. Deduplicates and
@@ -153,18 +147,17 @@ impl Allowlist {
     }
 
     /// The default read-only Allowlist: every tool in
-    /// [`DEFAULT_READONLY_TOOLS`] as `ReadOnly`. Safe to expose without an
-    /// `OperationContract`.
+    /// the shared Command Surface's default read-only MCP projection as
+    /// `ReadOnly`. Safe to expose without an `OperationContract`.
     #[must_use]
     pub fn default_read_only() -> Self {
-        let tools = DEFAULT_READONLY_TOOLS
-            .iter()
-            .map(|n| AllowedTool {
-                name: (*n).to_string(),
+        let tools = default_read_only_tool_names()
+            .map(|name| AllowedTool {
+                name: name.to_string(),
                 policy: AllowlistPolicy::ReadOnly,
             })
             .collect();
-        // No duplicates in the const array by construction.
+        // No duplicates by construction; command-surface tests assert this.
         Self { tools }
     }
 
@@ -173,15 +166,14 @@ impl Allowlist {
     /// by the `MutateGate` + attestation at call time.
     #[must_use]
     pub fn default_with_mutate() -> Self {
-        let mut tools: Vec<AllowedTool> = DEFAULT_READONLY_TOOLS
-            .iter()
-            .map(|n| AllowedTool {
-                name: (*n).to_string(),
+        let mut tools: Vec<AllowedTool> = default_read_only_tool_names()
+            .map(|name| AllowedTool {
+                name: name.to_string(),
                 policy: AllowlistPolicy::ReadOnly,
             })
             .collect();
-        tools.extend(DEFAULT_MUTATE_TOOLS.iter().map(|n| AllowedTool {
-            name: (*n).to_string(),
+        tools.extend(default_mutate_tool_names().map(|name| AllowedTool {
+            name: name.to_string(),
             policy: AllowlistPolicy::Mutate,
         }));
         Self { tools }
@@ -219,8 +211,9 @@ impl Allowlist {
     /// an error; an empty tools list is an error.
     ///
     /// `known_commands` is the set of registered command names from
-    /// `command_registry::COMMANDS` — the validator checks each Allowlist
-    /// entry against it so a typo is caught at load, not at call time.
+    /// `forge_core_command_surface::COMMANDS` — the validator checks each
+    /// Allowlist entry against it so a typo is caught at load, not at call
+    /// time.
     ///
     /// # Errors
     ///
@@ -318,36 +311,24 @@ impl ToolEntryYaml {
 mod tests {
     use super::*;
 
-    /// Drift guard: every name in [`DEFAULT_READONLY_TOOLS`] and
-    /// [`DEFAULT_MUTATE_TOOLS`] MUST be a registered command name in
-    /// `command_registry::COMMANDS`. This makes a command rename in the CLI a
-    /// test failure HERE — the adapter's tool-name arrays can no longer drift
-    /// silently from the registry they claim to project.
-    ///
-    /// The arrays are intentionally hand-curated (the default surface is a
-    /// *subset* of COMMANDS, not the whole table), so this is a validation,
-    /// not a generation. A command may exist in COMMANDS without appearing in
-    /// either default array; the reverse is forbidden.
+    /// Drift guard: every default MCP tool name must be projected from the
+    /// shared Command Surface. This makes command rename / MCP visibility
+    /// changes visible here without copying a second list into the adapter.
     #[test]
     fn default_tools_are_registered_commands() {
         let registered: std::collections::HashSet<&str> = known_commands().into_iter().collect();
-        for name in DEFAULT_READONLY_TOOLS
-            .iter()
-            .chain(DEFAULT_MUTATE_TOOLS.iter())
-            .copied()
-        {
+        for name in default_read_only_tool_names().chain(default_mutate_tool_names()) {
             assert!(
                 registered.contains(name),
                 "default tool {name:?} is not a registered forge-core command \
-                 (rename in COMMANDS, or a typo in DEFAULT_*_TOOLS)",
+                 (rename or MCP visibility drift in command surface)",
             );
         }
-        // The two default arrays must not overlap (a tool is read-only XOR mutate).
-        let ro: std::collections::HashSet<&str> = DEFAULT_READONLY_TOOLS.iter().copied().collect();
-        for name in DEFAULT_MUTATE_TOOLS.iter().copied() {
+        let ro: std::collections::HashSet<&str> = default_read_only_tool_names().collect();
+        for name in default_mutate_tool_names() {
             assert!(
                 !ro.contains(name),
-                "tool {name:?} appears in both DEFAULT_READONLY_TOOLS and DEFAULT_MUTATE_TOOLS",
+                "tool {name:?} appears in both read-only and mutate MCP projections",
             );
         }
     }
@@ -393,15 +374,11 @@ mod tests {
     }
 
     /// The registered command names, projected from
-    /// `forge_core_cli::command_registry::COMMANDS`. This is NOT a
-    /// hand-maintained list — it is derived at test time so the YAML-loader
-    /// tests validate against the real registry. A rename in COMMANDS updates
-    /// this set automatically.
+    /// `forge_core_command_surface::COMMANDS`. This is NOT a hand-maintained
+    /// list; it is derived at test time so the YAML-loader tests validate
+    /// against the real shared registry.
     fn known_commands() -> Vec<&'static str> {
-        forge_core_cli::command_registry::COMMANDS
-            .iter()
-            .map(|c| c.name)
-            .collect()
+        forge_core_command_surface::command_names().collect()
     }
 
     #[test]

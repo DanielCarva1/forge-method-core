@@ -792,6 +792,7 @@ dependencies = [
  "assert_cmd",
  "base64",
  "ed25519-dalek",
+ "forge-core-command-surface",
  "forge-core-contracts",
  "forge-core-crypto",
  "forge-core-decisions",
@@ -825,6 +826,10 @@ dependencies = [
  "x509-parser",
  "yaml_serde",
 ]
+
+[[package]]
+name = "forge-core-command-surface"
+version = "0.2.0"
 
 [[package]]
 name = "forge-core-contracts"
@@ -967,7 +972,7 @@ name = "forge-core-protocol-mcp"
 version = "0.2.0"
 dependencies = [
  "ed25519-dalek",
- "forge-core-cli",
+ "forge-core-command-surface",
  "forge-core-contracts",
  "forge-core-validate",
  "proptest",

@@ -1,4 +1,4 @@
-//! MCP server — the adapter that exposes `command_registry::COMMANDS` as MCP
+//! MCP server — the adapter that exposes the shared Command Surface as MCP
 //! tools over stdio JSON-RPC (ADR-0006 Decision 1).
 //!
 //! # Architecture
@@ -34,6 +34,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
 
+use forge_core_command_surface::{command_by_name, JsonMode};
 use rmcp::model::{
     CallToolRequestParams, CallToolResult, ContentBlock, ErrorData, Implementation, JsonObject,
     ListToolsResult, ServerCapabilities, ServerInfo, Tool,
@@ -544,16 +545,23 @@ impl ForgeMcpServer {
 /// fields) — the underlying `forge-core` command does the real validation, so
 /// the adapter does not duplicate per-command flag schemas here.
 fn mcp_tool_descriptor(allowed: &crate::allowlist::AllowedTool) -> Tool {
+    let command = command_by_name(&allowed.name);
+    let usage = command.map_or_else(
+        || format!("forge-core {}", allowed.name),
+        |spec| spec.canonical_usage().trim().to_string(),
+    );
+    let json_mode = command.map_or("unknown-json-mode", |spec| match spec.json_mode {
+        JsonMode::EnvelopeOptional => "CliEnvelope JSON/text",
+        JsonMode::ProtocolStream => "protocol stream",
+    });
     let description: std::borrow::Cow<'static, str> = match allowed.policy {
         AllowlistPolicy::ReadOnly => format!(
-            "Forge `forge-core {}` command (read-only). Pass-through adapter.",
-            allowed.name
+            "Forge `{usage}` command (read-only). Pass-through adapter; output mode: {json_mode}."
         )
         .into(),
         AllowlistPolicy::Mutate => format!(
-            "Forge `forge-core {}` command (mutate). Requires an OperationContract \
-             + Tool-Call Attestation (ADR-0006).",
-            allowed.name
+            "Forge `{usage}` command (mutate). Requires an OperationContract \
+             + Tool-Call Attestation (ADR-0006); output mode: {json_mode}."
         )
         .into(),
     };
@@ -662,7 +670,8 @@ mod tests {
             ..config_with_fake_binary(bin.clone())
         };
         let server = ForgeMcpServer::new(cfg);
-        // "preview" is in DEFAULT_READONLY_TOOLS.
+        // "preview" is in the shared Command Surface's default read-only MCP
+        // projection.
         let out = server.invoke_tool("preview", &[]).expect("invoke ok");
         assert!(
             out.contains("\"ok\":true"),
@@ -1082,7 +1091,7 @@ mod tests {
         let envelope = r#"{"ok":true,"exit_reason":"ok","data":{"phase":"1"}}"#;
         let bin = make_fake_forge_core(true, envelope);
         let server = ForgeMcpServer::new(config_with_fake_binary(bin));
-        let req = CallToolRequestParams::new("preview"); // in DEFAULT_READONLY_TOOLS
+        let req = CallToolRequestParams::new("preview"); // default read-only MCP projection
                                                          // Test the synchronous handler body directly (no RequestContext needed).
         let res = server.handle_call_tool(req).expect("call ok");
         assert!(!res.is_error.unwrap_or(false));
@@ -1124,6 +1133,26 @@ mod tests {
         // get_info must advertise the server (smoke test the ServerHandler impl).
         let info = server.get_info();
         assert_eq!(info.server_info.name, "forge-core-mcp");
+    }
+
+    #[test]
+    fn mcp_tool_descriptor_projects_command_surface_usage() {
+        let tool = mcp_tool_descriptor(&crate::allowlist::AllowedTool {
+            name: "start".to_string(),
+            policy: AllowlistPolicy::ReadOnly,
+        });
+        let description = tool
+            .description
+            .as_ref()
+            .expect("tool descriptor carries description");
+        assert!(
+            description.contains("forge-core start [--root <path>]"),
+            "descriptor must include canonical Command Surface usage: {description}"
+        );
+        assert!(
+            description.contains("CliEnvelope JSON/text"),
+            "descriptor must include shared JSON mode metadata: {description}"
+        );
     }
 
     fn content_text(result: &rmcp::model::CallToolResult) -> String {

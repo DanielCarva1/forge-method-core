@@ -9,11 +9,11 @@
 //!
 //! # Architecture (ADR-0006)
 //!
-//! - **[`server`]** — the MCP server over stdio JSON-RPC (`rmcp`). Exposes a
-//!   projection of `forge_core_cli::command_registry::COMMANDS` as MCP tools.
-//!   Each tool is a pass-through: map `(tool_name, arguments)` → argv
-//!   `&[String]` → invoke the matching `CommandSpec::handler` → return the
-//!   `CliEnvelope` JSON as the tool result. No domain logic lives here.
+//! - **[`server`]** ? the MCP server over stdio JSON-RPC (`rmcp`). Exposes a
+//!   projection of `forge_core_command_surface::COMMANDS` as MCP tools. Each
+//!   tool is a pass-through: map `(tool_name, arguments)` to argv, invoke the
+//!   matching `forge-core` subprocess command, and return the `CliEnvelope`
+//!   JSON as the tool result. No domain logic lives here.
 //! - **[`allowlist`]** — the capability surface (`mcp-allowlist.yaml`). A tool
 //!   absent from the Allowlist is invisible to `tools/list` and rejected on
 //!   `tools/call` — fail-closed (ADR-0006 Decision 3).
@@ -40,8 +40,8 @@ pub mod error;
 pub mod server;
 
 pub use allowlist::{
-    AllowedTool, Allowlist, AllowlistError, AllowlistPolicy, DEFAULT_MUTATE_TOOLS,
-    DEFAULT_READONLY_TOOLS,
+    default_mutate_tool_names, default_read_only_tool_names, AllowedTool, Allowlist,
+    AllowlistError, AllowlistPolicy,
 };
 pub use attestation::{
     AttestationError, AttestationGateOutcome, AttestationInput, AttestationPolicy,

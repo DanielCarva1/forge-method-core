@@ -18,13 +18,13 @@
 
 use std::path::PathBuf;
 
+use forge_core_command_surface::command_names;
 use forge_core_contracts::{CliEnvelope, ExitReason};
 use forge_core_protocol_mcp::{
     Allowlist, AttestationPolicy, AttestationVerifier, ForgeMcpServer, McpServerConfig,
 };
 
 use crate::cli_error::ExitError;
-use crate::command_registry::COMMANDS;
 
 const MCP_COMMAND: &str = "mcp";
 const SERVE_COMMAND: &str = "mcp serve";
@@ -170,7 +170,7 @@ fn run_serve(args: &[String]) -> Result<(), ExitError> {
                     );
                 }
             };
-            let known: Vec<&str> = COMMANDS.iter().map(|c| c.name).collect();
+            let known: Vec<&str> = command_names().collect();
             let (allowlist, report) = Allowlist::from_yaml_str(&yaml, &known);
             if report.has_errors() {
                 // Surface validation diagnostics via the envelope so the

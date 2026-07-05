@@ -2,6 +2,7 @@
 members = [
   "crates/forge-contract-validator",
   "crates/forge-core-contracts",
+  "crates/forge-core-command-surface",
   "crates/forge-core-schema",
   "crates/forge-core-cli",
   "crates/forge-core-crypto",

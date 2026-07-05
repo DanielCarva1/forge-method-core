@@ -1,0 +1,643 @@
+//! Canonical command surface metadata for `forge-core`.
+//!
+//! This crate owns command facts that are shared by CLI help, CLI dispatch
+//! metadata, and MCP tool projection. Host adapter projection and generated
+//! command documentation can migrate to this same seam in later slices. It
+//! deliberately does **not** own command handlers or parsing implementation;
+//! those remain behind the CLI module seam so the surface metadata can stay
+//! dependency-free and reusable.
+
+/// Coarse authority class for a top-level command path.
+///
+/// The class is intentionally conservative for command paths that contain
+/// mixed read/write subcommands. Gate decisions must still rely on the
+/// concrete parser/runtime path; this metadata exists to keep projections
+/// honest and drift-resistant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CommandAuthority {
+    /// The command path is read-only.
+    ReadOnly,
+    /// The command path mutates Forge runtime state.
+    MutatesForgeState,
+    /// The command path contains both read-only and mutating subcommands.
+    MixedBySubcommand,
+    /// The command path starts a protocol adapter rather than a normal envelope command.
+    AdapterProtocol,
+}
+
+impl CommandAuthority {
+    /// Whether this authority class may mutate Forge runtime state.
+    #[must_use]
+    pub const fn may_mutate(self) -> bool {
+        matches!(self, Self::MutatesForgeState | Self::MixedBySubcommand)
+    }
+}
+
+/// How a command path emits machine-readable output.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum JsonMode {
+    /// The command supports the normal `CliEnvelope` JSON/text switch.
+    EnvelopeOptional,
+    /// The command owns a protocol stream on stdout and cannot print normal envelopes there.
+    ProtocolStream,
+}
+
+/// How the command path is visible to MCP and future adapters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum McpVisibility {
+    /// The command is not exposed by default but remains available to an explicit allowlist.
+    AllowlistOnly,
+    /// The command is part of the default read-only MCP surface.
+    DefaultReadOnly,
+    /// The command is part of the opt-in default mutating MCP surface.
+    DefaultMutate,
+}
+
+impl McpVisibility {
+    /// Whether this visibility contributes to the default read-only MCP projection.
+    #[must_use]
+    pub const fn is_default_read_only(self) -> bool {
+        matches!(self, Self::DefaultReadOnly)
+    }
+
+    /// Whether this visibility contributes to the default mutating MCP projection.
+    #[must_use]
+    pub const fn is_default_mutate(self) -> bool {
+        matches!(self, Self::DefaultMutate)
+    }
+}
+
+/// One canonical top-level command path.
+///
+/// `usage_lines` are the exact lines rendered by global CLI help. They live
+/// here, not in the CLI handler table, so renaming a command or changing a
+/// flag updates help, adapter projection tests, and generated docs from the
+/// same seam.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CommandSpec {
+    /// The `argv[1]` token that selects this command.
+    pub name: &'static str,
+    /// Canonical global help usage lines, without trailing newlines.
+    pub usage_lines: &'static [&'static str],
+    /// Coarse command authority class.
+    pub authority: CommandAuthority,
+    /// JSON/envelope output mode.
+    pub json_mode: JsonMode,
+    /// MCP adapter visibility classification.
+    pub mcp_visibility: McpVisibility,
+}
+
+impl CommandSpec {
+    /// The first usage line, suitable for compact docs and projections.
+    #[must_use]
+    pub fn canonical_usage(&self) -> &'static str {
+        self.usage_lines.first().copied().unwrap_or("")
+    }
+}
+
+#[rustfmt::skip]
+pub const COMMAND_GUIDE: CommandSpec = CommandSpec {
+    name: "guide",
+    usage_lines:     &["       forge-core guide [--root <path>] [--allow-bootstrap-core] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_CLAIM: CommandSpec = CommandSpec {
+    name: "claim",
+    usage_lines:     &[
+                "       forge-core claim acquire [--root <path>] [--allow-bootstrap-core] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--claims-dir <path>] [--no-sync] [--json|--no-json]",
+                "       forge-core claim heartbeat [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--no-sync] [--json|--no-json]",
+                "       forge-core claim release [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--no-sync] [--json|--no-json]",
+                "       forge-core claim handoff [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> --summary <text> [--evidence <path>...] [--claims-dir <path>] [--no-sync] [--json|--no-json]",
+                "       forge-core claim status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--from-cache] [--json|--no-json]",
+                "       forge-core claim reconcile [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--loop] [--interval-ms <ms>] [--max-ticks <n>] [--no-sync] [--json|--no-json]",
+                "       forge-core claim check-write [--root <path>] [--allow-bootstrap-core] --agent <id> --target <path> [--claims-dir <path>] [--json|--no-json]",
+            ],
+    authority: CommandAuthority::MixedBySubcommand,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::DefaultMutate,
+};
+
+pub const COMMAND_AUTONOMY: CommandSpec = CommandSpec {
+    name: "autonomy",
+    usage_lines:     &["       forge-core autonomy <subcommand> [flags]   (route|policy|admit|decision) [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_CONTRACT: CommandSpec = CommandSpec {
+    name: "contract",
+    usage_lines: &[
+        "       forge-core contract <subcommand>   (catalog|snapshot|explain) [--json|--no-json]",
+    ],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_ISOLATION: CommandSpec = CommandSpec {
+    name: "isolation",
+    usage_lines: &[
+        "       forge-core isolation [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
+    ],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_MEMORY: CommandSpec = CommandSpec {
+    name: "memory",
+    usage_lines:     &[
+                "       forge-core memory ingest  --entry-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--json|--no-json]",
+                "       forge-core memory list    [--root <path>] [--allow-bootstrap-core] [--now-unix <epoch>] [--memory-dir <path>] [--json|--no-json]",
+                "       forge-core memory forget  --entry-id <id> [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--json|--no-json]",
+                "       forge-core memory promote --entry-id <id> --policy-file <path> --evidence <ref>... [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--json|--no-json]",
+                "       forge-core memory review  (deferred — requires F07 governance)",
+            ],
+    authority: CommandAuthority::MixedBySubcommand,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::DefaultReadOnly,
+};
+
+pub const COMMAND_GOVERNANCE: CommandSpec = CommandSpec {
+    name: "governance",
+    usage_lines:     &[
+                "       forge-core governance record   --conflict-file <path> [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--json|--no-json]",
+                "       forge-core governance conflicts [--status pending|resolved|escalated] [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--json|--no-json]",
+                "       forge-core governance arbitrate --conflict-id <id> --policy-file <path> --arbiter <principal> (--awarded-to <principal> | --both-released | --split-scope) [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--json|--no-json]",
+                "       forge-core governance escalate  --conflict-id <id> --policy-file <path> --principal <principal> [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--json|--no-json]",
+            ],
+    authority: CommandAuthority::MixedBySubcommand,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_COORDINATION: CommandSpec = CommandSpec {
+    name: "coordination",
+    usage_lines:     &["       forge-core coordination [--root <path>] [--allow-bootstrap-core] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_PROJECT: CommandSpec = CommandSpec {
+    name: "project",
+    usage_lines:     &[
+                "       forge-core project init [--root <path>] [--project-id <id>] [--sidecar-root <path>] [--state-root <path>] [--json|--no-json]",
+                "       forge-core project resolve [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
+            ],
+    authority: CommandAuthority::MixedBySubcommand,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_GRAPH: CommandSpec = CommandSpec {
+    name: "graph",
+    usage_lines:     &[
+                "       forge-core graph validate --root <project> --graph <path> [--allow-bootstrap-core] [--json|--no-json]",
+                "       forge-core graph run --root <project> --graph <path> --dry-run [--agent <id>] [--claims-dir <path>] [--now-unix <epoch>] [--allow-bootstrap-core] [--json|--no-json]",
+            ],
+    authority: CommandAuthority::MixedBySubcommand,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::DefaultReadOnly,
+};
+
+pub const COMMAND_EVAL: CommandSpec = CommandSpec {
+    name: "eval",
+    usage_lines:     &["       forge-core eval compare [--root <project>] [--suite <path>] --baseline <single-agent|graph|mas|manual> --candidate <single-agent|graph|mas|manual> [--allow-bootstrap-core] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_EVAL_HARNESS: CommandSpec = CommandSpec {
+    name: "eval-harness",
+    usage_lines:     &["       forge-core eval-harness --config <yaml> [--root <path>] [--corpus <yaml>] [--allow-bootstrap-core] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_TELEMETRY: CommandSpec = CommandSpec {
+    name: "telemetry",
+    usage_lines:     &["       forge-core telemetry export [--root <project>] [--contract <path>] [--output <path>] [--format jsonl|otel-json] [--trace-id <id>|--run-id <id>|--latest-run] [--allow-bootstrap-core] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_PREVIEW: CommandSpec = CommandSpec {
+    name: "preview",
+    usage_lines:     &["       forge-core preview [--root <path>] --operation <path> [--allow-bootstrap-core] [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::DefaultReadOnly,
+};
+
+pub const COMMAND_READY: CommandSpec = CommandSpec {
+    name: "ready",
+    usage_lines:     &["       forge-core ready [--root <path>] --operation <path> [--allow-bootstrap-core] [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::DefaultReadOnly,
+};
+
+pub const COMMAND_EXPLAIN: CommandSpec = CommandSpec {
+    name: "explain",
+    usage_lines:     &["       forge-core explain [--root <path>] (--last-run | --run-id <id>) [--allow-bootstrap-core] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::DefaultReadOnly,
+};
+
+pub const COMMAND_COST: CommandSpec = CommandSpec {
+    name: "cost",
+    usage_lines:     &["       forge-core cost [--root <path>] [--run-id <id> | --last-run] [--graph-id <id>] [--principal <id>] [--allow-bootstrap-core] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_RISK_AUDIT: CommandSpec = CommandSpec {
+    name: "risk-audit",
+    usage_lines: &[
+        "       forge-core risk-audit [--root <path>] --rules <path> [--json|--no-json]",
+    ],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_VALIDATE: CommandSpec = CommandSpec {
+    name: "validate",
+    usage_lines: &["       forge-core validate [--root <path>] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_PREFLIGHT: CommandSpec = CommandSpec {
+    name: "preflight",
+    usage_lines:     &["       forge-core preflight [--root <path>] [--allow-bootstrap-core] [--json|--no-json] [--profile <name>] [--gate <name>]... [--expected-anchor <count>]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_EXECUTE_OPERATION: CommandSpec = CommandSpec {
+    name: "execute-operation",
+    usage_lines:     &["       forge-core execute-operation --root <path> --operation <path> [--command <path>] [--effect <path>] [--payload <target_ref>=<path>] [--max-payload-bytes <bytes>] [--allow-payload-outside-root] [--allow-bootstrap-core] [--recorded-at <value>] [--tx-id-prefix <value>] [--require-risk-audit <path>] [--require-citation] [--no-sync] [--json|--no-json]"],
+    authority: CommandAuthority::MutatesForgeState,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::DefaultMutate,
+};
+
+pub const COMMAND_REBUILD_EFFECT_INDEX: CommandSpec = CommandSpec {
+    name: "rebuild-effect-index",
+    usage_lines:     &["       forge-core rebuild-effect-index [--root <path>] [--wal <path>] [--index <path>] [--lock <path>] [--allow-bootstrap-core] [--recorded-at <value>] [--no-sync] [--json|--no-json]"],
+    authority: CommandAuthority::MutatesForgeState,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_QUERY_EFFECT_INDEX: CommandSpec = CommandSpec {
+    name: "query-effect-index",
+    usage_lines:     &["       forge-core query-effect-index [--root <path>] [--index <path>] [--logical-ref <ref>] [--effect-id <id>] [--operation-id <id>] [--target-kind <kind>] [--consumer-use <discovery|diagnostics|handoff_context>] [--context] [--max-context-groups <n>] [--adapter-kind <codex|cursor|claude|opencode|vscode|pidev|forge_standalone|custom>] [--adapter-trigger <evidence_discovery|diagnostics|handoff_preparation|manual_inspection>] [--latest] [--allow-bootstrap-core] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::DefaultReadOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_MANIFEST: CommandSpec = CommandSpec {
+    name: "host-adapter-manifest",
+    usage_lines: &["       forge-core host-adapter-manifest [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_PROJECTION: CommandSpec = CommandSpec {
+    name: "host-adapter-projection",
+    usage_lines:     &["       forge-core host-adapter-projection [--target <mcp_tools|borrowed_shell|app_ui>] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_PROCESS_POLICY: CommandSpec = CommandSpec {
+    name: "host-adapter-process-policy",
+    usage_lines:     &["       forge-core host-adapter-process-policy [--target <mcp_stdio|borrowed_shell|app_bridge>] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_ADMIT_INVOCATION: CommandSpec = CommandSpec {
+    name: "host-adapter-admit-invocation",
+    usage_lines:     &["       forge-core host-adapter-admit-invocation --command <name> [--target <mcp_stdio|borrowed_shell|app_bridge>] [--explicit] [--argv <arg>] [--cwd <path>] [--env-key <key>] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_DISTRIBUTION_POLICY: CommandSpec = CommandSpec {
+    name: "host-adapter-distribution-policy",
+    usage_lines: &["       forge-core host-adapter-distribution-policy [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_ADMIT_DISTRIBUTION: CommandSpec = CommandSpec {
+    name: "host-adapter-admit-distribution",
+    usage_lines:     &["       forge-core host-adapter-admit-distribution --artifact <name> [--target <codex|cursor|claude|opencode|vscode|pidev|forge_standalone|custom>] [--channel <stable|canary|dev>] [--sha256 <digest>] [--signature-ref <ref>] [--provenance-ref <ref>] [--source-ref <ref>] [--version <value>] [--compatible-core-version <value>] [--rollback-ref <ref>] [--update-summary-ref <ref>] [--explicit-canary-opt-in] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_VERIFY_ARTIFACT: CommandSpec = CommandSpec {
+    name: "host-adapter-verify-artifact",
+    usage_lines:     &["       forge-core host-adapter-verify-artifact --artifact-path <path> --sha256 <digest> [--signature-ref <ref>] [--provenance-ref <ref>] [--source-ref <ref>] [--version <value>] [--compatible-core-version <value>] [--rollback-ref <ref>] [--update-summary-ref <ref>] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_VERIFY_PROVENANCE: CommandSpec = CommandSpec {
+    name: "host-adapter-verify-provenance",
+    usage_lines:     &["       forge-core host-adapter-verify-provenance --artifact-path <path> --provenance-path <path> --signature-path <path> --public-key-path <path> --transparency-log-path <path> --sha256 <digest> --expected-builder-id <id> --expected-source-uri <uri> --expected-source-ref <ref> [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_VERIFY_REKOR_ENTRY: CommandSpec = CommandSpec {
+    name: "host-adapter-verify-rekor-entry",
+    usage_lines:     &["       forge-core host-adapter-verify-rekor-entry --log-entry-path <path> --public-key-path <path> --expected-log-id <id> [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_TRUST_POLICY: CommandSpec = CommandSpec {
+    name: "host-adapter-verify-sigstore-trust-policy",
+    usage_lines:     &["       forge-core host-adapter-verify-sigstore-trust-policy --policy-path <path> [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_VERIFY_FULCIO_CERTIFICATE_IDENTITY: CommandSpec = CommandSpec {
+    name: "host-adapter-verify-fulcio-certificate-identity",
+    usage_lines:     &["       forge-core host-adapter-verify-fulcio-certificate-identity --trust-policy-path <path> --certificate-path <path> --issuer-certificate-path <path> [--issuer-certificate-path <path>] --verification-time-unix <seconds> [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_BUNDLE_SUBJECT: CommandSpec = CommandSpec {
+    name: "host-adapter-verify-sigstore-bundle-subject",
+    usage_lines:     &["       forge-core host-adapter-verify-sigstore-bundle-subject --bundle-path <path> --artifact-path <path> --trust-policy-path <path> --certificate-path <path> --issuer-certificate-path <path> [--issuer-certificate-path <path>] --rekor-log-entry-path <path> --rekor-public-key-path <path> --expected-rekor-log-id <id> [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_DSSE_IN_TOTO_SUBJECT: CommandSpec = CommandSpec {
+    name: "host-adapter-verify-sigstore-dsse-in-toto-subject",
+    usage_lines:     &["       forge-core host-adapter-verify-sigstore-dsse-in-toto-subject --bundle-path <path> --artifact-path <path> --trust-policy-path <path> --certificate-path <path> --issuer-certificate-path <path> [--issuer-certificate-path <path>] --rekor-log-entry-path <path> --rekor-public-key-path <path> --expected-rekor-log-id <id> [--expected-predicate-type <type>] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_TIMESTAMP_AUTHORITY: CommandSpec = CommandSpec {
+    name: "host-adapter-verify-sigstore-timestamp-authority",
+    usage_lines:     &["       forge-core host-adapter-verify-sigstore-timestamp-authority --trust-policy-path <path> --certificate-path <path> [--rekor-log-entry-path <path>] [--rekor-public-key-path <path>] [--expected-rekor-log-id <id>] [--rfc3161-timestamp-token-path <path>] [--rfc3161-timestamped-signature-path <path>] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_TRANSPARENCY_SCT: CommandSpec = CommandSpec {
+    name: "host-adapter-verify-certificate-transparency-sct",
+    usage_lines:     &["       forge-core host-adapter-verify-certificate-transparency-sct --trust-policy-path <path> --certificate-path <path> --sct-path <path> [--sct-path <path>] --verification-time-unix-ms <milliseconds> [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_REVOCATION_POLICY: CommandSpec = CommandSpec {
+    name: "host-adapter-verify-certificate-revocation-policy",
+    usage_lines:     &["       forge-core host-adapter-verify-certificate-revocation-policy --trust-policy-path <path> --certificate-path <path> --trusted-signing-time-unix <seconds> [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_VERIFY_TUF_TRUSTED_ROOT_FRESHNESS: CommandSpec = CommandSpec {
+    name: "host-adapter-verify-tuf-trusted-root-freshness",
+    usage_lines:     &["       forge-core host-adapter-verify-tuf-trusted-root-freshness --trust-policy-path <path> --root-metadata-path <path> [--timestamp-metadata-path <path>] [--snapshot-metadata-path <path>] [--targets-metadata-path <path>] --update-start-time-unix <seconds> [--min-root-version <n>] [--min-timestamp-version <n>] [--min-snapshot-version <n>] [--min-targets-version <n>] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_CRL_STATUS: CommandSpec = CommandSpec {
+    name: "host-adapter-verify-certificate-crl-status",
+    usage_lines:     &["       forge-core host-adapter-verify-certificate-crl-status --trust-policy-path <path> --certificate-path <path> --issuer-certificate-path <path> --crl-path <path> --verification-time-unix <seconds> [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_OCSP_STATUS: CommandSpec = CommandSpec {
+    name: "host-adapter-verify-certificate-ocsp-status",
+    usage_lines:     &["       forge-core host-adapter-verify-certificate-ocsp-status --trust-policy-path <path> --certificate-path <path> --issuer-certificate-path <path> --ocsp-response-path <path> --verification-time-unix <seconds> [--expected-nonce-hex <hex>] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_START: CommandSpec = CommandSpec {
+    name: "start",
+    usage_lines:     &["       forge-core start [--root <path>] [--allow-bootstrap-core] [--agent-id <id>] [--json|--no-json]"],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_MCP: CommandSpec = CommandSpec {
+    name: "mcp",
+    usage_lines:     &[
+                "       forge-core mcp serve [--allowlist <yaml>] [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
+            ],
+    authority: CommandAuthority::AdapterProtocol,
+    json_mode: JsonMode::ProtocolStream,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+pub const COMMAND_RESEARCH: CommandSpec = CommandSpec {
+    name: "research",
+    usage_lines:     &[
+                "       forge-core research source add  --source-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
+                "       forge-core research source list [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
+                "       forge-core research check       [--root <path>] [--allow-bootstrap-core] [--evidence-file <path>] [--json|--no-json]",
+                "       forge-core research graph       [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
+                "       forge-core research cite        --source-id <id> [--root <path>] [--allow-bootstrap-core] [--evidence-file <path>] [--json|--no-json]",
+            ],
+    authority: CommandAuthority::MixedBySubcommand,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::AllowlistOnly,
+};
+
+/// The complete, ordered metadata table for `forge-core` commands.
+///
+/// Order matches global help output. Dispatch-specific handler pointers are
+/// intentionally added in `forge-core-cli`; this crate owns only reusable
+/// command facts.
+#[rustfmt::skip]
+pub const COMMANDS: &[CommandSpec] = &[
+    COMMAND_GUIDE,
+    COMMAND_CLAIM,
+    COMMAND_AUTONOMY,
+    COMMAND_CONTRACT,
+    COMMAND_ISOLATION,
+    COMMAND_MEMORY,
+    COMMAND_GOVERNANCE,
+    COMMAND_COORDINATION,
+    COMMAND_PROJECT,
+    COMMAND_GRAPH,
+    COMMAND_EVAL,
+    COMMAND_EVAL_HARNESS,
+    COMMAND_TELEMETRY,
+    COMMAND_PREVIEW,
+    COMMAND_READY,
+    COMMAND_EXPLAIN,
+    COMMAND_COST,
+    COMMAND_RISK_AUDIT,
+    COMMAND_VALIDATE,
+    COMMAND_PREFLIGHT,
+    COMMAND_EXECUTE_OPERATION,
+    COMMAND_REBUILD_EFFECT_INDEX,
+    COMMAND_QUERY_EFFECT_INDEX,
+    COMMAND_HOST_ADAPTER_MANIFEST,
+    COMMAND_HOST_ADAPTER_PROJECTION,
+    COMMAND_HOST_ADAPTER_PROCESS_POLICY,
+    COMMAND_HOST_ADAPTER_ADMIT_INVOCATION,
+    COMMAND_HOST_ADAPTER_DISTRIBUTION_POLICY,
+    COMMAND_HOST_ADAPTER_ADMIT_DISTRIBUTION,
+    COMMAND_HOST_ADAPTER_VERIFY_ARTIFACT,
+    COMMAND_HOST_ADAPTER_VERIFY_PROVENANCE,
+    COMMAND_HOST_ADAPTER_VERIFY_REKOR_ENTRY,
+    COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_TRUST_POLICY,
+    COMMAND_HOST_ADAPTER_VERIFY_FULCIO_CERTIFICATE_IDENTITY,
+    COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_BUNDLE_SUBJECT,
+    COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_DSSE_IN_TOTO_SUBJECT,
+    COMMAND_HOST_ADAPTER_VERIFY_SIGSTORE_TIMESTAMP_AUTHORITY,
+    COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_TRANSPARENCY_SCT,
+    COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_REVOCATION_POLICY,
+    COMMAND_HOST_ADAPTER_VERIFY_TUF_TRUSTED_ROOT_FRESHNESS,
+    COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_CRL_STATUS,
+    COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_OCSP_STATUS,
+    COMMAND_START,
+    COMMAND_MCP,
+    COMMAND_RESEARCH,
+];
+
+/// Look up command metadata by top-level command name.
+#[must_use]
+pub fn command_by_name(name: &str) -> Option<&'static CommandSpec> {
+    COMMANDS.iter().find(|command| command.name == name)
+}
+
+/// Iterate over every registered command name.
+pub fn command_names() -> impl Iterator<Item = &'static str> {
+    COMMANDS.iter().map(|command| command.name)
+}
+
+/// Iterate over the default read-only MCP tool projection.
+pub fn mcp_default_read_only_tool_names() -> impl Iterator<Item = &'static str> {
+    COMMANDS
+        .iter()
+        .filter(|command| command.mcp_visibility.is_default_read_only())
+        .map(|command| command.name)
+}
+
+/// Iterate over the opt-in default mutating MCP tool projection.
+pub fn mcp_default_mutate_tool_names() -> impl Iterator<Item = &'static str> {
+    COMMANDS
+        .iter()
+        .filter(|command| command.mcp_visibility.is_default_mutate())
+        .map(|command| command.name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn command_names_are_unique() {
+        let mut names: Vec<&str> = command_names().collect();
+        names.sort_unstable();
+        let before = names.len();
+        names.dedup();
+        assert_eq!(names.len(), before, "duplicate command surface names");
+    }
+
+    #[test]
+    fn every_command_has_canonical_usage() {
+        for command in COMMANDS {
+            assert!(
+                !command.usage_lines.is_empty(),
+                "{} has no usage",
+                command.name
+            );
+            assert!(
+                command
+                    .canonical_usage()
+                    .trim_start()
+                    .starts_with("forge-core "),
+                "{} canonical usage should start with forge-core: {:?}",
+                command.name,
+                command.canonical_usage()
+            );
+        }
+    }
+
+    #[test]
+    fn mcp_default_projection_is_disjoint_and_registered() {
+        let read_only: std::collections::HashSet<&str> =
+            mcp_default_read_only_tool_names().collect();
+        let mutate: std::collections::HashSet<&str> = mcp_default_mutate_tool_names().collect();
+        assert!(
+            !read_only.is_empty(),
+            "default read-only MCP projection is empty"
+        );
+        assert!(!mutate.is_empty(), "default mutate MCP projection is empty");
+        if let Some(name) = read_only.intersection(&mutate).next() {
+            panic!("MCP default projection classifies {name:?} as both read-only and mutate");
+        }
+        for name in read_only.iter().chain(mutate.iter()) {
+            assert!(
+                command_by_name(name).is_some(),
+                "default MCP tool {name:?} is not registered"
+            );
+        }
+    }
+
+    #[test]
+    fn default_mutate_projection_uses_mutating_authority() {
+        for name in mcp_default_mutate_tool_names() {
+            let command = command_by_name(name).expect("registered default mutate command");
+            assert!(
+                command.authority.may_mutate(),
+                "default mutate MCP tool {name:?} must have mutating authority metadata"
+            );
+        }
+    }
+}

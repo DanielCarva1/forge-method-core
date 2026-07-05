@@ -69,6 +69,45 @@ highest-signal drift surfaces:
   - `cargo clippy --workspace --all-targets -- -D clippy::pedantic`
   - `cargo run -p forge-core-cli -- validate --root . --json`
 
+## Second hardening changeset evidence
+
+The second implementation slice deepens the Command Surface seam without a
+big-bang parser rewrite:
+
+- A dependency-free `forge-core-command-surface` crate now owns canonical
+  command names, usage lines, coarse authority class, JSON mode, and MCP
+  visibility metadata.
+- `forge-core-cli::command_registry` now adds handler pointers to the shared
+  metadata instead of owning a second copy of command usage facts.
+- The MCP adapter validates explicit allowlists against the shared command
+  surface, not against a dev-only dependency on CLI internals.
+- Default MCP read-only and mutate tool sets are projections of
+  `McpVisibility`, not independent arrays inside the MCP adapter.
+- `tools/list` descriptors now include canonical command usage and JSON mode
+  projected from the shared Command Surface.
+- Focused verification after this slice:
+  - `cargo check -p forge-core-command-surface -p forge-core-protocol-mcp -p forge-core-cli --all-targets`
+  - `cargo test -p forge-core-command-surface`
+  - `cargo test -p forge-core-cli --lib command_registry`
+  - `cargo test -p forge-core-protocol-mcp --lib allowlist`
+  - `cargo test -p forge-core-protocol-mcp --lib mcp_tool_descriptor_projects_command_surface_usage`
+- Workspace verification after this slice:
+  - `python scripts/generate-workspace-layout.py --check`
+  - `cargo fmt --all -- --check`
+  - `cargo check --workspace --all-targets`
+  - `cargo clippy --workspace --all-targets -- -D clippy::pedantic`
+  - `CARGO_BUILD_JOBS=1 cargo test --workspace --no-fail-fast`
+  - `cargo run -p forge-core-cli -- validate --root . --json`
+  - `git diff --check`
+
+Remaining Stage 4 work:
+
+- Move generated command documentation to this same seam.
+- Decide whether host-adapter projection should consume the shared command
+  metadata directly or continue using its narrower host-command manifest.
+- Pilot a typed parser adapter for `start` after the shared metadata seam is
+  fully green.
+
 ## Research base
 
 ### Rust and CLI codebases

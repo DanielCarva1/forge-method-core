@@ -342,13 +342,12 @@ share the same wrapper shape; only the gate differs.
 ## Command Surface
 
 The canonical command-language module that owns what a `forge-core` command is:
-its path, usage metadata, authority class, JSON/text support, adapter exposure,
-and dispatch adapter. CLI help, MCP tool projection, generated command docs,
-and parser/handler lookup should be projections of the Command Surface rather
-than rival hand-written lists. The current seed is
-`forge-core-cli::command_registry::COMMANDS`; the hardening path is to deepen
-that module until command drift becomes a test failure instead of a user-facing
-surprise.
+its path, usage metadata, authority class, JSON/text support, and adapter
+exposure. The current shared seam is the `forge-core-command-surface` crate.
+`forge-core-cli::command_registry` adds handler pointers to that metadata; the
+MCP adapter projects allowlist defaults and tool descriptors from it. Generated
+command docs and parser/handler lookup should continue migrating toward this
+Command Surface rather than growing rival hand-written lists.
 
 ## Allowlist
 

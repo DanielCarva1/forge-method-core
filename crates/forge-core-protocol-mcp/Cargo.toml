@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+forge-core-command-surface = { path = "../forge-core-command-surface" }
 forge-core-contracts = { path = "../forge-core-contracts" }
 forge-core-validate = { path = "../forge-core-validate" }
 # Local tokio features for stdio MCP server (io-util + macros for the
@@ -27,14 +28,3 @@ proptest.workspace = true
 # re-exports `rand_core` traits; `rand` provides `OsRng`. Dev-only — not part
 # of the production build.
 rand = "0.8"
-# DEV-ONLY: this crate's tool-name source of truth is `command_registry::COMMANDS`
-# in `forge-core-cli`. The CLI depends on THIS crate (one-way: CLI → adapter),
-# so we cannot link it at runtime without creating a cycle. A dev-dependency is
-# the lowest-risk way to make a rename in COMMANDS a test failure here: the
-# validation test below (`default_tools_are_registered_commands`) reads the
-# `pub const COMMANDS` and asserts every default tool name exists in it. This
-# adds ZERO runtime coupling — the adapter still spawns the `forge-core` binary
-# as a subprocess and never links the CLI's lib code in a production build.
-# (Cargo permits dev-dependency cycles for non-publish builds; the parent
-# verifies via `cargo test`, never `cargo publish`.)
-forge-core-cli = { path = "../forge-core-cli" }
