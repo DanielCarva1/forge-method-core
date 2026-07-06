@@ -61,7 +61,13 @@ pub fn run_route(args: &[String]) -> Result<(), ExitError> {
             return Ok(());
         }
         Ok(RouteParseOutcome::Run(options)) => options,
-        Err(error) => return emit_err(ROUTE_COMMAND, &error.message(), error.want_json()),
+        Err(error) => {
+            return emit_err(
+                ROUTE_COMMAND,
+                &autonomy_parse_error_message_with_usage("route", &error),
+                error.want_json(),
+            );
+        }
     };
 
     let contracts = match load_route_contracts(&options) {
@@ -104,6 +110,14 @@ fn autonomy_command_surface_usage_line_for(subcommand: &str) -> &'static str {
     COMMAND_AUTONOMY
         .usage_line_for_subcommand(subcommand)
         .unwrap_or("forge-core autonomy <subcommand> [options]")
+}
+
+fn autonomy_parse_error_message_with_usage(subcommand: &str, error: &RouteParseError) -> String {
+    format!(
+        "{}\n\nusage:\n  {}",
+        error.message(),
+        autonomy_command_surface_usage_line_for(subcommand)
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -466,6 +480,28 @@ mod tests {
         values.iter().map(|value| (*value).to_string()).collect()
     }
 
+    fn assert_autonomy_route_error_projects_route_usage(
+        error: &RouteParseError,
+        expected_diagnostic: &str,
+    ) {
+        let message = autonomy_parse_error_message_with_usage("route", error);
+        assert!(
+            message.contains(expected_diagnostic),
+            "error should preserve diagnostic {expected_diagnostic:?}: {message}"
+        );
+        let projected = COMMAND_AUTONOMY
+            .usage_line_for_subcommand("route")
+            .expect("autonomy route usage");
+        assert!(
+            message.contains(projected),
+            "error should project route Command Surface usage {projected:?}: {message}"
+        );
+        assert!(
+            !message.contains("forge-core execute-operation"),
+            "route error should not leak unrelated command usage: {message}"
+        );
+    }
+
     fn manual_policy() -> AutonomyPolicyContract {
         AutonomyPolicyContract {
             id: StableId("p1".into()),
@@ -667,6 +703,22 @@ mod tests {
     }
 
     #[test]
+    fn autonomy_route_invalid_u8_reports_route_usage() {
+        let error = parse_route_args(&args(&[
+            "--policy-file",
+            "policy.yaml",
+            "--failure-streak",
+            "999",
+        ]))
+        .expect_err("bad u8");
+
+        assert_autonomy_route_error_projects_route_usage(
+            &error,
+            "--failure-streak must be an integer 0-255, got '999'",
+        );
+    }
+
+    #[test]
     fn parse_route_args_rejects_negative_number_as_flag_value() {
         let error = parse_route_args(&args(&[
             "--policy-file",
@@ -683,6 +735,17 @@ mod tests {
                 value: "-1".to_string(),
                 want_json: true,
             }
+        );
+    }
+
+    #[test]
+    fn autonomy_route_flag_as_value_reports_route_usage() {
+        let error =
+            parse_route_args(&args(&["--policy-file", "--goal-file"])).expect_err("flag as value");
+
+        assert_autonomy_route_error_projects_route_usage(
+            &error,
+            "--policy-file requires a value, got another flag '--goal-file'",
         );
     }
 
@@ -737,6 +800,27 @@ mod tests {
     }
 
     #[test]
+    fn autonomy_route_invalid_tool_class_reports_route_usage() {
+        let error = parse_route_args(&args(&[
+            "--policy-file",
+            "policy.yaml",
+            "--tool-class",
+            "browser_cookie_dump",
+        ]))
+        .expect_err("unknown tool class");
+
+        assert_autonomy_route_error_projects_route_usage(
+            &error,
+            "--tool-class must be one of file_edit",
+        );
+        let message = autonomy_parse_error_message_with_usage("route", &error);
+        assert!(
+            message.contains("browser_cookie_dump"),
+            "route error should preserve invalid value: {message}"
+        );
+    }
+
+    #[test]
     fn parse_tool_class_accepts_every_public_snake_case_value() {
         let cases = [
             ("file_edit", ToolClass::FileEdit),
@@ -762,6 +846,20 @@ mod tests {
             error,
             RouteParseError::MissingPolicyFile { want_json: false }
         );
+    }
+
+    #[test]
+    fn autonomy_route_missing_policy_reports_route_usage() {
+        let error = parse_route_args(&args(&[])).expect_err("missing policy");
+
+        assert_autonomy_route_error_projects_route_usage(&error, "--policy-file is required");
+    }
+
+    #[test]
+    fn autonomy_route_unknown_arg_reports_route_usage() {
+        let error = parse_route_args(&args(&["--unknown"])).expect_err("unknown arg");
+
+        assert_autonomy_route_error_projects_route_usage(&error, "unknown argument '--unknown'");
     }
 
     #[test]

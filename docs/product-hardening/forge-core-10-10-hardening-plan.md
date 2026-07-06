@@ -918,6 +918,35 @@ interface before changing code:
   subcommand-specific `Command Surface` usage to research parse-error envelopes,
   and prove that each research subcommand projects only its own usage line.
 
+## Fiftieth hardening changeset evidence
+
+The fiftieth implementation slice targets the autonomy router interface before
+changing code:
+
+- Context7 research against clap reconfirmed the parser-help invariant on the
+  smallest relevant command tree: parse failures for missing required flags,
+  missing values, invalid numeric values, and unknown arguments are formatted
+  with the failing command's usage.
+- CLI Guidelines research keeps the product standard human-first and
+  agent-friendly: subcommands should expose their own help and expected errors
+  should guide the caller toward the right syntax instead of forcing a separate
+  discovery round-trip.
+- `autonomy route` is the flagship dual-lane risk router surface. It is
+  read-only, but it decides whether proposed work belongs on the fast or
+  rigorous lane from an `AutonomyPolicyContract`, optional
+  `VerificationGoalContract`, tool classes, and failure streak. Parser locality
+  is therefore still product-critical: malformed routing input should fail
+  before policy loading while returning the exact route interface to retry.
+- The current typed parser already preserves every diagnostic variant and
+  JSON/text preference. The shallow part is the emission seam: parse-error
+  envelopes still carry only short messages such as `--policy-file is required`
+  or `--failure-streak must be an integer 0-255`.
+- The implementation target is deliberately narrow: keep the router, policy
+  loading, and contract validation semantics unchanged; append the
+  `autonomy route` `Command Surface` usage to route parse-error envelopes; and
+  prove that missing, invalid, unknown, and flag-as-value errors project the
+  canonical route usage only.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
