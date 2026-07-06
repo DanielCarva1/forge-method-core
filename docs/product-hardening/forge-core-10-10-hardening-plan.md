@@ -890,6 +890,34 @@ parser-help paths in the `governance` command family:
   arguments, invalid `--status`, and the arbitrate resolution selector path
   project only the failing governance subcommand usage.
 
+## Forty-ninth hardening changeset evidence
+
+The forty-ninth implementation slice targets the F14 research Source Ledger
+interface before changing code:
+
+- Context7 research against clap confirmed the same parser-help invariant used
+  by the memory and governance slices: parser errors are formatted with the
+  failing command context and render that command's usage. Nested subcommand
+  failures should not fall back to root usage.
+- The CLI Guidelines project frames a modern CLI as a human-first text UI:
+  subcommands should have their own help, and expected errors should be
+  rewritten into useful, actionable feedback rather than opaque short strings.
+- ADR-0010 makes `research` a semantic trust seam, not a convenience wrapper:
+  runtime `ResearchSource` provenance lives in its own Source Ledger so citation
+  provenance does not collapse into memory authority. Parser locality matters
+  here because malformed source admission, citation checks, graph projection,
+  or point citation lookup should fail closed while still returning the exact
+  research interface the agent must retry.
+- The current typed research parser preserves diagnostics and JSON/text
+  preference, and the `Command Surface` already owns canonical usage lines for
+  `source add`, `source list`, `check`, `graph`, and `cite`. The shallow part is
+  the emission seam: parse-error envelopes still carry only messages such as
+  `--source-file is required` or `unknown argument '--bogus'`.
+- The implementation target is therefore deliberately narrow: keep the typed
+  parser and all F14 Source Ledger semantics unchanged, append
+  subcommand-specific `Command Surface` usage to research parse-error envelopes,
+  and prove that each research subcommand projects only its own usage line.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

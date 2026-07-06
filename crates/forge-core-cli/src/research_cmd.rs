@@ -127,6 +127,14 @@ fn research_command_surface_usage_line_for(path: &[&str]) -> &'static str {
         .unwrap_or("forge-core research <subcommand> [options]")
 }
 
+fn research_parse_error_message_with_usage(path: &[&str], error: &ResearchParseError) -> String {
+    format!(
+        "{}\n\nusage:\n  {}",
+        error.message(),
+        research_command_surface_usage_line_for(path)
+    )
+}
+
 // --- shared resolution -------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -227,7 +235,13 @@ fn run_source_add(args: &[String]) -> Result<(), ExitError> {
             return Ok(());
         }
         Ok(ResearchParseOutcome::Run(opts)) => opts,
-        Err(error) => return emit_err(SOURCE_ADD_COMMAND, &error.message(), error.want_json()),
+        Err(error) => {
+            return emit_err(
+                SOURCE_ADD_COMMAND,
+                &research_parse_error_message_with_usage(&["source", "add"], &error),
+                error.want_json(),
+            );
+        }
     };
     let source = match load_source_file(&outcome.source_file) {
         Ok(source) => source,
@@ -306,7 +320,13 @@ fn run_source_list(args: &[String]) -> Result<(), ExitError> {
             return Ok(());
         }
         Ok(ResearchParseOutcome::Run(common)) => common,
-        Err(error) => return emit_err(SOURCE_LIST_COMMAND, &error.message(), error.want_json()),
+        Err(error) => {
+            return emit_err(
+                SOURCE_LIST_COMMAND,
+                &research_parse_error_message_with_usage(&["source", "list"], &error),
+                error.want_json(),
+            );
+        }
     };
     let state_root = match resolve_state_root(outcome.root.as_deref(), outcome.allow_bootstrap_core)
     {
@@ -376,7 +396,13 @@ fn run_check(args: &[String]) -> Result<(), ExitError> {
             return Ok(());
         }
         Ok(ResearchParseOutcome::Run(common)) => common,
-        Err(error) => return emit_err(CHECK_COMMAND, &error.message(), error.want_json()),
+        Err(error) => {
+            return emit_err(
+                CHECK_COMMAND,
+                &research_parse_error_message_with_usage(&["check"], &error),
+                error.want_json(),
+            );
+        }
     };
     let root_str = outcome.root.as_deref().unwrap_or(".");
     let root_path = PathBuf::from(root_str);
@@ -459,7 +485,13 @@ fn run_graph(args: &[String]) -> Result<(), ExitError> {
             return Ok(());
         }
         Ok(ResearchParseOutcome::Run(common)) => common,
-        Err(error) => return emit_err(GRAPH_COMMAND, &error.message(), error.want_json()),
+        Err(error) => {
+            return emit_err(
+                GRAPH_COMMAND,
+                &research_parse_error_message_with_usage(&["graph"], &error),
+                error.want_json(),
+            );
+        }
     };
     let root_str = outcome.root.as_deref().unwrap_or(".");
     let root_path = PathBuf::from(root_str);
@@ -508,7 +540,13 @@ fn run_cite(args: &[String]) -> Result<(), ExitError> {
             return Ok(());
         }
         Ok(ResearchParseOutcome::Run(opts)) => opts,
-        Err(error) => return emit_err(CITE_COMMAND, &error.message(), error.want_json()),
+        Err(error) => {
+            return emit_err(
+                CITE_COMMAND,
+                &research_parse_error_message_with_usage(&["cite"], &error),
+                error.want_json(),
+            );
+        }
     };
     let root_str = outcome.common.root.as_deref().unwrap_or(".");
     let root_path = PathBuf::from(root_str);
@@ -951,6 +989,42 @@ mod tests {
         values.iter().map(|value| (*value).to_string()).collect()
     }
 
+    fn assert_research_error_projects_only_subcommand_usage(
+        error: &ResearchParseError,
+        path: &[&str],
+        expected_diagnostic: &str,
+    ) {
+        let message = research_parse_error_message_with_usage(path, error);
+        assert!(
+            message.contains(expected_diagnostic),
+            "error should preserve diagnostic {expected_diagnostic:?}: {message}"
+        );
+        let projected = COMMAND_RESEARCH
+            .usage_line_for_subcommand_path(path)
+            .expect("research subcommand usage");
+        assert!(
+            message.contains(projected),
+            "error should project {path:?} Command Surface usage {projected:?}: {message}"
+        );
+        for sibling in [
+            &["source", "add"][..],
+            &["source", "list"][..],
+            &["check"][..],
+            &["graph"][..],
+            &["cite"][..],
+        ] {
+            if sibling != path {
+                let sibling_usage = COMMAND_RESEARCH
+                    .usage_line_for_subcommand_path(sibling)
+                    .expect("sibling usage");
+                assert!(
+                    !message.contains(sibling_usage),
+                    "error for {path:?} should not leak {sibling:?} usage: {message}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn parse_source_add_requires_source_and_policy_file() {
         let error = parse_source_add_args(&args(&[])).expect_err("missing required");
@@ -1086,6 +1160,69 @@ mod tests {
                 "research {path:?} help should come from the Command Surface"
             );
         }
+    }
+
+    #[test]
+    fn research_missing_value_reports_subcommand_usage() {
+        let error = parse_source_add_args(&args(&["--source-file", "--policy-file"]))
+            .expect_err("missing value");
+
+        assert_research_error_projects_only_subcommand_usage(
+            &error,
+            &["source", "add"],
+            "--source-file requires a value, got another flag '--policy-file'",
+        );
+    }
+
+    #[test]
+    fn research_missing_required_reports_subcommand_usage() {
+        let add_error = parse_source_add_args(&args(&[])).expect_err("missing source file");
+        assert_research_error_projects_only_subcommand_usage(
+            &add_error,
+            &["source", "add"],
+            "--source-file is required",
+        );
+
+        let cite_error = parse_cite_args(&args(&[])).expect_err("missing source id");
+        assert_research_error_projects_only_subcommand_usage(
+            &cite_error,
+            &["cite"],
+            "--source-id is required",
+        );
+    }
+
+    #[test]
+    fn research_unknown_arg_reports_subcommand_usage() {
+        let error = parse_common_only_args(&args(&["--bogus"])).expect_err("unknown arg");
+
+        assert_research_error_projects_only_subcommand_usage(
+            &error,
+            &["graph"],
+            "unknown argument '--bogus'",
+        );
+    }
+
+    #[test]
+    fn research_flag_as_value_reports_subcommand_usage() {
+        let error = parse_cite_args(&args(&["--source-id", "--root"])).expect_err("flag as value");
+
+        assert_research_error_projects_only_subcommand_usage(
+            &error,
+            &["cite"],
+            "--source-id requires a value, got another flag '--root'",
+        );
+    }
+
+    #[test]
+    fn research_common_flag_errors_project_requested_command_usage() {
+        let error =
+            parse_common_only_args(&args(&["--evidence-file", "--json"])).expect_err("bad value");
+
+        assert_research_error_projects_only_subcommand_usage(
+            &error,
+            &["check"],
+            "--evidence-file requires a value, got another flag '--json'",
+        );
     }
 
     #[test]
