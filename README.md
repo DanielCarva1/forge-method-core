@@ -10,6 +10,31 @@ any host agent (Codex, Cursor, Claude, OpenCode, pi.dev, VS Code, or the future
 Forge app) calls through its shell. Bring your own model — or several models, run
 by several different people. Forge keeps them coordinated.
 
+### How to start (and when to start again)
+
+Forge separates **project setup** (once per project) from **session orientation**
+(any time a new chat opens on an existing project):
+
+- **Initialize once per project.** From the repo you want governed, run:
+
+  ```bash
+  forge-core project init --root <repo>
+  ```
+
+  This creates a small `.forge-method.yaml` pointer in the consumer repo and a
+  sibling runtime sidecar. It is idempotent: re-running it on a project that is
+  already initialized is a no-op as long as the link still resolves to the same
+  sidecar. You do **not** re-run `project init` for every chat — the project
+  stays initialized across chats, agents, and machines.
+
+- **Orient each new chat/session with `forge-core start`.** This is the
+  read-only entry point an agent runs when it first lands on a project (in a
+  new chat, a new terminal, or after handing off to another agent). It inspects
+  the real state on disk and returns the current phase plus a concrete,
+  typed `next_step` (command + argv) — it never writes anything. So: run
+  `project init` once, then run `forge-core start` every time you open a new
+  chat on that project to pick up exactly where things left off.
+
 ---
 
 ## The promise
