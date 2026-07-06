@@ -1004,6 +1004,34 @@ resolution interface before changing code:
   while pointing only at the relevant `project init` or `project resolve`
   usage line.
 
+## Fifty-third hardening changeset evidence
+
+The fifty-third implementation slice targets the `start` first-use bootstrap
+and status interface before changing code:
+
+- Context7 research against clap reconfirmed that options requiring values
+  should fail at parse time, and that parser errors should render the relevant
+  command usage. A value token that looks like a second flag is not a valid
+  path or agent identifier unless the interface explicitly opts into that
+  behavior.
+- `start` is the read-only bootstrap status command in `CONTEXT.md`: it never
+  creates a Project Link, never creates state, and only recommends the next
+  concrete step such as `project init`, `project resolve`, or `guide describe`.
+  Parser locality matters because a malformed first-use command should not be
+  diagnosed as a project-resolution state.
+- The current parser already preserves the typed `StartCliOptions`, JSON/text
+  preference, `--allow-bootstrap-core`, and read-only state machine, but parse
+  failures are emitted as short local strings and values such as
+  `--root --agent-id` can be accepted as paths. That delays user feedback into
+  bootstrap/status evaluation and makes the agent debug the wrong seam.
+- The implementation target is deliberately narrow: keep Project Link/start
+  semantics unchanged, append the canonical `Command Surface` usage to `start`
+  parser errors, and reject flag-as-value cases for `--root` and
+  `--agent-id`/`--agent` before any project state is inspected.
+- Unit coverage should prove missing values, flag-as-value cases, and unknown
+  arguments keep their typed diagnostics while pointing only at the canonical
+  `start` usage line.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

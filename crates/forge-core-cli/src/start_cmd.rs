@@ -126,6 +126,7 @@ enum StartParseOutcome {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum StartParseError {
     MissingValue { flag: &'static str },
+    FlagAsValue { flag: &'static str, value: String },
     UnknownArgument { argument: String },
 }
 
@@ -133,11 +134,38 @@ impl std::fmt::Display for StartParseError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::MissingValue { flag } => write!(formatter, "start: {flag} requires a value"),
+            Self::FlagAsValue { flag, value } => write!(
+                formatter,
+                "start: {flag} requires a value, got another flag '{value}'"
+            ),
             Self::UnknownArgument { argument } => {
                 write!(formatter, "start: unrecognized argument '{argument}'")
             }
         }
     }
+}
+
+impl std::error::Error for StartParseError {}
+
+fn require_start_value(
+    args: &[String],
+    index: usize,
+    flag: &'static str,
+) -> Result<String, StartParseError> {
+    match args.get(index) {
+        Some(value) if value.starts_with('-') && value.len() > 1 => {
+            Err(StartParseError::FlagAsValue {
+                flag,
+                value: value.clone(),
+            })
+        }
+        Some(value) => Ok(value.clone()),
+        None => Err(StartParseError::MissingValue { flag }),
+    }
+}
+
+fn start_parse_error_with_usage(error: &StartParseError) -> String {
+    format!("{}\n\nusage:\n  {}", error, start_usage_line())
 }
 
 /// The `start` success payload. Carries the diagnosed state, the resolved
@@ -297,14 +325,15 @@ impl std::error::Error for StartError {}
 /// (via `emit`) when project resolution fails and the envelope carries a
 /// non-zero exit code.
 pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
-    let options =
-        match parse_start_args(args).map_err(|error| ExitError::usage(error.to_string()))? {
-            StartParseOutcome::Run(options) => options,
-            StartParseOutcome::Help => {
-                println!("{}", start_usage_line());
-                return Ok(());
-            }
-        };
+    let options = match parse_start_args(args)
+        .map_err(|error| ExitError::usage(start_parse_error_with_usage(&error)))?
+    {
+        StartParseOutcome::Run(options) => options,
+        StartParseOutcome::Help => {
+            println!("{}", start_usage_line());
+            return Ok(());
+        }
+    };
 
     let env = run_start_with_agent(
         &options.root,
@@ -327,18 +356,14 @@ fn parse_start_args(args: &[String]) -> Result<StartParseOutcome, StartParseErro
         match args[index].as_str() {
             "--root" => {
                 index += 1;
-                let Some(value) = args.get(index) else {
-                    return Err(StartParseError::MissingValue { flag: "--root" });
-                };
+                let value = require_start_value(args, index, "--root")?;
                 root = PathBuf::from(value);
             }
             "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--agent-id" | "--agent" => {
                 index += 1;
-                let Some(value) = args.get(index) else {
-                    return Err(StartParseError::MissingValue { flag: "--agent-id" });
-                };
-                agent_id = Some(value.clone());
+                let value = require_start_value(args, index, "--agent-id")?;
+                agent_id = Some(value);
             }
             "--json" => output = StartOutputMode::Json,
             "--no-json" | "--text" => output = StartOutputMode::Text,
@@ -712,6 +737,28 @@ mod tests {
         parts.iter().map(|part| (*part).to_string()).collect()
     }
 
+    fn assert_start_error_uses_command_surface_usage(message: &str, expected_diagnostic: &str) {
+        assert!(
+            message.contains(expected_diagnostic),
+            "error should preserve diagnostic {expected_diagnostic:?}: {message}"
+        );
+        assert!(
+            message.contains(start_usage_line()),
+            "error should project start Command Surface usage {:?}: {message}",
+            start_usage_line()
+        );
+        for unrelated_usage in [
+            "forge-core project init",
+            "forge-core project resolve",
+            "forge-core mcp serve",
+        ] {
+            assert!(
+                !message.contains(unrelated_usage),
+                "start parse error should not leak unrelated usage {unrelated_usage:?}: {message}"
+            );
+        }
+    }
+
     #[test]
     fn typed_start_parser_returns_options() {
         let parsed = parse_start_args(&argv(&[
@@ -743,12 +790,70 @@ mod tests {
     #[test]
     fn typed_start_parser_reports_usage_errors() {
         let missing = parse_start_args(&argv(&["start", "--root"])).unwrap_err();
+        assert_eq!(missing, StartParseError::MissingValue { flag: "--root" });
         assert_eq!(missing.to_string(), "start: --root requires a value");
+
+        let flag_as_value =
+            parse_start_args(&argv(&["start", "--root", "--agent-id"])).unwrap_err();
+        assert_eq!(
+            flag_as_value,
+            StartParseError::FlagAsValue {
+                flag: "--root",
+                value: "--agent-id".to_string(),
+            }
+        );
+        assert_eq!(
+            flag_as_value.to_string(),
+            "start: --root requires a value, got another flag '--agent-id'"
+        );
 
         let unknown = parse_start_args(&argv(&["start", "--surprise"])).unwrap_err();
         assert_eq!(
+            unknown,
+            StartParseError::UnknownArgument {
+                argument: "--surprise".to_string(),
+            }
+        );
+        assert_eq!(
             unknown.to_string(),
             "start: unrecognized argument '--surprise'"
+        );
+    }
+
+    #[test]
+    fn start_parse_errors_use_start_usage() {
+        let missing = parse_start_args(&argv(&["start", "--root"])).unwrap_err();
+        let message = start_parse_error_with_usage(&missing);
+        assert_start_error_uses_command_surface_usage(&message, "start: --root requires a value");
+
+        let root_flag_as_value =
+            parse_start_args(&argv(&["start", "--root", "--agent-id"])).unwrap_err();
+        let message = start_parse_error_with_usage(&root_flag_as_value);
+        assert_start_error_uses_command_surface_usage(
+            &message,
+            "start: --root requires a value, got another flag '--agent-id'",
+        );
+
+        let agent_flag_as_value =
+            parse_start_args(&argv(&["start", "--agent-id", "--json"])).unwrap_err();
+        assert_eq!(
+            agent_flag_as_value,
+            StartParseError::FlagAsValue {
+                flag: "--agent-id",
+                value: "--json".to_string(),
+            }
+        );
+        let message = start_parse_error_with_usage(&agent_flag_as_value);
+        assert_start_error_uses_command_surface_usage(
+            &message,
+            "start: --agent-id requires a value, got another flag '--json'",
+        );
+
+        let unknown = parse_start_args(&argv(&["start", "--surprise"])).unwrap_err();
+        let message = start_parse_error_with_usage(&unknown);
+        assert_start_error_uses_command_surface_usage(
+            &message,
+            "start: unrecognized argument '--surprise'",
         );
     }
 
