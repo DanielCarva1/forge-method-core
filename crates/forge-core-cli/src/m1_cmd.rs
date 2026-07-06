@@ -824,12 +824,14 @@ pub fn parse_m1_command_args(
     }
 
     if kind == M1CommandKind::Explain && !last_run && run_id.is_none() {
-        return Err(ExitError::usage(
+        return Err(m1_relation_usage_error(
+            kind,
             "explain requires --last-run or --run-id <id>",
         ));
     }
     if last_run && run_id.is_some() {
-        return Err(ExitError::usage(
+        return Err(m1_relation_usage_error(
+            kind,
             "explain accepts either --last-run or --run-id, not both",
         ));
     }
@@ -852,6 +854,10 @@ pub fn parse_m1_command_args(
 #[must_use]
 fn m1_usage(kind: M1CommandKind) -> String {
     command_surface_usage(kind.command_spec())
+}
+
+fn m1_relation_usage_error(kind: M1CommandKind, message: &str) -> ExitError {
+    ExitError::usage(format!("{message}\n\n{}", m1_usage(kind)))
 }
 
 fn next_m1_arg_or_err(
@@ -1231,7 +1237,8 @@ mod tests {
     fn parser_rejects_explain_without_selector() {
         let args = vec!["explain".to_string()];
         let result = parse_m1_command_args(&args, M1CommandKind::Explain);
-        assert!(result.is_err(), "explain with no selector must error");
+        let error = result.expect_err("explain with no selector must error");
+        assert_explain_relation_usage_error(&error, "explain requires --last-run or --run-id <id>");
     }
 
     #[test]
@@ -1243,9 +1250,10 @@ mod tests {
             "run.abc".to_string(),
         ];
         let result = parse_m1_command_args(&args, M1CommandKind::Explain);
-        assert!(
-            result.is_err(),
-            "--last-run and --run-id are mutually exclusive"
+        let error = result.expect_err("--last-run and --run-id are mutually exclusive");
+        assert_explain_relation_usage_error(
+            &error,
+            "explain accepts either --last-run or --run-id, not both",
         );
     }
 
@@ -1261,6 +1269,27 @@ mod tests {
         assert!(
             !error.message().contains("forge-core preview"),
             "explain usage must not fall back to the global M1/global surface: {error}"
+        );
+    }
+
+    fn assert_explain_relation_usage_error(error: &ExitError, diagnostic: &str) {
+        assert_eq!(error.exit_code(), 2);
+        assert!(
+            error.message().contains(diagnostic),
+            "explain relation error should preserve the specific diagnostic {diagnostic:?}: {error}"
+        );
+        let projected = COMMAND_EXPLAIN.canonical_usage().trim_start();
+        assert!(
+            error.message().contains(projected),
+            "explain relation error should include projected Command Surface line {projected:?}: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core preview"),
+            "explain relation error must not fall back to sibling M1 command usage: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core ready"),
+            "explain relation error must not fall back to sibling M1 command usage: {error}"
         );
     }
 }

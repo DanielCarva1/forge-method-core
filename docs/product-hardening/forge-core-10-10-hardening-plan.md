@@ -779,6 +779,26 @@ safety-switch path in the graph dry-run surface:
 - Unit coverage proves the safety-switch error includes the `graph run`
   Command Surface line and does not leak unrelated command usage.
 
+## Forty-fourth hardening changeset evidence
+
+The forty-fourth implementation slice closes the remaining shallow argument
+relation paths in the M1 explain surface:
+
+- The `explain` Command Surface already models its selector as an exclusive
+  relation, `(--last-run | --run-id <id>)`, matching the CLI pattern that
+  required/conflicting argument errors should point operators back to the same
+  command usage that defines the relation.
+- Missing both selectors and providing both selectors still emitted local
+  one-line messages without the projected `forge-core explain` usage surface,
+  so the parser/help seam had lower locality than unknown-argument and
+  missing-value paths fixed earlier in the M1 family.
+- Selector relation errors now keep the specific human diagnostic while also
+  appending the `explain` Command Surface usage, preserving operator intent
+  and aligning the manual parser with the same usage contract used by current
+  Rust CLI practice.
+- Unit coverage proves both selector relation failures report the projected
+  `forge-core explain` line and do not fall back to sibling M1 command usage.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
