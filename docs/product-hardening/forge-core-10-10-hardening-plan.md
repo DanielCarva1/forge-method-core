@@ -947,6 +947,34 @@ changing code:
   prove that missing, invalid, unknown, and flag-as-value errors project the
   canonical route usage only.
 
+## Fifty-first hardening changeset evidence
+
+The fifty-first implementation slice targets the MCP adapter startup interface
+before changing code:
+
+- Context7 research against clap reconfirmed that options requiring values
+  should fail as parser errors and render the failing command's usage. A token
+  that is another flag is not a valid path-like value unless the interface
+  explicitly supports an escape hatch.
+- The current official MCP tools specification describes tools as executable
+  functions exposed by servers and invoked through `tools/list` and
+  `tools/call`. ADR-0006 and `CONTEXT.md` therefore treat `mcp serve` as a
+  protocol adapter seam, not an ordinary text command: once it starts, stdout
+  belongs to JSON-RPC and the Allowlist is the capability surface.
+- Parser locality is security-relevant here. `--allowlist --root` currently
+  parses as an allowlist path literally named `--root`, so the error is delayed
+  into file loading instead of failing at the adapter startup interface. That
+  is a shallow parse seam: callers receive a misleading operational error and
+  do not get the canonical `mcp serve` usage.
+- The current parser already preserves JSON/text preference and keeps the
+  server itself as a thin adapter over `COMMANDS`; those semantics must stay
+  unchanged. The target is only to make `mcp serve` parser failures fail before
+  server construction, append the canonical `Command Surface` usage, and reject
+  flag-as-value cases for `--allowlist` and `--root`.
+- Unit coverage should prove missing values, flag-as-value cases, unknown
+  flags, unexpected positionals, and unknown top-level MCP subcommands surface
+  actionable diagnostics with only the MCP Command Surface usage.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

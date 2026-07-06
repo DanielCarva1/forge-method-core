@@ -48,12 +48,14 @@ pub fn run_mcp_command(args: &[String]) -> Result<(), ExitError> {
             want_json,
         }) => emit_err(
             MCP_COMMAND,
-            &format!("unknown subcommand '{subcommand}'. Try: serve"),
+            &mcp_message_with_usage(&format!("unknown subcommand '{subcommand}'. Try: serve")),
             want_json,
         ),
-        Err(McpArgsError::Serve { error, want_json }) => {
-            emit_err(SERVE_COMMAND, &error.to_string(), want_json)
-        }
+        Err(McpArgsError::Serve { error, want_json }) => emit_err(
+            SERVE_COMMAND,
+            &mcp_serve_parse_error_with_usage(&error),
+            want_json,
+        ),
     }
 }
 
@@ -100,6 +102,20 @@ fn print_mcp_usage() {
     println!("  is read-only; --allowlist overrides with the named YAML file.");
 }
 
+fn mcp_serve_usage_line() -> &'static str {
+    COMMAND_MCP
+        .usage_line_for_subcommand("serve")
+        .unwrap_or("forge-core mcp serve [options]")
+}
+
+fn mcp_message_with_usage(message: &str) -> String {
+    format!("{message}\n\nusage:\n  {}", mcp_serve_usage_line())
+}
+
+fn mcp_serve_parse_error_with_usage(error: &ServeArgsError) -> String {
+    mcp_message_with_usage(&error.to_string())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ServeArgs {
     allowlist: Option<PathBuf>,
@@ -125,16 +141,12 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
         match args[i].as_str() {
             "--allowlist" => {
                 i += 1;
-                let p = args
-                    .get(i)
-                    .ok_or(ServeArgsError::MissingValue("--allowlist <yaml>"))?;
+                let p = require_value(args, i, "--allowlist")?;
                 allowlist = Some(PathBuf::from(p));
             }
             "--root" => {
                 i += 1;
-                let p = args
-                    .get(i)
-                    .ok_or(ServeArgsError::MissingValue("--root <path>"))?;
+                let p = require_value(args, i, "--root")?;
                 root = Some(PathBuf::from(p));
             }
             "--allow-bootstrap-core" => allow_bootstrap_core = true,
@@ -159,6 +171,13 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
 pub enum ServeArgsError {
     /// A flag that requires a value was given none.
     MissingValue(&'static str),
+    /// A flag that requires a value received another flag.
+    FlagAsValue {
+        /// The flag requiring a value.
+        flag: &'static str,
+        /// The flag-like token that was passed where a value was expected.
+        value: String,
+    },
     /// An unrecognized flag (starts with `--`).
     UnknownFlag(String),
     /// An unexpected positional argument.
@@ -169,6 +188,9 @@ impl std::fmt::Display for ServeArgsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::MissingValue(flag) => write!(f, "{flag} requires a value"),
+            Self::FlagAsValue { flag, value } => {
+                write!(f, "{flag} requires a value, got another flag '{value}'")
+            }
             Self::UnknownFlag(flag) => write!(f, "unknown flag: {flag}"),
             Self::UnexpectedPositional(arg) => {
                 write!(f, "unexpected positional argument: {arg}")
@@ -178,6 +200,23 @@ impl std::fmt::Display for ServeArgsError {
 }
 
 impl std::error::Error for ServeArgsError {}
+
+fn require_value(
+    args: &[String],
+    idx: usize,
+    flag: &'static str,
+) -> Result<String, ServeArgsError> {
+    match args.get(idx) {
+        Some(value) if value.starts_with('-') && value.len() > 1 => {
+            Err(ServeArgsError::FlagAsValue {
+                flag,
+                value: value.clone(),
+            })
+        }
+        Some(value) => Ok(value.clone()),
+        None => Err(ServeArgsError::MissingValue(flag)),
+    }
+}
 
 fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
     // Build the Allowlist: from --allowlist <yaml> if given, else default
@@ -253,6 +292,24 @@ mod tests {
         parts.iter().map(|part| (*part).to_string()).collect()
     }
 
+    fn assert_mcp_error_projects_serve_usage(message: &str, expected_diagnostic: &str) {
+        assert!(
+            message.contains(expected_diagnostic),
+            "error should preserve diagnostic {expected_diagnostic:?}: {message}"
+        );
+        let projected = COMMAND_MCP
+            .usage_line_for_subcommand("serve")
+            .expect("mcp serve usage");
+        assert!(
+            message.contains(projected),
+            "error should project mcp serve Command Surface usage {projected:?}: {message}"
+        );
+        assert!(
+            !message.contains("forge-core execute-operation"),
+            "mcp error should not leak unrelated command usage: {message}"
+        );
+    }
+
     #[test]
     fn parse_mcp_args_routes_serve_to_typed_serve_args() {
         let parsed = parse_mcp_args(&args(&[
@@ -289,7 +346,7 @@ mod tests {
         assert_eq!(
             serve_error,
             McpArgsError::Serve {
-                error: ServeArgsError::MissingValue("--allowlist <yaml>"),
+                error: ServeArgsError::MissingValue("--allowlist"),
                 want_json: false,
             }
         );
@@ -345,10 +402,78 @@ mod tests {
     }
 
     #[test]
+    fn parse_serve_rejects_flag_as_allowlist_value() {
+        let args: Vec<String> = vec!["--allowlist".into(), "--root".into()];
+        let err = parse_serve_args(&args).unwrap_err();
+        assert_eq!(
+            err,
+            ServeArgsError::FlagAsValue {
+                flag: "--allowlist",
+                value: "--root".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_serve_rejects_flag_as_root_value() {
+        let args: Vec<String> = vec!["--root".into(), "--json".into()];
+        let err = parse_serve_args(&args).unwrap_err();
+        assert_eq!(
+            err,
+            ServeArgsError::FlagAsValue {
+                flag: "--root",
+                value: "--json".to_string(),
+            }
+        );
+    }
+
+    #[test]
     fn parse_serve_rejects_unknown_flag() {
         let args: Vec<String> = vec!["--bogus".into()];
         let err = parse_serve_args(&args).unwrap_err();
         assert!(err.to_string().contains("unknown flag"));
+    }
+
+    #[test]
+    fn mcp_serve_missing_value_reports_serve_usage() {
+        let err = parse_serve_args(&args(&["--allowlist"])).unwrap_err();
+        let message = mcp_serve_parse_error_with_usage(&err);
+
+        assert_mcp_error_projects_serve_usage(&message, "--allowlist requires a value");
+    }
+
+    #[test]
+    fn mcp_serve_flag_as_value_reports_serve_usage() {
+        let err = parse_serve_args(&args(&["--allowlist", "--root"])).unwrap_err();
+        let message = mcp_serve_parse_error_with_usage(&err);
+
+        assert_mcp_error_projects_serve_usage(
+            &message,
+            "--allowlist requires a value, got another flag '--root'",
+        );
+    }
+
+    #[test]
+    fn mcp_serve_unknown_flag_reports_serve_usage() {
+        let err = parse_serve_args(&args(&["--bogus"])).unwrap_err();
+        let message = mcp_serve_parse_error_with_usage(&err);
+
+        assert_mcp_error_projects_serve_usage(&message, "unknown flag: --bogus");
+    }
+
+    #[test]
+    fn mcp_serve_unexpected_positional_reports_serve_usage() {
+        let err = parse_serve_args(&args(&["extra"])).unwrap_err();
+        let message = mcp_serve_parse_error_with_usage(&err);
+
+        assert_mcp_error_projects_serve_usage(&message, "unexpected positional argument: extra");
+    }
+
+    #[test]
+    fn mcp_unknown_subcommand_reports_serve_usage() {
+        let message = mcp_message_with_usage("unknown subcommand 'bogus'. Try: serve");
+
+        assert_mcp_error_projects_serve_usage(&message, "unknown subcommand 'bogus'");
     }
 
     #[test]
