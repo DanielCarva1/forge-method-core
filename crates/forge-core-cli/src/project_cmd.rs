@@ -1050,10 +1050,10 @@ pub fn dispatch(args: &[String]) -> (String, i32) {
         Ok(ProjectArgs::Resolve) => dispatch_resolve(&args[2..]),
         Ok(ProjectArgs::Help) => (project_usage(), 0),
         Err(ProjectArgsError::UnknownSubcommand { subcommand }) => (
-            format!(
+            project_message_with_usage(&format!(
                 "forge-core project: unknown subcommand '{subcommand}'. Try: {hint}",
                 hint = project_subcommand_hint()
-            ),
+            )),
             2,
         ),
     }
@@ -1071,6 +1071,7 @@ struct ProjectInitArgs {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ProjectInitArgsError {
     MissingValue { flag: &'static str },
+    FlagAsValue { flag: &'static str, value: String },
     UnknownArgument { argument: String },
 }
 
@@ -1079,6 +1080,12 @@ impl std::fmt::Display for ProjectInitArgsError {
         match self {
             Self::MissingValue { flag } => {
                 write!(formatter, "project init: {flag} requires a value")
+            }
+            Self::FlagAsValue { flag, value } => {
+                write!(
+                    formatter,
+                    "project init: {flag} requires a value, got another flag '{value}'"
+                )
             }
             Self::UnknownArgument { argument } => {
                 write!(
@@ -1091,6 +1098,23 @@ impl std::fmt::Display for ProjectInitArgsError {
 }
 
 impl std::error::Error for ProjectInitArgsError {}
+
+fn require_project_init_value(
+    args: &[String],
+    index: usize,
+    flag: &'static str,
+) -> Result<String, ProjectInitArgsError> {
+    match args.get(index) {
+        Some(value) if value.starts_with('-') && value.len() > 1 => {
+            Err(ProjectInitArgsError::FlagAsValue {
+                flag,
+                value: value.clone(),
+            })
+        }
+        Some(value) => Ok(value.clone()),
+        None => Err(ProjectInitArgsError::MissingValue { flag }),
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ProjectInitParseOutcome {
@@ -1111,36 +1135,22 @@ fn parse_project_init_args(
         match args[index].as_str() {
             "--root" => {
                 index += 1;
-                let Some(value) = args.get(index) else {
-                    return Err(ProjectInitArgsError::MissingValue { flag: "--root" });
-                };
+                let value = require_project_init_value(args, index, "--root")?;
                 root = PathBuf::from(value);
             }
             "--project-id" => {
                 index += 1;
-                let Some(value) = args.get(index) else {
-                    return Err(ProjectInitArgsError::MissingValue {
-                        flag: "--project-id",
-                    });
-                };
-                project_id = Some(value.clone());
+                let value = require_project_init_value(args, index, "--project-id")?;
+                project_id = Some(value);
             }
             "--sidecar-root" => {
                 index += 1;
-                let Some(value) = args.get(index) else {
-                    return Err(ProjectInitArgsError::MissingValue {
-                        flag: "--sidecar-root",
-                    });
-                };
+                let value = require_project_init_value(args, index, "--sidecar-root")?;
                 sidecar_root = Some(PathBuf::from(value));
             }
             "--state-root" => {
                 index += 1;
-                let Some(value) = args.get(index) else {
-                    return Err(ProjectInitArgsError::MissingValue {
-                        flag: "--state-root",
-                    });
-                };
+                let value = require_project_init_value(args, index, "--state-root")?;
                 state_root = Some(PathBuf::from(value));
             }
             "--json" => want_json = true,
@@ -1168,7 +1178,7 @@ fn dispatch_init(args: &[String]) -> (String, i32) {
     let parsed = match parse_project_init_args(args) {
         Ok(ProjectInitParseOutcome::Run(parsed)) => parsed,
         Ok(ProjectInitParseOutcome::Help) => return (project_usage(), 0),
-        Err(error) => return (error.to_string(), 3),
+        Err(error) => return (project_init_error_with_usage(&error), 3),
     };
 
     let envelope = run_init(
@@ -1215,6 +1225,7 @@ struct ProjectResolveArgs {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ProjectResolveArgsError {
     MissingValue { flag: &'static str },
+    FlagAsValue { flag: &'static str, value: String },
     UnknownArgument { argument: String },
 }
 
@@ -1223,6 +1234,12 @@ impl std::fmt::Display for ProjectResolveArgsError {
         match self {
             Self::MissingValue { flag } => {
                 write!(formatter, "project resolve: {flag} requires a value")
+            }
+            Self::FlagAsValue { flag, value } => {
+                write!(
+                    formatter,
+                    "project resolve: {flag} requires a value, got another flag '{value}'"
+                )
             }
             Self::UnknownArgument { argument } => {
                 write!(
@@ -1235,6 +1252,23 @@ impl std::fmt::Display for ProjectResolveArgsError {
 }
 
 impl std::error::Error for ProjectResolveArgsError {}
+
+fn require_project_resolve_value(
+    args: &[String],
+    index: usize,
+    flag: &'static str,
+) -> Result<String, ProjectResolveArgsError> {
+    match args.get(index) {
+        Some(value) if value.starts_with('-') && value.len() > 1 => {
+            Err(ProjectResolveArgsError::FlagAsValue {
+                flag,
+                value: value.clone(),
+            })
+        }
+        Some(value) => Ok(value.clone()),
+        None => Err(ProjectResolveArgsError::MissingValue { flag }),
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ProjectResolveParseOutcome {
@@ -1253,9 +1287,7 @@ fn parse_project_resolve_args(
         match args[index].as_str() {
             "--root" => {
                 index += 1;
-                let Some(value) = args.get(index) else {
-                    return Err(ProjectResolveArgsError::MissingValue { flag: "--root" });
-                };
+                let value = require_project_resolve_value(args, index, "--root")?;
                 root = PathBuf::from(value);
             }
             "--allow-bootstrap-core" => allow_bootstrap_core = true,
@@ -1282,7 +1314,7 @@ fn dispatch_resolve(args: &[String]) -> (String, i32) {
     let parsed = match parse_project_resolve_args(args) {
         Ok(ProjectResolveParseOutcome::Run(parsed)) => parsed,
         Ok(ProjectResolveParseOutcome::Help) => return (project_usage(), 0),
-        Err(error) => return (error.to_string(), 3),
+        Err(error) => return (project_resolve_error_with_usage(&error), 3),
     };
 
     let envelope = run_resolve(&parsed.root, parsed.allow_bootstrap_core);
@@ -1319,6 +1351,31 @@ fn project_usage() -> String {
         usage.push_str(line);
     }
     usage
+}
+
+fn project_usage_line_for(subcommand: &str) -> &'static str {
+    COMMAND_PROJECT
+        .usage_line_for_subcommand(subcommand)
+        .unwrap_or("forge-core project <subcommand> [options]")
+}
+
+fn project_message_with_usage(message: &str) -> String {
+    format!("{message}\n\nusage:\n{}", project_usage())
+}
+
+fn project_subcommand_message_with_usage(subcommand: &str, message: &str) -> String {
+    format!(
+        "{message}\n\nusage:\n  {}",
+        project_usage_line_for(subcommand)
+    )
+}
+
+fn project_init_error_with_usage(error: &ProjectInitArgsError) -> String {
+    project_subcommand_message_with_usage("init", &error.to_string())
+}
+
+fn project_resolve_error_with_usage(error: &ProjectResolveArgsError) -> String {
+    project_subcommand_message_with_usage("resolve", &error.to_string())
 }
 
 fn project_subcommand_names() -> impl Iterator<Item = &'static str> {
@@ -1366,6 +1423,35 @@ mod tests {
 
     fn argv(parts: &[&str]) -> Vec<String> {
         parts.iter().map(|part| (*part).to_string()).collect()
+    }
+
+    fn assert_project_error_projects_only_subcommand_usage(
+        message: &str,
+        subcommand: &str,
+        expected_diagnostic: &str,
+    ) {
+        assert!(
+            message.contains(expected_diagnostic),
+            "error should preserve diagnostic {expected_diagnostic:?}: {message}"
+        );
+        let projected = COMMAND_PROJECT
+            .usage_line_for_subcommand(subcommand)
+            .expect("project subcommand usage");
+        assert!(
+            message.contains(projected),
+            "error should project {subcommand} Command Surface usage {projected:?}: {message}"
+        );
+        for sibling in ["init", "resolve"] {
+            if sibling != subcommand {
+                let sibling_usage = COMMAND_PROJECT
+                    .usage_line_for_subcommand(sibling)
+                    .expect("sibling usage");
+                assert!(
+                    !message.contains(sibling_usage),
+                    "error for {subcommand} should not leak {sibling} usage: {message}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -1417,6 +1503,10 @@ mod tests {
         assert!(
             output.contains(&project_subcommand_hint()),
             "unknown-subcommand hint should be projected from Command Surface: {output}"
+        );
+        assert!(
+            output.contains("forge-core project <subcommand> [options]"),
+            "unknown-subcommand error should include project usage: {output}"
         );
         for name in project_subcommand_names() {
             assert!(
@@ -1504,6 +1594,41 @@ mod tests {
     }
 
     #[test]
+    fn project_init_parse_errors_project_init_usage() {
+        let missing = parse_project_init_args(&argv(&["--sidecar-root"])).unwrap_err();
+        let message = project_init_error_with_usage(&missing);
+        assert_project_error_projects_only_subcommand_usage(
+            &message,
+            "init",
+            "project init: --sidecar-root requires a value",
+        );
+
+        let flag_as_value =
+            parse_project_init_args(&argv(&["--state-root", "--json"])).unwrap_err();
+        assert_eq!(
+            flag_as_value,
+            ProjectInitArgsError::FlagAsValue {
+                flag: "--state-root",
+                value: "--json".to_string(),
+            }
+        );
+        let message = project_init_error_with_usage(&flag_as_value);
+        assert_project_error_projects_only_subcommand_usage(
+            &message,
+            "init",
+            "project init: --state-root requires a value, got another flag '--json'",
+        );
+
+        let unknown = parse_project_init_args(&argv(&["--surprise"])).unwrap_err();
+        let message = project_init_error_with_usage(&unknown);
+        assert_project_error_projects_only_subcommand_usage(
+            &message,
+            "init",
+            "project init: unrecognized argument '--surprise'",
+        );
+    }
+
+    #[test]
     fn parse_project_resolve_args_returns_typed_options() {
         let parsed = parse_project_resolve_args(&argv(&[
             "--root",
@@ -1549,6 +1674,40 @@ mod tests {
         assert_eq!(
             unknown.to_string(),
             "project resolve: unrecognized argument '--surprise'"
+        );
+    }
+
+    #[test]
+    fn project_resolve_parse_errors_project_resolve_usage() {
+        let missing = parse_project_resolve_args(&argv(&["--root"])).unwrap_err();
+        let message = project_resolve_error_with_usage(&missing);
+        assert_project_error_projects_only_subcommand_usage(
+            &message,
+            "resolve",
+            "project resolve: --root requires a value",
+        );
+
+        let flag_as_value = parse_project_resolve_args(&argv(&["--root", "--json"])).unwrap_err();
+        assert_eq!(
+            flag_as_value,
+            ProjectResolveArgsError::FlagAsValue {
+                flag: "--root",
+                value: "--json".to_string(),
+            }
+        );
+        let message = project_resolve_error_with_usage(&flag_as_value);
+        assert_project_error_projects_only_subcommand_usage(
+            &message,
+            "resolve",
+            "project resolve: --root requires a value, got another flag '--json'",
+        );
+
+        let unknown = parse_project_resolve_args(&argv(&["--surprise"])).unwrap_err();
+        let message = project_resolve_error_with_usage(&unknown);
+        assert_project_error_projects_only_subcommand_usage(
+            &message,
+            "resolve",
+            "project resolve: unrecognized argument '--surprise'",
         );
     }
 

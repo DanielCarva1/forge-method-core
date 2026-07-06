@@ -975,6 +975,35 @@ before changing code:
   flags, unexpected positionals, and unknown top-level MCP subcommands surface
   actionable diagnostics with only the MCP Command Surface usage.
 
+## Fifty-second hardening changeset evidence
+
+The fifty-second implementation slice targets the Project Link bootstrap and
+resolution interface before changing code:
+
+- Context7 research against clap reconfirmed that subcommand parsers should
+  reject missing values and flag-as-value tokens at parse time, then render the
+  failing subcommand's usage. This is especially important for path-like
+  options because a second flag should not silently become a path.
+- `project init` and `project resolve` own the Forge Project Link seam. Per
+  `CONTEXT.md`, Consumer Project Repos must carry only a pointer file while
+  runtime state lives under a Forge Runtime Sidecar; `state_root` must stay
+  under `sidecar_root` and must not become consumer-local `.forge-method`
+  state. Parser locality here protects the first-use isolation contract.
+- The current typed parsers already preserve the init/resolve option structs
+  and JSON/text preference, but parse failures are emitted as short local
+  strings and values such as `--root --json` are accepted as paths. That
+  delays a parser error into project resolution and makes the user/agent debug
+  the wrong seam.
+- The implementation target is deliberately narrow: keep Project Link
+  semantics, idempotent init, sidecar validation, and bootstrap exception rules
+  unchanged; add flag-as-value variants for init and resolve path/id fields;
+  append the relevant `Command Surface` usage to parser errors; and project
+  unknown top-level project subcommands back to the project command usage.
+- Unit coverage should prove missing values, flag-as-value cases, unknown
+  arguments, and unknown top-level subcommands keep their typed diagnostics
+  while pointing only at the relevant `project init` or `project resolve`
+  usage line.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
