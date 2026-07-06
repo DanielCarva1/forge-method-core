@@ -840,6 +840,32 @@ the `guide` command family:
   guide inputs report their subcommand-specific usage and do not leak sibling
   subcommand usage.
 
+## Forty-seventh hardening changeset evidence
+
+The forty-seventh implementation slice closes the trust-critical parser-help
+paths in the `memory` command family:
+
+- Current clap behavior, rechecked through Context7 and the public clap docs,
+  keeps parse diagnostics scoped to the failing subcommand by rendering the
+  subcommand's usage instead of the root command usage.
+- `memory` already had a deeper typed parser than many older command modules,
+  but parse-error envelopes still carried only short diagnostics such as
+  `--entry-id is required` or `unknown argument '--bogus'`; agents had to
+  rediscover the command interface instead of receiving the relevant
+  `Command Surface` projection with the error.
+- Memory is a trust-critical module: admission, promote, forget, and deferred
+  review are part of the agent memory authority model. Parser-help locality
+  matters here because a malformed memory action should fail closed while
+  still telling the caller exactly which memory interface to retry.
+- Memory parse errors now preserve the typed diagnostic and append the
+  subcommand-specific `Command Surface` usage before any memory state read or
+  write. The deferred `review` path also stops swallowing validation errors
+  from common flag parsing; malformed review flags fail as parser errors
+  before the deferred-review envelope is emitted.
+- Unit coverage proves missing values, unknown arguments, missing required
+  inputs, invalid numeric values, and deferred-review flag errors project only
+  the failing memory subcommand usage.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

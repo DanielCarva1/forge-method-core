@@ -89,6 +89,14 @@ fn memory_command_surface_usage_line_for(subcommand: &str) -> &'static str {
         .unwrap_or("forge-core memory <subcommand> [options]")
 }
 
+fn memory_parse_error_message_with_usage(subcommand: &str, error: &MemoryParseError) -> String {
+    format!(
+        "{}\n\nusage:\n  {}",
+        error.message(),
+        memory_command_surface_usage_line_for(subcommand)
+    )
+}
+
 // --- shared resolution -------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -211,7 +219,13 @@ fn run_ingest(args: &[String]) -> Result<(), ExitError> {
             return Ok(());
         }
         Ok(MemoryParseOutcome::Run(opts)) => opts,
-        Err(error) => return emit_err(INGEST_COMMAND, &error.message(), error.want_json()),
+        Err(error) => {
+            return emit_err(
+                INGEST_COMMAND,
+                &memory_parse_error_message_with_usage("ingest", &error),
+                error.want_json(),
+            );
+        }
     };
     let entry = match load_entry_file(&outcome.entry_file) {
         Ok(entry) => entry,
@@ -270,7 +284,13 @@ fn run_list(args: &[String]) -> Result<(), ExitError> {
             return Ok(());
         }
         Ok(MemoryParseOutcome::Run(opts)) => opts,
-        Err(error) => return emit_err(LIST_COMMAND, &error.message(), error.want_json()),
+        Err(error) => {
+            return emit_err(
+                LIST_COMMAND,
+                &memory_parse_error_message_with_usage("list", &error),
+                error.want_json(),
+            );
+        }
     };
     let memory_dir = match resolve_memory_dir(
         outcome.common.root.as_deref(),
@@ -340,7 +360,13 @@ fn run_forget(args: &[String]) -> Result<(), ExitError> {
             return Ok(());
         }
         Ok(MemoryParseOutcome::Run(opts)) => opts,
-        Err(error) => return emit_err(FORGET_COMMAND, &error.message(), error.want_json()),
+        Err(error) => {
+            return emit_err(
+                FORGET_COMMAND,
+                &memory_parse_error_message_with_usage("forget", &error),
+                error.want_json(),
+            );
+        }
     };
     let memory_dir = match resolve_memory_dir(
         outcome.common.root.as_deref(),
@@ -398,7 +424,13 @@ fn run_promote(args: &[String]) -> Result<(), ExitError> {
             return Ok(());
         }
         Ok(MemoryParseOutcome::Run(opts)) => opts,
-        Err(error) => return emit_err(PROMOTE_COMMAND, &error.message(), error.want_json()),
+        Err(error) => {
+            return emit_err(
+                PROMOTE_COMMAND,
+                &memory_parse_error_message_with_usage("promote", &error),
+                error.want_json(),
+            );
+        }
     };
     let policy = match load_policy_file(&outcome.policy_file) {
         Ok(policy) => policy,
@@ -474,7 +506,13 @@ fn run_review(args: &[String]) -> Result<(), ExitError> {
     // review landed. This is the ADR-0023 orthogonality discipline: review is
     // a principal attestation, not a magic boolean.
     let want_json = json_output_unless_text_selected(args);
-    let _ = parse_common_only(args); // consume/validate flags without acting
+    if let Err(error) = parse_common_only(args) {
+        return emit_err(
+            REVIEW_COMMAND,
+            &memory_parse_error_message_with_usage("review", &error),
+            error.want_json(),
+        );
+    }
     emit_err(
         REVIEW_COMMAND,
         "review is deferred: the review axis requires F07 governance (reviewer authorization), which is not yet implemented",
@@ -883,6 +921,36 @@ mod tests {
         values.iter().map(|value| (*value).to_string()).collect()
     }
 
+    fn assert_memory_error_projects_only_subcommand_usage(
+        error: &MemoryParseError,
+        subcommand: &str,
+        expected_diagnostic: &str,
+    ) {
+        let message = memory_parse_error_message_with_usage(subcommand, error);
+        assert!(
+            message.contains(expected_diagnostic),
+            "error should preserve diagnostic {expected_diagnostic:?}: {message}"
+        );
+        let projected = COMMAND_MEMORY
+            .usage_line_for_subcommand(subcommand)
+            .expect("memory subcommand usage");
+        assert!(
+            message.contains(projected),
+            "error should project {subcommand} Command Surface usage {projected:?}: {message}"
+        );
+        for sibling in ["ingest", "list", "forget", "promote", "review"] {
+            if sibling != subcommand {
+                let sibling_usage = COMMAND_MEMORY
+                    .usage_line_for_subcommand(sibling)
+                    .expect("sibling usage");
+                assert!(
+                    !message.contains(sibling_usage),
+                    "error for {subcommand} should not leak {sibling} usage: {message}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn require_value_returns_present_value() {
         let a = args(&["--x", "v"]);
@@ -1127,5 +1195,69 @@ mod tests {
                 "memory {subcommand} help should come from the Command Surface"
             );
         }
+    }
+
+    #[test]
+    fn memory_missing_value_reports_subcommand_usage() {
+        let error = parse_ingest_args(&args(&["--entry-file", "--policy-file"]))
+            .expect_err("missing value");
+
+        assert_memory_error_projects_only_subcommand_usage(
+            &error,
+            "ingest",
+            "--entry-file requires a value, got another flag '--policy-file'",
+        );
+    }
+
+    #[test]
+    fn memory_unknown_arg_reports_subcommand_usage() {
+        let error = parse_list_args(&args(&["--bogus"])).expect_err("unknown arg");
+
+        assert_memory_error_projects_only_subcommand_usage(
+            &error,
+            "list",
+            "unknown argument '--bogus'",
+        );
+    }
+
+    #[test]
+    fn memory_missing_required_reports_subcommand_usage() {
+        let forget_error = parse_forget_args(&args(&[])).expect_err("missing entry");
+        assert_memory_error_projects_only_subcommand_usage(
+            &forget_error,
+            "forget",
+            "--entry-id is required",
+        );
+
+        let promote_error =
+            parse_promote_args(&args(&["--entry-id", "e.one"])).expect_err("missing policy");
+        assert_memory_error_projects_only_subcommand_usage(
+            &promote_error,
+            "promote",
+            "--policy-file is required",
+        );
+    }
+
+    #[test]
+    fn memory_invalid_value_reports_subcommand_usage() {
+        let error =
+            parse_list_args(&args(&["--now-unix", "not-a-number"])).expect_err("invalid now");
+
+        assert_memory_error_projects_only_subcommand_usage(
+            &error,
+            "list",
+            "--now-unix must be a non-negative integer, got 'not-a-number'",
+        );
+    }
+
+    #[test]
+    fn memory_review_flag_errors_project_review_usage() {
+        let error = parse_common_only(&args(&["--bogus"])).expect_err("unknown review flag");
+
+        assert_memory_error_projects_only_subcommand_usage(
+            &error,
+            "review",
+            "unknown argument '--bogus'",
+        );
     }
 }
