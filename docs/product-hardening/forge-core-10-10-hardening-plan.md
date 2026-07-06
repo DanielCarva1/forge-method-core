@@ -866,6 +866,30 @@ paths in the `memory` command family:
   inputs, invalid numeric values, and deferred-review flag errors project only
   the failing memory subcommand usage.
 
+## Forty-eighth hardening changeset evidence
+
+The forty-eighth implementation slice closes the principal-governance
+parser-help paths in the `governance` command family:
+
+- Current clap behavior, rechecked through Context7, renders parser errors
+  with the command context that failed: unknown arguments, missing required
+  inputs, missing values, and invalid enum-like values surface the failing
+  subcommand usage rather than forcing callers to rediscover the interface.
+- `governance` is a high-risk mixed-authority module because it is the F07
+  surface for recording first-class conflicts, listing conflict state, and
+  gating arbitration/escalation by a `GovernancePolicy` and `PrincipalId`.
+  Parser failures therefore need the same locality as memory: fail closed, but
+  return enough interface context for an agent to retry the exact action.
+- The typed governance parser already preserved diagnostics and JSON/text
+  preference, but the emitted parse-error envelopes carried only short messages
+  such as `--conflict-id is required` or `unknown argument '--bogus'`.
+- Governance parse errors now preserve the typed diagnostic and append the
+  subcommand-specific `Command Surface` usage before conflict loading, ledger
+  projection, arbitration, or escalation begins.
+- Unit coverage proves missing values, missing required inputs, unknown
+  arguments, invalid `--status`, and the arbitrate resolution selector path
+  project only the failing governance subcommand usage.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers

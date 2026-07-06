@@ -89,6 +89,20 @@ fn governance_command_surface_usage_line_for(subcommand: &str) -> &'static str {
         .unwrap_or("forge-core governance <subcommand> [options]")
 }
 
+fn governance_message_with_usage(subcommand: &str, message: &str) -> String {
+    format!(
+        "{message}\n\nusage:\n  {}",
+        governance_command_surface_usage_line_for(subcommand)
+    )
+}
+
+fn governance_parse_error_message_with_usage(
+    subcommand: &str,
+    error: &GovernanceParseError,
+) -> String {
+    governance_message_with_usage(subcommand, &error.message())
+}
+
 // --- shared resolution -------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -197,7 +211,13 @@ fn run_record(args: &[String]) -> Result<(), ExitError> {
             return Ok(());
         }
         Ok(GovernanceParseOutcome::Run(opts)) => opts,
-        Err(error) => return emit_err(RECORD_COMMAND, &error.message(), error.want_json()),
+        Err(error) => {
+            return emit_err(
+                RECORD_COMMAND,
+                &governance_parse_error_message_with_usage("record", &error),
+                error.want_json(),
+            );
+        }
     };
     let conflict = match load_conflict_file(&outcome.conflict_file) {
         Ok(conflict) => conflict,
@@ -254,7 +274,13 @@ fn run_conflicts(args: &[String]) -> Result<(), ExitError> {
             return Ok(());
         }
         Ok(GovernanceParseOutcome::Run(opts)) => opts,
-        Err(error) => return emit_err(CONFLICTS_COMMAND, &error.message(), error.want_json()),
+        Err(error) => {
+            return emit_err(
+                CONFLICTS_COMMAND,
+                &governance_parse_error_message_with_usage("conflicts", &error),
+                error.want_json(),
+            );
+        }
     };
     let governance_dir = match resolve_governance_dir(
         outcome.common.root.as_deref(),
@@ -360,7 +386,13 @@ fn run_arbitrate(args: &[String]) -> Result<(), ExitError> {
             return Ok(());
         }
         Ok(GovernanceParseOutcome::Run(opts)) => opts,
-        Err(error) => return emit_err(ARBITRATE_COMMAND, &error.message(), error.want_json()),
+        Err(error) => {
+            return emit_err(
+                ARBITRATE_COMMAND,
+                &governance_parse_error_message_with_usage("arbitrate", &error),
+                error.want_json(),
+            );
+        }
     };
     let policy = match load_policy_file(&outcome.policy_file) {
         Ok(policy) => policy,
@@ -399,14 +431,20 @@ fn run_arbitrate(args: &[String]) -> Result<(), ExitError> {
         (None, false, false) => {
             return emit_err(
                 ARBITRATE_COMMAND,
-                "a decision is required: pass exactly one of --awarded-to, --both-released, --split-scope",
+                &governance_message_with_usage(
+                    "arbitrate",
+                    "a decision is required: pass exactly one of --awarded-to, --both-released, --split-scope",
+                ),
                 outcome.common.want_json,
             );
         }
         _ => {
             return emit_err(
                 ARBITRATE_COMMAND,
-                "pass exactly ONE decision flag (--awarded-to, --both-released, --split-scope)",
+                &governance_message_with_usage(
+                    "arbitrate",
+                    "pass exactly ONE decision flag (--awarded-to, --both-released, --split-scope)",
+                ),
                 outcome.common.want_json,
             );
         }
@@ -479,7 +517,13 @@ fn run_escalate(args: &[String]) -> Result<(), ExitError> {
             return Ok(());
         }
         Ok(GovernanceParseOutcome::Run(opts)) => opts,
-        Err(error) => return emit_err(ESCALATE_COMMAND, &error.message(), error.want_json()),
+        Err(error) => {
+            return emit_err(
+                ESCALATE_COMMAND,
+                &governance_parse_error_message_with_usage("escalate", &error),
+                error.want_json(),
+            );
+        }
     };
     let policy = match load_policy_file(&outcome.policy_file) {
         Ok(policy) => policy,
@@ -950,6 +994,48 @@ mod tests {
         values.iter().map(|value| (*value).to_string()).collect()
     }
 
+    fn assert_governance_message_projects_only_subcommand_usage(
+        message: &str,
+        subcommand: &str,
+        expected_diagnostic: &str,
+    ) {
+        assert!(
+            message.contains(expected_diagnostic),
+            "message should preserve diagnostic {expected_diagnostic:?}: {message}"
+        );
+        let projected = COMMAND_GOVERNANCE
+            .usage_line_for_subcommand(subcommand)
+            .expect("governance subcommand usage");
+        assert!(
+            message.contains(projected),
+            "message should project {subcommand} Command Surface usage {projected:?}: {message}"
+        );
+        for sibling in ["record", "conflicts", "arbitrate", "escalate"] {
+            if sibling != subcommand {
+                let sibling_usage = COMMAND_GOVERNANCE
+                    .usage_line_for_subcommand(sibling)
+                    .expect("sibling usage");
+                assert!(
+                    !message.contains(sibling_usage),
+                    "message for {subcommand} should not leak {sibling} usage: {message}"
+                );
+            }
+        }
+    }
+
+    fn assert_governance_error_projects_only_subcommand_usage(
+        error: &GovernanceParseError,
+        subcommand: &str,
+        expected_diagnostic: &str,
+    ) {
+        let message = governance_parse_error_message_with_usage(subcommand, error);
+        assert_governance_message_projects_only_subcommand_usage(
+            &message,
+            subcommand,
+            expected_diagnostic,
+        );
+    }
+
     #[test]
     fn parse_record_requires_conflict_file() {
         let error = parse_record_args(&args(&[])).expect_err("missing required");
@@ -1105,5 +1191,72 @@ mod tests {
                 "governance {subcommand} help should come from the Command Surface"
             );
         }
+    }
+
+    #[test]
+    fn governance_missing_value_reports_subcommand_usage() {
+        let error = parse_record_args(&args(&["--conflict-file", "--json"]))
+            .expect_err("missing conflict file value");
+
+        assert_governance_error_projects_only_subcommand_usage(
+            &error,
+            "record",
+            "--conflict-file requires a value, got another flag '--json'",
+        );
+    }
+
+    #[test]
+    fn governance_missing_required_reports_subcommand_usage() {
+        let arbitrate_error = parse_arbitrate_args(&args(&[])).expect_err("missing conflict-id");
+        assert_governance_error_projects_only_subcommand_usage(
+            &arbitrate_error,
+            "arbitrate",
+            "--conflict-id is required",
+        );
+
+        let escalate_error =
+            parse_escalate_args(&args(&["--conflict-id", "c.1", "--policy-file", "p.yaml"]))
+                .expect_err("missing principal");
+        assert_governance_error_projects_only_subcommand_usage(
+            &escalate_error,
+            "escalate",
+            "--principal is required",
+        );
+    }
+
+    #[test]
+    fn governance_unknown_arg_reports_subcommand_usage() {
+        let error = parse_conflicts_args(&args(&["--bogus"])).expect_err("unknown argument");
+
+        assert_governance_error_projects_only_subcommand_usage(
+            &error,
+            "conflicts",
+            "unknown argument '--bogus'",
+        );
+    }
+
+    #[test]
+    fn governance_invalid_status_reports_subcommand_usage() {
+        let error = parse_conflicts_args(&args(&["--status", "bogus"])).expect_err("bad status");
+
+        assert_governance_error_projects_only_subcommand_usage(
+            &error,
+            "conflicts",
+            "--status must be one of pending|resolved|escalated, got 'bogus'",
+        );
+    }
+
+    #[test]
+    fn governance_arbitrate_selector_error_reports_arbitrate_usage() {
+        let message = governance_message_with_usage(
+            "arbitrate",
+            "a decision is required: pass exactly one of --awarded-to, --both-released, --split-scope",
+        );
+
+        assert_governance_message_projects_only_subcommand_usage(
+            &message,
+            "arbitrate",
+            "a decision is required: pass exactly one of --awarded-to, --both-released, --split-scope",
+        );
     }
 }
