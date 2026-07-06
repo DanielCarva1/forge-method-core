@@ -35,6 +35,20 @@ Forge separates **project setup** (once per project) from **session orientation*
   `project init` once, then run `forge-core start` every time you open a new
   chat on that project to pick up exactly where things left off.
 
+### One command per chat (the `start-forge` skill)
+
+For the best experience, wire the **`start-forge` skill** (`skill/start-forge/SKILL.md`)
+into your host agent (Codex, Zed, Claude, Cursor, …). It collapses the flow above
+into a single invocation: the agent runs `forge-core start`, and if the project is
+new it performs `project init` and re-orients; if the project is in progress it
+routes straight to discovery/guide. One command per chat — re-run it only when you
+open a new chat on the project.
+
+Forge ships the skill as a canonical file but **does not assume an install path**:
+save it wherever your agent runtime reads skills from (common conventions include
+`~/.agents/skills/` for Codex/Zed, an MCP tool, or a project-local directory).
+Forge itself ships no installer and never writes to your agent's directories.
+
 ---
 
 ## The promise
@@ -667,7 +681,8 @@ Other top-level authority surfaces:
 - `contracts/spec/`, `contracts/plan/`, `contracts/stories/` — typed discovery
   and delivery artifacts.
 - `contracts/claims/` — claim fixtures and schemas.
-- `skill/forge-method/` — host skill wiring.
+- `skill/forge-method/` — runtime/claims governance skill (host wiring).
+- `skill/start-forge/` — single-command bootstrap skill (run once per chat).
 - `docs/` — live ADRs, design specs, fixtures, generated layout/command
   references, and hardening plans.
 
