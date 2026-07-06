@@ -962,7 +962,7 @@ pub fn run_graph_command(args: &[String]) -> Result<(), ExitError> {
             let (input, json, dry_run) =
                 parse_graph_command_args(args, GraphCommandKind::RunDryRun)?;
             if !dry_run {
-                return Err(ExitError::usage("graph run requires --dry-run"));
+                return Err(ExitError::usage(graph_usage()));
             }
             run_graph_dry_run(&input, json)
         }
@@ -1119,5 +1119,48 @@ pub fn run_graph_dry_run(input: &GraphCommandInput, json: bool) -> Result<(), Ex
             Ok(())
         }
         Err(error) => Err(ExitError::failed(format!("graph run failed: {error}"))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use forge_core_command_surface::COMMAND_GRAPH;
+
+    #[test]
+    fn graph_run_missing_dry_run_reports_graph_usage() {
+        let error = run_graph_command(&args(&[
+            "graph",
+            "run",
+            "--root",
+            ".",
+            "--graph",
+            "graphs/workflow.yaml",
+        ]))
+        .expect_err("missing dry-run should fail before project resolution");
+
+        assert_graph_run_usage_error(&error);
+    }
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    fn assert_graph_run_usage_error(error: &ExitError) {
+        assert_eq!(error.exit_code(), 2);
+        let graph_run_usage = COMMAND_GRAPH
+            .usage_lines
+            .iter()
+            .find(|line| line.contains("graph run"))
+            .expect("graph run usage line is present")
+            .trim_start();
+        assert!(
+            error.message().contains(graph_run_usage),
+            "graph run usage error should include projected Command Surface line {graph_run_usage:?}: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core execute-operation"),
+            "graph run usage error must not include unrelated mutating command usage: {error}"
+        );
     }
 }

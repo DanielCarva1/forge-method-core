@@ -762,6 +762,23 @@ required-argument paths in the eval comparison surface:
 - Unit coverage proves those required-argument paths report the projected
   Command Surface line and do not leak unrelated command usage.
 
+## Forty-third hardening changeset evidence
+
+The forty-third implementation slice closes the remaining shallow required
+safety-switch path in the graph dry-run surface:
+
+- `graph run` is intentionally read-only unless `--dry-run` is present, and the
+  shared Command Surface already records that safety switch in the canonical
+  `graph run` usage line.
+- The missing-`--dry-run` path still returned a local one-line message instead
+  of the command-specific usage surface, so the parser/help seam was shallower
+  than the rest of the graph command adapter.
+- Missing `--dry-run` now reports the projected `graph` Command Surface usage
+  before project resolution or graph loading, preserving fail-closed behavior
+  while giving operators the same usage contract as other malformed argv paths.
+- Unit coverage proves the safety-switch error includes the `graph run`
+  Command Surface line and does not leak unrelated command usage.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
