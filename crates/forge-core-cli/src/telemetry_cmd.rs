@@ -1180,7 +1180,7 @@ pub fn parse_telemetry_export_args(
     let selected_filters =
         usize::from(trace_id.is_some()) + usize::from(run_id.is_some()) + usize::from(latest_run);
     if selected_filters > 1 {
-        return Err(ExitError::invalid_value(
+        return Err(telemetry_relation_invalid_value(
             "telemetry export accepts only one of --trace-id, --run-id, or --latest-run",
         ));
     }
@@ -1198,6 +1198,10 @@ pub fn parse_telemetry_export_args(
         },
         json,
     ))
+}
+
+fn telemetry_relation_invalid_value(message: &str) -> ExitError {
+    ExitError::invalid_value(format!("{message}\n\n{}", telemetry_usage()))
 }
 
 /// Parses a CLI string into a [`TelemetryExportFormat`].
@@ -1264,6 +1268,7 @@ pub fn run_telemetry_export(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use forge_core_command_surface::COMMAND_TELEMETRY;
     use forge_core_contracts::telemetry::{CorrelationPolicy, SamplingPolicy, TelemetryEventSpec};
     use forge_core_contracts::StableId;
     use forge_core_trace::{
@@ -1347,6 +1352,40 @@ mod tests {
             TraceRef::new("command", "cmd.check"),
             TraceRef::new("effect", "src/main.rs"),
         ])
+    }
+
+    fn args(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn parser_rejects_multiple_filters_with_telemetry_usage() {
+        let error = parse_telemetry_export_args(&args(&[
+            "telemetry",
+            "export",
+            "--trace-id",
+            "trace.one",
+            "--run-id",
+            "run.one",
+        ]))
+        .expect_err("multiple telemetry selectors must fail before project resolution");
+
+        assert_eq!(error.exit_code(), 3);
+        assert!(
+            error.message().contains(
+                "telemetry export accepts only one of --trace-id, --run-id, or --latest-run"
+            ),
+            "telemetry filter conflict should preserve the specific diagnostic: {error}"
+        );
+        let projected = COMMAND_TELEMETRY.canonical_usage().trim_start();
+        assert!(
+            error.message().contains(projected),
+            "telemetry filter conflict should include projected Command Surface line {projected:?}: {error}"
+        );
+        assert!(
+            !error.message().contains("forge-core execute-operation"),
+            "telemetry filter conflict must not leak unrelated mutating command usage: {error}"
+        );
     }
 
     #[test]

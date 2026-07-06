@@ -799,6 +799,26 @@ relation paths in the M1 explain surface:
 - Unit coverage proves both selector relation failures report the projected
   `forge-core explain` line and do not fall back to sibling M1 command usage.
 
+## Forty-fifth hardening changeset evidence
+
+The forty-fifth implementation slice closes the remaining shallow argument
+relation path in the telemetry export surface:
+
+- The `telemetry export` Command Surface already models the filter selector as
+  an exclusive relation, `[--trace-id <id>|--run-id <id>|--latest-run]`, which
+  is the same operator-facing contract exposed by generated docs and MCP
+  descriptors.
+- Providing more than one selector still emitted a local one-line invalid-value
+  diagnostic without the projected `forge-core telemetry export` usage surface,
+  so the relation lived in parser implementation knowledge rather than at the
+  command interface seam.
+- Telemetry selector conflicts now preserve the specific diagnostic and append
+  the telemetry Command Surface usage before project resolution or trace export
+  begins, matching the robust CLI relation pattern used by current Rust parser
+  practice.
+- Unit coverage proves the conflict path reports the projected telemetry usage
+  and does not leak unrelated command usage.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
