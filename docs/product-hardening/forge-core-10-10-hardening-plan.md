@@ -1,7 +1,7 @@
 # Forge Core 10/10 Product Hardening Plan
 
-Status: active technical plan  
-Owner: Forge core maintainers and agents  
+Status: completion-audited technical plan
+Owner: Forge core maintainers and agents
 Last reviewed: 2026-07-05
 
 ## Purpose
@@ -1032,11 +1032,70 @@ and status interface before changing code:
   arguments keep their typed diagnostics while pointing only at the canonical
   `start` usage line.
 
-Remaining Stage 4 work:
+## Fifty-fourth hardening changeset evidence
 
-- Extend the typed parser adapter pattern only to high-value shallow parsers
-  after `start` remains green under full gates.
-- Audit the next high-value parser/help seam before migrating another command.
+The fifty-fourth implementation slice is a completion audit, not a behavior
+change. It checks the current product state against the original 10/10 plan
+before claiming completion:
+
+- The live workspace source of truth is still `cargo metadata
+  --format-version=1 --no-deps`; the generated workspace layout currently
+  matches the 19 live workspace members and CI runs the generator in check
+  mode.
+- The generated Command Surface docs are current, and the CLI registry, MCP
+  allowlist/default-tool projection, MCP tool descriptors, and host-adapter
+  command/help surfaces are all covered by tests that compare back to the
+  shared Command Surface seam.
+- `start` now proves the Stage 5 bootstrap behavior from command output:
+  inside this repository it reports the Bootstrap Core Exception and hands off
+  to `guide`; in a fresh consumer repo it reports `no_link` and recommends
+  `project init`; and a consumer repo with arbitrary local `.forge-method/`
+  state is not normalized as a safe Bootstrap Core Exception.
+- CI coverage proves the cross-platform product gate shape: the quality job
+  runs generated-doc checks, formatting, pedantic clippy, contract validation,
+  and the regression anchor on Linux, while the platform matrix runs
+  `cargo check --workspace --all-targets` and `cargo test --workspace` on both
+  `ubuntu-latest` and `windows-latest`.
+- The product essence is preserved: no `anyhow` or `thiserror` dependency is
+  introduced, validation remains accumulating, Consumer Project Repo state
+  remains sidecar-owned, adapters remain projections rather than sources of
+  truth, and existing contracts/workflows remain validated by the full gate.
+- Current completion score for the scoped 10/10 hardening plan: 10.00/10.
+
+## Fifty-fifth hardening changeset evidence
+
+The fifty-fifth implementation slice closes the final audit-gate flake found
+by the completion gate:
+
+- The full serial gate exposed a Windows-local failure in
+  `claim_wal_append_repairs_torn_tail_then_repair_is_idempotent`: after appending
+  to a torn-tail WAL, a recovery sometimes returned zero physical records
+  instead of four. The failure was not data loss; it happened when
+  `maybe_rotate_after_append` legitimately rotated the active WAL because the
+  replay-duration threshold was exceeded under load.
+- Context7 research against the Rust standard library confirmed the storage
+  invariant used by the WAL implementation: `File::set_len` can truncate the
+  file to the verified prefix, and `OpenOptions::append(true)` writes at the
+  current EOF. The append path's repair-then-append behavior is therefore the
+  right product invariant to test.
+- The previous assertion was shallow because it coupled the test to the active
+  WAL's physical layout after append. A valid rotation may replace the active
+  WAL with a checkpoint record and move the four logical records into a
+  snapshot, making `recovery.records.len() == 0` correct for that physical
+  layout.
+- The fix is to assert the deep Module Interface instead: recover the WAL,
+  project it with `project_claim_wal_recovery`, and require the logical
+  projection to contain the appended fourth sequence with clean EOF and no
+  diagnostics. The idempotent repair assertion still proves that a clean
+  active WAL is not mutated by a subsequent repair pass.
+
+Future Stage 4 maintenance work:
+
+- Continue extending the typed parser adapter pattern only when a future audit
+  finds a high-value shallow parser/help seam that is not already protected by
+  Command Surface projection and focused tests.
+- Keep using the same research-before-code and docs-before-code discipline for
+  any future hardening slice.
 
 ## Research base
 
@@ -1324,3 +1383,14 @@ This plan is complete only when:
    and the Forge core Bootstrap Core Exception.
 6. The release/product docs describe only capabilities proven by tests or
    command output.
+
+## Completion audit matrix
+
+| Requirement | Current evidence | Status |
+| --- | --- | --- |
+| All current green-loop commands pass locally. | Full serial gate: `python scripts/generate-workspace-layout.py --check`, generated Command Surface docs check, `cargo fmt --all -- --check`, `cargo check --workspace --all-targets`, `cargo clippy --workspace --all-targets -- -D clippy::pedantic`, `cargo test --workspace --no-fail-fast`, `cargo run -p forge-core-cli -- validate --root . --json`, and `git diff --check`. | Complete. |
+| CI covers Linux and Windows for all targets/tests. | `.github/workflows/ci.yml` has a `platform` matrix over `ubuntu-latest` and `windows-latest` with `cargo check --workspace --all-targets` and `cargo test --workspace`; the Linux quality job preserves strict docs/format/clippy/validation gates. | Complete. |
+| README/AGENTS workspace layout cannot drift without a generator check failing. | `AGENTS.md` and `README.md` point to `docs/generated/workspace-layout.md`; `scripts/generate-workspace-layout.py --check` consumes `cargo metadata --format-version=1 --no-deps`; the generated doc matches the live 19 workspace members. | Complete. |
+| Command surface metadata drives CLI help, MCP projection, and generated command docs. | `docs/generated/command-surface.md` is generated from `forge_core_command_surface::COMMANDS`; `command_registry::tests`, MCP allowlist tests, MCP descriptor tests, and host-adapter command/help tests compare projections back to the shared Command Surface. | Complete. |
+| `start` gives safe, explicit bootstrap diagnostics for consumer repos and the Forge core Bootstrap Core Exception. | `forge-core start --root . --json` reports the Bootstrap Core Exception in this repository; a fresh consumer repo reports `no_link` with `project init`; arbitrary consumer-local `.forge-method/` state is not accepted as a Bootstrap Core Exception. | Complete. |
+| Release/product docs describe only capabilities proven by tests or command output. | Product docs now point to generated workspace and command references; release workflow smoke-tests built binaries; host-adapter manifest/projection output is generated from runtime code and validated by tests; deferred surfaces remain explicitly marked as deferred instead of advertised as implemented. | Complete. |

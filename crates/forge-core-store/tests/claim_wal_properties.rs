@@ -442,7 +442,6 @@ fn claim_wal_append_repairs_torn_tail_then_repair_is_idempotent() {
     let root = temp_state("append-repairs-torn-tail");
     build_tiny_wal(&root);
     let path = claim_wal_path(&root);
-    let valid_len = fs::metadata(&path).expect("metadata for clean WAL").len();
     let mut bytes = fs::read(&path).expect("read clean WAL");
     bytes.extend_from_slice(b"FMW1partial");
     fs::write(&path, bytes).expect("write torn tail");
@@ -461,8 +460,18 @@ fn claim_wal_append_repairs_torn_tail_then_repair_is_idempotent() {
         repaired_then_appended.stop_reason,
         ClaimWalStopReason::CleanEof
     );
-    assert_eq!(repaired_then_appended.records.len(), 4);
-    assert!(fs::metadata(&path).expect("metadata after append").len() > valid_len);
+    let projected = project_claim_wal_recovery(repaired_then_appended.clone());
+    assert!(
+        projected.diagnostics.is_empty(),
+        "repair-then-append projection should stay clean: {:?}",
+        projected.diagnostics
+    );
+    let appended_claim = projected
+        .latest_by_claim_id
+        .get("claim.story.S3.S3")
+        .expect("appended claim is projected");
+    assert_eq!(appended_claim.last_seq, 4);
+    assert_eq!(appended_claim.last_operation, ClaimWalOperation::Acquire);
 
     let before_idempotent_repair = fs::metadata(&path)
         .expect("metadata before idempotent repair")
