@@ -152,6 +152,17 @@ fn state_one_no_link_emits_ok_envelope_with_project_init_next_step() {
             .is_some_and(|c| c.contains("project init")),
         "no_link should recommend `forge-core project init`; got {next}"
     );
+    assert_eq!(
+        next["argv"],
+        serde_json::json!([
+            "forge-core",
+            "project",
+            "init",
+            "--root",
+            app.display().to_string()
+        ]),
+        "no_link should expose typed argv so agents do not split display strings"
+    );
     // Read-only invariant: nothing was created in the app dir.
     assert!(
         !app.join(PROJECT_LINK_FILE_NAME).exists(),
@@ -160,10 +171,33 @@ fn state_one_no_link_emits_ok_envelope_with_project_init_next_step() {
 }
 
 #[test]
+fn state_one_no_link_quotes_space_paths_in_display_command() {
+    let parent = FreshParent::new("no-link path");
+    let app = parent.path.join("app with spaces");
+    fs::create_dir_all(&app).unwrap();
+
+    let (exit_ok, env) = run_start(&app);
+
+    assert!(exit_ok, "no_link with a space path should still exit zero");
+    let next = &env["data"]["next_step"];
+    let command = next["command"].as_str().expect("display command");
+    let app_display = app.display().to_string();
+    assert!(
+        command.contains(&format!("--root \"{app_display}\"")),
+        "display command should quote paths with spaces; got {command:?}"
+    );
+    assert_eq!(
+        next["argv"],
+        serde_json::json!(["forge-core", "project", "init", "--root", app_display]),
+        "typed argv should keep the raw path without shell quotes"
+    );
+}
+
+#[test]
 fn state_two_link_without_sidecar_diagnoses_broken_link() {
     // Scenario B: link parses, but sidecar/state root does not exist.
-    let parent = FreshParent::new("no-sidecar");
-    let app = parent.path.join("app");
+    let parent = FreshParent::new("no-sidecar path");
+    let app = parent.path.join("app with spaces");
     fs::create_dir_all(&app).unwrap();
     // sidecar/state intentionally NOT created.
     write_link(&app, "../forge-app", "../forge-app/.forge-method");
@@ -182,6 +216,18 @@ fn state_two_link_without_sidecar_diagnoses_broken_link() {
             .as_str()
             .is_some_and(|c| c.contains("project resolve")),
         "state 2 should recommend project resolve"
+    );
+    let app_display = app.display().to_string();
+    assert!(
+        next["command"]
+            .as_str()
+            .is_some_and(|c| c.contains(&format!("--root \"{app_display}\""))),
+        "state 2 display command should quote root paths with spaces"
+    );
+    assert_eq!(
+        next["argv"],
+        serde_json::json!(["forge-core", "project", "resolve", "--root", app_display]),
+        "state 2 should expose typed argv for agents/hosts"
     );
 }
 
@@ -223,6 +269,10 @@ fn state_three_sidecar_ready_points_at_starter_fixtures() {
         env["data"]["next_step"]["command"].is_null(),
         "state 3's step is authoring, not a command"
     );
+    assert!(
+        env["data"]["next_step"]["argv"].is_null(),
+        "state 3 should not expose argv when there is no command to execute"
+    );
 }
 
 #[test]
@@ -243,6 +293,11 @@ fn state_four_contract_present_hands_off_to_guide() {
     assert_eq!(
         env["data"]["next_step"]["command"], "forge-core guide describe",
         "state 4 hands off to guide describe"
+    );
+    assert_eq!(
+        env["data"]["next_step"]["argv"],
+        serde_json::json!(["forge-core", "guide", "describe"]),
+        "state 4 should expose typed guide argv"
     );
     let refs = env["data"]["next_step"]["references"]
         .as_array()
@@ -277,6 +332,11 @@ fn state_five_preview_run_is_terminal() {
     assert_eq!(
         env["data"]["next_step"]["command"], "forge-core guide describe",
         "state 5 still points at guide (ongoing orientation)"
+    );
+    assert_eq!(
+        env["data"]["next_step"]["argv"],
+        serde_json::json!(["forge-core", "guide", "describe"]),
+        "state 5 should expose typed guide argv"
     );
 }
 

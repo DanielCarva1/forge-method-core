@@ -189,6 +189,11 @@ fn fresh_consumer_repo_bootstraps_and_validates_clean_end_to_end() {
             .is_some_and(|c| c.contains("project init")),
         "no_link should recommend `project init`; got {next_step}"
     );
+    assert_eq!(
+        start_json["data"]["next_step"]["argv"],
+        serde_json::json!(["forge-core", "project", "init", "--root", app_arg]),
+        "no_link should expose typed argv for agents/hosts, not only a shell string"
+    );
 
     // ── Step 3: project init creates the sibling sidecar ──────────────────
     let init = bin()

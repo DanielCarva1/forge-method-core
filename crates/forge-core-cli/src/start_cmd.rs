@@ -236,11 +236,15 @@ impl BootstrapState {
 /// surfaces it to the human); `start` itself never acts.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct NextStep {
-    /// A copy-pasteable / runnable command string, when one applies. Absent
-    /// only when the step is not a single command (e.g. "author a spec",
-    /// which is a creative act, not a command).
+    /// A copy-pasteable command string for humans, when one applies. This is
+    /// display-only; agents and hosts should prefer [`Self::argv`] so paths
+    /// with spaces are not re-tokenized through a shell.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
+    /// Typed argv for agents/hosts to execute directly. The first entry is the
+    /// executable and each following entry is one already-tokenized argument.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub argv: Vec<String>,
     /// One short line describing the step in agent-readable prose.
     pub description: String,
     /// Additional pointers the agent may need (paths, reference dirs). Flat
@@ -262,6 +266,42 @@ pub struct ProjectContext {
     pub state_exists: bool,
     pub layout: ProjectLayoutKind,
     pub bootstrap_core_exception: bool,
+}
+
+#[must_use]
+fn command_next_step(argv: Vec<String>, description: impl Into<String>) -> NextStep {
+    command_next_step_with_references(argv, description, Vec::new())
+}
+
+#[must_use]
+fn command_next_step_with_references(
+    argv: Vec<String>,
+    description: impl Into<String>,
+    references: Vec<String>,
+) -> NextStep {
+    NextStep {
+        command: Some(render_command_for_display(&argv)),
+        argv,
+        description: description.into(),
+        references,
+    }
+}
+
+#[must_use]
+fn render_command_for_display(argv: &[String]) -> String {
+    argv.iter()
+        .map(|arg| quote_display_arg(arg))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[must_use]
+fn quote_display_arg(arg: &str) -> String {
+    if arg.is_empty() || arg.chars().any(char::is_whitespace) {
+        format!("\"{}\"", arg.replace('"', "\\\""))
+    } else {
+        arg.to_string()
+    }
 }
 
 impl From<ProjectResolvePayload> for ProjectContext {
@@ -449,13 +489,17 @@ pub fn run_start_with_agent(
                     reason: "No Forge Project Link found; the repo is not yet \
                              governed by Forge."
                         .to_string(),
-                    next_step: Some(NextStep {
-                        command: Some(format!("forge-core project init --root {}", root.display())),
-                        description: "Create the Forge Project Link and the sibling \
-                                      Runtime Sidecar so Forge can govern writes."
-                            .to_string(),
-                        references: Vec::new(),
-                    }),
+                    next_step: Some(command_next_step(
+                        vec![
+                            "forge-core".to_string(),
+                            "project".to_string(),
+                            "init".to_string(),
+                            "--root".to_string(),
+                            root.display().to_string(),
+                        ],
+                        "Create the Forge Project Link and the sibling \
+                         Runtime Sidecar so Forge can govern writes.",
+                    )),
                     project: None,
                 },
             );
@@ -508,11 +552,17 @@ fn bootstrap_core_start_payload(
 
 fn add_bootstrap_core_reference(next_step: Option<NextStep>, root: &Path) -> Option<NextStep> {
     next_step.map(|mut step| {
-        step.references.push(format!(
-            "verify bootstrap core resolution: forge-core project resolve --root {} \
-             --allow-bootstrap-core --json",
-            root.display()
-        ));
+        let command = render_command_for_display(&[
+            "forge-core".to_string(),
+            "project".to_string(),
+            "resolve".to_string(),
+            "--root".to_string(),
+            root.display().to_string(),
+            "--allow-bootstrap-core".to_string(),
+            "--json".to_string(),
+        ]);
+        step.references
+            .push(format!("verify bootstrap core resolution: {command}"));
         step
     })
 }
@@ -540,15 +590,17 @@ fn classify(
                 resolved.link_path.as_deref().unwrap_or("<unresolved link>"),
                 resolved.state_root
             ),
-            Some(NextStep {
-                command: Some(format!(
-                    "forge-core project resolve --root {}",
-                    project_root.display()
-                )),
-                description: "Diagnose the broken Project Link / sidecar before proceeding."
-                    .to_string(),
-                references: vec![resolved.state_root.clone()],
-            }),
+            Some(command_next_step_with_references(
+                vec![
+                    "forge-core".to_string(),
+                    "project".to_string(),
+                    "resolve".to_string(),
+                    "--root".to_string(),
+                    project_root.display().to_string(),
+                ],
+                "Diagnose the broken Project Link / sidecar before proceeding.",
+                vec![resolved.state_root.clone()],
+            )),
         );
     }
 
@@ -562,19 +614,22 @@ fn classify(
         return (
             BootstrapState::PreviewRun,
             "A preview has already been produced; the project is onboarded.".to_string(),
-            Some(NextStep {
-                command: Some("forge-core guide describe".to_string()),
-                description: "Project onboarded. start has nothing more to add; guide orients \
-                              ongoing work (phases, workflows, gates)."
-                    .to_string(),
-                references: vec![
+            Some(command_next_step_with_references(
+                vec![
+                    "forge-core".to_string(),
+                    "guide".to_string(),
+                    "describe".to_string(),
+                ],
+                "Project onboarded. start has nothing more to add; guide orients \
+                 ongoing work (phases, workflows, gates).",
+                vec![
                     "next: forge-core guide status --phase <current-phase>  \
                      — workflows eligible now + forward gate pending"
                         .to_string(),
                     "start will keep reporting preview_run; it is a terminal bootstrap state."
                         .to_string(),
                 ],
-            }),
+            )),
         );
     }
 
@@ -582,12 +637,15 @@ fn classify(
         return (
             BootstrapState::ContractPresent,
             "An operation contract exists; the project is ready for the guide surface.".to_string(),
-            Some(NextStep {
-                command: Some("forge-core guide describe".to_string()),
-                description: "Hand off to guide; it orients phase, workflows, and gates. start's \
-                              bootstrap job is done."
-                    .to_string(),
-                references: vec![
+            Some(command_next_step_with_references(
+                vec![
+                    "forge-core".to_string(),
+                    "guide".to_string(),
+                    "describe".to_string(),
+                ],
+                "Hand off to guide; it orients phase, workflows, and gates. start's \
+                 bootstrap job is done.",
+                vec![
                     "then: forge-core guide status --phase discovery  \
                      — first phase; lists eligible workflows + the grill forward gate"
                         .to_string(),
@@ -595,7 +653,7 @@ fn classify(
                      — validate the contract end-to-end before driving work"
                         .to_string(),
                 ],
-            }),
+            )),
         );
     }
 
@@ -609,6 +667,7 @@ fn classify(
         "State tree is healthy but no operation contract exists yet.".to_string(),
         Some(NextStep {
             command: None,
+            argv: Vec::new(),
             description: "Author a minimal operation contract modelled on a starter fixture, \
                           then validate it with preview."
                 .to_string(),
@@ -911,9 +970,40 @@ mod tests {
             "no_link should recommend `forge-core project init`; got {:?}",
             next.command
         );
+        assert_eq!(
+            next.argv,
+            vec![
+                "forge-core".to_string(),
+                "project".to_string(),
+                "init".to_string(),
+                "--root".to_string(),
+                root.display().to_string(),
+            ],
+            "no_link should expose typed argv so agents do not parse shell strings"
+        );
         assert!(
             payload.project.is_none(),
             "no_link has no project context to report"
+        );
+    }
+
+    #[test]
+    fn no_link_next_step_quotes_space_paths_for_display() {
+        let root = temp_root("no link path");
+        let env = run_start(&root, false);
+        let payload = env.data.as_ref().expect("payload on no_link");
+        let next = payload.next_step.as_ref().expect("next step on no_link");
+        let command = next.command.as_ref().expect("display command");
+        let root_display = root.display().to_string();
+
+        assert!(
+            command.contains(&format!("--root \"{root_display}\"")),
+            "display command should quote paths with spaces; got {command:?}"
+        );
+        assert_eq!(
+            next.argv.last(),
+            Some(&root_display),
+            "typed argv should carry the raw path without shell quotes"
         );
     }
 

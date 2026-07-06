@@ -377,9 +377,9 @@ parser returns the global usage dump for a single-value error.
 - **First-use skill wiring** is out of scope for this repo. The `SKILL.md` Step 0
   handles repos already linked via `project resolve`; bootstrapping a repo without
   a link (running `forge-core start` and following the `next_step`) is the
-  responsibility of the host/operator that invokes the skill, not the skill itself. The `start` command already
-  emits the correct `next_step.command` — consuming that output is an agent/host
-  decision, not a core gap.
+  responsibility of the host/operator that invokes the skill, not the skill itself. The `start` command emits
+  `next_step.argv` as the agent/host execution contract and `next_step.command`
+  as display-only text for humans.
 - **110 workflows** stay. Each product uses a handful; the wide catalog is
   intentional (it serves a broader range of products).
 - **Repo URLs** (DanielCarva1/forge-method-core is the canonical in the README and

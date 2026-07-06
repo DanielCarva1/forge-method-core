@@ -10,6 +10,11 @@ venv/
 target/
 target-test/
 darkest-roguelite/
+# Stray Forge project workspaces left by agents working in the wrong cwd.
+# Real Forge projects live under D:\GameFactory, not inside this Rust workspace.
+Fabrica de jogos/
+forge-darkest-roguelite/
+forge-fabrica-de-jogos/
 .forge-method/*.local
 .forge-method/test-runs/
 .forge-method/claims-active/
