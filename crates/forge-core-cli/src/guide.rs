@@ -422,6 +422,13 @@ fn guide_command_surface_usage_line_for(subcommand: &str) -> &'static str {
         .unwrap_or("forge-core guide <subcommand> [options]")
 }
 
+fn guide_invalid_value_with_usage(subcommand: &str, message: &str) -> ExitError {
+    ExitError::invalid_value(format!(
+        "{message}\n\nusage:\n  {}",
+        guide_command_surface_usage_line_for(subcommand)
+    ))
+}
+
 pub fn guide_value(args: &[String], idx: usize) -> Option<&str> {
     args.get(idx)
         .filter(|value| !value.is_empty() && !value.starts_with("--"))
@@ -441,18 +448,19 @@ pub fn require_guide_value(
     subcommand: &str,
     flag: &str,
 ) -> Result<String, ExitError> {
-    match guide_value(args, idx) {
-        Some(value) => Ok(value.to_owned()),
-        None => Err(ExitError::invalid_value(format!(
-            "guide {subcommand}: --{flag} requires a value"
-        ))),
+    if let Some(value) = guide_value(args, idx) {
+        Ok(value.to_owned())
+    } else {
+        let message = format!("guide {subcommand}: --{flag} requires a value");
+        Err(guide_invalid_value_with_usage(subcommand, &message))
     }
 }
 
 #[must_use]
 pub fn reject_unknown_guide_arg(subcommand: &str, arg: &str) -> ExitError {
-    eprintln!("guide {subcommand}: unrecognized argument '{arg}'");
-    ExitError::invalid_value(format!("guide {subcommand}: unrecognized argument '{arg}'"))
+    let message = format!("guide {subcommand}: unrecognized argument '{arg}'");
+    eprintln!("{message}");
+    guide_invalid_value_with_usage(subcommand, &message)
 }
 
 /// Runs the `forge-core guide describe` subcommand.
@@ -550,8 +558,9 @@ pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
     }
 
     let decision_file = decision_file.ok_or_else(|| {
-        eprintln!("guide decide: --decision-file is required");
-        ExitError::invalid_value("guide decide: --decision-file is required")
+        let message = "guide decide: --decision-file is required";
+        eprintln!("{message}");
+        guide_invalid_value_with_usage("decide", message)
     })?;
 
     // Gates are optional (only needed for phase transitions). Loaded from a simple
@@ -604,8 +613,9 @@ pub fn run_guide_status(args: &[String]) -> Result<(), ExitError> {
     }
 
     let phase = phase.ok_or_else(|| {
-        eprintln!("guide status: --phase is required");
-        ExitError::invalid_value("guide status: --phase is required")
+        let message = "guide status: --phase is required";
+        eprintln!("{message}");
+        guide_invalid_value_with_usage("status", message)
     })?;
 
     let env: CliEnvelope<StatusPayload> = run_status(catalog_dir.as_deref(), &phase);
@@ -707,6 +717,37 @@ mod tests {
 
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    fn assert_guide_error_projects_only_subcommand_usage(
+        error: &ExitError,
+        subcommand: &str,
+        expected_diagnostic: &str,
+    ) {
+        assert_eq!(error.exit_code(), 3);
+        let message = error.message();
+        assert!(
+            message.contains(expected_diagnostic),
+            "error should preserve diagnostic {expected_diagnostic:?}: {message}"
+        );
+        let projected = COMMAND_GUIDE
+            .usage_line_for_subcommand(subcommand)
+            .expect("guide subcommand usage");
+        assert!(
+            message.contains(projected),
+            "error should project {subcommand} Command Surface usage {projected:?}: {message}"
+        );
+        for sibling in ["describe", "decide", "status"] {
+            if sibling != subcommand {
+                let sibling_usage = COMMAND_GUIDE
+                    .usage_line_for_subcommand(sibling)
+                    .expect("sibling usage");
+                assert!(
+                    !message.contains(sibling_usage),
+                    "error for {subcommand} should not leak {sibling} usage: {message}"
+                );
+            }
+        }
     }
 
     fn real_catalog_dir() -> std::path::PathBuf {
@@ -940,6 +981,46 @@ mod tests {
                 "guide {subcommand} help should come from the Command Surface"
             );
         }
+    }
+
+    #[test]
+    fn guide_missing_flag_value_reports_subcommand_usage() {
+        let error =
+            run_guide_describe(&args(&["--catalog-dir", "--json"])).expect_err("parse error");
+
+        assert_guide_error_projects_only_subcommand_usage(
+            &error,
+            "describe",
+            "guide describe: --catalog-dir requires a value",
+        );
+    }
+
+    #[test]
+    fn guide_unknown_arg_reports_subcommand_usage() {
+        let error = run_guide_status(&args(&["--bogus"])).expect_err("parse error");
+
+        assert_guide_error_projects_only_subcommand_usage(
+            &error,
+            "status",
+            "guide status: unrecognized argument '--bogus'",
+        );
+    }
+
+    #[test]
+    fn guide_missing_required_flags_report_subcommand_usage() {
+        let decide_error = run_guide_decide(&args(&[])).expect_err("missing decision file");
+        assert_guide_error_projects_only_subcommand_usage(
+            &decide_error,
+            "decide",
+            "guide decide: --decision-file is required",
+        );
+
+        let status_error = run_guide_status(&args(&[])).expect_err("missing phase");
+        assert_guide_error_projects_only_subcommand_usage(
+            &status_error,
+            "status",
+            "guide status: --phase is required",
+        );
     }
 
     #[test]

@@ -819,6 +819,27 @@ relation path in the telemetry export surface:
 - Unit coverage proves the conflict path reports the projected telemetry usage
   and does not leak unrelated command usage.
 
+## Forty-sixth hardening changeset evidence
+
+The forty-sixth implementation slice closes the shallow parser-help paths in
+the `guide` command family:
+
+- Current Rust CLI practice, rechecked against the clap examples through
+  Context7, keeps the operator-facing diagnostic specific while also rendering
+  the relevant command or subcommand usage for missing required inputs,
+  missing flag values, and relation/conflict failures.
+- `guide describe`, `guide decide`, and `guide status` already project their
+  help lines from the shared `Command Surface`, but parse failures for missing
+  values, unknown arguments, and required selector-like flags still emitted
+  one-line local diagnostics without the projected subcommand usage.
+- Those error paths now use a single `guide` parser-help helper that preserves
+  the exact diagnostic and appends the fully qualified `Command Surface` usage
+  line for the failing subcommand, increasing locality at the parser/help seam
+  without changing guide payload semantics.
+- Unit coverage proves missing values, unknown arguments, and missing required
+  guide inputs report their subcommand-specific usage and do not leak sibling
+  subcommand usage.
+
 Remaining Stage 4 work:
 
 - Extend the typed parser adapter pattern only to high-value shallow parsers
