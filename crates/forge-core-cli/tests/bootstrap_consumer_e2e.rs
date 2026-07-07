@@ -172,55 +172,47 @@ fn fresh_consumer_repo_bootstraps_and_validates_clean_end_to_end() {
         "fresh repo must have no contracts/ tree"
     );
 
-    // ── Step 2: start → no_link guidance ──────────────────────────────────
+    // ── Step 2: start bootstraps the project in one command ───────────────
+    // `start` on a fresh repo now creates the Project Link + sidecar (rather
+    // than recommending a separate `project init`), so the agent gets a ready
+    // project in a single command.
     let start = bin()
         .args(["start", "--root", &app_arg, "--json"])
         .output()
         .expect("run forge-core start");
     let start_json = assert_ok(&start, "start on fresh repo");
     assert_eq!(
-        start_json["data"]["state"], "no_link",
-        "start should diagnose no_link"
-    );
-    let next_step = &start_json["data"]["next_step"]["command"];
-    assert!(
-        next_step
-            .as_str()
-            .is_some_and(|c| c.contains("project init")),
-        "no_link should recommend `project init`; got {next_step}"
+        start_json["data"]["state"], "sidecar_ready_no_contract",
+        "start should bootstrap and advance to sidecar_ready_no_contract"
     );
     assert_eq!(
-        start_json["data"]["next_step"]["argv"],
-        serde_json::json!(["forge-core", "project", "init", "--root", app_arg]),
-        "no_link should expose typed argv for agents/hosts, not only a shell string"
-    );
-
-    // ── Step 3: project init creates the sibling sidecar ──────────────────
-    let init = bin()
-        .args(["project", "init", "--root", &app_arg, "--json"])
-        .output()
-        .expect("run forge-core project init");
-    let init_json = assert_ok(&init, "project init");
-    assert_eq!(
-        init_json["data"]["status"], "initialized",
-        "project init should report initialized"
-    );
-    assert_eq!(
-        init_json["data"]["state_exists"], true,
-        "project init should report the state root exists"
+        start_json["data"]["actions_performed"],
+        serde_json::json!(["initialized"]),
+        "start should report it initialized the project"
     );
     assert!(
         app.join(".forge-method.yaml").is_file(),
-        "project init should write the Project Link in the consumer"
+        "start should create the Project Link in the consumer"
     );
     assert!(
         sidecar_state_root.is_dir(),
-        "project init should create the sibling sidecar state root on disk"
+        "start should create the sibling sidecar state root on disk"
     );
     // The consumer must stay clean: no local `.forge-method` dir.
     assert!(
         !app.join(".forge-method").exists(),
         "consumer must not carry local .forge-method state"
+    );
+
+    // ── Step 3: project init is idempotent (already_initialized) ──────────
+    let init = bin()
+        .args(["project", "init", "--root", &app_arg, "--json"])
+        .output()
+        .expect("run forge-core project init");
+    let init_json = assert_ok(&init, "project init after start");
+    assert_eq!(
+        init_json["data"]["status"], "already_initialized",
+        "project init after start should report already_initialized"
     );
 
     // ── Step 4: project resolve confirms sidecar layout ───────────────────

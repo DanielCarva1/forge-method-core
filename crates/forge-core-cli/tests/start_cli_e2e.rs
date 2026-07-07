@@ -27,7 +27,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 /// `no_link` is covered by its own dedicated case below (it returns an `ok`
 /// envelope with a `project init` `next_step`), so it has no entry in the
 /// bootstrap-state constant list.
-const STATE_LINK_NO_SIDECAR: &str = "link_present_no_sidecar";
 const STATE_SIDECAR_READY: &str = "sidecar_ready_no_contract";
 const STATE_CONTRACT_PRESENT: &str = "contract_present";
 const STATE_PREVIEW_RUN: &str = "preview_run";
@@ -120,58 +119,43 @@ fn make_state_tree(state: &Path) {
 }
 
 #[test]
-fn state_one_no_link_emits_ok_envelope_with_project_init_next_step() {
-    // Scenario A: empty repo, no Project Link. `start` must NOT create
-    // anything (read-only invariant) and must surface the state as an ok
-    // envelope: state=no_link, next_step=`forge-core project init --root .`.
-    // This is the onboarding entry point — surfacing it is the whole reason
-    // `start` exists, so a bare env-config error here would defeat the command.
+fn state_one_no_link_bootstraps_the_project_in_one_command() {
+    // Scenario A: empty repo, no Project Link. `start` now bootstraps the
+    // project (creates the Project Link + sidecar) in a single command, then
+    // reports the post-init state. The agent does not need a separate
+    // `project init` step.
     let parent = FreshParent::new("no-link");
     let app = parent.path.join("app");
     fs::create_dir_all(&app).unwrap();
 
     let (exit_ok, env) = run_start(&app);
 
-    assert!(
-        exit_ok,
-        "no_link must exit zero (it is a diagnosis, not a failure)"
-    );
-    assert_eq!(env["ok"], true, "no_link envelope ok must be true");
+    assert!(exit_ok, "no_link bootstrap must exit zero");
+    assert_eq!(env["ok"], true, "bootstrap envelope ok must be true");
     assert_eq!(
         env["exit_reason"], "ok",
-        "no_link must report ok, not env_config"
+        "bootstrap must report ok"
     );
     assert_eq!(
-        env["data"]["state"], "no_link",
-        "no_link state must be reported in the payload"
-    );
-    let next = &env["data"]["next_step"];
-    assert!(
-        next["command"]
-            .as_str()
-            .is_some_and(|c| c.contains("project init")),
-        "no_link should recommend `forge-core project init`; got {next}"
+        env["data"]["state"], "sidecar_ready_no_contract",
+        "start should bootstrap and advance to sidecar_ready_no_contract"
     );
     assert_eq!(
-        next["argv"],
-        serde_json::json!([
-            "forge-core",
-            "project",
-            "init",
-            "--root",
-            app.display().to_string()
-        ]),
-        "no_link should expose typed argv so agents do not split display strings"
+        env["data"]["actions_performed"],
+        serde_json::json!(["initialized"]),
+        "start should report it initialized the project"
     );
-    // Read-only invariant: nothing was created in the app dir.
+    // Bootstrap actually created the Project Link.
     assert!(
-        !app.join(PROJECT_LINK_FILE_NAME).exists(),
-        "start must not write a Project Link"
+        app.join(PROJECT_LINK_FILE_NAME).is_file(),
+        "start should write a Project Link on no_link"
     );
 }
 
 #[test]
-fn state_one_no_link_quotes_space_paths_in_display_command() {
+fn state_one_no_link_bootstraps_project_with_space_in_path() {
+    // Space-in-path must not break bootstrap. The link is created at the raw
+    // path (no shell quoting); agents read `actions_performed` and `state`.
     let parent = FreshParent::new("no-link path");
     let app = parent.path.join("app with spaces");
     fs::create_dir_all(&app).unwrap();
@@ -179,25 +163,30 @@ fn state_one_no_link_quotes_space_paths_in_display_command() {
     let (exit_ok, env) = run_start(&app);
 
     assert!(exit_ok, "no_link with a space path should still exit zero");
-    let next = &env["data"]["next_step"];
-    let command = next["command"].as_str().expect("display command");
-    let app_display = app.display().to_string();
-    assert!(
-        command.contains(&format!("--root \"{app_display}\"")),
-        "display command should quote paths with spaces; got {command:?}"
+    assert_eq!(
+        env["data"]["state"], "sidecar_ready_no_contract",
+        "no_link with space path should bootstrap and advance"
     );
     assert_eq!(
-        next["argv"],
-        serde_json::json!(["forge-core", "project", "init", "--root", app_display]),
-        "typed argv should keep the raw path without shell quotes"
+        env["data"]["actions_performed"],
+        serde_json::json!(["initialized"]),
+        "no_link with space path should report it initialized"
+    );
+    assert!(
+        app.join(PROJECT_LINK_FILE_NAME).is_file(),
+        "start should write a Project Link even with a space in the path"
     );
 }
 
 #[test]
-fn state_two_link_without_sidecar_diagnoses_broken_link() {
-    // Scenario B: link parses, but sidecar/state root does not exist.
-    let parent = FreshParent::new("no-sidecar path");
-    let app = parent.path.join("app with spaces");
+fn state_two_link_without_sidecar_repairs_the_sidecar() {
+    // Scenario B: link parses and points at the canonical default sidecar,
+    // but the sidecar/state root does not exist. `start` repairs the sidecar
+    // (idempotent `init_project` re-creates the state tree), then reports the
+    // post-repair state. The dir name matches the link's project_id ("app")
+    // so the canonical-default reconciliation succeeds.
+    let parent = FreshParent::new("no-sidecar");
+    let app = parent.path.join("app");
     fs::create_dir_all(&app).unwrap();
     // sidecar/state intentionally NOT created.
     write_link(&app, "../forge-app", "../forge-app/.forge-method");
@@ -206,28 +195,56 @@ fn state_two_link_without_sidecar_diagnoses_broken_link() {
 
     assert!(
         exit_ok,
-        "link_present_no_sidecar is a diagnosis, not a failure"
+        "sidecar repair must exit zero"
     );
     assert_eq!(env["ok"], true);
-    assert_eq!(env["data"]["state"], STATE_LINK_NO_SIDECAR);
-    let next = &env["data"]["next_step"];
-    assert!(
-        next["command"]
-            .as_str()
-            .is_some_and(|c| c.contains("project resolve")),
-        "state 2 should recommend project resolve"
-    );
-    let app_display = app.display().to_string();
-    assert!(
-        next["command"]
-            .as_str()
-            .is_some_and(|c| c.contains(&format!("--root \"{app_display}\""))),
-        "state 2 display command should quote root paths with spaces"
+    assert_eq!(
+        env["data"]["state"], "sidecar_ready_no_contract",
+        "state 2 should repair the sidecar and advance to sidecar_ready_no_contract"
     );
     assert_eq!(
-        next["argv"],
-        serde_json::json!(["forge-core", "project", "resolve", "--root", app_display]),
-        "state 2 should expose typed argv for agents/hosts"
+        env["data"]["actions_performed"],
+        serde_json::json!(["repaired_sidecar"]),
+        "state 2 should report it repaired the sidecar"
+    );
+    // The sidecar state root was actually (re)created.
+    assert!(
+        app.parent()
+            .unwrap()
+            .join("forge-app")
+            .join(".forge-method")
+            .is_dir(),
+        "start should (re)create the sidecar state root on state 2"
+    );
+}
+
+#[test]
+fn state_two_link_mismatch_fails_closed_not_silent_overwrite() {
+    // Scenario B-fail: link parses and points at a canonical default sidecar,
+    // but the dir name yields a different default project_id than the link
+    // declares. `init_project` returns `ExistingProjectLinkMismatch` and
+    // `start` surfaces it as an error rather than silently overwriting the
+    // link. This protects against an operator hand-editing the link to a
+    // non-default location and then losing it to an idempotent repair.
+    let parent = FreshParent::new("no-sidecar-mismatch");
+    // Dir name "app-with-spaces" slugifies differently than the link's
+    // declared project_id ("app"), so the canonical-default reconciliation
+    // cannot proceed.
+    let app = parent.path.join("app with spaces");
+    fs::create_dir_all(&app).unwrap();
+    write_link(&app, "../forge-app", "../forge-app/.forge-method");
+
+    let (exit_ok, env) = run_start(&app);
+
+    assert!(
+        !exit_ok,
+        "mismatched link + missing sidecar must fail closed, not overwrite"
+    );
+    assert_eq!(env["ok"], false);
+    assert_eq!(
+        env["exit_reason"], "invalid_decision_shape",
+        "mismatch should surface as invalid_decision_shape, got {:?}",
+        env["exit_reason"]
     );
 }
 

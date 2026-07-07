@@ -52,8 +52,8 @@ use forge_core_contracts::{CliEnvelope, ExitReason, ENVELOPE_SCHEMA_VERSION};
 
 use crate::cli_error::ExitError;
 use crate::project_cmd::{
-    is_bootstrap_core_root, resolve_project, ProjectLayoutKind, ProjectResolveError,
-    ProjectResolvePayload,
+    init_project, is_bootstrap_core_root, resolve_project, ProjectInitError, ProjectInitStatus,
+    ProjectLayoutKind, ProjectResolveError, ProjectResolvePayload,
 };
 
 /// Usage line for `forge-core start`, projected from the shared Command Surface.
@@ -178,9 +178,9 @@ fn start_parse_error_with_usage(error: &StartParseError) -> String {
 pub struct StartPayload {
     /// Envelope contract version (matches the rest of the CLI).
     pub schema_version: String,
-    /// Optional host-supplied agent identifier. `start` is read-only and does
-    /// not acquire a claim; this field exists so host surfaces can correlate
-    /// diagnostics without changing the bootstrap state machine.
+    /// Optional host-supplied agent identifier. This field exists so host
+    /// surfaces can correlate diagnostics without changing the bootstrap state
+    /// machine.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_id: Option<String>,
     /// Where the project is on the bootstrap path. See [`BootstrapState`].
@@ -198,6 +198,11 @@ pub struct StartPayload {
     /// nothing valid to resolve yet.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project: Option<ProjectContext>,
+    /// Bootstrap actions `start` performed on this call (e.g.
+    /// `["initialized"]`, `["repaired_sidecar"]`). Empty when the call only
+    /// routed (no write). Forward-compatible: omitted from JSON when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub actions_performed: Vec<String>,
 }
 
 /// The five bootstrap states a Consumer Project Repo can be in along the path
@@ -266,11 +271,6 @@ pub struct ProjectContext {
     pub state_exists: bool,
     pub layout: ProjectLayoutKind,
     pub bootstrap_core_exception: bool,
-}
-
-#[must_use]
-fn command_next_step(argv: Vec<String>, description: impl Into<String>) -> NextStep {
-    command_next_step_with_references(argv, description, Vec::new())
 }
 
 #[must_use]
@@ -453,7 +453,10 @@ pub fn run_start(root: &Path, allow_bootstrap_core: bool) -> CliEnvelope<StartPa
 }
 
 /// Variant of [`run_start`] that preserves an optional host-supplied agent id
-/// in the read-only diagnostic payload.
+/// in the bootstrap payload. `start` is the single-command bootstrap entry
+/// point: on a fresh repo it creates the Project Link + sidecar; on a repo
+/// with a broken/missing sidecar it repairs it; on a healthy in-progress repo
+/// it routes to discovery/guide.
 #[must_use]
 pub fn run_start_with_agent(
     root: &Path,
@@ -477,41 +480,91 @@ pub fn run_start_with_agent(
                     }
                 }
             }
-            // The repo has no `.forge-method.yaml`. This is the canonical
-            // "brand new user" state — surface it as an actionable ok
-            // envelope rather than an opaque env-config error.
-            return CliEnvelope::ok(
-                "start",
-                StartPayload {
-                    schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
-                    agent_id,
-                    state: BootstrapState::NoLink,
-                    reason: "No Forge Project Link found; the repo is not yet \
-                             governed by Forge."
-                        .to_string(),
-                    next_step: Some(command_next_step(
-                        vec![
-                            "forge-core".to_string(),
-                            "project".to_string(),
-                            "init".to_string(),
-                            "--root".to_string(),
-                            root.display().to_string(),
-                        ],
-                        "Create the Forge Project Link and the sibling \
-                         Runtime Sidecar so Forge can govern writes.",
-                    )),
-                    project: None,
-                },
-            );
+            // Fresh repo: no `.forge-method.yaml`. `start` bootstraps it now
+            // rather than recommending a separate `project init` step, so the
+            // agent gets a ready project in one command.
+            return match init_project(root, None, None, None) {
+                Ok(init_payload) => {
+                    let action = if init_payload.status == ProjectInitStatus::Initialized {
+                        "initialized"
+                    } else {
+                        "already_initialized"
+                    };
+                    // Re-resolve to classify the post-init state.
+                    match resolve_project(root, allow_bootstrap_core) {
+                        Ok(resolved) => finish_classified(
+                            &resolved,
+                            root,
+                            agent_id,
+                            vec![action.to_string()],
+                        ),
+                        Err(err) => CliEnvelope::err(
+                            "start",
+                            resolve_error_exit_reason(&err),
+                            err.to_string(),
+                        ),
+                    }
+                }
+                Err(err) => CliEnvelope::err(
+                    "start",
+                    init_error_exit_reason(&err),
+                    err.to_string(),
+                ),
+            };
         }
         Err(err) => {
             return CliEnvelope::err("start", resolve_error_exit_reason(&err), err.to_string());
         }
     };
 
-    let project = ProjectContext::from(resolved.clone());
-    let (state, reason, next_step) = classify(&resolved, root);
+    // Link present. If the sidecar is missing, `start` repairs it (idempotent
+    // `init_project` re-creates the state tree when the link points at the
+    // canonical default). A link pointing elsewhere + missing sidecar yields
+    // `ExistingProjectLinkMismatch`, surfaced as an error rather than silently
+    // overwritten.
+    if !resolved.state_exists {
+        return match init_project(root, None, None, None) {
+            Ok(init_payload) => {
+                let action = if init_payload.status == ProjectInitStatus::Initialized {
+                    "initialized"
+                } else {
+                    "repaired_sidecar"
+                };
+                match resolve_project(root, allow_bootstrap_core) {
+                    Ok(resolved) => finish_classified(
+                        &resolved,
+                        root,
+                        agent_id,
+                        vec![action.to_string()],
+                    ),
+                    Err(err) => CliEnvelope::err(
+                        "start",
+                        resolve_error_exit_reason(&err),
+                        err.to_string(),
+                    ),
+                }
+            }
+            Err(err) => CliEnvelope::err(
+                "start",
+                init_error_exit_reason(&err),
+                err.to_string(),
+            ),
+        };
+    }
 
+    finish_classified(&resolved, root, agent_id, Vec::new())
+}
+
+/// Build the final ok envelope from a resolved, healthy project (sidecar
+/// exists). No further bootstrap action; pure routing via `classify`.
+fn finish_classified(
+    resolved: &ProjectResolvePayload,
+    project_root: &Path,
+    agent_id: Option<String>,
+    actions_performed: Vec<String>,
+) -> CliEnvelope<StartPayload> {
+    let project = ProjectContext::from(resolved.clone());
+    let (state, reason, next_step) = classify(resolved, project_root);
     CliEnvelope::ok(
         "start",
         StartPayload {
@@ -521,6 +574,7 @@ pub fn run_start_with_agent(
             reason,
             next_step,
             project: Some(project),
+            actions_performed,
         },
     )
 }
@@ -546,6 +600,7 @@ fn bootstrap_core_start_payload(
             ),
             next_step,
             project: Some(project),
+            actions_performed: Vec::new(),
         },
     )
 }
@@ -748,9 +803,14 @@ fn resolve_error_exit_reason(err: &ProjectResolveError) -> ExitReason {
     err.exit_reason()
 }
 
+fn init_error_exit_reason(err: &ProjectInitError) -> ExitReason {
+    err.exit_reason()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use forge_core_contracts::PROJECT_LINK_FILE_NAME;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -950,70 +1010,75 @@ mod tests {
     }
 
     #[test]
-    fn no_link_returns_ok_with_project_init_next_step() {
+    fn no_link_bootstraps_the_project_in_one_command() {
         // State 1: repo with no Project Link and no bootstrap exception.
-        // `start` must surface this as an actionable ok envelope (state
-        // NoLink + next_step `forge-core project init --root .`), NOT as a
-        // bare env-config error. This is the single most useful thing `start`
-        // can tell a brand-new user.
+        // `start` now bootstraps the project (creates the link + sidecar) in
+        // a single command, then reports the post-init state. This is the
+        // single-command UX: the agent does not need a separate `project init`.
         let root = temp_root("no-link");
         let env = run_start(&root, false);
-        assert!(env.ok, "no_link must be an ok envelope, not an error");
+        assert!(env.ok, "no_link bootstraps and returns an ok envelope");
         assert_eq!(env.exit_reason.0, ExitReason::Ok.as_str());
         let payload = env.data.as_ref().expect("payload on no_link");
-        assert_eq!(payload.state, BootstrapState::NoLink);
-        let next = payload.next_step.as_ref().expect("next step on no_link");
-        assert!(
-            next.command
-                .as_ref()
-                .is_some_and(|c| c.contains("project init")),
-            "no_link should recommend `forge-core project init`; got {:?}",
-            next.command
+        // After bootstrap, the project is in sidecar_ready_no_contract.
+        assert_eq!(
+            payload.state,
+            BootstrapState::SidecarReadyNoContract,
+            "no_link should bootstrap and advance to sidecar_ready_no_contract"
         );
         assert_eq!(
-            next.argv,
-            vec![
-                "forge-core".to_string(),
-                "project".to_string(),
-                "init".to_string(),
-                "--root".to_string(),
-                root.display().to_string(),
-            ],
-            "no_link should expose typed argv so agents do not parse shell strings"
+            payload.actions_performed,
+            vec!["initialized".to_string()],
+            "no_link should report it initialized the project"
+        );
+        // The Project Link and sidecar were actually created.
+        assert!(
+            root.join(PROJECT_LINK_FILE_NAME).exists(),
+            "start should create the Project Link on no_link"
         );
         assert!(
-            payload.project.is_none(),
-            "no_link has no project context to report"
+            payload.project.is_some(),
+            "no_link has project context after bootstrap"
         );
     }
 
     #[test]
-    fn no_link_next_step_quotes_space_paths_for_display() {
+    fn no_link_bootstraps_project_with_space_in_path() {
+        // Space-in-path must not break bootstrap. The link is created at the
+        // raw path (no shell quoting); agents read `actions_performed` and
+        // `state`, not a shell string.
         let root = temp_root("no link path");
         let env = run_start(&root, false);
+        assert!(env.ok, "no_link with a space path should still exit zero");
         let payload = env.data.as_ref().expect("payload on no_link");
-        let next = payload.next_step.as_ref().expect("next step on no_link");
-        let command = next.command.as_ref().expect("display command");
-        let root_display = root.display().to_string();
-
-        assert!(
-            command.contains(&format!("--root \"{root_display}\"")),
-            "display command should quote paths with spaces; got {command:?}"
+        assert_eq!(
+            payload.state,
+            BootstrapState::SidecarReadyNoContract,
+            "no_link with space path should bootstrap and advance"
         );
         assert_eq!(
-            next.argv.last(),
-            Some(&root_display),
-            "typed argv should carry the raw path without shell quotes"
+            payload.actions_performed,
+            vec!["initialized".to_string()],
+            "no_link with space path should report it initialized"
+        );
+        assert!(
+            root.join(PROJECT_LINK_FILE_NAME).exists(),
+            "start should create the Project Link even with a space in the path"
         );
     }
 
     #[test]
-    fn agent_id_is_preserved_as_read_only_context() {
+    fn agent_id_is_preserved_in_bootstrap_payload() {
         let root = temp_root("agent-id");
         let env = run_start_with_agent(&root, false, Some("codex-main".to_string()));
         let payload = env.data.as_ref().expect("payload on no_link");
         assert_eq!(payload.agent_id.as_deref(), Some("codex-main"));
-        assert_eq!(payload.state, BootstrapState::NoLink);
+        // Bootstrap happens; state advances past no_link.
+        assert_eq!(
+            payload.state,
+            BootstrapState::SidecarReadyNoContract,
+            "agent_id test should observe post-bootstrap state"
+        );
     }
 
     #[test]
@@ -1060,23 +1125,28 @@ mod tests {
     }
 
     #[test]
-    fn arbitrary_local_forge_method_without_core_markers_remains_no_link() {
+    fn arbitrary_local_forge_method_without_core_markers_fails_closed() {
+        // A repo with a local `.forge-method/` dir but no core markers and no
+        // Project Link is in an unsafe state (consumer-local runtime state).
+        // `start` does NOT silently create a Project Link on top of it —
+        // `init_project` fails closed (`ConsumerLocalStateExists`), and `start`
+        // surfaces that error so the operator cleans up before bootstrapping.
         let root = temp_root("local-state-not-core");
         make_state_tree(&root.join(".forge-method"));
 
         let env = run_start(&root, false);
-        let payload = env.data.as_ref().expect("payload on no_link");
-        assert!(env.ok);
-        assert_eq!(payload.state, BootstrapState::NoLink);
         assert!(
-            payload.project.is_none(),
-            "local .forge-method alone must not be treated as a safe sidecar"
+            !env.ok,
+            "unsafe local .forge-method should fail closed, not bootstrap"
         );
     }
 
     #[test]
-    fn link_present_no_sidecar_diagnoses_state_two() {
-        // State 2: link parses but state root does not exist.
+    fn link_present_no_sidecar_repairs_the_sidecar() {
+        // State 2: link parses but state root does not exist. `start` now
+        // repairs the sidecar (idempotent `init_project` re-creates the state
+        // tree when the link points at the canonical default), then reports
+        // the post-repair state.
         let parent = temp_root("no-sidecar-parent");
         let app = parent.join("app");
         fs::create_dir_all(&app).unwrap();
@@ -1085,14 +1155,16 @@ mod tests {
 
         let env = run_start(&app, false);
         let payload = env.data.as_ref().expect("payload on ok");
-        assert!(env.ok);
-        assert_eq!(payload.state, BootstrapState::LinkPresentNoSidecar);
-        let next = payload.next_step.as_ref().expect("next step");
-        assert!(
-            next.command
-                .as_ref()
-                .is_some_and(|c| c.contains("project resolve")),
-            "state 2 should recommend project resolve"
+        assert!(env.ok, "state 2 should repair and return ok");
+        assert_eq!(
+            payload.state,
+            BootstrapState::SidecarReadyNoContract,
+            "state 2 should repair the sidecar and advance to sidecar_ready_no_contract"
+        );
+        assert_eq!(
+            payload.actions_performed,
+            vec!["repaired_sidecar".to_string()],
+            "state 2 should report it repaired the sidecar"
         );
     }
 

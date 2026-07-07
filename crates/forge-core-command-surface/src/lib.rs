@@ -659,7 +659,7 @@ pub const COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_OCSP_STATUS: CommandSpec = Com
 pub const COMMAND_START: CommandSpec = CommandSpec {
     name: "start",
     usage_lines:     &["       forge-core start [--root <path>] [--allow-bootstrap-core] [--agent-id <id>] [--json|--no-json]"],
-    authority: CommandAuthority::ReadOnly,
+    authority: CommandAuthority::MutatesForgeState,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::AllowlistOnly,
 };
