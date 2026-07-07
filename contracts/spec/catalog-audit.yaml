@@ -73,8 +73,28 @@ module_coverage:
     launch-ops: {workflows: 16, role: "release/readiness/launch"}
     test-architect: {workflows: 25, role: "test strategy, framework, eval"}
     runtime-builder: {workflows: 35, role: "meta: build new forge modules/workflows/agents"}
-  orphan_workflows_no_module: ["start", "validate", "analyze", "builder", "collaboration-handoff", "product-area-map", "team-operating-model", "hook-event-plan", "isolated-eval-runner", "repo-split-plan", "trunk-based-plan", "api-browser-utility"]
-  orphan_implication: "12 workflows have no module home; either assign them to core-runtime or retire. Mostly cross-cutting utilities."
+  orphan_workflows_no_module: []  # FX4 RESOLVED 2026-07-07 — see orphan_resolution below
+  orphan_implication: "RESOLVED — all 12 originals now have a documented home (4 retired/renamed, 8 assigned to core-runtime)."
+  orphan_resolution:
+    resolved_at: "2026-07-07"
+    retired_or_renamed:
+      - {from: "start", to: "start-runtime", reason: "FX2 id normalization"}
+      - {from: "validate", to: "workflow-validate", reason: "FX2 id normalization"}
+      - {from: "analyze", to: "agent-analyze", reason: "FX2 id normalization"}
+      - {from: "builder", to: "builder-scaffold", reason: "FX2 id normalization"}
+    assigned_to_core_runtime:
+      # cross-cutting utilities that span every domain; core-runtime is the
+      # natural home until/unless a future module split (Wave 3+) argues
+      # otherwise. No schema field added — module coverage stays a documented
+      # property of this audit block, not a serialized workflow field.
+      - {workflow: "collaboration-handoff", rationale: "cross-phase handoff; applies to every team/agent combo"}
+      - {workflow: "product-area-map", rationale: "modularization aid; domain-agnostic"}
+      - {workflow: "team-operating-model", rationale: "multi-human/agent coordination; not domain-specific"}
+      - {workflow: "hook-event-plan", rationale: "lifecycle automation primitive; cross-cutting"}
+      - {workflow: "isolated-eval-runner", rationale: "eval isolation utility; used by any domain's evals"}
+      - {workflow: "repo-split-plan", rationale: "structural repo operation; domain-agnostic"}
+      - {workflow: "trunk-based-plan", rationale: "branching strategy; cross-cutting"}
+      - {workflow: "api-browser-utility", rationale: "reusable connector/test utility; cross-cutting"}
 
 # ---------------------------------------------------------------------------
 # the 'build anything' promise - assessed honestly
@@ -95,17 +115,20 @@ build_anything_assessment:
   assessment: "the framework is domain-agnostic and extensible enough that ANY domain can be added as a module. The promise holds IF (a) adding a module is genuinely turnkey (today it is manual and under-specified), and (b) the cross-cutting core (discovery, spec, system-design-gate, plan, build, gate) is strong for every domain."
 
 # ---------------------------------------------------------------------------
-# system-design gate (the gap the human flagged)
+# system-design gate (FX3 — CLOSED 2026-07-07; promoted to mandatory gate)
 # ---------------------------------------------------------------------------
 system_design_gate:
-  status: "PARTIALLY PRESENT, NOT ENFORCED"
+  status: "CLOSED — enforced as mandatory spec->plan gate (DC6)"
   existing_workflow: "architecture"
   architecture_covers: ["system boundaries", "components", "data ownership", "interfaces", "dependencies", "integration contracts", "tradeoffs", "rejected options", "platform/security/privacy/ops hooks"]
-  why_still_a_gap:
-    - "trigger is conditional ('track requires technical design') not mandatory"
-    - "not enforced as a gate between specification (the WHAT) and plan (sprints)"
-    - "naming conflates; no distinct system-design contract; engine-architecture exists separately for games"
-  required_fix: "make a system-design GATE mandatory in the spec->plan transition for all serious product builds (DC6). The architecture workflow content is the seed; promote it to a gate."
+  enforcement_evidence:
+    - "crates/forge-core-decisions/src/phase_transition.rs:113 — (Phase::Specification, Phase::Plan) => Some(GateKind::SystemDesign)"
+    - "crates/forge-core-decisions/src/phase_transition.rs:244 — test spec_to_plan_without_system_design_gate_is_blocked"
+    - "crates/forge-core-decisions/src/guide_validation.rs:225,238 — SystemDesign gate exercised in guide validation"
+  historical_gap_notes:
+    - "PREVIOUSLY (now fixed): trigger was conditional, not mandatory; gate was not enforced between spec and plan."
+    - "FIX (FX3) LANDED: GateKind::SystemDesign is mandatory on the Specification->Plan edge; failing the gate blocks the transition with a typed reason."
+  superseded_required_fix: "FX3 is closed. No further action."
 
 # ---------------------------------------------------------------------------
 # persona-venom (the 'poisonous context' the codex left)
@@ -116,29 +139,36 @@ persona_venom:
   interpretation: "the codex DID produce clean contract versions in references/. But it left 34 duplicated facilitation .md files carrying 'Presence: The agent is an excited expert friend...' persona scripts. These are the poison. Migration = adopt references/ as authority, retire facilitation/ persona layer, distill any unique content into typed contracts."
 
 # ---------------------------------------------------------------------------
-# fixes required (concrete, for the plan phase)
+# fixes required (status reconciled 2026-07-07 against current code)
 # ---------------------------------------------------------------------------
 fixes_required:
   - id: "FX1"
     fix: "every workflow declares owning phase(s) in trigger (closes 101/101 gap)"
     blocks: "orchestrator routing DC1"
+    status: "CLOSED — all 110 workflows declare phases; consumed via Workflow.phases (crates/forge-core-contracts/src/workflow.rs:40, guide_validation.rs:107)"
   - id: "FX2"
     fix: "normalize 1 canonical id per workflow; filename == id; fix double-prefix and start/start-runtime"
     blocks: "routing integrity"
+    status: "CLOSED — filename==id across all 110; no double-prefix files remain"
   - id: "FX3"
     fix: "promote system-design to a mandatory gate in spec->plan transition"
     blocks: "product excellence (DC6)"
+    status: "CLOSED — GateKind::SystemDesign mandatory on Specification->Plan (phase_transition.rs:113); test phase_transition.rs:244"
   - id: "FX4"
     fix: "assign or retire the 12 orphan workflows"
+    status: "PARTIALLY CLOSED — 4 retired/renamed (start->start-runtime, validate->workflow-validate, analyze->agent-analyze, builder->builder-scaffold); 8 remain (see orphan_coverage resolution below)"
   - id: "FX5"
     fix: "retire the 34 facilitation persona-venom files after distilling unique content"
     blocks: "context-poisoning cleanup"
+    status: "CLOSED — find . -path '*/facilitation/*' returns 0 files; no 'Presence: The agent' hits remain"
   - id: "FX6"
     fix: "convert references/workflow-*.md from md-with-yaml-block to pure typed YAML contracts consumed by the rust engine"
     blocks: "G1 (markdown is not runtime authority)"
+    status: "CLOSED — 110 typed YAML in contracts/workflows/; no references/workflow-*.md remain; loaded via load_catalog (catalog.rs)"
   - id: "FX7"
     fix: "make module-builder turnkey (scaffold + validate + gate a new domain module end-to-end)"
     blocks: "build-anything promise credibility"
+    status: "OPEN — module-* workflows exist as typed YAML but no `forge-core module *` CLI subcommand in command-surface (Wave 3+ scope)"
 
 inference_boundaries:
   - "structural audit is mechanical and reproducible; content-quality (are steps actually good?) was spot-checked on load-bearing workflows (discover-intent, write-spec, build-story, architecture) and found sound, not exhaustively reviewed on all 110."

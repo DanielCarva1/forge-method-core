@@ -68,7 +68,8 @@ stories:
   S4.3:
     title: "Claim engine: typed lifecycle state machine"
     detail: "contracts/stories/S4.3-claim-engine.yaml"
-    status: "pending"
+    status: "done"
+    status_evidence: "CLOSED 2026-07-07 — crates/forge-core-decisions/src/claim_engine.rs implements acquire (line 332), heartbeat (465), release (519); exercised by every claim-related test in the v1.1 self-healing backlog (P1.1-P3.4 all verified_current_core) and claim_e2e.rs / claim_wal_e2e.rs"
     autonomy_value: "HIGH — the semantic core that makes claims MEAN something"
     scope:
       - "ClaimEngine in forge-core-decisions: acquire, heartbeat, release, expire_stale, list_active"

@@ -641,8 +641,12 @@ gates.
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is
   no longer an authority path (inspect it via `claim status --from-cache`).
-  The effect WAL is also implemented and tested. Snapshot/rotation as a read
-  cache (P3.3) remains a later perf layer.
+  The effect WAL is also implemented and tested. Snapshot/rotation (P3.3) is
+  **shipped** — the WAL emits snapshot + checkpoint_ref + rotation records
+  (record type 4) at thresholds of 64MiB / 100k records / 250ms append time,
+  with archive + manifest; covered by `claim_wal_rotation_*` tests. (Earlier
+  README drafts called this "a later perf layer"; that was stale — the
+  correctness spine for rotation landed with the v1.1 self-healing batch.)
 - **Product-ready bootstrap proof** — ✅ Proven end-to-end. A fresh consumer
   repo (`git init` + README, no `contracts/` tree) runs the full flow:
   `forge-core start` → `project init` → `project resolve` → `claim acquire` →
