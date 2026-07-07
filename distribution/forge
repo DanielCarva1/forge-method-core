@@ -1,0 +1,25 @@
+#!/usr/bin/env sh
+# Forge wrapper (POSIX) — delegates to forge-core in the same directory.
+#
+# The Forge Method skill (`start-forge`) looks for a `forge` command on PATH
+# first, falling back to `forge-core`. This thin wrapper lets releases ship a
+# single archive containing both names, so users do not have to alias anything
+# themselves. Install this file alongside `forge-core` with executable bits:
+#
+#     tar xzf forge-core-<arch>-<os>.tar.gz
+#     install -m 0755 forge forge-core ~/.local/bin/
+#
+# The wrapper resolves the directory of the real binary (handles symlinks via
+# `readlink` when available, falls back to `$0` dirname) so it keeps working
+# whether invoked directly, through a symlink, or via PATH lookup.
+set -eu
+
+# Resolve the directory containing this script, following one level of symlink.
+self="$0"
+if command -v readlink >/dev/null 2>&1; then
+    link=$(readlink -f "$self" 2>/dev/null || true)
+    [ -n "$link" ] && self="$link"
+fi
+bin_dir=$(cd "$(dirname "$self")" && pwd)
+
+exec "$bin_dir/forge-core" "$@"

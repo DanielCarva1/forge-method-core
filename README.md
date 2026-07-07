@@ -253,18 +253,27 @@ and Windows are published on every tagged release at
 ```bash
 # Linux / macOS
 tar xzf forge-core-<arch>-<os>.tar.gz
-install -m 0755 forge-core ~/.local/bin/
+install -m 0755 forge forge-core ~/.local/bin/
 
 # Windows (PowerShell)
 Expand-Archive forge-core-x86_64-windows.zip $env:LOCALAPPDATA\Programs\forge-core
 # then add $env:LOCALAPPDATA\Programs\forge-core to your PATH
 ```
 
+Each archive contains **both** `forge-core` (the binary) and `forge` (a thin
+wrapper that delegates to `forge-core` in the same directory). The `forge`
+wrapper exists so the `start-forge` skill and other tooling that look up
+`forge` on PATH find it without any manual aliasing. You can use either name
+interchangeably; `forge-core` is always the real binary.
+
 Verify it landed on your PATH:
 
 ```bash
 forge-core validate --root .
 # forge_core_validation_passed checks=NN diagnostics=0
+
+forge validate --root .
+# same result — `forge` just delegates to `forge-core`
 ```
 
 Every release asset ships with three siblings so the supply chain is auditable
