@@ -116,7 +116,6 @@ impl MemoryResolveError {
 /// `resolve_isolation_dir_or_err` pattern in `isolation.rs`.
 fn resolve_memory_dir(
     root: Option<&str>,
-    allow_bootstrap_core: bool,
     memory_dir: Option<&str>,
 ) -> Result<PathBuf, MemoryResolveError> {
     if let Some(dir) = memory_dir {
@@ -131,7 +130,7 @@ fn resolve_memory_dir(
     }
     let root_str = root.unwrap_or(".");
     let root_path = PathBuf::from(root_str);
-    let project = crate::project_cmd::resolve_project(&root_path, allow_bootstrap_core).map_err(
+    let project = crate::project_cmd::resolve_project(&root_path).map_err(
         |source| MemoryResolveError {
             message: format!("cannot resolve Forge project from --root '{root_str}': {source}"),
         },
@@ -160,12 +159,11 @@ fn resolve_memory_dir(
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct CommonOptions {
     root: Option<String>,
-    allow_bootstrap_core: bool,
     memory_dir: Option<String>,
     want_json: bool,
 }
 
-/// Parse the common `--root` / `--allow-bootstrap-core` / `--memory-dir` /
+/// Parse the common `--root` / `--memory-dir` /
 /// `--no-json` / `--text` flags into `common`. Returns `Some(unknown_arg)` if
 /// the flag is not one of these (so the caller can handle subcommand-specific
 /// flags); returns `None` when the flag was consumed.
@@ -187,10 +185,6 @@ fn parse_common_flag(
             *idx += 1;
             let value = require_value(args, *idx, "root", want_json)?;
             common.root = Some(value);
-            Ok(CommonFlag::Consumed)
-        }
-        "--allow-bootstrap-core" => {
-            common.allow_bootstrap_core = true;
             Ok(CommonFlag::Consumed)
         }
         "--memory-dir" => {
@@ -237,7 +231,6 @@ fn run_ingest(args: &[String]) -> Result<(), ExitError> {
     };
     let memory_dir = match resolve_memory_dir(
         outcome.common.root.as_deref(),
-        outcome.common.allow_bootstrap_core,
         outcome.common.memory_dir.as_deref(),
     ) {
         Ok(dir) => dir,
@@ -294,7 +287,6 @@ fn run_list(args: &[String]) -> Result<(), ExitError> {
     };
     let memory_dir = match resolve_memory_dir(
         outcome.common.root.as_deref(),
-        outcome.common.allow_bootstrap_core,
         outcome.common.memory_dir.as_deref(),
     ) {
         Ok(dir) => dir,
@@ -370,7 +362,6 @@ fn run_forget(args: &[String]) -> Result<(), ExitError> {
     };
     let memory_dir = match resolve_memory_dir(
         outcome.common.root.as_deref(),
-        outcome.common.allow_bootstrap_core,
         outcome.common.memory_dir.as_deref(),
     ) {
         Ok(dir) => dir,
@@ -438,7 +429,6 @@ fn run_promote(args: &[String]) -> Result<(), ExitError> {
     };
     let memory_dir = match resolve_memory_dir(
         outcome.common.root.as_deref(),
-        outcome.common.allow_bootstrap_core,
         outcome.common.memory_dir.as_deref(),
     ) {
         Ok(dir) => dir,

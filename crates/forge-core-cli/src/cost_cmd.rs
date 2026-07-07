@@ -40,7 +40,6 @@ pub fn run_cost_command(args: &[String]) -> Result<(), ExitError> {
     let mut graph_id: Option<String> = None;
     let mut principal_id: Option<String> = None;
     let mut latest_run = false;
-    let mut allow_bootstrap_core = false;
     let mut want_json = true;
     let mut index = 1usize;
     while index < args.len() {
@@ -62,7 +61,6 @@ pub fn run_cost_command(args: &[String]) -> Result<(), ExitError> {
                 principal_id = Some(next_arg_or_err(args, index)?.to_string());
             }
             "--last-run" => latest_run = true,
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--no-json" | "--text" => want_json = false,
             "--json" => want_json = true,
             "--help" | "-h" => {
@@ -75,7 +73,7 @@ pub fn run_cost_command(args: &[String]) -> Result<(), ExitError> {
     }
 
     let command = "cost";
-    let resolved = resolve_project(&root, allow_bootstrap_core)
+    let resolved = resolve_project(&root)
         .map_err(|error| ExitError::env_config(format!("cost: project resolve failed: {error}")))?;
     let state_root = existing_state_root(&resolved)?;
 
@@ -113,7 +111,7 @@ pub fn run_cost_command(args: &[String]) -> Result<(), ExitError> {
 
 fn existing_state_root(resolved: &ProjectResolvePayload) -> Result<PathBuf, ExitError> {
     let state_root = PathBuf::from(&resolved.state_root);
-    if !resolved.state_exists && !resolved.bootstrap_core_exception {
+    if !resolved.state_exists {
         return Err(ExitError::env_config(format!(
             "cost: sidecar state root {} does not exist",
             state_root.display(),

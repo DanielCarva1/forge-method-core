@@ -173,6 +173,58 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
+/// Copy a directory tree recursively into `target` (created if missing).
+fn copy_dir_recursive(source: &Path, target: &Path) {
+    fs::create_dir_all(target).expect("create target dir");
+    for entry in fs::read_dir(source).expect("read source dir") {
+        let entry = entry.expect("dir entry");
+        let source_path = entry.path();
+        let target_path = target.join(entry.file_name());
+        if source_path.is_dir() {
+            copy_dir_recursive(&source_path, &target_path);
+        } else {
+            fs::copy(&source_path, &target_path).expect("copy file");
+        }
+    }
+}
+
+/// Build a temp validation root mirroring the Forge core repo's contract tree
+/// plus the append-only ledger.
+///
+/// The core repo is now a normal consumer: its `.forge-method.yaml` Project
+/// Link points at a sibling sidecar (`../forge-forge-method-core`) that holds
+/// the runtime state, including `ledger.ndjson`. The completion contracts
+/// reference `.forge-method/ledger.ndjson` as a repo-relative ref, so a
+/// reference-index built from a single root must carry both the contract tree
+/// (from the repo) and the ledger (from the sidecar) to resolve cleanly.
+fn merged_validation_root(label: &str) -> PathBuf {
+    let root = repo_root();
+    let temp = temp_store_root(label);
+    copy_dir_recursive(&root.join("contracts"), &temp.join("contracts"));
+    copy_dir_recursive(
+        &root
+            .join("docs")
+            .join("fixtures")
+            .join("operation-contract-v0"),
+        &temp
+            .join("docs")
+            .join("fixtures")
+            .join("operation-contract-v0"),
+    );
+    let ledger_source = [
+        root.join("../forge-forge-method-core/.forge-method/ledger.ndjson"),
+        root.join(".forge-method").join("ledger.ndjson"),
+    ]
+    .into_iter()
+    .find(|candidate| candidate.exists())
+    .expect("ledger.ndjson must exist in the core sidecar or repo root");
+    let ledger_target = temp.join(".forge-method").join("ledger.ndjson");
+    fs::create_dir_all(ledger_target.parent().expect("ledger parent"))
+        .expect("create .forge-method dir");
+    fs::copy(&ledger_source, &ledger_target).expect("copy ledger.ndjson");
+    temp
+}
+
 fn read_yaml<T: serde::de::DeserializeOwned>(path: &Path) -> T {
     let text =
         fs::read_to_string(path).unwrap_or_else(|err| panic!("read {}: {err}", path.display()));
@@ -193,7 +245,7 @@ fn temp_store_root(test_name: &str) -> PathBuf {
 
 #[test]
 fn store_reference_index_satisfies_current_cross_file_validation() {
-    let root = repo_root();
+    let root = merged_validation_root("current-cross-file-validation");
     let index = build_reference_index(&root).expect("build reference index");
 
     let inventory: ContractFamilyInventoryDocument =

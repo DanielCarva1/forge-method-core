@@ -42,7 +42,6 @@ pub fn run_eval_harness_command(args: &[String]) -> Result<(), ExitError> {
     let mut root = PathBuf::from(".");
     let mut config_path: Option<PathBuf> = None;
     let mut corpus_override: Option<PathBuf> = None;
-    let mut allow_bootstrap_core = false;
     let mut want_json = true;
 
     let mut index = 1usize;
@@ -60,7 +59,6 @@ pub fn run_eval_harness_command(args: &[String]) -> Result<(), ExitError> {
                 index += 1;
                 corpus_override = Some(next_path_or_err(args, index)?);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--no-json" | "--text" => want_json = false,
             "--json" => want_json = true,
             "--help" | "-h" => {
@@ -73,8 +71,6 @@ pub fn run_eval_harness_command(args: &[String]) -> Result<(), ExitError> {
         }
         index += 1;
     }
-
-    let _ = allow_bootstrap_core;
 
     let Some(config_path) = config_path else {
         return Err(ExitError::usage(eval_harness_usage()));

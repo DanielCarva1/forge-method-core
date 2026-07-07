@@ -82,10 +82,9 @@ impl std::error::Error for StatefulRootsError {}
 /// `.forge-method`, or when it has no parent sidecar root.
 pub fn resolve_stateful_command_roots(
     root: &Path,
-    allow_bootstrap_core: bool,
 ) -> Result<StatefulCommandRoots, StatefulRootsError> {
     let resolved =
-        crate::project_cmd::resolve_project(root, allow_bootstrap_core).map_err(|error| {
+        crate::project_cmd::resolve_project(root).map_err(|error| {
             StatefulRootsError::ProjectResolve {
                 source: error.to_string(),
             }
@@ -447,9 +446,8 @@ pub fn parse_strict_or_err<T: std::str::FromStr>(s: &str, flag: &str) -> Result<
 pub fn resolve_stateful_roots_or_err(
     command: &str,
     root: &Path,
-    allow_bootstrap_core: bool,
 ) -> Result<StatefulCommandRoots, ExitError> {
-    resolve_stateful_command_roots(root, allow_bootstrap_core)
+    resolve_stateful_command_roots(root)
         .map_err(|error| ExitError::failed(format!("{command} failed: {error}")))
 }
 
@@ -707,9 +705,8 @@ impl<'a> ArgvCursor<'a> {
 
     /// Advances the cursor past the current flag without consuming a value.
     ///
-    /// Used for boolean flags like `--json`, `--latest-run`,
-    /// `--allow-bootstrap-core`. The dispatcher calls this after setting its
-    /// boolean state.
+    /// Used for boolean flags like `--json`, `--latest-run`. The dispatcher
+    /// calls this after setting its boolean state.
     pub fn advance(&mut self) {
         self.index += 1;
     }

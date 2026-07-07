@@ -120,7 +120,6 @@ fn mcp_serve_parse_error_with_usage(error: &ServeArgsError) -> String {
 struct ServeArgs {
     allowlist: Option<PathBuf>,
     root: Option<PathBuf>,
-    allow_bootstrap_core: bool,
     want_json: bool,
 }
 
@@ -133,7 +132,6 @@ struct ServeArgs {
 fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
     let mut allowlist = None;
     let mut root = None;
-    let mut allow_bootstrap_core = false;
     let want_json = json_output_unless_text_selected(args);
 
     let mut i = 0;
@@ -149,7 +147,6 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
                 let p = require_value(args, i, "--root")?;
                 root = Some(PathBuf::from(p));
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--json" | "--no-json" | "--text" => { /* handled by want_json */ }
             other if other.starts_with("--") => {
                 return Err(ServeArgsError::UnknownFlag(other.to_string()));
@@ -161,7 +158,6 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
     Ok(ServeArgs {
         allowlist,
         root,
-        allow_bootstrap_core,
         want_json,
     })
 }
@@ -259,7 +255,6 @@ fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
         attestation: AttestationVerifier::new(AttestationPolicy::Default),
         forge_core_binary: PathBuf::from("forge-core"),
         root: parsed.root,
-        allow_bootstrap_core: parsed.allow_bootstrap_core,
     };
     let server = ForgeMcpServer::new(config);
 
@@ -312,15 +307,8 @@ mod tests {
 
     #[test]
     fn parse_mcp_args_routes_serve_to_typed_serve_args() {
-        let parsed = parse_mcp_args(&args(&[
-            "mcp",
-            "serve",
-            "--root",
-            "/proj",
-            "--allow-bootstrap-core",
-            "--no-json",
-        ]))
-        .expect("parse mcp serve");
+        let parsed = parse_mcp_args(&args(&["mcp", "serve", "--root", "/proj", "--no-json"]))
+            .expect("parse mcp serve");
 
         let McpArgs::Serve(serve) = parsed else {
             panic!("expected serve args");
@@ -329,7 +317,6 @@ mod tests {
             serve.root.as_ref().map(|p| p.to_str().unwrap()),
             Some("/proj")
         );
-        assert!(serve.allow_bootstrap_core);
         assert!(!serve.want_json);
     }
 
@@ -366,7 +353,6 @@ mod tests {
         let args: Vec<String> = vec![];
         let parsed = parse_serve_args(&args).unwrap();
         assert!(parsed.allowlist.is_none());
-        assert!(!parsed.allow_bootstrap_core);
     }
 
     #[test]
@@ -380,18 +366,13 @@ mod tests {
     }
 
     #[test]
-    fn parse_serve_reads_root_and_bootstrap() {
-        let args: Vec<String> = vec![
-            "--root".into(),
-            "/proj".into(),
-            "--allow-bootstrap-core".into(),
-        ];
+    fn parse_serve_reads_root() {
+        let args: Vec<String> = vec!["--root".into(), "/proj".into()];
         let parsed = parse_serve_args(&args).unwrap();
         assert_eq!(
             parsed.root.as_ref().map(|p| p.to_str().unwrap()),
             Some("/proj")
         );
-        assert!(parsed.allow_bootstrap_core);
     }
 
     #[test]

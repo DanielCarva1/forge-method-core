@@ -134,7 +134,6 @@ fn resolve_accepts_relative_sidecar_link_when_state_exists() {
     assert_eq!(json["command"], "project.resolve");
     assert_eq!(json["data"]["project_id"], "consumer-app");
     assert_eq!(json["data"]["layout"], "sidecar");
-    assert_eq!(json["data"]["bootstrap_core_exception"], false);
     assert_eq!(json["data"]["state_exists"], true);
     assert!(Path::new(json["data"]["sidecar_root"].as_str().unwrap()).ends_with("forge-app"));
     assert!(Path::new(json["data"]["state_root"].as_str().unwrap())
@@ -183,7 +182,7 @@ fn resolve_rejects_state_root_outside_sidecar_root() {
 }
 
 #[test]
-fn resolve_rejects_consumer_local_state_root_without_bootstrap_exception() {
+fn resolve_rejects_consumer_local_state_root() {
     let parent = fresh_parent("consumer-local-state");
     let app = parent.join("consumer-app");
     std::fs::create_dir_all(app.join(".forge-method"))
@@ -207,7 +206,6 @@ fn resolve_rejects_consumer_local_state_root_without_bootstrap_exception() {
     assert!(
         message.contains("consumer")
             || message.contains("local")
-            || message.contains("bootstrap")
             || message.contains("sidecar_root"),
         "error should explain why consumer-local state is unsafe/actionable: {message}"
     );
@@ -247,28 +245,4 @@ fn claim_status_rejects_missing_resolved_state_root_and_does_not_create_local_st
         fixture.sidecar_root.exists(),
         "fixture sidecar root should still exist for a precise missing-state assertion"
     );
-}
-
-#[test]
-fn bootstrap_core_exception_still_resolves_when_explicitly_allowed() {
-    let root = repo_root();
-
-    let output = bin()
-        .args([
-            "project",
-            "resolve",
-            "--root",
-            &root.display().to_string(),
-            "--allow-bootstrap-core",
-            "--json",
-        ])
-        .output()
-        .expect("run bootstrap project resolve");
-
-    let json = assert_success(&output, "bootstrap core exception resolve");
-    assert_eq!(json["command"], "project.resolve");
-    assert_eq!(json["data"]["project_id"], "forge-method-core");
-    assert_eq!(json["data"]["layout"], "bootstrap_core_local");
-    assert_eq!(json["data"]["bootstrap_core_exception"], true);
-    assert!(Path::new(json["data"]["state_root"].as_str().unwrap()).ends_with(".forge-method"));
 }

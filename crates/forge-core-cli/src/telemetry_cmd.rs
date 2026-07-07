@@ -41,7 +41,6 @@ pub struct TelemetryExportCommandInput {
     pub trace_id: Option<String>,
     pub run_id: Option<String>,
     pub latest_run: bool,
-    pub allow_bootstrap_core: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -300,7 +299,7 @@ impl From<ProjectResolveError> for TelemetryExportError {
 pub fn run_export(
     input: &TelemetryExportCommandInput,
 ) -> Result<TelemetryExportReport, TelemetryExportError> {
-    let resolved = resolve_project(&input.root, input.allow_bootstrap_core)?;
+    let resolved = resolve_project(&input.root)?;
     let project_root = PathBuf::from(&resolved.project_root);
     let state_root = existing_state_root_for_telemetry(&resolved)?;
     let raw_contract_path = resolve_input_path(
@@ -441,7 +440,7 @@ fn existing_state_root_for_telemetry(
     resolved: &ProjectResolvePayload,
 ) -> Result<PathBuf, TelemetryExportError> {
     let state_root = PathBuf::from(&resolved.state_root);
-    if !resolved.state_exists && !resolved.bootstrap_core_exception {
+    if !resolved.state_exists {
         return Err(TelemetryExportError::MissingSidecarStateRoot {
             project_root: PathBuf::from(&resolved.project_root),
             state_root,
@@ -1135,7 +1134,6 @@ pub fn parse_telemetry_export_args(
     let mut trace_id: Option<String> = None;
     let mut run_id: Option<String> = None;
     let mut latest_run = false;
-    let mut allow_bootstrap_core = false;
     let mut json = false;
     let mut cursor = ArgvCursor::new(args, 2, "telemetry export");
     while let Some(flag) = cursor.peek_flag() {
@@ -1154,10 +1152,6 @@ pub fn parse_telemetry_export_args(
             "--run-id" => run_id = Some(cursor.expect_value("run-id")?.to_string()),
             "--latest-run" => {
                 latest_run = true;
-                cursor.advance();
-            }
-            "--allow-bootstrap-core" => {
-                allow_bootstrap_core = true;
                 cursor.advance();
             }
             "--json" => {
@@ -1194,7 +1188,6 @@ pub fn parse_telemetry_export_args(
             trace_id,
             run_id,
             latest_run,
-            allow_bootstrap_core,
         },
         json,
     ))

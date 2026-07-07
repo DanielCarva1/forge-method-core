@@ -155,11 +155,10 @@ impl ResearchResolveError {
 /// `resolve_memory_dir` in `memory_cmd.rs`.
 fn resolve_state_root(
     root: Option<&str>,
-    allow_bootstrap_core: bool,
 ) -> Result<PathBuf, ResearchResolveError> {
     let root_str = root.unwrap_or(".");
     let root_path = PathBuf::from(root_str);
-    let project = crate::project_cmd::resolve_project(&root_path, allow_bootstrap_core).map_err(
+    let project = crate::project_cmd::resolve_project(&root_path).map_err(
         |source| ResearchResolveError {
             message: format!("cannot resolve Forge project from --root '{root_str}': {source}"),
         },
@@ -181,7 +180,6 @@ fn resolve_state_root(
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct CommonOptions {
     root: Option<String>,
-    allow_bootstrap_core: bool,
     evidence_file: Option<PathBuf>,
     want_json: bool,
 }
@@ -202,10 +200,6 @@ fn parse_common_flag(
             *idx += 1;
             let value = require_value(args, *idx, "root", want_json)?;
             common.root = Some(value);
-            Ok(CommonFlag::Consumed)
-        }
-        "--allow-bootstrap-core" => {
-            common.allow_bootstrap_core = true;
             Ok(CommonFlag::Consumed)
         }
         "--evidence-file" => {
@@ -263,10 +257,7 @@ fn run_source_add(args: &[String]) -> Result<(), ExitError> {
             )
         }
     };
-    let state_root = match resolve_state_root(
-        outcome.common.root.as_deref(),
-        outcome.common.allow_bootstrap_core,
-    ) {
+    let state_root = match resolve_state_root(outcome.common.root.as_deref()) {
         Ok(root) => root,
         Err(error) => {
             return emit_err(
@@ -328,8 +319,7 @@ fn run_source_list(args: &[String]) -> Result<(), ExitError> {
             );
         }
     };
-    let state_root = match resolve_state_root(outcome.root.as_deref(), outcome.allow_bootstrap_core)
-    {
+    let state_root = match resolve_state_root(outcome.root.as_deref()) {
         Ok(root) => root,
         Err(error) => return emit_err(SOURCE_LIST_COMMAND, &error.message(), outcome.want_json),
     };
@@ -411,8 +401,7 @@ fn run_check(args: &[String]) -> Result<(), ExitError> {
         Ok(evidence) => evidence,
         Err(error) => return emit_err(CHECK_COMMAND, &error.to_string(), outcome.want_json),
     };
-    let projection = match resolve_state_root(outcome.root.as_deref(), outcome.allow_bootstrap_core)
-    {
+    let projection = match resolve_state_root(outcome.root.as_deref()) {
         Ok(state_root) => project_research(&state_root).unwrap_or_default(),
         // No sidecar = no runtime ledger; check against the curated registry
         // alone (the runtime half of the union is empty).
@@ -496,8 +485,7 @@ fn run_graph(args: &[String]) -> Result<(), ExitError> {
     let root_str = outcome.root.as_deref().unwrap_or(".");
     let root_path = PathBuf::from(root_str);
 
-    let projection = match resolve_state_root(outcome.root.as_deref(), outcome.allow_bootstrap_core)
-    {
+    let projection = match resolve_state_root(outcome.root.as_deref()) {
         Ok(state_root) => project_research(&state_root).unwrap_or_default(),
         Err(_) => ResearchProjection::default(),
     };
@@ -555,10 +543,7 @@ fn run_cite(args: &[String]) -> Result<(), ExitError> {
         Ok(evidence) => evidence,
         Err(error) => return emit_err(CITE_COMMAND, &error.to_string(), outcome.common.want_json),
     };
-    let projection = match resolve_state_root(
-        outcome.common.root.as_deref(),
-        outcome.common.allow_bootstrap_core,
-    ) {
+    let projection = match resolve_state_root(outcome.common.root.as_deref()) {
         Ok(state_root) => project_research(&state_root).unwrap_or_default(),
         Err(_) => ResearchProjection::default(),
     };
@@ -1133,12 +1118,12 @@ mod tests {
 
         assert!(
             usage.contains(
-                "add  --source-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--json|--no-json]"
+                "add  --source-file <path> --policy-file <path> [--root <path>] [--json|--no-json]"
             ),
             "research source usage should include projected add line: {usage}"
         );
         assert!(
-            usage.contains("list [--root <path>] [--allow-bootstrap-core] [--json|--no-json]"),
+            usage.contains("list [--root <path>] [--json|--no-json]"),
             "research source usage should include projected list line: {usage}"
         );
         assert_eq!(research_source_subcommand_hint(), "add | list");

@@ -17,7 +17,6 @@ pub struct EvalCompareCommandInput {
     pub suite_path: Option<PathBuf>,
     pub baseline: EvalArmLabel,
     pub candidate: EvalArmLabel,
-    pub allow_bootstrap_core: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,7 +111,7 @@ impl From<ProjectResolveError> for EvalCommandError {
 pub fn run_compare(
     input: &EvalCompareCommandInput,
 ) -> Result<EvalComparisonReport, EvalCommandError> {
-    let resolved = resolve_project(&input.root, input.allow_bootstrap_core)?;
+    let resolved = resolve_project(&input.root)?;
     let project_root = PathBuf::from(&resolved.project_root);
     let canonical_project_root = fs::canonicalize(&project_root).map_err(|source| {
         EvalCommandError::CanonicalizeProjectRoot {
@@ -464,7 +463,6 @@ pub fn parse_eval_compare_args(
     let mut suite_path: Option<PathBuf> = None;
     let mut baseline: Option<EvalArmLabel> = None;
     let mut candidate: Option<EvalArmLabel> = None;
-    let mut allow_bootstrap_core = false;
     let mut json = false;
     let mut cursor = ArgvCursor::new(args, 2, "eval compare");
     while let Some(flag) = cursor.peek_flag() {
@@ -484,10 +482,6 @@ pub fn parse_eval_compare_args(
                     cursor.expect_value("candidate")?,
                     "candidate",
                 )?);
-            }
-            "--allow-bootstrap-core" => {
-                allow_bootstrap_core = true;
-                cursor.advance();
             }
             "--json" => {
                 json = true;
@@ -510,7 +504,6 @@ pub fn parse_eval_compare_args(
             suite_path,
             baseline,
             candidate,
-            allow_bootstrap_core,
         },
         json,
     ))

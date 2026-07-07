@@ -40,7 +40,6 @@ pub enum GraphCommandKind {
 pub struct GraphCommandInput {
     pub root: PathBuf,
     pub graph_path: Option<PathBuf>,
-    pub allow_bootstrap_core: bool,
     pub agent_id: Option<String>,
     pub claims_dir: Option<PathBuf>,
     pub now_unix: Option<i64>,
@@ -170,7 +169,7 @@ impl std::error::Error for GraphCommandError {}
 pub fn run_validate(
     input: &GraphCommandInput,
 ) -> Result<GraphValidateCommandOutput, GraphCommandError> {
-    let resolved = resolve_project(&input.root, input.allow_bootstrap_core)
+    let resolved = resolve_project(&input.root)
         .map_err(GraphCommandError::ProjectResolve)?;
     let project_root = PathBuf::from(&resolved.project_root);
     let graph_path = resolve_graph_path(&project_root, input.graph_path.as_deref())?;
@@ -200,7 +199,7 @@ pub fn run_validate(
 /// Returns an error when project resolution fails, the graph path is missing,
 /// the graph cannot be read or parsed, or a graph report cannot be serialized.
 pub fn run_dry_run(input: &GraphCommandInput) -> Result<GraphRunCommandOutput, GraphCommandError> {
-    let resolved = resolve_project(&input.root, input.allow_bootstrap_core)
+    let resolved = resolve_project(&input.root)
         .map_err(GraphCommandError::ProjectResolve)?;
     let project_root = PathBuf::from(&resolved.project_root);
     let graph_path = resolve_graph_path(&project_root, input.graph_path.as_deref())?;
@@ -989,7 +988,6 @@ pub fn parse_graph_command_args(
 
     let mut root = PathBuf::from(".");
     let mut graph_path: Option<PathBuf> = None;
-    let mut allow_bootstrap_core = false;
     let mut agent_id: Option<String> = None;
     let mut claims_dir: Option<PathBuf> = None;
     let mut now_unix: Option<i64> = None;
@@ -1013,10 +1011,6 @@ pub fn parse_graph_command_args(
                 dry_run = true;
                 cursor.advance();
             }
-            "--allow-bootstrap-core" => {
-                allow_bootstrap_core = true;
-                cursor.advance();
-            }
             "--json" => {
                 json = true;
                 cursor.advance();
@@ -1030,7 +1024,6 @@ pub fn parse_graph_command_args(
         GraphCommandInput {
             root,
             graph_path,
-            allow_bootstrap_core,
             agent_id,
             claims_dir,
             now_unix,

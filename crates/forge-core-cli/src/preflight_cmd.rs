@@ -202,7 +202,6 @@ pub struct PreflightSummary {
 #[derive(Debug, Clone)]
 pub struct PreflightInput {
     pub root: PathBuf,
-    pub allow_bootstrap_core: bool,
     pub json: bool,
     /// When empty, runs all default gates. When non-empty, runs only the named
     /// gates (still classified by their default requirement).
@@ -219,7 +218,6 @@ impl Default for PreflightInput {
     fn default() -> Self {
         Self {
             root: PathBuf::from("."),
-            allow_bootstrap_core: false,
             json: false,
             gates: Vec::new(),
             expected_anchor: 122,
@@ -290,7 +288,6 @@ pub fn parse_preflight_args(args: &[String]) -> Result<PreflightInput, Preflight
                 };
                 input.root = std::path::PathBuf::from(value);
             }
-            "--allow-bootstrap-core" => input.allow_bootstrap_core = true,
             "--json" => input.json = true,
             "--no-json" => input.json = false,
             "--profile" => {
@@ -565,9 +562,6 @@ fn run_validate_gate(input: &PreflightInput) -> GateOutcome {
     let mut command = Command::new("cargo");
     command.args(["run", "--quiet", "-p", "forge-core-cli", "--", "validate"]);
     command.arg("--root").arg(&input.root);
-    if input.allow_bootstrap_core {
-        command.arg("--allow-bootstrap-core");
-    }
     let output = command.output();
     match output {
         Ok(output) if output.status.success() => GateOutcome::Passed,
@@ -593,9 +587,6 @@ fn run_anchor_gate(input: &PreflightInput) -> GateOutcome {
     ]);
     command.arg(&input.root);
     command.arg("--json");
-    if input.allow_bootstrap_core {
-        command.arg("--allow-bootstrap-core");
-    }
     let output = match command.output() {
         Ok(output) => output,
         Err(error) => {
@@ -848,7 +839,6 @@ mod tests {
     fn parse_preflight_args_defaults() {
         let input = parse_preflight_args(&[]).expect("empty argv");
         assert_eq!(input.root, std::path::PathBuf::from("."));
-        assert!(!input.allow_bootstrap_core);
         assert!(!input.json);
         assert!(input.gates.is_empty());
         assert_eq!(input.expected_anchor, 122);

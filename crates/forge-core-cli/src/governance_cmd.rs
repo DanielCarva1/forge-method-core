@@ -123,7 +123,6 @@ impl GovernanceResolveError {
 /// overrides to act as the state root directly.
 fn resolve_governance_dir(
     root: Option<&str>,
-    allow_bootstrap_core: bool,
     governance_dir: Option<&str>,
 ) -> Result<PathBuf, GovernanceResolveError> {
     if let Some(dir) = governance_dir {
@@ -138,7 +137,7 @@ fn resolve_governance_dir(
     }
     let root_str = root.unwrap_or(".");
     let root_path = PathBuf::from(root_str);
-    let project = crate::project_cmd::resolve_project(&root_path, allow_bootstrap_core).map_err(
+    let project = crate::project_cmd::resolve_project(&root_path).map_err(
         |source| GovernanceResolveError {
             message: format!("cannot resolve Forge project from --root '{root_str}': {source}"),
         },
@@ -160,7 +159,6 @@ fn resolve_governance_dir(
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 struct CommonOptions {
     root: Option<String>,
-    allow_bootstrap_core: bool,
     governance_dir: Option<String>,
     want_json: bool,
 }
@@ -181,10 +179,6 @@ fn parse_common_flag(
             *idx += 1;
             let value = require_value(args, *idx, "root", want_json)?;
             common.root = Some(value);
-            Ok(CommonFlag::Consumed)
-        }
-        "--allow-bootstrap-core" => {
-            common.allow_bootstrap_core = true;
             Ok(CommonFlag::Consumed)
         }
         "--governance-dir" => {
@@ -225,7 +219,6 @@ fn run_record(args: &[String]) -> Result<(), ExitError> {
     };
     let governance_dir = match resolve_governance_dir(
         outcome.common.root.as_deref(),
-        outcome.common.allow_bootstrap_core,
         outcome.common.governance_dir.as_deref(),
     ) {
         Ok(dir) => dir,
@@ -284,7 +277,6 @@ fn run_conflicts(args: &[String]) -> Result<(), ExitError> {
     };
     let governance_dir = match resolve_governance_dir(
         outcome.common.root.as_deref(),
-        outcome.common.allow_bootstrap_core,
         outcome.common.governance_dir.as_deref(),
     ) {
         Ok(dir) => dir,
@@ -406,7 +398,6 @@ fn run_arbitrate(args: &[String]) -> Result<(), ExitError> {
     };
     let governance_dir = match resolve_governance_dir(
         outcome.common.root.as_deref(),
-        outcome.common.allow_bootstrap_core,
         outcome.common.governance_dir.as_deref(),
     ) {
         Ok(dir) => dir,
@@ -533,7 +524,6 @@ fn run_escalate(args: &[String]) -> Result<(), ExitError> {
     };
     let governance_dir = match resolve_governance_dir(
         outcome.common.root.as_deref(),
-        outcome.common.allow_bootstrap_core,
         outcome.common.governance_dir.as_deref(),
     ) {
         Ok(dir) => dir,

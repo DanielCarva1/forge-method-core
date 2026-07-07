@@ -63,9 +63,6 @@ pub struct McpServerConfig {
     /// The project root forwarded as `--root <path>` to every tool that
     /// accepts it. `None` lets each tool resolve its own root.
     pub root: Option<PathBuf>,
-    /// Whether to pass `--allow-bootstrap-core` to subprocess tool calls
-    /// (mirrors the CLI flag; for the bootstrap core only).
-    pub allow_bootstrap_core: bool,
 }
 
 impl McpServerConfig {
@@ -78,7 +75,6 @@ impl McpServerConfig {
             attestation: AttestationVerifier::new(AttestationPolicy::Default),
             forge_core_binary: PathBuf::from("forge-core"),
             root: None,
-            allow_bootstrap_core: false,
         }
     }
 }
@@ -210,7 +206,7 @@ impl ForgeMcpServer {
     /// `argv_tail` is the already-assembled list of CLI flags/positional args
     /// for the command (e.g. `["--operation", "/path/op.yaml", "--root",
     /// "/proj"]`). The adapter appends `--json` and the configured
-    /// `--root`/`--allow-bootstrap-core` so the subprocess always emits a JSON
+    /// `--root` so the subprocess always emits a JSON
     /// envelope.
     ///
     /// # Errors
@@ -250,7 +246,7 @@ impl ForgeMcpServer {
         }
 
         // 3. Build argv: ["forge-core", <tool_name>, ...argv_tail, --json,
-        //    (--root <path>)?, (--allow-bootstrap-core)?]
+        //    (--root <path>)?]
         let mut cmd = Command::new(&self.config.forge_core_binary);
         cmd.arg(tool_name);
         for a in argv_tail {
@@ -259,9 +255,6 @@ impl ForgeMcpServer {
         cmd.arg("--json");
         if let Some(root) = &self.config.root {
             cmd.arg("--root").arg(root);
-        }
-        if self.config.allow_bootstrap_core {
-            cmd.arg("--allow-bootstrap-core");
         }
         // Capture both streams; the envelope is on stdout, diagnostics on
         // stderr. We do NOT inherit stdout — we must parse it.
@@ -604,7 +597,6 @@ mod tests {
             attestation: AttestationVerifier::new(AttestationPolicy::Default),
             forge_core_binary: fake_path,
             root: None,
-            allow_bootstrap_core: false,
         }
     }
 
@@ -761,7 +753,6 @@ mod tests {
             ),
             forge_core_binary: bin,
             root: None,
-            allow_bootstrap_core: false,
         }
     }
 
@@ -776,7 +767,6 @@ mod tests {
             ),
             forge_core_binary: bin,
             root: None,
-            allow_bootstrap_core: false,
         }
     }
 

@@ -45,7 +45,6 @@ pub struct M1CommandInput {
     pub kind: M1CommandKind,
     pub root: PathBuf,
     pub operation_path: Option<PathBuf>,
-    pub allow_bootstrap_core: bool,
     pub recorded_at: String,
     pub agent_id: String,
     pub principal_id: String,
@@ -154,7 +153,7 @@ impl std::error::Error for M1CommandError {}
 /// read or parsed, the reference index cannot be built, or trace persistence
 /// fails.
 pub fn run_preview(input: &M1CommandInput) -> Result<PreviewCommandOutput, M1CommandError> {
-    let resolved = resolve_project(&input.root, input.allow_bootstrap_core)
+    let resolved = resolve_project(&input.root)
         .map_err(M1CommandError::ProjectResolve)?;
     let project_root = PathBuf::from(&resolved.project_root);
     let state_root = existing_state_root_for_m1(&resolved)?;
@@ -202,7 +201,7 @@ pub fn run_preview(input: &M1CommandInput) -> Result<PreviewCommandOutput, M1Com
 /// read or parsed, the reference index cannot be built, or trace persistence
 /// fails.
 pub fn run_ready(input: &M1CommandInput) -> Result<ReadyCommandOutput, M1CommandError> {
-    let resolved = resolve_project(&input.root, input.allow_bootstrap_core)
+    let resolved = resolve_project(&input.root)
         .map_err(M1CommandError::ProjectResolve)?;
     let project_root = PathBuf::from(&resolved.project_root);
     let state_root = existing_state_root_for_m1(&resolved)?;
@@ -251,7 +250,7 @@ pub fn run_ready(input: &M1CommandInput) -> Result<ReadyCommandOutput, M1Command
 ///
 /// Returns an error when project resolution fails.
 pub fn run_explain(input: &M1CommandInput) -> Result<ExplainCommandOutput, M1CommandError> {
-    let resolved = resolve_project(&input.root, input.allow_bootstrap_core)
+    let resolved = resolve_project(&input.root)
         .map_err(M1CommandError::ProjectResolve)?;
     let state_root = existing_state_root_for_m1(&resolved)?;
     let latest_run = input.run_id.is_none();
@@ -277,7 +276,7 @@ fn existing_state_root_for_m1(
     resolved: &crate::project_cmd::ProjectResolvePayload,
 ) -> Result<PathBuf, M1CommandError> {
     let state_root = PathBuf::from(&resolved.state_root);
-    if !resolved.state_exists && !resolved.bootstrap_core_exception {
+    if !resolved.state_exists {
         return Err(M1CommandError::MissingSidecarStateRoot {
             project_root: PathBuf::from(&resolved.project_root),
             state_root,
@@ -773,7 +772,6 @@ pub fn parse_m1_command_args(
 ) -> Result<(M1CommandInput, bool), ExitError> {
     let mut root = PathBuf::from(".");
     let mut operation_path: Option<PathBuf> = None;
-    let mut allow_bootstrap_core = false;
     let mut recorded_at = "unknown".to_string();
     let mut agent_id = "agent.codex.local".to_string();
     let mut principal_id = "principal.unknown".to_string();
@@ -791,7 +789,6 @@ pub fn parse_m1_command_args(
                 index += 1;
                 operation_path = Some(next_m1_path_or_err(args, index, kind)?);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--recorded-at" => {
                 index += 1;
                 recorded_at = next_m1_arg_or_err(args, index, kind)?.to_string();
@@ -841,7 +838,6 @@ pub fn parse_m1_command_args(
             kind,
             root,
             operation_path,
-            allow_bootstrap_core,
             recorded_at,
             agent_id,
             principal_id,

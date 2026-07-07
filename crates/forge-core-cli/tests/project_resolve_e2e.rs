@@ -103,29 +103,3 @@ fn project_resolve_without_link_fails_closed_for_consumer_repo() {
         .unwrap()
         .contains(".forge-method.yaml"));
 }
-
-#[test]
-fn project_resolve_allows_core_bootstrap_exception_explicitly() {
-    let root = repo_root();
-
-    let output = bin()
-        .args([
-            "project",
-            "resolve",
-            "--root",
-            &root.display().to_string(),
-            "--allow-bootstrap-core",
-        ])
-        .unwrap();
-
-    assert!(
-        output.status.success(),
-        "bootstrap resolve should pass: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["ok"], true);
-    assert_eq!(json["data"]["project_id"], "forge-method-core");
-    assert_eq!(json["data"]["layout"], "bootstrap_core_local");
-    assert_eq!(json["data"]["bootstrap_core_exception"], true);
-}

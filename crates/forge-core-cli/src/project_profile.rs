@@ -5,7 +5,7 @@
 //! but fails (misleadingly) on a Node or QA-only project. This module detects
 //! the profile from project-root markers (manifest files) — it never reads
 //! file contents, only checks for file existence, mirroring the cheap
-//! `is_bootstrap_core_root` predicate in `project_cmd.rs`.
+//! project-root predicate in `project_cmd.rs`.
 //!
 //! Detection is intentionally non-authoritative: a detected profile is a
 //! default, not a verdict. The agent (or the user via `--profile`) can always

@@ -127,6 +127,61 @@ fn temp_repo_root(label: &str) -> PathBuf {
     path
 }
 
+/// Copy a directory tree recursively into `target` (created if missing).
+fn copy_dir_recursive(source: &Path, target: &Path) {
+    fs::create_dir_all(target).expect("create target dir");
+    for entry in fs::read_dir(source).expect("read source dir") {
+        let entry = entry.expect("dir entry");
+        let source_path = entry.path();
+        let target_path = target.join(entry.file_name());
+        if source_path.is_dir() {
+            copy_dir_recursive(&source_path, &target_path);
+        } else {
+            fs::copy(&source_path, &target_path).expect("copy file");
+        }
+    }
+}
+
+/// Build a temp validation root that mirrors the Forge core repo's contract
+/// tree plus the append-only ledger.
+///
+/// The core repo is now a normal consumer: its `.forge-method.yaml` Project
+/// Link points at a sibling sidecar (`../forge-forge-method-core`) that holds
+/// the runtime state, including `ledger.ndjson`. The completion contracts
+/// reference `.forge-method/ledger.ndjson` as a repo-relative ref, so a
+/// validation root must carry both the contract tree (from the repo) and the
+/// ledger (from the sidecar) to pass cleanly. This builds that merged tree in a
+/// temp dir and returns it.
+fn merged_validation_root(label: &str) -> PathBuf {
+    let root = repo_root();
+    let temp = temp_repo_root(label);
+    copy_dir_recursive(&root.join("contracts"), &temp.join("contracts"));
+    copy_dir_recursive(
+        &root
+            .join("docs")
+            .join("fixtures")
+            .join("operation-contract-v0"),
+        &temp
+            .join("docs")
+            .join("fixtures")
+            .join("operation-contract-v0"),
+    );
+    // The ledger lives in the core repo's sibling sidecar via the Project Link;
+    // fall back to a repo-local copy for repos that still ship it themselves.
+    let ledger_source = [
+        root.join("../forge-forge-method-core/.forge-method/ledger.ndjson"),
+        root.join(".forge-method").join("ledger.ndjson"),
+    ]
+    .into_iter()
+    .find(|candidate| candidate.exists())
+    .expect("ledger.ndjson must exist in the core sidecar or repo root");
+    let ledger_target = temp.join(".forge-method").join("ledger.ndjson");
+    fs::create_dir_all(ledger_target.parent().expect("ledger parent"))
+        .expect("create .forge-method dir");
+    fs::copy(&ledger_source, &ledger_target).expect("copy ledger.ndjson");
+    temp
+}
+
 struct SidecarCliFixture {
     app: PathBuf,
     sidecar: PathBuf,
@@ -1427,7 +1482,8 @@ fn rekor_entry_fixture_for_dsse(
 
 #[test]
 fn validate_library_passes_current_repo() {
-    let summary = run_validate(repo_root());
+    let root = merged_validation_root("validate-library-current-repo");
+    let summary = run_validate(&root);
     assert_eq!(summary.status, ValidationStatus::Passed);
     assert!(
         summary.diagnostics.is_empty(),
@@ -1439,9 +1495,10 @@ fn validate_library_passes_current_repo() {
 
 #[test]
 fn validate_binary_outputs_json_summary() {
+    let root = merged_validation_root("validate-binary-json-summary");
     let output = Command::new(env!("CARGO_BIN_EXE_forge-core"))
         .args(["validate", "--root"])
-        .arg(repo_root())
+        .arg(&root)
         .arg("--json")
         .output()
         .expect("run forge-core validate");
@@ -4799,7 +4856,6 @@ fn execute_operation_binary_outputs_json_even_when_awaiting_human() {
         .args([
             "--operation",
             "docs/fixtures/operation-contract-v0/facilitate-first-product-idea.yaml",
-            "--allow-bootstrap-core",
             "--json",
         ])
         .output()

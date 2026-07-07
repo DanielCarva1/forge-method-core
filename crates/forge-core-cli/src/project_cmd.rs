@@ -1,8 +1,9 @@
 //! Project sidecar resolution.
 //!
-//! The Forge core repo is allowed to keep a local `.forge-method` only as a
-//! bootstrap exception. Consumer projects should carry a small
-//! `.forge-method.yaml` pointer to a sibling Forge Runtime Sidecar.
+//! Every project (including the Forge core repo itself) carries a small
+//! `.forge-method.yaml` pointer to a sibling Forge Runtime Sidecar. There is
+//! no special-case layout for the core repo — it is a consumer of its own
+//! protocol, dogfooding the same path as any other project.
 
 use forge_core_command_surface::COMMAND_PROJECT;
 use forge_core_contracts::{
@@ -21,7 +22,6 @@ use crate::cli_error::ExitError;
 #[serde(rename_all = "snake_case")]
 pub enum ProjectLayoutKind {
     Sidecar,
-    BootstrapCoreLocal,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -34,7 +34,6 @@ pub struct ProjectResolvePayload {
     pub state_root: String,
     pub state_exists: bool,
     pub layout: ProjectLayoutKind,
-    pub bootstrap_core_exception: bool,
     /// Current phase read from `<state_root>/state.yaml` when present.
     /// `None` when the state file does not exist yet (fresh project); callers
     /// fall back to `1-discovery` as the funnel entry point.
@@ -415,8 +414,8 @@ impl fmt::Display for ProjectInitError {
 }
 
 #[must_use]
-pub fn run_resolve(root: &Path, allow_bootstrap_core: bool) -> CliEnvelope<ProjectResolvePayload> {
-    match resolve_project(root, allow_bootstrap_core) {
+pub fn run_resolve(root: &Path) -> CliEnvelope<ProjectResolvePayload> {
+    match resolve_project(root) {
         Ok(payload) => CliEnvelope::ok("project.resolve", payload),
         Err(err) => CliEnvelope::err("project.resolve", err.exit_reason(), err.to_string()),
     }
@@ -898,10 +897,7 @@ fn temp_project_link_path(link_path: &Path) -> PathBuf {
 /// [`ProjectResolveError::RootCanonicalize`] when canonicalization fails,
 /// and link/state-related variants when the project link points at a
 /// non-existent or malformed state root.
-pub fn resolve_project(
-    root: &Path,
-    allow_bootstrap_core: bool,
-) -> Result<ProjectResolvePayload, ProjectResolveError> {
+pub fn resolve_project(root: &Path) -> Result<ProjectResolvePayload, ProjectResolveError> {
     if !root.exists() {
         return Err(ProjectResolveError::RootNotFound {
             root: display_path(root),
@@ -916,26 +912,6 @@ pub fn resolve_project(
     let link_path = root.join(PROJECT_LINK_FILE_NAME);
     if link_path.exists() {
         return resolve_from_link(&root, &link_path);
-    }
-    if allow_bootstrap_core && is_bootstrap_core_root(&root) {
-        let state_root = normalize_path(root.join(".forge-method"));
-        let state_exists = state_root.exists();
-        let current_phase = if state_exists {
-            read_current_phase(&state_root)
-        } else {
-            None
-        };
-        return Ok(ProjectResolvePayload {
-            project_id: "forge-method-core".to_string(),
-            project_root: display_path(&root),
-            link_path: None,
-            sidecar_root: display_path(&root),
-            state_exists,
-            state_root: display_path(&state_root),
-            layout: ProjectLayoutKind::BootstrapCoreLocal,
-            bootstrap_core_exception: true,
-            current_phase,
-        });
     }
     Err(ProjectResolveError::MissingProjectLink {
         root: display_path(&root),
@@ -998,7 +974,6 @@ fn resolve_from_link(
         state_exists,
         state_root: display_path(&state_root),
         layout: ProjectLayoutKind::Sidecar,
-        bootstrap_core_exception: false,
         current_phase,
     })
 }
@@ -1088,12 +1063,6 @@ fn normalize_path(path: PathBuf) -> PathBuf {
 
 fn strip_utf8_bom(raw: &str) -> &str {
     raw.strip_prefix('\u{feff}').unwrap_or(raw)
-}
-
-pub(crate) fn is_bootstrap_core_root(root: &Path) -> bool {
-    root.join("Cargo.toml").is_file()
-        && root.join("crates").join("forge-core-cli").is_dir()
-        && root.join(".forge-method").is_dir()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1295,7 +1264,6 @@ fn dispatch_init(args: &[String]) -> (String, i32) {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ProjectResolveArgs {
     root: PathBuf,
-    allow_bootstrap_core: bool,
     want_json: bool,
 }
 
@@ -1357,7 +1325,6 @@ fn parse_project_resolve_args(
     args: &[String],
 ) -> Result<ProjectResolveParseOutcome, ProjectResolveArgsError> {
     let mut root = PathBuf::from(".");
-    let mut allow_bootstrap_core = false;
     let mut want_json = true;
     let mut index = 0usize;
     while index < args.len() {
@@ -1367,7 +1334,6 @@ fn parse_project_resolve_args(
                 let value = require_project_resolve_value(args, index, "--root")?;
                 root = PathBuf::from(value);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--json" => want_json = true,
             "--no-json" => want_json = false,
             "--help" | "-h" => return Ok(ProjectResolveParseOutcome::Help),
@@ -1382,7 +1348,6 @@ fn parse_project_resolve_args(
 
     Ok(ProjectResolveParseOutcome::Run(ProjectResolveArgs {
         root,
-        allow_bootstrap_core,
         want_json,
     }))
 }
@@ -1394,7 +1359,7 @@ fn dispatch_resolve(args: &[String]) -> (String, i32) {
         Err(error) => return (project_resolve_error_with_usage(&error), 3),
     };
 
-    let envelope = run_resolve(&parsed.root, parsed.allow_bootstrap_core);
+    let envelope = run_resolve(&parsed.root);
     let exit_code = envelope.exit_code();
     if parsed.want_json {
         (
@@ -1567,10 +1532,6 @@ mod tests {
                 "project usage should include projected Command Surface line {subcommand_usage:?}: {usage}"
             );
         }
-        assert!(
-            usage.contains("--allow-bootstrap-core"),
-            "project resolve help must preserve the bootstrap-core flag: {usage}"
-        );
     }
 
     #[test]
@@ -1707,19 +1668,13 @@ mod tests {
 
     #[test]
     fn parse_project_resolve_args_returns_typed_options() {
-        let parsed = parse_project_resolve_args(&argv(&[
-            "--root",
-            "app",
-            "--allow-bootstrap-core",
-            "--no-json",
-        ]))
-        .expect("parse resolve args");
+        let parsed =
+            parse_project_resolve_args(&argv(&["--root", "app", "--no-json"])).expect("parse resolve args");
 
         let ProjectResolveParseOutcome::Run(options) = parsed else {
             panic!("expected runnable resolve options");
         };
         assert_eq!(options.root, PathBuf::from("app"));
-        assert!(options.allow_bootstrap_core);
         assert!(!options.want_json);
     }
 
@@ -1801,7 +1756,7 @@ mod tests {
         )
         .unwrap();
 
-        let payload = resolve_project(&app, false).unwrap();
+        let payload = resolve_project(&app).unwrap();
 
         assert_eq!(payload.project_id, "app");
         assert_eq!(payload.layout, ProjectLayoutKind::Sidecar);
@@ -1814,7 +1769,7 @@ mod tests {
     #[test]
     fn missing_link_without_exception_fails_closed() {
         let root = temp_root("missing-link");
-        let err = resolve_project(&root, false).unwrap_err();
+        let err = resolve_project(&root).unwrap_err();
         assert_eq!(err.exit_reason(), ExitReason::EnvConfig);
         assert!(err.to_string().contains(PROJECT_LINK_FILE_NAME));
     }
@@ -1830,7 +1785,7 @@ mod tests {
         )
         .unwrap();
 
-        let err = resolve_project(&app, false).unwrap_err();
+        let err = resolve_project(&app).unwrap_err();
 
         assert_eq!(err.exit_reason(), ExitReason::InvalidDecisionShape);
         assert!(err.to_string().contains("state_root"));
@@ -1852,7 +1807,7 @@ state_root: ../forge-app/state
         )
         .unwrap();
 
-        let err = resolve_project(&app, false).unwrap_err();
+        let err = resolve_project(&app).unwrap_err();
 
         assert_eq!(err.exit_reason(), ExitReason::InvalidDecisionShape);
         assert!(err.to_string().contains(".forge-method"));
@@ -1869,7 +1824,7 @@ state_root: ../forge-app/state
         )
         .unwrap();
 
-        let err = resolve_project(&app, false).unwrap_err();
+        let err = resolve_project(&app).unwrap_err();
 
         assert_eq!(err.exit_reason(), ExitReason::InvalidDecisionShape);
         assert!(err.to_string().contains("project_root"));

@@ -629,7 +629,7 @@ fn build_coordination_gates(
     effects: &[RuntimeOperationEffectInput],
     now_unix: i64,
 ) -> Vec<Box<dyn OperationGate>> {
-    let payload = match resolve_project(root, false) {
+    let payload = match resolve_project(root) {
         Ok(payload) => payload,
         Err(_) => return Vec::new(),
     };
@@ -858,7 +858,6 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
     let mut effect_paths = Vec::new();
     let mut payloads = Vec::new();
     let mut payload_policy = PayloadLoadPolicy::default();
-    let mut allow_bootstrap_core = false;
     let mut recorded_at = "unknown".to_string();
     let mut tx_id_prefix = "cli-execute-operation".to_string();
     let mut json = false;
@@ -901,9 +900,6 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
             "--allow-payload-outside-root" => {
                 payload_policy.allow_outside_root = true;
             }
-            "--allow-bootstrap-core" => {
-                allow_bootstrap_core = true;
-            }
             "--recorded-at" => {
                 index += 1;
                 recorded_at = next_execute_operation_arg_or_err(args, index, command)?.to_string();
@@ -938,7 +934,7 @@ pub fn run_execute_operation_command(args: &[String]) -> Result<(), ExitError> {
     let Some(operation_path) = operation_path else {
         return Err(ExitError::usage(execute_operation_usage(command)));
     };
-    let roots = resolve_stateful_roots_or_err("execute-operation", &root, allow_bootstrap_core)?;
+    let roots = resolve_stateful_roots_or_err("execute-operation", &root)?;
     let durability = if no_sync {
         // ADR-0009: emit a one-line stderr warning the first time the flag is
         // honoured, so a CI log makes the durability trade-off visible.

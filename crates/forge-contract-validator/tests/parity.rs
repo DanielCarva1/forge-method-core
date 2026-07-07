@@ -14,8 +14,21 @@ fn repo_root() -> PathBuf {
 
 #[test]
 fn legacy_validator_and_forge_core_cli_both_pass_current_repo() {
-    let root = repo_root();
-    let legacy = run_legacy_validator(&root);
+    // The Forge core repo is now a normal consumer: its `.forge-method.yaml`
+    // Project Link points at a sibling sidecar (`../forge-forge-method-core`)
+    // that holds the runtime state, including `ledger.ndjson`. The completion
+    // contracts reference `.forge-method/ledger.ndjson` as a repo-relative ref,
+    // so a validation root must carry both the contract tree (from the repo)
+    // and the ledger (from the sidecar) to pass cleanly. Build that merged
+    // validation tree in a temp dir and run both validators against it.
+    let source = repo_root();
+    let temp = temp_repo_root("forge-parity-pass");
+    if temp.exists() {
+        fs::remove_dir_all(&temp).expect("remove old temp repo");
+    }
+    copy_validation_tree(&source, &temp);
+
+    let legacy = run_legacy_validator(&temp);
     assert!(
         legacy.status.success(),
         "legacy stderr: {}",
@@ -47,8 +60,10 @@ fn legacy_validator_and_forge_core_cli_both_pass_current_repo() {
         );
     }
 
-    let cli = run_validate(&root);
+    let cli = run_validate(&temp);
     assert!(cli.passed(), "cli diagnostics: {:?}", cli.diagnostics);
+
+    fs::remove_dir_all(&temp).expect("clean temp repo");
 }
 
 #[test]
@@ -245,9 +260,18 @@ fn copy_validation_tree(source: &Path, target: &Path) {
             .join("fixtures")
             .join("operation-contract-v0"),
     );
-    // completion contracts reference the append-only ledger; copy it so cross-refs resolve
-    let ledger_source = source.join(".forge-method").join("ledger.ndjson");
-    if ledger_source.exists() {
+    // completion contracts reference the append-only ledger; copy it so
+    // cross-refs resolve. The core repo's runtime state (including the ledger)
+    // now lives in its sibling sidecar via the Project Link at
+    // `.forge-method.yaml`, so resolve the ledger there first and fall back to
+    // the repo root's own `.forge-method/` for repos that still ship it locally.
+    let ledger_source = [
+        source.join("../forge-forge-method-core/.forge-method/ledger.ndjson"),
+        source.join(".forge-method").join("ledger.ndjson"),
+    ]
+    .into_iter()
+    .find(|candidate| candidate.exists());
+    if let Some(ledger_source) = ledger_source {
         let ledger_target = target.join(".forge-method").join("ledger.ndjson");
         fs::create_dir_all(ledger_target.parent().expect("ledger parent"))
             .expect("create .forge-method dir");

@@ -639,7 +639,7 @@ pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
     // legacy (advisory) decide behavior is preserved.
     let project = root
         .as_deref()
-        .and_then(|r| resolve_project(r, false).ok());
+        .and_then(|r| resolve_project(r).ok());
 
     let env: CliEnvelope<DecideAccepted> =
         run_decide(&decision_file, catalog_dir.as_deref(), &gates, project.as_ref());
@@ -713,7 +713,7 @@ fn resolve_current_phase(root: Option<&std::path::Path>) -> String {
     let Some(root) = root else {
         return DEFAULT_PHASE.to_string();
     };
-    match resolve_project(root, false) {
+    match resolve_project(root) {
         Ok(payload) => payload
             .current_phase
             .unwrap_or_else(|| DEFAULT_PHASE.to_string()),

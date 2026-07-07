@@ -144,7 +144,6 @@ pub fn run_query_effect_index_context(
 pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError> {
     let command = &COMMAND_REBUILD_EFFECT_INDEX;
     let mut input = RebuildEffectIndexInput::default();
-    let mut allow_bootstrap_core = false;
     let mut json = false;
     let mut no_sync = false;
     let mut index = 1usize;
@@ -169,9 +168,6 @@ pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError
                 input.lock_relative_path =
                     next_effect_index_arg_or_err(args, index, command)?.to_string();
             }
-            "--allow-bootstrap-core" => {
-                allow_bootstrap_core = true;
-            }
             "--recorded-at" => {
                 index += 1;
                 input.recorded_at =
@@ -194,7 +190,7 @@ pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError
     }
 
     let roots =
-        resolve_stateful_roots_or_err("rebuild-effect-index", &input.root, allow_bootstrap_core)?;
+        resolve_stateful_roots_or_err("rebuild-effect-index", &input.root)?;
     input.root = roots.effect_store_root;
     if no_sync {
         // ADR-0009: emit a one-line stderr warning the first time the flag is
@@ -238,7 +234,6 @@ pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError
 pub fn run_query_effect_index_command(args: &[String]) -> Result<(), ExitError> {
     let command = &COMMAND_QUERY_EFFECT_INDEX;
     let mut input = QueryEffectIndexInput::default();
-    let mut allow_bootstrap_core = false;
     let mut json = false;
     let mut context = false;
     let mut index = 1usize;
@@ -283,9 +278,6 @@ pub fn run_query_effect_index_command(args: &[String]) -> Result<(), ExitError> 
                 )?;
             }
             "--context" => context = true,
-            "--allow-bootstrap-core" => {
-                allow_bootstrap_core = true;
-            }
             "--max-context-groups" => {
                 index += 1;
                 input.context_options.max_groups = parse_effect_index_usize_or_err(
@@ -323,7 +315,7 @@ pub fn run_query_effect_index_command(args: &[String]) -> Result<(), ExitError> 
     }
 
     let roots =
-        resolve_stateful_roots_or_err("query-effect-index", &input.root, allow_bootstrap_core)?;
+        resolve_stateful_roots_or_err("query-effect-index", &input.root)?;
     input.root = roots.effect_store_root;
     emit_query_effect_index_result(input, context, json)
 }

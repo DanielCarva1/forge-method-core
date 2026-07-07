@@ -276,13 +276,13 @@ pub const COMMAND_GUIDE: CommandSpec = CommandSpec {
 pub const COMMAND_CLAIM: CommandSpec = CommandSpec {
     name: "claim",
     usage_lines:     &[
-                "       forge-core claim acquire [--root <path>] [--allow-bootstrap-core] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--heartbeat-interval 120] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]",
-                "       forge-core claim heartbeat [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]",
-                "       forge-core claim release [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]",
-                "       forge-core claim handoff [--root <path>] [--allow-bootstrap-core] --id <claim-id> --agent <id> --summary <text> [--evidence <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]",
-                "       forge-core claim status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--from-cache] [--json|--no-json]",
-                "       forge-core claim reconcile [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--loop] [--interval-ms 30000] [--max-ticks <n>] [--no-sync] [--json|--no-json]",
-                "       forge-core claim check-write [--root <path>] [--allow-bootstrap-core] --agent <id> --target <path> [--target <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--json|--no-json]",
+                "       forge-core claim acquire [--root <path>] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--heartbeat-interval 120] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]",
+                "       forge-core claim heartbeat [--root <path>] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]",
+                "       forge-core claim release [--root <path>] --id <claim-id> --agent <id> [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]",
+                "       forge-core claim handoff [--root <path>] --id <claim-id> --agent <id> --summary <text> [--evidence <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]",
+                "       forge-core claim status [--root <path>] [--claims-dir <path>] [--now-unix <epoch>] [--from-cache] [--json|--no-json]",
+                "       forge-core claim reconcile [--root <path>] [--claims-dir <path>] [--now-unix <epoch>] [--loop] [--interval-ms 30000] [--max-ticks <n>] [--no-sync] [--json|--no-json]",
+                "       forge-core claim check-write [--root <path>] --agent <id> --target <path> [--target <path>...] [--claims-dir <path>] [--now-unix <epoch>] [--json|--no-json]",
             ],
     authority: CommandAuthority::MixedBySubcommand,
     json_mode: JsonMode::EnvelopeOptional,
@@ -310,10 +310,10 @@ pub const COMMAND_CONTRACT: CommandSpec = CommandSpec {
 pub const COMMAND_ISOLATION: CommandSpec = CommandSpec {
     name: "isolation",
     usage_lines: &[
-        "       forge-core isolation propose [--root <path>] [--allow-bootstrap-core] --agent <id> --branch <name> --worktree-path <path> --base-ref <ref> [--id <id>] [--merge-policy rebase|merge|squash] [--claim <claim-id>] [--isolation-dir <path>] [--now-unix <epoch>] [--json|--no-json]",
-        "       forge-core isolation status [--root <path>] [--allow-bootstrap-core] [--agent <id>] [--isolation-dir <path>] [--json|--no-json]",
-        "       forge-core isolation merge-plan [--root <path>] [--allow-bootstrap-core] --id <isolation-id> [--isolation-dir <path>] [--now-unix <epoch>] [--json|--no-json]",
-        "       forge-core isolation transition [--root <path>] [--allow-bootstrap-core] --id <isolation-id> --to proposed|active|merging|merged|abandoned [--isolation-dir <path>] [--now-unix <epoch>] [--json|--no-json]",
+        "       forge-core isolation propose [--root <path>] --agent <id> --branch <name> --worktree-path <path> --base-ref <ref> [--id <id>] [--merge-policy rebase|merge|squash] [--claim <claim-id>] [--isolation-dir <path>] [--now-unix <epoch>] [--json|--no-json]",
+        "       forge-core isolation status [--root <path>] [--agent <id>] [--isolation-dir <path>] [--json|--no-json]",
+        "       forge-core isolation merge-plan [--root <path>] --id <isolation-id> [--isolation-dir <path>] [--now-unix <epoch>] [--json|--no-json]",
+        "       forge-core isolation transition [--root <path>] --id <isolation-id> --to proposed|active|merging|merged|abandoned [--isolation-dir <path>] [--now-unix <epoch>] [--json|--no-json]",
     ],
     authority: CommandAuthority::MixedBySubcommand,
     json_mode: JsonMode::EnvelopeOptional,
@@ -323,10 +323,10 @@ pub const COMMAND_ISOLATION: CommandSpec = CommandSpec {
 pub const COMMAND_MEMORY: CommandSpec = CommandSpec {
     name: "memory",
     usage_lines:     &[
-                "       forge-core memory ingest  --entry-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--json|--no-json]",
-                "       forge-core memory list    [--root <path>] [--allow-bootstrap-core] [--now-unix <epoch>] [--memory-dir <path>] [--json|--no-json]",
-                "       forge-core memory forget  --entry-id <id> [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--json|--no-json]",
-                "       forge-core memory promote --entry-id <id> --policy-file <path> --evidence <ref>... [--root <path>] [--allow-bootstrap-core] [--memory-dir <path>] [--json|--no-json]",
+                "       forge-core memory ingest  --entry-file <path> --policy-file <path> [--root <path>] [--memory-dir <path>] [--json|--no-json]",
+                "       forge-core memory list    [--root <path>] [--now-unix <epoch>] [--memory-dir <path>] [--json|--no-json]",
+                "       forge-core memory forget  --entry-id <id> [--root <path>] [--memory-dir <path>] [--json|--no-json]",
+                "       forge-core memory promote --entry-id <id> --policy-file <path> --evidence <ref>... [--root <path>] [--memory-dir <path>] [--json|--no-json]",
                 "       forge-core memory review  (deferred — requires F07 governance)",
             ],
     authority: CommandAuthority::MixedBySubcommand,
@@ -337,10 +337,10 @@ pub const COMMAND_MEMORY: CommandSpec = CommandSpec {
 pub const COMMAND_GOVERNANCE: CommandSpec = CommandSpec {
     name: "governance",
     usage_lines:     &[
-                "       forge-core governance record   --conflict-file <path> [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--json|--no-json]",
-                "       forge-core governance conflicts [--status pending|resolved|escalated] [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--json|--no-json]",
-                "       forge-core governance arbitrate --conflict-id <id> --policy-file <path> --arbiter <principal> (--awarded-to <principal> | --both-released | --split-scope) [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--json|--no-json]",
-                "       forge-core governance escalate  --conflict-id <id> --policy-file <path> --principal <principal> [--root <path>] [--allow-bootstrap-core] [--governance-dir <path>] [--json|--no-json]",
+                "       forge-core governance record   --conflict-file <path> [--root <path>] [--governance-dir <path>] [--json|--no-json]",
+                "       forge-core governance conflicts [--status pending|resolved|escalated] [--root <path>] [--governance-dir <path>] [--json|--no-json]",
+                "       forge-core governance arbitrate --conflict-id <id> --policy-file <path> --arbiter <principal> (--awarded-to <principal> | --both-released | --split-scope) [--root <path>] [--governance-dir <path>] [--json|--no-json]",
+                "       forge-core governance escalate  --conflict-id <id> --policy-file <path> --principal <principal> [--root <path>] [--governance-dir <path>] [--json|--no-json]",
             ],
     authority: CommandAuthority::MixedBySubcommand,
     json_mode: JsonMode::EnvelopeOptional,
@@ -359,7 +359,7 @@ pub const COMMAND_PROJECT: CommandSpec = CommandSpec {
     name: "project",
     usage_lines:     &[
                 "       forge-core project init [--root <path>] [--project-id <id>] [--sidecar-root <path>] [--state-root <path>] [--json|--no-json]",
-                "       forge-core project resolve [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
+                "       forge-core project resolve [--root <path>] [--json|--no-json]",
             ],
     authority: CommandAuthority::MixedBySubcommand,
     json_mode: JsonMode::EnvelopeOptional,
@@ -369,8 +369,8 @@ pub const COMMAND_PROJECT: CommandSpec = CommandSpec {
 pub const COMMAND_GRAPH: CommandSpec = CommandSpec {
     name: "graph",
     usage_lines:     &[
-                "       forge-core graph validate --root <project> --graph <path> [--allow-bootstrap-core] [--json|--no-json]",
-                "       forge-core graph run --root <project> --graph <path> --dry-run [--agent <id>] [--claims-dir <path>] [--now-unix <epoch>] [--allow-bootstrap-core] [--json|--no-json]",
+                "       forge-core graph validate --root <project> --graph <path> [--json|--no-json]",
+                "       forge-core graph run --root <project> --graph <path> --dry-run [--agent <id>] [--claims-dir <path>] [--now-unix <epoch>] [--json|--no-json]",
             ],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
@@ -379,7 +379,7 @@ pub const COMMAND_GRAPH: CommandSpec = CommandSpec {
 
 pub const COMMAND_EVAL: CommandSpec = CommandSpec {
     name: "eval",
-    usage_lines:     &["       forge-core eval compare [--root <project>] [--suite <path>] --baseline <single-agent|graph|mas|manual> --candidate <single-agent|graph|mas|manual> [--allow-bootstrap-core] [--json|--no-json]"],
+    usage_lines:     &["       forge-core eval compare [--root <project>] [--suite <path>] --baseline <single-agent|graph|mas|manual> --candidate <single-agent|graph|mas|manual> [--json|--no-json]"],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::AllowlistOnly,
@@ -394,7 +394,7 @@ pub const COMMAND_EVAL_DEFAULT_SUITE: &str =
 
 pub const COMMAND_EVAL_HARNESS: CommandSpec = CommandSpec {
     name: "eval-harness",
-    usage_lines:     &["       forge-core eval-harness --config <yaml> [--root <path>] [--corpus <yaml>] [--allow-bootstrap-core] [--json|--no-json]"],
+    usage_lines:     &["       forge-core eval-harness --config <yaml> [--root <path>] [--corpus <yaml>] [--json|--no-json]"],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::AllowlistOnly,
@@ -402,7 +402,7 @@ pub const COMMAND_EVAL_HARNESS: CommandSpec = CommandSpec {
 
 pub const COMMAND_TELEMETRY: CommandSpec = CommandSpec {
     name: "telemetry",
-    usage_lines:     &["       forge-core telemetry export [--root <project>] [--contract <path>] [--output <path>] [--format jsonl|otel-json] [--trace-id <id>|--run-id <id>|--latest-run] [--allow-bootstrap-core] [--json|--no-json]"],
+    usage_lines:     &["       forge-core telemetry export [--root <project>] [--contract <path>] [--output <path>] [--format jsonl|otel-json] [--trace-id <id>|--run-id <id>|--latest-run] [--json|--no-json]"],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::AllowlistOnly,
@@ -421,7 +421,7 @@ pub const COMMAND_TELEMETRY_DEFAULT_TRACE_SOURCE: &str =
 
 pub const COMMAND_PREVIEW: CommandSpec = CommandSpec {
     name: "preview",
-    usage_lines:     &["       forge-core preview [--root <path>] --operation <path> [--allow-bootstrap-core] [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json|--no-json]"],
+    usage_lines:     &["       forge-core preview [--root <path>] --operation <path> [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json|--no-json]"],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::DefaultReadOnly,
@@ -429,7 +429,7 @@ pub const COMMAND_PREVIEW: CommandSpec = CommandSpec {
 
 pub const COMMAND_READY: CommandSpec = CommandSpec {
     name: "ready",
-    usage_lines:     &["       forge-core ready [--root <path>] --operation <path> [--allow-bootstrap-core] [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json|--no-json]"],
+    usage_lines:     &["       forge-core ready [--root <path>] --operation <path> [--recorded-at <value>] [--agent-id <id>] [--principal-id <id>] [--json|--no-json]"],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::DefaultReadOnly,
@@ -437,7 +437,7 @@ pub const COMMAND_READY: CommandSpec = CommandSpec {
 
 pub const COMMAND_EXPLAIN: CommandSpec = CommandSpec {
     name: "explain",
-    usage_lines:     &["       forge-core explain [--root <path>] (--last-run | --run-id <id>) [--allow-bootstrap-core] [--json|--no-json]"],
+    usage_lines:     &["       forge-core explain [--root <path>] (--last-run | --run-id <id>) [--json|--no-json]"],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::DefaultReadOnly,
@@ -445,7 +445,7 @@ pub const COMMAND_EXPLAIN: CommandSpec = CommandSpec {
 
 pub const COMMAND_COST: CommandSpec = CommandSpec {
     name: "cost",
-    usage_lines:     &["       forge-core cost [--root <path>] [--run-id <id> | --last-run] [--graph-id <id>] [--principal <id>] [--allow-bootstrap-core] [--json|--no-json]"],
+    usage_lines:     &["       forge-core cost [--root <path>] [--run-id <id> | --last-run] [--graph-id <id>] [--principal <id>] [--json|--no-json]"],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::AllowlistOnly,
@@ -472,7 +472,7 @@ pub const COMMAND_VALIDATE: CommandSpec = CommandSpec {
 pub const COMMAND_PREFLIGHT: CommandSpec = CommandSpec {
     name: "preflight",
     usage_lines:     &[
-        "       forge-core preflight [--root <path>] [--allow-bootstrap-core] [--json|--no-json] [--profile <name>] [--gate <name>]... [--expected-anchor <count>]",
+        "       forge-core preflight [--root <path>] [--json|--no-json] [--profile <name>] [--gate <name>]... [--expected-anchor <count>]",
         "       forge-core preflight init [--root <path>] [--profile <name>] [--json|--no-json]",
     ],
     authority: CommandAuthority::MixedBySubcommand,
@@ -482,7 +482,7 @@ pub const COMMAND_PREFLIGHT: CommandSpec = CommandSpec {
 
 pub const COMMAND_EXECUTE_OPERATION: CommandSpec = CommandSpec {
     name: "execute-operation",
-    usage_lines:     &["       forge-core execute-operation --root <path> --operation <path> [--command <path>] [--effect <path>] [--payload <target_ref>=<path>] [--max-payload-bytes <bytes>] [--allow-payload-outside-root] [--allow-bootstrap-core] [--recorded-at <value>] [--tx-id-prefix <value>] [--require-risk-audit <path>] [--require-citation] [--no-sync] [--json|--no-json]"],
+    usage_lines:     &["       forge-core execute-operation --root <path> --operation <path> [--command <path>] [--effect <path>] [--payload <target_ref>=<path>] [--max-payload-bytes <bytes>] [--allow-payload-outside-root] [--recorded-at <value>] [--tx-id-prefix <value>] [--require-risk-audit <path>] [--require-citation] [--no-sync] [--json|--no-json]"],
     authority: CommandAuthority::MutatesForgeState,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::DefaultMutate,
@@ -490,7 +490,7 @@ pub const COMMAND_EXECUTE_OPERATION: CommandSpec = CommandSpec {
 
 pub const COMMAND_REBUILD_EFFECT_INDEX: CommandSpec = CommandSpec {
     name: "rebuild-effect-index",
-    usage_lines:     &["       forge-core rebuild-effect-index [--root <path>] [--wal <path>] [--index <path>] [--lock <path>] [--allow-bootstrap-core] [--recorded-at <value>] [--no-sync] [--json|--no-json]"],
+    usage_lines:     &["       forge-core rebuild-effect-index [--root <path>] [--wal <path>] [--index <path>] [--lock <path>] [--recorded-at <value>] [--no-sync] [--json|--no-json]"],
     authority: CommandAuthority::MutatesForgeState,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::AllowlistOnly,
@@ -498,7 +498,7 @@ pub const COMMAND_REBUILD_EFFECT_INDEX: CommandSpec = CommandSpec {
 
 pub const COMMAND_QUERY_EFFECT_INDEX: CommandSpec = CommandSpec {
     name: "query-effect-index",
-    usage_lines:     &["       forge-core query-effect-index [--root <path>] [--index <path>] [--logical-ref <ref>] [--effect-id <id>] [--operation-id <id>] [--target-kind <kind>] [--consumer-use <discovery|diagnostics|handoff_context>] [--context] [--max-context-groups <n>] [--adapter-kind <codex|cursor|claude|opencode|vscode|pidev|forge_standalone|custom>] [--adapter-trigger <evidence_discovery|diagnostics|handoff_preparation|manual_inspection>] [--latest] [--allow-bootstrap-core] [--json|--no-json]"],
+    usage_lines:     &["       forge-core query-effect-index [--root <path>] [--index <path>] [--logical-ref <ref>] [--effect-id <id>] [--operation-id <id>] [--target-kind <kind>] [--consumer-use <discovery|diagnostics|handoff_context>] [--context] [--max-context-groups <n>] [--adapter-kind <codex|cursor|claude|opencode|vscode|pidev|forge_standalone|custom>] [--adapter-trigger <evidence_discovery|diagnostics|handoff_preparation|manual_inspection>] [--latest] [--json|--no-json]"],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::DefaultReadOnly,
@@ -658,7 +658,7 @@ pub const COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_OCSP_STATUS: CommandSpec = Com
 
 pub const COMMAND_START: CommandSpec = CommandSpec {
     name: "start",
-    usage_lines:     &["       forge-core start [--root <path>] [--allow-bootstrap-core] [--agent-id <id>] [--json|--no-json]"],
+    usage_lines:     &["       forge-core start [--root <path>] [--agent-id <id>] [--json|--no-json]"],
     authority: CommandAuthority::MutatesForgeState,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::AllowlistOnly,
@@ -667,7 +667,7 @@ pub const COMMAND_START: CommandSpec = CommandSpec {
 pub const COMMAND_MCP: CommandSpec = CommandSpec {
     name: "mcp",
     usage_lines:     &[
-                "       forge-core mcp serve [--allowlist <yaml>] [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
+                "       forge-core mcp serve [--allowlist <yaml>] [--root <path>] [--json|--no-json]",
             ],
     authority: CommandAuthority::AdapterProtocol,
     json_mode: JsonMode::ProtocolStream,
@@ -677,11 +677,11 @@ pub const COMMAND_MCP: CommandSpec = CommandSpec {
 pub const COMMAND_RESEARCH: CommandSpec = CommandSpec {
     name: "research",
     usage_lines:     &[
-                "       forge-core research source add  --source-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
-                "       forge-core research source list [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
-                "       forge-core research check       [--root <path>] [--allow-bootstrap-core] [--evidence-file <path>] [--json|--no-json]",
-                "       forge-core research graph       [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
-                "       forge-core research cite        --source-id <id> [--root <path>] [--allow-bootstrap-core] [--evidence-file <path>] [--json|--no-json]",
+                "       forge-core research source add  --source-file <path> --policy-file <path> [--root <path>] [--json|--no-json]",
+                "       forge-core research source list [--root <path>] [--json|--no-json]",
+                "       forge-core research check       [--root <path>] [--evidence-file <path>] [--json|--no-json]",
+                "       forge-core research graph       [--root <path>] [--json|--no-json]",
+                "       forge-core research cite        --source-id <id> [--root <path>] [--evidence-file <path>] [--json|--no-json]",
             ],
     authority: CommandAuthority::MixedBySubcommand,
     json_mode: JsonMode::EnvelopeOptional,
@@ -806,7 +806,7 @@ mod tests {
     fn local_usage_lines_strip_only_the_current_command_prefix() {
         assert_eq!(
             COMMAND_CLAIM.local_usage_line(COMMAND_CLAIM.usage_lines[0]),
-            "acquire [--root <path>] [--allow-bootstrap-core] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--heartbeat-interval 120] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]"
+            "acquire [--root <path>] --scope <kind> --id <scope-id> --agent <id> [--path <repo-path>...] [--role worker] [--ttl 600] [--heartbeat-interval 120] [--claims-dir <path>] [--now-unix <epoch>] [--no-sync] [--json|--no-json]"
         );
         assert_eq!(
             COMMAND_PROJECT.local_usage_line(COMMAND_PROJECT.usage_lines[0]),
@@ -899,7 +899,7 @@ mod tests {
     fn subcommand_usage_lookup_returns_fully_qualified_usage() {
         assert_eq!(
             COMMAND_CLAIM.usage_line_for_subcommand("status"),
-            Some("forge-core claim status [--root <path>] [--allow-bootstrap-core] [--claims-dir <path>] [--now-unix <epoch>] [--from-cache] [--json|--no-json]")
+            Some("forge-core claim status [--root <path>] [--claims-dir <path>] [--now-unix <epoch>] [--from-cache] [--json|--no-json]")
         );
         assert_eq!(COMMAND_CLAIM.usage_line_for_subcommand("missing"), None);
     }
@@ -923,13 +923,13 @@ mod tests {
                 .local_usage_lines_under_subcommand_path(&["source"])
                 .collect::<Vec<_>>(),
             vec![
-                "add  --source-file <path> --policy-file <path> [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
-                "list [--root <path>] [--allow-bootstrap-core] [--json|--no-json]",
+                "add  --source-file <path> --policy-file <path> [--root <path>] [--json|--no-json]",
+                "list [--root <path>] [--json|--no-json]",
             ]
         );
         assert_eq!(
             COMMAND_RESEARCH.usage_line_for_subcommand_path(&["source", "list"]),
-            Some("forge-core research source list [--root <path>] [--allow-bootstrap-core] [--json|--no-json]")
+            Some("forge-core research source list [--root <path>] [--json|--no-json]")
         );
         assert_eq!(
             COMMAND_RESEARCH.usage_line_for_subcommand_path(&["missing"]),

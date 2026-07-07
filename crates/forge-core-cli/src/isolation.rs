@@ -612,14 +612,13 @@ pub fn resolve_isolation_dir_or_err(
     command: &str,
     isolation_dir: Option<PathBuf>,
     root: &std::path::Path,
-    allow_bootstrap_core: bool,
     want_json: bool,
 ) -> Result<PathBuf, ExitError> {
     if let Some(isolation_dir) = isolation_dir {
         return Ok(isolation_dir);
     }
 
-    match crate::project_cmd::resolve_project(root, allow_bootstrap_core) {
+    match crate::project_cmd::resolve_project(root) {
         Ok(project) if project.state_exists => {
             let state_root = PathBuf::from(project.state_root);
             if state_root.is_dir() {
@@ -687,7 +686,6 @@ pub fn run_isolation_propose(args: &[String]) -> Result<(), ExitError> {
 
     let mut isolation_dir: Option<PathBuf> = None;
     let mut root = PathBuf::from(".");
-    let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
     let mut want_json = true;
     let mut agent = String::new();
@@ -705,7 +703,6 @@ pub fn run_isolation_propose(args: &[String]) -> Result<(), ExitError> {
                 idx += 1;
                 root = PathBuf::from(require_value_or_err(args, idx, "root")?);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--agent" => {
                 idx += 1;
                 agent = require_value_or_err(args, idx, "agent")?;
@@ -781,7 +778,6 @@ pub fn run_isolation_propose(args: &[String]) -> Result<(), ExitError> {
         "isolation.propose",
         isolation_dir,
         &root,
-        allow_bootstrap_core,
         want_json,
     )?;
     let env = run_propose(
@@ -809,7 +805,6 @@ pub fn run_isolation_status(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::StableId;
     let mut isolation_dir: Option<PathBuf> = None;
     let mut root = PathBuf::from(".");
-    let mut allow_bootstrap_core = false;
     let mut want_json = true;
     let mut agent: Option<String> = None;
     let mut idx = 0usize;
@@ -819,7 +814,6 @@ pub fn run_isolation_status(args: &[String]) -> Result<(), ExitError> {
                 idx += 1;
                 root = PathBuf::from(require_value_or_err(args, idx, "root")?);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--agent" => {
                 idx += 1;
                 agent = Some(require_value_or_err(args, idx, "agent")?);
@@ -847,7 +841,6 @@ pub fn run_isolation_status(args: &[String]) -> Result<(), ExitError> {
         "isolation.status",
         isolation_dir,
         &root,
-        allow_bootstrap_core,
         want_json,
     )?;
     let env = run_status(
@@ -868,7 +861,6 @@ pub fn run_isolation_merge_plan(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::StableId;
     let mut isolation_dir: Option<PathBuf> = None;
     let mut root = PathBuf::from(".");
-    let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
     let mut want_json = true;
     let mut id = String::new();
@@ -879,7 +871,6 @@ pub fn run_isolation_merge_plan(args: &[String]) -> Result<(), ExitError> {
                 idx += 1;
                 root = PathBuf::from(require_value_or_err(args, idx, "root")?);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--id" => {
                 idx += 1;
                 id = require_value_or_err(args, idx, "id")?;
@@ -920,7 +911,6 @@ pub fn run_isolation_merge_plan(args: &[String]) -> Result<(), ExitError> {
         "isolation.merge-plan",
         isolation_dir,
         &root,
-        allow_bootstrap_core,
         want_json,
     )?;
     let env = run_merge_plan(&isolation_dir, &StableId(id), resolve_now_unix(now_unix));
@@ -939,7 +929,6 @@ pub fn run_isolation_transition(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::StableId;
     let mut isolation_dir: Option<PathBuf> = None;
     let mut root = PathBuf::from(".");
-    let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
     let mut want_json = true;
     let mut id = String::new();
@@ -951,7 +940,6 @@ pub fn run_isolation_transition(args: &[String]) -> Result<(), ExitError> {
                 idx += 1;
                 root = PathBuf::from(require_value_or_err(args, idx, "root")?);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--id" => {
                 idx += 1;
                 id = require_value_or_err(args, idx, "id")?;
@@ -1005,7 +993,6 @@ pub fn run_isolation_transition(args: &[String]) -> Result<(), ExitError> {
         "isolation.transition",
         isolation_dir,
         &root,
-        allow_bootstrap_core,
         want_json,
     )?;
     let env = run_transition(

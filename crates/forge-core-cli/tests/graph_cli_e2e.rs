@@ -1572,7 +1572,6 @@ fn graph_run_dry_run_blocks_operation_contract_that_is_not_ready() {
             "--graph",
             &graph.display().to_string(),
             "--dry-run",
-            "--allow-bootstrap-core",
             "--json",
         ])
         .output()
@@ -1612,7 +1611,6 @@ fn graph_run_dry_run_derives_mutation_from_operation_contract_over_graph_false()
             "--graph",
             &graph.display().to_string(),
             "--dry-run",
-            "--allow-bootstrap-core",
             "--json",
         ])
         .output()
@@ -1631,7 +1629,7 @@ fn graph_run_dry_run_derives_mutation_from_operation_contract_over_graph_false()
 }
 
 #[test]
-fn published_verifier_block_fixture_exits_nonzero_with_bootstrap_exception() {
+fn published_verifier_block_fixture_exits_nonzero() {
     let root = repo_root();
     let output = bin()
         .args([
@@ -1642,7 +1640,6 @@ fn published_verifier_block_fixture_exits_nonzero_with_bootstrap_exception() {
             "--graph",
             "docs/fixtures/workflow-graph-v0/verifier-blocks-mutation.yaml",
             "--dry-run",
-            "--allow-bootstrap-core",
             "--json",
         ])
         .output()

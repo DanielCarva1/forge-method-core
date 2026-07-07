@@ -1600,10 +1600,6 @@ mod tests {
             );
         }
         assert!(
-            usage.contains("--allow-bootstrap-core"),
-            "claim help must preserve the bootstrap-core flag: {usage}"
-        );
-        assert!(
             usage.contains("--now-unix <epoch>"),
             "claim help must preserve deterministic replay flags: {usage}"
         );
@@ -1695,14 +1691,13 @@ pub fn resolve_claims_dir_or_err(
     command: &str,
     claims_dir: Option<PathBuf>,
     root: &std::path::Path,
-    allow_bootstrap_core: bool,
     want_json: bool,
 ) -> Result<PathBuf, ExitError> {
     if let Some(claims_dir) = claims_dir {
         return Ok(claims_dir);
     }
 
-    match crate::project_cmd::resolve_project(root, allow_bootstrap_core) {
+    match crate::project_cmd::resolve_project(root) {
         Ok(project) if project.state_exists => {
             Ok(PathBuf::from(project.state_root).join("claims-active"))
         }
@@ -1759,7 +1754,6 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
     let mut paths: Vec<String> = Vec::new();
     let mut claims_dir: Option<PathBuf> = None;
     let mut root = PathBuf::from(".");
-    let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
     let mut no_sync = false;
     let mut want_json = true;
@@ -1770,7 +1764,6 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
                 idx += 1;
                 root = PathBuf::from(require_value_or_err(args, idx, "root")?);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--scope" => {
                 idx += 1;
                 scope_kind = Some(require_value_or_err(args, idx, "scope")?);
@@ -1864,7 +1857,6 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
         "claim.acquire",
         claims_dir,
         &root,
-        allow_bootstrap_core,
         want_json,
     )?;
     let durability = if no_sync {
@@ -1941,7 +1933,6 @@ pub fn run_claim_single_target(
     let mut agent_id: Option<String> = None;
     let mut claims_dir: Option<PathBuf> = None;
     let mut root = PathBuf::from(".");
-    let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
     let mut no_sync = false;
     let mut want_json = true;
@@ -1952,7 +1943,6 @@ pub fn run_claim_single_target(
                 idx += 1;
                 root = PathBuf::from(require_value_or_err(args, idx, "root")?);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--id" => {
                 idx += 1;
                 claim_id = Some(require_value_or_err(args, idx, "id")?);
@@ -1997,7 +1987,6 @@ pub fn run_claim_single_target(
         &format!("claim.{sub}"),
         claims_dir,
         &root,
-        allow_bootstrap_core,
         want_json,
     )?;
     let durability = if no_sync {
@@ -2038,7 +2027,6 @@ pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
     let mut evidence_refs: Vec<String> = Vec::new();
     let mut claims_dir: Option<PathBuf> = None;
     let mut root = PathBuf::from(".");
-    let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
     let mut no_sync = false;
     let mut want_json = true;
@@ -2049,7 +2037,6 @@ pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
                 idx += 1;
                 root = PathBuf::from(require_value_or_err(args, idx, "root")?);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--id" => {
                 idx += 1;
                 claim_id = Some(require_value_or_err(args, idx, "id")?);
@@ -2103,7 +2090,6 @@ pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
         "claim.handoff",
         claims_dir,
         &root,
-        allow_bootstrap_core,
         want_json,
     )?;
     let durability = if no_sync {
@@ -2140,7 +2126,6 @@ pub fn run_claim_status(args: &[String]) -> Result<(), ExitError> {
     use crate::claim::{run_status, run_status_with_source};
     let mut claims_dir: Option<PathBuf> = None;
     let mut root = PathBuf::from(".");
-    let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
     let mut want_json = true;
     let mut from_cache = false;
@@ -2151,7 +2136,6 @@ pub fn run_claim_status(args: &[String]) -> Result<(), ExitError> {
                 idx += 1;
                 root = PathBuf::from(require_value_or_err(args, idx, "root")?);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--claims-dir" => {
                 idx += 1;
                 claims_dir = Some(PathBuf::from(require_value_or_err(
@@ -2186,7 +2170,6 @@ pub fn run_claim_status(args: &[String]) -> Result<(), ExitError> {
         "claim.status",
         claims_dir,
         &root,
-        allow_bootstrap_core,
         want_json,
     )?;
     let env = if from_cache {
@@ -2212,7 +2195,6 @@ pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
 
     let mut claims_dir: Option<PathBuf> = None;
     let mut root = PathBuf::from(".");
-    let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
     let mut want_json = true;
     let mut run_loop = false;
@@ -2226,7 +2208,6 @@ pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
                 idx += 1;
                 root = PathBuf::from(require_value_or_err(args, idx, "root")?);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--claims-dir" => {
                 idx += 1;
                 claims_dir = Some(PathBuf::from(require_value_or_err(
@@ -2281,7 +2262,6 @@ pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
         "claim.reconcile",
         claims_dir,
         &root,
-        allow_bootstrap_core,
         want_json,
     )?;
     let durability = if no_sync {
@@ -2408,7 +2388,6 @@ pub fn run_claim_check_write(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::StableId;
     let mut claims_dir: Option<PathBuf> = None;
     let mut root = PathBuf::from(".");
-    let mut allow_bootstrap_core = false;
     let mut now_unix: Option<i64> = None;
     let mut want_json = true;
     let mut agent_id = String::new();
@@ -2420,7 +2399,6 @@ pub fn run_claim_check_write(args: &[String]) -> Result<(), ExitError> {
                 idx += 1;
                 root = PathBuf::from(require_value_or_err(args, idx, "root")?);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--agent" => {
                 idx += 1;
                 agent_id = require_value_or_err(args, idx, "agent")?;
@@ -2470,7 +2448,6 @@ pub fn run_claim_check_write(args: &[String]) -> Result<(), ExitError> {
         "check-write",
         claims_dir,
         &root,
-        allow_bootstrap_core,
         want_json,
     )?;
     let env = run_check_write(

@@ -52,7 +52,7 @@ use forge_core_contracts::{CliEnvelope, ExitReason, ENVELOPE_SCHEMA_VERSION};
 
 use crate::cli_error::ExitError;
 use crate::project_cmd::{
-    init_project, is_bootstrap_core_root, resolve_project, write_initial_project_state,
+    init_project, resolve_project, write_initial_project_state,
     ProjectInitError, ProjectInitStatus, ProjectLayoutKind, ProjectResolveError,
     ProjectResolvePayload,
 };
@@ -100,7 +100,6 @@ const STARTER_FIXTURE_EXECUTE: &str = "execute-trivial-write.yaml";
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct StartCliOptions {
     root: PathBuf,
-    allow_bootstrap_core: bool,
     agent_id: Option<String>,
     output: StartOutputMode,
 }
@@ -271,7 +270,6 @@ pub struct ProjectContext {
     pub state_root: String,
     pub state_exists: bool,
     pub layout: ProjectLayoutKind,
-    pub bootstrap_core_exception: bool,
     /// Current phase read from the authoritative `state.yaml`. `None` when no
     /// state file exists yet; callers fall back to `1-discovery`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -319,7 +317,6 @@ impl From<ProjectResolvePayload> for ProjectContext {
             state_root: p.state_root,
             state_exists: p.state_exists,
             layout: p.layout,
-            bootstrap_core_exception: p.bootstrap_core_exception,
             current_phase: p.current_phase,
         }
     }
@@ -359,7 +356,7 @@ impl std::error::Error for StartError {}
 
 /// Runs the `forge-core start` subcommand.
 ///
-/// Parses `--root` (default `.`), `--allow-bootstrap-core`, optional
+/// Parses `--root` (default `.`), optional
 /// `--agent-id`, and the standard `--json`/`--no-json` dual-output flags,
 /// resolves the project, classifies the bootstrap state, and emits a
 /// [`CliEnvelope<StartPayload>`] via
@@ -381,17 +378,12 @@ pub fn run_start_command(args: &[String]) -> Result<(), ExitError> {
         }
     };
 
-    let env = run_start_with_agent(
-        &options.root,
-        options.allow_bootstrap_core,
-        options.agent_id,
-    );
+    let env = run_start_with_agent(&options.root, options.agent_id);
     crate::cli_util::emit_envelope(env, options.output.wants_json())
 }
 
 fn parse_start_args(args: &[String]) -> Result<StartParseOutcome, StartParseError> {
     let mut root = PathBuf::from(".");
-    let mut allow_bootstrap_core = false;
     let mut agent_id: Option<String> = None;
     let mut output = StartOutputMode::Json;
 
@@ -405,7 +397,6 @@ fn parse_start_args(args: &[String]) -> Result<StartParseOutcome, StartParseErro
                 let value = require_start_value(args, index, "--root")?;
                 root = PathBuf::from(value);
             }
-            "--allow-bootstrap-core" => allow_bootstrap_core = true,
             "--agent-id" | "--agent" => {
                 index += 1;
                 let value = require_start_value(args, index, "--agent-id")?;
@@ -425,7 +416,6 @@ fn parse_start_args(args: &[String]) -> Result<StartParseOutcome, StartParseErro
 
     Ok(StartParseOutcome::Run(StartCliOptions {
         root,
-        allow_bootstrap_core,
         agent_id,
         output,
     }))
@@ -454,8 +444,8 @@ fn parse_start_args(args: &[String]) -> Result<StartParseOutcome, StartParseErro
 /// malformed link, unsafe state root, …). The caller maps the [`ExitReason`]
 /// into the envelope exit code.
 #[must_use]
-pub fn run_start(root: &Path, allow_bootstrap_core: bool) -> CliEnvelope<StartPayload> {
-    run_start_with_agent(root, allow_bootstrap_core, None)
+pub fn run_start(root: &Path) -> CliEnvelope<StartPayload> {
+    run_start_with_agent(root, None)
 }
 
 /// Variant of [`run_start`] that preserves an optional host-supplied agent id
@@ -464,32 +454,14 @@ pub fn run_start(root: &Path, allow_bootstrap_core: bool) -> CliEnvelope<StartPa
 /// with a broken/missing sidecar it repairs it; on a healthy in-progress repo
 /// it routes to discovery/guide.
 #[must_use]
-pub fn run_start_with_agent(
-    root: &Path,
-    allow_bootstrap_core: bool,
-    agent_id: Option<String>,
-) -> CliEnvelope<StartPayload> {
-    let resolved = match resolve_project(root, allow_bootstrap_core) {
+pub fn run_start_with_agent(root: &Path, agent_id: Option<String>) -> CliEnvelope<StartPayload> {
+    let resolved = match resolve_project(root) {
         Ok(payload) => payload,
         Err(ProjectResolveError::MissingProjectLink { .. }) => {
-            if is_bootstrap_core_root(root) {
-                match resolve_project(root, true) {
-                    Ok(payload) => {
-                        return bootstrap_core_start_payload(root, payload, agent_id);
-                    }
-                    Err(err) => {
-                        return CliEnvelope::err(
-                            "start",
-                            resolve_error_exit_reason(&err),
-                            err.to_string(),
-                        );
-                    }
-                }
-            }
             // Fresh repo: no `.forge-method.yaml`. `start` bootstraps it now
             // rather than recommending a separate `project init` step, so the
             // agent gets a ready project in one command.
-            return bootstrap_and_finish(root, allow_bootstrap_core, agent_id, false);
+            return bootstrap_and_finish(root, agent_id, false);
         }
         Err(err) => {
             return CliEnvelope::err("start", resolve_error_exit_reason(&err), err.to_string());
@@ -502,7 +474,7 @@ pub fn run_start_with_agent(
     // `ExistingProjectLinkMismatch`, surfaced as an error rather than silently
     // overwritten.
     if !resolved.state_exists {
-        return bootstrap_and_finish(root, allow_bootstrap_core, agent_id, true);
+        return bootstrap_and_finish(root, agent_id, true);
     }
 
     finish_classified(&resolved, root, agent_id, Vec::new())
@@ -514,7 +486,6 @@ pub fn run_start_with_agent(
 /// `repaired_sidecar` action label from `initialized`.
 fn bootstrap_and_finish(
     root: &Path,
-    allow_bootstrap_core: bool,
     agent_id: Option<String>,
     is_repair: bool,
 ) -> CliEnvelope<StartPayload> {
@@ -536,7 +507,7 @@ fn bootstrap_and_finish(
             {
                 eprintln!("start: failed to seed state.yaml (non-fatal): {err}");
             }
-            match resolve_project(root, allow_bootstrap_core) {
+            match resolve_project(root) {
                 Ok(resolved) => finish_classified(
                     &resolved,
                     root,
@@ -576,49 +547,6 @@ fn finish_classified(
             actions_performed,
         },
     )
-}
-
-fn bootstrap_core_start_payload(
-    root: &Path,
-    resolved: ProjectResolvePayload,
-    agent_id: Option<String>,
-) -> CliEnvelope<StartPayload> {
-    let project = ProjectContext::from(resolved.clone());
-    let (state, reason, next_step) = classify(&resolved, root);
-    let next_step = add_bootstrap_core_reference(next_step, root);
-    CliEnvelope::ok(
-        "start",
-        StartPayload {
-            schema_version: ENVELOPE_SCHEMA_VERSION.to_string(),
-            agent_id,
-            state,
-            reason: format!(
-                "Bootstrap Core Exception detected: no consumer Project Link is present, \
-                 but this repository carries Forge core local state that resolves only \
-                 with --allow-bootstrap-core. {reason}"
-            ),
-            next_step,
-            project: Some(project),
-            actions_performed: Vec::new(),
-        },
-    )
-}
-
-fn add_bootstrap_core_reference(next_step: Option<NextStep>, root: &Path) -> Option<NextStep> {
-    next_step.map(|mut step| {
-        let command = render_command_for_display(&[
-            "forge-core".to_string(),
-            "project".to_string(),
-            "resolve".to_string(),
-            "--root".to_string(),
-            root.display().to_string(),
-            "--allow-bootstrap-core".to_string(),
-            "--json".to_string(),
-        ]);
-        step.references
-            .push(format!("verify bootstrap core resolution: {command}"));
-        step
-    })
 }
 
 /// Classify the bootstrap state from the resolved project. The ordering is
@@ -883,7 +811,6 @@ mod tests {
             "start",
             "--root",
             "app",
-            "--allow-bootstrap-core",
             "--agent",
             "codex-main",
             "--no-json",
@@ -894,7 +821,6 @@ mod tests {
             panic!("expected runnable start options");
         };
         assert_eq!(options.root, PathBuf::from("app"));
-        assert!(options.allow_bootstrap_core);
         assert_eq!(options.agent_id.as_deref(), Some("codex-main"));
         assert_eq!(options.output, StartOutputMode::Text);
     }
@@ -1015,7 +941,7 @@ mod tests {
         // a single command, then reports the post-init state. This is the
         // single-command UX: the agent does not need a separate `project init`.
         let root = temp_root("no-link");
-        let env = run_start(&root, false);
+        let env = run_start(&root);
         assert!(env.ok, "no_link bootstraps and returns an ok envelope");
         assert_eq!(env.exit_reason.0, ExitReason::Ok.as_str());
         let payload = env.data.as_ref().expect("payload on no_link");
@@ -1055,7 +981,7 @@ mod tests {
         // raw path (no shell quoting); agents read `actions_performed` and
         // `state`, not a shell string.
         let root = temp_root("no link path");
-        let env = run_start(&root, false);
+        let env = run_start(&root);
         assert!(env.ok, "no_link with a space path should still exit zero");
         let payload = env.data.as_ref().expect("payload on no_link");
         assert_eq!(
@@ -1077,7 +1003,7 @@ mod tests {
     #[test]
     fn agent_id_is_preserved_in_bootstrap_payload() {
         let root = temp_root("agent-id");
-        let env = run_start_with_agent(&root, false, Some("codex-main".to_string()));
+        let env = run_start_with_agent(&root, Some("codex-main".to_string()));
         let payload = env.data.as_ref().expect("payload on no_link");
         assert_eq!(payload.agent_id.as_deref(), Some("codex-main"));
         // Bootstrap happens; state advances past no_link.
@@ -1085,49 +1011,6 @@ mod tests {
             payload.state,
             BootstrapState::SidecarReadyNoContract,
             "agent_id test should observe post-bootstrap state"
-        );
-    }
-
-    #[test]
-    fn bootstrap_core_exception_is_diagnosed_without_consumer_link() {
-        let root = temp_root("bootstrap-core");
-        fs::write(
-            root.join("Cargo.toml"),
-            "[workspace]\nmembers = [\"crates/forge-core-cli\"]\n",
-        )
-        .unwrap();
-        fs::create_dir_all(root.join("crates").join("forge-core-cli")).unwrap();
-        make_state_tree(&root.join(".forge-method"));
-
-        let env = run_start(&root, false);
-        let payload = env.data.as_ref().expect("payload on bootstrap core");
-        let resolved = resolve_project(&root, true).expect("bootstrap core resolves explicitly");
-        let expected_project = ProjectContext::from(resolved.clone());
-        assert!(env.ok);
-        assert_eq!(payload.state, BootstrapState::SidecarReadyNoContract);
-        assert!(
-            payload.reason.contains("Bootstrap Core Exception"),
-            "reason should name the explicit exception: {}",
-            payload.reason
-        );
-        assert_eq!(
-            payload.project.as_ref(),
-            Some(&expected_project),
-            "start must mirror `project resolve --allow-bootstrap-core` so agents do not infer a different project context"
-        );
-        assert_eq!(resolved.layout, ProjectLayoutKind::BootstrapCoreLocal);
-        assert!(resolved.bootstrap_core_exception);
-        let project = payload.project.as_ref().expect("project context");
-        assert!(project.bootstrap_core_exception);
-        assert_eq!(project.layout, ProjectLayoutKind::BootstrapCoreLocal);
-        let next = payload.next_step.as_ref().expect("next step");
-        assert!(
-            next.references
-                .iter()
-                .any(|reference| reference.contains("project resolve")
-                    && reference.contains("--allow-bootstrap-core")),
-            "bootstrap-core next step should preserve the explicit resolve flag: {:?}",
-            next.references
         );
     }
 
@@ -1141,7 +1024,7 @@ mod tests {
         let root = temp_root("local-state-not-core");
         make_state_tree(&root.join(".forge-method"));
 
-        let env = run_start(&root, false);
+        let env = run_start(&root);
         assert!(
             !env.ok,
             "unsafe local .forge-method should fail closed, not bootstrap"
@@ -1160,7 +1043,7 @@ mod tests {
         // sidecar dir intentionally NOT created.
         write_link(&app, "../forge-app", "../forge-app/.forge-method");
 
-        let env = run_start(&app, false);
+        let env = run_start(&app);
         let payload = env.data.as_ref().expect("payload on ok");
         assert!(env.ok, "state 2 should repair and return ok");
         assert_eq!(
@@ -1185,7 +1068,7 @@ mod tests {
         make_state_tree(&state);
         write_link(&app, "../forge-app", "../forge-app/.forge-method");
 
-        let env = run_start(&app, false);
+        let env = run_start(&app);
         let payload = env.data.as_ref().expect("payload on ok");
         assert!(env.ok);
         assert_eq!(payload.state, BootstrapState::SidecarReadyNoContract);
@@ -1235,7 +1118,7 @@ mod tests {
         // Drop a contract-looking file in the consumer repo.
         fs::write(app.join("my-operation.yaml"), "operation_contract: {}\n").unwrap();
 
-        let env = run_start(&app, false);
+        let env = run_start(&app);
         let payload = env.data.as_ref().expect("payload on ok");
         assert!(env.ok);
         assert_eq!(payload.state, BootstrapState::ContractPresent);
@@ -1273,7 +1156,7 @@ mod tests {
         // Simulate a trace having been written.
         fs::write(state.join("traces").join("m1.jsonl"), "{}\n").unwrap();
 
-        let env = run_start(&app, false);
+        let env = run_start(&app);
         let payload = env.data.as_ref().expect("payload on ok");
         assert!(env.ok);
         assert_eq!(payload.state, BootstrapState::PreviewRun);
@@ -1301,8 +1184,8 @@ mod tests {
         make_state_tree(&state);
         write_link(&app, "../forge-app", "../forge-app/.forge-method");
 
-        let first = run_start(&app, false);
-        let second = run_start(&app, false);
+        let first = run_start(&app);
+        let second = run_start(&app);
         assert_eq!(
             first.data.as_ref().unwrap().state,
             second.data.as_ref().unwrap().state
