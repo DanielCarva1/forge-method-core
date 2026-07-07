@@ -52,8 +52,9 @@ use forge_core_contracts::{CliEnvelope, ExitReason, ENVELOPE_SCHEMA_VERSION};
 
 use crate::cli_error::ExitError;
 use crate::project_cmd::{
-    init_project, is_bootstrap_core_root, resolve_project, ProjectInitError, ProjectInitStatus,
-    ProjectLayoutKind, ProjectResolveError, ProjectResolvePayload,
+    init_project, is_bootstrap_core_root, resolve_project, write_initial_project_state,
+    ProjectInitError, ProjectInitStatus, ProjectLayoutKind, ProjectResolveError,
+    ProjectResolvePayload,
 };
 
 /// Usage line for `forge-core start`, projected from the shared Command Surface.
@@ -271,6 +272,10 @@ pub struct ProjectContext {
     pub state_exists: bool,
     pub layout: ProjectLayoutKind,
     pub bootstrap_core_exception: bool,
+    /// Current phase read from the authoritative `state.yaml`. `None` when no
+    /// state file exists yet; callers fall back to `1-discovery`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_phase: Option<String>,
 }
 
 #[must_use]
@@ -315,6 +320,7 @@ impl From<ProjectResolvePayload> for ProjectContext {
             state_exists: p.state_exists,
             layout: p.layout,
             bootstrap_core_exception: p.bootstrap_core_exception,
+            current_phase: p.current_phase,
         }
     }
 }
@@ -483,34 +489,7 @@ pub fn run_start_with_agent(
             // Fresh repo: no `.forge-method.yaml`. `start` bootstraps it now
             // rather than recommending a separate `project init` step, so the
             // agent gets a ready project in one command.
-            return match init_project(root, None, None, None) {
-                Ok(init_payload) => {
-                    let action = if init_payload.status == ProjectInitStatus::Initialized {
-                        "initialized"
-                    } else {
-                        "already_initialized"
-                    };
-                    // Re-resolve to classify the post-init state.
-                    match resolve_project(root, allow_bootstrap_core) {
-                        Ok(resolved) => finish_classified(
-                            &resolved,
-                            root,
-                            agent_id,
-                            vec![action.to_string()],
-                        ),
-                        Err(err) => CliEnvelope::err(
-                            "start",
-                            resolve_error_exit_reason(&err),
-                            err.to_string(),
-                        ),
-                    }
-                }
-                Err(err) => CliEnvelope::err(
-                    "start",
-                    init_error_exit_reason(&err),
-                    err.to_string(),
-                ),
-            };
+            return bootstrap_and_finish(root, allow_bootstrap_core, agent_id, false);
         }
         Err(err) => {
             return CliEnvelope::err("start", resolve_error_exit_reason(&err), err.to_string());
@@ -523,36 +502,56 @@ pub fn run_start_with_agent(
     // `ExistingProjectLinkMismatch`, surfaced as an error rather than silently
     // overwritten.
     if !resolved.state_exists {
-        return match init_project(root, None, None, None) {
-            Ok(init_payload) => {
-                let action = if init_payload.status == ProjectInitStatus::Initialized {
-                    "initialized"
-                } else {
-                    "repaired_sidecar"
-                };
-                match resolve_project(root, allow_bootstrap_core) {
-                    Ok(resolved) => finish_classified(
-                        &resolved,
-                        root,
-                        agent_id,
-                        vec![action.to_string()],
-                    ),
-                    Err(err) => CliEnvelope::err(
-                        "start",
-                        resolve_error_exit_reason(&err),
-                        err.to_string(),
-                    ),
-                }
-            }
-            Err(err) => CliEnvelope::err(
-                "start",
-                init_error_exit_reason(&err),
-                err.to_string(),
-            ),
-        };
+        return bootstrap_and_finish(root, allow_bootstrap_core, agent_id, true);
     }
 
     finish_classified(&resolved, root, agent_id, Vec::new())
+}
+
+/// Run `init_project` (fresh or repair), seed the authoritative `state.yaml`
+/// with the funnel entry-point phase when newly initialized, then re-resolve
+/// and classify the post-action state. `is_repair` distinguishes the
+/// `repaired_sidecar` action label from `initialized`.
+fn bootstrap_and_finish(
+    root: &Path,
+    allow_bootstrap_core: bool,
+    agent_id: Option<String>,
+    is_repair: bool,
+) -> CliEnvelope<StartPayload> {
+    match init_project(root, None, None, None) {
+        Ok(init_payload) => {
+            let action = if is_repair {
+                "repaired_sidecar"
+            } else if init_payload.status == ProjectInitStatus::Initialized {
+                "initialized"
+            } else {
+                "already_initialized"
+            };
+            // Seed the authoritative phase record so the runtime (guide,
+            // PhaseGate) does not have to trust the host's --phase string.
+            // Best-effort: a failure to seed does not block bootstrap; the
+            // phase stays None and callers fall back to 1-discovery.
+            if let Err(err) =
+                write_initial_project_state(std::path::Path::new(&init_payload.state_root))
+            {
+                eprintln!("start: failed to seed state.yaml (non-fatal): {err}");
+            }
+            match resolve_project(root, allow_bootstrap_core) {
+                Ok(resolved) => finish_classified(
+                    &resolved,
+                    root,
+                    agent_id,
+                    vec![action.to_string()],
+                ),
+                Err(err) => CliEnvelope::err(
+                    "start",
+                    resolve_error_exit_reason(&err),
+                    err.to_string(),
+                ),
+            }
+        }
+        Err(err) => CliEnvelope::err("start", init_error_exit_reason(&err), err.to_string()),
+    }
 }
 
 /// Build the final ok envelope from a resolved, healthy project (sidecar
@@ -1039,6 +1038,14 @@ mod tests {
         assert!(
             payload.project.is_some(),
             "no_link has project context after bootstrap"
+        );
+        // The authoritative phase record is seeded at 1-discovery so the
+        // runtime does not have to trust the host's --phase string.
+        let project = payload.project.as_ref().expect("project context");
+        assert_eq!(
+            project.current_phase.as_deref(),
+            Some("1-discovery"),
+            "start should seed state.yaml with the 1-discovery entry phase"
         );
     }
 

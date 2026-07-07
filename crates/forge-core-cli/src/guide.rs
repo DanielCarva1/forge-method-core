@@ -5,6 +5,7 @@
 //! Implements R1/R3/R4 from the slice-3 spec.
 
 use forge_core_command_surface::COMMAND_GUIDE;
+use crate::project_cmd::resolve_project;
 use forge_core_contracts::{
     Catalog, CatalogEntry, CliEnvelope, ExitReason, Phase, ENVELOPE_SCHEMA_VERSION,
 };
@@ -583,6 +584,7 @@ pub fn run_guide_status(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::CliEnvelope;
 
     let mut phase: Option<String> = None;
+    let mut root: Option<std::path::PathBuf> = None;
     let mut catalog_dir: Option<std::path::PathBuf> = None;
     let mut want_json = true;
     let mut idx = 0usize;
@@ -591,6 +593,12 @@ pub fn run_guide_status(args: &[String]) -> Result<(), ExitError> {
             "--phase" => {
                 idx += 1;
                 phase = Some(require_guide_value(args, idx, "status", "phase")?);
+            }
+            "--root" => {
+                idx += 1;
+                root = Some(std::path::PathBuf::from(require_guide_value(
+                    args, idx, "status", "root",
+                )?));
             }
             "--catalog-dir" => {
                 idx += 1;
@@ -612,14 +620,32 @@ pub fn run_guide_status(args: &[String]) -> Result<(), ExitError> {
         idx += 1;
     }
 
-    let phase = phase.ok_or_else(|| {
-        let message = "guide status: --phase is required";
-        eprintln!("{message}");
-        guide_invalid_value_with_usage("status", message)
-    })?;
+    // Phase authority: an explicit `--phase` wins (host override). Otherwise
+    // read the authoritative phase from the project's `state.yaml`. If no root
+    // is given or the state file is missing, fall back to `1-discovery` so a
+    // freshly-bootstrapped project still has a usable funnel entry point.
+    let phase = phase.unwrap_or_else(|| resolve_current_phase(root.as_deref()));
 
     let env: CliEnvelope<StatusPayload> = run_status(catalog_dir.as_deref(), &phase);
     emit_guide(env, want_json)
+}
+
+/// Resolve the authoritative current phase for a project root. Reads
+/// `<state_root>/state.yaml` via `resolve_project`; on any failure or missing
+/// file, returns `"1-discovery"` as the funnel entry point. This makes the
+/// runtime the phase authority rather than trusting whatever the agent passes
+/// on `--phase`.
+fn resolve_current_phase(root: Option<&std::path::Path>) -> String {
+    const DEFAULT_PHASE: &str = "1-discovery";
+    let Some(root) = root else {
+        return DEFAULT_PHASE.to_string();
+    };
+    match resolve_project(root, false) {
+        Ok(payload) => payload
+            .current_phase
+            .unwrap_or_else(|| DEFAULT_PHASE.to_string()),
+        Err(_) => DEFAULT_PHASE.to_string(),
+    }
 }
 
 /// Parse the gates-file into `ProvidedGateResult` rows. Empty/absent = no gates provided.
@@ -1015,12 +1041,10 @@ mod tests {
             "guide decide: --decision-file is required",
         );
 
-        let status_error = run_guide_status(&args(&[])).expect_err("missing phase");
-        assert_guide_error_projects_only_subcommand_usage(
-            &status_error,
-            "status",
-            "guide status: --phase is required",
-        );
+        // `guide status` without --phase no longer errors: it falls back to
+        // the authoritative `state.yaml` phase (or `1-discovery` when no root
+        // is provided). Only `--decision-file` is required on `decide`.
+        run_guide_status(&args(&[])).expect("status falls back to 1-discovery");
     }
 
     #[test]

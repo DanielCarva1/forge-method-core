@@ -35,6 +35,11 @@ pub struct ProjectResolvePayload {
     pub state_exists: bool,
     pub layout: ProjectLayoutKind,
     pub bootstrap_core_exception: bool,
+    /// Current phase read from `<state_root>/state.yaml` when present.
+    /// `None` when the state file does not exist yet (fresh project); callers
+    /// fall back to `1-discovery` as the funnel entry point.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_phase: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -780,6 +785,41 @@ fn create_state_tree(state_root: &Path) -> Result<(), ProjectInitError> {
     }
 }
 
+/// Write the initial `state.yaml` at `<state_root>/state.yaml` carrying the
+/// funnel entry-point phase (`1-discovery`). Idempotent: if the file already
+/// exists and parses, this is a no-op (does not overwrite a prior phase). Used
+/// by `start` after a fresh `init_project` so the runtime has an authoritative
+/// phase record instead of trusting the agent's `--phase` string.
+///
+/// # Errors
+/// Returns `ProjectInitError::CreateStateDir` if the `state_root` cannot be
+/// created or the file cannot be written.
+pub fn write_initial_project_state(state_root: &Path) -> Result<(), ProjectInitError> {
+    let path = state_root.join("state.yaml");
+    if path.exists() {
+        return Ok(());
+    }
+    fs::create_dir_all(state_root).map_err(|source| ProjectInitError::CreateStateDir {
+        path: display_path(state_root),
+        source: source.to_string(),
+    })?;
+    // Keep this minimal and hand-written (no schema migration needed for the
+    // bootstrap record): the runtime reads `current_phase:` via
+    // `read_current_phase`, which does a tolerant key scan.
+    let body = "schema_version: forge_project_state_v1\n\
+                current_phase: \"1-discovery\"\n\
+                updated_at: null\n";
+    let tmp = state_root.join(format!("state.yaml.tmp-{}", std::process::id()));
+    std::fs::write(&tmp, body).map_err(|source| ProjectInitError::CreateStateDir {
+        path: display_path(&tmp),
+        source: source.to_string(),
+    })?;
+    std::fs::rename(&tmp, &path).map_err(|source| ProjectInitError::CreateStateDir {
+        path: display_path(&path),
+        source: source.to_string(),
+    })
+}
+
 fn write_project_link_atomically(plan: &ProjectInitPlan) -> Result<(), ProjectInitError> {
     let document = ProjectLinkDocument {
         schema_version: PROJECT_LINK_SCHEMA_VERSION.to_string(),
@@ -879,20 +919,50 @@ pub fn resolve_project(
     }
     if allow_bootstrap_core && is_bootstrap_core_root(&root) {
         let state_root = normalize_path(root.join(".forge-method"));
+        let state_exists = state_root.exists();
+        let current_phase = if state_exists {
+            read_current_phase(&state_root)
+        } else {
+            None
+        };
         return Ok(ProjectResolvePayload {
             project_id: "forge-method-core".to_string(),
             project_root: display_path(&root),
             link_path: None,
             sidecar_root: display_path(&root),
-            state_exists: state_root.exists(),
+            state_exists,
             state_root: display_path(&state_root),
             layout: ProjectLayoutKind::BootstrapCoreLocal,
             bootstrap_core_exception: true,
+            current_phase,
         });
     }
     Err(ProjectResolveError::MissingProjectLink {
         root: display_path(&root),
     })
+}
+
+/// Read the current phase from `<state_root>/state.yaml`, returning the raw
+/// phase tag (e.g. `"1-discovery"`) when present and parseable. Returns `None`
+/// when the file is missing, unreadable, or carries no recognized `current_phase`
+/// key. Errors are best-effort: phase is an advisory read, not a hard gate on
+/// resolution (callers fall back to `1-discovery`).
+fn read_current_phase(state_root: &Path) -> Option<String> {
+    let path = state_root.join("state.yaml");
+    let raw = fs::read_to_string(&path).ok()?;
+    // Minimal parse: look for a `current_phase:` key. We do not require a full
+    // ProjectStateDocument schema here so that a hand-edited or partial file
+    // still surfaces a phase when the key is recognizable.
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("current_phase:") {
+            let value = rest.trim().trim_matches('"').trim_matches('\'');
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+        }
+    }
+    None
 }
 
 fn resolve_from_link(
@@ -914,15 +984,22 @@ fn resolve_from_link(
     let sidecar_root = resolve_repo_path(project_root, &link.sidecar_root.0);
     let state_root = resolve_repo_path(project_root, &link.state_root.0);
     validate_resolved_sidecar_paths(project_root, link_path, &sidecar_root, &state_root)?;
+    let state_exists = state_root.exists();
+    let current_phase = if state_exists {
+        read_current_phase(&state_root)
+    } else {
+        None
+    };
     Ok(ProjectResolvePayload {
         project_id: link.project_id.0,
         project_root: display_path(project_root),
         link_path: Some(display_path(link_path)),
         sidecar_root: display_path(&sidecar_root),
-        state_exists: state_root.exists(),
+        state_exists,
         state_root: display_path(&state_root),
         layout: ProjectLayoutKind::Sidecar,
         bootstrap_core_exception: false,
+        current_phase,
     })
 }
 
