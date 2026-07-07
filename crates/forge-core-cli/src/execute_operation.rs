@@ -29,16 +29,19 @@ use forge_core_contracts::{
     OperationContractDocument, RepoPath, ToolEffectContractDocument, TypedFailure,
 };
 use forge_core_kernel::{
-    execute_operation, CitationGate, GateRejection, RiskAuditGate, RuntimeEffectPayloadKind,
-    RuntimeOperationCommandInput, RuntimeOperationEffectInput, RuntimeOperationEffectPayload,
-    RuntimeOperationExecution, RuntimeOperationExecutionContext, RuntimeReadSnapshot,
+    execute_operation, CitationGate, ClaimCoverageGate, GateRejection, OperationGate, PhaseGate,
+    RiskAuditGate, RuntimeEffectPayloadKind, RuntimeOperationCommandInput,
+    RuntimeOperationEffectInput, RuntimeOperationEffectPayload, RuntimeOperationExecution,
+    RuntimeOperationExecutionContext, RuntimeReadSnapshot,
 };
-use forge_core_store::{build_reference_index, WalDurability};
+use forge_core_contracts::{Phase, StableId};
+use forge_core_store::{build_reference_index, derive_state, WalDurability};
 use forge_core_validate::risk_audit::{validate_risk_audit_rule_set, RiskAuditRuleSet};
 
 use crate::cli_error::ExitError;
 use crate::cli_util::{command_surface_usage, resolve_stateful_roots_or_err};
 use crate::hex_sha256;
+use crate::project_cmd::resolve_project;
 
 /// All inputs required to drive one operation execution.
 ///
@@ -523,6 +526,25 @@ pub fn run_execute_operation(
     if let Some(gate) = citation_gate {
         context = context.with_gate(Box::new(gate));
     }
+    // V5 — proportional coordination gates. These attach by DEFAULT (not via a
+    // flag) based on the project's resolved state, implementing "scale with
+    // the agent, never constrain": a solo agent doing low-autonomy work in
+    // discovery moves fast; an agent executing durable mutation must hold a
+    // covering claim and be past discovery. The CLI resolves the data the
+    // gates need (claims via the WAL authority, phase from state.yaml, the
+    // operation's write targets) and passes it in as fields, mirroring the
+    // CitationGate pattern so the kernel stays decoupled from claim storage.
+    let coordination_gates = build_coordination_gates(
+        &root,
+        &effect_store_root,
+        &effects,
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs() as i64),
+    );
+    for gate in coordination_gates {
+        context = context.with_gate(gate);
+    }
     let context = context.audited();
 
     let execution = execute_operation(
@@ -589,6 +611,52 @@ fn load_curated_evidence(root: &Path) -> FieldEvidenceRegistry {
         .ok()
         .and_then(|text| yaml_serde::from_str::<FieldEvidenceRegistry>(&text).ok())
         .unwrap_or_else(crate::research_cmd::empty_evidence)
+}
+
+/// Build the proportional coordination gates (ClaimCoverageGate, PhaseGate)
+/// from the project's resolved state. Returns an empty vector when the project
+/// is not yet bootstrapped (no link/sidecar) — those cases are upstream errors
+/// caught before this point, but the helper stays defensive.
+///
+/// The gates follow the "CLI resolves data, kernel runs gate" pattern:
+/// - claims come from the WAL authority (`derive_state`), not a cache;
+/// - phase comes from the authoritative `state.yaml` (via `resolve_project`,
+///   FASE 1), falling back to `1-discovery` when no record exists yet;
+/// - the write targets come from the operation's effect contracts.
+fn build_coordination_gates(
+    root: &Path,
+    _effect_store_root: &Path,
+    effects: &[RuntimeOperationEffectInput],
+    now_unix: i64,
+) -> Vec<Box<dyn OperationGate>> {
+    let payload = match resolve_project(root, false) {
+        Ok(payload) => payload,
+        Err(_) => return Vec::new(),
+    };
+    let current_phase = payload
+        .current_phase
+        .as_deref()
+        .map_or(Phase::Discovery, |raw| {
+            Phase::parse(raw).unwrap_or(Phase::Discovery)
+        });
+    // Claims come from the sidecar's WAL authority (state_root), not the
+    // consumer root. `derive_state` reads `<state_root>/wal/claims.fmw1`.
+    let claims = match derive_state(Path::new(&payload.state_root)) {
+        Ok(projection) => projection.claims,
+        Err(_) => Vec::new(),
+    };
+    let documents: Vec<ToolEffectContractDocument> =
+        effects.iter().map(|e| e.document.clone()).collect();
+    let targets = forge_core_kernel::collect_effect_touched_refs(&documents);
+    let writer_agent_id = StableId("host".to_string());
+    let claim_gate: Box<dyn OperationGate> = Box::new(ClaimCoverageGate {
+        targets,
+        writer_agent_id,
+        claims,
+        now_unix,
+    });
+    let phase_gate: Box<dyn OperationGate> = Box::new(PhaseGate { current_phase });
+    vec![claim_gate, phase_gate]
 }
 
 /// Read and parse one YAML contract, mapping IO and parse errors into

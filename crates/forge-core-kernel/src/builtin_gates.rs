@@ -21,7 +21,9 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 
-use forge_core_contracts::FieldEvidenceRegistry;
+use forge_core_contracts::operation::AutonomyMode;
+use forge_core_contracts::{ClaimContract, FieldEvidenceRegistry, Phase, RepoPath, StableId};
+use forge_core_decisions::{check_write_against_claims, WriteCheck};
 use forge_core_store::{append_trace_event, collect_validation_yaml_documents};
 use forge_core_trace::{
     TraceActor, TraceAuthority, TraceCost, TraceEvent, TraceEventKind, TraceRef, TraceRisk,
@@ -299,6 +301,141 @@ fn risk_audit_event(
     .with_inputs(vec![TraceRef::new("risk_audit_rules", ctx.rule_set_ref)])
 }
 
+/// V5 — proportional coordination gate: every write target must be covered by
+/// an active claim held by the writer, OR be ungoverned by anyone (the engine
+/// distinguishes "covered by self" from "covered by no one"). A target claimed
+/// by another agent blocks hard; a target claimed by no one passes when the
+/// plan's autonomy mode does not require claim coverage.
+///
+/// The gate holds the data the CLI pre-resolved (claims, writer identity, the
+/// target paths the operation will touch, the policy decision) and calls the
+/// unmodified `check_write_against_claims` engine in `forge-core-decisions`.
+/// This mirrors the CitationGate pattern: the kernel stays decoupled from
+/// claim storage; the CLI resolves claims via `derive_state` and passes them
+/// in as plain fields.
+pub struct ClaimCoverageGate {
+    /// Targets the operation will write, collected from its effect contracts.
+    pub targets: Vec<RepoPath>,
+    /// The agent attempting the write. Claims held by other agents block.
+    pub writer_agent_id: StableId,
+    /// Active claims (the CLI resolves these via `derive_state`).
+    pub claims: Vec<ClaimContract>,
+    /// Wall-clock seconds; injected so the gate stays deterministic in tests.
+    pub now_unix: i64,
+}
+
+impl OperationGate for ClaimCoverageGate {
+    fn evaluate(&self, plan: &RuntimePlan) -> Result<(), GateRejection> {
+        if self.targets.is_empty() {
+            // Read-only operation: nothing to claim-cover.
+            return Ok(());
+        }
+        let check = check_write_against_claims(
+            &self.targets,
+            &self.writer_agent_id,
+            &self.claims,
+            self.now_unix,
+        );
+        match check {
+            WriteCheck::Ok {
+                ungoverned, ..
+            } => {
+                // Hard collision with another agent's claim? Already `Blocked`.
+                // Here targets are either governed-by-self or ungoverned-by-anyone.
+                // An ungoverned target is allowed for Observe/Facilitate/Research
+                // (low-autonomy, no durable writes) but must be claimed for
+                // Execute/Repair/Plan (high-autonomy, durable mutation). This is
+                // the "scale with agent, never constrain" rule: a solo agent in
+                // discovery can move fast; an agent executing in build-verify
+                // must hold the lane.
+                if ungoverned.is_empty() {
+                    return Ok(());
+                }
+                let requires_claim = matches!(
+                    plan.autonomy_mode,
+                    AutonomyMode::Execute | AutonomyMode::Repair | AutonomyMode::Plan
+                );
+                if requires_claim {
+                    let paths: Vec<String> =
+                        ungoverned.iter().map(|p| p.0.clone()).collect();
+                    Err(GateRejection::Custom {
+                        code: "claim_coverage_missing".to_string(),
+                        message: format!(
+                            "autonomy mode {:?} requires a claim covering every write target; \
+                             these targets are ungoverned: {}",
+                            plan.autonomy_mode,
+                            paths.join(", ")
+                        ),
+                    })
+                } else {
+                    Ok(())
+                }
+            }
+            WriteCheck::Blocked { blocks } => {
+                let paths: Vec<String> = blocks
+                    .iter()
+                    .map(|b| format!("{} (held by {})", b.blocked_path.0, b.claimant.0))
+                    .collect();
+                Err(GateRejection::Custom {
+                    code: "claim_collision".to_string(),
+                    message: format!(
+                        "write target is held by another agent's live claim: {}",
+                        paths.join(", ")
+                    ),
+                })
+            }
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        "claim-coverage"
+    }
+}
+
+/// V5 — proportional phase gate: an operation whose autonomy mode is
+/// `Execute`/`Repair` is refused while the project is still in `0-route` or
+/// `1-discovery` (the human-heavy interrogation phase). This is the other half
+/// of "scale with agent, never constrain": low-autonomy work (Observe,
+/// Facilitate, Research) is always allowed regardless of phase; only durable
+/// mutation is gated by phase progression.
+///
+/// The gate holds the current phase as a caller-supplied value (the CLI
+/// resolves it from `state.yaml`, the authoritative source since FASE 1).
+/// There is no IO inside the gate.
+pub struct PhaseGate {
+    /// Current phase of the project, as resolved from `state.yaml`.
+    pub current_phase: Phase,
+}
+
+impl OperationGate for PhaseGate {
+    fn evaluate(&self, plan: &RuntimePlan) -> Result<(), GateRejection> {
+        let durable_mutation = matches!(
+            plan.autonomy_mode,
+            AutonomyMode::Execute | AutonomyMode::Repair
+        );
+        if !durable_mutation {
+            return Ok(());
+        }
+        let too_early = matches!(self.current_phase, Phase::Route | Phase::Discovery);
+        if too_early {
+            Err(GateRejection::Custom {
+                code: "phase_blocks_mutation".to_string(),
+                message: format!(
+                    "autonomy mode {:?} mutates durable state, but the project is in phase {:?}; \
+                     advance to 2-specification or later before executing",
+                    plan.autonomy_mode, self.current_phase
+                ),
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    fn name(&self) -> &'static str {
+        "phase"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -475,6 +612,103 @@ mod tests {
             reference_error_count: 0,
             reference_warning_count: 0,
             used_read_snapshot: false,
+        }
+    }
+
+    fn stub_plan_with_autonomy(mode: AutonomyMode) -> RuntimePlan {
+        let mut plan = stub_plan();
+        plan.autonomy_mode = mode;
+        plan
+    }
+
+    #[test]
+    fn phase_gate_allows_observe_in_discovery() {
+        // Low-autonomy work (Observe) is never phase-gated: a solo agent in
+        // discovery must move fast. "Scale with agent, never constrain."
+        let gate = PhaseGate {
+            current_phase: Phase::Discovery,
+        };
+        let plan = stub_plan_with_autonomy(AutonomyMode::Observe);
+        assert!(gate.evaluate(&plan).is_ok(), "Observe in Discovery passes");
+    }
+
+    #[test]
+    fn phase_gate_blocks_execute_in_discovery() {
+        // Durable mutation (Execute) is refused while the project is still in
+        // the human-heavy discovery phase. This is the proportional gate.
+        let gate = PhaseGate {
+            current_phase: Phase::Discovery,
+        };
+        let plan = stub_plan_with_autonomy(AutonomyMode::Execute);
+        let err = gate.evaluate(&plan).expect_err("Execute in Discovery blocks");
+        match err {
+            GateRejection::Custom { code, .. } => {
+                assert_eq!(code, "phase_blocks_mutation");
+            }
+            other => panic!("expected Custom phase_blocks_mutation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn phase_gate_allows_execute_in_build_verify() {
+        let gate = PhaseGate {
+            current_phase: Phase::BuildVerify,
+        };
+        let plan = stub_plan_with_autonomy(AutonomyMode::Execute);
+        assert!(
+            gate.evaluate(&plan).is_ok(),
+            "Execute in BuildVerify passes"
+        );
+    }
+
+    #[test]
+    fn claim_coverage_gate_passes_when_no_targets() {
+        // Read-only operation: nothing to claim-cover.
+        let gate = ClaimCoverageGate {
+            targets: Vec::new(),
+            writer_agent_id: StableId("a".to_string()),
+            claims: Vec::new(),
+            now_unix: 0,
+        };
+        let plan = stub_plan_with_autonomy(AutonomyMode::Execute);
+        assert!(gate.evaluate(&plan).is_ok(), "no targets = no claim needed");
+    }
+
+    #[test]
+    fn claim_coverage_gate_passes_for_observe_with_ungoverned_targets() {
+        // Low-autonomy work does not require a claim even on ungoverned paths.
+        let gate = ClaimCoverageGate {
+            targets: vec![RepoPath("src/lib.rs".to_string())],
+            writer_agent_id: StableId("a".to_string()),
+            claims: Vec::new(),
+            now_unix: 0,
+        };
+        let plan = stub_plan_with_autonomy(AutonomyMode::Observe);
+        assert!(
+            gate.evaluate(&plan).is_ok(),
+            "Observe mode does not require claim coverage"
+        );
+    }
+
+    #[test]
+    fn claim_coverage_gate_blocks_execute_with_ungoverned_targets() {
+        // Execute-mode mutation on an ungoverned target is refused: the agent
+        // must acquire a claim first. Proportional enforcement.
+        let gate = ClaimCoverageGate {
+            targets: vec![RepoPath("src/lib.rs".to_string())],
+            writer_agent_id: StableId("a".to_string()),
+            claims: Vec::new(),
+            now_unix: 0,
+        };
+        let plan = stub_plan_with_autonomy(AutonomyMode::Execute);
+        let err = gate
+            .evaluate(&plan)
+            .expect_err("Execute on ungoverned target blocks");
+        match err {
+            GateRejection::Custom { code, .. } => {
+                assert_eq!(code, "claim_coverage_missing");
+            }
+            other => panic!("expected claim_coverage_missing, got {other:?}"),
         }
     }
 }

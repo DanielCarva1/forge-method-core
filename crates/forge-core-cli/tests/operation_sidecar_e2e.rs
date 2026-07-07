@@ -1,4 +1,7 @@
 use assert_cmd::Command;
+use forge_core_cli::claim::run_acquire;
+use forge_core_decisions::AcquireRequest;
+use forge_core_store::WalDurability;
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -89,6 +92,38 @@ fn consumer_fixture(label: &str) -> ConsumerFixture {
         .expect("write artifact payload");
     fs::write(app.join("payloads/evidence.json"), r#"{"status":"passed"}"#)
         .expect("write evidence payload");
+    // Authoritative phase record: these fixtures drive execute-operation in
+    // build-verify, so seed state.yaml at 4-build-verify. Without this, the
+    // proportional PhaseGate (FASE 2) blocks durable mutation in discovery.
+    fs::write(
+        state_root.join("state.yaml"),
+        "schema_version: forge_project_state_v1\n\
+         current_phase: \"4-build-verify\"\n\
+         updated_at: null\n",
+    )
+    .expect("write authoritative state.yaml");
+    // Active claim covering the sidecar write targets the fixtures exercise.
+    // Without this, the proportional ClaimCoverageGate (FASE 2) blocks an
+    // Execute-mode operation whose targets are ungoverned.
+    let claims_dir = state_root.join("claims-active");
+    fs::create_dir_all(&claims_dir).expect("create claims-active dir");
+    let claim_req = AcquireRequest {
+        scope_kind: forge_core_contracts::claim::ClaimScopeKind::Story,
+        scope_id: forge_core_contracts::ScopeId("story-current".to_string()),
+        agent_id: forge_core_contracts::StableId("host".to_string()),
+        role: forge_core_contracts::claim::ActorRole::Worker,
+        ttl_seconds: 600,
+        heartbeat_interval_seconds: 120,
+        paths: vec![
+            forge_core_contracts::RepoPath(
+                ".forge-method/artifacts/story-current-result.yaml".to_string(),
+            ),
+            forge_core_contracts::RepoPath(".forge-method/evidence/story-validation.json".to_string()),
+        ],
+        product_area: None,
+        expected_state_version: None,
+    };
+    let _ = run_acquire(&claims_dir, &claim_req, 1_800_000_000, WalDurability::NoSync);
 
     ConsumerFixture { app, state_root }
 }

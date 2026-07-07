@@ -13,6 +13,7 @@ dangerous-bypass = []
 
 [dependencies]
 forge-core-contracts = { path = "../forge-core-contracts" }
+forge-core-decisions = { path = "../forge-core-decisions" }
 forge-core-store = { path = "../forge-core-store" }
 forge-core-trace = { path = "../forge-core-trace" }
 forge-core-validate = { path = "../forge-core-validate" }

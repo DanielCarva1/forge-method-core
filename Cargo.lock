@@ -943,6 +943,7 @@ name = "forge-core-kernel"
 version = "0.2.0"
 dependencies = [
  "forge-core-contracts",
+ "forge-core-decisions",
  "forge-core-store",
  "forge-core-trace",
  "forge-core-validate",
