@@ -186,6 +186,27 @@ pub struct EnforcementPolicy {
     /// Gates the runtime will attach automatically (the agent does not pass
     /// these as flags). Informative so the agent knows what will be checked.
     pub automatic_gates: Vec<String>,
+    /// Funnel-of-autonomy contact density for the current phase (principle #6).
+    /// Binding signal to the host agent about expected human-interaction mode.
+    ///
+    /// Values mirror the documented `density_by_phase` table:
+    /// - `"high"` — discovery, specification: agent provokes, extracts,
+    ///   confirms. Asking is expected and correct.
+    /// - `"medium"` — plan, evolve: human approves slicing / gives
+    ///   correct-course feedback, then the agent proceeds. Once the
+    ///   human-approved gate has passed, the agent executes remaining
+    ///   mechanical work without asking for procedural confirmation.
+    /// - `"low"` — build-verify, ready-operate: near-silent contractual
+    ///   execution. The agent must NOT request permission for work that is
+    ///   already aligned (spec'd, grilled, gated); it escalates only on gate
+    ///   failure or new ambiguity. Asking for procedural ok/continue here is a
+    ///   funnel violation, not a courtesy.
+    ///
+    /// Added 2026-07-07 (Wave 2 / D4 / FRUST-031). The engine derives this from
+    /// `Phase::rank()` so it stays consistent with the funnel as the project
+    /// advances. Previously the policy treated discovery/spec/plan as a single
+    /// "human-heavy" block, which caused agents to over-ask in plan and build.
+    pub contact_density: String,
 }
 
 /// The failure payload for `guide decide` when the decision is Rejected.
@@ -289,7 +310,7 @@ fn resolve_enforcement_policy(project: &crate::project_cmd::ProjectResolvePayloa
             Phase::parse(raw).unwrap_or(Phase::Discovery)
         });
     // Durable mutation is gated from build-verify onward; discovery/spec/plan
-    // are human-heavy and the agent moves fast there (no claim required).
+    // do not require a claim (the agent moves fast there).
     let claim_required = matches!(
         phase,
         Phase::BuildVerify | Phase::ReadyOperate | Phase::Evolve
@@ -299,12 +320,28 @@ fn resolve_enforcement_policy(project: &crate::project_cmd::ProjectResolvePayloa
     } else {
         "fast"
     };
+    // Funnel-of-autonomy contact density (principle #6), derived from
+    // `Phase::rank()` so it tracks the documented `density_by_phase` table.
+    // NOTE: discovery/spec are HIGH contact (agent provokes/extracts/confirms);
+    // plan/evolve are MEDIUM (human approves slicing or corrects course, then
+    // the agent proceeds); build-verify/ready-operate are LOW (near-silent —
+    // the agent must NOT ask permission for already-aligned work). Do not lump
+    // plan in with discovery/spec: the prior comment did, which caused agents
+    // to over-ask during mechanical plan/build execution (gap D4, fixed
+    // 2026-07-07).
+    let contact_density = match phase {
+        Phase::Route => "medium",
+        Phase::Discovery | Phase::Specification => "high",
+        Phase::Plan | Phase::Evolve => "medium",
+        Phase::BuildVerify | Phase::ReadyOperate => "low",
+    };
     // The runtime attaches these automatically based on project state (FASE 2).
     let automatic_gates = vec!["claim-coverage".to_string(), "phase".to_string()];
     EnforcementPolicy {
         claim_required,
         lane: lane.to_string(),
         automatic_gates,
+        contact_density: contact_density.to_string(),
     }
 }
 
@@ -1133,5 +1170,108 @@ mod tests {
         let result = run_guide_status(&status_args);
 
         assert!(result.is_ok(), "explicit --json should parse");
+    }
+
+    // ------------------------------------------------------------------------
+    // Wave 2 (D4 / FRUST-031): funnel-of-autonomy contact_density enforcement
+    // ------------------------------------------------------------------------
+    // The policy must carry a binding contact_density per phase so the agent
+    // host knows whether asking is expected (discovery/spec), conditional
+    // (plan/evolve), or a funnel violation (build/ready — near-silent lane).
+    // Regression: previously discovery/spec/plan were lumped as one
+    // "human-heavy" block, causing agents to over-ask during mechanical
+    // plan/build execution.
+
+    fn resolve_payload(phase: Option<&str>) -> crate::project_cmd::ProjectResolvePayload {
+        crate::project_cmd::ProjectResolvePayload {
+            project_id: "test-project".to_string(),
+            project_root: "/tmp/test".to_string(),
+            link_path: None,
+            sidecar_root: "/tmp/test-sidecar".to_string(),
+            state_root: "/tmp/test-sidecar/.forge-method".to_string(),
+            state_exists: true,
+            layout: crate::project_cmd::ProjectLayoutKind::Sidecar,
+            current_phase: phase.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn contact_density_is_high_in_discovery_and_specification() {
+        for phase in ["1-discovery", "2-specification"] {
+            let policy = resolve_enforcement_policy(&resolve_payload(Some(phase)));
+            assert_eq!(
+                policy.contact_density, "high",
+                "phase {phase} must be high-contact (agent provokes/extracts/confirms)"
+            );
+        }
+    }
+
+    #[test]
+    fn contact_density_is_medium_in_plan_and_evolve() {
+        // CRITICAL: plan must NOT be lumped with discovery/spec. The human
+        // approves sprint slicing, then the agent executes mechanical work
+        // without asking for procedural confirmation. Evolve is the same shape
+        // (correct-course feedback, then proceed).
+        for phase in ["3-plan", "6-evolve"] {
+            let policy = resolve_enforcement_policy(&resolve_payload(Some(phase)));
+            assert_eq!(
+                policy.contact_density, "medium",
+                "phase {phase} must be medium-contact (approve, then execute)"
+            );
+        }
+    }
+
+    #[test]
+    fn contact_density_is_low_in_build_verify_and_ready_operate() {
+        // The near-silent lane. Asking for permission on already-aligned,
+        // gated, mechanical work here is a funnel violation, not a courtesy.
+        for phase in ["4-build-verify", "5-ready-operate"] {
+            let policy = resolve_enforcement_policy(&resolve_payload(Some(phase)));
+            assert_eq!(
+                policy.contact_density, "low",
+                "phase {phase} must be low-contact (near-silent contractual execution)"
+            );
+        }
+    }
+
+    #[test]
+    fn contact_density_defaults_to_medium_for_route_and_missing_phase() {
+        // Route (rank 0) and missing/unparseable phase both fall back safely.
+        let route_policy = resolve_enforcement_policy(&resolve_payload(Some("0-route")));
+        assert_eq!(route_policy.contact_density, "medium");
+        let none_policy = resolve_enforcement_policy(&resolve_payload(None));
+        assert_eq!(
+            none_policy.contact_density, "high",
+            "missing phase falls back to discovery, which is high-contact"
+        );
+    }
+
+    #[test]
+    fn enforcement_policy_with_contact_density_roundtrips_through_json() {
+        // Non-regression for JSON consumers (host agents, MCP projection):
+        // the new field must serialize and deserialize cleanly alongside the
+        // existing fields, and old payloads without it must still parse.
+        let policy = resolve_enforcement_policy(&resolve_payload(Some("4-build-verify")));
+        let json = serde_json::to_string(&policy).expect("serialize");
+        assert!(
+            json.contains("\"contact_density\":\"low\""),
+            "contact_density must appear in JSON output: {json}"
+        );
+        let back: EnforcementPolicy =
+            serde_json::from_str(&json).expect("deserialize own output");
+        assert_eq!(policy, back);
+
+        // An older payload (pre-Wave-2) missing contact_density must still be
+        // tolerable by deserialization — but since the field is non-optional,
+        // we document the contract: callers built against this struct must
+        // supply it. The JSON shape change is additive for any reader using a
+        // dynamic parser; static consumers must rebuild against the new struct.
+        let legacy_json = r#"{"claim_required":false,"lane":"fast","automatic_gates":[]}"#;
+        let legacy_result: Result<EnforcementPolicy, _> = serde_json::from_str(legacy_json);
+        assert!(
+            legacy_result.is_err(),
+            "legacy payload without contact_density must fail closed (typed contract, not silent default): {:?}",
+            legacy_result
+        );
     }
 }

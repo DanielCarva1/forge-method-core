@@ -1,0 +1,151 @@
+schema_version: "0.1"
+artifact_kind: "spec-kernel"
+status: "ready"
+created_at: "2026-07-07"
+project: "forge-method-core"
+spec_id: "wave-1-status-reconciliation"
+phase: "2-specification"
+parent_artifacts:
+  discovery: ".forge-method/artifacts/D1-competitor-and-facilitation-discovery.yaml"
+  grill: ".forge-method/artifacts/D2-facilitation-grill-2026-07-07.yaml"
+
+# ---------------------------------------------------------------------------
+# why
+# ---------------------------------------------------------------------------
+why: |
+  Three spec/status files lie about the state of the code, and the catalog has
+  8 workflows with no module home. Every future audit, grill-gate, and
+  contributor onboarding pays a tax re-discovering that "FX3 is NOT ENFORCED"
+  (it is enforced), "S4.3 is pending" (it is done), "P3.3 is a later perf
+  layer" (it shipped), and "8 orphans have no home" (assignable in one pass).
+  Wave 1 closes these false-positive gaps so the real gaps (Wave 2: funnel-
+  autonomy; Wave 3: host-conformance) are not drowned in noise. This is the
+  lowest-risk, highest-signal work in the roadmap.
+
+# ---------------------------------------------------------------------------
+# capabilities (stable IDs)
+# ---------------------------------------------------------------------------
+capabilities:
+
+  - id: "CAP-W1-A"
+    intent: "Reconcile 3 status-stale records so docs match code"
+    target_files:
+      - "contracts/spec/catalog-audit.yaml"
+      - "contracts/spec/slice-4-governance-spec.yaml"
+      - "README.md"
+    success: |
+      All three records reflect code reality:
+        (1) catalog-audit.yaml system_design_gate.status changes from
+            "PARTIALLY PRESENT, NOT ENFORCED" to a closed/verified state with a
+            pointer to the enforcing code (phase_transition.rs:113 + test at
+            phase_transition.rs:244).
+        (2) slice-4-governance-spec.yaml S4.3 status changes from "pending"
+            to "done" with evidence (claim_engine.rs implements acquire/
+            heartbeat/release; exercised by every claim-related test).
+        (3) README.md line ~645 changes "remains a later perf layer" to
+            reflect that P3.3 (snapshot + checkpoint_ref + rotation) shipped,
+            with thresholds 64MiB/100k records/250ms and 6+ tests.
+    acceptance_evidence:
+      - "grep for the stale strings returns 0 hits"
+      - "new status fields cite file:line proof"
+      - "cargo test still green (no behavior change, doc-only)"
+
+  - id: "CAP-W1-B"
+    intent: "Author CHANGELOG.md so release history is discoverable and dated"
+    target_files:
+      - "CHANGELOG.md (new)"
+    success: |
+      A CHANGELOG.md exists at repo root, follows Keep a Changelog structure,
+      and is backfilled from git history (tags v0.1.0, v0.2.0) plus the two
+      README "Patch notes" sections (evolve phase, v0.1.0). It covers at
+      minimum: v0.2.0 (current), v0.1.0, and an Unreleased section pointing
+      forward to Wave 1.
+    acceptance_evidence:
+      - "CHANGELOG.md exists at repo root"
+      - "sections: Unreleased, [0.2.0], [0.1.0]"
+      - "each released section cites its git tag"
+
+  - id: "CAP-W1-C"
+    intent: "Assign 8 orphan workflows to core-runtime module home"
+    target_files:
+      - "contracts/spec/catalog-audit.yaml (orphan_workflows_no_module list)"
+      - "a module-coverage record documenting the assignment"
+    success: |
+      The 8 remaining orphan workflows (collaboration-handoff, product-area-
+      map, team-operating-model, hook-event-plan, isolated-eval-runner,
+      repo-split-plan, trunk-based-plan, api-browser-utility) each have a
+      documented module home (core-runtime, since they are cross-cutting
+      utilities), recorded in the catalog-audit's orphan resolution. The
+      orphan_workflows_no_module list is empty or marked resolved.
+    acceptance_evidence:
+      - "catalog-audit.yaml orphan section shows each of the 8 assigned"
+      - "no workflow is left without a documented home"
+      - "rationale recorded: cross-cutting utilities -> core-runtime"
+
+# ---------------------------------------------------------------------------
+# constraints
+# ---------------------------------------------------------------------------
+constraints:
+  - "Doc-only changes for CAP-W1-A and CAP-W1-C: no Rust behavior change, no schema change, no contract-shape change."
+  - "CAP-W1-A must cite enforcing code with file:line so the fix is self-verifying."
+  - "CAP-W1-B must not invent releases that do not exist in git tags; the Rust core has only v0.1.0 and v0.2.0 reachable from HEAD (legacy v1.x/v2.x tags belong to the abandoned Python Forge in the sibling archive and are explicitly out of scope)."
+  - "CAP-W1-C assigns to core-runtime; it does NOT mint a new schema field. Module coverage today is documented in the audit's orphan_coverage block, not serialized as a workflow field. Keep it that way unless Wave 2/3 changes the model."
+  - "Follow the anti-over-planning rule: spec Wave 1 only. Wave 2 (funnel-autonomy) and Wave 3 (host-conformance) stay coarse until their turn."
+
+# ---------------------------------------------------------------------------
+# non-goals
+# ---------------------------------------------------------------------------
+non_goals:
+  - "Do NOT add a module: field to the Workflow schema (denied by deny_unknown_fields; not needed for this wave)."
+  - "Do NOT touch the legacy v1.x/v2.x tags or the sibling archive repo."
+  - "Do NOT spec Wave 2 or Wave 3 in this artifact."
+  - "Do NOT reformat or restructure the spec files beyond the targeted status fixes."
+  - "Do NOT change any runtime behavior; if a status fix reveals a real code gap, escalate rather than fix inline."
+
+# ---------------------------------------------------------------------------
+# success signal (testable)
+# ---------------------------------------------------------------------------
+success_signal: |
+  After Wave 1, a fresh contributor running the gap inventory (the same scan
+  that produced the 2026-07-07 inventory) sees ZERO false-positive status-
+  stale entries and ZERO orphan workflows. The three real gaps (funnel-
+  autonomy, host-conformance, plus the deferred-by-design self-healing items)
+  are the only items left, clearly separated from cosmetic noise.
+
+# ---------------------------------------------------------------------------
+# preservation map (what MUST NOT be lost)
+# ---------------------------------------------------------------------------
+preservation_map:
+  - preserve: "FX3 closed-evidence trail (phase_transition.rs:113 + test)"
+    reason: "Future audits must see WHY it was closed, not just that it was."
+  - preserve: "S4.3 implementation evidence (claim_engine.rs)"
+    reason: "Slice-4 governance is load-bearing for multi-agent claims."
+  - preserve: "P3.3 WAL rotation design intent (snapshot/checkpoint/rotation thresholds)"
+    reason: "If perf tuning is needed later, the shipped thresholds are the baseline."
+  - preserve: "The 8 orphan names and their cross-cutting rationale"
+    reason: "If a future module split happens, the assignment history informs it."
+
+# ---------------------------------------------------------------------------
+# validation verdict + open assumptions
+# ---------------------------------------------------------------------------
+validation_verdict: "internally consistent; no requirement conflicts with stated constraints"
+open_assumptions:
+  - "Assumption: the README P3.3 line at ~645 is the only stale perf-layer claim. If a grep reveals more, expand CAP-W1-A scope."
+  - "Assumption: CHANGELOG backfill from git tags + README patch notes is sufficient; no deeper archaeology into unreachable legacy tags is wanted."
+open_questions:
+  - "Should the catalog-audit orphan assignment live in the audit file itself, or in a new contracts/spec/module-coverage.yaml? Decide at plan time based on what the audit file's shape supports cleanly."
+
+# ---------------------------------------------------------------------------
+# next workflow
+# ---------------------------------------------------------------------------
+next_workflow:
+  primary: "system-design gate (the spec->plan gate) then 3-plan"
+  note: |
+    Wave 1 is doc-only with no architecture decisions, so the system-design
+    gate should pass quickly: there are no system boundaries, components, or
+    integration contracts to design. The gate's value here is confirming the
+    work is genuinely doc-only and does not hide a behavior change.
+  must_carry_into_plan:
+    - "Wave 1 has 3 independent capabilities (A, B, C) that can be built in parallel or in any order."
+    - "Each capability is S-scope; estimate 1 session each."
+    - "Verification is grep-based + cargo test green; no new test scaffolding needed."

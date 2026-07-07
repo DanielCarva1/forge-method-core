@@ -126,7 +126,12 @@ jobs:
         if: runner.os != 'Windows'
         working-directory: target/${{ matrix.target }}/release
         run: |
-          tar czf ../../../${{ matrix.archive }} ${{ matrix.artifact }}
+          # Copy the `forge` wrapper alongside the binary so a single archive
+          # exposes both names. The skill `start-forge` looks for `forge`
+          # first; shipping it removes the need for users to alias anything.
+          cp ../../../distribution/forge ./forge
+          chmod 0755 ./forge
+          tar czf ../../../${{ matrix.archive }} ${{ matrix.artifact }} forge
           cd ../../..
           # sha256sum is GNU coreutils (Linux); macOS ships shasum instead.
           if command -v sha256sum >/dev/null 2>&1; then
@@ -139,7 +144,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Compress-Archive -Path "target\${{ matrix.target }}\release\${{ matrix.artifact }}" -DestinationPath "${{ matrix.archive }}"
+          # Copy the `forge.cmd` wrapper alongside the binary so a single
+          # archive exposes both names (see POSIX packaging comment above).
+          Copy-Item "distribution\forge.cmd" "target\${{ matrix.target }}\release\forge.cmd" -Force
+          Compress-Archive -Path "target\${{ matrix.target }}\release\${{ matrix.artifact }}", "target\${{ matrix.target }}\release\forge.cmd" -DestinationPath "${{ matrix.archive }}"
           $hash = (Get-FileHash "${{ matrix.archive }}" -Algorithm SHA256).Hash.ToLower()
           "$hash  ${{ matrix.archive }}" | Out-File -Encoding ascii "${{ matrix.archive }}.sha256"
 

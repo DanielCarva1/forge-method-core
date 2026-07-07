@@ -56,14 +56,19 @@ orchestrator_guide:
 # ---------------------------------------------------------------------------
 funnel_of_autonomy:
   principle: "interaction density thins down the funnel: high-contact and provocative at discovery; contractual and near-silent at build."
+  enforcement_status: "MACHINE-ENFORCED since 2026-07-07 (Wave 2 / D4 / FRUST-031). The guide's EnforcementPolicy carries a binding `contact_density` field derived from Phase::rank(): discovery/specification=high, plan/evolve=medium, build-verify/ready-operate=low. The host agent reads this and modulates its interaction mode: asking is expected at high, conditional at medium (after the human-approved gate passes, execute without procedural confirmation), and a funnel violation at low (escalate only on gate failure or new ambiguity)."
   density_by_phase:
     "1-discovery": {contact: "high", human_role: "source of intent; the agent provokes and extracts", structure: "directions + elicitation, no persona script"}
     "2-specification": {contact: "high", human_role: "confirms capabilities, constraints, non-goals", structure: "spec-kernel artifact + spec-check gate"}
     "system-design-gate": {contact: "medium", human_role: "confirms architecture tradeoffs", structure: "mandatory gate (DC6)"}
-    "3-plan": {contact: "medium", human_role: "approves sprint slicing", structure: "cohesion-aware partitioning for multi-agent"}
+    "3-plan": {contact: "medium", human_role: "approves sprint slicing, then the agent executes mechanical work without procedural confirmation", structure: "cohesion-aware partitioning for multi-agent"}
     "4-build-verify": {contact: "low", human_role: "only when gate demands human input", structure: "contractual, autonomous, gated done_when"}
     "5-ready-operate": {contact: "low", human_role: "release sign-off", structure: "readiness gate"}
     "6-evolve": {contact: "medium", human_role: "correct-course feedback", structure: "retrospective + drift"}
+  enforcement_evidence:
+    - "crates/forge-core-cli/src/guide.rs — EnforcementPolicy.contact_density field (binding, serialized in guide decide output)"
+    - "crates/forge-core-cli/src/guide.rs — resolve_enforcement_policy derives contact_density from Phase::rank()"
+    - "crates/forge-core-cli/src/guide.rs — 5 tests: high (discovery/spec), medium (plan/evolve), low (build/ready), route+missing fallback, JSON roundtrip + legacy fail-closed"
   persona_scripts: "REMOVED. agents are smart; give directions not role-play. (grill GQ3: persona is double-edged, benefits mixed)."
   dual_mode_governance_extension: "the funnel also modulates COORDINATION strictness (magi-code dual-mode): normal=speed for single-agent safe work, deep=strong-claim+lease for multi-agent contested work."
 

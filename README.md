@@ -253,18 +253,27 @@ and Windows are published on every tagged release at
 ```bash
 # Linux / macOS
 tar xzf forge-core-<arch>-<os>.tar.gz
-install -m 0755 forge-core ~/.local/bin/
+install -m 0755 forge forge-core ~/.local/bin/
 
 # Windows (PowerShell)
 Expand-Archive forge-core-x86_64-windows.zip $env:LOCALAPPDATA\Programs\forge-core
 # then add $env:LOCALAPPDATA\Programs\forge-core to your PATH
 ```
 
+Each archive contains **both** `forge-core` (the binary) and `forge` (a thin
+wrapper that delegates to `forge-core` in the same directory). The `forge`
+wrapper exists so the `start-forge` skill and other tooling that look up
+`forge` on PATH find it without any manual aliasing. You can use either name
+interchangeably; `forge-core` is always the real binary.
+
 Verify it landed on your PATH:
 
 ```bash
 forge-core validate --root .
 # forge_core_validation_passed checks=NN diagnostics=0
+
+forge validate --root .
+# same result — `forge` just delegates to `forge-core`
 ```
 
 Every release asset ships with three siblings so the supply chain is auditable
@@ -641,8 +650,12 @@ gates.
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is
   no longer an authority path (inspect it via `claim status --from-cache`).
-  The effect WAL is also implemented and tested. Snapshot/rotation as a read
-  cache (P3.3) remains a later perf layer.
+  The effect WAL is also implemented and tested. Snapshot/rotation (P3.3) is
+  **shipped** — the WAL emits snapshot + checkpoint_ref + rotation records
+  (record type 4) at thresholds of 64MiB / 100k records / 250ms append time,
+  with archive + manifest; covered by `claim_wal_rotation_*` tests. (Earlier
+  README drafts called this "a later perf layer"; that was stale — the
+  correctness spine for rotation landed with the v1.1 self-healing batch.)
 - **Product-ready bootstrap proof** — ✅ Proven end-to-end. A fresh consumer
   repo (`git init` + README, no `contracts/` tree) runs the full flow:
   `forge-core start` → `project init` → `project resolve` → `claim acquire` →
