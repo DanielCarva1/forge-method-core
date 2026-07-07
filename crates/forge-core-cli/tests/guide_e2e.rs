@@ -76,13 +76,13 @@ fn e2e_full_agent_loop_describe_status_decide() {
 
     // STEP 3a: host proposes a LEGAL decision (discover-intent in discovery).
     let legal = decision_file("discover-intent", "1-discovery", None, "begin");
-    let accepted = run_decide(&legal, Some(&catalog_dir()), &[]);
+    let accepted = run_decide(&legal, Some(&catalog_dir()), &[], None);
     assert!(accepted.ok);
     assert_eq!(accepted.exit_code(), 0);
 
     // STEP 3b: host proposes an ILLEGAL decision (plan-sprint in discovery).
     let illegal = decision_file("plan-sprint", "1-discovery", None, "skip ahead");
-    let rejected: CliEnvelope<_> = run_decide(&illegal, Some(&catalog_dir()), &[]);
+    let rejected: CliEnvelope<_> = run_decide(&illegal, Some(&catalog_dir()), &[], None);
     assert!(!rejected.ok);
     assert_eq!(rejected.exit_code(), 2);
     let code = rejected.error.as_ref().expect("error").code.0.clone();
@@ -101,7 +101,7 @@ fn e2e_legal_transition_when_gate_provided() {
     // Host in specification, proposes plan-sprint (a 3-plan workflow) with a
     // PROPOSED transition spec->plan. Without the system-design gate: blocked.
     let no_gate = decision_file("plan-sprint", "2-specification", Some("3-plan"), "promote");
-    let blocked = run_decide(&no_gate, Some(&catalog_dir()), &[]);
+    let blocked = run_decide(&no_gate, Some(&catalog_dir()), &[], None);
     assert!(!blocked.ok);
     assert_eq!(blocked.exit_code(), 2);
 
@@ -111,7 +111,7 @@ fn e2e_legal_transition_when_gate_provided() {
         gate_kind: GateKind::SystemDesign,
         status: GateStatus::Pass,
     }];
-    let cleared = run_decide(&no_gate, Some(&catalog_dir()), &gates);
+    let cleared = run_decide(&no_gate, Some(&catalog_dir()), &gates, None);
     assert!(
         cleared.ok,
         "gate-cleared transition should accept: {:?}",

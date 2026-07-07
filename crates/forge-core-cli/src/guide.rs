@@ -162,6 +162,30 @@ pub struct DecideAccepted {
     pub current_phase: String,
     pub proposed_next_phase: Option<String>,
     pub reason: String,
+    /// V5 — binding enforcement policy the agent must satisfy to advance this
+    /// workflow. Populated when `--root` resolves a project; `None` when no
+    /// project context is available (the legacy behavior).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enforcement_policy: Option<EnforcementPolicy>,
+}
+
+/// The binding policy a `guide decide` acceptance carries: what the agent
+/// must do (acquire a claim, satisfy gates) before the runtime will execute
+/// the recommended workflow. This is the "orchestrator" output — the agent
+/// reads it and complies, rather than guessing.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct EnforcementPolicy {
+    /// `true` when the recommended workflow mutates durable state and the
+    /// runtime's ClaimCoverageGate will refuse execution without a covering
+    /// claim. The agent should `claim acquire` before calling execute-operation.
+    pub claim_required: bool,
+    /// Autonomy lane derived from the project's phase (Fast for discovery/spec,
+    /// Rigorous for build-verify and beyond). Advisory — the runtime enforces
+    /// via ClaimCoverageGate + PhaseGate, not via this string.
+    pub lane: String,
+    /// Gates the runtime will attach automatically (the agent does not pass
+    /// these as flags). Informative so the agent knows what will be checked.
+    pub automatic_gates: Vec<String>,
 }
 
 /// The failure payload for `guide decide` when the decision is Rejected.
@@ -186,6 +210,7 @@ pub fn run_decide(
     decision_file: &Path,
     catalog_dir: Option<&Path>,
     gates: &[ProvidedGateResult],
+    project: Option<&crate::project_cmd::ProjectResolvePayload>,
 ) -> CliEnvelope<DecideAccepted> {
     // 1. Load the decision (typed). Shape error -> exit 3.
     let decision_text = match std::fs::read_to_string(decision_file) {
@@ -229,6 +254,7 @@ pub fn run_decide(
                 current_phase: decision.current_phase.0.clone(),
                 proposed_next_phase: decision.proposed_next_phase.as_ref().map(|p| p.0.clone()),
                 reason: decision.reason.clone(),
+                enforcement_policy: project.map(resolve_enforcement_policy),
             },
         ),
         GuideValidation::Rejected(reason) => {
@@ -246,6 +272,39 @@ pub fn run_decide(
             }
             env
         }
+    }
+}
+
+/// Map a resolved project to a binding enforcement policy. The policy tells
+/// the agent what the runtime will require before executing the recommended
+/// workflow: a covering claim (for durable mutation in build-verify and
+/// beyond) and the autonomy lane (Fast/Rigorous, derived from phase). The
+/// agent reads this and complies; the runtime enforces via ClaimCoverageGate
+/// and PhaseGate regardless.
+fn resolve_enforcement_policy(project: &crate::project_cmd::ProjectResolvePayload) -> EnforcementPolicy {
+    let phase = project
+        .current_phase
+        .as_deref()
+        .map_or(Phase::Discovery, |raw| {
+            Phase::parse(raw).unwrap_or(Phase::Discovery)
+        });
+    // Durable mutation is gated from build-verify onward; discovery/spec/plan
+    // are human-heavy and the agent moves fast there (no claim required).
+    let claim_required = matches!(
+        phase,
+        Phase::BuildVerify | Phase::ReadyOperate | Phase::Evolve
+    );
+    let lane = if matches!(phase, Phase::BuildVerify | Phase::ReadyOperate | Phase::Evolve) {
+        "rigorous"
+    } else {
+        "fast"
+    };
+    // The runtime attaches these automatically based on project state (FASE 2).
+    let automatic_gates = vec!["claim-coverage".to_string(), "phase".to_string()];
+    EnforcementPolicy {
+        claim_required,
+        lane: lane.to_string(),
+        automatic_gates,
     }
 }
 
@@ -514,6 +573,7 @@ pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
     use forge_core_contracts::CliEnvelope;
 
     let mut decision_file: Option<std::path::PathBuf> = None;
+    let mut root: Option<std::path::PathBuf> = None;
     let mut catalog_dir: Option<std::path::PathBuf> = None;
     let mut gates_file: Option<std::path::PathBuf> = None;
     let mut want_json = true;
@@ -527,6 +587,12 @@ pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
                     idx,
                     "decide",
                     "decision-file",
+                )?));
+            }
+            "--root" => {
+                idx += 1;
+                root = Some(std::path::PathBuf::from(require_guide_value(
+                    args, idx, "decide", "root",
                 )?));
             }
             "--catalog-dir" => {
@@ -568,8 +634,15 @@ pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
     // YAML file: [{gate_kind: system-design, status: pass}, ...].
     let gates = load_gates(gates_file.as_deref());
 
+    // Resolve project state (for the enforcement policy). When --root is
+    // absent or the project isn't bootstrapped, the policy stays None and the
+    // legacy (advisory) decide behavior is preserved.
+    let project = root
+        .as_deref()
+        .and_then(|r| resolve_project(r, false).ok());
+
     let env: CliEnvelope<DecideAccepted> =
-        run_decide(&decision_file, catalog_dir.as_deref(), &gates);
+        run_decide(&decision_file, catalog_dir.as_deref(), &gates, project.as_ref());
     emit_guide(env, want_json)
 }
 
@@ -858,7 +931,7 @@ mod tests {
     fn decide_accepts_valid_in_phase_decision() {
         let tmp = tempfile_dir();
         let df = write_decision(&tmp, "d.yaml", VALID_DISCOVERY);
-        let env = run_decide(&df, Some(&real_catalog_dir()), &[]);
+        let env = run_decide(&df, Some(&real_catalog_dir()), &[], None);
         assert!(env.ok, "should accept: {:?}", env.error);
         assert_eq!(env.exit_code(), 0);
         let p = env.data.as_ref().expect("payload");
@@ -869,7 +942,7 @@ mod tests {
     fn decide_rejects_ineligible_workflow_with_typed_code() {
         let tmp = tempfile_dir();
         let df = write_decision(&tmp, "d.yaml", PLAN_IN_DISCOVERY);
-        let env = run_decide(&df, Some(&real_catalog_dir()), &[]);
+        let env = run_decide(&df, Some(&real_catalog_dir()), &[], None);
         assert!(!env.ok);
         assert_eq!(env.exit_reason.0, "rejected_by_gate");
         assert_eq!(env.exit_code(), 2);
@@ -881,7 +954,7 @@ mod tests {
     fn decide_rejects_unknown_workflow() {
         let tmp = tempfile_dir();
         let df = write_decision(&tmp, "d.yaml", UNKNOWN_WF);
-        let env = run_decide(&df, Some(&real_catalog_dir()), &[]);
+        let env = run_decide(&df, Some(&real_catalog_dir()), &[], None);
         assert!(!env.ok);
         let code = env.error.as_ref().expect("error").code.0.clone();
         assert!(code.starts_with("unknown_workflow"), "got: {code}");
@@ -891,7 +964,7 @@ mod tests {
     fn decide_returns_invalid_decision_shape_on_bad_yaml() {
         let tmp = tempfile_dir();
         let df = write_decision(&tmp, "d.yaml", BAD_YAML);
-        let env = run_decide(&df, Some(&real_catalog_dir()), &[]);
+        let env = run_decide(&df, Some(&real_catalog_dir()), &[], None);
         assert!(!env.ok);
         assert_eq!(env.exit_reason.0, "invalid_decision_shape");
         assert_eq!(env.exit_code(), 3);
@@ -903,6 +976,7 @@ mod tests {
             std::path::Path::new("/no/such/file.yaml"),
             Some(&real_catalog_dir()),
             &[],
+            None,
         );
         assert!(!env.ok);
         // missing decision file = invalid input (no decision to validate) -> exit 3
