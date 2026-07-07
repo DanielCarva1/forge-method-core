@@ -12,28 +12,47 @@ by several different people. Forge keeps them coordinated.
 
 ### How to start (and when to start again)
 
-Forge separates **project setup** (once per project) from **session orientation**
-(any time a new chat opens on an existing project):
+The single entry point is `forge-core start`. Run it once per chat/session on
+a project — it bootstraps, repairs, or routes depending on the real state on
+disk:
 
-- **Initialize once per project.** From the repo you want governed, run:
+```bash
+forge-core start --root <repo> --json
+```
 
-  ```bash
-  forge-core project init --root <repo>
-  ```
+- **Fresh repo** (no `.forge-method.yaml`): `start` creates the Project Link
+  + sibling sidecar and seeds the authoritative phase record (`1-discovery`),
+  so the agent gets a ready project in one command.
+- **Broken sidecar** (link exists but state root missing): `start` repairs it
+  idempotently. A link pointing at a non-default sidecar fails closed rather
+  than silently overwriting.
+- **Healthy project**: `start` reports the current bootstrap state and the
+  concrete next step (typically `guide describe` or authoring the first
+  operation contract).
 
-  This creates a small `.forge-method.yaml` pointer in the consumer repo and a
-  sibling runtime sidecar. It is idempotent: re-running it on a project that is
-  already initialized is a no-op as long as the link still resolves to the same
-  sidecar. You do **not** re-run `project init` for every chat — the project
-  stays initialized across chats, agents, and machines.
+Re-run `forge-core start` whenever you open a new chat on the project to pick
+up exactly where things left off. The runtime owns the current phase
+(`state.yaml`); you do not pass it on the command line.
 
-- **Orient each new chat/session with `forge-core start`.** This is the
-  read-only entry point an agent runs when it first lands on a project (in a
-  new chat, a new terminal, or after handing off to another agent). It inspects
-  the real state on disk and returns the current phase plus a concrete,
-  typed `next_step` (command + argv) — it never writes anything. So: run
-  `project init` once, then run `forge-core start` every time you open a new
-  chat on that project to pick up exactly where things left off.
+### The orchestrator loop: `start → decide → execute`
+
+Once bootstrapped, the agent follows a three-step loop where each command
+feeds the next:
+
+1. **`forge-core start --root <repo> --json`** — bootstraps/orients, returns
+   the current phase.
+2. **`forge-core guide decide --root <repo> --decision-file <intent.yaml> --json`**
+   — the intelligent router. Returns the recommended workflow **and a binding
+   `enforcement_policy`**: whether a claim is required (`claim_required`), the
+   autonomy lane (`fast`/`rigorous`), and which gates the runtime will attach.
+   The agent reads the policy and complies (acquire a claim if required).
+3. **`forge-core execute-operation --root <repo> --operation <op.yaml> --json`**
+   — executes the operation. The kernel runs `ClaimCoverageGate` + `PhaseGate`
+   before any WAL append, enforcing the policy the guide emitted.
+
+This is the "protocol that guarantees quality" made concrete: the agent is
+guided through the best path, and the runtime refuses anything that violates
+coordination — proportionally, so low-autonomy work never gets constrained.
 
 ### One command per chat (the `start-forge` skill)
 
@@ -95,10 +114,23 @@ guesses whether it is "done".
 
 ### 1. Scale-with-the-model, not lock-in
 
-Forge enforces **hard gates** (you cannot skip a phase, you cannot write a file
-you have not claimed, a contract must be valid before it is authority) and
-otherwise gives the agent **freedom within those gates**. No persona scripts, no
-rigid step-by-step theater. As the host model gets smarter, execution inside the
+Forge enforces **proportional gates** — the runtime scales enforcement to the
+work's risk, never constraining the agent unnecessarily. A solo agent doing
+read-only discovery moves fast (no claim required); an agent executing durable
+mutation in `4-build-verify` must hold a covering claim and be past discovery.
+Two `OperationGate`s run inside the kernel, before any WAL append, attached
+automatically based on the project's resolved phase:
+
+- **ClaimCoverageGate** — an `Execute`/`Repair`/`Plan` operation is refused
+  when its write targets are not covered by the writer's active claim, or when
+  a target is held by another agent's live claim. Low-autonomy work (Observe,
+  Facilitate, Research) is never claim-gated.
+- **PhaseGate** — durable mutation is refused while the project is still in
+  `0-route`/`1-discovery` (the human-heavy interrogation phase).
+
+This is the "scale with agent, never constrain" rule made executable: the
+agent reads its binding policy from `guide decide` and complies; the runtime
+enforces regardless. As the host model gets smarter, execution inside the
 gates improves automatically — Forge never caps the model's ceiling.
 
 ### 2. Typed contracts, not documents
@@ -122,9 +154,11 @@ This is what removes the merge-conflict tax:
 
 - **Claim acquisition** — an agent declares intent on a scope (a story, a lane, a
   path) and gets a lease with a TTL.
-- **Conflict detection** — before any write, the agent checks whether its own
-  active claim covers every target path. Peer-claimed and unclaimed writes are
-  refused.
+- **Claim coverage enforced at the write path** — the kernel's
+  `ClaimCoverageGate` runs before any WAL append: a durable-mutation operation
+  whose targets are not covered by the writer's active claim is refused. Two
+  agents therefore cannot write the same path, because the second one cannot
+  acquire a covering claim and cannot execute without one.
 - **Worktree isolation** — parallel workers operate in isolated git worktrees so
   their builds never contend.
 - **Coordination eval** — a gate that scores whether a session left the repo
