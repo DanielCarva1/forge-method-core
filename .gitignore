@@ -22,3 +22,9 @@ forge-fabrica-de-jogos/
 .forge-method/traces/
 .forge-method/handoffs/
 .forge-method/wal/
+# The consumer-project link file (.forge-method.yaml) points at a sibling
+# sidecar that only exists on the local machine (../forge-<project>). It is
+# local dogfood state and must not be committed — the release CI's
+# `validate --root .` smoke test fails when it resolves an external sidecar
+# that is absent from the checkout.
+.forge-method.yaml

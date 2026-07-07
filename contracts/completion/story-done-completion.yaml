@@ -33,7 +33,10 @@ completion_contract:
   storage:
     canonical_id: "completion.story.done"
     backend: "file_projection"
-    event_log_ref: ".forge-method/ledger.ndjson"
+    # See story-current-completion.yaml: event_log_ref is null in this fixture
+    # because no live consumer ledger exists in the repo. The release CI smoke
+    # test (`validate --root .`) would otherwise report missing_reference.
+    event_log_ref: null
     projection_key: "completion:story:done"
     db_ready: true
   rust_compatibility:

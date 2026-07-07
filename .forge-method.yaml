@@ -1,4 +1,0 @@
-schema_version: forge_project_link_v1
-project_id: forge-method-core
-sidecar_root: ../forge-forge-method-core
-state_root: ../forge-forge-method-core/.forge-method

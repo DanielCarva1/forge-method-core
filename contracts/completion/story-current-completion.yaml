@@ -31,7 +31,13 @@ completion_contract:
   storage:
     canonical_id: "completion.story.current"
     backend: "file_projection"
-    event_log_ref: ".forge-method/ledger.ndjson"
+    # event_log_ref is null in this fixture: there is no live consumer
+    # `.forge-method/ledger.ndjson` in the repo. The cross-reference validator
+    # (`validate --root .`) resolves event_log_ref against the runtime Ledger
+    # path, which only exists in a real consumer sidecar. Pointing a fixture at
+    # a path that does not exist fails the release CI smoke test. A consumer
+    # instance would populate this with its real ledger path.
+    event_log_ref: null
     projection_key: "completion:story:current"
     db_ready: true
   rust_compatibility:
