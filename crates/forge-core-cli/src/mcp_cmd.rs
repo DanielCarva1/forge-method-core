@@ -65,7 +65,7 @@ enum McpArgs {
     Help,
 }
 
-/// Top-level `forge-core mcp` parser errors. Hand-rolled per AGENTS.md.
+/// Top-level `forge-core mcp` parser errors. Hand-rolled (no anyhow/thiserror).
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum McpArgsError {
     UnknownSubcommand {
@@ -166,7 +166,7 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
     })
 }
 
-/// Failures parsing `mcp serve` arguments. Hand-rolled per AGENTS.md.
+/// Failures parsing `mcp serve` arguments. Hand-rolled (no anyhow/thiserror).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServeArgsError {
     /// A flag that requires a value was given none.

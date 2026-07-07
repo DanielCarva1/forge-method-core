@@ -6,7 +6,7 @@
 //! [`forge_core_eventlog::EventLogError`], so they are now **type aliases** for
 //! `EventLogError<ResearchProjectionDiagnostic>` — same shape, same variants,
 //! same `Display`, but a single source of truth in `forge-core-eventlog`
-//! (per AGENTS.md: hand-rolled, no `anyhow`/`thiserror`).
+//! (hand-rolled, no `anyhow`/`thiserror`).
 //!
 //! A denied admission is [`crate::AdmissionStatus::DeniedByGate`], NOT an
 //! error (the PEP enforces a pure decision; it fails on storage mechanics,

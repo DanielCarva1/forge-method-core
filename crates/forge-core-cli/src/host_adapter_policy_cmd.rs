@@ -7,8 +7,7 @@
 //! the result as JSON or human-readable text, and exits non-zero on
 //! verification failure.
 //!
-//! Extracted from the legacy god-file `main.rs` as part of R11.3
-//! (see `docs/dev-docs/forge-method-core-dev-docs-v2/09_system_design_roadmap.md`).
+//! Extracted from the legacy god-file `main.rs` as part of R11.3.
 
 use crate::cli_error::ExitError;
 use crate::cli_util::{

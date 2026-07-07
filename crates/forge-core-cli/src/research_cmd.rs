@@ -890,7 +890,7 @@ fn load_evidence(
     }
 }
 
-/// Failures loading an explicit `--evidence-file`. Hand-rolled per AGENTS.md.
+/// Failures loading an explicit `--evidence-file`. Hand-rolled (no anyhow/thiserror).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EvidenceLoadError {
     /// The evidence file could not be read.

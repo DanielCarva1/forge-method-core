@@ -1026,7 +1026,7 @@ enum ProjectArgs {
     Help,
 }
 
-/// Top-level `forge-core project` parser errors. Hand-rolled per AGENTS.md.
+/// Top-level `forge-core project` parser errors. Hand-rolled (no anyhow/thiserror).
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ProjectArgsError {
     UnknownSubcommand { subcommand: String },

@@ -2,8 +2,7 @@
 //! `anyhow`/`thiserror`; no `Result<_, String>`).
 //!
 //! All enums derive `Debug, Clone, PartialEq, Eq` and store a lossy `String`
-//! for the source/message when needed (the legacy pattern in this workspace;
-//! see `AGENTS.md`).
+//! for the source/message when needed (the legacy pattern in this workspace).
 
 use std::fmt;
 

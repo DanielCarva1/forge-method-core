@@ -2,8 +2,7 @@
 //! dispatchers in the `forge-core-cli` crate.
 //!
 //! Extracted from the legacy god-file `main.rs` as part of the R11
-//! main.rs decomposition (see
-//! `docs/dev-docs/forge-method-core-dev-docs-v2/09_system_design_roadmap.md`).
+//! main.rs decomposition.
 //!
 //! ## R8 (`process::exit` removal)
 //!

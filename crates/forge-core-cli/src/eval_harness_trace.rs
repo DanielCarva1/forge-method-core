@@ -24,8 +24,7 @@ pub struct EvalHarnessTraceContext<'a> {
 }
 
 /// Outcome fields the trace builder needs. Bundled into a struct to avoid a
-/// nine-argument call site (AGENTS.md pitfall #4: parameter struct over
-/// `#[allow]`).
+/// nine-argument call site (parameter struct over `#[allow]`).
 #[derive(Clone, Debug)]
 pub struct EvalHarnessOutcome {
     pub status: EvalCompareStatus,

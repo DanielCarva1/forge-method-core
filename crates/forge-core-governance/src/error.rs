@@ -6,7 +6,7 @@
 //! onto [`forge_core_eventlog::EventLogError`], so they are now **type
 //! aliases** for `EventLogError<ArbitrationProjectionDiagnostic>` — same shape,
 //! same variants, same `Display`, but a single source of truth in
-//! `forge-core-eventlog` (per AGENTS.md: hand-rolled, no `anyhow`/`thiserror`).
+//! `forge-core-eventlog` (hand-rolled, no `anyhow`/`thiserror`).
 //!
 //! Per-operation aliases (rather than one shared name) are kept so call-site
 //! signatures stay self-documenting — `RecordError` reads as "an error from

@@ -34,8 +34,8 @@
 //!
 //! # What V2.D will add
 //!
-//! V2.D will define `TypedFailure` here — a hand-rolled failure enum (per
-//! AGENTS.md: no `thiserror`, derive `Debug, Clone, PartialEq, Eq`) carrying the
+//! V2.D will define `TypedFailure` here — a hand-rolled failure enum
+//! (no `thiserror`, derive `Debug, Clone, PartialEq, Eq`) carrying the
 //! canonical [`DiagnosticCode`](crate::DiagnosticCode) / future
 //! [`DiagnosticCodeDef`](crate::codes::DiagnosticCodeDef) and enough context to
 //! reconstruct the failure at the consumer. It will be annotated with the

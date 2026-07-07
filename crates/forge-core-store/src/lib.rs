@@ -1628,8 +1628,8 @@ fn parse_effect_wal_records_for_recovery(
     Ok((records, diagnostics))
 }
 
-/// Failures parsing effect WAL records for recovery. Hand-rolled per
-/// AGENTS.md (no anyhow/thiserror); derives Debug, Clone, `PartialEq`, Eq.
+/// Failures parsing effect WAL records for recovery. Hand-rolled
+/// (no anyhow/thiserror); derives Debug, Clone, `PartialEq`, Eq.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EffectWalRecoveryParseError {
     /// A WAL line could not be parsed as an `EffectWalRecord`.

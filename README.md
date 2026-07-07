@@ -681,10 +681,8 @@ Other top-level authority surfaces:
 - `contracts/spec/`, `contracts/plan/`, `contracts/stories/` — typed discovery
   and delivery artifacts.
 - `contracts/claims/` — claim fixtures and schemas.
-- `skill/forge-method/` — runtime/claims governance skill (host wiring).
 - `skill/start-forge/` — single-command bootstrap skill (run once per chat).
-- `docs/` — live ADRs, design specs, fixtures, generated layout/command
-  references, and hardening plans.
+- `docs/` — test fixtures and generated layout/command references.
 
 The authority is always the `contracts/` tree plus the running `forge-core`
 binary. Historical research digests, agent session journals, milestone plans,

@@ -15,9 +15,9 @@ pub struct WorkflowDocument {
 
 /// A single Forge Method workflow: a compact state machine.
 ///
-/// Per AGENTS.md, agent-facing workflow docs are compact state machines with
-/// exactly these directional slots: `trigger`, `inputs`, `steps`, `outputs`,
-/// `done_when`, `blocked_when`, `handoff`.
+/// Agent-facing workflow docs are compact state machines with exactly these
+/// directional slots: `trigger`, `inputs`, `steps`, `outputs`, `done_when`,
+/// `blocked_when`, `handoff`.
 ///
 /// `steps` carry DIRECTIONAL text (what to achieve), never scripted persona
 /// behavior (DC9). The orchestrator-guide (slice 2) classifies human intent

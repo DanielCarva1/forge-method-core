@@ -10,10 +10,6 @@
 //! dispatchers return as `Result<(), ExitError>`. The single remaining
 //! `process::exit` lives at the top of `main.rs`, which converts an
 //! `ExitError` into the right exit code and stderr message.
-//!
-//! See
-//! `docs/dev-docs/forge-method-core-dev-docs-v2/09_system_design_roadmap.md`
-//! (Fase 2 / R8) for the full rationale.
 
 use std::fmt;
 

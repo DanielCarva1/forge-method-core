@@ -394,7 +394,7 @@ fn extract_attestation(
 }
 
 /// Failures extracting a Tool-Call Attestation from a request's `_meta`.
-/// Hand-rolled per AGENTS.md (no anyhow/thiserror).
+/// Hand-rolled (no anyhow/thiserror).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AttestationExtractError {
     /// The `_meta.attestation` field was present but did not deserialize into

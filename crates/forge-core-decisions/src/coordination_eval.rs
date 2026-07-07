@@ -118,7 +118,7 @@ pub enum CoordinationValidationError {
 /// contract. `score_coordination` therefore calls this function at its top
 /// (review S4.7 fix M1) and short-circuits to `Failed` on any error.
 ///
-/// # AGENTS.md alignment
+/// # Validation alignment
 ///
 /// This function already **accumulates** (it collects every problem into the
 /// returned `Vec` rather than bailing on the first), satisfying the repo's

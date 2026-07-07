@@ -1149,9 +1149,8 @@ eval_corpus:
 
     #[test]
     fn validate_inner_accumulates_all_empties_at_once() {
-        // Cumulative contract (AGENTS.md): every empty field is reported in a
-        // single pass so the operator can fix the whole config without
-        // re-running N times.
+        // Cumulative contract: every empty field is reported in a single pass
+        // so the operator can fix the whole config without re-running N times.
         let mut config = bare_config();
         config.arms.clear();
         config.corpus_ref = RepoPath(String::new());

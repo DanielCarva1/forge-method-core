@@ -14,7 +14,7 @@
 //! requirement). Admitting a source never attests to its truthfulness — only
 //! that it is registered and reachable for citation. Tier-minimum gates are a
 //! future, separate axis (analogous to how F06 separates authority from
-//! review). See `CONTEXT.md` "Knowledge Orchestration (F14)".
+//! review).
 //!
 //! # Distinct from `EvidenceSource` (ADR-0010, decision §1)
 //!
@@ -182,7 +182,7 @@ impl ResearchContract {
     /// F14 admission gate. Decides whether `source` may ENTER the Source
     /// Ledger. Fail-closed: any missing policy requirement blocks. Admitting
     /// attests to **registration/resolution**, never to truthfulness or tier
-    /// (ADR-0010 §5). See `CONTEXT.md` "Citation Check".
+    /// (ADR-0010 §5).
     pub fn can_admit_source(
         source: &ResearchSource,
         policy: &ResearchPolicy,

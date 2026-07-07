@@ -4,9 +4,6 @@
 //! anti-patterns (fail-soft, exception swallowing, security slop, false
 //! tests). Rules are parametric YAML contracts (`risk-audit-v0`); the
 //! validator accumulates typed `Diagnostic`s into a `ValidationReport`.
-//!
-//! See `CONTEXT.md` → "Risk Audit" and "Anti-pattern (AI Code)" for the
-//! canonical definitions.
 
 use crate::{Diagnostic, DiagnosticCode, DiagnosticSeverity, ValidationReport};
 use serde::{Deserialize, Serialize};

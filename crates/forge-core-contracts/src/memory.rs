@@ -87,8 +87,7 @@ impl MemoryContract {
     /// at the trust floor (`Raw`, `Unreviewed`). Fail-closed: any missing
     /// policy or required evidence blocks. Admitting NEVER raises authority
     /// above `Raw` or review above `Unreviewed` — those transitions have their
-    /// own gates (`can_promote`, and the review attestation in F07). See
-    /// `CONTEXT.md` "Admission".
+    /// own gates (`can_promote`, and the review attestation in F07).
     pub fn can_admit(entry: &MemoryEntry, policy: &MemoryPolicy) -> AdmissionDecision {
         let mut denials = Vec::new();
 
@@ -116,7 +115,7 @@ impl MemoryContract {
     /// distinct non-empty evidence ref (the F06 NFR). Never consults or touches
     /// the review axis; the [`AdmissionDenialReason::PromoteTargetsReviewAxis`]
     /// variant is the structural guard documenting that invariant (it cannot
-    /// fire from this pure API). See `CONTEXT.md` "Promote".
+    /// fire from this pure API).
     pub fn can_promote(
         entry: &MemoryEntry,
         policy: &MemoryPolicy,
@@ -421,9 +420,8 @@ pub struct Freshness {
 }
 
 /// F06 Trust Axis 1 — authority. Whether the agent may treat a Memory
-/// Document as ground truth for autonomous action. See `CONTEXT.md`
-/// "Authority Axis". Gated by policy + raw evidence; **never auto-promoted**
-/// (the F06 NFR).
+/// Document as ground truth for autonomous action. Gated by policy + raw
+/// evidence; **never auto-promoted** (the F06 NFR).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthorityLevel {
@@ -439,8 +437,8 @@ pub enum AuthorityLevel {
 }
 
 /// F06 Trust Axis 2 — review. Orthogonal to authority: has a principal
-/// attested to this record's curation? See `CONTEXT.md` "Review Axis".
-/// Modelled as a principal attestation (`StableId`), not a magic boolean.
+/// attested to this record's curation? Modelled as a principal attestation
+/// (`StableId`), not a magic boolean.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewState {

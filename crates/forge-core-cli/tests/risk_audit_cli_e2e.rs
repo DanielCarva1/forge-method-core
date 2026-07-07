@@ -7,7 +7,7 @@
 //! baseline.
 //!
 //! See `crates/forge-core-validate/src/risk_audit.rs` for the rule engine
-//! unit tests, and `CONTEXT.md` → "Risk Audit" for the domain definition.
+//! unit tests.
 
 use assert_cmd::Command;
 use serde_json::Value;

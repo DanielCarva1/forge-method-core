@@ -21,8 +21,8 @@
 //!
 //! ## State machine
 //!
-//! The five states are documented as domain terms in `CONTEXT.md`
-//! ("Start Bootstrap State"). Each maps to one concrete next step:
+//! The five states are documented as domain terms. Each maps to one concrete
+//! next step:
 //!
 //! | state                         | next step                                  |
 //! |-------------------------------|--------------------------------------------|
@@ -201,7 +201,7 @@ pub struct StartPayload {
 }
 
 /// The five bootstrap states a Consumer Project Repo can be in along the path
-/// `start` diagnoses. Documented as a domain term in `CONTEXT.md`.
+/// `start` diagnoses.
 ///
 /// Wire form is `snake_case` to match the rest of the CLI contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -927,8 +927,8 @@ mod tests {
     #[test]
     fn bootstrap_state_wire_form_is_snake_case() {
         // Lock the wire contract: states serialize to snake_case to match the
-        // rest of the CLI. Renaming a variant without updating CONTEXT.md /
-        // consumers would silently break the agent-facing payload.
+        // rest of the CLI. Renaming a variant without updating consumers would
+        // silently break the agent-facing payload.
         let cases = [
             (BootstrapState::NoLink, "no_link"),
             (

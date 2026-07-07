@@ -234,7 +234,7 @@ impl AttestationVerifier {
 
 /// Failures decoding a hex string into bytes.
 ///
-/// Hand-rolled per AGENTS.md (no `anyhow`/`thiserror`). Returned by
+/// Hand-rolled (no `anyhow`/`thiserror`). Returned by
 /// [`hex_decode`]; callers convert into the public [`AttestationError`]
 /// variants via `to_string()` so the typed boundary stays stable.
 #[derive(Debug, Clone, PartialEq, Eq)]

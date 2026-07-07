@@ -3,9 +3,9 @@
 //! Collapses the `{Lock, Append, Serialize, Read}` quartet that was copied
 //! verbatim across `forge-core-memory`, `forge-core-research`,
 //! `forge-core-governance`, and the JSONL half of `forge-core-store` (7
-//! near-identical copies). Per AGENTS.md this is hand-rolled — NO `anyhow`, NO
-//! `thiserror` (neither is a workspace dep). `Debug, Clone, PartialEq, Eq` are
-//! derived; `Display`/`std::error::Error` are implemented by hand below.
+//! near-identical copies). Hand-rolled — NO `anyhow`, NO `thiserror` (neither
+//! is a workspace dep). `Debug, Clone, PartialEq, Eq` are derived;
+//! `Display`/`std::error::Error` are implemented by hand below.
 //!
 //! The enum is generic over the projection's `Diagnostic` type so a domain can
 //! surface its own diagnostic vocabulary alongside a successful read
