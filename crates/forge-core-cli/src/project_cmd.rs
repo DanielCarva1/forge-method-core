@@ -164,6 +164,24 @@ pub enum ProjectInitError {
     ConsumerLocalStateExists {
         path: String,
     },
+    /// The consumer root is nested inside another git repository (it is not a
+    /// git root of its own). Initializing Forge here would create sidecar
+    /// state inside the parent repo. The user should run `git init` on the
+    /// consumer root first, or pick a root that is its own repository.
+    RootNestedInAnotherRepo {
+        root: String,
+        parent_repo: String,
+    },
+    /// The resolved sidecar root would land inside a different git repository
+    /// than the consumer root. This pollutes that other repo with runtime
+    /// state. The user should pass an explicit `--sidecar-root` outside any
+    /// foreign repo, or run `forge-core start` from a root whose default
+    /// `../forge-<id>` sibling is not inside another repository.
+    SidecarInsideAnotherRepo {
+        sidecar_root: String,
+        foreign_repo: String,
+        consumer_root: String,
+    },
     StateRootNotDotForgeMethod {
         path: String,
         state_root: String,
@@ -243,7 +261,9 @@ impl ProjectInitError {
             | Self::ConsumerLocalStateExists { .. }
             | Self::StateRootNotDotForgeMethod { .. }
             | Self::ExistingProjectLinkMismatch { .. }
-            | Self::ProjectLinkSerialize { .. } => ExitReason::InvalidDecisionShape,
+            | Self::ProjectLinkSerialize { .. }
+            | Self::RootNestedInAnotherRepo { .. }
+            | Self::SidecarInsideAnotherRepo { .. } => ExitReason::InvalidDecisionShape,
             Self::ExistingProjectLinkInvalid { exit_reason, .. } => *exit_reason,
             Self::LinkExistsRace { .. } => ExitReason::Conflict,
             Self::RootNotFound { .. }
@@ -350,6 +370,23 @@ impl fmt::Display for ProjectInitError {
             Self::ConsumerLocalStateExists { path } => write!(
                 f,
                 "consumer project already has local Forge state at '{path}'; move or quarantine it into a Forge Runtime Sidecar before running project init"
+            ),
+            Self::RootNestedInAnotherRepo { root, parent_repo } => write!(
+                f,
+                "consumer root '{root}' is nested inside another git repository ('{parent_repo}'); \
+                 run 'git init' on the consumer root first, or pick a root that is its own \
+                 repository, so Forge runtime state does not pollute the parent"
+            ),
+            Self::SidecarInsideAnotherRepo {
+                sidecar_root,
+                foreign_repo,
+                consumer_root,
+            } => write!(
+                f,
+                "resolved sidecar root '{sidecar_root}' would land inside git repository \
+                 '{foreign_repo}', which is not the consumer root '{consumer_root}'; pass an \
+                 explicit --sidecar-root outside any foreign repo, or run forge-core start from \
+                 a root whose default ../forge-<id> sibling is not inside another repository"
             ),
             Self::StateRootNotDotForgeMethod { path, state_root } => write!(
                 f,
@@ -469,6 +506,7 @@ pub fn init_project(
     let root = canonical_project_root_for_init(root)?;
     let plan = build_init_plan(&root, project_id, sidecar_root, state_root)?;
     reject_existing_consumer_local_state(&plan.project_root)?;
+    validate_repo_identity(&plan.project_root, &plan.sidecar_root)?;
     if plan.link_path.exists() {
         return init_existing_project_link(&plan);
     }
@@ -677,6 +715,81 @@ fn reject_existing_consumer_local_state(project_root: &Path) -> Result<(), Proje
     } else {
         Ok(())
     }
+}
+
+/// Find the nearest enclosing `.git` directory walking up from `start`.
+/// Returns the repository root (the parent of the `.git` dir) when one is
+/// found, or `None` when the walk reaches the filesystem root without finding
+/// one. Used to detect nested repos and sidecars landing inside a foreign
+/// repository.
+///
+/// Pure filesystem walk; does not invoke `git`. A `.git` file (worktree
+/// pointer) is also recognized, since `git init` in a worktree writes a file
+/// rather than a directory.
+fn find_enclosing_git_root(start: &Path) -> Option<PathBuf> {
+    let mut current = Some(start);
+    while let Some(dir) = current {
+        let git_marker = dir.join(".git");
+        if git_marker.exists() {
+            return Some(dir.to_path_buf());
+        }
+        current = dir.parent();
+    }
+    None
+}
+
+/// Validate that the consumer root is its own git repository (not nested inside
+/// another), and that the resolved sidecar root does not land inside a
+/// *different* git repository than the consumer. This prevents the structural
+/// incident where running `forge-core start` in a subfolder of an existing repo
+/// pollutes the parent repo with sibling sidecar state.
+///
+/// The check is fail-closed: a consumer root with no `.git` at all (e.g. a
+/// brand-new folder that has not been `git init`-ed yet) is allowed, because
+/// `forge-core start` is a reasonable way to bootstrap a brand-new project
+/// before its first commit. Only an *enclosing* `.git` (one above the consumer
+/// root) is treated as a nesting violation.
+fn validate_repo_identity(
+    project_root: &Path,
+    sidecar_root: &Path,
+) -> Result<(), ProjectInitError> {
+    // (a) Reject a consumer root nested inside another repo ONLY when the
+    // consumer is not its own git root. A consumer that has run `git init` on
+    // itself is a deliberate nested repository (common in monorepos and
+    // worktrees); Forge respects that. The pollution scenario is a subfolder
+    // that has NOT been initialized — it silently inherits the parent repo,
+    // which is exactly the incident this check prevents.
+    let consumer_is_own_repo = project_root.join(".git").exists();
+    if !consumer_is_own_repo {
+        if let Some(parent_git) = project_root
+            .parent()
+            .and_then(find_enclosing_git_root)
+        {
+            return Err(ProjectInitError::RootNestedInAnotherRepo {
+                root: display_path(project_root),
+                parent_repo: display_path(&parent_git),
+            });
+        }
+    }
+    // (b) Reject a sidecar that lands inside a foreign repo. The sidecar's
+    // enclosing git root must either be the consumer root itself (when the
+    // consumer is a repo and the sidecar is somehow inside it — already
+    // rejected by the state-root checks) or none (the sidecar lives in a
+    // folder with no `.git`, the normal sibling case). A foreign `.git`
+    // above the sidecar is the pollution scenario.
+    if let Some(sidecar_git) = find_enclosing_git_root(sidecar_root) {
+        // The sidecar living inside the consumer repo is handled by the
+        // state-root placement checks; only a FOREIGN repo is rejected here.
+        let sidecar_in_consumer = consumer_is_own_repo && sidecar_git == *project_root;
+        if !sidecar_in_consumer {
+            return Err(ProjectInitError::SidecarInsideAnotherRepo {
+                sidecar_root: display_path(sidecar_root),
+                foreign_repo: display_path(&sidecar_git),
+                consumer_root: display_path(project_root),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn init_existing_project_link(
@@ -1829,5 +1942,110 @@ state_root: ../forge-app/state
         assert_eq!(err.exit_reason(), ExitReason::InvalidDecisionShape);
         assert!(err.to_string().contains("project_root"));
         assert!(err.to_string().contains("Sidecar"));
+    }
+
+    /// Simulate a `.git` repository at `dir` for the repo-identity checks. An
+    /// empty `.git` directory is enough: `find_enclosing_git_root` only tests
+    /// `.git` existence (it does not invoke `git`).
+    fn seed_git_repo(dir: &Path) {
+        fs::create_dir_all(dir.join(".git")).expect("seed .git directory");
+        assert!(dir.join(".git").is_dir(), ".git should be a directory");
+    }
+
+    /// Repo-identity validation (incident closure): a consumer root that is NOT
+    /// its own git repository, but is nested inside a parent that has `.git`,
+    /// must be rejected. This is the structural incident — running `forge-core
+    /// start` in a subfolder of an existing repo would silently inherit the
+    /// parent and pollute it with sibling sidecar state.
+    #[test]
+    fn init_rejects_consumer_nested_in_foreign_repo_without_own_git() {
+        // Parent that looks like an existing git repository.
+        let parent = temp_root("nested-foreign-parent");
+        seed_git_repo(&parent);
+
+        // Consumer root nested inside the parent, deliberately NOT git-init'd.
+        let app = parent.join("app");
+        fs::create_dir_all(&app).expect("create nested consumer root");
+
+        let err = init_project(&app, None, None, None).unwrap_err();
+        assert_eq!(
+            err,
+            ProjectInitError::RootNestedInAnotherRepo {
+                root: display_path(&app),
+                parent_repo: display_path(&parent),
+            },
+            "a consumer nested in a foreign repo without its own .git must be rejected"
+        );
+        assert_eq!(err.exit_reason(), ExitReason::InvalidDecisionShape);
+    }
+
+    /// A consumer that is nested inside another repo but has run `git init` on
+    /// itself is a deliberate nested repository (common in monorepos /
+    /// worktrees). Forge respects that and does NOT reject it — the nesting
+    /// check only fires when the consumer silently inherits the parent repo.
+    /// The sidecar must land somewhere that is not inside a foreign repo, so
+    /// the test passes an explicit absolute sidecar root in a clean temp dir.
+    #[test]
+    fn init_allows_consumer_nested_in_foreign_repo_when_consumer_is_own_repo() {
+        let parent = temp_root("nested-own-repo-parent");
+        seed_git_repo(&parent);
+
+        // Consumer root nested inside the parent, but it IS its own git repo.
+        let app = parent.join("app");
+        fs::create_dir_all(&app).expect("create nested consumer root");
+        seed_git_repo(&app);
+
+        // Sidecar must NOT resolve into the parent repo; put it in a separate
+        // clean temp location with no `.git` above it.
+        let sidecar = temp_root("nested-own-repo-sidecar");
+        let payload = init_project(
+            &app,
+            None,
+            Some(&sidecar),
+            Some(&sidecar.join(".forge-method")),
+        )
+        .expect("a consumer that is its own repo is allowed even when nested");
+
+        assert_eq!(payload.status, ProjectInitStatus::Initialized);
+        assert!(app.join(PROJECT_LINK_FILE_NAME).is_file());
+        assert!(sidecar.join(".forge-method").is_dir());
+    }
+
+    /// Repo-identity validation: a consumer that IS its own git repo, but whose
+    /// resolved sidecar root lands inside a DIFFERENT git repository, must be
+    /// rejected — that sidecar state would pollute the foreign repo.
+    #[test]
+    fn init_rejects_sidecar_inside_foreign_repo() {
+        // The consumer is a clean repo of its own (no foreign parent).
+        let app = temp_root("sidecar-foreign-consumer");
+        seed_git_repo(&app);
+
+        // A separate foreign git repository; the sidecar lands inside it.
+        let foreign = temp_root("sidecar-foreign-repo");
+        seed_git_repo(&foreign);
+        let sidecar_in_foreign = foreign.join("forge-app");
+
+        let err = init_project(
+            &app,
+            None,
+            Some(&sidecar_in_foreign),
+            Some(&sidecar_in_foreign.join(".forge-method")),
+        )
+        .unwrap_err();
+        assert_eq!(
+            err,
+            ProjectInitError::SidecarInsideAnotherRepo {
+                sidecar_root: display_path(&sidecar_in_foreign),
+                foreign_repo: display_path(&foreign),
+                consumer_root: display_path(&app),
+            },
+            "a sidecar landing inside a foreign git repo must be rejected"
+        );
+        assert_eq!(err.exit_reason(), ExitReason::InvalidDecisionShape);
+        // The failing init must not have created the sidecar state tree.
+        assert!(
+            !sidecar_in_foreign.join(".forge-method").exists(),
+            "rejected sidecar init must not pollute the foreign repo"
+        );
     }
 }

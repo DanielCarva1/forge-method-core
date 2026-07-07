@@ -38,15 +38,7 @@ fn bin() -> Command {
     Command::cargo_bin("forge-core").expect("forge-core binary must exist")
 }
 
-fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .expect("repo root")
-        .to_path_buf()
-}
-
-/// A fresh temp parent under `target/`, cleaned up on drop. Mirrors the
+/// A fresh temp parent under the OS temp dir, cleaned up on drop. Mirrors the
 /// `project_init_e2e` harness so the two stay consistent.
 struct FreshParent {
     path: PathBuf,
@@ -56,9 +48,16 @@ impl FreshParent {
     fn new(label: &str) -> Self {
         static SEQ: AtomicUsize = AtomicUsize::new(0);
         let n = SEQ.fetch_add(1, Ordering::SeqCst);
-        let path = repo_root()
-            .join("target")
-            .join(format!("start-e2e-{label}-{}-{n}", std::process::id()));
+        // Use the OS temp dir, NOT repo_root()/target/. The repo-identity
+        // validation (incident closure) rejects a consumer root nested inside a
+        // foreign git repo, and target/ is inside the forge core repo — so the
+        // test's bootstrap sidecar would be rejected. std::env::temp_dir()
+        // returns a Windows path (D:\Temp\...) on this host, which avoids the
+        // WSL→Windows /tmp mangling the old DD46 comment warned about.
+        let path = std::env::temp_dir().join(format!(
+            "start-e2e-{label}-{}-{n}",
+            std::process::id()
+        ));
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).expect("create fresh parent");
         Self { path }
