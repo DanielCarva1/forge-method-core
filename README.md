@@ -582,9 +582,9 @@ forge-core preflight --profile generic  # force a profile
 forge-core preflight --json             # machine-readable report
 ```
 
-**Custom gates.** To encode project-specific checks (Bruno YAML parse, QA
+**Custom gates.** To encode project-specific checks (API contract test, QA
 package validator, report linter, secret scan, fixture/data-safety validator,
-Testmo dry-run, …), run `forge-core preflight init` once — it writes
+suite dry-run, …), run `forge-core preflight init` once — it writes
 `.forge-method/preflight.yaml` for the detected profile — then add shell-command
 gates. A gate's verdict is its exit code (0 = pass, non-zero = fail), mirroring
 how `pre-commit`'s `language: system` hooks and CI runners work:
@@ -597,8 +597,8 @@ gates:
   - name: validate
     command: []
     requirement: required
-  - name: bruno_yaml_parse
-    command: ["npx", "@bruno/api", "validate", "--strict"]
+  - name: api_contract_test
+    command: ["npx", "my-api-cli", "test", "--suite", "contracts"]
     requirement: required
   - name: qa_package_validate
     command: ["python", "scripts/qa_validate.py"]

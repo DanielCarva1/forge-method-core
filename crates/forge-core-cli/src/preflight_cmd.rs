@@ -15,7 +15,7 @@
 //!   "Cargo.toml not found" error.
 //!
 //! Custom gates: the profile document may declare shell-command gates (e.g.
-//! `["npm","test"]`, `["pytest"]`, `["npx","@bruno/api"]`) whose exit code is
+//! `["npm","test"]`, `["pytest"]`, `["npx","my-api-cli"]`) whose exit code is
 //! the verdict. This mirrors pre-commit's `language: system` hooks and lets
 //! any project encode its real readiness checks without Rust code in the
 //! core.

@@ -355,14 +355,14 @@ mod tests {
     #[test]
     fn custom_gate_spec_carries_command() {
         let spec = GateSpec::custom(
-            "bruno_validate".to_string(),
-            vec!["npx".to_string(), "@bruno/api".to_string()],
+            "api_contract_test".to_string(),
+            vec!["npx".to_string(), "my-api-cli".to_string()],
             GateRequirement::Required,
         );
         assert!(!spec.is_builtin());
         assert_eq!(
             spec.command,
-            vec!["npx".to_string(), "@bruno/api".to_string()]
+            vec!["npx".to_string(), "my-api-cli".to_string()]
         );
     }
 }
