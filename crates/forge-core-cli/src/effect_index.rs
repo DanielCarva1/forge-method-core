@@ -189,8 +189,7 @@ pub fn run_rebuild_effect_index_command(args: &[String]) -> Result<(), ExitError
         index += 1;
     }
 
-    let roots =
-        resolve_stateful_roots_or_err("rebuild-effect-index", &input.root)?;
+    let roots = resolve_stateful_roots_or_err("rebuild-effect-index", &input.root)?;
     input.root = roots.effect_store_root;
     if no_sync {
         // ADR-0009: emit a one-line stderr warning the first time the flag is
@@ -314,8 +313,7 @@ pub fn run_query_effect_index_command(args: &[String]) -> Result<(), ExitError> 
         index += 1;
     }
 
-    let roots =
-        resolve_stateful_roots_or_err("query-effect-index", &input.root)?;
+    let roots = resolve_stateful_roots_or_err("query-effect-index", &input.root)?;
     input.root = roots.effect_store_root;
     emit_query_effect_index_result(input, context, json)
 }

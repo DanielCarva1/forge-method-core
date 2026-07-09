@@ -480,6 +480,37 @@ forge-core guide describe              # list every workflow in the catalog
 forge-core guide status --phase 1-discovery   # what's required in this phase?
 ```
 
+### Derive agent-native assurance guidance
+
+This is a host-agent surface, not a human authoring workflow. The human states
+the goal in chat; the host agent constructs the typed input, calls Forge, and
+explains the result. The human does not edit YAML or choose a workflow.
+
+```bash
+forge-core assurance derive --input-file <obligation-engine-input.yaml> --json
+```
+
+The response contains the complete validated `assurance_case`, a compact
+`guidance` projection, and a content-addressed `resume_token`. A host persists
+the returned Assurance Case and a replacement agent can recover the same
+governed state with:
+
+```bash
+forge-core assurance resume --case-file <assurance-case.yaml> --json
+```
+
+`blocked` readiness is valid guidance and therefore does not make the command
+fail. It means the host should follow the ranked technical or evidence action;
+Forge requests human attention only when a due irreducible Decision Request
+exists. The Adapter is read-only and does not authorize project mutation.
+
+The default read-only MCP surface also exposes the `assurance` tool. Its
+order-independent flag form is suitable for pass-through adapters:
+
+```text
+forge-core assurance --input-file <path> --root <project> --json
+```
+
 ### Route work through the dual-lane autonomy router
 
 The flagship evolve-phase command is the risk router. It reads an

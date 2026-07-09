@@ -761,10 +761,7 @@ fn validate_repo_identity(
     // which is exactly the incident this check prevents.
     let consumer_is_own_repo = project_root.join(".git").exists();
     if !consumer_is_own_repo {
-        if let Some(parent_git) = project_root
-            .parent()
-            .and_then(find_enclosing_git_root)
-        {
+        if let Some(parent_git) = project_root.parent().and_then(find_enclosing_git_root) {
             return Err(ProjectInitError::RootNestedInAnotherRepo {
                 root: display_path(project_root),
                 parent_repo: display_path(&parent_git),
@@ -1781,8 +1778,8 @@ mod tests {
 
     #[test]
     fn parse_project_resolve_args_returns_typed_options() {
-        let parsed =
-            parse_project_resolve_args(&argv(&["--root", "app", "--no-json"])).expect("parse resolve args");
+        let parsed = parse_project_resolve_args(&argv(&["--root", "app", "--no-json"]))
+            .expect("parse resolve args");
 
         let ProjectResolveParseOutcome::Run(options) = parsed else {
             panic!("expected runnable resolve options");

@@ -153,16 +153,13 @@ impl ResearchResolveError {
 /// Ledger lives at `<state_root>/research/sources.ndjson` (per
 /// `forge_core_research::RESEARCH_LOG_RELATIVE_PATH`). Mirrors
 /// `resolve_memory_dir` in `memory_cmd.rs`.
-fn resolve_state_root(
-    root: Option<&str>,
-) -> Result<PathBuf, ResearchResolveError> {
+fn resolve_state_root(root: Option<&str>) -> Result<PathBuf, ResearchResolveError> {
     let root_str = root.unwrap_or(".");
     let root_path = PathBuf::from(root_str);
-    let project = crate::project_cmd::resolve_project(&root_path).map_err(
-        |source| ResearchResolveError {
+    let project =
+        crate::project_cmd::resolve_project(&root_path).map_err(|source| ResearchResolveError {
             message: format!("cannot resolve Forge project from --root '{root_str}': {source}"),
-        },
-    )?;
+        })?;
     let state_root = PathBuf::from(&project.state_root);
     if !state_root.is_dir() {
         return Err(ResearchResolveError {

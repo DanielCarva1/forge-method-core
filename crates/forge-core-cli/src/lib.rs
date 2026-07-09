@@ -21,6 +21,7 @@
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::needless_pass_by_value)]
 
+pub mod assurance_cmd;
 pub mod autonomy_cmd;
 pub mod claim;
 pub mod cli_error;

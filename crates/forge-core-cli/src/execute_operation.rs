@@ -28,13 +28,13 @@ use forge_core_contracts::{
     CliEnvelope, CommandContractDocument, ExitReason, FieldEvidenceRegistry,
     OperationContractDocument, RepoPath, ToolEffectContractDocument, TypedFailure,
 };
+use forge_core_contracts::{Phase, StableId};
 use forge_core_kernel::{
     execute_operation, CitationGate, ClaimCoverageGate, GateRejection, OperationGate, PhaseGate,
     RiskAuditGate, RuntimeEffectPayloadKind, RuntimeOperationCommandInput,
     RuntimeOperationEffectInput, RuntimeOperationEffectPayload, RuntimeOperationExecution,
     RuntimeOperationExecutionContext, RuntimeReadSnapshot,
 };
-use forge_core_contracts::{Phase, StableId};
 use forge_core_store::{build_reference_index, derive_state, WalDurability};
 use forge_core_validate::risk_audit::{validate_risk_audit_rule_set, RiskAuditRuleSet};
 
@@ -540,7 +540,9 @@ pub fn run_execute_operation(
         &effects,
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |d| d.as_secs() as i64),
+            .map_or(0, |duration| {
+                i64::try_from(duration.as_secs()).unwrap_or(i64::MAX)
+            }),
     );
     for gate in coordination_gates {
         context = context.with_gate(gate);
@@ -613,7 +615,7 @@ fn load_curated_evidence(root: &Path) -> FieldEvidenceRegistry {
         .unwrap_or_else(crate::research_cmd::empty_evidence)
 }
 
-/// Build the proportional coordination gates (ClaimCoverageGate, PhaseGate)
+/// Build the proportional coordination gates (`ClaimCoverageGate`, `PhaseGate`)
 /// from the project's resolved state. Returns an empty vector when the project
 /// is not yet bootstrapped (no link/sidecar) — those cases are upstream errors
 /// caught before this point, but the helper stays defensive.
@@ -629,9 +631,8 @@ fn build_coordination_gates(
     effects: &[RuntimeOperationEffectInput],
     now_unix: i64,
 ) -> Vec<Box<dyn OperationGate>> {
-    let payload = match resolve_project(root) {
-        Ok(payload) => payload,
-        Err(_) => return Vec::new(),
+    let Ok(payload) = resolve_project(root) else {
+        return Vec::new();
     };
     let current_phase = payload
         .current_phase

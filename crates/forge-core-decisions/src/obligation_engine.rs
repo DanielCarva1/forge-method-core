@@ -213,7 +213,8 @@ impl std::fmt::Display for ObligationEngineRejection {
 impl std::error::Error for ObligationEngineRejection {}
 
 /// Typed reasons a host proposal is rejected before derivation.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "code", rename_all = "snake_case")]
 pub enum ObligationEngineIssue {
     UnsupportedSchemaVersion {
         found: String,
@@ -260,6 +261,73 @@ pub enum ObligationEngineIssue {
     DecisionAffectedLensMissing {
         id: StableId,
     },
+}
+
+impl std::fmt::Display for ObligationEngineIssue {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnsupportedSchemaVersion { found } => {
+                write!(formatter, "unsupported schema version {found:?}")
+            }
+            Self::EmptyCaseId => formatter.write_str("case_id must not be empty"),
+            Self::EmptyDesiredOutcome => formatter.write_str("desired_outcome must not be empty"),
+            Self::DuplicateLensObservation { lens } => {
+                write!(formatter, "duplicate lens observation for {lens:?}")
+            }
+            Self::IntendedOutcomeNotApplicable => {
+                formatter.write_str("intended_outcome cannot be marked not_applicable")
+            }
+            Self::NotApplicableWithoutRationale { lens } => {
+                write!(formatter, "not_applicable lens {lens:?} requires rationale")
+            }
+            Self::EvidenceMissing { lens } => {
+                write!(
+                    formatter,
+                    "evidence-bearing status for {lens:?} requires evidence refs"
+                )
+            }
+            Self::WaiverInconsistent { lens } => {
+                write!(formatter, "waiver fields are inconsistent for {lens:?}")
+            }
+            Self::DuplicateEpistemicSignal { signal } => {
+                write!(formatter, "duplicate epistemic signal {signal:?}")
+            }
+            Self::EpistemicSignalConflictsWithObservation { signal, lens } => write!(
+                formatter,
+                "epistemic signal {signal:?} conflicts with satisfied {lens:?} observation"
+            ),
+            Self::EmptyCapabilityId => formatter.write_str("capability id must not be empty"),
+            Self::DuplicateCapabilityId { id } => {
+                write!(formatter, "duplicate capability id {:?}", id.0)
+            }
+            Self::CapabilityResolutionMissing { id } => {
+                write!(
+                    formatter,
+                    "capability {:?} requires a resolution option",
+                    id.0
+                )
+            }
+            Self::CapabilityAffectedLensMissing { id } => write!(
+                formatter,
+                "capability {:?} requires at least one applicable affected lens",
+                id.0
+            ),
+            Self::EmptyDecisionId => formatter.write_str("decision id must not be empty"),
+            Self::DuplicateDecisionId { id } => {
+                write!(formatter, "duplicate decision id {:?}", id.0)
+            }
+            Self::DecisionAlternativesInvalid { id } => write!(
+                formatter,
+                "decision {:?} requires two distinct alternatives and a valid recommendation",
+                id.0
+            ),
+            Self::DecisionAffectedLensMissing { id } => write!(
+                formatter,
+                "decision {:?} requires at least one applicable affected lens",
+                id.0
+            ),
+        }
+    }
 }
 
 #[derive(Debug)]

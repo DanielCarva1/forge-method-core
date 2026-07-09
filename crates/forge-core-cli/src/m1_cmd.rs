@@ -153,8 +153,7 @@ impl std::error::Error for M1CommandError {}
 /// read or parsed, the reference index cannot be built, or trace persistence
 /// fails.
 pub fn run_preview(input: &M1CommandInput) -> Result<PreviewCommandOutput, M1CommandError> {
-    let resolved = resolve_project(&input.root)
-        .map_err(M1CommandError::ProjectResolve)?;
+    let resolved = resolve_project(&input.root).map_err(M1CommandError::ProjectResolve)?;
     let project_root = PathBuf::from(&resolved.project_root);
     let state_root = existing_state_root_for_m1(&resolved)?;
     let operation_path = input
@@ -201,8 +200,7 @@ pub fn run_preview(input: &M1CommandInput) -> Result<PreviewCommandOutput, M1Com
 /// read or parsed, the reference index cannot be built, or trace persistence
 /// fails.
 pub fn run_ready(input: &M1CommandInput) -> Result<ReadyCommandOutput, M1CommandError> {
-    let resolved = resolve_project(&input.root)
-        .map_err(M1CommandError::ProjectResolve)?;
+    let resolved = resolve_project(&input.root).map_err(M1CommandError::ProjectResolve)?;
     let project_root = PathBuf::from(&resolved.project_root);
     let state_root = existing_state_root_for_m1(&resolved)?;
     let operation_path = input
@@ -250,8 +248,7 @@ pub fn run_ready(input: &M1CommandInput) -> Result<ReadyCommandOutput, M1Command
 ///
 /// Returns an error when project resolution fails.
 pub fn run_explain(input: &M1CommandInput) -> Result<ExplainCommandOutput, M1CommandError> {
-    let resolved = resolve_project(&input.root)
-        .map_err(M1CommandError::ProjectResolve)?;
+    let resolved = resolve_project(&input.root).map_err(M1CommandError::ProjectResolve)?;
     let state_root = existing_state_root_for_m1(&resolved)?;
     let latest_run = input.run_id.is_none();
     let query = query_trace_events(

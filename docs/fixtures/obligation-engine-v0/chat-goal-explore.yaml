@@ -1,0 +1,30 @@
+schema_version: "0.1"
+obligation_engine_input:
+  case_id: "assurance.derived.chat_goal_explore"
+  intent:
+    id: "intent.chat_goal_explore"
+    desired_outcome: "Create a useful product in a domain the human does not know how to develop."
+    constraints:
+      - "The human interacts only through chat."
+      - "The host agent owns technical artifacts and verification."
+    preferences:
+      - "Prefer early learning and representative feedback."
+    unacceptable_outcomes:
+      - "Apparent progress is declared complete before integrated reality feedback."
+    uncertainties:
+      - "The applicable lifecycle, hazards, and quality method are not yet known."
+  project_snapshot:
+    id: "snapshot.chat_goal_explore.v1"
+    state_version: 1
+    observed_at: "2026-07-09T22:30:00Z"
+    evidence_refs:
+      - "evidence:human-chat-goal"
+    phase_projection: "1-discovery"
+  target: "explore"
+  risk_level: "medium"
+  lens_observations: []
+  epistemic_signals:
+    - "novel_domain"
+    - "method_gap"
+  capability_observations: []
+  decision_needs: []

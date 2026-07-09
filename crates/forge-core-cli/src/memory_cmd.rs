@@ -130,11 +130,10 @@ fn resolve_memory_dir(
     }
     let root_str = root.unwrap_or(".");
     let root_path = PathBuf::from(root_str);
-    let project = crate::project_cmd::resolve_project(&root_path).map_err(
-        |source| MemoryResolveError {
+    let project =
+        crate::project_cmd::resolve_project(&root_path).map_err(|source| MemoryResolveError {
             message: format!("cannot resolve Forge project from --root '{root_str}': {source}"),
-        },
-    )?;
+        })?;
     let state_root = PathBuf::from(&project.state_root);
     if !state_root.is_dir() {
         return Err(MemoryResolveError {

@@ -118,12 +118,19 @@ fn consumer_fixture(label: &str) -> ConsumerFixture {
             forge_core_contracts::RepoPath(
                 ".forge-method/artifacts/story-current-result.yaml".to_string(),
             ),
-            forge_core_contracts::RepoPath(".forge-method/evidence/story-validation.json".to_string()),
+            forge_core_contracts::RepoPath(
+                ".forge-method/evidence/story-validation.json".to_string(),
+            ),
         ],
         product_area: None,
         expected_state_version: None,
     };
-    let _ = run_acquire(&claims_dir, &claim_req, 1_800_000_000, WalDurability::NoSync);
+    let _ = run_acquire(
+        &claims_dir,
+        &claim_req,
+        1_800_000_000,
+        WalDurability::NoSync,
+    );
 
     ConsumerFixture { app, state_root }
 }

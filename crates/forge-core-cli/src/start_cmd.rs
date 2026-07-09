@@ -52,9 +52,8 @@ use forge_core_contracts::{CliEnvelope, ExitReason, ENVELOPE_SCHEMA_VERSION};
 
 use crate::cli_error::ExitError;
 use crate::project_cmd::{
-    init_project, resolve_project, write_initial_project_state,
-    ProjectInitError, ProjectInitStatus, ProjectLayoutKind, ProjectResolveError,
-    ProjectResolvePayload,
+    init_project, resolve_project, write_initial_project_state, ProjectInitError,
+    ProjectInitStatus, ProjectLayoutKind, ProjectResolveError, ProjectResolvePayload,
 };
 
 /// Usage line for `forge-core start`, projected from the shared Command Surface.
@@ -508,17 +507,12 @@ fn bootstrap_and_finish(
                 eprintln!("start: failed to seed state.yaml (non-fatal): {err}");
             }
             match resolve_project(root) {
-                Ok(resolved) => finish_classified(
-                    &resolved,
-                    root,
-                    agent_id,
-                    vec![action.to_string()],
-                ),
-                Err(err) => CliEnvelope::err(
-                    "start",
-                    resolve_error_exit_reason(&err),
-                    err.to_string(),
-                ),
+                Ok(resolved) => {
+                    finish_classified(&resolved, root, agent_id, vec![action.to_string()])
+                }
+                Err(err) => {
+                    CliEnvelope::err("start", resolve_error_exit_reason(&err), err.to_string())
+                }
             }
         }
         Err(err) => CliEnvelope::err("start", init_error_exit_reason(&err), err.to_string()),

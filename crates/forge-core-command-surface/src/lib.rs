@@ -297,6 +297,21 @@ pub const COMMAND_AUTONOMY: CommandSpec = CommandSpec {
     mcp_visibility: McpVisibility::AllowlistOnly,
 };
 
+/// Agent-facing projection over the pure Assurance Case / Obligation Engine
+/// Interface. Both subcommands are read-only: persistence belongs to the host
+/// Adapter, which may store the returned Assurance Case for later resume.
+pub const COMMAND_ASSURANCE: CommandSpec = CommandSpec {
+    name: "assurance",
+    usage_lines: &[
+        "       forge-core assurance (--input-file <path>|--case-file <path>) [--root <path>] [--json|--no-json]",
+        "       forge-core assurance derive --input-file <path> [--root <path>] [--json|--no-json]",
+        "       forge-core assurance resume --case-file <path> [--root <path>] [--json|--no-json]",
+    ],
+    authority: CommandAuthority::ReadOnly,
+    json_mode: JsonMode::EnvelopeOptional,
+    mcp_visibility: McpVisibility::DefaultReadOnly,
+};
+
 pub const COMMAND_CONTRACT: CommandSpec = CommandSpec {
     name: "contract",
     usage_lines: &[
@@ -437,7 +452,9 @@ pub const COMMAND_READY: CommandSpec = CommandSpec {
 
 pub const COMMAND_EXPLAIN: CommandSpec = CommandSpec {
     name: "explain",
-    usage_lines:     &["       forge-core explain [--root <path>] (--last-run | --run-id <id>) [--json|--no-json]"],
+    usage_lines: &[
+        "       forge-core explain [--root <path>] (--last-run | --run-id <id>) [--json|--no-json]",
+    ],
     authority: CommandAuthority::ReadOnly,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::DefaultReadOnly,
@@ -658,7 +675,7 @@ pub const COMMAND_HOST_ADAPTER_VERIFY_CERTIFICATE_OCSP_STATUS: CommandSpec = Com
 
 pub const COMMAND_START: CommandSpec = CommandSpec {
     name: "start",
-    usage_lines:     &["       forge-core start [--root <path>] [--agent-id <id>] [--json|--no-json]"],
+    usage_lines: &["       forge-core start [--root <path>] [--agent-id <id>] [--json|--no-json]"],
     authority: CommandAuthority::MutatesForgeState,
     json_mode: JsonMode::EnvelopeOptional,
     mcp_visibility: McpVisibility::AllowlistOnly,
@@ -666,9 +683,9 @@ pub const COMMAND_START: CommandSpec = CommandSpec {
 
 pub const COMMAND_MCP: CommandSpec = CommandSpec {
     name: "mcp",
-    usage_lines:     &[
-                "       forge-core mcp serve [--allowlist <yaml>] [--root <path>] [--json|--no-json]",
-            ],
+    usage_lines: &[
+        "       forge-core mcp serve [--allowlist <yaml>] [--root <path>] [--json|--no-json]",
+    ],
     authority: CommandAuthority::AdapterProtocol,
     json_mode: JsonMode::ProtocolStream,
     mcp_visibility: McpVisibility::AllowlistOnly,
@@ -698,6 +715,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     COMMAND_GUIDE,
     COMMAND_CLAIM,
     COMMAND_AUTONOMY,
+    COMMAND_ASSURANCE,
     COMMAND_CONTRACT,
     COMMAND_ISOLATION,
     COMMAND_MEMORY,
@@ -882,6 +900,12 @@ mod tests {
                 .concrete_subcommand_names()
                 .collect::<Vec<_>>(),
             vec!["route"]
+        );
+        assert_eq!(
+            COMMAND_ASSURANCE
+                .concrete_subcommand_names()
+                .collect::<Vec<_>>(),
+            vec!["derive", "resume"]
         );
         assert_eq!(
             COMMAND_PREFLIGHT

@@ -25,6 +25,14 @@ constraints:
 
 delivery_strategy:
   principle: "Prove one deep vertical slice before broad catalog migration."
+  checkpoint_policy:
+    - "Complete phases land as separate validated commits that a user can fast-forward pull."
+    - "Every user-visible checkpoint updates the changelog and source-install update path."
+    - "Prebuilt distribution requires a SemVer tag only after the checkpoint passes the release matrix."
+    - "Schema or command changes must remain additive within a minor line or ship explicit migration guidance."
+  published_local_checkpoints:
+    - commit: "87406ba"
+      scope: "P0-P2 agent-native doctrine, Assurance Case v0, validation, and Obligation Engine"
   preserve:
     - "Command Surface"
     - "typed contracts"
@@ -91,7 +99,7 @@ phases:
       - "The engine does not treat agent confidence or artifact presence as evidence."
 
   - id: "P3-conversational-golden-path"
-    status: "pending"
+    status: "completed"
     outcome: "One host Adapter proves chat-only human interaction from an empty consumer through evidence-backed next actions and resume."
     scenario:
       - "Human provides only a goal in chat."
@@ -150,11 +158,17 @@ first_executable_slice:
     - "deterministic Assurance Case derivation from Intent Proposal, Project Snapshot, universal lens observations, epistemic signals, capabilities, and Decision Needs"
     - "four typed input fixtures covering novel-domain and method gaps, unsupported capability, artifact-only progress, waiver, and verified release readiness"
     - "derived outputs validated by the P1 semantic validator plus byte-equivalent determinism coverage"
+    - "read-only assurance derive/resume host Adapter with stable CliEnvelope output"
+    - "content-addressed resume token and compact guidance projection derived from the complete Assurance Case"
+    - "human attention requested only for due irreducible Decision Requests"
+    - "default read-only MCP projection with order-independent flag-only invocation"
+    - "typed conversational golden path from an empty consumer through replacement-agent resume"
   next_action: >-
-    Begin P3 by adding one thin host Adapter that translates a chat-originated
-    goal into the P2 input Interface, presents typed gaps and ranked next-best
-    actions without exposing YAML to the human, and proves durable resume through
-    one conversational golden-path fixture before any execution-kernel mutation.
+    Begin P4 by binding the P3 Assurance Case and its due obligations to typed
+    execution admission while preserving the existing release blockers:
+    operation-wide transaction or saga semantics, trusted MCP identity and
+    replay protection, claim revision revalidation, and evidence recorded only
+    after verified effects.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

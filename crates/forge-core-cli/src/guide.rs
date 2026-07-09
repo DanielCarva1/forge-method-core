@@ -4,8 +4,8 @@
 //! single [`CliEnvelope`] as JSON to stdout; diagnostics go to stderr.
 //! Implements R1/R3/R4 from the slice-3 spec.
 
-use forge_core_command_surface::COMMAND_GUIDE;
 use crate::project_cmd::resolve_project;
+use forge_core_command_surface::COMMAND_GUIDE;
 use forge_core_contracts::{
     Catalog, CatalogEntry, CliEnvelope, ExitReason, Phase, ENVELOPE_SCHEMA_VERSION,
 };
@@ -176,12 +176,12 @@ pub struct DecideAccepted {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct EnforcementPolicy {
     /// `true` when the recommended workflow mutates durable state and the
-    /// runtime's ClaimCoverageGate will refuse execution without a covering
+    /// runtime's `ClaimCoverageGate` will refuse execution without a covering
     /// claim. The agent should `claim acquire` before calling execute-operation.
     pub claim_required: bool,
     /// Autonomy lane derived from the project's phase (Fast for discovery/spec,
     /// Rigorous for build-verify and beyond). Advisory — the runtime enforces
-    /// via ClaimCoverageGate + PhaseGate, not via this string.
+    /// via `ClaimCoverageGate` + `PhaseGate`, not via this string.
     pub lane: String,
     /// Gates the runtime will attach automatically (the agent does not pass
     /// these as flags). Informative so the agent knows what will be checked.
@@ -300,9 +300,11 @@ pub fn run_decide(
 /// the agent what the runtime will require before executing the recommended
 /// workflow: a covering claim (for durable mutation in build-verify and
 /// beyond) and the autonomy lane (Fast/Rigorous, derived from phase). The
-/// agent reads this and complies; the runtime enforces via ClaimCoverageGate
-/// and PhaseGate regardless.
-fn resolve_enforcement_policy(project: &crate::project_cmd::ProjectResolvePayload) -> EnforcementPolicy {
+/// agent reads this and complies; the runtime enforces via `ClaimCoverageGate`
+/// and `PhaseGate` regardless.
+fn resolve_enforcement_policy(
+    project: &crate::project_cmd::ProjectResolvePayload,
+) -> EnforcementPolicy {
     let phase = project
         .current_phase
         .as_deref()
@@ -315,7 +317,10 @@ fn resolve_enforcement_policy(project: &crate::project_cmd::ProjectResolvePayloa
         phase,
         Phase::BuildVerify | Phase::ReadyOperate | Phase::Evolve
     );
-    let lane = if matches!(phase, Phase::BuildVerify | Phase::ReadyOperate | Phase::Evolve) {
+    let lane = if matches!(
+        phase,
+        Phase::BuildVerify | Phase::ReadyOperate | Phase::Evolve
+    ) {
         "rigorous"
     } else {
         "fast"
@@ -330,9 +335,8 @@ fn resolve_enforcement_policy(project: &crate::project_cmd::ProjectResolvePayloa
     // to over-ask during mechanical plan/build execution (gap D4, fixed
     // 2026-07-07).
     let contact_density = match phase {
-        Phase::Route => "medium",
         Phase::Discovery | Phase::Specification => "high",
-        Phase::Plan | Phase::Evolve => "medium",
+        Phase::Route | Phase::Plan | Phase::Evolve => "medium",
         Phase::BuildVerify | Phase::ReadyOperate => "low",
     };
     // The runtime attaches these automatically based on project state (FASE 2).
@@ -674,12 +678,14 @@ pub fn run_guide_decide(args: &[String]) -> Result<(), ExitError> {
     // Resolve project state (for the enforcement policy). When --root is
     // absent or the project isn't bootstrapped, the policy stays None and the
     // legacy (advisory) decide behavior is preserved.
-    let project = root
-        .as_deref()
-        .and_then(|r| resolve_project(r).ok());
+    let project = root.as_deref().and_then(|r| resolve_project(r).ok());
 
-    let env: CliEnvelope<DecideAccepted> =
-        run_decide(&decision_file, catalog_dir.as_deref(), &gates, project.as_ref());
+    let env: CliEnvelope<DecideAccepted> = run_decide(
+        &decision_file,
+        catalog_dir.as_deref(),
+        &gates,
+        project.as_ref(),
+    );
     emit_guide(env, want_json)
 }
 
@@ -1257,8 +1263,7 @@ mod tests {
             json.contains("\"contact_density\":\"low\""),
             "contact_density must appear in JSON output: {json}"
         );
-        let back: EnforcementPolicy =
-            serde_json::from_str(&json).expect("deserialize own output");
+        let back: EnforcementPolicy = serde_json::from_str(&json).expect("deserialize own output");
         assert_eq!(policy, back);
 
         // An older payload (pre-Wave-2) missing contact_density must still be
@@ -1270,8 +1275,7 @@ mod tests {
         let legacy_result: Result<EnforcementPolicy, _> = serde_json::from_str(legacy_json);
         assert!(
             legacy_result.is_err(),
-            "legacy payload without contact_density must fail closed (typed contract, not silent default): {:?}",
-            legacy_result
+            "legacy payload without contact_density must fail closed (typed contract, not silent default): {legacy_result:?}"
         );
     }
 }

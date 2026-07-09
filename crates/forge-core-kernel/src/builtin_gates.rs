@@ -310,7 +310,7 @@ fn risk_audit_event(
 /// The gate holds the data the CLI pre-resolved (claims, writer identity, the
 /// target paths the operation will touch, the policy decision) and calls the
 /// unmodified `check_write_against_claims` engine in `forge-core-decisions`.
-/// This mirrors the CitationGate pattern: the kernel stays decoupled from
+/// This mirrors the `CitationGate` pattern: the kernel stays decoupled from
 /// claim storage; the CLI resolves claims via `derive_state` and passes them
 /// in as plain fields.
 pub struct ClaimCoverageGate {
@@ -337,9 +337,7 @@ impl OperationGate for ClaimCoverageGate {
             self.now_unix,
         );
         match check {
-            WriteCheck::Ok {
-                ungoverned, ..
-            } => {
+            WriteCheck::Ok { ungoverned, .. } => {
                 // Hard collision with another agent's claim? Already `Blocked`.
                 // Here targets are either governed-by-self or ungoverned-by-anyone.
                 // An ungoverned target is allowed for Observe/Facilitate/Research
@@ -356,8 +354,7 @@ impl OperationGate for ClaimCoverageGate {
                     AutonomyMode::Execute | AutonomyMode::Repair | AutonomyMode::Plan
                 );
                 if requires_claim {
-                    let paths: Vec<String> =
-                        ungoverned.iter().map(|p| p.0.clone()).collect();
+                    let paths: Vec<String> = ungoverned.iter().map(|p| p.0.clone()).collect();
                     Err(GateRejection::Custom {
                         code: "claim_coverage_missing".to_string(),
                         message: format!(
@@ -640,7 +637,9 @@ mod tests {
             current_phase: Phase::Discovery,
         };
         let plan = stub_plan_with_autonomy(AutonomyMode::Execute);
-        let err = gate.evaluate(&plan).expect_err("Execute in Discovery blocks");
+        let err = gate
+            .evaluate(&plan)
+            .expect_err("Execute in Discovery blocks");
         match err {
             GateRejection::Custom { code, .. } => {
                 assert_eq!(code, "phase_blocks_mutation");

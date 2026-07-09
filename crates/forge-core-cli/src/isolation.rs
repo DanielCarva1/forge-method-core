@@ -774,12 +774,8 @@ pub fn run_isolation_propose(args: &[String]) -> Result<(), ExitError> {
     }
     let now = resolve_now_unix(now_unix);
     let id = isolation_id.unwrap_or_else(|| format!("iso-{}-{}", slug_for_file(&branch), now));
-    let isolation_dir = resolve_isolation_dir_or_err(
-        "isolation.propose",
-        isolation_dir,
-        &root,
-        want_json,
-    )?;
+    let isolation_dir =
+        resolve_isolation_dir_or_err("isolation.propose", isolation_dir, &root, want_json)?;
     let env = run_propose(
         &isolation_dir,
         &StableId(agent),
@@ -837,12 +833,8 @@ pub fn run_isolation_status(args: &[String]) -> Result<(), ExitError> {
         }
         idx += 1;
     }
-    let isolation_dir = resolve_isolation_dir_or_err(
-        "isolation.status",
-        isolation_dir,
-        &root,
-        want_json,
-    )?;
+    let isolation_dir =
+        resolve_isolation_dir_or_err("isolation.status", isolation_dir, &root, want_json)?;
     let env = run_status(
         &isolation_dir,
         agent.as_ref().map(|a| StableId(a.clone())).as_ref(),
@@ -907,12 +899,8 @@ pub fn run_isolation_merge_plan(args: &[String]) -> Result<(), ExitError> {
             "isolation merge-plan: --id <isolation-id> is required",
         ));
     }
-    let isolation_dir = resolve_isolation_dir_or_err(
-        "isolation.merge-plan",
-        isolation_dir,
-        &root,
-        want_json,
-    )?;
+    let isolation_dir =
+        resolve_isolation_dir_or_err("isolation.merge-plan", isolation_dir, &root, want_json)?;
     let env = run_merge_plan(&isolation_dir, &StableId(id), resolve_now_unix(now_unix));
     emit_envelope_or_err("isolation", env, want_json)
 }
@@ -989,12 +977,8 @@ pub fn run_isolation_transition(args: &[String]) -> Result<(), ExitError> {
             )));
         }
     };
-    let isolation_dir = resolve_isolation_dir_or_err(
-        "isolation.transition",
-        isolation_dir,
-        &root,
-        want_json,
-    )?;
+    let isolation_dir =
+        resolve_isolation_dir_or_err("isolation.transition", isolation_dir, &root, want_json)?;
     let env = run_transition(
         &isolation_dir,
         &StableId(id),

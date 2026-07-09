@@ -1853,12 +1853,7 @@ pub fn run_claim_acquire(args: &[String]) -> Result<(), ExitError> {
         product_area: None,
         expected_state_version: None,
     };
-    let claims_dir = resolve_claims_dir_or_err(
-        "claim.acquire",
-        claims_dir,
-        &root,
-        want_json,
-    )?;
+    let claims_dir = resolve_claims_dir_or_err("claim.acquire", claims_dir, &root, want_json)?;
     let durability = if no_sync {
         // The durability warning is human-facing guidance; suppress it in
         // --json mode so a machine consumer (MCP, agent) gets a clean stdout
@@ -1983,12 +1978,8 @@ pub fn run_claim_single_target(
             "claim {sub}: --id and --agent are required"
         )));
     };
-    let claims_dir = resolve_claims_dir_or_err(
-        &format!("claim.{sub}"),
-        claims_dir,
-        &root,
-        want_json,
-    )?;
+    let claims_dir =
+        resolve_claims_dir_or_err(&format!("claim.{sub}"), claims_dir, &root, want_json)?;
     let durability = if no_sync {
         // The durability warning is human-facing guidance; suppress it in
         // --json mode so a machine consumer (MCP, agent) gets a clean stdout
@@ -2086,12 +2077,7 @@ pub fn run_claim_handoff(args: &[String]) -> Result<(), ExitError> {
             "claim handoff: --id, --agent, and --summary are required",
         ));
     };
-    let claims_dir = resolve_claims_dir_or_err(
-        "claim.handoff",
-        claims_dir,
-        &root,
-        want_json,
-    )?;
+    let claims_dir = resolve_claims_dir_or_err("claim.handoff", claims_dir, &root, want_json)?;
     let durability = if no_sync {
         // The durability warning is human-facing guidance; suppress it in
         // --json mode so a machine consumer (MCP, agent) gets a clean stdout
@@ -2166,12 +2152,7 @@ pub fn run_claim_status(args: &[String]) -> Result<(), ExitError> {
         }
         idx += 1;
     }
-    let claims_dir = resolve_claims_dir_or_err(
-        "claim.status",
-        claims_dir,
-        &root,
-        want_json,
-    )?;
+    let claims_dir = resolve_claims_dir_or_err("claim.status", claims_dir, &root, want_json)?;
     let env = if from_cache {
         run_status_with_source(&claims_dir, resolve_now_unix(now_unix), true)
     } else {
@@ -2258,12 +2239,7 @@ pub fn run_claim_reconcile(args: &[String]) -> Result<(), ExitError> {
         ));
     }
 
-    let claims_dir = resolve_claims_dir_or_err(
-        "claim.reconcile",
-        claims_dir,
-        &root,
-        want_json,
-    )?;
+    let claims_dir = resolve_claims_dir_or_err("claim.reconcile", claims_dir, &root, want_json)?;
     let durability = if no_sync {
         // The durability warning is human-facing guidance; suppress it in
         // --json mode so a machine consumer (MCP, agent) gets a clean stdout
@@ -2444,12 +2420,7 @@ pub fn run_claim_check_write(args: &[String]) -> Result<(), ExitError> {
             "claim check-write: at least one --target <path> is required",
         ));
     }
-    let claims_dir = resolve_claims_dir_or_err(
-        "check-write",
-        claims_dir,
-        &root,
-        want_json,
-    )?;
+    let claims_dir = resolve_claims_dir_or_err("check-write", claims_dir, &root, want_json)?;
     let env = run_check_write(
         &claims_dir,
         &StableId(agent_id),

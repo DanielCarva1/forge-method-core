@@ -83,12 +83,11 @@ impl std::error::Error for StatefulRootsError {}
 pub fn resolve_stateful_command_roots(
     root: &Path,
 ) -> Result<StatefulCommandRoots, StatefulRootsError> {
-    let resolved =
-        crate::project_cmd::resolve_project(root).map_err(|error| {
-            StatefulRootsError::ProjectResolve {
-                source: error.to_string(),
-            }
-        })?;
+    let resolved = crate::project_cmd::resolve_project(root).map_err(|error| {
+        StatefulRootsError::ProjectResolve {
+            source: error.to_string(),
+        }
+    })?;
     let state_root = PathBuf::from(&resolved.state_root);
     if !state_root.exists() {
         return Err(StatefulRootsError::StateRootMissing {

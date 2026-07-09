@@ -44,6 +44,7 @@ fn every_p2_fixture_derives_a_semantically_valid_assurance_case() {
         "artifact-only-release.yaml",
         "waived-release.yaml",
         "verified-release.yaml",
+        "chat-goal-explore.yaml",
     ] {
         assert_generated_case_is_valid(&load_fixture(name));
     }

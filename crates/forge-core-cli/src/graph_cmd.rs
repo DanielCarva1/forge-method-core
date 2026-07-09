@@ -169,8 +169,7 @@ impl std::error::Error for GraphCommandError {}
 pub fn run_validate(
     input: &GraphCommandInput,
 ) -> Result<GraphValidateCommandOutput, GraphCommandError> {
-    let resolved = resolve_project(&input.root)
-        .map_err(GraphCommandError::ProjectResolve)?;
+    let resolved = resolve_project(&input.root).map_err(GraphCommandError::ProjectResolve)?;
     let project_root = PathBuf::from(&resolved.project_root);
     let graph_path = resolve_graph_path(&project_root, input.graph_path.as_deref())?;
     let graph = read_graph(&graph_path)?;
@@ -199,8 +198,7 @@ pub fn run_validate(
 /// Returns an error when project resolution fails, the graph path is missing,
 /// the graph cannot be read or parsed, or a graph report cannot be serialized.
 pub fn run_dry_run(input: &GraphCommandInput) -> Result<GraphRunCommandOutput, GraphCommandError> {
-    let resolved = resolve_project(&input.root)
-        .map_err(GraphCommandError::ProjectResolve)?;
+    let resolved = resolve_project(&input.root).map_err(GraphCommandError::ProjectResolve)?;
     let project_root = PathBuf::from(&resolved.project_root);
     let graph_path = resolve_graph_path(&project_root, input.graph_path.as_deref())?;
     let state_root = PathBuf::from(&resolved.state_root);

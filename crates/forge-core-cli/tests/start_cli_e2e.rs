@@ -54,10 +54,8 @@ impl FreshParent {
         // test's bootstrap sidecar would be rejected. std::env::temp_dir()
         // returns a Windows path (D:\Temp\...) on this host, which avoids the
         // WSL→Windows /tmp mangling the old DD46 comment warned about.
-        let path = std::env::temp_dir().join(format!(
-            "start-e2e-{label}-{}-{n}",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("start-e2e-{label}-{}-{n}", std::process::id()));
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).expect("create fresh parent");
         Self { path }
@@ -131,10 +129,7 @@ fn state_one_no_link_bootstraps_the_project_in_one_command() {
 
     assert!(exit_ok, "no_link bootstrap must exit zero");
     assert_eq!(env["ok"], true, "bootstrap envelope ok must be true");
-    assert_eq!(
-        env["exit_reason"], "ok",
-        "bootstrap must report ok"
-    );
+    assert_eq!(env["exit_reason"], "ok", "bootstrap must report ok");
     assert_eq!(
         env["data"]["state"], "sidecar_ready_no_contract",
         "start should bootstrap and advance to sidecar_ready_no_contract"
@@ -192,10 +187,7 @@ fn state_two_link_without_sidecar_repairs_the_sidecar() {
 
     let (exit_ok, env) = run_start(&app);
 
-    assert!(
-        exit_ok,
-        "sidecar repair must exit zero"
-    );
+    assert!(exit_ok, "sidecar repair must exit zero");
     assert_eq!(env["ok"], true);
     assert_eq!(
         env["data"]["state"], "sidecar_ready_no_contract",

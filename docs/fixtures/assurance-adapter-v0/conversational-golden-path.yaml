@@ -1,0 +1,31 @@
+schema_version: "0.1"
+scenario:
+  id: "conversational_golden_path"
+  human_input: "I want to create a useful product, but I do not know the development method or all necessary stages."
+  human_actions:
+    - "state_goal_in_chat"
+  forbidden_human_actions:
+    - "edit_forge_yaml"
+    - "select_workflow"
+    - "run_build_or_test_commands"
+  host_actions:
+    - "interpret_chat_as_typed_intent"
+    - "capture_unknowns_without_inventing_confidence"
+    - "invoke_assurance_derive"
+    - "persist_returned_assurance_case"
+    - "act_on_ranked_next_action"
+  obligation_engine_input_ref: "docs/fixtures/obligation-engine-v0/chat-goal-explore.yaml"
+  expected_first_projection:
+    target: "explore"
+    verdict: "ready"
+    human_attention: "not_required"
+    first_action_kind: "proceed"
+    future_gap_required: true
+  resume:
+    persisted_value: "assurance_case"
+    continuity_key: "resume_token"
+    second_agent_command: "assurance resume"
+    required_equal_fields:
+      - "resume_token"
+      - "guidance"
+      - "assurance_case"

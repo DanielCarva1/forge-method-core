@@ -16,12 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No unreleased changes yet._
+
+---
+
+## [0.4.0] — 2026-07-09
+
 ### Added
 - **Agent-native Assurance Case v0.** A deny-unknown-fields typed contract family now represents intent, project snapshots, obligations, evidence-backed claims, Decision Requests, Capability Gaps, ranked next actions, and target-specific readiness.
 - **Read-only Obligation Engine vertical slice.** `forge-core-decisions::obligation_engine` deterministically derives a semantically validated Assurance Case from host-proposed intent, observations, epistemic-risk signals, capabilities, and irreducible human decisions without IO, model calls, or mutation authority.
 - Four Obligation Engine fixtures cover novel-domain/method/capability gaps, artifact-only progress, explicit waiver, and verified release readiness.
+- **Conversational assurance Adapter.** `forge-core assurance derive` projects a host-authored Obligation Engine input into an agent-facing envelope containing the complete Assurance Case, compact guidance, human-attention status, and a content-addressed resume token; `assurance resume` validates persisted state and reproduces the same guidance.
+- The read-only MCP allowlist now projects the `assurance` tool, including an order-independent flag-only invocation for generic pass-through adapters.
+- A typed conversational golden-path fixture proves chat-only human input, explicit future gaps, ranked next action, and replacement-agent continuity without exposing YAML or workflow selection to the human.
 
 ### Changed
+- Workspace version bumped `0.3.0` → `0.4.0` for the additive Assurance Case, Obligation Engine, CLI command, and default read-only MCP tool surface.
 - Repository contract validation now includes the Assurance Case family and uses a 125-clean-check regression anchor.
 - Agent-native product doctrine, architecture direction, and the phased delivery plan are carried as typed YAML under `contracts/`.
 
