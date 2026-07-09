@@ -151,7 +151,7 @@ fn research_lifecycle_add_list_cite_check_graph() {
     assert_eq!(json["data"]["resolved"], false);
 
     // 5. check → citation check over the workspace. The repo's curated registry
-    //    has no unresolved source_ids (anchor 122 invariant), and the runtime
+    //    has no unresolved source_ids (anchor 125 invariant), and the runtime
     //    ledger now has the admitted source, so the check passes.
     let out = bin()
         .args(["research", "check", "--root"])
@@ -181,7 +181,7 @@ fn research_lifecycle_add_list_cite_check_graph() {
     assert_eq!(json["command"], "research graph");
     // The graph is deterministic; source_count is whatever the repo contracts
     // cite. We assert shape, not an exact count (the count tracks the curated
-    // registry, which the anchor 122 suite already pins).
+    // registry, which the anchor 125 suite already pins).
     assert!(
         json["data"]["graph"].is_array(),
         "graph entries must be an array"

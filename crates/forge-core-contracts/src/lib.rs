@@ -6,6 +6,7 @@ pub mod envelope;
 pub mod typed_failure;
 
 pub mod agent_run;
+pub mod assurance;
 pub mod autonomy_policy;
 pub mod checkpoint;
 pub mod completion;
@@ -33,6 +34,13 @@ pub mod verification_goal;
 pub mod workflow;
 
 pub use agent_run::{AgentRunContract, AgentRunContractDocument};
+pub use assurance::{
+    AssuranceCase, AssuranceCaseDocument, AssuranceClaim, AssuranceClaimStatus, AssuranceWaiver,
+    CapabilityGap, CapabilityGapKind, DecisionAlternative, DecisionRequest, HumanDecisionReason,
+    IntentProposal, NextAction, NextActionKind, Obligation, ObligationCriticality,
+    ObligationStatus, ProjectSnapshot, ReadinessAssessment, ReadinessTarget, ReadinessVerdict,
+    ASSURANCE_CASE_SCHEMA_VERSION,
+};
 pub use autonomy_policy::{AutonomyPolicyContract, AutonomyPolicyContractDocument};
 pub use checkpoint::{CheckpointContract, CheckpointContractDocument};
 pub use claim::{ClaimContract, ClaimContractDocument};

@@ -877,6 +877,7 @@ name = "forge-core-decisions"
 version = "0.3.0"
 dependencies = [
  "forge-core-contracts",
+ "forge-core-validate",
  "include_dir",
  "serde",
  "serde_json",

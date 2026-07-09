@@ -1,0 +1,110 @@
+schema_version: "0.1"
+policy: agent_native_product_constitution
+status: accepted
+accepted_at: "2026-07-09"
+
+authority:
+  type: human_explicit
+  decision: "Adopt Forge as an agent-native governance control plane rather than a scripted persona or chained-skill system."
+  relationship:
+    - "Extends contracts/policies/human-agent-interface.yaml."
+    - "Refines the product thesis in contracts/spec/forge-rust-v1-specification.yaml."
+    - "Requires the workflow-centric guide architecture to migrate toward obligation- and evidence-centric guidance."
+
+thesis: >-
+  Forge transforms human intent and evidence-backed project state into
+  obligations, authority, verification requirements, and next-best actions.
+  The host agent remains free to choose language, reasoning, tools, and
+  implementation strategy inside those governed constraints.
+
+roles:
+  human:
+    owns:
+      - "intent"
+      - "preferences and values"
+      - "material trade-offs"
+      - "acceptance"
+      - "exceptional or external authority"
+    does_not_need_to:
+      - "read or edit Forge contracts"
+      - "write code or tests"
+      - "operate the development toolchain"
+      - "know the complete delivery method"
+  host_agent:
+    owns:
+      - "conversation and explanation"
+      - "research and competence acquisition"
+      - "planning and strategy selection"
+      - "artifact creation"
+      - "implementation and verification"
+      - "surfacing uncertainty and capability gaps"
+  forge:
+    owns:
+      - "derived project truth"
+      - "obligations and gates"
+      - "authority and effect admission"
+      - "evidence requirements"
+      - "continuity and replay"
+      - "next-best-action guidance"
+
+principles:
+  - id: "chat_is_the_human_interface"
+    rule: "The normal human experience is conversation with the host agent, not direct manipulation of Forge files or commands."
+  - id: "govern_truth_not_speech"
+    rule: "Forge constrains effects and completion claims; it does not prescribe persona, wording, or a word-for-word reasoning script."
+  - id: "outcomes_over_sequences"
+    rule: "Authoritative governance defines what must be true and proven, not one mandatory procedure for making it true."
+  - id: "evidence_before_done"
+    rule: "No consequential completion claim is accepted without representative evidence or an explicit authorized waiver."
+  - id: "phase_is_a_projection"
+    rule: "Lifecycle phases summarize maturity but do not replace evidence-backed obligations as the source of readiness."
+  - id: "minimum_sufficient_governance"
+    rule: "Governance density scales with impact, uncertainty, reversibility, exposure, and evidence quality."
+  - id: "human_attention_is_scarce"
+    rule: "The agent asks the human only for irreducible value judgments, preferences, material trade-offs, costs, risks, or authority."
+  - id: "ignorance_must_be_managed"
+    rule: "Human and agent ignorance are expected; consequential uncertainty must be researched, tested, challenged, waived, or declared as a Capability Gap."
+  - id: "continuity_is_a_product_property"
+    rule: "A replacement agent must be able to recover intent, obligations, evidence, decisions, and next actions without relying on the previous model's hidden context."
+  - id: "capability_limits_are_explicit"
+    rule: "Forge must not claim universal ability when the available agent, tools, knowledge, environment, or evaluators cannot perform or verify the work."
+
+workflow_policy:
+  authoritative:
+    - "policies"
+    - "obligations"
+    - "assurance claims"
+    - "evidence rules"
+    - "authority rules"
+    - "evaluators"
+  advisory:
+    - "playbooks"
+    - "workflow steps"
+    - "agent-selected implementation strategy"
+    - "presentation style"
+
+non_goals:
+  - "Do not ship model-specific personas as the core product."
+  - "Do not require a human to know which workflow or skill to invoke."
+  - "Do not treat document production as proof that the product works."
+  - "Do not encode every domain's delivery method into the cross-domain core."
+  - "Do not replace agent reasoning with a static master checklist."
+  - "Do not allow agent confidence to substitute for external or executable evidence."
+
+preserve_from_current_system:
+  - "typed contracts"
+  - "host-agnostic Rust core"
+  - "Project Link and external sidecar"
+  - "Command Surface"
+  - "claims, gates, and authority"
+  - "WAL, event sourcing, recovery, and replay"
+  - "evidence, traces, telemetry, and evals"
+  - "host Adapters"
+
+acceptance:
+  - "A human can start and evolve a project through chat without editing Forge artifacts."
+  - "The host agent can choose a novel strategy without bypassing obligations or evidence requirements."
+  - "Forge can challenge a weak idea or plan without overriding human values."
+  - "Forge can represent 'we do not know' and 'we cannot verify this' as governed states."
+  - "A new agent can resume from durable state and explain why each next action matters."
+  - "Completion is derived from verified or authorized-waived claims, not workflow attendance."

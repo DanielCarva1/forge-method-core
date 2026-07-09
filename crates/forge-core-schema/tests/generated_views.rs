@@ -24,6 +24,7 @@ fn generated_schemas_cover_v0_contract_surface() {
         "runtime_capability",
         "health_recovery_contract",
         "coordination_eval_contract",
+        "assurance_case",
         "contract_family_inventory",
         "field_evidence_registry",
     ] {

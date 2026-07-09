@@ -30,7 +30,7 @@
 //!
 //! Fixtures are real `.yaml` files under `docs/fixtures/autonomy-policy-v0/`
 //! and `docs/fixtures/verification-goal-v0/`. They are also exercised by the
-//! CLI validator (anchor 122), so schema drift between contracts and
+//! CLI validator (anchor 125), so schema drift between contracts and
 //! fixtures is caught twice.
 
 use forge_core_contracts::autonomy_policy::{

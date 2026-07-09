@@ -20,6 +20,7 @@ contract_family_inventory:
   supporting_policy_refs:
     - "contracts/policies/rust-validation-authority.yaml"
     - "contracts/policies/human-agent-interface.yaml"
+    - "contracts/policies/agent-native-product-constitution.yaml"
     - "contracts/policies/schema-generation-authority.yaml"
     - "contracts/policies/rust-workspace-architecture.yaml"
     - "contracts/policies/rust-contract-type-order.yaml"
@@ -265,4 +266,16 @@ contract_family_inventory:
         - "agentops_survey_2508_02121"
         - "agentops_observability_2411_05285"
         - "agentscope_2402_14034"
+    - id: "assurance_case"
+      family_kind: "assurance_case"
+      schema_ref: "contracts/assurance/assurance-case-contract-v0.yaml"
+      instance_globs:
+        - "contracts/assurance/*.yaml"
+      validator_function: "validate_assurance_case"
+      validation_surface: "rust_contract_validator"
+      status: "locked_for_schema_generation"
+      evidence_refs:
+        - "code_as_agent_harness_2605_18747"
+        - "harnessfix_trace_guided_2606_06324"
+        - "w3c_prov_dm"
   inference_boundary: "This inventory locks the known v0 runtime contract families for schema/code generation. It does not claim the product is complete, and it does not prevent a future family when backed by evidence, grill review, fixtures, and Rust validation."

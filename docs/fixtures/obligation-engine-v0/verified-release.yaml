@@ -1,0 +1,75 @@
+schema_version: "0.1"
+obligation_engine_input:
+  case_id: "assurance.derived.verified_release"
+  intent:
+    id: "intent.verified_release"
+    desired_outcome: "Release an integrated product with representative evidence."
+    constraints: []
+    preferences:
+      - "Use executable evidence instead of artifact-count proxies."
+    unacceptable_outcomes:
+      - "Release with a critical unsupported claim."
+    uncertainties: []
+  project_snapshot:
+    id: "snapshot.verified_release.v24"
+    state_version: 24
+    observed_at: "2026-07-09T22:15:00Z"
+    evidence_refs:
+      - "evidence:representative-first-use-run"
+      - "evidence:failure-recovery-run"
+      - "evidence:independent-review"
+    phase_projection: "5-ready-operate"
+  target: "release"
+  risk_level: "medium"
+  lens_observations:
+    - lens: "intended_outcome"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:intent-accepted"]
+      waiver: null
+      rationale: null
+    - lens: "critical_journeys"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:representative-first-use-run"]
+      waiver: null
+      rationale: null
+    - lens: "system_integrity"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:integrity-run"]
+      waiver: null
+      rationale: null
+    - lens: "quality_attributes"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:quality-attribute-run"]
+      waiver: null
+      rationale: null
+    - lens: "operability"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:operability-run"]
+      waiver: null
+      rationale: null
+    - lens: "lifecycle_coverage"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:lifecycle-review"]
+      waiver: null
+      rationale: null
+    - lens: "risk_and_failure"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:failure-recovery-run"]
+      waiver: null
+      rationale: null
+    - lens: "evidence_representativeness"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:representative-first-use-run"]
+      waiver: null
+      rationale: null
+  epistemic_signals: []
+  capability_observations: []
+  decision_needs: []

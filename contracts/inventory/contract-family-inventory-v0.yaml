@@ -26,6 +26,7 @@ enums:
     - "support_only"
   family_kind:
     - "authority_response"
+    - "assurance_case"
     - "reference_policy"
     - "command_surface"
     - "coordination_claim"

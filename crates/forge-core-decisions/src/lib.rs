@@ -33,6 +33,7 @@ pub mod embedded_contracts;
 pub mod eval;
 pub mod guide_validation;
 pub mod isolation;
+pub mod obligation_engine;
 pub mod phase_transition;
 
 pub use catalog::{
@@ -67,6 +68,12 @@ pub use conflict_detection::{
 pub use isolation::{
     branch_name_for, detect_isolation_conflict, is_live as isolation_is_live, propose_merge,
     transition_status, validate_isolation_contract,
+};
+pub use obligation_engine::{
+    derive_assurance_case, CapabilityAvailability, CapabilityObservation, DecisionNeed,
+    EpistemicRiskSignal, LensApplicability, LensObservation, ObligationEngineInput,
+    ObligationEngineInputDocument, ObligationEngineIssue, ObligationEngineRejection, RiskLevel,
+    UniversalAssuranceLens, OBLIGATION_ENGINE_INPUT_SCHEMA_VERSION,
 };
 
 pub use coordination_eval::{

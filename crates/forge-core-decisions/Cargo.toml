@@ -10,5 +10,6 @@ serde.workspace = true
 yaml_serde.workspace = true
 
 [dev-dependencies]
+forge-core-validate = { path = "../forge-core-validate" }
 serde_json.workspace = true
 yaml_serde.workspace = true

@@ -1,0 +1,60 @@
+schema_version: "0.1"
+obligation_engine_input:
+  case_id: "assurance.derived.novel_domain"
+  intent:
+    id: "intent.novel_domain"
+    desired_outcome: "Create a usable product in an unfamiliar domain."
+    constraints:
+      - "The human interacts only through chat."
+    preferences:
+      - "Prefer early falsification over speculative production."
+    unacceptable_outcomes:
+      - "Apparent progress hides an incomplete delivery method."
+    uncertainties:
+      - "Neither the human nor the host agent knows the complete domain lifecycle."
+  project_snapshot:
+    id: "snapshot.novel_domain.v1"
+    state_version: 1
+    observed_at: "2026-07-09T22:00:00Z"
+    evidence_refs:
+      - "evidence:intent-interview"
+      - "evidence:initial-risk-review"
+    phase_projection: "1-discovery"
+  target: "execute"
+  risk_level: "high"
+  lens_observations:
+    - lens: "intended_outcome"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs:
+        - "evidence:intent-interview"
+      waiver: null
+      rationale: "The desired outcome and unacceptable outcomes were confirmed in chat."
+    - lens: "lifecycle_coverage"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs:
+        - "evidence:initial-lifecycle-hypothesis"
+      waiver: null
+      rationale: "Only a provisional generic lifecycle exists; the domain method remains unknown."
+    - lens: "risk_and_failure"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs:
+        - "evidence:initial-risk-review"
+      waiver: null
+      rationale: "The current risk review proves only that method ignorance is consequential."
+  epistemic_signals:
+    - "novel_domain"
+    - "method_gap"
+  capability_observations:
+    - id: "capability.domain_pack"
+      kind: "domain_pack"
+      availability: "missing"
+      description: "No reviewed domain lifecycle, hazard set, or evaluator is available."
+      affected_lenses:
+        - "lifecycle_coverage"
+      resolution_options:
+        - "Research multiple credible domain methods with provenance."
+        - "Acquire a reviewed Domain Pack or specialist evaluator."
+  decision_needs: []

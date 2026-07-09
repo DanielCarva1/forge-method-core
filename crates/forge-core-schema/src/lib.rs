@@ -1,6 +1,6 @@
 use forge_core_contracts::{
-    ClaimContractDocument, CommandContractDocument, CompletionContractDocument,
-    ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
+    AssuranceCaseDocument, ClaimContractDocument, CommandContractDocument,
+    CompletionContractDocument, ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
     DecisionCloseContractDocument, FieldEvidenceRegistry, GateContractDocument,
     HealthRecoveryContractDocument, OperationContractDocument,
     OperationCrossReferencePolicyDocument, RequestContractDocument, RuntimeCapabilityDocument,
@@ -30,6 +30,9 @@ pub struct CompactAgentView {
 }
 
 #[must_use]
+// Keep the complete schema registry visible in one auditable table until the
+// planned ContractFamilyRegistry replaces these manual registrations.
+#[allow(clippy::too_many_lines)]
 pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
     vec![
         schema_artifact::<FieldEvidenceRegistry>(
@@ -127,6 +130,12 @@ pub fn generated_contract_schemas() -> Vec<ContractSchemaArtifact> {
             "CoordinationEvalContractDocument",
             Some("coordination_eval_contract"),
             "coordination failure-mode eval surface; schema shape is not readiness",
+        ),
+        schema_artifact::<AssuranceCaseDocument>(
+            "assurance_case",
+            "AssuranceCaseDocument",
+            Some("assurance_case"),
+            "evidence-backed obligations and target-specific readiness; agent confidence is not authority",
         ),
     ]
 }
@@ -261,6 +270,9 @@ fn authority_note(family_id: &str) -> &'static str {
         "runtime_handoff_contract" => "handoff requires registry and capability evidence",
         "health_recovery_contract" => "recovery intent requires claim/request/evidence refs",
         "coordination_eval_contract" => "coordination readiness requires failure-mode coverage",
+        "assurance_case" => {
+            "readiness requires coherent obligations, claims, evidence, blockers, and waivers"
+        }
         _ => "generated view; Rust validation remains authority",
     }
 }

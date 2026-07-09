@@ -1,0 +1,83 @@
+schema_version: "0.1"
+assurance_case:
+  id: "assurance.novel_domain.initial"
+  intent:
+    id: "intent.novel_domain.initial"
+    desired_outcome: "Create a usable product in a domain neither the human nor the current agent has previously delivered."
+    constraints:
+      - "The human interacts only through chat."
+    preferences:
+      - "Prefer an early usable result over extensive speculative production."
+    unacceptable_outcomes:
+      - "Substantial work appears complete before an integrated result has been exercised."
+    uncertainties:
+      - "No applicable domain lifecycle or evaluator is currently available."
+  project_snapshot:
+    id: "snapshot.novel_domain.v1"
+    state_version: 1
+    observed_at: "2026-07-09T21:00:00Z"
+    evidence_refs: []
+    phase_projection: "1-discovery"
+  obligations:
+    - id: "obligation.acquire_domain_competence"
+      description: "Acquire a credible delivery and assurance model for the unfamiliar domain."
+      criticality: "critical"
+      status: "blocked"
+      required_before: "execute"
+      claim_refs:
+        - "claim.domain_method_is_credible"
+    - id: "obligation.exercise_representative_slice"
+      description: "Exercise an integrated vertical slice that can falsify the proposed method."
+      criticality: "critical"
+      status: "pending"
+      required_before: "execute"
+      claim_refs:
+        - "claim.vertical_slice_is_representative"
+  claims:
+    - id: "claim.domain_method_is_credible"
+      statement: "The selected delivery method covers the consequential lifecycle and quality concerns of the domain."
+      status: "unknown"
+      evidence_refs: []
+      waiver: null
+    - id: "claim.vertical_slice_is_representative"
+      statement: "The earliest integrated slice exercises the critical user journey in a representative environment."
+      status: "unknown"
+      evidence_refs: []
+      waiver: null
+  decision_requests: []
+  capability_gaps:
+    - id: "gap.domain_pack_or_evaluator"
+      kind: "domain_pack"
+      description: "No governed domain lifecycle, hazard set, or evaluator is available."
+      affected_claim_refs:
+        - "claim.domain_method_is_credible"
+        - "claim.vertical_slice_is_representative"
+      resolution_options:
+        - "Research multiple credible domain methods and record provenance."
+        - "Acquire a reviewed Domain Pack or specialist evaluator."
+        - "Build a provisional evaluator and independently challenge it."
+      blocking: true
+      blocks_before: "execute"
+  next_actions:
+    - id: "action.research_domain_method"
+      kind: "research"
+      description: "Compare credible domain lifecycles, failure modes, and quality criteria."
+      addresses_claim_refs:
+        - "claim.domain_method_is_credible"
+      rationale: "The highest-risk gap is shared human and agent ignorance about the method itself."
+      rank: 1
+    - id: "action.design_falsifiable_slice"
+      kind: "experiment"
+      description: "Design the smallest integrated slice capable of disproving the selected method."
+      addresses_claim_refs:
+        - "claim.vertical_slice_is_representative"
+      rationale: "Early integrated reality feedback limits the cost of an incomplete method."
+      rank: 2
+  readiness:
+    target: "execute"
+    verdict: "blocked"
+    blocker_refs:
+      - "obligation.acquire_domain_competence"
+      - "obligation.exercise_representative_slice"
+      - "gap.domain_pack_or_evaluator"
+    rationale: "Exploration may continue, but durable product execution is not justified until competence and a falsifiable slice exist."

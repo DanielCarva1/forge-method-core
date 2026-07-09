@@ -1,0 +1,190 @@
+schema_version: "0.1"
+artifact_kind: "agent-native-guidance-implementation-plan"
+status: "active"
+created_at: "2026-07-09"
+project: "forge-method-core"
+
+objective: >-
+  Make Forge an invisible, agent-native governance control plane that can guide
+  a non-technical human and a fallible host agent from intent to an
+  evidence-backed result without relying on scripted dialogue or chained skills.
+
+authority:
+  product_constitution: "contracts/policies/agent-native-product-constitution.yaml"
+  architecture_proposal: "contracts/spec/agent-native-assurance-architecture.yaml"
+  human_direction: "Proceed with the agent-native plan and begin by documenting it."
+
+constraints:
+  - "Do not rewrite the working integrity spine."
+  - "Keep the Rust core host- and model-agnostic."
+  - "Keep the human interaction in chat through the host agent."
+  - "Do not expose YAML authoring or workflow selection as normal human work."
+  - "Do not migrate all 110 workflows before proving one vertical slice."
+  - "Do not let documentation claims outrun executable evidence."
+  - "Operation-wide atomicity and MCP authorization/replay remain release blockers."
+
+delivery_strategy:
+  principle: "Prove one deep vertical slice before broad catalog migration."
+  preserve:
+    - "Command Surface"
+    - "typed contracts"
+    - "eventlog and WAL"
+    - "claims, gates, and effect admission"
+    - "host Adapter model"
+  defer:
+    - "full Domain Pack ecosystem"
+    - "bulk conversion of the workflow catalog"
+    - "new UI"
+    - "model-specific orchestration"
+
+phases:
+  - id: "P0-doctrine-and-assurance-model"
+    status: "completed"
+    outcome: "The product constitution, epistemic-risk model, assurance architecture, and migration direction are explicit and reviewable."
+    deliverables:
+      - "contracts/policies/agent-native-product-constitution.yaml"
+      - "contracts/spec/agent-native-assurance-architecture.yaml"
+      - "contracts/plan/agent-native-guidance-plan.yaml"
+      - "CONTEXT.md domain-language navigation"
+    exit:
+      - "The human accepts or corrects the assurance model."
+      - "Open architecture questions are resolved or deliberately deferred."
+      - "The first versioned contract slice is selected."
+
+  - id: "P1-contract-and-eval-foundation"
+    status: "completed"
+    outcome: "A minimal typed vocabulary and failing acceptance corpus define agent-native guidance before runtime implementation."
+    candidate_contracts:
+      - "Intent Proposal"
+      - "Project Snapshot"
+      - "Obligation"
+      - "Assurance Claim"
+      - "Evidence Assessment"
+      - "Decision Request"
+      - "Capability Gap"
+      - "Guidance Response"
+    eval_scenarios:
+      - "underspecified idea from a non-technical human"
+      - "host agent proposes a plausible but incomplete method"
+      - "artifact-heavy progress without representative integrated execution"
+      - "novel domain with no applicable pack or evaluator"
+      - "human insists on a risky path after receiving an evidence-backed warning"
+      - "replacement agent resumes from durable state"
+    exit:
+      - "Schemas reject unknown fields and invalid state transitions."
+      - "The acceptance corpus distinguishes good guidance from obedient execution and procedural overreach."
+
+  - id: "P2-obligation-engine-vertical-slice"
+    status: "completed"
+    outcome: "A read-only Module derives obligations, evidence gaps, Decision Requests, Capability Gaps, and next-best actions from one Intent Proposal and Project Snapshot."
+    scope:
+      - "Use a small universal assurance frame."
+      - "No model inside the Rust core."
+      - "No durable mutation in the first slice."
+      - "Keep existing workflows available as advisory playbooks."
+    architecture_gate:
+      - "Choose the crate/Module placement by Depth, Locality, and deletion test rather than by file size."
+      - "The Interface is the test surface."
+      - "Avoid a pass-through Module between CLI and existing decisions code."
+    exit:
+      - "Deterministic fixtures cover missing method, unsupported capability, critical unknown, waiver, and verified readiness."
+      - "The engine does not treat agent confidence or artifact presence as evidence."
+
+  - id: "P3-conversational-golden-path"
+    status: "pending"
+    outcome: "One host Adapter proves chat-only human interaction from an empty consumer through evidence-backed next actions and resume."
+    scenario:
+      - "Human provides only a goal in chat."
+      - "Host agent creates typed proposals and artifacts without exposing YAML work."
+      - "Forge returns gaps, obligations, rationale, and next-best actions."
+      - "The agent builds and verifies an early representative vertical slice."
+      - "A fresh agent resumes without hidden context."
+    exit:
+      - "The human never selects a workflow or edits a Forge artifact."
+      - "Critical unknowns block readiness."
+      - "The final explanation is generated from typed state and evidence."
+
+  - id: "P4-execution-assurance-hardening"
+    status: "pending"
+    outcome: "Agent-native guidance can safely authorize real mutations."
+    release_blockers:
+      - "operation-wide transaction or explicit saga semantics"
+      - "trusted MCP caller identity"
+      - "MCP replay protection"
+      - "typed per-command admission and contract binding"
+      - "Execution Principal propagated through claims, traces, WAL, and evidence"
+      - "gate success records and claim revision revalidation at commit"
+    exit:
+      - "A late effect failure cannot silently leave an operation partially applied."
+      - "A self-selected caller key or ignored fake contract flag cannot authorize mutation."
+
+  - id: "P5-workflow-migration"
+    status: "pending"
+    outcome: "The catalog is incrementally expressed as policies, obligations, Assurance Claims, playbooks, and evaluators."
+    strategy:
+      - "Choose a small set of high-leverage workflows used by the golden path."
+      - "Preserve legacy workflows as compatibility playbooks during migration."
+      - "Measure deletion behavior before retiring workflow fields."
+      - "Do not claim the full catalog is executable until its predicates and evidence rules are evaluated by runtime."
+
+  - id: "P6-domain-pack-ecosystem"
+    status: "pending"
+    outcome: "Novel domains extend Forge through governed knowledge and evaluators rather than core-specific scripts."
+    scope:
+      - "pack manifest, version, provenance, conflicts, and compatibility"
+      - "domain obligations, hazards, lifecycle models, playbooks, evaluators, and fixtures"
+      - "capability requirements and Adapter declarations"
+      - "promotion path from local learning to reviewed reusable pack"
+
+first_executable_slice:
+  name: "unknown-unknowns-assurance-foundation"
+  current_done:
+    - "agent-native constitution documented"
+    - "universal assurance and competence-acquisition proposal documented"
+    - "implementation phases and release blockers documented"
+    - "Assurance Case v0 Rust contract family with closed enums and deny-unknown-fields"
+    - "semantic validation for evidence, waivers, references, ranks, and target-specific readiness"
+    - "three acceptance fixtures distinguishing novel-domain, artifact-only, and verified readiness states"
+    - "schema generation, generic contract CLI validation, inventory registration, and repo validation coverage"
+    - "read-only Obligation Engine Module with a pure typed Interface in forge-core-decisions"
+    - "deterministic Assurance Case derivation from Intent Proposal, Project Snapshot, universal lens observations, epistemic signals, capabilities, and Decision Needs"
+    - "four typed input fixtures covering novel-domain and method gaps, unsupported capability, artifact-only progress, waiver, and verified release readiness"
+    - "derived outputs validated by the P1 semantic validator plus byte-equivalent determinism coverage"
+  next_action: >-
+    Begin P3 by adding one thin host Adapter that translates a chat-originated
+    goal into the P2 input Interface, presents typed gaps and ranked next-best
+    actions without exposing YAML to the human, and proves durable resume through
+    one conversational golden-path fixture before any execution-kernel mutation.
+  not_in_scope:
+    - "turning the Obligation Engine into a model-driven orchestrator"
+    - "rewriting existing workflows"
+    - "adding a game-specific method to core"
+    - "claiming unknown unknowns can be eliminated"
+
+success_measures:
+  - id: "human_zero_artifact_ops"
+    measure: "The human completes the golden path without editing files, selecting workflows, or operating commands."
+  - id: "ignorance_visibility"
+    measure: "A novel-domain scenario produces explicit unknowns and Capability Gaps rather than false readiness."
+  - id: "early_reality_feedback"
+    measure: "Every consequential project reaches a representative vertical slice before component progress can dominate the readiness signal."
+  - id: "evidence_bound_done"
+    measure: "Every required readiness claim traces to representative evidence or an authorized waiver."
+  - id: "agent_replaceability"
+    measure: "A replacement agent resumes the same Assurance Case and next action from durable state."
+  - id: "freedom_inside_governance"
+    measure: "Different capable agents can use different successful strategies while satisfying the same obligations and evaluators."
+
+risks:
+  - id: "overformalization"
+    mitigation: "Start with a minimal assurance vocabulary and one vertical slice."
+  - id: "checklist_regression"
+    mitigation: "Keep playbooks advisory and use diverse probes plus representative evidence."
+  - id: "false_quantification"
+    mitigation: "Use ordinal risk and explicit rationale until validated calibration data exists."
+  - id: "domain_pack_poisoning"
+    mitigation: "Require provenance, review, versioning, conflict handling, and evidence-backed promotion."
+  - id: "human_overload"
+    mitigation: "Generate Decision Requests only for irreducible human choices and always include a recommendation and consequences."
+  - id: "premature_refactor"
+    mitigation: "Preserve current Modules and prove the new Interface through fixtures before moving code."

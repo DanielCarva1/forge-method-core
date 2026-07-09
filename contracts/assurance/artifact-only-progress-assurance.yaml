@@ -1,0 +1,72 @@
+schema_version: "0.1"
+assurance_case:
+  id: "assurance.artifact_only.release"
+  intent:
+    id: "intent.artifact_only.release"
+    desired_outcome: "Deliver an integrated product that works for its primary user journey."
+    constraints: []
+    preferences:
+      - "Reuse the artifacts already produced when they survive integrated evaluation."
+    unacceptable_outcomes:
+      - "Declare release readiness because documents and components exist."
+    uncertainties:
+      - "The integrated first-use journey has not been exercised."
+  project_snapshot:
+    id: "snapshot.artifact_only.v12"
+    state_version: 12
+    observed_at: "2026-07-09T21:05:00Z"
+    evidence_refs:
+      - "artifact:requirements"
+      - "artifact:architecture"
+      - "artifact:component-tests"
+    phase_projection: "4-build-verify"
+  obligations:
+    - id: "obligation.integrated_first_use"
+      description: "Exercise the complete first-use journey in a representative environment."
+      criticality: "critical"
+      status: "pending"
+      required_before: "release"
+      claim_refs:
+        - "claim.integrated_first_use_works"
+    - id: "obligation.independent_challenge"
+      description: "Independently challenge the claim-to-evidence graph before release."
+      criticality: "required"
+      status: "pending"
+      required_before: "release"
+      claim_refs:
+        - "claim.release_case_survives_challenge"
+  claims:
+    - id: "claim.integrated_first_use_works"
+      statement: "A new user can complete the primary journey using the integrated result."
+      status: "hypothesized"
+      evidence_refs: []
+      waiver: null
+    - id: "claim.release_case_survives_challenge"
+      statement: "An independent review finds no critical uncovered readiness claim."
+      status: "unknown"
+      evidence_refs: []
+      waiver: null
+  decision_requests: []
+  capability_gaps: []
+  next_actions:
+    - id: "action.run_integrated_first_use"
+      kind: "evaluate"
+      description: "Run the integrated result through the complete first-use journey."
+      addresses_claim_refs:
+        - "claim.integrated_first_use_works"
+      rationale: "Representative execution is stronger evidence than component artifacts."
+      rank: 1
+    - id: "action.challenge_release_case"
+      kind: "challenge"
+      description: "Have an independent reviewer search for missing release claims and weak evidence."
+      addresses_claim_refs:
+        - "claim.release_case_survives_challenge"
+      rationale: "A separate view reduces self-approval and shared-plan blind spots."
+      rank: 2
+  readiness:
+    target: "release"
+    verdict: "blocked"
+    blocker_refs:
+      - "obligation.integrated_first_use"
+      - "obligation.independent_challenge"
+    rationale: "Artifact production demonstrates activity, not release readiness."

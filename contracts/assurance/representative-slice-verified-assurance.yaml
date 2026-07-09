@@ -1,0 +1,79 @@
+schema_version: "0.1"
+assurance_case:
+  id: "assurance.representative_slice.release"
+  intent:
+    id: "intent.representative_slice.release"
+    desired_outcome: "Release an integrated product whose critical journey and recovery behavior are proven."
+    constraints: []
+    preferences:
+      - "Prefer evidence from the real integrated artifact."
+    unacceptable_outcomes:
+      - "Release with a critical unsupported claim."
+    uncertainties: []
+  project_snapshot:
+    id: "snapshot.representative_slice.v24"
+    state_version: 24
+    observed_at: "2026-07-09T21:10:00Z"
+    evidence_refs:
+      - "evidence:representative-first-use-run"
+      - "evidence:failure-recovery-run"
+      - "evidence:independent-assurance-review"
+    phase_projection: "5-ready-operate"
+  obligations:
+    - id: "obligation.critical_journey_verified"
+      description: "Verify the critical user journey on the integrated result."
+      criticality: "critical"
+      status: "satisfied"
+      required_before: "release"
+      claim_refs:
+        - "claim.critical_journey_works"
+    - id: "obligation.recovery_verified"
+      description: "Verify recovery from the highest-impact representative failure."
+      criticality: "required"
+      status: "satisfied"
+      required_before: "release"
+      claim_refs:
+        - "claim.recovery_behavior_works"
+    - id: "obligation.release_case_challenged"
+      description: "Independently challenge the release Assurance Case."
+      criticality: "required"
+      status: "satisfied"
+      required_before: "release"
+      claim_refs:
+        - "claim.release_case_survives_challenge"
+  claims:
+    - id: "claim.critical_journey_works"
+      statement: "The integrated result completes the critical journey in a representative environment."
+      status: "verified"
+      evidence_refs:
+        - "evidence:representative-first-use-run"
+      waiver: null
+    - id: "claim.recovery_behavior_works"
+      statement: "The integrated result detects and recovers from the selected high-impact failure."
+      status: "verified"
+      evidence_refs:
+        - "evidence:failure-recovery-run"
+      waiver: null
+    - id: "claim.release_case_survives_challenge"
+      statement: "An independent review found no critical unsupported release claim."
+      status: "verified"
+      evidence_refs:
+        - "evidence:independent-assurance-review"
+      waiver: null
+  decision_requests: []
+  capability_gaps: []
+  next_actions:
+    - id: "action.proceed_to_release"
+      kind: "proceed"
+      description: "Proceed to the separately authorized release operation."
+      addresses_claim_refs:
+        - "claim.critical_journey_works"
+        - "claim.recovery_behavior_works"
+        - "claim.release_case_survives_challenge"
+      rationale: "All required release claims have representative evidence and no blocker remains."
+      rank: 1
+  readiness:
+    target: "release"
+    verdict: "ready"
+    blocker_refs: []
+    rationale: "All due required and critical obligations are satisfied by verified claims."

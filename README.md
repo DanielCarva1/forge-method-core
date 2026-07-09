@@ -332,6 +332,22 @@ forge-core validate --root .
 > The crate is not yet published to crates.io, so `cargo install forge-core-cli`
 > (without `--path`) will not work yet. Use one of the two options above.
 
+### Update an existing source installation
+
+Forge changes are delivered as usable, validated commits. To update a clone
+without creating an implicit merge commit, pull the latest published checkpoint
+and reinstall the binary:
+
+```bash
+git pull --ff-only
+cargo install --path crates/forge-core-cli --force
+forge-core validate --root .
+```
+
+Users of prebuilt binaries should replace both `forge-core` and its `forge`
+wrapper from the same tagged release archive. Do not mix files from different
+release versions.
+
 ### What you get
 
 A single binary, `forge-core`, plus the `contracts/` tree (the catalog, schemas,

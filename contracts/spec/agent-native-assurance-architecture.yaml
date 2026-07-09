@@ -1,0 +1,228 @@
+schema_version: "0.1"
+artifact_kind: "agent-native-assurance-architecture"
+status: "accepted"
+created_at: "2026-07-09"
+accepted_at: "2026-07-09"
+project: "forge-method-core"
+
+authority:
+  accepted_direction: "contracts/policies/agent-native-product-constitution.yaml"
+  revisits:
+    - "contracts/spec/engine-architecture.yaml"
+    - "contracts/spec/forge-rust-v1-specification.yaml"
+  rule: >-
+    The constitution and Assurance Case direction are human-accepted. Open
+    questions remain explicit and each runtime slice still requires versioned
+    contracts, fixtures, and executable validation before it becomes authority.
+
+problem:
+  statement: >-
+    A human may not know the lifecycle, disciplines, failure modes, or quality
+    criteria required to realize an idea. The host agent may share the same
+    ignorance while producing plausible artifacts and apparent progress. The
+    first representative use can therefore reveal that important capabilities
+    were never built or verified.
+  distinction:
+    - "A human delegating because they lack technical knowledge is normal product behavior, not user error."
+    - "An agent not knowing a novel domain is normal. Concealing that uncertainty behind confident progress is a governance failure."
+    - "A fixed universal checklist cannot enumerate every unknown unknown."
+  invariant: >-
+    Forge must make consequential uncertainty visible and require systematic
+    attempts to discover missing claims before it permits a readiness decision.
+
+solution_summary: >-
+  Replace procedural confidence with an Assurance Case. Forge derives claims
+  that must hold, seeks representative evidence, probes for missing claims from
+  multiple independent views, and selects the next action by risk-weighted
+  evidence gap. Domain Packs extend knowledge without placing domain-specific
+  methods in the core.
+
+universal_assurance_frame:
+  purpose: "Provide cross-domain lenses that help expose missing concerns without pretending to contain every domain method."
+  lenses:
+    - id: "intended_outcome"
+      question: "Does the result solve the human's actual problem under stated constraints?"
+    - id: "critical_journeys"
+      question: "Do representative end-to-end uses work, including first use and common failure paths?"
+    - id: "system_integrity"
+      question: "Are state, data, effects, authority, and recovery coherent?"
+    - id: "quality_attributes"
+      question: "Which performance, reliability, security, safety, usability, accessibility, or fidelity qualities apply, and what proves them?"
+    - id: "operability"
+      question: "Can the result be built, delivered, observed, diagnosed, recovered, updated, and retired as applicable?"
+    - id: "lifecycle_coverage"
+      question: "What must happen before, during, and after normal use, and who or what performs it?"
+    - id: "risk_and_failure"
+      question: "What plausible failures create unacceptable outcomes, and how are they prevented, detected, or recovered?"
+    - id: "evidence_representativeness"
+      question: "Was the actual integrated result exercised in an environment representative of real use?"
+
+assurance_case:
+  definition: "A derived graph connecting desired outcomes and unacceptable outcomes to claims, obligations, evidence, challenges, decisions, and waivers."
+  claim_statuses:
+    - "unknown"
+    - "hypothesized"
+    - "supported"
+    - "verified"
+    - "disproven"
+    - "waived"
+  completion_rule:
+    - "Every required claim is verified or waived by authorized judgment."
+    - "A critical unknown, unsupported claim, or disproven claim blocks readiness."
+    - "Artifact presence alone is not verification."
+    - "Agent confidence is metadata, never evidence."
+
+epistemic_risk_signals:
+  - id: "novel_domain"
+    signal: "No applicable Domain Pack, evaluator, or prior evidence exists."
+  - id: "method_gap"
+    signal: "The plan was produced without a referenced delivery or assurance model for a high-uncertainty domain."
+  - id: "single_view"
+    signal: "The same agent or reasoning path created the claim, implementation, and approval without independent challenge."
+  - id: "artifact_only_progress"
+    signal: "Documents or isolated assets accumulate without representative integrated execution."
+  - id: "late_integration"
+    signal: "The first end-to-end or user-visible slice is deferred while component work grows."
+  - id: "unverified_capability"
+    signal: "The agent or tool claims a capability for which no evaluator or representative output exists."
+  - id: "weak_provenance"
+    signal: "A consequential method or requirement is based on unsourced, stale, or single-source knowledge."
+  - id: "long_feedback_gap"
+    signal: "Substantial work occurs without real-user, representative-environment, or independent evaluator feedback."
+
+competence_acquisition_loop:
+  trigger: "An epistemic risk signal affects a consequential claim."
+  actions:
+    - "State what is unknown and why it matters."
+    - "Identify applicable reference methods, lifecycle models, failure taxonomies, and quality criteria."
+    - "Research multiple credible and independent sources when the knowledge is not locally authoritative."
+    - "Acquire or build the missing Domain Pack, evaluator, Adapter, fixture, or tool capability when justified."
+    - "Construct the smallest representative vertical slice that can falsify the current plan."
+    - "Request an independent challenge of the claim-to-evidence graph."
+    - "Update the Assurance Case from observed results."
+    - "Declare a Capability Gap when reliable completion or verification remains unavailable."
+  exit:
+    - "The affected claims have representative evidence."
+    - "The plan changes to address discovered gaps."
+    - "The human authorizes an explicit waiver with consequences explained."
+    - "Work is blocked by a declared Capability Gap."
+
+unknown_unknown_probes:
+  rule: "Use diverse probes because no single checklist or agent view can reveal all missing concerns."
+  probes:
+    - "reference-model coverage: compare against established domain lifecycles and delivery methods"
+    - "journey coverage: exercise first use, primary use, edge cases, failure, recovery, and return use"
+    - "lifecycle coverage: inspect creation, operation, maintenance, update, migration, and retirement"
+    - "quality-attribute review: make non-functional expectations explicit and testable"
+    - "hazard and failure analysis: search for ways plausible success can still produce an unacceptable outcome"
+    - "independent challenge: use a separate reviewer, evaluator, agent, model, or human expert when impact warrants it"
+    - "representative vertical slice: integrate early enough that the real result can disprove component-level optimism"
+    - "post-outcome learning: convert escaped gaps into candidate Domain Pack rules only after evidence and review"
+
+idea_challenge:
+  purpose: "Guide an inexperienced human without demanding that they already know the method."
+  agent_behavior:
+    - "Restate the desired outcome and identify assumptions rather than blindly literalizing the first solution."
+    - "Distinguish human values from technical hypotheses."
+    - "Challenge incoherent, infeasible, unsupported, or unnecessarily risky assumptions with evidence."
+    - "Recommend a path and present alternatives with consequences."
+    - "Prefer cheap falsification of fatal assumptions before expensive implementation."
+    - "Proceed autonomously when the remaining choice is technical and reversible."
+  human_decision_rule: >-
+    Ask the human only when the unresolved choice is about values, preference,
+    material cost, unacceptable outcome, irreversible risk, product direction,
+    or authority that the agent does not possess.
+  anti_paternalism: >-
+    Forge may challenge a proposed means but must not silently replace the
+    human's values or desired outcome. A well-informed human may accept a risk
+    through an explicit, scoped waiver.
+
+obligation_engine_module:
+  interface_intent:
+    inputs:
+      - "Intent Proposal"
+      - "Project Snapshot"
+      - "applicable policies and Domain Packs"
+      - "agent, tool, environment, and evaluator capabilities"
+      - "existing Assurance Case and evidence"
+    outputs:
+      - "required and recommended obligations"
+      - "Assurance Claims and evidence gaps"
+      - "Decision Requests"
+      - "Capability Gaps"
+      - "ranked next-best actions with rationale"
+  implementation_intent:
+    - "Derive obligations deterministically where policy permits."
+    - "Accept host-agent proposals without treating them as authority."
+    - "Rank actions by expected reduction of consequential uncertainty, risk, and blocker depth."
+    - "Re-evaluate after every accepted event or new evidence item."
+  depth_goal: >-
+    Keep policy evaluation, claim state, risk weighting, and next-action
+    derivation behind one compact Interface so callers gain Leverage and changes
+    retain Locality.
+
+workflow_migration:
+  current: "Workflows contain directional strings and phase eligibility and are treated as the primary guide catalog."
+  target:
+    policy: "what is mandatory"
+    obligation: "what must become true"
+    assurance_claim: "what must be proven"
+    playbook: "one optional way to achieve it"
+    evaluator: "how evidence is judged"
+    presentation: "how a host agent may explain it"
+  compatibility: >-
+    Existing workflows remain available as playbooks during migration. Their
+    steps stop being implied authority once equivalent obligations and
+    evaluators exist.
+
+domain_pack_model:
+  core_owns:
+    - "universal assurance frame"
+    - "obligation and evidence semantics"
+    - "capability-gap and waiver semantics"
+    - "pack admission, versioning, provenance, and conflict rules"
+  pack_owns:
+    - "domain lifecycle knowledge"
+    - "domain-specific hazards and failure modes"
+    - "domain-specific obligations and playbooks"
+    - "evaluators, fixtures, and evidence requirements"
+    - "required tools and Adapter capabilities"
+  constraint: "No example domain becomes privileged behavior in the cross-domain core."
+
+architecture_modules:
+  - module: "Project Snapshot Module"
+    responsibility: "Derive evidence-backed current truth from durable state."
+  - module: "Obligation Engine Module"
+    responsibility: "Derive the Assurance Case, guidance, gaps, and next-best action."
+  - module: "Execution Assurance Kernel"
+    responsibility: "Admit only authorized, contracted, and safely committable mutations."
+  - module: "Evidence Module"
+    responsibility: "Record provenance, evaluator results, representativeness, and claim support."
+  - module: "Continuity Module"
+    responsibility: "Preserve intent, decisions, obligations, evidence, and resumable next actions."
+  - module: "Host Adapter"
+    responsibility: "Translate between a host agent's conversation/tool surface and Forge's typed Interface."
+
+north_star_acceptance:
+  scenario: "A non-technical human describes an underspecified idea in chat to an agent operating in an unfamiliar domain."
+  must_demonstrate:
+    - "The human is not asked to edit files, author contracts, select workflows, or operate tools."
+    - "The agent identifies consequential assumptions and missing competence before claiming a complete plan."
+    - "Forge derives cross-domain obligations and triggers competence acquisition for domain gaps."
+    - "The agent produces an early representative vertical slice capable of disproving the plan."
+    - "Independent challenge or an explicit justified waiver covers consequential single-view risk."
+    - "The integrated result is exercised through critical journeys in a representative environment."
+    - "A replacement agent can resume and explain remaining claims and evidence gaps."
+    - "Readiness remains blocked while critical claims are unknown, unsupported, or disproven."
+
+open_questions:
+  - id: "AQ-ASSURANCE-001"
+    question: "Which universal assurance lenses are mandatory for every project and which are applicability-filtered?"
+  - id: "AQ-ASSURANCE-002"
+    question: "What deterministic risk model ranks obligations without pretending to quantify unknowable domain risk?"
+  - id: "AQ-ASSURANCE-003"
+    question: "What evidence and independence thresholds trigger a second agent, second model, specialist, or human expert?"
+  - id: "AQ-ASSURANCE-004"
+    question: "How are Domain Packs admitted, versioned, conflicted, and promoted from local learning without poisoning the core?"
+  - id: "AQ-ASSURANCE-005"
+    question: "Which existing workflow fields can migrate compatibly and which require a new versioned contract family?"

@@ -19,8 +19,8 @@ use tracing::instrument;
 
 use forge_core_command_surface::{CommandSpec, COMMAND_VALIDATE};
 use forge_core_contracts::{
-    ClaimContractDocument, CommandContractDocument, CompletionContractDocument,
-    ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
+    AssuranceCaseDocument, ClaimContractDocument, CommandContractDocument,
+    CompletionContractDocument, ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
     DecisionCloseContractDocument, FieldEvidenceRegistry, GateContractDocument,
     HealthRecoveryContractDocument, OperationContractDocument, RequestContractDocument,
     RuntimeCapabilityDocument, RuntimeHandoffContractDocument, RuntimeRegistryEntryDocument,
@@ -28,8 +28,8 @@ use forge_core_contracts::{
 };
 use forge_core_store::{collect_known_repo_paths, collect_validation_yaml_documents};
 use forge_core_validate::{
-    validate_claim, validate_claim_cross_references, validate_command, validate_completion,
-    validate_completion_cross_references, validate_coordination_eval,
+    validate_assurance_case, validate_claim, validate_claim_cross_references, validate_command,
+    validate_completion, validate_completion_cross_references, validate_coordination_eval,
     validate_coordination_eval_cross_references, validate_decision_close,
     validate_decision_close_cross_references, validate_evidence_registry, validate_gate,
     validate_gate_cross_references, validate_health_recovery,
@@ -271,6 +271,14 @@ pub fn run_validate(root: impl AsRef<Path>) -> ValidateSummary {
         "command_contracts",
         &mut summary,
         validate_command,
+    );
+    validate_named_dir_instances::<AssuranceCaseDocument, _>(
+        root,
+        "contracts/assurance",
+        "assurance-case-contract-v0.yaml",
+        "assurance_case",
+        &mut summary,
+        validate_assurance_case,
     );
     // Operation fixtures (docs/fixtures/operation-contract-v0), side-contract
     // instances, and runtime contracts (contracts/runtimes/*.yaml) are

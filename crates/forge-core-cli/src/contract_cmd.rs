@@ -6,10 +6,11 @@
 
 use forge_core_command_surface::COMMAND_CONTRACT;
 use forge_core_contracts::{
-    AgentRunContractDocument, AutonomyPolicyContractDocument, CheckpointContractDocument,
-    CliEnvelope, EvalRunContractDocument, ExitReason, MemoryContractDocument,
-    TelemetryContractDocument, VerificationGoalContractDocument,
+    AgentRunContractDocument, AssuranceCaseDocument, AutonomyPolicyContractDocument,
+    CheckpointContractDocument, CliEnvelope, EvalRunContractDocument, ExitReason,
+    MemoryContractDocument, TelemetryContractDocument, VerificationGoalContractDocument,
 };
+use forge_core_validate::validate_assurance_case;
 
 use crate::cli_error::ExitError;
 
@@ -21,6 +22,7 @@ const SUPPORTED_KINDS: &[&str] = &[
     "checkpoint",
     "eval_run",
     "telemetry",
+    "assurance_case",
 ];
 
 /// Successful `contract validate` payload.
@@ -41,6 +43,8 @@ pub enum ContractValidateError {
     },
     /// The YAML payload could not be deserialized as the typed document for `kind`.
     YamlInvalid { kind: String, source: String },
+    /// The typed document deserialized but violated semantic invariants.
+    SemanticInvalid { kind: String, source: String },
 }
 
 impl std::fmt::Display for ContractValidateError {
@@ -55,6 +59,9 @@ impl std::fmt::Display for ContractValidateError {
                 f,
                 "{kind} file is not valid YAML for that contract type: {source}"
             ),
+            Self::SemanticInvalid { kind, source } => {
+                write!(f, "{kind} file violates semantic invariants: {source}")
+            }
         }
     }
 }
@@ -198,11 +205,45 @@ pub fn validate_kind(
         "checkpoint" => parse_document::<CheckpointContractDocument>(kind, text),
         "eval_run" => parse_document::<EvalRunContractDocument>(kind, text),
         "telemetry" => parse_document::<TelemetryContractDocument>(kind, text),
+        "assurance_case" => parse_assurance_case(kind, text),
         other => Err(ContractValidateError::UnsupportedKind {
             kind: other.to_string(),
             supported: SUPPORTED_KINDS.iter().map(|s| (*s).to_string()).collect(),
         }),
     }
+}
+
+fn parse_assurance_case(
+    kind: &str,
+    text: &str,
+) -> Result<ContractValidationResult, ContractValidateError> {
+    let document: AssuranceCaseDocument =
+        yaml_serde::from_str(text).map_err(|error| ContractValidateError::YamlInvalid {
+            kind: kind.to_owned(),
+            source: error.to_string(),
+        })?;
+    let report = validate_assurance_case(&document);
+    if report.has_errors() {
+        return Err(ContractValidateError::SemanticInvalid {
+            kind: kind.to_owned(),
+            source: report
+                .diagnostics()
+                .iter()
+                .map(|diagnostic| {
+                    format!(
+                        "{:?} at {}: {}",
+                        diagnostic.code, diagnostic.path, diagnostic.message
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("; "),
+        });
+    }
+    Ok(ContractValidationResult {
+        kind: kind.to_owned(),
+        valid: true,
+        schema_version: document.schema_version,
+    })
 }
 
 fn parse_document<T>(
@@ -264,6 +305,12 @@ impl HasSchemaVersion for EvalRunContractDocument {
 }
 
 impl HasSchemaVersion for TelemetryContractDocument {
+    fn schema_version(&self) -> &str {
+        &self.schema_version
+    }
+}
+
+impl HasSchemaVersion for AssuranceCaseDocument {
     fn schema_version(&self) -> &str {
         &self.schema_version
     }
@@ -351,6 +398,35 @@ autonomy_policy_contract:
             err.to_string()
                 .contains("autonomy_policy file is not valid YAML"),
             "got: {err}"
+        );
+    }
+
+    #[test]
+    fn valid_assurance_case_is_accepted_with_semantic_validation() {
+        let yaml = include_str!(
+            "../../../contracts/assurance/representative-slice-verified-assurance.yaml"
+        );
+
+        let result = validate_kind("assurance_case", yaml).expect("valid Assurance Case");
+
+        assert_eq!(result.kind, "assurance_case");
+        assert!(result.valid);
+        assert_eq!(result.schema_version, "0.1");
+    }
+
+    #[test]
+    fn semantically_invalid_assurance_case_is_rejected() {
+        let yaml = include_str!(
+            "../../../contracts/assurance/representative-slice-verified-assurance.yaml"
+        )
+        .replacen("schema_version: \"0.1\"", "schema_version: \"999\"", 1);
+
+        let error = validate_kind("assurance_case", &yaml)
+            .expect_err("unsupported Assurance Case schema must fail");
+
+        assert!(
+            error.to_string().contains("semantic invariants"),
+            "got: {error}"
         );
     }
 

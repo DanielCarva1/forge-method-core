@@ -33,6 +33,7 @@ pub mod derive_state;
 pub use derive_state::derive_state;
 
 const CONTRACT_DEFINITIONS: &[&str] = &[
+    "contracts/assurance/assurance-case-contract-v0.yaml",
     "contracts/commands/command-contract-v0.yaml",
     "contracts/claims/claim-contract-v0.yaml",
     "contracts/completion/completion-contract-v0.yaml",

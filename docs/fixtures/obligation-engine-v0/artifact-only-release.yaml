@@ -1,0 +1,78 @@
+schema_version: "0.1"
+obligation_engine_input:
+  case_id: "assurance.derived.artifact_only"
+  intent:
+    id: "intent.artifact_only"
+    desired_outcome: "Release an integrated product that works for its primary user journey."
+    constraints: []
+    preferences:
+      - "Reuse existing artifacts only when they survive integrated evaluation."
+    unacceptable_outcomes:
+      - "Documents and components are mistaken for a working product."
+    uncertainties:
+      - "No representative integrated run exists."
+  project_snapshot:
+    id: "snapshot.artifact_only.v12"
+    state_version: 12
+    observed_at: "2026-07-09T22:05:00Z"
+    evidence_refs:
+      - "artifact:requirements"
+      - "artifact:architecture"
+      - "artifact:component-tests"
+    phase_projection: "4-build-verify"
+  target: "release"
+  risk_level: "medium"
+  lens_observations:
+    - lens: "intended_outcome"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:intent-accepted"]
+      waiver: null
+      rationale: null
+    - lens: "critical_journeys"
+      applicability: "applicable"
+      status: "supported"
+      evidence_refs: ["artifact:component-tests"]
+      waiver: null
+      rationale: "Component evidence does not verify the integrated journey."
+    - lens: "system_integrity"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:state-integrity-test"]
+      waiver: null
+      rationale: null
+    - lens: "quality_attributes"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:quality-attribute-tests"]
+      waiver: null
+      rationale: null
+    - lens: "operability"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:operability-test"]
+      waiver: null
+      rationale: null
+    - lens: "lifecycle_coverage"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:lifecycle-review"]
+      waiver: null
+      rationale: null
+    - lens: "risk_and_failure"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:failure-review"]
+      waiver: null
+      rationale: null
+    - lens: "evidence_representativeness"
+      applicability: "applicable"
+      status: "hypothesized"
+      evidence_refs: []
+      waiver: null
+      rationale: "The integrated result has not been exercised."
+  epistemic_signals:
+    - "artifact_only_progress"
+    - "single_view"
+  capability_observations: []
+  decision_needs: []

@@ -617,6 +617,7 @@ fn current_reference_index(root: &Path) -> ReferenceIndex {
 
 fn add_contract_definitions(index: &mut ReferenceIndex) {
     for reference in [
+        "contracts/assurance/assurance-case-contract-v0.yaml",
         "contracts/commands/command-contract-v0.yaml",
         "contracts/claims/claim-contract-v0.yaml",
         "contracts/completion/completion-contract-v0.yaml",

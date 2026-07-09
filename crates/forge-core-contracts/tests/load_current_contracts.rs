@@ -1,6 +1,6 @@
 use forge_core_contracts::{
-    ClaimContractDocument, CommandContractDocument, CompletionContractDocument,
-    ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
+    AssuranceCaseDocument, ClaimContractDocument, CommandContractDocument,
+    CompletionContractDocument, ContractFamilyInventoryDocument, CoordinationEvalContractDocument,
     DecisionCloseContractDocument, FieldEvidenceRegistry, GateContractDocument,
     HealthRecoveryContractDocument, OperationContractDocument,
     OperationCrossReferencePolicyDocument, RequestContractDocument, RuntimeCapabilityDocument,
@@ -187,6 +187,15 @@ fn deserializes_coordination_eval_instances() {
         "contracts/evals",
         "coordination-eval-contract-v0.yaml",
         1,
+    );
+}
+
+#[test]
+fn deserializes_assurance_case_instances() {
+    assert_yaml_instances::<AssuranceCaseDocument>(
+        "contracts/assurance",
+        "assurance-case-contract-v0.yaml",
+        3,
     );
 }
 

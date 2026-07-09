@@ -1,0 +1,79 @@
+schema_version: "0.1"
+obligation_engine_input:
+  case_id: "assurance.derived.waived_release"
+  intent:
+    id: "intent.waived_release"
+    desired_outcome: "Release a small internal tool with an explicitly accepted quality limitation."
+    constraints: []
+    preferences: []
+    unacceptable_outcomes:
+      - "The limitation is hidden or applied outside the authorized scope."
+    uncertainties: []
+  project_snapshot:
+    id: "snapshot.waived_release.v8"
+    state_version: 8
+    observed_at: "2026-07-09T22:10:00Z"
+    evidence_refs:
+      - "evidence:integrated-run"
+      - "evidence:human-waiver"
+    phase_projection: "5-ready-operate"
+  target: "release"
+  risk_level: "low"
+  lens_observations:
+    - lens: "intended_outcome"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:intent-accepted"]
+      waiver: null
+      rationale: null
+    - lens: "critical_journeys"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:integrated-run"]
+      waiver: null
+      rationale: null
+    - lens: "system_integrity"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:integrity-run"]
+      waiver: null
+      rationale: null
+    - lens: "quality_attributes"
+      applicability: "applicable"
+      status: "waived"
+      evidence_refs: []
+      waiver:
+        authorized_by: "human.owner"
+        reason: "The internal pilot accepts slower startup for this release."
+        consequences:
+          - "The waiver is limited to the internal pilot."
+          - "External distribution remains prohibited."
+        expires_at: "2026-08-09T00:00:00Z"
+      rationale: "A scoped human value and cost trade-off remains explicit."
+    - lens: "operability"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:operability-run"]
+      waiver: null
+      rationale: null
+    - lens: "lifecycle_coverage"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:lifecycle-review"]
+      waiver: null
+      rationale: null
+    - lens: "risk_and_failure"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:failure-recovery-run"]
+      waiver: null
+      rationale: null
+    - lens: "evidence_representativeness"
+      applicability: "applicable"
+      status: "verified"
+      evidence_refs: ["evidence:integrated-run"]
+      waiver: null
+      rationale: null
+  epistemic_signals: []
+  capability_observations: []
+  decision_needs: []

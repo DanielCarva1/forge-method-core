@@ -4,9 +4,12 @@
 // helpers and hurt audit readability.
 #![allow(clippy::too_many_lines)]
 
+pub mod assurance;
 pub mod codes;
 pub mod failure;
 pub mod risk_audit;
+
+pub use assurance::validate_assurance_case;
 
 use forge_core_contracts::{
     ClaimContractDocument, CommandContractDocument, CompletionContractDocument,
@@ -224,6 +227,18 @@ pub enum DiagnosticCode {
     CoordinationEvalThresholdMissing,
     CoordinationEvalUnexpectedThreshold,
     CoordinationEvalManualReviewPolicyUnsafe,
+    AssuranceUnsupportedSchemaVersion,
+    AssuranceRequiredCollectionEmpty,
+    AssuranceEmptyEntityId,
+    AssuranceDuplicateEntityId,
+    AssuranceDanglingClaimRef,
+    AssuranceClaimEvidenceMissing,
+    AssuranceWaiverInconsistent,
+    AssuranceSatisfiedObligationUnsupported,
+    AssuranceDecisionRecommendationInvalid,
+    AssuranceCapabilityGapResolutionEmpty,
+    AssuranceNextActionRankInvalid,
+    AssuranceReadinessInconsistent,
     MissingReference,
     ReferenceKindMismatch,
     // F11 — Risk Audit (AI-induced anti-patterns).
