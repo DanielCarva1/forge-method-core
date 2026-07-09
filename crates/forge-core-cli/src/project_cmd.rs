@@ -1968,8 +1968,8 @@ state_root: ../forge-app/state
         assert_eq!(
             err,
             ProjectInitError::RootNestedInAnotherRepo {
-                root: display_path(&app),
-                parent_repo: display_path(&parent),
+                root: display_path(&app.canonicalize().expect("canonical consumer root")),
+                parent_repo: display_path(&parent.canonicalize().expect("canonical parent repo")),
             },
             "a consumer nested in a foreign repo without its own .git must be rejected"
         );
@@ -2034,7 +2034,7 @@ state_root: ../forge-app/state
             ProjectInitError::SidecarInsideAnotherRepo {
                 sidecar_root: display_path(&sidecar_in_foreign),
                 foreign_repo: display_path(&foreign),
-                consumer_root: display_path(&app),
+                consumer_root: display_path(&app.canonicalize().expect("canonical consumer root")),
             },
             "a sidecar landing inside a foreign git repo must be rejected"
         );

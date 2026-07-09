@@ -68,7 +68,7 @@ fn owner_write_into_own_claimed_path_is_allowed() {
     );
     assert!(check.ok, "owner writing own path must be allowed");
     // Payload reports the write as governed by the writer's own claim.
-    assert!(check.data.unwrap().governed_by_self.len() == 1);
+    assert_eq!(check.data.unwrap().governed_by_self.len(), 1);
 }
 
 #[test]

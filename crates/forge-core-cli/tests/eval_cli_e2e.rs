@@ -111,7 +111,8 @@ fn eval_compare_json(app: &Path) -> std::process::Output {
 
 #[test]
 fn eval_compare_default_suite_outputs_deterministic_json() {
-    let root = repo_root();
+    let (root, _sidecar) = fresh_project("default-suite");
+    copy_eval_fixtures(&root);
 
     let output = bin()
         .args([
@@ -660,7 +661,8 @@ fn eval_compare_unsupported_suite_schema_exits_env_config() {
 
 #[test]
 fn eval_compare_blocked_report_exits_1() {
-    let root = repo_root();
+    let (root, _sidecar) = fresh_project("blocked-report");
+    copy_eval_fixtures(&root);
 
     let output = bin()
         .args([
