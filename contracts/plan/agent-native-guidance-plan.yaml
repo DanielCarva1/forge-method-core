@@ -195,20 +195,32 @@ phases:
           cooperative snapshots, whole replay-pair rollback detection remains
           external, operation-wide/saga semantics remain unsupported, and MCP
           and CLI mutation remain unchanged and fail-closed.
+      - id: "P4b.3a-typed-deployment-policy"
+        delivers:
+          - "closed typed read-only and trusted-single-effect deployment modes"
+          - "cross-field invariant validation for audience, exact tool, loaders, reconciliation, effect scope, opt-in, root binding, commit protocol, and trust-boundary acknowledgement"
+          - "active-read-only versus policy-validated-dormant audit states"
+          - "safe read-only operator example plus adversarial parser and invariant tests"
+        boundary: >-
+          Policy validation cannot activate mutation. Trusted material and
+          snapshot loading, startup reconciliation, and MCP server wiring remain
+          absent, so public MCP mutation stays fail-closed.
     checkpoint_sequence:
       rule: >-
-        P4b.2a, P4b.2b, and P4b.2c each land as a separate validated commit so
+        P4b.2a, P4b.2b, P4b.2c, and each P4b.3 sub-checkpoint land as separate validated commits so
         source users can fast-forward pull a usable checkpoint without
         implicitly enabling the next authority boundary.
     next_slice:
-      id: "P4b.3-explicit-mutation-enablement-policy"
+      id: "P4b.3b-trusted-material-and-snapshot-loaders"
       scope:
-        - "define read-only-default and explicit trusted-single-effect deployment modes"
-        - "wire trusted contract/payload material and bounded snapshot loading into the in-process MCP executor"
-        - "run P4b.2c reconciliation before accepting mutation"
-        - "require explicit operator-owned root, audience, registry, allowlist, and enablement policy"
+        - "load exact typed operation, command, effect, and risk-audit contracts from canonical project-bound references"
+        - "load bounded payload bytes with canonical path, size, and digest verification"
+        - "provide a bounded local read-only snapshot source without network, model, subprocess, or mutation capability"
+        - "compare loaded material and snapshot posture to the validated deployment policy"
+        - "keep public MCP mutation dormant"
         - "keep operation-wide WAL and saga requests fail-closed"
     following_slices:
+      - "P4b.3c startup reconciliation and explicit narrow server opt-in"
       - "operation-wide transaction or complete typed saga semantics"
       - "externally protected replay epoch/head for whole-pair rollback detection"
     release_blockers:
@@ -266,13 +278,12 @@ first_executable_slice:
     - "P4b.2a host-neutral opaque execution authorization and typed in-process MCP executor seam"
     - "P4b.2b opaque prepared transaction, double effect preflight, owned replay guard, and dormant late Admission typestate"
     - "P4b.2c complete redacted provenance, immediate commit Admission, one-effect commit, replay completion receipt, and deterministic crash reconciliation"
+    - "P4b.3a closed typed deployment policy with active read-only and validated-but-dormant trusted-single-effect states"
   next_action: >-
-    Implement P4b.3 as a separate checkpoint by defining explicit deployment
-    policy, wiring trusted material/snapshot sources into the in-process MCP
-    executor, and requiring startup reconciliation before narrowly enabling the
-    single-effect path. Keep read-only as the default and keep operation-wide
-    transaction, complete saga semantics, whole-pair rollback detection, and
-    enforced-deployment isolation as explicit release boundaries.
+    Implement P4b.3b as a separate checkpoint by wiring canonical project-bound
+    typed contract and bounded payload loading plus a local read-only snapshot
+    source into the dormant in-process executor. Do not enable public mutation;
+    startup reconciliation and explicit narrow opt-in remain P4b.3c.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

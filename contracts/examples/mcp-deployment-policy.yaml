@@ -1,0 +1,14 @@
+schema_version: "0.1"
+mcp_deployment_policy:
+  id: "local-read-only"
+  mode: "read_only"
+  required_audience: null
+  mutating_tools: []
+  startup_reconciliation: "disabled"
+  material_loading: "disabled"
+  snapshot_loading: "disabled"
+  effect_scope: "none"
+  public_mutation: "disabled"
+  root_binding: "canonical_configured_root"
+  required_commit_protocol: null
+  same_user_boundary_acknowledged: false

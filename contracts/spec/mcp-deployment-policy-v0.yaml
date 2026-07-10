@@ -1,0 +1,49 @@
+schema_version: "0.1"
+spec: "mcp_deployment_policy_v0"
+status: "p4b3a_implemented_dormant"
+purpose: >-
+  Define a closed operator-owned deployment posture for the local MCP adapter
+  without allowing policy validation itself to activate mutation.
+
+modes:
+  read_only:
+    activation_state: "active_read_only"
+    invariants:
+      - "no required mutation audience"
+      - "no mutating tools"
+      - "material loading, snapshot loading, and startup reconciliation disabled"
+      - "no effect scope or mutation commit protocol"
+      - "public mutation disabled"
+  trusted_single_effect:
+    activation_state: "policy_validated_dormant"
+    invariants:
+      - "non-blank exact audience"
+      - "exactly one mutating tool: execute-operation"
+      - "canonical project-bound material loading"
+      - "bounded local read-only snapshot loading"
+      - "startup reconciliation required before listen"
+      - "single-effect scope only"
+      - "explicit operator opt-in"
+      - "canonical configured root binding"
+      - "execution_provenance_commit_v0@0.1 pinned"
+      - "same-user trust boundary explicitly acknowledged"
+
+fail_closed_rules:
+  - "unknown YAML fields and unknown enum values fail deserialization"
+  - "blank identifiers, audiences, and protocol identifiers fail validation"
+  - "duplicate, missing, or additional mutating tools fail validation"
+  - "operation-wide and saga effect scopes are not representable"
+  - "trusted policy validation exposes no activation capability"
+
+checkpoint_boundary:
+  implemented: "typed parse, invariant validation, safe read-only example, and dormant audit state"
+  not_implemented:
+    - "trusted contract, payload, or snapshot loaders"
+    - "startup reconciliation wiring"
+    - "MCP server mutation activation"
+  next: "P4b.3b trusted material and bounded snapshot loaders"
+
+references:
+  - "contracts/examples/mcp-deployment-policy.yaml"
+  - "contracts/spec/execution-provenance-commit-v0.yaml"
+  - "contracts/spec/execution-trust-boundary-v0.yaml"

@@ -27,6 +27,9 @@
 //!   controls. P4b.2c consumes the seam only in a dormant provenance-bound commit
 //!   and recovery path; MCP stdio mutation remains blocked pending explicit
 //!   deployment policy and trusted adapter wiring.
+//! - **[`deployment_policy`]** validates the operator's closed, typed
+//!   deployment posture. Trusted mutation policies remain dormant until the
+//!   loader and startup-reconciliation checkpoints are complete.
 //! - **[`error`]** — hand-rolled error enums (project convention: no
 //!   `anyhow`/`thiserror`, no `Result<_, String>`).
 //!
@@ -43,6 +46,7 @@
 
 pub mod allowlist;
 pub mod attestation;
+pub mod deployment_policy;
 pub mod error;
 pub mod mutation_executor;
 pub mod principal_registry;
@@ -55,6 +59,14 @@ pub use allowlist::{
 pub use attestation::{
     AttestationError, AttestationGateOutcome, AttestationInput, AttestationPolicy,
     AttestationVerifier, CanonicalIntent,
+};
+pub use deployment_policy::{
+    EffectScopePolicy, MaterialLoadingPolicy, McpDeploymentActivationState, McpDeploymentMode,
+    McpDeploymentPolicy, McpDeploymentPolicyDocument, McpDeploymentPolicyError,
+    McpDeploymentPolicyIssue, McpDeploymentPolicyIssueCode, PublicMutationPolicy,
+    RootBindingPolicy, SnapshotLoadingPolicy, StartupReconciliationPolicy,
+    ValidatedMcpDeploymentPolicy, MCP_DEPLOYMENT_POLICY_SCHEMA_VERSION,
+    MCP_EXECUTION_COMMIT_PROTOCOL,
 };
 pub use error::{McpAdapterError, ServerRunError};
 pub use mutation_executor::{
