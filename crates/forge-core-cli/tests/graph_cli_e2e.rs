@@ -81,6 +81,22 @@ fn install_review_operation(app: &Path, target_relative: &str) {
     );
 }
 
+fn install_published_operation_aware_fixtures(app: &Path) {
+    for path in [
+        "docs/fixtures/workflow-graph-v0/operation-aware-blocked.yaml",
+        "docs/fixtures/workflow-graph-v0/operation-aware-valid.yaml",
+        "docs/fixtures/workflow-graph-v0/verifier-blocks-mutation.yaml",
+        "docs/fixtures/operation-contract-v0/release-gate-required.yaml",
+        "docs/fixtures/operation-contract-v0/observe-project-status.yaml",
+        "docs/fixtures/operation-contract-v0/execute-trivial-write.yaml",
+        "contracts/gates/release-missing-gate.yaml",
+        "contracts/effects/story-artifact-write-effect.yaml",
+        "contracts/claims/story-v2-010-active-claim.yaml",
+    ] {
+        copy_repo_file(app, path, path);
+    }
+}
+
 fn create_directory_link(link: &Path, target: &Path) {
     fs::create_dir_all(link.parent().expect("link parent")).expect("create link parent");
     create_directory_link_platform(link, target).unwrap_or_else(|message| panic!("{message}"));
@@ -1556,7 +1572,8 @@ fn graph_run_dry_run_blocks_ready_mutation_claimed_by_peer_agent() {
 
 #[test]
 fn graph_run_dry_run_blocks_operation_contract_that_is_not_ready() {
-    let root = repo_root();
+    let (root, _sidecar) = fresh_project("published-operation-blocked");
+    install_published_operation_aware_fixtures(&root);
     let graph = root
         .join("docs")
         .join("fixtures")
@@ -1595,7 +1612,8 @@ fn graph_run_dry_run_blocks_operation_contract_that_is_not_ready() {
 
 #[test]
 fn graph_run_dry_run_derives_mutation_from_operation_contract_over_graph_false() {
-    let root = repo_root();
+    let (root, _sidecar) = fresh_project("published-operation-mutation");
+    install_published_operation_aware_fixtures(&root);
     let graph = root
         .join("docs")
         .join("fixtures")
@@ -1630,7 +1648,8 @@ fn graph_run_dry_run_derives_mutation_from_operation_contract_over_graph_false()
 
 #[test]
 fn published_verifier_block_fixture_exits_nonzero() {
-    let root = repo_root();
+    let (root, _sidecar) = fresh_project("published-verifier-block");
+    install_published_operation_aware_fixtures(&root);
     let output = bin()
         .args([
             "graph",
