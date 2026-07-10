@@ -342,25 +342,24 @@ async fn official_rmcp_client_initializes_lists_and_calls_real_stdio_server() {
     let transport = TokioChildProcess::new(command).expect("child-process transport");
     let client = ().serve(transport).await.expect("initialize MCP client");
     let tools = client.list_all_tools().await.expect("tools/list");
-    assert!(tools.iter().any(|tool| tool.name == "preview"));
+    assert!(tools.iter().any(|tool| tool.name == "assurance"));
     let arguments = serde_json::json!({
-        "--operation": "docs/fixtures/operation-contract-v0/observe-project-status.yaml",
-        "--json": true
+        "--input-file": "docs/fixtures/obligation-engine-v0/verified-release.yaml"
     })
     .as_object()
     .expect("arguments object")
     .clone();
     let result = client
-        .call_tool(CallToolRequestParams::new("preview").with_arguments(arguments))
+        .call_tool(CallToolRequestParams::new("assurance").with_arguments(arguments))
         .await
         .expect("tools/call");
-    assert_ne!(result.is_error, Some(true));
+    assert_ne!(result.is_error, Some(true), "assurance result: {result:?}");
     let text = result
         .content
         .first()
         .and_then(|content| content.as_text())
         .expect("text result");
-    assert!(text.text.contains("op_fixture_observe_project_status"));
+    assert!(text.text.contains("\"assurance_case\""));
     client.cancel().await.expect("close client");
 }
 
