@@ -3,6 +3,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct FieldEvidenceRegistry {
     pub schema_version: String,
     pub research: String,
@@ -17,6 +18,7 @@ pub struct FieldEvidenceRegistry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct EvidencePolicy {
     pub purpose: String,
     pub evidence_tiers: Vec<EvidenceTier>,
@@ -25,6 +27,7 @@ pub struct EvidencePolicy {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct EvidenceTier {
     pub id: StableId,
     pub description: String,
@@ -32,6 +35,7 @@ pub struct EvidenceTier {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct GeographicCoverage {
     pub rule: String,
     pub rationale: String,
@@ -39,6 +43,7 @@ pub struct GeographicCoverage {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct EvidenceSource {
     pub id: SourceId,
     pub tier: StableId,
@@ -53,6 +58,7 @@ pub struct EvidenceSource {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct PlanLevelImplication {
     pub id: StableId,
     pub rule: String,

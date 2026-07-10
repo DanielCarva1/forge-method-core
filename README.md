@@ -617,8 +617,9 @@ physically atomic transaction. P4b.2c now closes that crash window with typed
 pending receipts, a persisted pseudonymous replay binding, and deterministic
 idempotent reconciliation.
 
-This is a **Rust API only** checkpoint. No live MCP or CLI mutation path reserves
-or consumes this WAL, and MCP stdio mutation remains disabled. See
+This began as a **Rust API only** checkpoint. P4b.3c now consumes it only under
+explicit reconciled trusted single-effect MCP deployment; read-only remains the
+default and missing replay authority fails startup. See
 [`contracts/spec/replay-protection-wal-v0.yaml`](contracts/spec/replay-protection-wal-v0.yaml)
 and
 [`contracts/spec/execution-trust-boundary-v0.yaml`](contracts/spec/execution-trust-boundary-v0.yaml)
@@ -643,21 +644,18 @@ requirement. Caller-selected root, sync behavior, payload escape/size limits,
 transaction identity, commit timestamp, output flags, and unknown arguments
 are rejected before the executor.
 
-This seam is intentionally dormant. The public MCP handler and server startup
-still reject every mutating allowlist, even when both a registry and executor
-are configured; read-only tools retain the pinned subprocess path. Internal
-tests prove a valid proof reaches the injected executor exactly once without
-spawning a CLI child. P4b.2b/P4b.2c now consume this handoff through a dormant
-prepared, committed, and recoverable kernel transaction; the public surface
-remains unchanged. See
+This seam remains inert without a reconciled activation proof. Read-only tools
+retain the pinned subprocess path; trusted mutation stays in process. P4b.3c
+tests prove public verified dispatch reaches the injected executor without
+spawning a CLI child, while incomplete configurations fail closed. See
 [`contracts/spec/execution-authority-handoff-v0.yaml`](contracts/spec/execution-authority-handoff-v0.yaml).
 
 ### Prepare and admit one execution before the effect WAL (P4b.2b)
 
 `forge-core-kernel` now exposes an internal Rust-only preparation path that
 consumes `VerifiedExecutionCall` without making authority serializable. A
-`TrustedExecutionEnvironment` canonicalizes an existing project and
-`.forge-method` state root and pins the exact operator audience. The kernel,
+`TrustedExecutionEnvironment` canonicalizes an existing project and its
+Project Link resolved sidecar state root and pins the exact operator audience. The kernel,
 not the adapter, derives a canonical commit descriptor covering the project,
 audience, Operation/Command/Effect tokens, payload paths and hashes, effect
 lock/WAL paths, transaction id, and synchronous durability.
@@ -681,7 +679,8 @@ Preparation does record one replay reservation; failed/dropped attempts remain
 seen rather than making replay authority erasable.
 
 Claim/gate revisions are exact typed snapshots, not an OS sandbox against a
-same-user bypass writer. Public MCP mutation remains disabled. See
+same-user bypass writer. Public MCP mutation is disabled by default and only
+the P4b.3c reconciled single-effect deployment can consume this path. See
 [`contracts/spec/prepared-execution-transaction-v0.yaml`](contracts/spec/prepared-execution-transaction-v0.yaml).
 
 ### Commit one admitted effect with provenance and recovery (P4b.2c)
@@ -887,8 +886,7 @@ gates.
 - P4b.1a trusted-principal derivation, P4b.1b bounded durable replay, P4b.2a
   opaque in-process authority handoff, P4b.2b prepared late Admission, and
   P4b.2c provenance-bound one-effect commit plus crash reconciliation are
-  available as dormant Rust substrates while public MCP mutation remains
-  fail-closed.
+  the internal authority substrate consumed only by explicit P4b.3c activation.
 - P4b.3a adds a strict typed deployment policy: read-only is active by default,
   while a coherent trusted single-effect posture is only
   `policy_validated_dormant` and cannot enable the server.
@@ -897,6 +895,11 @@ gates.
   digest is carried in the signed request. The in-process executor validates
   the bundle and still returns a dormant rejection without reserving replay or
   writing a WAL.
+- P4b.3c adds explicit trusted single-effect activation. Startup resolves the
+  Project Link sidecar state, verifies replay, reconciles incomplete commits,
+  and binds the exact policy/root/audience/registry/allowlist before listening.
+  Risk-audit and citation requirements run in the kernel before replay reserve;
+  successful execution commits one effect with provenance and replay evidence.
 - Dual-lane autonomy router exposed as `forge-core autonomy route` for fast vs
   rigorous lane selection.
 - Seven evolve-phase governance contracts: `autonomy_policy`,
@@ -906,18 +909,11 @@ gates.
 
 **Not yet (roadmap)**
 
-- **MCP server** — `forge-core mcp serve` is implemented for read-only stdio
-  JSON-RPC with a fail-closed allowlist and optional signature-only
-  attestation. P4b.1a adds an operator principal registry, but mutating stdio
-  tools remain blocked. P4b.1b adds durable replay primitives, but they are not
-  connected to MCP or CLI mutation. P4b.2a adds the opaque typed in-process
-  authority handoff, P4b.2b adds replay-bound prepared late Admission, and
-  P4b.2c adds complete redacted provenance, direct one-effect commit, typed
-  pending receipts, and deterministic crash reconciliation. P4b.3a defines the
-  closed operator policy and P4b.3b supplies trusted material/snapshot loading,
-  but the executor remains deliberately dormant. P4b.3c must still require
-  startup reconciliation and explicit opt-in before any narrow single-effect
-  enablement. The CLI remains the intended agent boundary by design.
+- **MCP operational UX** ? `forge-core mcp serve` supports read-only stdio by
+  default and explicit reconciled single-effect mutation through P4b.3c. P4b.4
+  must remove the remaining manual snapshot/credential ceremony, provide
+  agent-operated setup and readiness diagnostics, and prove a real MCP client
+  end to end. Operation-wide and saga semantics remain intentionally absent.
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is

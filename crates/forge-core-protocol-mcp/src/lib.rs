@@ -24,12 +24,11 @@
 //! - **[`mutation_executor`]** provides the typed in-process handoff for a
 //!   verified `execute-operation` call. It structurally excludes
 //!   caller-selected root, durability, payload-scope, and transaction-id
-//!   controls. P4b.2c consumes the seam only in a dormant provenance-bound commit
-//!   and recovery path; MCP stdio mutation remains blocked pending explicit
-//!   deployment policy and trusted adapter wiring.
+//!   controls. P4b.3c consumes the seam only for an explicitly enabled,
+//!   reconciled, provenance-bound single-effect deployment.
 //! - **[`deployment_policy`]** validates the operator's closed, typed
-//!   deployment posture. Trusted mutation policies remain dormant until the
-//!   loader and startup-reconciliation checkpoints are complete.
+//!   deployment posture. A policy remains dormant until a separate explicit
+//!   startup-reconciliation proof activates the exact root.
 //! - **[`trusted_loader`]** performs canonical, byte-bounded local reads for
 //!   typed contracts, signed payloads, risk rules, and authority snapshots.
 //!   Its executor always rejects after loading; it cannot prepare or commit.
@@ -55,6 +54,7 @@ pub mod mutation_executor;
 pub mod principal_registry;
 pub mod server;
 pub mod trusted_loader;
+pub mod trusted_runtime;
 
 pub use allowlist::{
     default_mutate_tool_names, default_read_only_tool_names, AllowedTool, Allowlist,
@@ -68,7 +68,7 @@ pub use deployment_policy::{
     EffectScopePolicy, MaterialLoadingPolicy, McpDeploymentActivationState, McpDeploymentMode,
     McpDeploymentPolicy, McpDeploymentPolicyDocument, McpDeploymentPolicyError,
     McpDeploymentPolicyIssue, McpDeploymentPolicyIssueCode, PublicMutationPolicy,
-    RootBindingPolicy, SnapshotLoadingPolicy, StartupReconciliationPolicy,
+    RootBindingPolicy, SnapshotLoadingPolicy, StartupReconciliationPolicy, StateRootBindingPolicy,
     ValidatedMcpDeploymentPolicy, MCP_DEPLOYMENT_POLICY_SCHEMA_VERSION,
     MCP_EXECUTION_COMMIT_PROTOCOL,
 };
@@ -93,4 +93,8 @@ pub use trusted_loader::{
     TrustedMcpLoadError, TrustedMcpLoaderLimits, TrustedMcpMaterialLoader,
     MAX_TRUSTED_CONTRACT_BYTES, MAX_TRUSTED_PAYLOAD_BYTES, MAX_TRUSTED_SNAPSHOT_BYTES,
     MAX_TRUSTED_TOTAL_PAYLOAD_BYTES, MCP_LOCAL_SNAPSHOT_SCHEMA_VERSION,
+};
+pub use trusted_runtime::{
+    ExplicitTrustedSingleEffectOptIn, ReconciledTrustedMcpDeployment, TrustedMcpActivationAudit,
+    TrustedMcpActivationError, TrustedSingleEffectMcpExecutor,
 };

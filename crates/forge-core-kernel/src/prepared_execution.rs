@@ -9,7 +9,7 @@
 //! one effect, consumes replay, and reconciles the cross-WAL crash window.
 //! Public MCP mutation remains disabled pending explicit deployment policy.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -17,8 +17,8 @@ use forge_core_authority::{
     VerifiedExecutionAuthorization, VerifiedExecutionAuthorizationAudit, VerifiedExecutionCall,
 };
 use forge_core_contracts::{
-    AssuranceCaseDocument, CommandContractDocument, OperationContractDocument, RepoPath, StableId,
-    ToolEffectContractDocument,
+    AssuranceCaseDocument, CommandContractDocument, FieldEvidenceRegistry,
+    OperationContractDocument, RepoPath, StableId, ToolEffectContractDocument,
 };
 use forge_core_decisions::{
     command_contract_token, effect_contract_token, evaluate_execution_admission,
@@ -38,7 +38,7 @@ use forge_core_store::replay_wal::{
 };
 use forge_core_store::{
     acquire_effect_store_lock, append_effect_replay_completion_under_lock,
-    apply_file_effect_transaction_with_provenance_under_lock,
+    apply_file_effect_transaction_with_provenance_under_lock, collect_validation_yaml_documents,
     pending_effect_replay_commits_under_lock, preflight_file_effect_transaction_under_lock,
     recover_effect_wal, repair_effect_wal_tail_under_lock, sha256_content_hash,
     EffectApplicationPayload, EffectApplicationResult, EffectApplicationStatus,
@@ -46,6 +46,10 @@ use forge_core_store::{
     EffectPreflightStatus, EffectReplayCommitBinding, EffectReplayCompletionResult,
     EffectReplayReconciliationError, EffectStoreLockError, EffectWalRecoveryStatus,
 };
+use forge_core_validate::risk_audit::{
+    collect_risk_audit_targets, evaluate_risk_audit, validate_risk_audit_rule_set, RiskAuditRuleSet,
+};
+use forge_core_validate::{validate_yaml_citation_references, DiagnosticSeverity};
 use serde::{Deserialize, Serialize};
 
 use crate::{RuntimeEffectPayloadKind, RuntimeOperationEffectPayload};
@@ -78,6 +82,23 @@ impl TrustedExecutionEnvironment {
         project_root: impl AsRef<Path>,
         required_audience: impl Into<String>,
     ) -> Result<Self, PrepareExecutionError> {
+        let state_root = project_root.as_ref().join(FORGE_STATE_DIR);
+        Self::from_project_and_state_roots(project_root, state_root, required_audience)
+    }
+
+    /// Canonicalize an existing project root and an operator/project-link
+    /// resolved Forge state root. Sidecar state may intentionally live outside
+    /// the consumer repository; the trusted host owns that resolution.
+    ///
+    /// # Errors
+    ///
+    /// Returns a root-unavailable error when either boundary is missing,
+    /// non-directory, or cannot be canonicalized.
+    pub fn from_project_and_state_roots(
+        project_root: impl AsRef<Path>,
+        state_root: impl AsRef<Path>,
+        required_audience: impl Into<String>,
+    ) -> Result<Self, PrepareExecutionError> {
         let requested = project_root.as_ref();
         let project_root = requested.canonicalize().map_err(|error| {
             PrepareExecutionError::ProjectRootUnavailable {
@@ -95,7 +116,7 @@ impl TrustedExecutionEnvironment {
         if required_audience.trim().is_empty() {
             return Err(PrepareExecutionError::InvalidRequiredAudience);
         }
-        let state_root_path = project_root.join(FORGE_STATE_DIR);
+        let state_root_path = state_root.as_ref().to_path_buf();
         let state_root = state_root_path.canonicalize().map_err(|error| {
             PrepareExecutionError::StateRootUnavailable {
                 path: state_root_path,
@@ -106,12 +127,6 @@ impl TrustedExecutionEnvironment {
             return Err(PrepareExecutionError::StateRootUnavailable {
                 path: state_root,
                 source: "Forge state root is not a directory".to_owned(),
-            });
-        }
-        if !state_root.starts_with(&project_root) {
-            return Err(PrepareExecutionError::StateRootUnavailable {
-                path: state_root,
-                source: "canonical Forge state root escapes the project root".to_owned(),
             });
         }
         Ok(Self {
@@ -147,6 +162,8 @@ pub struct PreparedExecutionMaterial {
     commands: Vec<CommandContractDocument>,
     effect: ToolEffectContractDocument,
     payloads: Vec<RuntimeOperationEffectPayload>,
+    risk_audit_rules: Option<RiskAuditRuleSet>,
+    citation_material: Option<TrustedCitationMaterial>,
 }
 
 impl fmt::Debug for PreparedExecutionMaterial {
@@ -162,6 +179,11 @@ impl fmt::Debug for PreparedExecutionMaterial {
             .field("command_count", &self.commands.len())
             .field("effect_id", &self.effect.tool_effect_contract.id)
             .field("payload_count", &self.payloads.len())
+            .field("risk_audit_loaded", &self.risk_audit_rules.is_some())
+            .field(
+                "citation_material_loaded",
+                &self.citation_material.is_some(),
+            )
             .finish()
     }
 }
@@ -183,6 +205,53 @@ impl PreparedExecutionMaterial {
             commands,
             effect,
             payloads,
+            risk_audit_rules: None,
+            citation_material: None,
+        }
+    }
+
+    /// Construct material that carries every requested adapter gate into the
+    /// kernel. The kernel evaluates these values before acquiring mutation
+    /// locks or reserving replay.
+    #[must_use]
+    #[allow(clippy::too_many_arguments)] // one exact authority bundle; a builder could permit omission
+    pub fn new_with_adapter_requirements(
+        call: VerifiedExecutionCall,
+        admission_request: ExecutionAdmissionRequest,
+        operation: OperationContractDocument,
+        commands: Vec<CommandContractDocument>,
+        effect: ToolEffectContractDocument,
+        payloads: Vec<RuntimeOperationEffectPayload>,
+        risk_audit_rules: Option<RiskAuditRuleSet>,
+        citation_material: Option<TrustedCitationMaterial>,
+    ) -> Self {
+        Self {
+            call,
+            admission_request,
+            operation,
+            commands,
+            effect,
+            payloads,
+            risk_audit_rules,
+            citation_material,
+        }
+    }
+}
+
+/// Curated and runtime citation authority loaded by the trusted host. The
+/// kernel still walks the current project YAML and evaluates every source id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrustedCitationMaterial {
+    evidence: FieldEvidenceRegistry,
+    runtime_ids: HashSet<String>,
+}
+
+impl TrustedCitationMaterial {
+    #[must_use]
+    pub fn new(evidence: FieldEvidenceRegistry, runtime_ids: HashSet<String>) -> Self {
+        Self {
+            evidence,
+            runtime_ids,
         }
     }
 }
@@ -782,8 +851,14 @@ impl LateAdmittedExecutionTransaction {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum PrepareExecutionError {
-    ProjectRootUnavailable { path: PathBuf, source: String },
-    StateRootUnavailable { path: PathBuf, source: String },
+    ProjectRootUnavailable {
+        path: PathBuf,
+        source: String,
+    },
+    StateRootUnavailable {
+        path: PathBuf,
+        source: String,
+    },
     NonUtf8Path(PathBuf),
     InvalidRequiredAudience,
     AudienceMismatch,
@@ -800,6 +875,10 @@ pub enum PrepareExecutionError {
     SingleEffectRequired,
     PayloadBindingMismatch,
     AdapterRequirementNotIntegrated(&'static str),
+    AdapterRequirementRejected {
+        requirement: &'static str,
+        diagnostics: Vec<String>,
+    },
     CommitDescriptor(String),
     EffectLock(String),
     EffectPreflightBlocked(Box<EffectPreflightResult>),
@@ -871,6 +950,14 @@ impl fmt::Display for PrepareExecutionError {
             Self::AdapterRequirementNotIntegrated(requirement) => write!(
                 formatter,
                 "adapter requirement '{requirement}' has no trusted P4b.2c kernel projection"
+            ),
+            Self::AdapterRequirementRejected {
+                requirement,
+                diagnostics,
+            } => write!(
+                formatter,
+                "adapter requirement '{requirement}' rejected execution: {}",
+                diagnostics.join("; ")
             ),
             Self::CommitDescriptor(source) => {
                 write!(formatter, "commit descriptor failed: {source}")
@@ -1007,6 +1094,101 @@ impl fmt::Display for ExecutionReplayReconciliationError {
 
 impl std::error::Error for ExecutionReplayReconciliationError {}
 
+fn validate_adapter_requirements(
+    request: &forge_core_authority::ExecutionRequest,
+    project_root: &Path,
+    risk_audit_rules: Option<&RiskAuditRuleSet>,
+    citation_material: Option<&TrustedCitationMaterial>,
+) -> Result<(), PrepareExecutionError> {
+    match (request.risk_audit_rules_ref(), risk_audit_rules) {
+        (Some(_), Some(rules)) => {
+            let structure = validate_risk_audit_rule_set(rules);
+            if structure.has_errors() {
+                return Err(requirement_rejection("risk_audit", structure.diagnostics()));
+            }
+            let targets = collect_risk_audit_targets(project_root).map_err(|error| {
+                PrepareExecutionError::AdapterRequirementRejected {
+                    requirement: "risk_audit",
+                    diagnostics: vec![error.to_string()],
+                }
+            })?;
+            let report = evaluate_risk_audit(rules, &targets);
+            if report.has_errors() {
+                return Err(requirement_rejection("risk_audit", report.diagnostics()));
+            }
+        }
+        (Some(_), None) => {
+            return Err(PrepareExecutionError::AdapterRequirementNotIntegrated(
+                "risk_audit_rules_ref",
+            ));
+        }
+        (None, Some(_)) => {
+            return Err(PrepareExecutionError::AdapterRequirementRejected {
+                requirement: "risk_audit",
+                diagnostics: vec!["unrequested risk-audit material supplied".to_owned()],
+            });
+        }
+        (None, None) => {}
+    }
+
+    match (request.require_citation(), citation_material) {
+        (true, Some(material)) => {
+            let documents = collect_validation_yaml_documents(project_root);
+            let mut diagnostics = documents.diagnostics;
+            let report = validate_yaml_citation_references(
+                &documents.documents,
+                &material.evidence,
+                &material.runtime_ids,
+            );
+            diagnostics.extend_from_slice(report.diagnostics());
+            if diagnostics
+                .iter()
+                .any(|item| item.severity == DiagnosticSeverity::Error)
+            {
+                return Err(requirement_rejection("citation", &diagnostics));
+            }
+        }
+        (true, None) => {
+            return Err(PrepareExecutionError::AdapterRequirementNotIntegrated(
+                "require_citation",
+            ));
+        }
+        (false, Some(_)) => {
+            return Err(PrepareExecutionError::AdapterRequirementRejected {
+                requirement: "citation",
+                diagnostics: vec!["unrequested citation material supplied".to_owned()],
+            });
+        }
+        (false, None) => {}
+    }
+    Ok(())
+}
+
+fn requirement_rejection(
+    requirement: &'static str,
+    diagnostics: &[forge_core_validate::Diagnostic],
+) -> PrepareExecutionError {
+    const DIAGNOSTIC_LIMIT: usize = 16;
+    let mut messages = diagnostics
+        .iter()
+        .filter(|item| item.severity == DiagnosticSeverity::Error)
+        .take(DIAGNOSTIC_LIMIT)
+        .map(|item| format!("{}: {}", item.path, item.message))
+        .collect::<Vec<_>>();
+    if diagnostics
+        .iter()
+        .filter(|item| item.severity == DiagnosticSeverity::Error)
+        .count()
+        > DIAGNOSTIC_LIMIT
+    {
+        messages.push("additional diagnostics omitted".to_owned());
+    }
+    PrepareExecutionError::AdapterRequirementRejected {
+        requirement,
+        diagnostics: messages,
+    }
+}
+
 /// Consume verified authority and prepare one replay-bound single-effect
 /// transaction without writing the effect WAL.
 ///
@@ -1025,19 +1207,16 @@ pub fn prepare_execution_transaction(
         commands,
         effect,
         payloads,
+        risk_audit_rules,
+        citation_material,
     } = material;
     let (authorization, execution_request) = call.into_parts();
-
-    if execution_request.risk_audit_rules_ref().is_some() {
-        return Err(PrepareExecutionError::AdapterRequirementNotIntegrated(
-            "risk_audit_rules_ref",
-        ));
-    }
-    if execution_request.require_citation() {
-        return Err(PrepareExecutionError::AdapterRequirementNotIntegrated(
-            "require_citation",
-        ));
-    }
+    validate_adapter_requirements(
+        &execution_request,
+        environment.project_root(),
+        risk_audit_rules.as_ref(),
+        citation_material.as_ref(),
+    )?;
 
     let intent_digest = execution_intent_digest(&admission_request)
         .map_err(|error| PrepareExecutionError::IntentDigest(error.to_string()))?;

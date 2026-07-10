@@ -68,30 +68,25 @@ adapter_handoff:
     - "unknown arguments"
 
 public_surface:
-  mcp_stdio_mutation: "disabled_fail_closed"
+  mcp_stdio_mutation: "explicit_reconciled_single_effect_opt_in_only"
   read_only_subprocesses: "unchanged"
   reason: >-
-    P4b.2a proves the opaque capability and in-process handoff; P4b.2b/P4b.2c
-    now prove the dormant prepared Admission, provenance-bound single-effect
-    commit, and crash reconciliation path. Explicit operator policy, trusted
-    material/snapshot adapter wiring, and startup reconciliation are still
-    required before public mutation.
+    P4b.3c exposes this handoff only through exact operator policy, trusted
+    loading, startup reconciliation, and explicit single-effect opt-in.
 
 executable_evidence:
   - "compile-fail tests reject deserialization and cloning of the authority capability"
   - "compile-fail tests reject deserialization and cloning of the host-neutral verified execution call"
   - "registry tests cover revoked, unregistered, wrong-audience, stale, and non-execution authorization"
   - "argument tests reject every caller-controlled authority knob"
-  - "a private dispatch test delivers one verified call to an injected executor exactly once and proves no CLI child was spawned"
-  - "startup and public-handler tests keep mutating MCP stdio disabled even with a registry and executor"
+  - "a reconciled public-dispatch test delivers verified authority only to the injected executor and proves no CLI child was spawned"
+  - "startup tests reject missing registry, executor, activation, audience, root, or exact-tool binding"
 
 next_boundary:
-  id: "P4b.3-explicit-mutation-enablement-policy"
+  id: "P4b.4-agent-operated-trusted-deployment"
   required:
-    - "define explicit read-only-default and trusted-single-effect deployment modes"
-    - "wire trusted material and bounded snapshot loading into the MCP executor"
-    - "run P4b.2c reconciliation before accepting any mutation"
-    - "keep public MCP mutation blocked unless the operator enables the narrow mode"
+    - "generate signed Admission snapshots without manual YAML"
+    - "secure credential lifecycle and real MCP client proof"
 
 references:
   - "contracts/spec/execution-admission-v0.yaml"

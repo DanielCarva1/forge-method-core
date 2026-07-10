@@ -129,6 +129,20 @@ fn mcp_serve_missing_allowlist_fails_closed() {
     );
 }
 
+#[test]
+fn trusted_single_effect_requires_complete_explicit_operator_configuration() {
+    let output = bin()
+        .args(["mcp", "serve", "--enable-trusted-single-effect", "--json"])
+        .output()
+        .expect("run incomplete trusted MCP startup");
+    assert!(!output.status.success());
+    let envelope = output_json(&output);
+    assert_eq!(envelope["ok"], false);
+    assert!(envelope["error"]["message"]
+        .as_str()
+        .is_some_and(|message| message.contains("requires --deployment-policy")));
+}
+
 /// `mcp serve --allowlist <invalid-yaml>` fails closed with an
 /// `InvalidDecisionShape` envelope listing the parse diagnostic.
 #[test]

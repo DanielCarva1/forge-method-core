@@ -9,22 +9,27 @@ use forge_core_authority::{
     PrincipalCredentialStatus, PrincipalRegistryContract, PrincipalRegistryDocument,
     PrincipalRegistryEntry, VerifiedExecutionCall, PRINCIPAL_REGISTRY_SCHEMA_VERSION,
 };
+use forge_core_contracts::claim::ActorRole;
 use forge_core_contracts::operation::CallerRole;
+use forge_core_contracts::tool_effect::EffectTargetKind;
 use forge_core_contracts::{
-    AssuranceCaseDocument, CommandContractDocument, OperationContractDocument, PrincipalId,
-    StableId, ToolEffectContractDocument,
+    AssuranceCaseDocument, ClaimContractDocument, CommandContractDocument,
+    OperationContractDocument, PrincipalId, RepoPath, StableId, ToolEffectContractDocument,
 };
 use forge_core_decisions::{
     assurance_case_token, command_contract_token, effect_contract_token, execution_intent_digest,
-    operation_contract_token, ClaimSnapshotObservation, ContentAddressedBinding,
-    ExecutionAdmissionRequest, GateSnapshotObservation, SnapshotCompleteness,
+    operation_contract_token, ClaimRevisionObservation, ClaimSnapshotObservation,
+    ContentAddressedBinding, ExecutionAdmissionRequest, GateSnapshotObservation,
+    RevisionExpectation, SnapshotCompleteness,
 };
 use forge_core_protocol_mcp::{
-    DormantTrustedMcpExecutor, LocalMcpSnapshotSource, McpDeploymentPolicyDocument,
-    McpLocalExecutionSnapshot, McpLocalExecutionSnapshotDocument, TrustedMcpLoadError,
-    TrustedMcpLoaderLimits, TrustedMcpMaterialLoader, ValidatedMcpDeploymentPolicy,
+    DormantTrustedMcpExecutor, ExplicitTrustedSingleEffectOptIn, LocalMcpSnapshotSource,
+    McpDeploymentPolicyDocument, McpLocalExecutionSnapshot, McpLocalExecutionSnapshotDocument,
+    ReconciledTrustedMcpDeployment, TrustedMcpLoadError, TrustedMcpLoaderLimits,
+    TrustedMcpMaterialLoader, TrustedSingleEffectMcpExecutor, ValidatedMcpDeploymentPolicy,
     MCP_LOCAL_SNAPSHOT_SCHEMA_VERSION,
 };
+use forge_core_store::replay_wal::initialize_replay_wal;
 use forge_core_store::sha256_content_hash;
 use serde_json::{Map, Value};
 
@@ -36,6 +41,7 @@ const COMMAND_REF: &str = "contracts/command.yaml";
 const EFFECT_REF: &str = "contracts/effect.yaml";
 const RISK_REF: &str = "contracts/risk.yaml";
 const SNAPSHOT_REF: &str = ".forge-method/runtime/mcp-snapshot.yaml";
+const CLAIM_REF: &str = "contracts/claim.yaml";
 
 struct LoaderFixture {
     root: PathBuf,
@@ -65,6 +71,7 @@ fn fresh_root(label: &str) -> PathBuf {
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(root.join("contracts")).expect("contracts");
     fs::create_dir_all(root.join("payloads")).expect("payloads");
+    fs::create_dir_all(root.join("output")).expect("output");
     fs::create_dir_all(root.join(".forge-method/runtime")).expect("runtime");
     root
 }
@@ -83,6 +90,7 @@ mcp_deployment_policy:
   effect_scope: "single_effect"
   public_mutation: "explicit_opt_in"
   root_binding: "canonical_configured_root"
+  state_root_binding: "project_link_resolved"
   required_commit_protocol: "execution_provenance_commit_v0@0.1"
   same_user_boundary_acknowledged: true
 "#;
@@ -97,16 +105,55 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 #[allow(clippy::too_many_lines)] // one linear cryptographic fixture keeps all signed bindings visible
-fn fixture(label: &str, bind_payload_digests: bool) -> LoaderFixture {
+fn fixture(label: &str, bind_payload_digests: bool, require_citation: bool) -> LoaderFixture {
     let root = fresh_root(label);
-    let operation: OperationContractDocument =
+    let mut operation: OperationContractDocument =
         parse_repo_yaml("docs/fixtures/operation-contract-v0/mechanical-story-execute.yaml");
     let command: CommandContractDocument =
         parse_repo_yaml("contracts/commands/story-validation-fast.yaml");
-    let effect: ToolEffectContractDocument =
+    let mut effect: ToolEffectContractDocument =
         parse_repo_yaml("contracts/effects/story-artifact-write-effect.yaml");
     let assurance: AssuranceCaseDocument =
         parse_repo_yaml("contracts/assurance/representative-slice-verified-assurance.yaml");
+    let mut claim: ClaimContractDocument =
+        parse_repo_yaml("contracts/claims/story-v2-010-active-claim.yaml");
+    let state_version = assurance.assurance_case.project_snapshot.state_version;
+    operation.operation_contract.project_ref.state_version = state_version;
+    operation
+        .operation_contract
+        .coordination_scope
+        .concurrency
+        .expected_state_version = state_version;
+    operation
+        .operation_contract
+        .coordination_scope
+        .concurrency
+        .agent_id = Some(StableId("codex-main".to_owned()));
+    operation.operation_contract.coordination_scope.target.paths =
+        vec![RepoPath("output/result.txt".to_owned())];
+    operation.operation_contract.effect_contract_refs = vec![RepoPath(EFFECT_REF.to_owned())];
+    operation
+        .operation_contract
+        .coordination_scope
+        .write_authority
+        .requires_lane_claim = true;
+    operation
+        .operation_contract
+        .coordination_scope
+        .write_authority
+        .claim_contract_ref = Some(RepoPath(CLAIM_REF.to_owned()));
+    effect
+        .tool_effect_contract
+        .read_set
+        .retain(|read| read.target_kind != EffectTargetKind::FilePath);
+    effect.tool_effect_contract.write_set.truncate(1);
+    effect.tool_effect_contract.write_set[0].target_kind = EffectTargetKind::FilePath;
+    "output/result.txt".clone_into(&mut effect.tool_effect_contract.write_set[0].reference);
+    claim.claim_contract.claim.claimant_agent_id = StableId("codex-main".to_owned());
+    claim.claim_contract.claim.claimant_role = ActorRole::Driver;
+    claim.claim_contract.scope.paths = vec![RepoPath("output/result.txt".to_owned())];
+    claim.claim_contract.lease.expected_state_version = state_version;
+    "2030-01-01T00:00:00Z".clone_into(&mut claim.claim_contract.lease.expires_at);
 
     fs::write(
         root.join(OPERATION_REF),
@@ -128,6 +175,12 @@ fn fixture(label: &str, bind_payload_digests: bool) -> LoaderFixture {
         root.join(RISK_REF),
     )
     .expect("copy risk audit");
+    fs::create_dir_all(root.join("contracts/research")).expect("research contracts");
+    fs::copy(
+        repo_root().join("contracts/research/field-evidence-20260625.yaml"),
+        root.join("contracts/research/field-evidence-20260625.yaml"),
+    )
+    .expect("copy field evidence");
 
     let mut payload_bindings = Vec::new();
     let mut first_payload = None;
@@ -168,7 +221,10 @@ fn fixture(label: &str, bind_payload_digests: bool) -> LoaderFixture {
             token: effect_contract_token(&effect).expect("effect token"),
         }],
         expected_claim_snapshot_revision: 11,
-        expected_claim_revisions: Vec::new(),
+        expected_claim_revisions: vec![RevisionExpectation {
+            reference: CLAIM_REF.to_owned(),
+            revision: 7,
+        }],
         expected_gate_snapshot_revision: 5,
         expected_gate_revisions: Vec::new(),
         expected_replay_reservation_revision: 1,
@@ -176,7 +232,13 @@ fn fixture(label: &str, bind_payload_digests: bool) -> LoaderFixture {
         issued_at_unix: NOW - 10,
     };
     let intent_digest = execution_intent_digest(&admission).expect("intent digest");
-    let call = verified_call(principal_id, agent_id, &intent_digest, payload_bindings);
+    let call = verified_call(
+        principal_id,
+        agent_id,
+        &intent_digest,
+        payload_bindings,
+        require_citation,
+    );
     let snapshot = McpLocalExecutionSnapshotDocument {
         schema_version: MCP_LOCAL_SNAPSHOT_SCHEMA_VERSION.to_owned(),
         execution_snapshot: McpLocalExecutionSnapshot {
@@ -185,14 +247,18 @@ fn fixture(label: &str, bind_payload_digests: bool) -> LoaderFixture {
             claim_snapshot: ClaimSnapshotObservation {
                 revision: 11,
                 completeness: SnapshotCompleteness::Complete,
-                claims: Vec::new(),
+                claims: vec![ClaimRevisionObservation {
+                    claim_ref: RepoPath(CLAIM_REF.to_owned()),
+                    revision: 7,
+                    document: claim,
+                }],
             },
             gate_snapshot: GateSnapshotObservation {
                 revision: 5,
                 completeness: SnapshotCompleteness::Complete,
                 gates: Vec::new(),
             },
-            current_state_version: 1,
+            current_state_version: state_version,
             now_unix: NOW,
         },
     };
@@ -224,6 +290,7 @@ fn verified_call(
     agent_id: StableId,
     intent_digest: &str,
     payloads: Vec<ExecutionPayloadBinding>,
+    require_citation: bool,
 ) -> VerifiedExecutionCall {
     let signing_key = SigningKey::from_bytes(&[23; 32]);
     let public_key_hex = hex(signing_key.verifying_key().as_bytes());
@@ -281,19 +348,20 @@ fn verified_call(
             Some(PathBuf::from(EFFECT_REF)),
             payloads,
             Some(PathBuf::from(RISK_REF)),
-            false,
+            require_citation,
         ),
     )
 }
 
 #[test]
 fn trusted_loader_loads_exact_typed_material_and_signed_payloads() {
-    let fixture = fixture("valid", true);
+    let fixture = fixture("valid", true, true);
     let loaded = fixture.loader.load(fixture.call).expect("trusted material");
     let audit = loaded.audit();
     assert_eq!(audit.command_count, 1);
-    assert_eq!(audit.payload_count, 2);
+    assert_eq!(audit.payload_count, 1);
     assert!(audit.risk_audit_loaded);
+    assert!(audit.citation_material_loaded);
     assert_eq!(audit.claim_snapshot_revision, 11);
     assert_eq!(audit.gate_snapshot_revision, 5);
     assert!(audit
@@ -304,13 +372,13 @@ fn trusted_loader_loads_exact_typed_material_and_signed_payloads() {
 
 #[test]
 fn trusted_loader_rejects_unsigned_and_changed_payload_bytes() {
-    let unsigned = fixture("unsigned", false);
+    let unsigned = fixture("unsigned", false, false);
     assert!(matches!(
         unsigned.loader.load(unsigned.call),
         Err(TrustedMcpLoadError::PayloadDigestRequired { .. })
     ));
 
-    let changed = fixture("changed", true);
+    let changed = fixture("changed", true, false);
     fs::write(&changed.first_payload, b"changed after signing\n").expect("tamper payload");
     assert!(matches!(
         changed.loader.load(changed.call),
@@ -320,13 +388,13 @@ fn trusted_loader_rejects_unsigned_and_changed_payload_bytes() {
 
 #[test]
 fn trusted_loader_rejects_unsafe_paths_oversize_and_open_yaml() {
-    let path_fixture = fixture("path-bounds", true);
+    let path_fixture = fixture("path-bounds", true, false);
     assert!(matches!(
         LocalMcpSnapshotSource::new(&path_fixture.root, "../outside.yaml", 1024),
         Err(TrustedMcpLoadError::InvalidReference(_))
     ));
 
-    let open_fixture = fixture("open-yaml", true);
+    let open_fixture = fixture("open-yaml", true, false);
     let mut yaml = fs::read_to_string(&open_fixture.operation).expect("operation");
     yaml.push_str("unknown_field: true\n");
     fs::write(&open_fixture.operation, yaml).expect("open operation");
@@ -335,7 +403,7 @@ fn trusted_loader_rejects_unsafe_paths_oversize_and_open_yaml() {
         Err(TrustedMcpLoadError::Parse { .. })
     ));
 
-    let risk_fixture = fixture("open-risk-yaml", true);
+    let risk_fixture = fixture("open-risk-yaml", true, false);
     let mut risk_yaml = fs::read_to_string(&risk_fixture.risk_audit).expect("risk audit");
     risk_yaml.push_str("unknown_field: true\n");
     fs::write(&risk_fixture.risk_audit, risk_yaml).expect("open risk audit");
@@ -344,7 +412,7 @@ fn trusted_loader_rejects_unsafe_paths_oversize_and_open_yaml() {
         Err(TrustedMcpLoadError::Parse { .. })
     ));
 
-    let size_fixture = fixture("oversize", true);
+    let size_fixture = fixture("oversize", true, false);
     let limits = TrustedMcpLoaderLimits {
         max_payload_bytes: 4,
         max_total_payload_bytes: 8,
@@ -361,7 +429,7 @@ fn trusted_loader_rejects_unsafe_paths_oversize_and_open_yaml() {
 
 #[test]
 fn dormant_executor_loads_but_never_activates_mutation() {
-    let fixture = fixture("dormant", true);
+    let fixture = fixture("dormant", true, false);
     let executor = DormantTrustedMcpExecutor::new(fixture.loader);
     let rejection = executor
         .execute(fixture.call)
@@ -375,7 +443,7 @@ fn dormant_executor_loads_but_never_activates_mutation() {
 
 #[test]
 fn loader_requires_validated_trusted_policy() {
-    let fixture = fixture("read-only-policy", true);
+    let fixture = fixture("read-only-policy", true, false);
     let yaml =
         fs::read_to_string(repo_root().join("contracts/examples/mcp-deployment-policy.yaml"))
             .expect("read-only example");
@@ -390,4 +458,143 @@ fn loader_requires_validated_trusted_policy() {
         ),
         Err(TrustedMcpLoadError::TrustedPolicyRequired)
     ));
+}
+
+#[test]
+fn reconciled_executor_commits_one_effect_and_consumes_replay() {
+    let fixture = fixture("active-single-effect", true, true);
+    initialize_replay_wal(fixture.root.join(".forge-method")).expect("initialize replay");
+    let activation = std::sync::Arc::new(
+        ReconciledTrustedMcpDeployment::reconcile(
+            trusted_policy(),
+            &fixture.root,
+            fixture.root.join(".forge-method"),
+            ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
+        )
+        .expect("startup reconciliation"),
+    );
+    let executor =
+        TrustedSingleEffectMcpExecutor::new(fixture.loader, activation).expect("active executor");
+    let result = executor.execute(fixture.call).expect("execute one effect");
+    assert_eq!(
+        result.status(),
+        forge_core_authority::ExecutionStatus::Applied
+    );
+    assert_eq!(
+        fs::read(fixture.root.join("output/result.txt")).expect("committed output"),
+        b"trusted payload 0\n"
+    );
+    assert!(fixture
+        .root
+        .join(".forge-method/wal/effects.ndjson")
+        .exists());
+}
+
+#[test]
+fn activation_requires_preinitialized_replay_authority() {
+    let fixture = fixture("activation-missing-replay", true, false);
+    let error = ReconciledTrustedMcpDeployment::reconcile(
+        trusted_policy(),
+        &fixture.root,
+        fixture.root.join(".forge-method"),
+        ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
+    )
+    .expect_err("missing replay pair must fail startup");
+    assert!(error.to_string().contains("replay"));
+}
+
+#[test]
+fn activation_accepts_project_link_resolved_external_sidecar_state() {
+    let fixture = fixture("activation-external-sidecar", true, false);
+    let external_state = fresh_root("external-sidecar-state").join("state/.forge-method");
+    fs::create_dir_all(&external_state).expect("external state root");
+    initialize_replay_wal(&external_state).expect("external replay initialization");
+    let activation = ReconciledTrustedMcpDeployment::reconcile(
+        trusted_policy(),
+        &fixture.root,
+        &external_state,
+        ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
+    )
+    .expect("external sidecar activation");
+    assert_eq!(
+        activation.environment().state_root(),
+        external_state
+            .canonicalize()
+            .expect("canonical external state")
+    );
+}
+
+#[test]
+fn active_executor_runs_risk_and_citation_gates_before_replay_reservation() {
+    let risk_fixture = fixture("active-risk-block", true, false);
+    fs::write(
+        &risk_fixture.risk_audit,
+        r#"schema_version: risk-audit-v0
+rules:
+  - id: block-operation-yaml
+    description: test rejection
+    severity: error
+    detector:
+      kind: regex
+      pattern: operation_contract
+    evidence_required: false
+    fix_hint: remove test marker
+    applies_to: ["**/*.yaml"]
+"#,
+    )
+    .expect("blocking risk rule");
+    initialize_replay_wal(risk_fixture.root.join(".forge-method")).expect("initialize replay");
+    let risk_activation = std::sync::Arc::new(
+        ReconciledTrustedMcpDeployment::reconcile(
+            trusted_policy(),
+            &risk_fixture.root,
+            risk_fixture.root.join(".forge-method"),
+            ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
+        )
+        .expect("risk startup"),
+    );
+    let risk_executor = TrustedSingleEffectMcpExecutor::new(risk_fixture.loader, risk_activation)
+        .expect("risk executor");
+    let risk_error = risk_executor
+        .execute(risk_fixture.call)
+        .expect_err("risk gate must reject");
+    assert!(risk_error.to_string().contains("risk_audit"));
+    let risk_recovery = forge_core_store::replay_wal::recover_replay_wal(
+        risk_fixture.root.join(".forge-method"),
+        false,
+    )
+    .expect("risk replay state");
+    assert_eq!(risk_recovery.valid_record_count, 0);
+
+    let citation_fixture = fixture("active-citation-block", true, true);
+    fs::write(
+        citation_fixture
+            .root
+            .join("contracts/unresolved-citation.yaml"),
+        "schema_version: '0.1'\nsource_id: definitely_missing_source\n",
+    )
+    .expect("unresolved citation");
+    initialize_replay_wal(citation_fixture.root.join(".forge-method")).expect("initialize replay");
+    let citation_activation = std::sync::Arc::new(
+        ReconciledTrustedMcpDeployment::reconcile(
+            trusted_policy(),
+            &citation_fixture.root,
+            citation_fixture.root.join(".forge-method"),
+            ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
+        )
+        .expect("citation startup"),
+    );
+    let citation_executor =
+        TrustedSingleEffectMcpExecutor::new(citation_fixture.loader, citation_activation)
+            .expect("citation executor");
+    let citation_error = citation_executor
+        .execute(citation_fixture.call)
+        .expect_err("citation gate must reject");
+    assert!(citation_error.to_string().contains("citation"));
+    let citation_recovery = forge_core_store::replay_wal::recover_replay_wal(
+        citation_fixture.root.join(".forge-method"),
+        false,
+    )
+    .expect("citation replay state");
+    assert_eq!(citation_recovery.valid_record_count, 0);
 }

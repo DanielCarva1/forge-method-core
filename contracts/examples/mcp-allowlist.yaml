@@ -5,10 +5,10 @@
 # OperationContract; `policy: mutate` tools require an OperationContract
 # (--operation/--command/--effect) AND a fresh Tool-Call Attestation authorized
 # by the operator-owned principal registry at call time. Starting this mixed
-# surface will therefore also require `--principal-registry <yaml>`. P4b.1a
-# deliberately keeps all stdio mutation blocked until replay + the late kernel
-# Execution Admission handoff land; this file currently exercises fail-closed
-# startup rather than enabling a production mutation surface.
+# surface will therefore also require `--principal-registry <yaml>`. The P4b.3c
+# trusted deployment admits exactly one mutating tool, so this intentionally
+# broader mixed fixture remains a fail-closed example rather than an activatable
+# production surface.
 #
 # This is an example mixed surface: read-only exploration plus explicit mutate
 # verbs. Copy and trim to lock a server down further (e.g. use the built-in

@@ -10,5 +10,6 @@ mcp_deployment_policy:
   effect_scope: "none"
   public_mutation: "disabled"
   root_binding: "canonical_configured_root"
+  state_root_binding: "disabled"
   required_commit_protocol: null
   same_user_boundary_acknowledged: false

@@ -14,8 +14,8 @@ use forge_core_authority::{
     ExecutionError, ExecutionExecutor, ExecutionRequest, ExecutionResult, VerifiedExecutionCall,
 };
 use forge_core_contracts::{
-    AssuranceCaseDocument, CommandContractDocument, OperationContractDocument,
-    ToolEffectContractDocument,
+    AssuranceCaseDocument, CommandContractDocument, FieldEvidenceRegistry,
+    OperationContractDocument, ToolEffectContractDocument,
 };
 use forge_core_decisions::{
     assurance_case_token, command_contract_token, effect_contract_token, execution_intent_digest,
@@ -24,7 +24,8 @@ use forge_core_decisions::{
 };
 use forge_core_kernel::{
     LateExecutionSnapshot, LateExecutionSnapshotSource, LateSnapshotError,
-    RuntimeEffectPayloadKind, RuntimeOperationEffectPayload,
+    PreparedExecutionMaterial, RuntimeEffectPayloadKind, RuntimeOperationEffectPayload,
+    TrustedCitationMaterial,
 };
 use forge_core_store::sha256_content_hash;
 use forge_core_validate::risk_audit::{validate_risk_audit_rule_set, RiskAuditRuleSet};
@@ -37,6 +38,7 @@ pub const MAX_TRUSTED_CONTRACT_BYTES: u64 = 1024 * 1024;
 pub const MAX_TRUSTED_PAYLOAD_BYTES: u64 = 16 * 1024 * 1024;
 pub const MAX_TRUSTED_TOTAL_PAYLOAD_BYTES: u64 = 32 * 1024 * 1024;
 pub const MAX_TRUSTED_SNAPSHOT_BYTES: u64 = 8 * 1024 * 1024;
+const CURATED_EVIDENCE_REF: &str = "contracts/research/field-evidence-20260625.yaml";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TrustedMcpLoaderLimits {
@@ -309,13 +311,14 @@ impl LateExecutionSnapshotSource for LocalMcpSnapshotSource {
 }
 
 pub struct LoadedMcpExecutionMaterial {
-    _call: VerifiedExecutionCall,
-    _admission_request: ExecutionAdmissionRequest,
-    _operation: OperationContractDocument,
-    _commands: Vec<CommandContractDocument>,
-    _effect: ToolEffectContractDocument,
-    _payloads: Vec<RuntimeOperationEffectPayload>,
-    _risk_audit_rules: Option<RiskAuditRuleSet>,
+    call: VerifiedExecutionCall,
+    admission_request: ExecutionAdmissionRequest,
+    operation: OperationContractDocument,
+    commands: Vec<CommandContractDocument>,
+    effect: ToolEffectContractDocument,
+    payloads: Vec<RuntimeOperationEffectPayload>,
+    risk_audit_rules: Option<RiskAuditRuleSet>,
+    citation_material: Option<TrustedCitationMaterial>,
     audit: LoadedMcpMaterialAudit,
 }
 
@@ -333,6 +336,19 @@ impl LoadedMcpExecutionMaterial {
     pub const fn audit(&self) -> &LoadedMcpMaterialAudit {
         &self.audit
     }
+
+    pub(crate) fn into_kernel_material(self) -> PreparedExecutionMaterial {
+        PreparedExecutionMaterial::new_with_adapter_requirements(
+            self.call,
+            self.admission_request,
+            self.operation,
+            self.commands,
+            self.effect,
+            self.payloads,
+            self.risk_audit_rules,
+            self.citation_material,
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -345,6 +361,7 @@ pub struct LoadedMcpMaterialAudit {
     pub total_payload_bytes: u64,
     pub payload_hashes: Vec<String>,
     pub risk_audit_loaded: bool,
+    pub citation_material_loaded: bool,
     pub claim_snapshot_revision: u64,
     pub gate_snapshot_revision: u64,
     pub state_version: u64,
@@ -378,13 +395,31 @@ impl TrustedMcpMaterialLoader {
         snapshot_ref: impl Into<PathBuf>,
         limits: TrustedMcpLoaderLimits,
     ) -> Result<Self, TrustedMcpLoadError> {
+        let project_root = project_root.as_ref();
+        Self::new_with_snapshot_root(policy, project_root, project_root, snapshot_ref, limits)
+    }
+
+    /// Bind project material and runtime snapshots to separate canonical
+    /// roots. Sidecar deployments resolve the snapshot root from Project Link.
+    ///
+    /// # Errors
+    ///
+    /// Rejects active read-only policy, unsafe roots/snapshot configuration,
+    /// or limits above the compiled ceilings.
+    pub fn new_with_snapshot_root(
+        policy: ValidatedMcpDeploymentPolicy,
+        project_root: impl AsRef<Path>,
+        snapshot_root: impl AsRef<Path>,
+        snapshot_ref: impl Into<PathBuf>,
+        limits: TrustedMcpLoaderLimits,
+    ) -> Result<Self, TrustedMcpLoadError> {
         if policy.activation_state() != McpDeploymentActivationState::PolicyValidatedDormant {
             return Err(TrustedMcpLoadError::TrustedPolicyRequired);
         }
         let limits = limits.validate()?;
         let reader = ConfinedProjectReader::new(project_root.as_ref())?;
         let snapshot_source =
-            LocalMcpSnapshotSource::new(project_root, snapshot_ref, limits.max_snapshot_bytes)?;
+            LocalMcpSnapshotSource::new(snapshot_root, snapshot_ref, limits.max_snapshot_bytes)?;
         Ok(Self {
             policy,
             reader,
@@ -396,6 +431,16 @@ impl TrustedMcpMaterialLoader {
     #[must_use]
     pub const fn snapshot_source(&self) -> &LocalMcpSnapshotSource {
         &self.snapshot_source
+    }
+
+    #[must_use]
+    pub(crate) fn project_root(&self) -> &Path {
+        &self.reader.canonical_root
+    }
+
+    #[must_use]
+    pub(crate) const fn policy(&self) -> &ValidatedMcpDeploymentPolicy {
+        &self.policy
     }
 
     /// Load and cross-check one signed request without preparing or committing it.
@@ -418,9 +463,6 @@ impl TrustedMcpMaterialLoader {
         }
 
         let request = call.request();
-        if request.require_citation() {
-            return Err(TrustedMcpLoadError::CitationRequirementNotIntegrated);
-        }
         let LoadedContracts {
             operation,
             commands,
@@ -429,6 +471,7 @@ impl TrustedMcpMaterialLoader {
         } = self.load_contracts(request)?;
         let (payloads, total_payload_bytes) = self.load_payloads(request)?;
         let risk_audit_rules = self.load_risk_audit(request)?;
+        let citation_material = self.load_citation_material(request)?;
 
         let snapshot_document = self.snapshot_source.load_document()?;
         validate_signed_material(
@@ -451,18 +494,20 @@ impl TrustedMcpMaterialLoader {
                 .map(|payload| payload.content_hash.clone())
                 .collect(),
             risk_audit_loaded: risk_audit_rules.is_some(),
+            citation_material_loaded: citation_material.is_some(),
             claim_snapshot_revision: snapshot.claim_snapshot.revision,
             gate_snapshot_revision: snapshot.gate_snapshot.revision,
             state_version: snapshot.current_state_version,
         };
         Ok(LoadedMcpExecutionMaterial {
-            _call: call,
-            _admission_request: snapshot.admission_request,
-            _operation: operation,
-            _commands: commands,
-            _effect: effect,
-            _payloads: payloads,
-            _risk_audit_rules: risk_audit_rules,
+            call,
+            admission_request: snapshot.admission_request,
+            operation,
+            commands,
+            effect,
+            payloads,
+            risk_audit_rules,
+            citation_material,
             audit,
         })
     }
@@ -567,6 +612,23 @@ impl TrustedMcpMaterialLoader {
                 Ok(rules)
             })
             .transpose()
+    }
+
+    fn load_citation_material(
+        &self,
+        request: &ExecutionRequest,
+    ) -> Result<Option<TrustedCitationMaterial>, TrustedMcpLoadError> {
+        if !request.require_citation() {
+            return Ok(None);
+        }
+        let evidence: FieldEvidenceRegistry = self.reader.parse_yaml(
+            Path::new(CURATED_EVIDENCE_REF),
+            self.limits.max_contract_bytes,
+        )?;
+        let projection = forge_core_research::project(&self.reader.canonical_root)
+            .map_err(|error| TrustedMcpLoadError::CitationProjection(error.to_string()))?;
+        let runtime_ids = projection.sources.keys().cloned().collect();
+        Ok(Some(TrustedCitationMaterial::new(evidence, runtime_ids)))
     }
 }
 
@@ -749,7 +811,6 @@ pub enum TrustedMcpLoadError {
     },
     SnapshotSchemaVersion(String),
     AudienceMismatch,
-    CitationRequirementNotIntegrated,
     DuplicateReference(PathBuf),
     SingleEffectRequired,
     DuplicatePayloadTarget(String),
@@ -765,6 +826,7 @@ pub enum TrustedMcpLoadError {
         reference: PathBuf,
         errors: usize,
     },
+    CitationProjection(String),
     AdmissionAuthorityMismatch,
     AdmissionDigestMismatch,
     OperationBindingMismatch,
@@ -840,8 +902,6 @@ impl fmt::Display for TrustedMcpLoadError {
             Self::AudienceMismatch => {
                 formatter.write_str("verified principal audience differs from deployment policy")
             }
-            Self::CitationRequirementNotIntegrated => formatter
-                .write_str("citation requirement is not integrated into the trusted loader"),
             Self::DuplicateReference(path) => {
                 write!(formatter, "duplicate contract reference {}", path.display())
             }
@@ -868,6 +928,12 @@ impl fmt::Display for TrustedMcpLoadError {
                 "risk audit {} has {errors} validation error(s)",
                 reference.display()
             ),
+            Self::CitationProjection(source) => {
+                write!(
+                    formatter,
+                    "cannot project trusted citation ledger: {source}"
+                )
+            }
             Self::AdmissionAuthorityMismatch => {
                 formatter.write_str("snapshot Admission authority differs from verified call")
             }

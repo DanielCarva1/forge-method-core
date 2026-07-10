@@ -210,6 +210,10 @@ pub enum ProjectInitError {
     LedgerNotFile {
         path: String,
     },
+    ReplayInitialize {
+        path: String,
+        source: String,
+    },
     LinkTempCreate {
         path: String,
         source: String,
@@ -274,6 +278,7 @@ impl ProjectInitError {
             | Self::LedgerCreate { .. }
             | Self::LedgerSync { .. }
             | Self::LedgerNotFile { .. }
+            | Self::ReplayInitialize { .. }
             | Self::LinkTempCreate { .. }
             | Self::LinkTempWrite { .. }
             | Self::LinkTempSync { .. }
@@ -422,6 +427,10 @@ impl fmt::Display for ProjectInitError {
             Self::LedgerNotFile { path } => {
                 write!(f, "Forge ledger path exists but is not a file: {path}")
             }
+            Self::ReplayInitialize { path, source } => write!(
+                f,
+                "could not initialize replay authority at '{path}': {source}"
+            ),
             Self::LinkTempCreate { path, source } => write!(
                 f,
                 "could not create temporary Forge Project Link '{path}': {source}"
@@ -881,6 +890,13 @@ fn create_state_tree(state_root: &Path) -> Result<(), ProjectInitError> {
             source: source.to_string(),
         })?;
     }
+
+    forge_core_store::replay_wal::initialize_replay_wal(state_root).map_err(|source| {
+        ProjectInitError::ReplayInitialize {
+            path: display_path(state_root),
+            source: source.to_string(),
+        }
+    })?;
 
     let ledger = state_root.join("ledger.ndjson");
     if ledger.exists() {
@@ -2031,6 +2047,13 @@ state_root: ../forge-app/state
         assert_eq!(payload.status, ProjectInitStatus::Initialized);
         assert!(app.join(PROJECT_LINK_FILE_NAME).is_file());
         assert!(sidecar.join(".forge-method").is_dir());
+        assert!(
+            forge_core_store::replay_wal::replay_wal_path(sidecar.join(".forge-method")).is_file()
+        );
+        assert!(forge_core_store::replay_wal::replay_wal_manifest_path(
+            sidecar.join(".forge-method")
+        )
+        .is_file());
     }
 
     /// Repo-identity validation: a consumer that IS its own git repo, but whose

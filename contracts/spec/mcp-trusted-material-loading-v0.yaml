@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "mcp_trusted_material_loading_v0"
-status: "p4b3b_implemented_dormant"
+status: "p4b3c_integrated_into_opt_in_executor"
 purpose: >-
   Load the exact signed execution material and mutable-authority snapshot through
   bounded local reads without granting the MCP adapter mutation authority.
@@ -59,19 +59,20 @@ capability_boundary:
     - "filesystem writes"
     - "kernel prepare, replay reserve, WAL append, or effect commit"
   executor_result: >-
-    DormantTrustedMcpExecutor loads and verifies the complete bundle, then always
-    returns a typed dormant rejection.
-  public_mcp_mutation: "disabled_fail_closed"
+    DormantTrustedMcpExecutor remains available for load-only verification;
+    TrustedSingleEffectMcpExecutor can consume the bundle only when constructed
+    with a reconciled activation proof.
+  public_mcp_mutation: "explicit_reconciled_single_effect_opt_in_only"
 
 next_boundary:
-  id: "P4b.3c-startup-reconciliation-and-explicit-opt-in"
+  id: "P4b.4-agent-operated-trusted-deployment"
   requires:
-    - "run P4b.2c reconciliation successfully before accepting mutation"
-    - "convert loaded material into the prepared kernel path without dropping risk or citation requirements"
-    - "bind registry, allowlist, root, audience, policy, loader, and executor at startup"
-    - "make trusted single-effect mutation an explicit operator opt-in"
+    - "agent-generated and refreshed admission snapshots without human YAML editing"
+    - "secure credential lifecycle and host integration"
+    - "real MCP client end-to-end deployment evidence"
 
 references:
   - "contracts/spec/mcp-deployment-policy-v0.yaml"
   - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/prepared-execution-transaction-v0.yaml"
+  - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"

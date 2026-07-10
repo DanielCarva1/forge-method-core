@@ -124,19 +124,16 @@ intentional_limits:
   - "a failed or dropped pre-commit attempt leaves its replay nonce permanently seen"
   - "claim and gate authority is an exact typed revision snapshot, not an operating-system lock against a same-user bypass writer"
   - "same-user raw filesystem access remains outside the cooperative governance boundary"
-  - "the P4b.2c path is not wired to MCP, CLI, or the legacy execute_operation entrypoint"
-  - "public MCP mutation remains disabled"
+  - "the P4b.2c path is wired only to explicitly reconciled P4b.3c single-effect MCP deployment"
+  - "public MCP mutation remains disabled by default"
   - "operation-wide atomicity and saga semantics remain unsupported"
   - "whole replay manifest/WAL pair deletion or rollback detection still requires an externally protected epoch/head"
 
 next_boundary:
-  id: "P4b.3-explicit-mutation-enablement-policy"
+  id: "P4b.4-agent-operated-trusted-deployment"
   required:
-    - "define read-only-default and explicit trusted-single-effect deployment modes"
-    - "wire trusted material and bounded snapshot loading into the in-process MCP executor"
-    - "run P4b.2c reconciliation before accepting any mutation"
-    - "admit only the narrow single-effect capability; fail closed for operation-wide or saga requests"
-    - "require explicit operator-owned audience, registry, root, allowlist, and enablement policy"
+    - "agent-operated snapshot and credential setup without weakening the narrow capability"
+    - "real MCP client end-to-end deployment evidence"
 
 references:
   - "contracts/spec/execution-provenance-commit-v0.yaml"

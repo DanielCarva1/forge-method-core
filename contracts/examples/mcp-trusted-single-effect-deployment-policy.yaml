@@ -1,0 +1,16 @@
+schema_version: "0.1"
+mcp_deployment_policy:
+  id: "trusted-local-single-effect"
+  mode: "trusted_single_effect"
+  required_audience: "forge-local"
+  mutating_tools:
+    - "execute-operation"
+  startup_reconciliation: "required_before_listen"
+  material_loading: "canonical_project_bound"
+  snapshot_loading: "bounded_local_read_only"
+  effect_scope: "single_effect"
+  public_mutation: "explicit_opt_in"
+  root_binding: "canonical_configured_root"
+  state_root_binding: "project_link_resolved"
+  required_commit_protocol: "execution_provenance_commit_v0@0.1"
+  same_user_boundary_acknowledged: true

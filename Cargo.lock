@@ -1001,6 +1001,7 @@ dependencies = [
  "forge-core-contracts",
  "forge-core-decisions",
  "forge-core-kernel",
+ "forge-core-research",
  "forge-core-store",
  "forge-core-validate",
  "rand 0.8.6",

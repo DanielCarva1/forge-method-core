@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "execution_trust_boundary_v0"
-status: "p4b2c_cooperative_commit_boundary"
+status: "p4b3c_explicit_cooperative_single_effect_activation"
 purpose: >-
   Separate the guarantees Forge can provide inside a trusted local process
   from the stronger isolation required to resist an agent that already has raw
@@ -9,12 +9,12 @@ purpose: >-
 current_mode:
   id: "cooperative_governance"
   guarantees:
-    - "MCP stdio mutation is disabled fail-closed."
+    - "MCP stdio is read-only by default and fails closed without a complete reconciled trusted deployment."
     - "Read-only MCP children use a pinned binary, canonical repo cwd, minimal environment, and null stdin."
     - "An operator-owned registry can derive trusted principal identity without accepting a caller-selected key."
     - "Verified execute authority is an opaque, non-deserializable in-memory capability owned by a host-neutral crate."
     - "A typed injected executor can receive the verified MCP call in-process without caller-selected root, durability, limits, transaction identity, or commit time."
-    - "A dormant kernel path derives canonical commit authority, reserves replay, retains effect and replay locks, and evaluates late plus immediate-commit Admission."
+    - "The explicit trusted mode derives canonical commit authority, reserves replay, retains effect and replay locks, and evaluates late plus immediate-commit Admission."
     - "The admitted typestate persists complete redacted provenance, commits one effect, consumes replay, and records completion without releasing authority early."
     - "Typed pending receipts plus deterministic idempotent reconciliation close the effect-Commit/replay-Consume crash window."
   does_not_guarantee:
@@ -22,9 +22,9 @@ current_mode:
     - "protection from deletion or rollback by an agent with write access to the authority root"
     - "operation-wide atomicity, complete saga compensation, or same-user bypass resistance"
   required_description: >-
-    Describe Forge as cooperative governance with an executable dormant
-    single-effect authority boundary and a fail-closed MCP mutation surface,
-    not as a security sandbox or complete local privilege boundary.
+    Describe Forge as cooperative governance with an explicit reconciled
+    single-effect MCP authority boundary, not as a security sandbox or complete
+    local privilege boundary.
 
 planned_trusted_process_mode:
   id: "trusted_in_process_mutation"
@@ -32,7 +32,8 @@ planned_trusted_process_mode:
     - "P4b.2a completed: opaque verified authorization and a typed in-process executor seam are implemented and tested; public MCP mutation stays blocked."
     - "P4b.2b completed: a prepared transaction retains typed project/effect/replay/claim/gate authority and evaluates late Admission before any effect-WAL record; public MCP mutation stays blocked."
     - "P4b.2c completed: complete redacted provenance, one-effect commit, replay completion, pending receipts, and deterministic recovery are implemented and tested; public MCP mutation stays blocked."
-    - "P4b.3 next: define explicit deployment policy, trusted adapter loading, and startup reconciliation before narrowly enabling single-effect mutation."
+    - "P4b.3a/P4b.3b completed: closed deployment policy and trusted bounded loaders are implemented."
+    - "P4b.3c completed: explicit opt-in, Project Link sidecar state, startup reconciliation, kernel risk/citation gates, and narrow single-effect MCP dispatch are implemented."
   achievable_guarantee: >-
     A request entering the trusted Forge process cannot substitute its own
     registry identity, replay observation, or admission verdict before the
@@ -55,10 +56,9 @@ enforced_isolation_mode:
     the broker by writing the protected authority or project paths directly.
 
 enablement_rule: >-
-  Landing the complete dormant P4b.2 path still never enables mutation. Public
-  MCP mutation requires an explicit P4b.3 policy revision, trusted adapter
-  wiring, startup reconciliation, and a declared deployment mode with its
-  residual risks.
+  Read-only remains default. Public MCP mutation exists only when an operator
+  supplies every P4b.3c input plus the explicit enable flag and startup
+  reconciliation succeeds for the exact project/sidecar roots.
 
 references:
   - "contracts/policies/mcp-local-process-security-boundary.yaml"
@@ -67,3 +67,4 @@ references:
   - "contracts/spec/prepared-execution-transaction-v0.yaml"
   - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/replay-protection-wal-v0.yaml"
+  - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"

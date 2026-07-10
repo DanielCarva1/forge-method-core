@@ -217,29 +217,42 @@ phases:
           WAL append, or kernel preparation. Citation requirements remain
           unsupported, startup reconciliation is not wired, and public MCP
           mutation stays fail-closed.
+      - id: "P4b.3c-startup-reconciliation-and-explicit-opt-in"
+        delivers:
+          - "explicit CLI opt-in requiring policy, exact allowlist, principal registry, and state-relative snapshot"
+          - "Project Link resolved sidecar state root plus pre-listen replay verification and P4b.2c reconciliation"
+          - "kernel evaluation of loaded risk-audit and citation requirements before replay reservation"
+          - "trusted single-effect executor through late Admission, provenance commit, replay consume, and completion evidence"
+          - "typed applied, blocked, and recovery-required MCP results with no mutation subprocess fallback"
+          - "project bootstrap initialization of the replay manifest/WAL pair"
+        boundary: >-
+          Read-only remains default. Only execute-operation can mutate and only
+          under explicit reconciled trusted deployment. Operation-wide/saga
+          semantics, hostile-user isolation, externally anchored replay
+          anti-rollback, and turnkey agent credential/snapshot setup remain out
+          of scope.
     checkpoint_sequence:
       rule: >-
         P4b.2a, P4b.2b, P4b.2c, and each P4b.3 sub-checkpoint land as separate validated commits so
         source users can fast-forward pull a usable checkpoint without
         implicitly enabling the next authority boundary.
     next_slice:
-      id: "P4b.3c-startup-reconciliation-and-explicit-opt-in"
+      id: "P4b.4-agent-operated-trusted-deployment"
       scope:
-        - "run P4b.2c reconciliation successfully before accepting mutation"
-        - "convert loaded material into the prepared kernel path without dropping risk or citation requirements"
-        - "bind operator registry, allowlist, root, audience, policy, loader, and executor at startup"
-        - "require explicit trusted-single-effect opt-in while preserving read-only default"
-        - "keep operation-wide WAL and saga requests fail-closed"
+        - "generate and refresh signed Admission snapshots through an agent-facing command/API rather than manual YAML"
+        - "add secure credential provisioning, rotation, revocation, and client configuration guidance"
+        - "prove the complete flow through a real MCP client and replacement-agent resume"
+        - "surface activation/reconciliation/readiness diagnostics conversationally"
+        - "preserve every P4b.3c authority, replay, gate, and single-effect limit"
     following_slices:
       - "operation-wide transaction or complete typed saga semantics"
       - "externally protected replay epoch/head for whole-pair rollback detection"
     release_blockers:
-      - "operation-wide transaction or explicit saga semantics"
-      - "trusted MCP caller identity carried into the kernel without a forgeable subprocess handoff"
-      - "durable replay guard integrated with effect commit and crash recovery"
-      - "typed per-command admission and contract binding"
+      - "agent-operated Admission snapshot generation without human YAML editing"
+      - "secure host credential provisioning and lifecycle"
+      - "real MCP client end-to-end deployment evidence"
+      - "externally protected replay epoch/head or enforced deployment isolation"
       - "Execution Principal propagated through claims, traces, WAL, and evidence"
-      - "gate success records and claim revision revalidation at commit"
     exit:
       - "A late effect failure cannot silently leave an operation partially applied."
       - "A self-selected caller key or ignored fake contract flag cannot authorize mutation."
@@ -290,12 +303,12 @@ first_executable_slice:
     - "P4b.2c complete redacted provenance, immediate commit Admission, one-effect commit, replay completion receipt, and deterministic crash reconciliation"
     - "P4b.3a closed typed deployment policy with active read-only and validated-but-dormant trusted-single-effect states"
     - "P4b.3b canonical bounded typed material, signed-payload, risk-audit, and local snapshot loaders wired to an always-dormant executor"
+    - "P4b.3c explicit reconciled single-effect MCP activation with sidecar state, kernel risk/citation gates, provenance commit, and replay completion"
   next_action: >-
-    Implement P4b.3c as a separate checkpoint: require successful P4b.2c
-    reconciliation before listen, preserve every loaded risk/citation
-    requirement through kernel preparation, bind the full operator-owned
-    deployment at startup, and add explicit trusted-single-effect opt-in while
-    keeping read-only default and operation-wide/saga requests fail-closed.
+    Implement P4b.4 as separate pullable checkpoints focused on agent-operated
+    usability: generate/refresh signed Admission snapshots without human YAML,
+    define secure credential lifecycle, prove a real MCP client end to end, and
+    expose conversational readiness diagnostics without weakening P4b.3c.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

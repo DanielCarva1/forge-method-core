@@ -1,7 +1,7 @@
-//! `forge-core mcp` — CLI surface for the MCP adapter (F08.6, ADR-0006).
+//! `forge-core mcp` â€” CLI surface for the MCP adapter (F08.6, ADR-0006).
 //!
 //! One subcommand today:
-//! - `serve` — run the stdio JSON-RPC MCP server over stdin/stdout, exposing
+//! - `serve` â€” run the stdio JSON-RPC MCP server over stdin/stdout, exposing
 //!   the Allowlisted `forge-core` commands as MCP tools. Compatible with MCP
 //!   clients like Claude Desktop.
 //!
@@ -17,12 +17,16 @@
 //! remain gated by the `MutateGate` + Tool-Call Attestation at call time).
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use forge_core_command_surface::{command_names, COMMAND_MCP};
 use forge_core_contracts::{CliEnvelope, ExitReason};
 use forge_core_protocol_mcp::{
-    Allowlist, AttestationPolicy, AttestationVerifier, AuthorizedPrincipalRegistry, ForgeMcpServer,
-    McpServerConfig, DEFAULT_MAX_ATTESTATION_AGE_SECONDS, DEFAULT_MAX_FUTURE_SKEW_SECONDS,
+    Allowlist, AttestationPolicy, AttestationVerifier, AuthorizedPrincipalRegistry,
+    ExplicitTrustedSingleEffectOptIn, ForgeMcpServer, McpMutationExecutor, McpServerConfig,
+    ReconciledTrustedMcpDeployment, TrustedMcpLoaderLimits, TrustedMcpMaterialLoader,
+    TrustedSingleEffectMcpExecutor, ValidatedMcpDeploymentPolicy,
+    DEFAULT_MAX_ATTESTATION_AGE_SECONDS, DEFAULT_MAX_FUTURE_SKEW_SECONDS,
 };
 
 use crate::cli_error::ExitError;
@@ -102,6 +106,8 @@ fn print_mcp_usage() {
     println!("  serve runs the stdio JSON-RPC MCP server (ADR-0006). Default Allowlist");
     println!("  is read-only; --allowlist overrides with the named YAML file.");
     println!("  Any mutating allowlist also requires --principal-registry <yaml>.");
+    println!("  Trusted single-effect mutation additionally requires --deployment-policy,");
+    println!("  --snapshot (state-root relative), and the explicit enable flag.");
 }
 
 fn mcp_serve_usage_line() -> &'static str {
@@ -122,6 +128,9 @@ fn mcp_serve_parse_error_with_usage(error: &ServeArgsError) -> String {
 struct ServeArgs {
     allowlist: Option<PathBuf>,
     principal_registry: Option<PathBuf>,
+    deployment_policy: Option<PathBuf>,
+    snapshot: Option<PathBuf>,
+    enable_trusted_single_effect: bool,
     root: Option<PathBuf>,
     want_json: bool,
 }
@@ -135,6 +144,9 @@ struct ServeArgs {
 fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
     let mut allowlist = None;
     let mut principal_registry = None;
+    let mut deployment_policy = None;
+    let mut snapshot = None;
+    let mut enable_trusted_single_effect = false;
     let mut root = None;
     let want_json = json_output_unless_text_selected(args);
 
@@ -156,6 +168,19 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
                 let path = require_value(args, i, "--principal-registry")?;
                 principal_registry = Some(PathBuf::from(path));
             }
+            "--deployment-policy" => {
+                i += 1;
+                deployment_policy = Some(PathBuf::from(require_value(
+                    args,
+                    i,
+                    "--deployment-policy",
+                )?));
+            }
+            "--snapshot" => {
+                i += 1;
+                snapshot = Some(PathBuf::from(require_value(args, i, "--snapshot")?));
+            }
+            "--enable-trusted-single-effect" => enable_trusted_single_effect = true,
             "--json" | "--no-json" | "--text" => { /* handled by want_json */ }
             other if other.starts_with("--") => {
                 return Err(ServeArgsError::UnknownFlag(other.to_string()));
@@ -167,6 +192,9 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
     Ok(ServeArgs {
         allowlist,
         principal_registry,
+        deployment_policy,
+        snapshot,
+        enable_trusted_single_effect,
         root,
         want_json,
     })
@@ -312,11 +340,126 @@ fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
             );
         }
     };
+    let (mutation_executor, trusted_deployment) = if parsed.enable_trusted_single_effect {
+        let Some(policy_path) = parsed.deployment_policy.as_ref() else {
+            return emit_config_err(
+                SERVE_COMMAND,
+                "--enable-trusted-single-effect requires --deployment-policy <yaml>",
+                parsed.want_json,
+            );
+        };
+        let Some(snapshot_ref) = parsed.snapshot.as_ref() else {
+            return emit_config_err(
+                SERVE_COMMAND,
+                "--enable-trusted-single-effect requires --snapshot <state-relative-yaml>",
+                parsed.want_json,
+            );
+        };
+        if parsed.allowlist.is_none() || parsed.principal_registry.is_none() {
+            return emit_config_err(
+                SERVE_COMMAND,
+                "--enable-trusted-single-effect requires explicit --allowlist and --principal-registry files",
+                parsed.want_json,
+            );
+        }
+        let policy_yaml = match std::fs::read_to_string(policy_path) {
+            Ok(yaml) => yaml,
+            Err(error) => {
+                return emit_config_err(
+                    SERVE_COMMAND,
+                    &format!(
+                        "failed to read deployment policy {}: {error}",
+                        policy_path.display()
+                    ),
+                    parsed.want_json,
+                );
+            }
+        };
+        let policy = match ValidatedMcpDeploymentPolicy::from_yaml(&policy_yaml) {
+            Ok(policy) => policy,
+            Err(error) => {
+                return emit_config_err(
+                    SERVE_COMMAND,
+                    &format!(
+                        "deployment policy {} is invalid: {error}",
+                        policy_path.display()
+                    ),
+                    parsed.want_json,
+                );
+            }
+        };
+        let resolved = match crate::project_cmd::resolve_project(&root) {
+            Ok(resolved) => resolved,
+            Err(error) => {
+                return emit_config_err(
+                    SERVE_COMMAND,
+                    &format!("trusted MCP deployment cannot resolve Forge state root: {error}"),
+                    parsed.want_json,
+                );
+            }
+        };
+        let state_root = PathBuf::from(resolved.state_root);
+        let activation = match ReconciledTrustedMcpDeployment::reconcile(
+            policy.clone(),
+            &root,
+            &state_root,
+            ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
+        ) {
+            Ok(activation) => Arc::new(activation),
+            Err(error) => {
+                return emit_config_err(
+                    SERVE_COMMAND,
+                    &format!("trusted MCP startup reconciliation failed: {error}"),
+                    parsed.want_json,
+                );
+            }
+        };
+        let loader = match TrustedMcpMaterialLoader::new_with_snapshot_root(
+            policy,
+            &root,
+            &state_root,
+            snapshot_ref.clone(),
+            TrustedMcpLoaderLimits::default(),
+        ) {
+            Ok(loader) => loader,
+            Err(error) => {
+                return emit_config_err(
+                    SERVE_COMMAND,
+                    &format!("trusted MCP loader configuration failed: {error}"),
+                    parsed.want_json,
+                );
+            }
+        };
+        let executor = match TrustedSingleEffectMcpExecutor::new(loader, Arc::clone(&activation)) {
+            Ok(executor) => executor,
+            Err(error) => {
+                return emit_config_err(
+                    SERVE_COMMAND,
+                    &format!("trusted MCP executor configuration failed: {error}"),
+                    parsed.want_json,
+                );
+            }
+        };
+        (
+            Some(Arc::new(executor) as Arc<dyn McpMutationExecutor>),
+            Some(activation),
+        )
+    } else {
+        if parsed.deployment_policy.is_some() || parsed.snapshot.is_some() {
+            return emit_config_err(
+                SERVE_COMMAND,
+                "--deployment-policy/--snapshot require explicit --enable-trusted-single-effect",
+                parsed.want_json,
+            );
+        }
+        (None, None)
+    };
     let config = McpServerConfig {
         allowlist,
         attestation: AttestationVerifier::new(AttestationPolicy::Default),
         principal_registry,
-        mutation_executor: None,
+        mutation_executor,
+        trusted_deployment,
         max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
         max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
         forge_core_binary,
@@ -430,6 +573,9 @@ mod tests {
         let parsed = parse_serve_args(&args).unwrap();
         assert!(parsed.allowlist.is_none());
         assert!(parsed.principal_registry.is_none());
+        assert!(parsed.deployment_policy.is_none());
+        assert!(parsed.snapshot.is_none());
+        assert!(!parsed.enable_trusted_single_effect);
     }
 
     #[test]
@@ -456,6 +602,27 @@ mod tests {
                 .map(|path| path.to_str().unwrap()),
             Some("/operator/forge-principals.yaml")
         );
+    }
+
+    #[test]
+    fn parse_serve_reads_explicit_trusted_single_effect_flags() {
+        let parsed = parse_serve_args(&args(&[
+            "--deployment-policy",
+            "contracts/mcp-policy.yaml",
+            "--snapshot",
+            "runtime/mcp-snapshot.yaml",
+            "--enable-trusted-single-effect",
+        ]))
+        .expect("parse trusted deployment flags");
+        assert_eq!(
+            parsed.deployment_policy.as_deref(),
+            Some(std::path::Path::new("contracts/mcp-policy.yaml"))
+        );
+        assert_eq!(
+            parsed.snapshot.as_deref(),
+            Some(std::path::Path::new("runtime/mcp-snapshot.yaml"))
+        );
+        assert!(parsed.enable_trusted_single_effect);
     }
 
     #[test]

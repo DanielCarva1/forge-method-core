@@ -1,0 +1,82 @@
+schema_version: "0.1"
+spec: "mcp_trusted_single_effect_activation_v0"
+status: "p4b3c_implemented_opt_in"
+purpose: >-
+  Enable exactly one trusted execute-operation effect over MCP stdio only after
+  explicit operator opt-in, complete startup reconciliation, and current
+  request-level authority evaluation.
+
+default_posture:
+  mode: "read_only"
+  mutation_without_enable_flag: "blocked"
+  policy_without_enable_flag: "blocked"
+  mutating_allowlist_without_complete_deployment: "blocked"
+
+operator_activation:
+  command: >-
+    forge-core mcp serve --root <project> --allowlist <yaml>
+    --principal-registry <yaml> --deployment-policy <yaml>
+    --snapshot <state-relative-yaml> --enable-trusted-single-effect
+  required_bindings:
+    - "allowlist has exactly one mutating tool: execute-operation"
+    - "principal registry audience equals deployment-policy audience"
+    - "canonical server root equals reconciled project root"
+    - "runtime snapshot root is the Project Link resolved sidecar state root"
+    - "loader policy equals the reconciled activation policy"
+
+startup_order:
+  - "resolve canonical project and Project Link sidecar state roots"
+  - "require an already initialized replay manifest/WAL pair"
+  - "recover and verify the replay WAL"
+  - "repair safe torn effect-WAL tail and run P4b.2c reconciliation"
+  - "verify replay WAL again after reconciliation"
+  - "construct a non-serializable reconciled activation proof"
+  - "bind the trusted loader and single-effect executor"
+  - "validate the complete server configuration before listening"
+
+request_order:
+  - "allowlist and exact-tool check"
+  - "operator-registry attestation authorization"
+  - "typed argument projection with signed payload digests"
+  - "canonical bounded contract, payload, risk, and sidecar snapshot loading"
+  - "kernel risk-audit and citation evaluation before replay reservation"
+  - "kernel-derived descriptor, effect preflight, and replay reservation"
+  - "late Admission under retained locks"
+  - "immediate-commit preflight and Admission"
+  - "provenance-bound one-effect WAL commit"
+  - "replay consume and replay-completion evidence"
+
+result_states:
+  applied: "effect, replay consume, and completion evidence are durable"
+  blocked: "no effect committed"
+  recovery_required: >-
+    Effect may already be durable; caller must not retry as a new request and
+    must restart/reconcile the deployment.
+
+project_bootstrap:
+  behavior: "project init/start now initializes the replay manifest/WAL pair in the sidecar state root"
+  anti_rollback_boundary: >-
+    Whole-pair deletion or rollback still requires an externally protected
+    epoch/head or stronger deployment isolation; normal request processing
+    never initializes missing replay authority.
+
+unsupported:
+  - "more than one effect"
+  - "operation-wide WAL transactions"
+  - "saga semantics"
+  - "caller-selected root, state root, durability, limits, or transaction id"
+  - "mutation subprocess fallback"
+  - "hostile-user isolation inside the acknowledged same-user boundary"
+
+next_boundary:
+  id: "P4b.4-agent-operated-trusted-deployment"
+  goal: >-
+    Remove remaining manual YAML/key ceremony from the normal agent experience
+    and prove the complete flow through a real MCP client without weakening any
+    authority or recovery boundary.
+
+references:
+  - "contracts/spec/mcp-deployment-policy-v0.yaml"
+  - "contracts/spec/mcp-trusted-material-loading-v0.yaml"
+  - "contracts/spec/execution-provenance-commit-v0.yaml"
+  - "contracts/spec/execution-trust-boundary-v0.yaml"

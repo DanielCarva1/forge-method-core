@@ -35,6 +35,7 @@ pub struct McpDeploymentPolicy {
     pub effect_scope: EffectScopePolicy,
     pub public_mutation: PublicMutationPolicy,
     pub root_binding: RootBindingPolicy,
+    pub state_root_binding: StateRootBindingPolicy,
     pub required_commit_protocol: Option<String>,
     pub same_user_boundary_acknowledged: bool,
 }
@@ -85,6 +86,13 @@ pub enum PublicMutationPolicy {
 #[serde(rename_all = "snake_case")]
 pub enum RootBindingPolicy {
     CanonicalConfiguredRoot,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StateRootBindingPolicy {
+    Disabled,
+    ProjectLinkResolved,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -296,6 +304,13 @@ fn validate_read_only(policy: &McpDeploymentPolicy, issues: &mut Vec<McpDeployme
     );
     require(
         issues,
+        policy.state_root_binding == StateRootBindingPolicy::Disabled,
+        code,
+        "mcp_deployment_policy.state_root_binding",
+        "read-only mode must keep mutation state-root binding disabled",
+    );
+    require(
+        issues,
         !policy.same_user_boundary_acknowledged,
         code,
         "mcp_deployment_policy.same_user_boundary_acknowledged",
@@ -368,6 +383,13 @@ fn validate_trusted(policy: &McpDeploymentPolicy, issues: &mut Vec<McpDeployment
     );
     require(
         issues,
+        policy.state_root_binding == StateRootBindingPolicy::ProjectLinkResolved,
+        code,
+        "mcp_deployment_policy.state_root_binding",
+        "trusted mode requires a project-link-resolved state root",
+    );
+    require(
+        issues,
         policy.same_user_boundary_acknowledged,
         code,
         "mcp_deployment_policy.same_user_boundary_acknowledged",
@@ -418,6 +440,7 @@ mod tests {
                 effect_scope: EffectScopePolicy::None,
                 public_mutation: PublicMutationPolicy::Disabled,
                 root_binding: RootBindingPolicy::CanonicalConfiguredRoot,
+                state_root_binding: StateRootBindingPolicy::Disabled,
                 required_commit_protocol: None,
                 same_user_boundary_acknowledged: false,
             },
@@ -437,6 +460,7 @@ mod tests {
         policy.effect_scope = EffectScopePolicy::SingleEffect;
         policy.public_mutation = PublicMutationPolicy::ExplicitOptIn;
         policy.required_commit_protocol = Some(MCP_EXECUTION_COMMIT_PROTOCOL.to_owned());
+        policy.state_root_binding = StateRootBindingPolicy::ProjectLinkResolved;
         policy.same_user_boundary_acknowledged = true;
         document
     }
@@ -463,6 +487,19 @@ mod tests {
     }
 
     #[test]
+    fn published_trusted_example_is_validated_but_not_activated() {
+        let yaml = include_str!(
+            "../../../contracts/examples/mcp-trusted-single-effect-deployment-policy.yaml"
+        );
+        let validated =
+            ValidatedMcpDeploymentPolicy::from_yaml(yaml).expect("published trusted policy");
+        assert_eq!(
+            validated.activation_state(),
+            McpDeploymentActivationState::PolicyValidatedDormant
+        );
+    }
+
+    #[test]
     fn trusted_policy_validates_but_remains_dormant() {
         let validated = ValidatedMcpDeploymentPolicy::from_document(trusted_document())
             .expect("coherent trusted policy");
@@ -481,7 +518,7 @@ mod tests {
         else {
             panic!("expected typed validation issues");
         };
-        assert_eq!(issues.len(), 9);
+        assert_eq!(issues.len(), 10);
     }
 
     #[test]

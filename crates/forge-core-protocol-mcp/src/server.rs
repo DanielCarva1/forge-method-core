@@ -1,4 +1,4 @@
-//! MCP server — the adapter that exposes the shared Command Surface as MCP
+//! MCP server â€” the adapter that exposes the shared Command Surface as MCP
 //! tools over stdio JSON-RPC (ADR-0006 Decision 1).
 //!
 //! # Architecture
@@ -8,27 +8,26 @@
 //! (`forge-core <command> <args> --json`) and captures the JSON envelope from
 //! the child's stdout. This is:
 //!
-//! - **thread-safe** — each tool call is an isolated process, so concurrent
+//! - **thread-safe** â€” each tool call is an isolated process, so concurrent
 //!   `tools/call` requests do not share global stdout state;
-//! - **isolated** — a panicking command handler cannot poison the MCP server;
-//! - **honest** — removing the adapter leaves the CLI unchanged.
+//! - **isolated** â€” a panicking command handler cannot poison the MCP server;
+//! - **honest** â€” removing the adapter leaves the CLI unchanged.
 //!
 //! Mutation is deliberately different: verified authority is non-serializable
-//! and may cross only the typed, in-process executor seam. P4b.2c carries it
-//! through a dormant provenance-bound one-effect commit and recovery path, but
-//! no explicit operator policy enables public stdio mutation.
+//! and may cross only the typed, in-process executor seam. P4b.3c enables only
+//! the provenance-bound single-effect path after explicit operator opt-in,
+//! trusted loading, replay verification, and startup reconciliation.
 //!
 //! # Enforcement order (per `tools/call`)
 //!
-//! 1. **Allowlist** — tool name must be in the Allowlist, else fail-closed
+//! 1. **Allowlist** â€” tool name must be in the Allowlist, else fail-closed
 //!    (ADR-0006 Decision 3).
-//! 2. **MCP stdio mutation boundary** ? mutating tools remain blocked until
-//!    explicit operator policy, trusted material/snapshot loading, and startup
-//!    reconciliation are wired. A dormant internal commit path does not lift
-//!    this process-security policy by itself.
-//! 3. **Read-only attestation policy** — optionally require/verify a
+//! 2. **MCP stdio mutation boundary** — a mutating tool requires an exact
+//!    reconciled trusted deployment; otherwise it is rejected before identity
+//!    verification or execution.
+//! 3. **Read-only attestation policy** â€” optionally require/verify a
 //!    signature-only attestation for non-mutating calls.
-//! 4. **Invoke** — spawn only the admitted read-only subprocess, capture the
+//! 4. **Invoke** â€” spawn only the admitted read-only subprocess, capture the
 //!    envelope, and return it.
 
 use std::future::Future;
@@ -51,20 +50,21 @@ use crate::error::{McpAdapterError, ServerRunError};
 #[cfg(test)]
 use crate::mutation_executor::VerifiedMcpExecutionCall;
 use crate::mutation_executor::{
-    verified_call_from_arguments, McpMutationExecutionResult, McpMutationExecutor,
-    MCP_EXECUTE_OPERATION_TOOL,
+    verified_call_from_arguments, McpMutationExecutionResult, McpMutationExecutionStatus,
+    McpMutationExecutor, MCP_EXECUTE_OPERATION_TOOL,
 };
 use crate::principal_registry::{
     AuthorizedPrincipalRegistry, VerifiedExecutionAuthorization,
     DEFAULT_MAX_ATTESTATION_AGE_SECONDS, DEFAULT_MAX_FUTURE_SKEW_SECONDS,
 };
+use crate::ReconciledTrustedMcpDeployment;
 
 /// Configuration for a [`ForgeMcpServer`] instance.
 ///
 /// All fields are set by the CLI `mcp serve` subcommand (F08.6) or by tests.
 #[derive(Debug, Clone)]
 pub struct McpServerConfig {
-    /// The Allowlist — the capability surface. A tool absent from it is
+    /// The Allowlist â€” the capability surface. A tool absent from it is
     /// invisible/rejected (fail-closed, ADR-0006 Decision 3).
     pub allowlist: Allowlist,
     /// The Tool-Call Attestation policy + verifier.
@@ -72,10 +72,13 @@ pub struct McpServerConfig {
     /// Operator-owned credential registry. Required whenever the Allowlist
     /// exposes a mutating tool; caller-selected keys never populate it.
     pub principal_registry: Option<AuthorizedPrincipalRegistry>,
-    /// Trusted in-process executor for verified mutation calls. The public
-    /// stdio surface remains disabled even when this is configured; P4b.2c is
-    /// still a dormant kernel commit/recovery path pending deployment policy.
+    /// Trusted in-process executor for verified mutation calls. This alone
+    /// cannot enable mutation; [`Self::trusted_deployment`] must also prove the
+    /// exact reconciled root and policy.
     pub mutation_executor: Option<Arc<dyn McpMutationExecutor>>,
+    /// Explicit operator opt-in proof created only after replay verification
+    /// and P4b.2c startup reconciliation complete for this exact root/policy.
+    pub trusted_deployment: Option<Arc<ReconciledTrustedMcpDeployment>>,
     /// Maximum accepted age for mutating attestations.
     pub max_attestation_age_seconds: u64,
     /// Maximum accepted future clock skew for mutating attestations.
@@ -99,6 +102,7 @@ impl McpServerConfig {
             attestation: AttestationVerifier::new(AttestationPolicy::Default),
             principal_registry: None,
             mutation_executor: None,
+            trusted_deployment: None,
             max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
             max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
             forge_core_binary: std::env::current_exe()
@@ -113,28 +117,9 @@ impl McpServerConfig {
     ///
     /// Returns [`McpAdapterError::Config`] if mutation is exposed, the binary
     /// is not an absolute pinned path, or the repo-scoped root is absent or
-    /// relative. P4b.2c validates the dormant provenance-bound commit and crash
-    /// reconciliation path, but live stdio mutation remains disabled until a
-    /// trusted adapter and explicit deployment policy enable it.
+    /// relative. A mutating surface additionally requires the exact reconciled
+    /// deployment proof, principal registry, and in-process executor.
     pub fn validate_process_security(&self) -> Result<(), McpAdapterError> {
-        let exposes_mutation = self.allowlist.iter().any(|tool| tool.policy.is_mutate());
-        if exposes_mutation && self.principal_registry.is_none() {
-            return Err(McpAdapterError::Config(
-                "mutating MCP allowlist requires an operator principal registry".to_owned(),
-            ));
-        }
-        if exposes_mutation && self.mutation_executor.is_none() {
-            return Err(McpAdapterError::Config(
-                "mutating MCP stdio remains disabled: no trusted in-process mutation executor is configured"
-                    .to_owned(),
-            ));
-        }
-        if exposes_mutation {
-            return Err(McpAdapterError::Config(
-                "mutating MCP stdio remains disabled after P4b.2c until explicit operator policy, trusted material/snapshot loading, startup reconciliation, and single-effect enablement are enforced"
-                    .to_owned(),
-            ));
-        }
         if !self.forge_core_binary.is_absolute() {
             return Err(McpAdapterError::Config(
                 "MCP subprocess binary must be an absolute pinned path".to_owned(),
@@ -149,6 +134,63 @@ impl McpServerConfig {
             return Err(McpAdapterError::Config(
                 "MCP server root must be absolute".to_owned(),
             ));
+        }
+        let exposes_mutation = self.allowlist.iter().any(|tool| tool.policy.is_mutate());
+        if !exposes_mutation && self.trusted_deployment.is_some() {
+            return Err(McpAdapterError::Config(
+                "trusted mutation deployment configured without a mutating allowlist".to_owned(),
+            ));
+        }
+        if exposes_mutation && self.principal_registry.is_none() {
+            return Err(McpAdapterError::Config(
+                "mutating MCP allowlist requires an operator principal registry".to_owned(),
+            ));
+        }
+        if exposes_mutation && self.mutation_executor.is_none() {
+            return Err(McpAdapterError::Config(
+                "mutating MCP stdio remains disabled: no trusted in-process mutation executor is configured"
+                    .to_owned(),
+            ));
+        }
+        if exposes_mutation {
+            let deployment = self.trusted_deployment.as_ref().ok_or_else(|| {
+                McpAdapterError::Config(
+                    "mutating MCP stdio requires explicit reconciled trusted deployment".to_owned(),
+                )
+            })?;
+            let mutation_tools = self
+                .allowlist
+                .iter()
+                .filter(|tool| tool.policy.is_mutate())
+                .map(|tool| tool.name.as_str())
+                .collect::<Vec<_>>();
+            if mutation_tools != [MCP_EXECUTE_OPERATION_TOOL] {
+                return Err(McpAdapterError::Config(
+                    "trusted MCP deployment admits exactly one mutating execute-operation tool"
+                        .to_owned(),
+                ));
+            }
+            let Some(registry) = self.principal_registry.as_ref() else {
+                return Err(McpAdapterError::Config(
+                    "mutating MCP allowlist requires an operator principal registry".to_owned(),
+                ));
+            };
+            if registry.audience() != deployment.environment().required_audience() {
+                return Err(McpAdapterError::Config(
+                    "principal registry audience differs from reconciled deployment".to_owned(),
+                ));
+            }
+            let canonical_root = root.canonicalize().map_err(|error| {
+                McpAdapterError::Config(format!(
+                    "MCP server root {} cannot be canonicalized: {error}",
+                    root.display()
+                ))
+            })?;
+            if canonical_root != deployment.environment().project_root() {
+                return Err(McpAdapterError::Config(
+                    "MCP server root differs from reconciled deployment root".to_owned(),
+                ));
+            }
         }
         Ok(())
     }
@@ -312,11 +354,8 @@ impl ForgeMcpServer {
             })
     }
 
-    /// Dormant P4b.2a dispatch seam. The public [`ServerHandler`] path never
-    /// calls this while stdio mutation is disabled. Tests exercise it directly
-    /// to prove that verified authority stays in memory and reaches only the
-    /// injected executor, never the read-only subprocess path.
-    #[allow(dead_code)]
+    /// Dispatch verified mutation authority only to the reconciled in-process
+    /// executor, never through the read-only subprocess path.
     fn dispatch_mutation_in_process(
         &self,
         request: &CallToolRequestParams,
@@ -365,10 +404,10 @@ impl ForgeMcpServer {
     ///
     /// # Errors
     ///
-    /// - [`McpAdapterError::UnknownTool`] — `tool_name` not in the Allowlist.
-    /// - [`McpAdapterError::CommandRejected`] — the subprocess exited non-zero
+    /// - [`McpAdapterError::UnknownTool`] â€” `tool_name` not in the Allowlist.
+    /// - [`McpAdapterError::CommandRejected`] â€” the subprocess exited non-zero
     ///   (the captured envelope JSON is carried for self-correction).
-    /// - [`McpAdapterError::Config`] — the subprocess could not be spawned or
+    /// - [`McpAdapterError::Config`] â€” the subprocess could not be spawned or
     ///   its output read.
     pub fn invoke_tool(
         &self,
@@ -404,7 +443,7 @@ impl ForgeMcpServer {
             cmd.arg("--root").arg(root);
         }
         // Capture both streams; the envelope is on stdout, diagnostics on
-        // stderr. We do NOT inherit stdout — we must parse it.
+        // stderr. We do NOT inherit stdout â€” we must parse it.
         cmd.stdin(std::process::Stdio::null());
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
@@ -453,10 +492,10 @@ impl ForgeMcpServer {
     ///
     /// # Errors
     ///
-    /// - [`ServerRunError::Config`] — the configured capability surface is
+    /// - [`ServerRunError::Config`] â€” the configured capability surface is
     ///   unsafe to expose over stdio.
-    /// - [`ServerRunError::Runtime`] — the tokio runtime could not be built.
-    /// - [`ServerRunError::Transport`] — the stdio transport failed to
+    /// - [`ServerRunError::Runtime`] â€” the tokio runtime could not be built.
+    /// - [`ServerRunError::Transport`] â€” the stdio transport failed to
     ///   initialize or the server loop returned an error.
     pub fn run_stdio(self) -> Result<(), ServerRunError> {
         self.config
@@ -485,16 +524,16 @@ impl ForgeMcpServer {
 /// Map an MCP `arguments` object (a JSON object) to a flat CLI argv list.
 ///
 /// The mapping convention (simple, lossless, agent-friendly):
-/// - Each key→value pair becomes `["--<key>", "<value>"]` if the value is a
+/// - Each keyâ†’value pair becomes `["--<key>", "<value>"]` if the value is a
 ///   string, or `["--<key>", "<json>"]` for non-string scalars/arrays/objects.
 /// - A key whose value is the boolean `true` becomes the bare flag `["--<key>"]`
-///   (so `{"--json": true}` → `["--json"]`); `false` is dropped.
+///   (so `{"--json": true}` â†’ `["--json"]`); `false` is dropped.
 /// - Keys are passed through verbatim (callers send `"--root"`, `"--operation"`,
 ///   ...); we do not synthesize the leading `--`. This keeps the adapter a pure
 ///   shape transform with no knowledge of any command's flag semantics.
 ///
 /// This is intentionally dumb: the adapter does NOT validate flags against the
-/// command's usage — the underlying `forge-core` command does. Invalid flags
+/// command's usage â€” the underlying `forge-core` command does. Invalid flags
 /// surface as a rejection envelope from the subprocess.
 fn arguments_to_argv(arguments: Option<&JsonObject>) -> Vec<String> {
     let Some(map) = arguments else {
@@ -621,9 +660,8 @@ impl ServerHandler for ForgeMcpServer {
         info.server_info = Implementation::new("forge-core-mcp", env!("CARGO_PKG_VERSION"));
         info.instructions = Some(
             "Forge Method MCP adapter. Read-only tools are pass-throughs over \
-             `forge-core` CLI commands. MCP stdio mutation remains disabled \
-             after P4b.2c until explicit operator policy, trusted material/snapshot \
-             loading, startup reconciliation, and single-effect enablement are enforced."
+             pinned `forge-core` CLI commands. The sole execute-operation mutation \
+             path requires explicit reconciled trusted single-effect deployment."
                 .into(),
         );
         info
@@ -673,10 +711,31 @@ impl ForgeMcpServer {
         };
         let is_mutate = policy.is_mutate();
         if is_mutate {
-            return Ok(rejection_result(
-                &tool_name,
-                "mutating MCP stdio is disabled after P4b.2c until explicit operator policy, trusted material/snapshot loading, startup reconciliation, and single-effect enablement are enforced",
-            ));
+            if let Err(error) = self.config.validate_process_security() {
+                return Ok(rejection_result(&tool_name, &error.to_string()));
+            }
+            return match self.dispatch_mutation_in_process(&request, &tool_name) {
+                Ok(result) => {
+                    let (status, is_error) = match result.status() {
+                        McpMutationExecutionStatus::Applied => ("applied", false),
+                        McpMutationExecutionStatus::Blocked => ("blocked", true),
+                        McpMutationExecutionStatus::RecoveryRequired => ("recovery_required", true),
+                        _ => ("unknown", true),
+                    };
+                    let envelope = serde_json::json!({
+                        "ok": !is_error,
+                        "status": status,
+                        "result": result.payload(),
+                    })
+                    .to_string();
+                    if is_error {
+                        Ok(CallToolResult::error(vec![ContentBlock::text(envelope)]))
+                    } else {
+                        Ok(CallToolResult::success(vec![ContentBlock::text(envelope)]))
+                    }
+                }
+                Err(error) => Ok(rejection_result(&tool_name, &error.to_string())),
+            };
         }
         let argv = arguments_to_argv(request.arguments.as_ref());
         // Optional/read-only Tool-Call Attestation gate (ADR-0006 Decision 4).
@@ -734,7 +793,7 @@ impl ForgeMcpServer {
 
 /// Build the MCP [`Tool`] descriptor for one allowlisted tool. The
 /// `input_schema` is intentionally permissive (an object with no required
-/// fields) — the underlying `forge-core` command does the real validation, so
+/// fields) â€” the underlying `forge-core` command does the real validation, so
 /// the adapter does not duplicate per-command flag schemas here.
 fn mcp_tool_descriptor(allowed: &crate::allowlist::AllowedTool) -> Tool {
     let command = command_by_name(&allowed.name);
@@ -752,9 +811,9 @@ fn mcp_tool_descriptor(allowed: &crate::allowlist::AllowedTool) -> Tool {
         )
         .into(),
         AllowlistPolicy::Mutate => format!(
-            "Forge `{usage}` command (mutate). MCP stdio invocation is currently \
-             blocked after P4b.2c pending explicit operator policy, trusted material/snapshot loading, startup reconciliation, and single-effect enablement; \
-             output mode: {json_mode}."
+            "Forge `{usage}` command (mutate). MCP stdio invocation requires explicit \
+             operator policy, trusted material/snapshot loading, startup reconciliation, \
+             and reconciled single-effect enablement; output mode: {json_mode}."
         )
         .into(),
     };
@@ -778,7 +837,7 @@ fn rejection_result(tool: &str, reason: &str) -> CallToolResult {
 
 /// Best-effort extraction of `exit_reason` from an envelope JSON string, for
 /// error reporting. Returns `None` if the field is absent or the JSON is
-/// malformed — the caller treats that as a generic non-zero exit.
+/// malformed â€” the caller treats that as a generic non-zero exit.
 fn extract_exit_reason(envelope_json: &str) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(envelope_json.trim()).ok()?;
     v.get("exit_reason")?.as_str().map(ToString::to_string)
@@ -831,6 +890,7 @@ mod tests {
             attestation: AttestationVerifier::new(AttestationPolicy::Default),
             principal_registry: None,
             mutation_executor: None,
+            trusted_deployment: None,
             max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
             max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
             forge_core_binary: fake_path,
@@ -1031,6 +1091,7 @@ mod tests {
             ),
             principal_registry: None,
             mutation_executor: None,
+            trusted_deployment: None,
             max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
             max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
             forge_core_binary: bin,
@@ -1087,6 +1148,48 @@ mod tests {
         }
     }
 
+    fn activate_single_effect_config(mut config: McpServerConfig) -> McpServerConfig {
+        let root = config.root.clone().expect("test root");
+        let state_root = root.join(".forge-method");
+        std::fs::create_dir_all(&state_root).expect("test state root");
+        forge_core_store::replay_wal::initialize_replay_wal(&state_root)
+            .expect("test replay initialization");
+        let policy = crate::ValidatedMcpDeploymentPolicy::from_yaml(
+            r#"
+schema_version: "0.1"
+mcp_deployment_policy:
+  id: "test-trusted-single-effect"
+  mode: "trusted_single_effect"
+  required_audience: "forge-core:mcp:stdio:test"
+  mutating_tools: ["execute-operation"]
+  startup_reconciliation: "required_before_listen"
+  material_loading: "canonical_project_bound"
+  snapshot_loading: "bounded_local_read_only"
+  effect_scope: "single_effect"
+  public_mutation: "explicit_opt_in"
+  root_binding: "canonical_configured_root"
+  state_root_binding: "project_link_resolved"
+  required_commit_protocol: "execution_provenance_commit_v0@0.1"
+  same_user_boundary_acknowledged: true
+"#,
+        )
+        .expect("test deployment policy");
+        let deployment = crate::ReconciledTrustedMcpDeployment::reconcile(
+            policy,
+            &root,
+            &state_root,
+            crate::ExplicitTrustedSingleEffectOptIn::from_operator_flag(),
+        )
+        .expect("test startup reconciliation");
+        config.allowlist = Allowlist::from_tools(vec![crate::AllowedTool {
+            name: MCP_EXECUTE_OPERATION_TOOL.to_owned(),
+            policy: AllowlistPolicy::Mutate,
+        }])
+        .expect("single effect allowlist");
+        config.trusted_deployment = Some(Arc::new(deployment));
+        config
+    }
+
     /// Like `config_with_fake_binary` (read-only allowlist) but with the
     /// hardened `RequireAll` policy: attestation is required for ALL tools,
     /// read-only included.
@@ -1099,6 +1202,7 @@ mod tests {
             ),
             principal_registry: None,
             mutation_executor: None,
+            trusted_deployment: None,
             max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
             max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
             forge_core_binary: bin,
@@ -1130,7 +1234,7 @@ mod tests {
         };
         // Test-only signing helper. Infallible-by-construction (intent built
         // from JSON just above); NOT the security boundary. The verification
-        // path (server.rs verify_attestation → AttestationVerifier::verify) is
+        // path (server.rs verify_attestation â†’ AttestationVerifier::verify) is
         // fail-closed: a canonicalization failure returns AttestationError and
         // surfaces as a tool-call rejection, never a panic.
         let canon = intent.canonical_bytes().expect("canonicalize test intent");
@@ -1204,7 +1308,7 @@ mod tests {
         req.arguments = Some(arguments);
         let res = server.handle_call_tool(req).unwrap();
         assert!(res.is_error.unwrap_or(false));
-        assert!(content_text(&res).contains("mutating MCP stdio is disabled"));
+        assert!(content_text(&res).contains("operator principal registry"));
     }
 
     #[test]
@@ -1233,18 +1337,22 @@ mod tests {
 
         let result = server.handle_call_tool(req).expect("tool result");
         assert!(result.is_error.unwrap_or(false));
-        assert!(content_text(&result).contains("mutating MCP stdio is disabled"));
+        assert!(content_text(&result).contains("in-process mutation executor"));
     }
 
     #[test]
-    fn verified_call_reaches_in_process_executor_once_without_subprocess_spawn() {
+    fn reconciled_public_mutation_reaches_in_process_executor_without_subprocess_spawn() {
         let signing_key = ed25519_dalek::SigningKey::from_bytes(&[11; 32]);
         let (binary, spawn_marker) = make_spawn_marker_forge_core();
         let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
         let executor = Arc::new(RecordingMutationExecutor {
             calls: Arc::clone(&calls),
         });
-        let config = registered_mutate_config_with_executor(binary, &signing_key, executor);
+        let config = activate_single_effect_config(registered_mutate_config_with_executor(
+            binary,
+            &signing_key,
+            executor,
+        ));
         let server = ForgeMcpServer::new(config);
 
         let mut arguments = JsonObject::new();
@@ -1284,13 +1392,13 @@ mod tests {
 
         let public_result = server
             .handle_call_tool(request)
-            .expect("public handler rejection");
-        assert!(public_result.is_error.unwrap_or(false));
-        assert!(content_text(&public_result).contains("mutating MCP stdio is disabled"));
-        assert_eq!(calls.lock().expect("recorded calls").len(), 1);
+            .expect("public handler execution");
+        assert!(!public_result.is_error.unwrap_or(false));
+        assert!(content_text(&public_result).contains("in-process-test-executor"));
+        assert_eq!(calls.lock().expect("recorded calls").len(), 2);
         assert!(
             !spawn_marker.exists(),
-            "public rejection must not spawn child"
+            "public mutation must not spawn child"
         );
 
         if let Some(directory) = spawn_marker.parent() {
@@ -1346,7 +1454,7 @@ mod tests {
     }
 
     #[test]
-    fn mutating_server_startup_remains_disabled_with_registry_and_executor() {
+    fn mutating_server_startup_requires_reconciled_deployment_after_executor() {
         let signing_key = ed25519_dalek::SigningKey::from_bytes(&[11; 32]);
         let bin = make_fake_forge_core(true, "{}");
         let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -1356,8 +1464,9 @@ mod tests {
             .expect_err("dormant P4b.2c path must not enable public stdio mutation");
 
         assert!(matches!(rejection, McpAdapterError::Config(_)));
-        assert!(rejection.to_string().contains("disabled after P4b.2c"));
-        assert!(rejection.to_string().contains("startup reconciliation"));
+        assert!(rejection
+            .to_string()
+            .contains("explicit reconciled trusted deployment"));
     }
 
     #[test]
@@ -1366,7 +1475,7 @@ mod tests {
         let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
         let bin = make_fake_forge_core(true, envelope);
         let server = ForgeMcpServer::new(registered_mutate_config(bin, &signing_key));
-        // Sign over one intent but call with different arguments → tampered.
+        // Sign over one intent but call with different arguments â†’ tampered.
         let mut args = JsonObject::new();
         args.insert("--operation".into(), serde_json::json!("/tmp/actual.yaml"));
         let att = sign_registered_mutation(
@@ -1414,7 +1523,7 @@ mod tests {
         req.arguments = Some(args);
         let res = server.handle_call_tool(req).unwrap();
         assert!(res.is_error.unwrap_or(false));
-        assert!(content_text(&res).contains("mutating MCP stdio is disabled"));
+        assert!(content_text(&res).contains("operator principal registry"));
     }
 
     // --- security-gap: RequireAll at the gate (no integration test) ---------
@@ -1440,7 +1549,7 @@ mod tests {
     #[test]
     fn require_all_gate_passes_readonly_with_valid_attestation() {
         // Symmetric: RequireAll + read-only tool + valid signed attestation
-        // → gate passes and the subprocess envelope is returned. Uses the
+        // â†’ gate passes and the subprocess envelope is returned. Uses the
         // read-only allowlist (includes "preview").
         let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
         let bin = make_fake_forge_core(true, envelope);
@@ -1462,7 +1571,7 @@ mod tests {
         // Default policy: read-only does not REQUIRE attestation, but if one is
         // present it must verify (defense in depth via verify_present_attestation
         // at server.rs ~L157). Sign a valid attestation, then tamper one byte of
-        // the signature hex → the gate must reject even though attestation is
+        // the signature hex â†’ the gate must reject even though attestation is
         // optional for read-only.
         let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
         let bin = make_fake_forge_core(true, envelope);
@@ -1491,7 +1600,7 @@ mod tests {
     fn malformed_meta_attestation_is_rejected() {
         // RequireAll policy, read-only tool (so attestation is REQUIRED). Put
         // _meta.attestation as a plain string (not a valid AttestationInput
-        // object) → extract_attestation's `Some(Err(msg))` arm (server.rs
+        // object) â†’ extract_attestation's `Some(Err(msg))` arm (server.rs
         // ~L149/L377) must reject. This exercises the present-but-unparseable
         // path: a malformed attestation is never silently ignored.
         let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
@@ -1552,7 +1661,7 @@ mod tests {
         input.insert("--no-sync".into(), serde_json::json!(false));
         input.insert("--count".into(), serde_json::json!(3));
         let result = arguments_to_argv(Some(&input));
-        // bool(false) dropped; bool(true) → bare flag; string → pair; number → json string.
+        // bool(false) dropped; bool(true) â†’ bare flag; string â†’ pair; number â†’ json string.
         assert!(result.contains(&"--root".to_string()));
         assert!(result.contains(&"/tmp/proj".to_string()));
         assert!(result.contains(&"--json".to_string()));

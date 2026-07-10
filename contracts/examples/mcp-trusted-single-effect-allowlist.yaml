@@ -1,0 +1,7 @@
+tools:
+  - name: "preview"
+    policy: "read-only"
+  - name: "ready"
+    policy: "read-only"
+  - name: "execute-operation"
+    policy: "mutate"
