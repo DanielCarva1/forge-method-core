@@ -86,9 +86,7 @@ fn is_retryable_lock_contention(output: &Output) -> bool {
     };
     let code = json["error"]["code"].as_str();
     let message = json["error"]["message"].as_str().unwrap_or_default();
-    code == Some("env_config")
-        && message.contains("claims lock")
-        && message.contains(".forge-claim.lock")
+    code == Some("env_config") && message.contains("cannot acquire claims lock")
 }
 
 fn acquire_with_bounded_retries(

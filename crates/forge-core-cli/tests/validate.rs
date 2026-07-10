@@ -173,12 +173,15 @@ fn merged_validation_root(label: &str) -> PathBuf {
         root.join(".forge-method").join("ledger.ndjson"),
     ]
     .into_iter()
-    .find(|candidate| candidate.exists())
-    .expect("ledger.ndjson must exist in the core sidecar or repo root");
+    .find(|candidate| candidate.exists());
     let ledger_target = temp.join(".forge-method").join("ledger.ndjson");
     fs::create_dir_all(ledger_target.parent().expect("ledger parent"))
         .expect("create .forge-method dir");
-    fs::copy(&ledger_source, &ledger_target).expect("copy ledger.ndjson");
+    if let Some(ledger_source) = ledger_source {
+        fs::copy(&ledger_source, &ledger_target).expect("copy ledger.ndjson");
+    } else {
+        fs::write(&ledger_target, []).expect("create empty validation ledger");
+    }
     temp
 }
 
@@ -4850,14 +4853,19 @@ fn host_adapter_verify_tuf_trusted_root_freshness_binary_outputs_json() {
 
 #[test]
 fn execute_operation_binary_outputs_json_even_when_awaiting_human() {
+    let fixture = temp_sidecar_cli_fixture("execute-operation-awaiting-human");
+    let operation_relative =
+        "docs/fixtures/operation-contract-v0/facilitate-first-product-idea.yaml";
+    let operation_path = fixture.app.join(operation_relative);
+    fs::create_dir_all(operation_path.parent().expect("operation parent"))
+        .expect("create operation fixture directory");
+    fs::copy(repo_root().join(operation_relative), &operation_path)
+        .expect("copy operation fixture");
+
     let output = Command::new(env!("CARGO_BIN_EXE_forge-core"))
         .args(["execute-operation", "--root"])
-        .arg(repo_root())
-        .args([
-            "--operation",
-            "docs/fixtures/operation-contract-v0/facilitate-first-product-idea.yaml",
-            "--json",
-        ])
+        .arg(&fixture.app)
+        .args(["--operation", operation_relative, "--json"])
         .output()
         .expect("run forge-core execute-operation");
 
