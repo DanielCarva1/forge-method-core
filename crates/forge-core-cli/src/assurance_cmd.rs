@@ -14,7 +14,8 @@ use forge_core_contracts::{
     ReadinessVerdict, StableId,
 };
 use forge_core_decisions::{
-    derive_assurance_case, ObligationEngineInputDocument, ObligationEngineIssue,
+    assurance_case_token, derive_assurance_case, ObligationEngineInputDocument,
+    ObligationEngineIssue,
 };
 use forge_core_validate::{validate_assurance_case, Diagnostic};
 use serde::Serialize;
@@ -314,9 +315,7 @@ fn build_response(
     case: AssuranceCaseDocument,
     source: AssuranceAdapterSource,
 ) -> Result<AssuranceAdapterResponse, String> {
-    let canonical = serde_json_canonicalizer::to_vec(&case)
-        .map_err(|error| format!("cannot canonicalize Assurance Case: {error}"))?;
-    let resume_token = format!("sha256:{}", crate::hex_sha256(&canonical));
+    let resume_token = assurance_case_token(&case).map_err(|error| error.to_string())?;
     let assurance_case = &case.assurance_case;
     let target = assurance_case.readiness.target;
     let human_attention = project_human_attention(&assurance_case.decision_requests, target);

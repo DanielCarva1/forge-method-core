@@ -881,6 +881,8 @@ dependencies = [
  "include_dir",
  "serde",
  "serde_json",
+ "serde_json_canonicalizer",
+ "sha2",
  "yaml_serde",
 ]
 

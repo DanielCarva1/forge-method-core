@@ -7,6 +7,8 @@ edition.workspace = true
 forge-core-contracts = { path = "../forge-core-contracts" }
 include_dir.workspace = true
 serde.workspace = true
+serde_json_canonicalizer.workspace = true
+sha2.workspace = true
 yaml_serde.workspace = true
 
 [dev-dependencies]

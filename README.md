@@ -511,6 +511,25 @@ order-independent flag form is suitable for pass-through adapters:
 forge-core assurance --input-file <path> --root <project> --json
 ```
 
+### Evaluate execution admission in Rust (P4a)
+
+P4a adds a pure policy decision point for agents integrating Forge as a Rust
+library:
+
+```rust
+let decision = forge_core_decisions::evaluate_execution_admission(&document)?;
+```
+
+The request content-addresses the exact Assurance Case and
+Operation/Command/Effect contracts, then binds them to trusted principal,
+single-use replay, claim/gate revision, and commit-guarantee observations. Any
+deterministic issue blocks admission and is returned for agent self-correction.
+The executable corpus lives under `docs/fixtures/execution-admission-v0/`.
+
+This is intentionally **not yet** a CLI or MCP mutation-enforcement claim. P4b
+must make the Adapter produce trusted identity/replay observations and make the
+kernel evaluate the verdict immediately before its WAL boundary.
+
 ### Route work through the dual-lane autonomy router
 
 The flagship evolve-phase command is the risk router. It reads an

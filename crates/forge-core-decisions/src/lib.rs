@@ -18,6 +18,7 @@
 //! - [`autonomy_router`]: autonomy routing.
 //! - [`catalog`]: workflow catalog selection and eligibility.
 //! - [`coordination_eval`] / [`guide_validation`]: coordination and guide checks.
+//! - [`execution_admission`]: P4a commit-time execution policy decision point.
 
 // The coordination-eval aggregator and a few routers walk many independent
 // dimensions while accumulating diagnostics; splitting them just to satisfy
@@ -31,6 +32,7 @@ pub mod conflict_detection;
 pub mod coordination_eval;
 pub mod embedded_contracts;
 pub mod eval;
+pub mod execution_admission;
 pub mod guide_validation;
 pub mod isolation;
 pub mod obligation_engine;
@@ -47,6 +49,19 @@ pub use embedded_contracts::{
 pub use autonomy_router::{route_lane, LaneDecision, LaneKind, LaneRouteReason};
 pub use eval::{
     load_eval_corpus, score_router, CaseScore, EvalCase, EvalCorpusDocument, RouterScore,
+};
+pub use execution_admission::{
+    assurance_case_token, command_contract_token, effect_contract_token,
+    evaluate_execution_admission, execution_intent_digest, operation_contract_token,
+    ClaimRevisionObservation, ClaimSnapshotObservation, CommitAssuranceObservation,
+    CompensationCoverage, ContentAddressedBinding, EffectContractBinding,
+    ExecutionAdmissionDecision, ExecutionAdmissionInput, ExecutionAdmissionInputDocument,
+    ExecutionAdmissionIssue, ExecutionAdmissionIssueCode, ExecutionAdmissionRejection,
+    ExecutionAdmissionRequest, ExecutionAdmissionStatus, ExecutionCommitScope,
+    ExecutionCommitStrategy, ExecutionPrincipalObservation, ExecutionPrincipalTrust,
+    GateRevisionObservation, GateSnapshotObservation, GuaranteeStatus, ReplayProtectionObservation,
+    ReplayReservationStatus, RevisionExpectation, SnapshotCompleteness,
+    EXECUTION_ADMISSION_SCHEMA_VERSION, EXECUTION_AUTHORITY_SCOPE,
 };
 pub use guide_validation::{validate_guide_decision, GuideRejection, GuideValidation};
 

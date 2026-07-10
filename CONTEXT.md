@@ -58,6 +58,17 @@ Active implementation plan:
   hazards, playbooks, evaluators, evidence rules, and capability requirements.
 - **Phase Projection**: a human- and agent-friendly summary of maturity derived
   from satisfied obligations. It is not the primary source of authority.
+- **Execution Principal**: the authenticated and authorized caller identity and
+  role derived by a trusted Adapter. A caller-selected key or a valid signature
+  by itself is not an Execution Principal with mutation authority.
+- **Execution Admission**: a deterministic commit-time decision that binds the
+  ready Assurance Case, exact Operation/Command/Effect contracts, principal,
+  replay reservation, claim/gate revisions, and commit guarantees. P4a is the
+  pure policy decision point; it is not yet the runtime enforcement point.
+- **Replay Reservation**: a durable, single-use binding between a fresh nonce,
+  a revision, and the canonical execution-intent digest.
+- **Commit Assurance**: verified guarantees that the chosen WAL or saga scope
+  can recover, roll back, or compensate the complete authorized mutation.
 
 ## Architectural direction
 
@@ -65,6 +76,8 @@ Active implementation plan:
 - The **Obligation Engine Module** derives required claims, gaps, decisions, and
   next-best actions from Intent Proposal plus Project Snapshot.
 - The **Execution Assurance Kernel** governs authority and durable mutation.
+  The P4a decision module defines its fail-closed admission contract; the P4b
+  Adapter/kernel integration is required before Forge claims runtime enforcement.
 - Host-specific integrations are **Adapters** at a host seam; deleting one must
   not change Forge domain behavior.
 - Workflows migrate from authoritative step sequences into policies,

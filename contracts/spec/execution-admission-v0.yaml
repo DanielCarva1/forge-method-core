@@ -1,0 +1,101 @@
+schema_version: "0.1"
+spec: "execution_admission_v0"
+status: "p4a_read_only_pdp"
+purpose: >-
+  Bind an evidence-backed Assurance Case and a commit-time runtime snapshot to
+  one exact mutation intent before the Execution Assurance Kernel may admit it.
+
+interface:
+  rust_module: "forge_core_decisions::execution_admission"
+  input: "ExecutionAdmissionInputDocument"
+  output: "ExecutionAdmissionDecision"
+  properties:
+    - "pure"
+    - "deterministic"
+    - "deny_unknown_fields"
+    - "fail_closed"
+    - "all_issues_returned_for_agent_self_correction"
+
+authority_bindings:
+  assurance:
+    - "request case id equals the supplied Assurance Case id"
+    - "request token equals the canonical SHA-256 Assurance Case token"
+    - "readiness is Ready at Execute or a later target"
+    - "snapshot state version equals the commit-time project version"
+    - "no due required obligation, Decision Request, or Capability Gap remains"
+  operation:
+    - "request operation id equals the typed OperationContract"
+    - "request operation token equals the canonical SHA-256 OperationContract token"
+    - "project and concurrency state versions equal the commit-time version"
+    - "mutation policy is Allowed and missing_authority is empty"
+    - "provided Command and Effect contracts are exactly bound by ref and canonical SHA-256 token"
+    - "duplicate request or observed bindings are rejected"
+    - "commands executed inside the mutation boundary are read-only and offline"
+  principal:
+    - "request principal, agent, and role equal the trusted Adapter observation and Operation caller role"
+    - "signature verification alone is not authorization"
+    - "only an authorized key registry or OAuth resource-server result may authorize mutation"
+    - "audience must equal the configured Forge audience"
+    - "authority grants include operation.execute"
+    - "the attestation binds the canonical execution-intent digest"
+  replay:
+    - "nonce is non-empty and equals the reserved nonce"
+    - "reservation status is fresh_reserved"
+    - "reserved digest equals the canonical execution-intent digest"
+    - "reservation revision equals the revision attested by the request"
+    - "issued-at time is within the injected freshness and future-skew windows"
+  claims:
+    - "claim snapshot is complete and its revision equals the signed expectation"
+    - "duplicate signed expectations or observed claim refs are rejected"
+    - "required claim revision is revalidated from the commit-time snapshot"
+    - "required claim is live, belongs to the principal identity and role, and targets the current state version"
+    - "file-backed writes, including artifacts, evidence, ledgers, and request streams, are governed by the caller claim and do not conflict with another live claim"
+  gates:
+    - "gate snapshot is complete and its revision equals the signed expectation"
+    - "duplicate signed expectations or observed gate refs are rejected"
+    - "every required gate revision is revalidated at commit"
+    - "every required gate passed against the current project state version"
+    - "every passing required gate records evidence refs and a non-empty checker identity"
+  commit:
+    - "single_effect_wal admits exactly one effect with verified lock, rollback recovery, and durable commit record"
+    - "operation_wide_wal and saga remain typed but fail closed as unsupported in P4a"
+    - "future operation_wide_wal support requires whole-operation scope and the same verified guarantees"
+    - "future saga support requires whole-operation scope and complete typed compensation for every effect"
+
+trust_boundary:
+  accepted_observation_sources:
+    - "authorized_key_registry"
+    - "oauth_resource_server"
+  explicitly_insufficient:
+    - "caller_supplied_public_key"
+    - "signature_verified_without_registry_authority"
+    - "caller_supplied_nonce_without_server_reservation"
+    - "presence_of_operation_command_or_effect_flag"
+    - "agent_confidence"
+    - "artifact_presence"
+
+current_boundary:
+  enforced_now:
+    - "typed pure decision and content-addressed binding"
+    - "P4a executable acceptance corpus"
+    - "P3 resume token now shares the same canonical token function"
+  not_yet_claimed:
+    - "MCP authorized-principal registry wiring"
+    - "durable nonce reservation and consume-on-commit"
+    - "kernel pre-WAL ExecutionAdmission gate"
+    - "Execution Principal propagation into claims, traces, WAL, and evidence"
+    - "operation-wide WAL across multiple effects"
+
+references:
+  - id: "mcp_authorization_2025_11_25"
+    url: "https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization"
+    supports: "MCP resource servers validate tokens for their intended audience and do not pass tokens through."
+  - id: "mcp_security_best_practices"
+    url: "https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices"
+    supports: "Sessions are not authentication; identity and authorization must come from verified request context."
+  - id: "rfc_9700"
+    url: "https://www.rfc-editor.org/info/rfc9700/"
+    supports: "OAuth security best current practice includes sender-constrained access tokens and replay prevention."
+  - id: "rfc_9449"
+    url: "https://www.rfc-editor.org/info/rfc9449/"
+    supports: "A unique proof identifier and server-side tracking can detect and prevent replay."

@@ -33,6 +33,9 @@ delivery_strategy:
   published_local_checkpoints:
     - commit: "87406ba"
       scope: "P0-P2 agent-native doctrine, Assurance Case v0, validation, and Obligation Engine"
+    - commit: "7fe6d21"
+      tag: "v0.4.0"
+      scope: "P3 conversational Assurance Adapter, default read-only MCP projection, and replacement-agent resume"
   preserve:
     - "Command Surface"
     - "typed contracts"
@@ -113,8 +116,23 @@ phases:
       - "The final explanation is generated from typed state and evidence."
 
   - id: "P4-execution-assurance-hardening"
-    status: "pending"
+    status: "in_progress"
     outcome: "Agent-native guidance can safely authorize real mutations."
+    completed_slices:
+      - id: "P4a-read-only-execution-admission-pdp"
+        delivers:
+          - "pure deterministic fail-closed Execution Admission decision"
+          - "content-addressed Assurance Case and Operation, Command, and Effect contract bindings"
+          - "typed principal, replay, claim, gate, and commit observations"
+          - "executable accepted/blocked scenario matrix"
+        boundary: "No MCP or kernel enforcement is claimed by P4a."
+    next_slice:
+      id: "P4b-trusted-adapter-and-kernel-gate"
+      scope:
+        - "derive Execution Principal from an authorized MCP registry or resource-server result"
+        - "reserve and consume nonces durably"
+        - "evaluate Execution Admission immediately before the kernel WAL boundary"
+        - "propagate principal and admission decision through claims, traces, WAL, and evidence"
     release_blockers:
       - "operation-wide transaction or explicit saga semantics"
       - "trusted MCP caller identity"
@@ -163,12 +181,14 @@ first_executable_slice:
     - "human attention requested only for due irreducible Decision Requests"
     - "default read-only MCP projection with order-independent flag-only invocation"
     - "typed conversational golden path from an empty consumer through replacement-agent resume"
+    - "P4a pure Execution Admission PDP with content-addressed authority bindings"
+    - "P4a scenario corpus for principal, replay, snapshot, evidence, tampering, and commit failures"
   next_action: >-
-    Begin P4 by binding the P3 Assurance Case and its due obligations to typed
-    execution admission while preserving the existing release blockers:
-    operation-wide transaction or saga semantics, trusted MCP identity and
-    replay protection, claim revision revalidation, and evidence recorded only
-    after verified effects.
+    Implement P4b by deriving trusted Execution Principal and durable replay
+    observations in the MCP Adapter, then require the P4a verdict immediately
+    before the kernel WAL boundary. Propagate that principal and decision into
+    claims, traces, WAL, and evidence. Keep operation-wide transaction or
+    complete saga semantics as the following release blocker.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"
