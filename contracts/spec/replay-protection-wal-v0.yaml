@@ -1,0 +1,128 @@
+schema_version: "0.1"
+spec: "replay_protection_wal_v0"
+status: "p4b1b_rust_substrate"
+purpose: >-
+  Provide a durable, bounded, single-use nonce reservation substrate for a
+  future Execution Assurance Kernel without claiming that MCP or CLI mutation
+  is already connected to it.
+
+interface:
+  rust_module: "forge_core_store::replay_wal"
+  initialization: "initialize_replay_wal"
+  reserve: "reserve_replay_nonce"
+  guarded_consume: "acquire_replay_commit_guard then ReplayCommitGuard::consume"
+  administrative_consume: "consume_replay_nonce_non_boundary"
+  recovery: "recover_replay_wal"
+
+authority_key:
+  inputs:
+    - "trusted principal id"
+    - "configured Forge audience"
+    - "opaque nonce"
+  persisted_form: "domain-separated, length-prefixed, unkeyed SHA-256 hash"
+  confidentiality: >-
+    Pseudonymous only. Low-entropy principal, audience, or nonce values can be
+    guessed offline; the hash is not encryption and must not be described as
+    confidential.
+  bindings:
+    - "canonical execution-intent SHA-256 digest"
+    - "immutable canonical commit-descriptor SHA-256 digest"
+    - "compare-and-swap revision"
+
+state_layout:
+  trust_boundary: >-
+    The caller supplies an existing canonical Forge state root. Operators must
+    keep that root outside untrusted project artifacts or protect it with
+    equivalent operating-system permissions.
+  files:
+    wal: "wal/replay.fmr1"
+    manifest: "replay-wal.manifest.json"
+    lock: "locks/replay.wal.lock"
+  marker_pair_rule: >-
+    The manifest and WAL must exist together. A half-pair, corrupt manifest,
+    non-regular authority file, or path resolving outside the trusted root
+    fails closed.
+  anti_rollback_limit: >-
+    Runtime reserve never recreates a missing pair. The explicit initializer
+    cannot distinguish first bootstrap from deletion or rollback of both the
+    manifest and WAL together, however. Initialization must therefore remain
+    operator-controlled, and enforced deployment still needs an
+    operator-protected root plus an external durable epoch/head or explicit
+    initialization policy.
+
+transitions:
+  reserve:
+    - "the first observation of a principal/audience/nonce key writes revision 1"
+    - "any later reserve of that key is rejected, including after consume"
+    - "recovery, conflict checks, append, and fsync occur under the replay lock"
+  consume:
+    - "requires the reserved intent digest, commit digest, and expected revision"
+    - "the first valid consume appends expected_revision + 1"
+    - "an exact retry after a lost response is idempotent and appends nothing"
+  non_boundary_warning: >-
+    consume_replay_nonce_non_boundary releases the replay lock independently
+    of any effect commit and is only an administrative or recovery convenience.
+
+durability:
+  framing:
+    - "monotonic sequence number"
+    - "CRC32C-protected header and payload"
+    - "torn-tail repair only for an incomplete final header or payload"
+  initialization:
+    - "manifest and empty WAL creation are synced"
+    - "the created directory chain is synced, including Windows directory handles"
+  append: "each reserve or consume append is flushed and fsynced before success"
+  corruption_policy: >-
+    Checksum, sequence, decode, and invalid-transition failures are never
+    rewritten into an authoritative state.
+
+resource_bounds:
+  max_wal_bytes: 8388608
+  max_records: 10000
+  completed_lifecycle_capacity: >-
+    The record cap alone permits at most 5,000 completed reserve/consume
+    lifecycles when each uses two records. The byte cap may permit fewer, and
+    unconsumed reservations change the mix.
+  behavior_at_limit: "fail closed before append"
+  compaction_or_rotation: "not implemented"
+  consequence: >-
+    Capacity exhaustion blocks further reservations/consumes until a future
+    reviewed compaction, rotation, or migration mechanism exists.
+
+lock_order:
+  required: "effect-store lock before replay WAL lock"
+  enforcement: >-
+    ReplayCommitGuard borrows the caller's EffectStoreLock while owning the
+    replay lock, so both locks remain live while the future kernel retains the
+    guard between replay validation and consume.
+  scope_limit: >-
+    The store validates the caller-declared effect-lock path against the held
+    lock but cannot know whether that path is the canonical lock for the
+    intended effect. P4b.2 must derive the path and commit descriptor inside
+    the kernel and must not accept either from adapter input.
+  lifecycle_limit: >-
+    The store guard alone cannot prove that an effect commit happened before
+    consume or prevent a caller from dropping the guard. P4b.2 must add an
+    opaque prepared-transaction lifecycle and bind consume to its durable
+    commit receipt or reconciliation record.
+  limitation: >-
+    This guard is a substrate, not cross-WAL atomicity. A crash after the effect
+    commit and before replay consume still needs kernel recovery reconciliation.
+
+current_boundary:
+  enforced_now:
+    - "Rust API for durable reserve, recovery, guarded validation, and consume"
+    - "manifest/WAL half-pair and corruption detection"
+    - "bounded replay cost and append capacity"
+    - "effect-lock-first lifetime guard for future kernel integration"
+  not_yet_claimed:
+    - "live MCP or CLI mutation reserves or consumes this WAL"
+    - "P4a Execution Admission runs immediately before the first effect-WAL record"
+    - "effect-WAL commit and replay consume are one atomic transaction"
+    - "whole-pair deletion or rollback detection"
+    - "compaction, rotation, or online migration"
+
+references:
+  - "contracts/spec/execution-admission-v0.yaml"
+  - "contracts/spec/execution-trust-boundary-v0.yaml"
+  - "contracts/plan/agent-native-guidance-plan.yaml"

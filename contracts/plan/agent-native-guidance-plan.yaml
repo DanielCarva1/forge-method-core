@@ -21,7 +21,7 @@ constraints:
   - "Do not expose YAML authoring or workflow selection as normal human work."
   - "Do not migrate all 110 workflows before proving one vertical slice."
   - "Do not let documentation claims outrun executable evidence."
-  - "Operation-wide atomicity and MCP authorization/replay remain release blockers."
+  - "Operation-wide atomicity and end-to-end MCP authorization/replay enforcement remain release blockers."
 
 delivery_strategy:
   principle: "Prove one deep vertical slice before broad catalog migration."
@@ -36,6 +36,10 @@ delivery_strategy:
     - commit: "7fe6d21"
       tag: "v0.4.0"
       scope: "P3 conversational Assurance Adapter, default read-only MCP projection, and replacement-agent resume"
+    - commit: "1267048"
+      scope: "P4a deterministic fail-closed Execution Admission policy decision point and executable acceptance corpus"
+    - commit: "fc6aabd"
+      scope: "P4b.1a operator-owned principal registry, trusted identity derivation, and hardened read-only MCP subprocess boundary"
   preserve:
     - "Command Surface"
     - "typed contracts"
@@ -133,22 +137,46 @@ phases:
           - "read-only MCP startup can preload the registry while mutating stdio allowlists remain fail-closed"
           - "read-only child processes pin the current binary, canonical repo cwd, minimal environment, and null stdin"
         boundary: "The principal is not yet propagated to the kernel; live MCP stdio mutation remains disabled."
+      - id: "P4b.1b-durable-replay-substrate"
+        delivers:
+          - "bounded CRC32C-framed replay WAL with durable reserve and compare-and-swap consume"
+          - "canonical intent and immutable commit-descriptor digest bindings"
+          - "manifest/WAL half-pair, corrupt-state, path-escape, and capacity fail-closed checks"
+          - "effect-lock-first ReplayCommitGuard for future kernel integration"
+        boundary: >-
+          This is a Rust store API only. Live MCP and CLI mutation do not use it;
+          effect commit plus replay consume are not yet atomic; whole-pair
+          deletion or rollback is not distinguishable from first bootstrap by
+          the explicit initializer and needs an externally protected epoch/head
+          or initialization policy. Runtime reserve never recreates a missing
+          pair.
+    checkpoint_sequence:
+      rule: >-
+        P4b.2a, P4b.2b, and P4b.2c each land as a separate validated commit so
+        source users can fast-forward pull a usable checkpoint without
+        implicitly enabling the next authority boundary.
     next_slice:
-      id: "P4b.1b-durable-replay-substrate"
+      id: "P4b.2a-opaque-authority-and-in-process-seam"
       scope:
-        - "reserve and consume nonces durably"
-        - "make missing/rolled-back replay state fail closed and bound recovery cost"
-        - "keep replay state outside caller-controlled project artifacts"
-    following_slice:
-      id: "P4b.2-trusted-adapter-and-kernel-gate"
-      scope:
-        - "carry the typed Execution Principal and replay guard without a caller-forgeable subprocess handoff"
-        - "evaluate Execution Admission immediately before the kernel WAL boundary"
-        - "propagate principal and admission decision through claims, traces, WAL, and evidence"
+        - "seal verified execution authorization behind private fields and no caller deserialization"
+        - "introduce an adapter-neutral in-process mutation executor seam"
+        - "keep public MCP mutation blocked"
+    following_slices:
+      - id: "P4b.2b-prepared-transaction-and-late-admission"
+        scope:
+          - "retain project, effect, replay, claim, and gate authority through the commit boundary"
+          - "prepare and revalidate the transaction before the first effect-WAL record"
+          - "evaluate Execution Admission at that late boundary and keep public MCP mutation blocked"
+      - id: "P4b.2c-provenance-commit-and-recovery"
+        scope:
+          - "persist principal, intent, replay, claim, gate, and admission provenance in WAL and evidence"
+          - "commit one effect through the internal in-process path"
+          - "reconcile crashes between effect commit and replay consume"
+          - "require an explicit policy decision before public MCP mutation enablement"
     release_blockers:
       - "operation-wide transaction or explicit saga semantics"
-      - "trusted MCP caller identity"
-      - "MCP replay protection"
+      - "trusted MCP caller identity carried into the kernel without a forgeable subprocess handoff"
+      - "durable replay guard integrated with effect commit and crash recovery"
       - "typed per-command admission and contract binding"
       - "Execution Principal propagated through claims, traces, WAL, and evidence"
       - "gate success records and claim revision revalidation at commit"
@@ -196,12 +224,14 @@ first_executable_slice:
     - "P4a pure Execution Admission PDP with content-addressed authority bindings"
     - "P4a scenario corpus for principal, replay, snapshot, evidence, tampering, and commit failures"
     - "P4b.1a operator-owned MCP principal registry and fail-closed stdio mutation boundary"
+    - "P4b.1b bounded durable replay WAL and effect-lock-first commit guard Rust substrate"
   next_action: >-
-    Land the durable replay WAL as a separate safe substrate, then implement a
-    non-forgeable typed principal/replay handoff that retains authority through
-    the late kernel Execution Admission boundary. Propagate that principal and
-    decision into claims, traces, WAL, and evidence. Keep operation-wide
-    transaction or complete saga semantics as the following release blocker.
+    Seal verified authorization and introduce an adapter-neutral in-process
+    executor seam in P4b.2a while public MCP mutation stays blocked. Then build
+    the prepared late-admission transaction in P4b.2b and provenance, commit,
+    and crash reconciliation in P4b.2c. Keep operation-wide transaction or
+    complete saga semantics and enforced-deployment isolation as explicit
+    release boundaries.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

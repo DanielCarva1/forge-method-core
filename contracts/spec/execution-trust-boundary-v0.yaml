@@ -1,0 +1,60 @@
+schema_version: "0.1"
+spec: "execution_trust_boundary_v0"
+status: "p4b1b_cooperative_boundary"
+purpose: >-
+  Separate the guarantees Forge can provide inside a trusted local process
+  from the stronger isolation required to resist an agent that already has raw
+  shell or filesystem authority under the same operating-system identity.
+
+current_mode:
+  id: "cooperative_governance"
+  guarantees:
+    - "MCP stdio mutation is disabled fail-closed."
+    - "Read-only MCP children use a pinned binary, canonical repo cwd, minimal environment, and null stdin."
+    - "An operator-owned registry can derive trusted principal identity without accepting a caller-selected key."
+    - "The Rust store exposes durable replay primitives for a future in-process mutation boundary."
+  does_not_guarantee:
+    - "confinement of a same-user agent that can invoke another mutating CLI or store path directly"
+    - "protection from deletion or rollback by an agent with write access to the authority root"
+    - "an end-to-end boundary spanning identity, replay, claims, gates, admission, effect commit, and evidence"
+  required_description: >-
+    Until P4b.2 integration and an explicit enablement decision land, describe
+    Forge as cooperative governance with a fail-closed MCP mutation surface,
+    not as a security sandbox or complete local privilege boundary.
+
+planned_trusted_process_mode:
+  id: "trusted_in_process_mutation"
+  sequence:
+    - "P4b.2a: introduce opaque verified authorization and an adapter-neutral in-process executor seam; keep public MCP mutation blocked."
+    - "P4b.2b: retain project/effect/replay guards and evaluate a prepared transaction at the late pre-WAL boundary; keep public MCP mutation blocked."
+    - "P4b.2c: persist principal and admission provenance, commit one effect, reconcile recovery, and prove an internal end-to-end path before any enablement decision."
+  achievable_guarantee: >-
+    A request entering the trusted Forge process cannot substitute its own
+    registry identity, replay observation, or admission verdict before the
+    guarded effect commit.
+  remaining_limit: >-
+    This mode still cannot confine a malicious same-user process that can bypass
+    Forge and write project or authority files directly.
+
+enforced_isolation_mode:
+  id: "separate_authority_broker"
+  status: "not_implemented"
+  prerequisites:
+    - "a dedicated service identity or equivalent sandbox boundary"
+    - "operating-system ACLs that make project and authority writes broker-owned"
+    - "the broker exclusively owns registry, replay, claim, gate, effect-WAL, and evidence authority paths"
+    - "authenticated, audience-bound requests into the broker"
+    - "anti-rollback storage or an externally protected epoch/head"
+  guarantee_if_completed: >-
+    An untrusted agent process can request governed effects but cannot bypass
+    the broker by writing the protected authority or project paths directly.
+
+enablement_rule: >-
+  Landing identity or replay substrates alone never enables mutation. Public
+  MCP mutation requires an explicit policy revision after P4b.2 acceptance and
+  a declared deployment mode with its residual risks.
+
+references:
+  - "contracts/policies/mcp-local-process-security-boundary.yaml"
+  - "contracts/spec/execution-admission-v0.yaml"
+  - "contracts/spec/replay-protection-wal-v0.yaml"

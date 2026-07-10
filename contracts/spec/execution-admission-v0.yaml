@@ -80,12 +80,18 @@ current_boundary:
     - "P4a executable acceptance corpus"
     - "P3 resume token now shares the same canonical token function"
     - "P4b.1a strict operator-owned principal registry and trusted identity derivation primitive"
-    - "MCP stdio mutation stays fail-closed until replay and late kernel admission consume that identity"
+    - "P4b.1b durable bounded replay WAL Rust substrate with intent, commit-descriptor, and revision binding"
+    - "replay manifest/WAL half-pairs and corrupt authority state fail closed"
+    - "effect-lock-first ReplayCommitGuard retains the future kernel lock order through consume or drop"
+    - "MCP stdio mutation stays fail-closed until the late kernel path consumes trusted identity and guarded replay state"
     - "read-only MCP child processes use a pinned binary, repo-scoped cwd, minimal environment, and null stdin"
   not_yet_claimed:
     - "live MCP mutation using the authorized-principal result"
-    - "durable nonce reservation and consume-on-commit"
+    - "live MCP or CLI mutation reserving and consuming the replay WAL"
     - "kernel pre-WAL ExecutionAdmission gate"
+    - "atomic effect-WAL commit plus replay consume and crash reconciliation"
+    - "whole replay manifest/WAL pair deletion or rollback detection"
+    - "replay WAL compaction or rotation"
     - "Execution Principal propagation into claims, traces, WAL, and evidence"
     - "operation-wide WAL across multiple effects"
 
@@ -102,3 +108,7 @@ references:
   - id: "rfc_9449"
     url: "https://www.rfc-editor.org/info/rfc9449/"
     supports: "A unique proof identifier and server-side tracking can detect and prevent replay."
+
+local_specs:
+  - "contracts/spec/replay-protection-wal-v0.yaml"
+  - "contracts/spec/execution-trust-boundary-v0.yaml"

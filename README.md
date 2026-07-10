@@ -526,9 +526,10 @@ single-use replay, claim/gate revision, and commit-guarantee observations. Any
 deterministic issue blocks admission and is returned for agent self-correction.
 The executable corpus lives under `docs/fixtures/execution-admission-v0/`.
 
-This pure decision is intentionally **not yet** the kernel mutation gate. P4b.1
-now makes the MCP Adapter derive a trusted principal from an operator registry;
-durable replay state and late kernel evaluation are separate checkpoints below.
+This pure decision is intentionally **not yet** the kernel mutation gate. P4b.1a
+makes the MCP Adapter derive a trusted principal from an operator registry and
+P4b.1b provides a durable replay substrate in Rust. Neither is wired into a
+live mutation path; late kernel evaluation remains a separate checkpoint.
 
 ### Prepare a trusted MCP principal registry (P4b.1a)
 
@@ -570,6 +571,56 @@ inherit the host's full environment. The server pins its current executable,
 uses the canonical repo root as cwd and `--root`, clears the environment before
 copying a small OS/runtime allowlist, and disconnects child stdin from the MCP
 protocol stream.
+
+**Migration note for Rust and custom MCP consumers.** P4b.1a added fields to
+`McpServerConfig`, so Rust consumers that construct it with a struct literal
+must add the principal registry, freshness-window, pinned-binary, and root
+fields (prefer `McpServerConfig::default_read_only()` when possible). The new
+attestation fields are optional on the legacy read-only wire shape and are
+omitted when `None`. Any custom allowlist containing `policy: mutate` must
+remove those entries before starting `mcp serve`: loading a principal registry
+does **not** enable mutation.
+
+### Reserve replay nonces in Rust (P4b.1b)
+
+`forge_core_store::replay_wal` now exposes the durable replay substrate needed
+by the future Execution Assurance Kernel:
+
+- `initialize_replay_wal` creates the manifest/WAL marker pair;
+- `reserve_replay_nonce` durably binds a principal/audience/nonce key to the
+  canonical execution-intent and immutable commit-descriptor digests;
+- `acquire_replay_commit_guard` validates that reservation while retaining the
+  caller's effect-store lock, and `ReplayCommitGuard::consume` completes the
+  compare-and-swap transition;
+- `recover_replay_wal` verifies framing and can repair only an incomplete final
+  header or payload; other corruption fails closed.
+
+The authority files live under the supplied existing Forge state root at
+`wal/replay.fmr1`, `replay-wal.manifest.json`, and
+`locks/replay.wal.lock`. That root is a trust boundary: keep it outside
+agent-writable project artifacts or protect it with equivalent OS permissions.
+The on-disk key is an unkeyed SHA-256 hash of principal, audience, and nonce, so
+it is **pseudonymous, not confidential**; guessable inputs remain guessable.
+
+Replay is intentionally bounded to 8 MiB and 10,000 records and fails closed at
+either limit (the record cap alone allows at most 5,000 completed
+reserve/consume lifecycles when each uses two records; the byte cap may allow
+fewer, and unconsumed reservations change that mix). There is no
+compaction or rotation yet. Runtime reserve never recreates a missing pair and
+a missing manifest/WAL half-pair is detected. The explicit initializer still
+cannot distinguish first bootstrap from deletion or rollback of the complete
+pair, so it must remain an operator-controlled action; enforced deployment also
+needs an externally protected epoch/head or explicit initialization policy.
+The effect-lock-first guard does not make the effect WAL and replay WAL one
+atomic transaction: crash reconciliation between effect commit and replay
+consume belongs to P4b.2c.
+
+This is a **Rust API only** checkpoint. No live MCP or CLI mutation path reserves
+or consumes this WAL, and MCP stdio mutation remains disabled. See
+[`contracts/spec/replay-protection-wal-v0.yaml`](contracts/spec/replay-protection-wal-v0.yaml)
+and
+[`contracts/spec/execution-trust-boundary-v0.yaml`](contracts/spec/execution-trust-boundary-v0.yaml)
+for the exact guarantees and remaining boundaries.
 
 ### Route work through the dual-lane autonomy router
 
@@ -740,6 +791,9 @@ gates.
 - Self-hardening batch landed: TTL-overflow safety, RFC-3339 calendar
   validation, lockfile stale-owner reclaim, WAL fsync hardening, path-safety,
   symlink escape checks, and TOCTOU revalidation.
+- P4b.1a trusted-principal derivation and P4b.1b bounded durable replay are
+  available as Rust substrates while the public MCP mutation surface remains
+  fail-closed.
 - Dual-lane autonomy router exposed as `forge-core autonomy route` for fast vs
   rigorous lane selection.
 - Seven evolve-phase governance contracts: `autonomy_policy`,
@@ -752,9 +806,11 @@ gates.
 - **MCP server** — `forge-core mcp serve` is implemented for read-only stdio
   JSON-RPC with a fail-closed allowlist and optional signature-only
   attestation. P4b.1a adds an operator principal registry, but mutating stdio
-  tools remain blocked until durable replay, constrained principal handoff,
-  and late kernel Execution Admission land. The CLI remains the intended agent
-  boundary by design.
+  tools remain blocked. P4b.1b adds durable replay primitives, but they are not
+  connected to MCP or CLI mutation. P4b.2 must still deliver an opaque
+  in-process principal/replay handoff, prepared late kernel Execution Admission,
+  persisted provenance, and crash reconciliation before any explicit
+  enablement decision. The CLI remains the intended agent boundary by design.
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is
