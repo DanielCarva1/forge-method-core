@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "mcp_deployment_policy_v0"
-status: "p4b3a_implemented_dormant"
+status: "p4b3b_loaders_implemented_dormant"
 purpose: >-
   Define a closed operator-owned deployment posture for the local MCP adapter
   without allowing policy validation itself to activate mutation.
@@ -36,14 +36,16 @@ fail_closed_rules:
   - "trusted policy validation exposes no activation capability"
 
 checkpoint_boundary:
-  implemented: "typed parse, invariant validation, safe read-only example, and dormant audit state"
+  implemented: >-
+    Typed policy plus canonical bounded contract, signed-payload, risk-audit,
+    and local snapshot loaders wired to an always-dormant executor.
   not_implemented:
-    - "trusted contract, payload, or snapshot loaders"
     - "startup reconciliation wiring"
     - "MCP server mutation activation"
-  next: "P4b.3b trusted material and bounded snapshot loaders"
+  next: "P4b.3c startup reconciliation and explicit narrow server opt-in"
 
 references:
   - "contracts/examples/mcp-deployment-policy.yaml"
   - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/execution-trust-boundary-v0.yaml"
+  - "contracts/spec/mcp-trusted-material-loading-v0.yaml"

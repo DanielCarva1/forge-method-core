@@ -30,6 +30,9 @@
 //! - **[`deployment_policy`]** validates the operator's closed, typed
 //!   deployment posture. Trusted mutation policies remain dormant until the
 //!   loader and startup-reconciliation checkpoints are complete.
+//! - **[`trusted_loader`]** performs canonical, byte-bounded local reads for
+//!   typed contracts, signed payloads, risk rules, and authority snapshots.
+//!   Its executor always rejects after loading; it cannot prepare or commit.
 //! - **[`error`]** — hand-rolled error enums (project convention: no
 //!   `anyhow`/`thiserror`, no `Result<_, String>`).
 //!
@@ -51,6 +54,7 @@ pub mod error;
 pub mod mutation_executor;
 pub mod principal_registry;
 pub mod server;
+pub mod trusted_loader;
 
 pub use allowlist::{
     default_mutate_tool_names, default_read_only_tool_names, AllowedTool, Allowlist,
@@ -83,3 +87,10 @@ pub use principal_registry::{
     DEFAULT_MAX_FUTURE_SKEW_SECONDS, PRINCIPAL_REGISTRY_SCHEMA_VERSION,
 };
 pub use server::{ForgeMcpServer, McpServerConfig};
+pub use trusted_loader::{
+    DormantTrustedMcpExecutor, LoadedMcpExecutionMaterial, LoadedMcpMaterialAudit,
+    LocalMcpSnapshotSource, McpLocalExecutionSnapshot, McpLocalExecutionSnapshotDocument,
+    TrustedMcpLoadError, TrustedMcpLoaderLimits, TrustedMcpMaterialLoader,
+    MAX_TRUSTED_CONTRACT_BYTES, MAX_TRUSTED_PAYLOAD_BYTES, MAX_TRUSTED_SNAPSHOT_BYTES,
+    MAX_TRUSTED_TOTAL_PAYLOAD_BYTES, MCP_LOCAL_SNAPSHOT_SCHEMA_VERSION,
+};

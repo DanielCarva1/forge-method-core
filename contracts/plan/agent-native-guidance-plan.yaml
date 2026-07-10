@@ -205,22 +205,32 @@ phases:
           Policy validation cannot activate mutation. Trusted material and
           snapshot loading, startup reconciliation, and MCP server wiring remain
           absent, so public MCP mutation stays fail-closed.
+      - id: "P4b.3b-trusted-material-and-snapshot-loaders"
+        delivers:
+          - "canonical project-confined and byte-bounded local file reader"
+          - "strict typed operation, command, effect, risk-audit, and execution-snapshot loading"
+          - "payload bytes bound to sha256 digests carried inside the signed MCP intent"
+          - "exact Admission authority, content token, and claim/gate revision cross-checks"
+          - "dormant in-process executor that loads successfully and still rejects activation"
+        boundary: >-
+          Loading performs no network, model, subprocess, write, replay reserve,
+          WAL append, or kernel preparation. Citation requirements remain
+          unsupported, startup reconciliation is not wired, and public MCP
+          mutation stays fail-closed.
     checkpoint_sequence:
       rule: >-
         P4b.2a, P4b.2b, P4b.2c, and each P4b.3 sub-checkpoint land as separate validated commits so
         source users can fast-forward pull a usable checkpoint without
         implicitly enabling the next authority boundary.
     next_slice:
-      id: "P4b.3b-trusted-material-and-snapshot-loaders"
+      id: "P4b.3c-startup-reconciliation-and-explicit-opt-in"
       scope:
-        - "load exact typed operation, command, effect, and risk-audit contracts from canonical project-bound references"
-        - "load bounded payload bytes with canonical path, size, and digest verification"
-        - "provide a bounded local read-only snapshot source without network, model, subprocess, or mutation capability"
-        - "compare loaded material and snapshot posture to the validated deployment policy"
-        - "keep public MCP mutation dormant"
+        - "run P4b.2c reconciliation successfully before accepting mutation"
+        - "convert loaded material into the prepared kernel path without dropping risk or citation requirements"
+        - "bind operator registry, allowlist, root, audience, policy, loader, and executor at startup"
+        - "require explicit trusted-single-effect opt-in while preserving read-only default"
         - "keep operation-wide WAL and saga requests fail-closed"
     following_slices:
-      - "P4b.3c startup reconciliation and explicit narrow server opt-in"
       - "operation-wide transaction or complete typed saga semantics"
       - "externally protected replay epoch/head for whole-pair rollback detection"
     release_blockers:
@@ -279,11 +289,13 @@ first_executable_slice:
     - "P4b.2b opaque prepared transaction, double effect preflight, owned replay guard, and dormant late Admission typestate"
     - "P4b.2c complete redacted provenance, immediate commit Admission, one-effect commit, replay completion receipt, and deterministic crash reconciliation"
     - "P4b.3a closed typed deployment policy with active read-only and validated-but-dormant trusted-single-effect states"
+    - "P4b.3b canonical bounded typed material, signed-payload, risk-audit, and local snapshot loaders wired to an always-dormant executor"
   next_action: >-
-    Implement P4b.3b as a separate checkpoint by wiring canonical project-bound
-    typed contract and bounded payload loading plus a local read-only snapshot
-    source into the dormant in-process executor. Do not enable public mutation;
-    startup reconciliation and explicit narrow opt-in remain P4b.3c.
+    Implement P4b.3c as a separate checkpoint: require successful P4b.2c
+    reconciliation before listen, preserve every loaded risk/citation
+    requirement through kernel preparation, bind the full operator-owned
+    deployment at startup, and add explicit trusted-single-effect opt-in while
+    keeping read-only default and operation-wide/saga requests fail-closed.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

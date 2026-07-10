@@ -149,7 +149,7 @@ impl From<RiskAuditSeverity> for DiagnosticSeverity {
 /// validator can stay deterministic and side-effect-free (the exception is
 /// `ExternalLinter`, which shells out — it is the only non-pure detector).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RiskAuditDetector {
     /// Substring/regex match against the file contents. Use for known
     /// anti-pattern strings (`unwrap()`, `except Exception:`, `pass` in
@@ -191,6 +191,7 @@ pub enum RiskAuditDetector {
 /// A single anti-pattern rule. Rules are data, not code: adding one must
 /// never require a Rust change.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RiskAuditRule {
     /// Stable identifier. Surfaces in diagnostics so agents can dedupe and
     /// suppress.
@@ -215,6 +216,7 @@ pub struct RiskAuditRule {
 
 /// Top-level rule set loaded from a `risk-audit-v0` YAML contract.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct RiskAuditRuleSet {
     /// Must equal `RISK_AUDIT_SCHEMA_VERSION`.
     pub schema_version: String,

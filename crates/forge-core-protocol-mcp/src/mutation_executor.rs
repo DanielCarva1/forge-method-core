@@ -46,6 +46,7 @@ pub enum McpMutationRequestError {
     },
     BlankValue(String),
     InvalidPayloadBinding(String),
+    InvalidPayloadDigest(String),
     MultipleEffectsUnsupported {
         count: usize,
     },
@@ -66,6 +67,10 @@ impl fmt::Display for McpMutationRequestError {
             Self::InvalidPayloadBinding(binding) => write!(
                 formatter,
                 "payload binding '{binding}' must be <target_ref>=<path> with non-blank parts"
+            ),
+            Self::InvalidPayloadDigest(binding) => write!(
+                formatter,
+                "payload binding '{binding}' must end in #sha256:<64 lowercase hex characters>"
             ),
             Self::MultipleEffectsUnsupported { count } => write!(
                 formatter,
@@ -201,20 +206,38 @@ fn parse_payloads(
 
     raw.into_iter()
         .map(|binding| {
-            let Some((target_ref, path)) = binding.split_once('=') else {
+            let Some((target_ref, path_and_digest)) = binding.split_once('=') else {
                 return Err(McpMutationRequestError::InvalidPayloadBinding(
                     binding.to_owned(),
                 ));
             };
-            if target_ref.trim().is_empty() || path.trim().is_empty() {
+            if target_ref.trim().is_empty() || path_and_digest.trim().is_empty() {
                 return Err(McpMutationRequestError::InvalidPayloadBinding(
                     binding.to_owned(),
                 ));
             }
-            Ok(McpMutationPayloadBinding::new(
-                target_ref.to_owned(),
-                PathBuf::from(path),
-            ))
+            if let Some((path, digest)) = path_and_digest.rsplit_once("#sha256:") {
+                if path.trim().is_empty()
+                    || digest.len() != 64
+                    || !digest
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+                {
+                    return Err(McpMutationRequestError::InvalidPayloadDigest(
+                        binding.to_owned(),
+                    ));
+                }
+                Ok(McpMutationPayloadBinding::new_verified(
+                    target_ref.to_owned(),
+                    PathBuf::from(path),
+                    format!("sha256:{digest}"),
+                ))
+            } else {
+                Ok(McpMutationPayloadBinding::new(
+                    target_ref.to_owned(),
+                    PathBuf::from(path_and_digest),
+                ))
+            }
         })
         .collect()
 }
@@ -316,5 +339,28 @@ mod tests {
                 Err(McpMutationRequestError::InvalidPayloadBinding(_))
             ));
         }
+    }
+
+    #[test]
+    fn mutation_boundary_parses_signed_payload_digest_and_rejects_bad_digest() {
+        let digest = "a".repeat(64);
+        let arguments = map(&serde_json::json!({
+            "--operation": "op.yaml",
+            "--payload": format!("target.a=payload/a.bin#sha256:{digest}")
+        }));
+        let parsed = parse_execution_arguments(Some(&arguments)).expect("verified payload");
+        assert_eq!(
+            parsed.payloads[0].expected_content_hash(),
+            Some(format!("sha256:{digest}").as_str())
+        );
+
+        let invalid = map(&serde_json::json!({
+            "--operation": "op.yaml",
+            "--payload": "target.a=payload/a.bin#sha256:ABC"
+        }));
+        assert!(matches!(
+            parse_execution_arguments(Some(&invalid)),
+            Err(McpMutationRequestError::InvalidPayloadDigest(_))
+        ));
     }
 }

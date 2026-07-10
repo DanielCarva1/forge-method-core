@@ -892,6 +892,11 @@ gates.
 - P4b.3a adds a strict typed deployment policy: read-only is active by default,
   while a coherent trusted single-effect posture is only
   `policy_validated_dormant` and cannot enable the server.
+- P4b.3b adds canonical bounded local loaders for typed execution contracts,
+  risk-audit rules, complete authority snapshots, and payloads whose SHA-256
+  digest is carried in the signed request. The in-process executor validates
+  the bundle and still returns a dormant rejection without reserving replay or
+  writing a WAL.
 - Dual-lane autonomy router exposed as `forge-core autonomy route` for fast vs
   rigorous lane selection.
 - Seven evolve-phase governance contracts: `autonomy_policy`,
@@ -908,11 +913,11 @@ gates.
   connected to MCP or CLI mutation. P4b.2a adds the opaque typed in-process
   authority handoff, P4b.2b adds replay-bound prepared late Admission, and
   P4b.2c adds complete redacted provenance, direct one-effect commit, typed
-  pending receipts, and deterministic crash reconciliation. P4b.3a now defines
-  the closed operator policy but deliberately leaves trusted material/snapshot
-  loading and startup reconciliation to P4b.3b/P4b.3c before any narrow
-  single-effect enablement. The CLI remains the intended agent boundary by
-  design.
+  pending receipts, and deterministic crash reconciliation. P4b.3a defines the
+  closed operator policy and P4b.3b supplies trusted material/snapshot loading,
+  but the executor remains deliberately dormant. P4b.3c must still require
+  startup reconciliation and explicit opt-in before any narrow single-effect
+  enablement. The CLI remains the intended agent boundary by design.
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is

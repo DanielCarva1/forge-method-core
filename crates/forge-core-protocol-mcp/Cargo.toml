@@ -7,6 +7,9 @@ edition.workspace = true
 forge-core-authority = { path = "../forge-core-authority" }
 forge-core-command-surface = { path = "../forge-core-command-surface" }
 forge-core-contracts = { path = "../forge-core-contracts" }
+forge-core-decisions = { path = "../forge-core-decisions" }
+forge-core-kernel = { path = "../forge-core-kernel" }
+forge-core-store = { path = "../forge-core-store" }
 forge-core-validate = { path = "../forge-core-validate" }
 # Local tokio features for stdio MCP server (io-util + macros for the
 # async runtime + buffered stdin/AsyncBufReadExt). We do NOT modify the

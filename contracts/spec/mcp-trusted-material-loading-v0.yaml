@@ -1,0 +1,77 @@
+schema_version: "0.1"
+spec: "mcp_trusted_material_loading_v0"
+status: "p4b3b_implemented_dormant"
+purpose: >-
+  Load the exact signed execution material and mutable-authority snapshot through
+  bounded local reads without granting the MCP adapter mutation authority.
+
+project_boundary:
+  root: "operator-configured canonical project root"
+  admitted_references: "non-empty normalized relative paths only"
+  rejected_references:
+    - "absolute paths"
+    - "current-directory or parent-directory components"
+    - "canonical targets outside the project root"
+    - "directories and unavailable files"
+    - "paths whose canonical target changes during the bounded read"
+  residual_boundary: >-
+    Same-user filesystem replacement cannot be made hostile-user secure without
+    stronger operating-system isolation; the deployment policy requires this
+    boundary to be explicitly acknowledged.
+
+compiled_limits:
+  contract_bytes_each: 1048576
+  payload_bytes_each: 16777216
+  payload_bytes_total: 33554432
+  snapshot_bytes: 8388608
+  rule: "operator limits may lower but never raise compiled ceilings"
+
+loaded_material:
+  typed_yaml:
+    - "OperationContractDocument"
+    - "CommandContractDocument"
+    - "ToolEffectContractDocument"
+    - "RiskAuditRuleSet with semantic validation"
+    - "McpLocalExecutionSnapshotDocument"
+  payload_binding: >-
+    Each payload argument must use target=path#sha256:<64 lowercase hex> so the
+    digest is part of the signed MCP intent. Loaded bytes must match it exactly.
+  snapshot_contains:
+    - "the signed ExecutionAdmissionRequest"
+    - "Assurance Case"
+    - "complete claim and gate revision observations"
+    - "current state version and observation time"
+
+cross_checks:
+  - "verified principal audience equals the deployment policy audience"
+  - "Admission principal, agent, role, nonce, issue time, and digest equal verified authority"
+  - "content-addressed Assurance Case, operation, command, and effect bindings match"
+  - "claim and gate snapshot revisions and exact entries match the signed Admission"
+  - "duplicate contract references and payload targets fail closed"
+  - "citation-required requests remain blocked until their trusted integration lands"
+
+capability_boundary:
+  permitted: "filesystem read, typed parse, content hashing, semantic validation, redacted audit projection"
+  absent:
+    - "network access"
+    - "model calls"
+    - "subprocess execution"
+    - "filesystem writes"
+    - "kernel prepare, replay reserve, WAL append, or effect commit"
+  executor_result: >-
+    DormantTrustedMcpExecutor loads and verifies the complete bundle, then always
+    returns a typed dormant rejection.
+  public_mcp_mutation: "disabled_fail_closed"
+
+next_boundary:
+  id: "P4b.3c-startup-reconciliation-and-explicit-opt-in"
+  requires:
+    - "run P4b.2c reconciliation successfully before accepting mutation"
+    - "convert loaded material into the prepared kernel path without dropping risk or citation requirements"
+    - "bind registry, allowlist, root, audience, policy, loader, and executor at startup"
+    - "make trusted single-effect mutation an explicit operator opt-in"
+
+references:
+  - "contracts/spec/mcp-deployment-policy-v0.yaml"
+  - "contracts/spec/execution-provenance-commit-v0.yaml"
+  - "contracts/spec/prepared-execution-transaction-v0.yaml"

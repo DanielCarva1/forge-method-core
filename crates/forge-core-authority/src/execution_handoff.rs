@@ -149,12 +149,27 @@ impl ExecutionRequest {
 pub struct ExecutionPayloadBinding {
     target_ref: String,
     path: PathBuf,
+    expected_content_hash: Option<String>,
 }
 
 impl ExecutionPayloadBinding {
     #[must_use]
     pub fn new(target_ref: String, path: PathBuf) -> Self {
-        Self { target_ref, path }
+        Self {
+            target_ref,
+            path,
+            expected_content_hash: None,
+        }
+    }
+
+    /// Bind payload bytes to the digest signed in the adapter intent.
+    #[must_use]
+    pub fn new_verified(target_ref: String, path: PathBuf, expected_content_hash: String) -> Self {
+        Self {
+            target_ref,
+            path,
+            expected_content_hash: Some(expected_content_hash),
+        }
     }
 
     #[must_use]
@@ -165,6 +180,11 @@ impl ExecutionPayloadBinding {
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    #[must_use]
+    pub fn expected_content_hash(&self) -> Option<&str> {
+        self.expected_content_hash.as_deref()
     }
 }
 
