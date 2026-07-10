@@ -6,9 +6,9 @@ use forge_core_contracts::{
     OperationContractDocument, PrincipalId, RepoPath, StableId, ToolEffectContractDocument,
 };
 use forge_core_decisions::{
-    assurance_case_token, command_contract_token, derive_assurance_case, effect_contract_token,
-    evaluate_execution_admission, execution_intent_digest, operation_contract_token,
-    unix_to_rfc3339, ClaimRevisionObservation, ClaimSnapshotObservation,
+    assurance_case_token, authority_snapshot_token, command_contract_token, derive_assurance_case,
+    effect_contract_token, evaluate_execution_admission, execution_intent_digest,
+    operation_contract_token, unix_to_rfc3339, ClaimRevisionObservation, ClaimSnapshotObservation,
     CommitAssuranceObservation, CompensationCoverage, ContentAddressedBinding,
     EffectContractBinding, ExecutionAdmissionInput, ExecutionAdmissionInputDocument,
     ExecutionAdmissionIssueCode, ExecutionAdmissionRequest, ExecutionAdmissionStatus,
@@ -114,6 +114,7 @@ fn admitted_input() -> ExecutionAdmissionInputDocument {
             reference: GATE_REF.to_owned(),
             revision: 3,
         }],
+        authority_snapshot_token: String::new(),
         expected_replay_reservation_revision: 19,
         nonce: "nonce-96-bits-minimum-fixture-001".to_owned(),
         issued_at_unix: NOW - 10,
@@ -180,8 +181,20 @@ fn admitted_input() -> ExecutionAdmissionInputDocument {
             max_future_skew_seconds: 30,
         },
     };
+    rebind_authority_snapshot(&mut document);
     rebind_intent(&mut document);
     document
+}
+
+fn rebind_authority_snapshot(document: &mut ExecutionAdmissionInputDocument) {
+    let input = &mut document.execution_admission;
+    input.request.authority_snapshot_token = authority_snapshot_token(
+        &input.claim_snapshot,
+        &input.gate_snapshot,
+        input.current_state_version,
+        input.now_unix,
+    )
+    .expect("authority snapshot token");
 }
 
 fn rebind_intent(document: &mut ExecutionAdmissionInputDocument) {
@@ -264,6 +277,16 @@ fn gate_from_old_project_state_is_blocked() {
     input.execution_admission.gate_snapshot.gates[0].observed_state_version -= 1;
 
     assert!(issue_codes(&input).contains(&ExecutionAdmissionIssueCode::GateStateVersionMismatch));
+}
+
+#[test]
+fn mutable_authority_snapshot_cannot_change_after_intent_is_signed() {
+    let mut input = admitted_input();
+    input.execution_admission.now_unix += 1;
+
+    assert!(
+        issue_codes(&input).contains(&ExecutionAdmissionIssueCode::AuthoritySnapshotTokenMismatch)
+    );
 }
 
 #[test]

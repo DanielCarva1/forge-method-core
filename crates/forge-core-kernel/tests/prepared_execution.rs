@@ -13,12 +13,12 @@ use forge_core_contracts::{
     OperationContractDocument, PrincipalId, RepoPath, StableId, ToolEffectContractDocument,
 };
 use forge_core_decisions::{
-    assurance_case_token, command_contract_token, derive_assurance_case, effect_contract_token,
-    execution_intent_digest, operation_contract_token, unix_to_rfc3339, ClaimRevisionObservation,
-    ClaimSnapshotObservation, ContentAddressedBinding, ExecutionAdmissionIssueCode,
-    ExecutionAdmissionRequest, ExecutionAdmissionStatus, GateRevisionObservation,
-    GateSnapshotObservation, ObligationEngineInputDocument, RevisionExpectation,
-    SnapshotCompleteness,
+    assurance_case_token, authority_snapshot_token, command_contract_token, derive_assurance_case,
+    effect_contract_token, execution_intent_digest, operation_contract_token, unix_to_rfc3339,
+    ClaimRevisionObservation, ClaimSnapshotObservation, ContentAddressedBinding,
+    ExecutionAdmissionIssueCode, ExecutionAdmissionRequest, ExecutionAdmissionStatus,
+    GateRevisionObservation, GateSnapshotObservation, ObligationEngineInputDocument,
+    RevisionExpectation, SnapshotCompleteness,
 };
 use forge_core_kernel::{
     prepare_execution_transaction, reconcile_prepared_execution_commits, ExecutionCommitError,
@@ -164,6 +164,25 @@ where
     claim.claim_contract.lease.expected_state_version = state_version;
     claim.claim_contract.lease.expires_at = unix_to_rfc3339(NOW + 600);
     let gate: GateContractDocument = parse_yaml(GATE_REF);
+    let claim_snapshot = ClaimSnapshotObservation {
+        revision: 11,
+        completeness: SnapshotCompleteness::Complete,
+        claims: vec![ClaimRevisionObservation {
+            claim_ref: RepoPath(CLAIM_REF.to_owned()),
+            revision: 7,
+            document: claim,
+        }],
+    };
+    let gate_snapshot = GateSnapshotObservation {
+        revision: 5,
+        completeness: SnapshotCompleteness::Complete,
+        gates: vec![GateRevisionObservation {
+            gate_ref: RepoPath(GATE_REF.to_owned()),
+            revision: 3,
+            observed_state_version: state_version,
+            document: gate,
+        }],
+    };
 
     let mut request = ExecutionAdmissionRequest {
         id: StableId(format!("admission.request.{label}")),
@@ -192,6 +211,13 @@ where
             reference: GATE_REF.to_owned(),
             revision: 3,
         }],
+        authority_snapshot_token: authority_snapshot_token(
+            &claim_snapshot,
+            &gate_snapshot,
+            state_version,
+            NOW,
+        )
+        .expect("authority snapshot token"),
         expected_replay_reservation_revision: 1,
         nonce: NONCE.to_owned(),
         issued_at_unix: NOW - 10,
@@ -218,25 +244,8 @@ where
     let source = StaticSnapshotSource {
         snapshot: LateExecutionSnapshot {
             assurance_case,
-            claim_snapshot: ClaimSnapshotObservation {
-                revision: 11,
-                completeness: SnapshotCompleteness::Complete,
-                claims: vec![ClaimRevisionObservation {
-                    claim_ref: RepoPath(CLAIM_REF.to_owned()),
-                    revision: 7,
-                    document: claim,
-                }],
-            },
-            gate_snapshot: GateSnapshotObservation {
-                revision: 5,
-                completeness: SnapshotCompleteness::Complete,
-                gates: vec![GateRevisionObservation {
-                    gate_ref: RepoPath(GATE_REF.to_owned()),
-                    revision: 3,
-                    observed_state_version: state_version,
-                    document: gate,
-                }],
-            },
+            claim_snapshot,
+            gate_snapshot,
             current_state_version: state_version,
             now_unix: NOW,
         },

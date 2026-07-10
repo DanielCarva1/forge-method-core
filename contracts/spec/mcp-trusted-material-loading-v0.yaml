@@ -41,12 +41,18 @@ loaded_material:
     - "Assurance Case"
     - "complete claim and gate revision observations"
     - "current state version and observation time"
+  mutable_authority_binding: >-
+    P4b.4a requires the request to carry a canonical SHA-256 token over the
+    complete claim snapshot, gate snapshot, current state version, and trusted
+    observation time. The loader verifies it before replay reservation and the
+    kernel recomputes it at late and immediate-commit Admission.
 
 cross_checks:
   - "verified principal audience equals the deployment policy audience"
   - "Admission principal, agent, role, nonce, issue time, and digest equal verified authority"
   - "content-addressed Assurance Case, operation, command, and effect bindings match"
   - "claim and gate snapshot revisions and exact entries match the signed Admission"
+  - "the complete mutable authority snapshot token matches before replay reservation"
   - "duplicate contract references and payload targets fail closed"
   - "citation-required requests remain blocked until their trusted integration lands"
 
@@ -65,7 +71,7 @@ capability_boundary:
   public_mcp_mutation: "explicit_reconciled_single_effect_opt_in_only"
 
 next_boundary:
-  id: "P4b.4-agent-operated-trusted-deployment"
+  id: "P4b.4b-agent-operated-snapshot-generation"
   requires:
     - "agent-generated and refreshed admission snapshots without human YAML editing"
     - "secure credential lifecycle and host integration"

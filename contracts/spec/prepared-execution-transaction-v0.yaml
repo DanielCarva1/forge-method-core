@@ -130,7 +130,7 @@ intentional_limits:
   - "whole replay manifest/WAL pair deletion or rollback detection still requires an externally protected epoch/head"
 
 next_boundary:
-  id: "P4b.4-agent-operated-trusted-deployment"
+  id: "P4b.4b-agent-operated-snapshot-generation"
   required:
     - "agent-operated snapshot and credential setup without weakening the narrow capability"
     - "real MCP client end-to-end deployment evidence"

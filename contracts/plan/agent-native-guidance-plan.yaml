@@ -236,8 +236,18 @@ phases:
         P4b.2a, P4b.2b, P4b.2c, and each P4b.3 sub-checkpoint land as separate validated commits so
         source users can fast-forward pull a usable checkpoint without
         implicitly enabling the next authority boundary.
+    completed_p4b4_checkpoints:
+      - id: "P4b.4a-signed-mutable-authority-snapshot-binding"
+        delivers:
+          - "canonical SHA-256 binding over claims, gates, state version, and trusted observation time"
+          - "pre-replay loader verification of the snapshot token"
+          - "late and immediate-commit token recomputation from fresh snapshots under retained locks"
+          - "fail-closed compatibility diagnostics for older unbound serialized snapshots"
+        boundary: >-
+          This hardens generated and manual snapshots but does not yet create,
+          refresh, or sign them for the agent.
     next_slice:
-      id: "P4b.4-agent-operated-trusted-deployment"
+      id: "P4b.4b-agent-operated-snapshot-generation"
       scope:
         - "generate and refresh signed Admission snapshots through an agent-facing command/API rather than manual YAML"
         - "add secure credential provisioning, rotation, revocation, and client configuration guidance"
@@ -304,11 +314,13 @@ first_executable_slice:
     - "P4b.3a closed typed deployment policy with active read-only and validated-but-dormant trusted-single-effect states"
     - "P4b.3b canonical bounded typed material, signed-payload, risk-audit, and local snapshot loaders wired to an always-dormant executor"
     - "P4b.3c explicit reconciled single-effect MCP activation with sidecar state, kernel risk/citation gates, provenance commit, and replay completion"
+    - "P4b.4a canonical signed-intent binding for the complete mutable authority snapshot, revalidated before replay and under commit locks"
   next_action: >-
-    Implement P4b.4 as separate pullable checkpoints focused on agent-operated
-    usability: generate/refresh signed Admission snapshots without human YAML,
-    define secure credential lifecycle, prove a real MCP client end to end, and
-    expose conversational readiness diagnostics without weakening P4b.3c.
+    Implement P4b.4b as the next pullable checkpoint: generate and refresh the
+    content-bound Admission snapshot from authoritative project/sidecar state
+    through an agent-facing command without human YAML editing. Credential
+    lifecycle, real-client proof, and conversational readiness follow without
+    weakening P4b.3c/P4b.4a.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

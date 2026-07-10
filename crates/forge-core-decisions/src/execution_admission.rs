@@ -73,6 +73,11 @@ pub struct ExecutionAdmissionRequest {
     pub expected_claim_revisions: Vec<RevisionExpectation>,
     pub expected_gate_snapshot_revision: u64,
     pub expected_gate_revisions: Vec<RevisionExpectation>,
+    /// Canonical digest of every mutable authority observation consumed by
+    /// Admission. The transport attestation covers this token through the
+    /// complete execution-intent digest.
+    #[serde(default)]
+    pub authority_snapshot_token: String,
     pub expected_replay_reservation_revision: u64,
     pub nonce: String,
     pub issued_at_unix: i64,
@@ -294,6 +299,7 @@ pub enum ExecutionAdmissionIssueCode {
     PrincipalAudienceMismatch,
     PrincipalScopeMissing,
     AttestedIntentMismatch,
+    AuthoritySnapshotTokenMismatch,
     InvocationNonceMissing,
     InvocationReplayRejected,
     InvocationExpired,
@@ -412,6 +418,42 @@ pub fn execution_intent_digest(
     canonical_digest(request, "execution admission request")
 }
 
+/// Content-address all mutable authority observations consumed by Admission.
+///
+/// The Assurance Case has its own token in the request. This token covers the
+/// claim and gate snapshots, current state version, and trusted clock so none
+/// can be changed after the execution intent is signed.
+///
+/// # Errors
+///
+/// Returns [`ExecutionAdmissionRejection::Canonicalization`] if the snapshot
+/// cannot be serialized into canonical JSON.
+pub fn authority_snapshot_token(
+    claim_snapshot: &ClaimSnapshotObservation,
+    gate_snapshot: &GateSnapshotObservation,
+    current_state_version: u64,
+    now_unix: i64,
+) -> Result<String, ExecutionAdmissionRejection> {
+    #[derive(Serialize)]
+    #[serde(deny_unknown_fields)]
+    struct AuthoritySnapshotBinding<'a> {
+        claim_snapshot: &'a ClaimSnapshotObservation,
+        gate_snapshot: &'a GateSnapshotObservation,
+        current_state_version: u64,
+        now_unix: i64,
+    }
+
+    canonical_digest(
+        &AuthoritySnapshotBinding {
+            claim_snapshot,
+            gate_snapshot,
+            current_state_version,
+            now_unix,
+        },
+        "execution authority snapshot",
+    )
+}
+
 fn canonical_digest<T: Serialize>(
     value: &T,
     subject: &'static str,
@@ -454,6 +496,7 @@ pub fn evaluate_execution_admission(
     let mut issues = Vec::new();
 
     evaluate_assurance(input, &mut issues)?;
+    evaluate_authority_snapshot(input, &mut issues)?;
     evaluate_operation_and_bindings(input, &mut issues)?;
     evaluate_principal_and_replay(input, &intent_digest, &mut issues);
     let validated_claim_revisions = evaluate_claims(input, &mut issues);
@@ -475,6 +518,26 @@ pub fn evaluate_execution_admission(
         validated_gate_revisions,
         commit_strategy: input.commit.strategy,
     })
+}
+
+fn evaluate_authority_snapshot(
+    input: &ExecutionAdmissionInput,
+    issues: &mut Vec<ExecutionAdmissionIssue>,
+) -> Result<(), ExecutionAdmissionRejection> {
+    let computed = authority_snapshot_token(
+        &input.claim_snapshot,
+        &input.gate_snapshot,
+        input.current_state_version,
+        input.now_unix,
+    )?;
+    if input.request.authority_snapshot_token != computed {
+        push_issue(
+            issues,
+            ExecutionAdmissionIssueCode::AuthoritySnapshotTokenMismatch,
+            "authority_snapshot",
+        );
+    }
+    Ok(())
 }
 
 fn evaluate_assurance(

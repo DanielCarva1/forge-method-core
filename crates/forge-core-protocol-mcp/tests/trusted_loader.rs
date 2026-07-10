@@ -17,10 +17,10 @@ use forge_core_contracts::{
     OperationContractDocument, PrincipalId, RepoPath, StableId, ToolEffectContractDocument,
 };
 use forge_core_decisions::{
-    assurance_case_token, command_contract_token, effect_contract_token, execution_intent_digest,
-    operation_contract_token, ClaimRevisionObservation, ClaimSnapshotObservation,
-    ContentAddressedBinding, ExecutionAdmissionRequest, GateSnapshotObservation,
-    RevisionExpectation, SnapshotCompleteness,
+    assurance_case_token, authority_snapshot_token, command_contract_token, effect_contract_token,
+    execution_intent_digest, operation_contract_token, ClaimRevisionObservation,
+    ClaimSnapshotObservation, ContentAddressedBinding, ExecutionAdmissionRequest,
+    GateSnapshotObservation, RevisionExpectation, SnapshotCompleteness,
 };
 use forge_core_protocol_mcp::{
     DormantTrustedMcpExecutor, ExplicitTrustedSingleEffectOptIn, LocalMcpSnapshotSource,
@@ -203,6 +203,20 @@ fn fixture(label: &str, bind_payload_digests: bool, require_citation: bool) -> L
 
     let principal_id = PrincipalId("principal.codex-main".to_owned());
     let agent_id = StableId("codex-main".to_owned());
+    let claim_snapshot = ClaimSnapshotObservation {
+        revision: 11,
+        completeness: SnapshotCompleteness::Complete,
+        claims: vec![ClaimRevisionObservation {
+            claim_ref: RepoPath(CLAIM_REF.to_owned()),
+            revision: 7,
+            document: claim,
+        }],
+    };
+    let gate_snapshot = GateSnapshotObservation {
+        revision: 5,
+        completeness: SnapshotCompleteness::Complete,
+        gates: Vec::new(),
+    };
     let admission = ExecutionAdmissionRequest {
         id: StableId("admission.p4b3b.loader".to_owned()),
         principal_id: principal_id.clone(),
@@ -227,6 +241,13 @@ fn fixture(label: &str, bind_payload_digests: bool, require_citation: bool) -> L
         }],
         expected_gate_snapshot_revision: 5,
         expected_gate_revisions: Vec::new(),
+        authority_snapshot_token: authority_snapshot_token(
+            &claim_snapshot,
+            &gate_snapshot,
+            state_version,
+            NOW,
+        )
+        .expect("authority snapshot token"),
         expected_replay_reservation_revision: 1,
         nonce: NONCE.to_owned(),
         issued_at_unix: NOW - 10,
@@ -244,20 +265,8 @@ fn fixture(label: &str, bind_payload_digests: bool, require_citation: bool) -> L
         execution_snapshot: McpLocalExecutionSnapshot {
             admission_request: admission,
             assurance_case: assurance,
-            claim_snapshot: ClaimSnapshotObservation {
-                revision: 11,
-                completeness: SnapshotCompleteness::Complete,
-                claims: vec![ClaimRevisionObservation {
-                    claim_ref: RepoPath(CLAIM_REF.to_owned()),
-                    revision: 7,
-                    document: claim,
-                }],
-            },
-            gate_snapshot: GateSnapshotObservation {
-                revision: 5,
-                completeness: SnapshotCompleteness::Complete,
-                gates: Vec::new(),
-            },
+            claim_snapshot,
+            gate_snapshot,
             current_state_version: state_version,
             now_unix: NOW,
         },
@@ -383,6 +392,26 @@ fn trusted_loader_rejects_unsigned_and_changed_payload_bytes() {
     assert!(matches!(
         changed.loader.load(changed.call),
         Err(TrustedMcpLoadError::PayloadDigestMismatch { .. })
+    ));
+}
+
+#[test]
+fn trusted_loader_rejects_mutable_snapshot_changed_after_signing() {
+    let fixture = fixture("snapshot-token-tamper", true, false);
+    let snapshot_path = fixture.root.join(SNAPSHOT_REF);
+    let text = fs::read_to_string(&snapshot_path).expect("snapshot");
+    let mut document: McpLocalExecutionSnapshotDocument =
+        yaml_serde::from_str(&text).expect("typed snapshot");
+    document.execution_snapshot.now_unix += 1;
+    fs::write(
+        &snapshot_path,
+        yaml_serde::to_string(&document).expect("tampered snapshot yaml"),
+    )
+    .expect("tamper snapshot");
+
+    assert!(matches!(
+        fixture.loader.load(fixture.call),
+        Err(TrustedMcpLoadError::AuthoritySnapshotBindingMismatch)
     ));
 }
 

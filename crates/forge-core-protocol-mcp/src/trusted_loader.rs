@@ -18,9 +18,9 @@ use forge_core_contracts::{
     OperationContractDocument, ToolEffectContractDocument,
 };
 use forge_core_decisions::{
-    assurance_case_token, command_contract_token, effect_contract_token, execution_intent_digest,
-    operation_contract_token, ClaimSnapshotObservation, ExecutionAdmissionRequest,
-    GateSnapshotObservation, SnapshotCompleteness,
+    assurance_case_token, authority_snapshot_token, command_contract_token, effect_contract_token,
+    execution_intent_digest, operation_contract_token, ClaimSnapshotObservation,
+    ExecutionAdmissionRequest, GateSnapshotObservation, SnapshotCompleteness,
 };
 use forge_core_kernel::{
     LateExecutionSnapshot, LateExecutionSnapshotSource, LateSnapshotError,
@@ -670,6 +670,7 @@ fn validate_signed_material(
     {
         return Err(TrustedMcpLoadError::AssuranceBindingMismatch);
     }
+    validate_authority_snapshot_binding(admission, snapshot)?;
     if admission.command_bindings.len() != commands.len() {
         return Err(TrustedMcpLoadError::CommandBindingMismatch);
     }
@@ -736,6 +737,23 @@ fn validate_signed_material(
         || expected_gates != observed_gates
     {
         return Err(TrustedMcpLoadError::SnapshotRevisionMismatch);
+    }
+    Ok(())
+}
+
+fn validate_authority_snapshot_binding(
+    admission: &ExecutionAdmissionRequest,
+    snapshot: &McpLocalExecutionSnapshot,
+) -> Result<(), TrustedMcpLoadError> {
+    let computed = authority_snapshot_token(
+        &snapshot.claim_snapshot,
+        &snapshot.gate_snapshot,
+        snapshot.current_state_version,
+        snapshot.now_unix,
+    )
+    .map_err(|error| TrustedMcpLoadError::Binding(error.to_string()))?;
+    if admission.authority_snapshot_token != computed {
+        return Err(TrustedMcpLoadError::AuthoritySnapshotBindingMismatch);
     }
     Ok(())
 }
@@ -831,6 +849,7 @@ pub enum TrustedMcpLoadError {
     AdmissionDigestMismatch,
     OperationBindingMismatch,
     AssuranceBindingMismatch,
+    AuthoritySnapshotBindingMismatch,
     CommandBindingMismatch,
     EffectBindingMismatch,
     SnapshotRevisionMismatch,
@@ -945,6 +964,9 @@ impl fmt::Display for TrustedMcpLoadError {
             }
             Self::AssuranceBindingMismatch => {
                 formatter.write_str("Assurance Case differs from signed Admission")
+            }
+            Self::AuthoritySnapshotBindingMismatch => {
+                formatter.write_str("mutable authority snapshot differs from signed Admission")
             }
             Self::CommandBindingMismatch => {
                 formatter.write_str("command contracts differ from signed Admission")

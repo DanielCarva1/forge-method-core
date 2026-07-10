@@ -51,7 +51,7 @@ pub use eval::{
     load_eval_corpus, score_router, CaseScore, EvalCase, EvalCorpusDocument, RouterScore,
 };
 pub use execution_admission::{
-    assurance_case_token, command_contract_token, effect_contract_token,
+    assurance_case_token, authority_snapshot_token, command_contract_token, effect_contract_token,
     evaluate_execution_admission, execution_intent_digest, operation_contract_token,
     ClaimRevisionObservation, ClaimSnapshotObservation, CommitAssuranceObservation,
     CompensationCoverage, ContentAddressedBinding, EffectContractBinding,

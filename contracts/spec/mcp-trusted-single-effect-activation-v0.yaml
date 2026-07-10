@@ -69,7 +69,7 @@ unsupported:
   - "hostile-user isolation inside the acknowledged same-user boundary"
 
 next_boundary:
-  id: "P4b.4-agent-operated-trusted-deployment"
+  id: "P4b.4b-agent-operated-snapshot-generation"
   goal: >-
     Remove remaining manual YAML/key ceremony from the normal agent experience
     and prove the complete flow through a real MCP client without weakening any

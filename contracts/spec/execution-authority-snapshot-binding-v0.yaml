@@ -1,0 +1,53 @@
+schema_version: "0.1"
+spec: "execution_authority_snapshot_binding_v0"
+status: "p4b4a_implemented"
+purpose: >-
+  Ensure every mutable authority fact consumed by Execution Admission is
+  content-bound to the exact intent authorized by the execution principal.
+
+binding:
+  field: "ExecutionAdmissionRequest.authority_snapshot_token"
+  algorithm: "sha256 over canonical JSON"
+  covers:
+    - "complete ClaimSnapshotObservation including embedded claim documents"
+    - "complete GateSnapshotObservation including embedded gate documents"
+    - "current_state_version"
+    - "trusted now_unix observation"
+  excluded_because_independently_bound:
+    - "Assurance Case, covered by assurance_case_token"
+    - "operation, command, and effect contracts, covered by their content tokens"
+    - "payload bytes, covered by signed payload SHA-256 bindings"
+
+verification_order:
+  before_replay:
+    component: "TrustedMcpMaterialLoader"
+    failure: "reject without replay reservation, effect WAL, or project write"
+  late_admission:
+    component: "Execution Admission under retained effect/replay locks"
+    failure: "blocked before effect WAL or project write"
+  immediate_commit:
+    component: "Execution Admission repeated at commit call"
+    failure: "blocked before provenance begin or project write"
+
+compatibility:
+  serialized_request_without_field: >-
+    Deserializes with an empty token so hosts can emit a typed diagnostic, but
+    trusted execution rejects it. The request must be regenerated and attested.
+  rust_struct_literals: "must initialize authority_snapshot_token"
+
+security_properties:
+  - "changing an embedded claim or gate invalidates the signed intent"
+  - "changing state version or trusted time invalidates the signed intent"
+  - "changing the snapshot between load, late Admission, and commit fails closed"
+  - "revision equality alone is no longer treated as a content binding"
+
+next_boundary:
+  id: "P4b.4b-agent-operated-snapshot-generation"
+  goal: >-
+    Derive and refresh this content-bound snapshot from authoritative
+    project/sidecar state through an agent-facing command without human YAML.
+
+references:
+  - "contracts/spec/execution-admission-v0.yaml"
+  - "contracts/spec/mcp-trusted-material-loading-v0.yaml"
+  - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
