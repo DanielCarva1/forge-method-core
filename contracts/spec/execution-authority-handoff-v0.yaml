@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "execution_authority_handoff_v0"
-status: "p4b2a_implemented_dormant"
+status: "p4b2c_implemented_dormant_end_to_end"
 purpose: >-
   Preserve verified execution authority as a non-forgeable in-memory capability
   from operator-owned credential verification to a typed host executor without
@@ -71,10 +71,11 @@ public_surface:
   mcp_stdio_mutation: "disabled_fail_closed"
   read_only_subprocesses: "unchanged"
   reason: >-
-    P4b.2a proves only an opaque capability and dormant in-process handoff.
-    Replay reservation, prepared late kernel admission, provenance persistence,
-    effect/replay crash reconciliation, and an explicit enablement decision are
-    still required.
+    P4b.2a proves the opaque capability and in-process handoff; P4b.2b/P4b.2c
+    now prove the dormant prepared Admission, provenance-bound single-effect
+    commit, and crash reconciliation path. Explicit operator policy, trusted
+    material/snapshot adapter wiring, and startup reconciliation are still
+    required before public mutation.
 
 executable_evidence:
   - "compile-fail tests reject deserialization and cloning of the authority capability"
@@ -85,16 +86,17 @@ executable_evidence:
   - "startup and public-handler tests keep mutating MCP stdio disabled even with a registry and executor"
 
 next_boundary:
-  id: "P4b.2c-provenance-commit-and-recovery"
+  id: "P4b.3-explicit-mutation-enablement-policy"
   required:
-    - "persist complete execution and admission provenance"
-    - "consume the P4b.2b admitted typestate directly into one effect commit"
-    - "reconcile crashes between effect commit and replay consume"
-    - "public MCP mutation remains blocked"
+    - "define explicit read-only-default and trusted-single-effect deployment modes"
+    - "wire trusted material and bounded snapshot loading into the MCP executor"
+    - "run P4b.2c reconciliation before accepting any mutation"
+    - "keep public MCP mutation blocked unless the operator enables the narrow mode"
 
 references:
   - "contracts/spec/execution-admission-v0.yaml"
   - "contracts/spec/prepared-execution-transaction-v0.yaml"
+  - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/execution-trust-boundary-v0.yaml"
   - "contracts/spec/replay-protection-wal-v0.yaml"
   - "contracts/plan/agent-native-guidance-plan.yaml"

@@ -295,6 +295,41 @@ pub struct OwnedReplayCommitGuard {
     effect_lock: crate::EffectStoreLock,
 }
 
+/// Replay-consume result that deliberately retains only the effect lock. The
+/// replay lock has already been released, allowing the kernel to append the
+/// effect-WAL completion marker before releasing the effect boundary.
+pub struct ConsumedReplayEffectGuard {
+    effect_lock: crate::EffectStoreLock,
+    result: ReplayConsumeResult,
+}
+
+impl fmt::Debug for ConsumedReplayEffectGuard {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ConsumedReplayEffectGuard")
+            .field("effect_lock_path", &self.effect_lock.path())
+            .field("result", &self.result)
+            .finish_non_exhaustive()
+    }
+}
+
+impl ConsumedReplayEffectGuard {
+    #[must_use]
+    pub fn effect_lock(&self) -> &crate::EffectStoreLock {
+        &self.effect_lock
+    }
+
+    #[must_use]
+    pub fn result(&self) -> &ReplayConsumeResult {
+        &self.result
+    }
+
+    #[must_use]
+    pub fn into_result(self) -> ReplayConsumeResult {
+        self.result
+    }
+}
+
 impl fmt::Debug for OwnedReplayCommitGuard {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -318,21 +353,42 @@ impl OwnedReplayCommitGuard {
         &self.state.reserved
     }
 
-    /// Durably consume the guarded replay reservation after a future effect
-    /// commit. P4b.2b retains this transition but does not call it.
+    /// Durably consume the guarded replay reservation after an effect commit.
+    /// P4b.2c uses the retaining variant below so it can acknowledge completion
+    /// in the effect WAL before releasing the effect lock.
     ///
     /// # Errors
     ///
     /// Returns [`ReplayWalError`] when the prepared consume frame cannot be
     /// appended and synced.
     pub fn consume(self) -> Result<ReplayConsumeResult, ReplayWalError> {
-        append_and_sync(&self.state.wal_path, &self.state.prepared.bytes)?;
-        Ok(ReplayConsumeResult {
-            wal_path: self.state.wal_path.clone(),
-            seq: self.state.prepared.seq,
-            bytes_appended: u64::try_from(self.state.prepared.bytes.len()).unwrap_or(u64::MAX),
+        self.consume_retaining_effect_lock()
+            .map(ConsumedReplayEffectGuard::into_result)
+    }
+
+    /// Durably consume replay, release the replay lock, and retain the effect
+    /// lock for the caller's final effect-WAL acknowledgement.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ReplayWalError`] when the prepared consume frame cannot be
+    /// appended and synced. On error both owned locks are released.
+    pub fn consume_retaining_effect_lock(
+        self,
+    ) -> Result<ConsumedReplayEffectGuard, ReplayWalError> {
+        let Self { state, effect_lock } = self;
+        append_and_sync(&state.wal_path, &state.prepared.bytes)?;
+        let result = ReplayConsumeResult {
+            wal_path: state.wal_path.clone(),
+            seq: state.prepared.seq,
+            bytes_appended: u64::try_from(state.prepared.bytes.len()).unwrap_or(u64::MAX),
             appended: true,
-            reservation: self.state.prepared.reservation.clone(),
+            reservation: state.prepared.reservation.clone(),
+        };
+        drop(state);
+        Ok(ConsumedReplayEffectGuard {
+            effect_lock,
+            result,
         })
     }
 }
@@ -769,16 +825,88 @@ pub fn consume_replay_nonce_non_boundary(
     ensure_replay_initialized_under_lock(&state_root, false)?;
     let recovery = recover_replay_wal_under_lock(&wal_path, true)?;
     ensure_appendable(&recovery)?;
-    let Some(existing) = recovery.reservations.get(&key_hash) else {
-        return Err(ReplayWalError::ReservationMissing { key_hash });
+    consume_replay_recovered(
+        wal_path,
+        &recovery,
+        &key_hash,
+        intent_digest,
+        commit_digest,
+        expected_revision,
+    )
+}
+
+/// Recovery-only replay consume using the already persisted pseudonymous key
+/// hash from a committed effect-WAL receipt. The caller must retain the exact
+/// effect lock, preserving the global `effect -> replay` lock order. This API
+/// never accepts or persists the raw nonce.
+///
+/// Retrying an already consumed exact binding is idempotent and appends
+/// nothing. It is intended for P4b.2c crash reconciliation, not for initial
+/// request admission.
+///
+/// # Errors
+///
+/// Returns [`ReplayWalError`] for invalid input, lock-scope mismatch, corrupt
+/// replay state, a missing/mismatched reservation, or durable append failure.
+#[allow(clippy::too_many_arguments)]
+pub fn consume_replay_key_hash_under_effect_lock(
+    state_root: impl AsRef<Path>,
+    effect_lock: &crate::EffectStoreLock,
+    expected_effect_lock_relative_path: &str,
+    key_hash: &str,
+    intent_digest: &str,
+    commit_digest: &str,
+    expected_revision: u64,
+) -> Result<ReplayConsumeResult, ReplayWalError> {
+    validate_sha256_field("key_hash", key_hash)?;
+    validate_sha256_digest(intent_digest)?;
+    validate_commit_digest(commit_digest)?;
+    if expected_revision == 0 {
+        return Err(ReplayWalError::InvalidInput {
+            field: "expected_revision",
+            reason: "must be greater than zero",
+        });
+    }
+    let state_root = trusted_state_root(state_root.as_ref())?;
+    validate_effect_lock_scope(&state_root, effect_lock, expected_effect_lock_relative_path)?;
+    let wal_path = replay_wal_path(&state_root);
+    let _replay_lock = acquire_replay_lock(&state_root)?;
+    ensure_replay_initialized_under_lock(&state_root, false)?;
+    let recovery = recover_replay_wal_under_lock(&wal_path, true)?;
+    ensure_appendable(&recovery)?;
+    consume_replay_recovered(
+        wal_path,
+        &recovery,
+        key_hash,
+        intent_digest,
+        commit_digest,
+        expected_revision,
+    )
+}
+
+fn consume_replay_recovered(
+    wal_path: PathBuf,
+    recovery: &ReplayWalRecovery,
+    key_hash: &str,
+    intent_digest: &str,
+    commit_digest: &str,
+    expected_revision: u64,
+) -> Result<ReplayConsumeResult, ReplayWalError> {
+    let Some(existing) = recovery.reservations.get(key_hash) else {
+        return Err(ReplayWalError::ReservationMissing {
+            key_hash: key_hash.to_owned(),
+        });
     };
     if existing.intent_digest != intent_digest {
-        return Err(ReplayWalError::IntentDigestMismatch { key_hash });
+        return Err(ReplayWalError::IntentDigestMismatch {
+            key_hash: key_hash.to_owned(),
+        });
     }
     if existing.commit_digest != commit_digest {
-        return Err(ReplayWalError::CommitDigestMismatch { key_hash });
+        return Err(ReplayWalError::CommitDigestMismatch {
+            key_hash: key_hash.to_owned(),
+        });
     }
-
     if existing.state == ReplayReservationState::Consumed {
         let reservation_revision = existing.revision.saturating_sub(1);
         if expected_revision == reservation_revision {
@@ -791,15 +919,14 @@ pub fn consume_replay_nonce_non_boundary(
             });
         }
         return Err(ReplayWalError::RevisionMismatch {
-            key_hash,
+            key_hash: key_hash.to_owned(),
             expected: expected_revision,
             actual: reservation_revision,
         });
     }
-
     if existing.revision != expected_revision {
         return Err(ReplayWalError::RevisionMismatch {
-            key_hash,
+            key_hash: key_hash.to_owned(),
             expected: expected_revision,
             actual: existing.revision,
         });
@@ -808,30 +935,29 @@ pub fn consume_replay_nonce_non_boundary(
         expected_revision
             .checked_add(1)
             .ok_or_else(|| ReplayWalError::RevisionOverflow {
-                key_hash: key_hash.clone(),
+                key_hash: key_hash.to_owned(),
                 revision: expected_revision,
             })?;
     let seq = next_sequence(recovery.last_observed_seq)?;
     let payload = ReplayWalPayload {
         schema_version: REPLAY_WAL_SCHEMA_VERSION.to_owned(),
         operation: ReplayWalOperation::Consume,
-        key_hash: key_hash.clone(),
+        key_hash: key_hash.to_owned(),
         intent_digest: intent_digest.to_owned(),
         commit_digest: commit_digest.to_owned(),
         revision,
         expected_revision: Some(expected_revision),
     };
     let bytes = encode_payload_record(seq, &payload)?;
-    ensure_append_capacity(&recovery, bytes.len())?;
+    ensure_append_capacity(recovery, bytes.len())?;
     append_and_sync(&wal_path, &bytes)?;
-
     Ok(ReplayConsumeResult {
         wal_path,
         seq,
         bytes_appended: u64::try_from(bytes.len()).unwrap_or(u64::MAX),
         appended: true,
         reservation: ReplayReservation {
-            key_hash,
+            key_hash: key_hash.to_owned(),
             intent_digest: intent_digest.to_owned(),
             commit_digest: commit_digest.to_owned(),
             revision,
@@ -1044,19 +1170,17 @@ fn validate_nonblank(field: &'static str, value: &str) -> Result<(), ReplayWalEr
 }
 
 fn validate_sha256_digest(value: &str) -> Result<(), ReplayWalError> {
-    if !is_sha256_token(value) {
-        return Err(ReplayWalError::InvalidInput {
-            field: "intent_digest",
-            reason: "must be a lowercase sha256:<64-hex> token",
-        });
-    }
-    Ok(())
+    validate_sha256_field("intent_digest", value)
 }
 
 fn validate_commit_digest(value: &str) -> Result<(), ReplayWalError> {
+    validate_sha256_field("commit_digest", value)
+}
+
+fn validate_sha256_field(field: &'static str, value: &str) -> Result<(), ReplayWalError> {
     if !is_sha256_token(value) {
         return Err(ReplayWalError::InvalidInput {
-            field: "commit_digest",
+            field,
             reason: "must be a lowercase sha256:<64-hex> token",
         });
     }

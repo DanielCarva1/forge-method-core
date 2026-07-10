@@ -5343,6 +5343,9 @@ fn write_committed_metadata_wal(root: &Path, payload_marker: &str) {
             target_metadata: None,
             original: None,
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         },
     )
     .expect("append begin");
@@ -5369,6 +5372,9 @@ fn write_committed_metadata_wal(root: &Path, payload_marker: &str) {
             }),
             original: None,
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         },
     )
     .expect("append write applied");
@@ -5385,6 +5391,9 @@ fn write_committed_metadata_wal(root: &Path, payload_marker: &str) {
             target_metadata: None,
             original: None,
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         },
     )
     .expect("append commit");

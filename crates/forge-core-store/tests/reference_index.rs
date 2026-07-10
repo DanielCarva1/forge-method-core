@@ -1124,6 +1124,9 @@ fn rebuild_effect_target_metadata_index_noops_for_legacy_wal_without_metadata() 
             target_metadata: None,
             original: None,
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         },
     )
     .expect("append legacy begin");
@@ -1140,6 +1143,9 @@ fn rebuild_effect_target_metadata_index_noops_for_legacy_wal_without_metadata() 
             target_metadata: None,
             original: None,
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         },
     )
     .expect("append legacy write applied");
@@ -1156,6 +1162,9 @@ fn rebuild_effect_target_metadata_index_noops_for_legacy_wal_without_metadata() 
             target_metadata: None,
             original: None,
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         },
     )
     .expect("append legacy commit");
@@ -1197,6 +1206,9 @@ fn recover_effect_wal_restores_incomplete_transaction() {
             target_metadata: None,
             original: None,
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         },
     )
     .expect("append begin");
@@ -1217,6 +1229,9 @@ fn recover_effect_wal_restores_incomplete_transaction() {
                 content_hash: sha256_content_hash(b"old"),
             }),
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         },
     )
     .expect("append before image");
@@ -1233,6 +1248,9 @@ fn recover_effect_wal_restores_incomplete_transaction() {
             target_metadata: None,
             original: None,
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         },
     )
     .expect("append write applied");
@@ -1323,6 +1341,9 @@ fn compact_effect_wal_drops_closed_records_and_keeps_incomplete() {
             target_metadata: None,
             original: None,
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         },
     )
     .expect("append closed begin");
@@ -1339,6 +1360,9 @@ fn compact_effect_wal_drops_closed_records_and_keeps_incomplete() {
             target_metadata: None,
             original: None,
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         },
     )
     .expect("append closed commit");
@@ -1355,6 +1379,9 @@ fn compact_effect_wal_drops_closed_records_and_keeps_incomplete() {
             target_metadata: None,
             original: None,
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         },
     )
     .expect("append incomplete begin");
@@ -1375,6 +1402,9 @@ fn compact_effect_wal_drops_closed_records_and_keeps_incomplete() {
                 content_hash: sha256_content_hash(b""),
             }),
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         },
     )
     .expect("append incomplete before image");

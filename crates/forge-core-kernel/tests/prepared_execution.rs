@@ -21,15 +21,20 @@ use forge_core_decisions::{
     SnapshotCompleteness,
 };
 use forge_core_kernel::{
-    prepare_execution_transaction, LateAdmissionError, LateAdmissionOutcome, LateExecutionSnapshot,
-    LateExecutionSnapshotSource, LateSnapshotError, PreparedExecutionMaterial,
-    RuntimeEffectPayloadKind, RuntimeOperationEffectPayload, TrustedExecutionEnvironment,
-    PREPARED_EFFECT_LOCK_RELATIVE_PATH, PREPARED_EFFECT_WAL_RELATIVE_PATH,
+    prepare_execution_transaction, reconcile_prepared_execution_commits, ExecutionCommitError,
+    ExecutionCommitOutcome, ExecutionCommitStatus, ExecutionReplayReconciliationStatus,
+    LateAdmissionError, LateAdmissionOutcome, LateExecutionSnapshot, LateExecutionSnapshotSource,
+    LateSnapshotError, PreparedExecutionMaterial, RuntimeEffectPayloadKind,
+    RuntimeOperationEffectPayload, TrustedExecutionEnvironment, PREPARED_EFFECT_LOCK_RELATIVE_PATH,
+    PREPARED_EFFECT_WAL_RELATIVE_PATH,
 };
 use forge_core_store::replay_wal::{
     initialize_replay_wal, recover_replay_wal, ReplayReservationState,
 };
-use forge_core_store::{sha256_content_hash, try_acquire_effect_store_lock, EffectStoreLockError};
+use forge_core_store::{
+    sha256_content_hash, try_acquire_effect_store_lock, EffectStoreLockError, EffectWalRecord,
+    EffectWalStage,
+};
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 use std::fs;
@@ -423,6 +428,297 @@ fn valid_snapshot_is_late_admitted_without_effect_wal_or_write() {
             .state,
         ReplayReservationState::Reserved
     );
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn admitted_typestate_commits_one_provenance_bound_effect_and_consumes_replay() {
+    let Fixture {
+        project_root,
+        target_path,
+        material,
+        source,
+    } = fixture("commit");
+    let environment = TrustedExecutionEnvironment::from_project_root(&project_root, AUDIENCE)
+        .expect("environment");
+    let prepared = prepare_execution_transaction(material, environment).expect("prepare");
+    let LateAdmissionOutcome::Admitted(admitted) =
+        prepared.evaluate_late(&source).expect("late evaluation")
+    else {
+        panic!("complete snapshot must admit");
+    };
+
+    let outcome = admitted.commit(&source).expect("commit boundary");
+    let ExecutionCommitOutcome::Committed { receipt } = outcome else {
+        panic!("valid admitted execution must commit");
+    };
+    assert_eq!(receipt.status, ExecutionCommitStatus::Committed);
+    assert_eq!(receipt.application.applied_refs, vec![EFFECT_TARGET]);
+    assert!(receipt
+        .replay
+        .as_ref()
+        .is_some_and(|result| result.appended));
+    assert!(receipt.completion.is_some());
+    assert_eq!(
+        fs::read_to_string(&target_path).expect("committed target"),
+        "p4b2b: prepared\n"
+    );
+
+    let wal_text = fs::read_to_string(effect_wal(&project_root)).expect("effect WAL");
+    assert!(
+        !wal_text.contains(NONCE),
+        "raw nonce must never be persisted"
+    );
+    let records: Vec<EffectWalRecord> = wal_text
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("effect WAL record"))
+        .collect();
+    assert_eq!(
+        records.first().map(|record| record.stage),
+        Some(EffectWalStage::Begin)
+    );
+    assert!(records
+        .first()
+        .and_then(|record| record.execution_provenance.as_ref())
+        .is_some());
+    assert_eq!(
+        records.last().map(|record| record.stage),
+        Some(EffectWalStage::ReplayConsumed)
+    );
+
+    let replay = recover_replay_wal(project_root.join(".forge-method"), false).expect("replay");
+    let reservation = replay.reservations.values().next().expect("reservation");
+    assert_eq!(reservation.state, ReplayReservationState::Consumed);
+    assert_eq!(replay.valid_record_count, 2);
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn mutable_claim_drift_at_commit_call_blocks_before_effect_wal() {
+    let Fixture {
+        project_root,
+        target_path,
+        material,
+        source,
+    } = fixture("commit-claim-drift");
+    let environment = TrustedExecutionEnvironment::from_project_root(&project_root, AUDIENCE)
+        .expect("environment");
+    let prepared = prepare_execution_transaction(material, environment).expect("prepare");
+    let LateAdmissionOutcome::Admitted(admitted) =
+        prepared.evaluate_late(&source).expect("late evaluation")
+    else {
+        panic!("initial late snapshot must admit");
+    };
+    let mut commit_source = source;
+    commit_source.snapshot.claim_snapshot.revision += 1;
+
+    let outcome = admitted.commit(&commit_source).expect("typed commit block");
+    let ExecutionCommitOutcome::Blocked { decision, .. } = outcome else {
+        panic!("commit-time claim drift must block");
+    };
+    assert_eq!(decision.status, ExecutionAdmissionStatus::Blocked);
+    assert!(decision
+        .issues
+        .iter()
+        .any(|issue| issue.code == ExecutionAdmissionIssueCode::ClaimSnapshotRevisionMismatch));
+    assert!(!target_path.exists());
+    assert!(!effect_wal(&project_root).exists());
+    let replay = recover_replay_wal(project_root.join(".forge-method"), false).expect("replay");
+    assert_eq!(
+        replay
+            .reservations
+            .values()
+            .next()
+            .expect("reservation")
+            .state,
+        ReplayReservationState::Reserved
+    );
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn filesystem_drift_after_late_admission_fails_before_effect_wal() {
+    let Fixture {
+        project_root,
+        target_path,
+        material,
+        source,
+    } = fixture("commit-filesystem-drift");
+    let environment = TrustedExecutionEnvironment::from_project_root(&project_root, AUDIENCE)
+        .expect("environment");
+    let prepared = prepare_execution_transaction(material, environment).expect("prepare");
+    let LateAdmissionOutcome::Admitted(admitted) =
+        prepared.evaluate_late(&source).expect("late evaluation")
+    else {
+        panic!("initial late snapshot must admit");
+    };
+    fs::write(&target_path, "same-user bypass\n").expect("simulate drift");
+
+    let error = admitted
+        .commit(&source)
+        .expect_err("commit-time filesystem drift must fail closed");
+    assert!(matches!(
+        error,
+        ExecutionCommitError::EffectPreflightChanged { .. }
+    ));
+    assert!(!effect_wal(&project_root).exists());
+    let replay = recover_replay_wal(project_root.join(".forge-method"), false).expect("replay");
+    assert_eq!(
+        replay
+            .reservations
+            .values()
+            .next()
+            .expect("reservation")
+            .state,
+        ReplayReservationState::Reserved
+    );
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn recovery_reconciles_crash_after_effect_commit_before_replay_consume() {
+    let Fixture {
+        project_root,
+        target_path,
+        material,
+        source,
+    } = fixture("crash-window");
+    let environment = TrustedExecutionEnvironment::from_project_root(&project_root, AUDIENCE)
+        .expect("environment");
+    let prepared = prepare_execution_transaction(material, environment.clone()).expect("prepare");
+    let LateAdmissionOutcome::Admitted(admitted) =
+        prepared.evaluate_late(&source).expect("late evaluation")
+    else {
+        panic!("complete snapshot must admit");
+    };
+    let ExecutionCommitOutcome::Committed { receipt } = admitted.commit(&source).expect("commit")
+    else {
+        panic!("fixture must commit");
+    };
+    assert_eq!(receipt.status, ExecutionCommitStatus::Committed);
+
+    // Reconstruct the exact durable state a process crash could leave after
+    // effect Commit and before replay Consume: remove the completion marker and
+    // truncate the replay WAL to its still-valid Reserve frame.
+    let wal_path = effect_wal(&project_root);
+    let wal_text = fs::read_to_string(&wal_path).expect("effect WAL");
+    let mut effect_lines: Vec<&str> = wal_text.lines().collect();
+    let removed = effect_lines.pop().expect("completion record");
+    let removed_record: EffectWalRecord =
+        serde_json::from_str(removed).expect("completion record JSON");
+    assert_eq!(removed_record.stage, EffectWalStage::ReplayConsumed);
+    fs::write(&wal_path, format!("{}\n", effect_lines.join("\n")))
+        .expect("simulate missing completion marker");
+
+    let replay_before =
+        recover_replay_wal(project_root.join(".forge-method"), false).expect("replay before");
+    assert_eq!(replay_before.records.len(), 2);
+    let reserve = &replay_before.records[0];
+    fs::OpenOptions::new()
+        .write(true)
+        .open(&replay_before.wal_path)
+        .expect("open replay WAL")
+        .set_len(reserve.offset + reserve.record_len)
+        .expect("truncate to reserve frame");
+    let reserved =
+        recover_replay_wal(project_root.join(".forge-method"), false).expect("reserved replay");
+    assert_eq!(reserved.valid_record_count, 1);
+    assert_eq!(
+        reserved
+            .reservations
+            .values()
+            .next()
+            .expect("reservation")
+            .state,
+        ReplayReservationState::Reserved
+    );
+
+    let reconciled =
+        reconcile_prepared_execution_commits(&environment).expect("reconcile crash window");
+    assert_eq!(
+        reconciled.status,
+        ExecutionReplayReconciliationStatus::Reconciled
+    );
+    assert_eq!(reconciled.reconciled_transactions.len(), 1);
+    assert!(reconciled.replay_results[0].appended);
+    assert!(reconciled.completion_records[0].completion.recovered);
+    assert!(
+        target_path.exists(),
+        "committed effect must not be rolled back"
+    );
+
+    let replay_after =
+        recover_replay_wal(project_root.join(".forge-method"), false).expect("replay after");
+    assert_eq!(replay_after.valid_record_count, 2);
+    assert_eq!(
+        replay_after
+            .reservations
+            .values()
+            .next()
+            .expect("reservation")
+            .state,
+        ReplayReservationState::Consumed
+    );
+    let second = reconcile_prepared_execution_commits(&environment).expect("idempotent reconcile");
+    assert_eq!(second.status, ExecutionReplayReconciliationStatus::Noop);
+    fs::remove_dir_all(project_root).expect("cleanup");
+}
+
+#[test]
+fn recovery_is_idempotent_after_replay_consume_before_completion_marker() {
+    let Fixture {
+        project_root,
+        target_path: _,
+        material,
+        source,
+    } = fixture("crash-after-replay");
+    let environment = TrustedExecutionEnvironment::from_project_root(&project_root, AUDIENCE)
+        .expect("environment");
+    let prepared = prepare_execution_transaction(material, environment.clone()).expect("prepare");
+    let LateAdmissionOutcome::Admitted(admitted) =
+        prepared.evaluate_late(&source).expect("late evaluation")
+    else {
+        panic!("complete snapshot must admit");
+    };
+    let ExecutionCommitOutcome::Committed { receipt } = admitted.commit(&source).expect("commit")
+    else {
+        panic!("fixture must commit");
+    };
+    assert_eq!(receipt.status, ExecutionCommitStatus::Committed);
+
+    let wal_path = effect_wal(&project_root);
+    let wal_text = fs::read_to_string(&wal_path).expect("effect WAL");
+    let mut lines: Vec<&str> = wal_text.lines().collect();
+    let marker_line = lines.pop().expect("completion marker");
+    let marker: EffectWalRecord = serde_json::from_str(marker_line).expect("marker JSON");
+    assert_eq!(marker.stage, EffectWalStage::ReplayConsumed);
+    let torn_marker = &marker_line[..marker_line.len() / 2];
+    fs::write(&wal_path, format!("{}\n{torn_marker}", lines.join("\n")))
+        .expect("simulate torn completion marker");
+
+    let replay_before =
+        recover_replay_wal(project_root.join(".forge-method"), false).expect("replay before");
+    assert_eq!(
+        replay_before
+            .reservations
+            .values()
+            .next()
+            .expect("reservation")
+            .state,
+        ReplayReservationState::Consumed
+    );
+    let reconciled =
+        reconcile_prepared_execution_commits(&environment).expect("reconcile completion marker");
+    assert_eq!(
+        reconciled.status,
+        ExecutionReplayReconciliationStatus::Reconciled
+    );
+    assert_eq!(reconciled.reconciled_transactions.len(), 1);
+    assert!(!reconciled.replay_results[0].appended);
+    assert!(reconciled.completion_records[0].completion.recovered);
+    let replay_after =
+        recover_replay_wal(project_root.join(".forge-method"), false).expect("replay after");
+    assert_eq!(replay_after.valid_record_count, 2);
     fs::remove_dir_all(project_root).expect("cleanup");
 }
 

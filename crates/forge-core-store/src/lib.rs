@@ -682,6 +682,7 @@ pub enum EffectApplicationReason {
     EffectValidationErrors,
     InternalInvariant,
     StoreLockFailed,
+    ExecutionProvenanceInvalid,
     WalAppendFailed,
     UnsupportedTargetKind,
     UnsupportedAccessMode,
@@ -723,6 +724,137 @@ pub enum EffectPreflightStatus {
     Blocked,
 }
 
+/// Schema for the complete kernel-owned authority and Admission evidence
+/// embedded in the first record of a prepared effect transaction.
+pub const EFFECT_EXECUTION_PROVENANCE_SCHEMA_VERSION: &str = "0.1";
+
+/// Canonical, content-addressed execution evidence persisted before the first
+/// project write. The store treats the document as opaque kernel evidence but
+/// verifies its canonical digest both on append and during reconciliation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[non_exhaustive]
+pub struct EffectExecutionProvenance {
+    pub schema_version: String,
+    pub digest: String,
+    pub document: serde_json::Value,
+}
+
+impl EffectExecutionProvenance {
+    /// Build a content-addressed provenance envelope from a typed kernel JSON
+    /// projection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EffectExecutionProvenanceError`] when canonical JSON encoding
+    /// fails.
+    pub fn new(document: serde_json::Value) -> Result<Self, EffectExecutionProvenanceError> {
+        let canonical = serde_json_canonicalizer::to_vec(&document)
+            .map_err(|error| EffectExecutionProvenanceError::Canonicalization(error.to_string()))?;
+        Ok(Self {
+            schema_version: EFFECT_EXECUTION_PROVENANCE_SCHEMA_VERSION.to_owned(),
+            digest: sha256_content_hash(&canonical),
+            document,
+        })
+    }
+
+    /// Recompute and verify the canonical provenance digest.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EffectExecutionProvenanceError`] for an unsupported schema,
+    /// failed canonicalization, or digest mismatch.
+    pub fn verify(&self) -> Result<(), EffectExecutionProvenanceError> {
+        if self.schema_version != EFFECT_EXECUTION_PROVENANCE_SCHEMA_VERSION {
+            return Err(EffectExecutionProvenanceError::UnsupportedSchemaVersion {
+                found: self.schema_version.clone(),
+            });
+        }
+        let canonical = serde_json_canonicalizer::to_vec(&self.document)
+            .map_err(|error| EffectExecutionProvenanceError::Canonicalization(error.to_string()))?;
+        let actual = sha256_content_hash(&canonical);
+        if actual != self.digest {
+            return Err(EffectExecutionProvenanceError::DigestMismatch {
+                expected: self.digest.clone(),
+                actual,
+            });
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum EffectExecutionProvenanceError {
+    UnsupportedSchemaVersion { found: String },
+    Canonicalization(String),
+    DigestMismatch { expected: String, actual: String },
+}
+
+impl fmt::Display for EffectExecutionProvenanceError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnsupportedSchemaVersion { found } => {
+                write!(formatter, "unsupported execution provenance schema {found}")
+            }
+            Self::Canonicalization(error) => {
+                write!(
+                    formatter,
+                    "execution provenance canonicalization failed: {error}"
+                )
+            }
+            Self::DigestMismatch { expected, actual } => write!(
+                formatter,
+                "execution provenance digest mismatch: expected {expected}, actual {actual}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for EffectExecutionProvenanceError {}
+
+/// Replay reservation identity bound into the effect WAL without persisting
+/// the raw nonce, principal id, or audience.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[non_exhaustive]
+pub struct EffectReplayCommitBinding {
+    pub key_hash: String,
+    pub intent_digest: String,
+    pub commit_digest: String,
+    pub reservation_revision: u64,
+}
+
+impl EffectReplayCommitBinding {
+    #[must_use]
+    pub fn new(
+        key_hash: impl Into<String>,
+        intent_digest: impl Into<String>,
+        commit_digest: impl Into<String>,
+        reservation_revision: u64,
+    ) -> Self {
+        Self {
+            key_hash: key_hash.into(),
+            intent_digest: intent_digest.into(),
+            commit_digest: commit_digest.into(),
+            reservation_revision,
+        }
+    }
+}
+
+/// Durable evidence that the replay transition corresponding to one committed
+/// effect reached `consumed`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[non_exhaustive]
+pub struct EffectReplayCompletion {
+    pub key_hash: String,
+    pub reservation_revision: u64,
+    pub consumed_revision: u64,
+    pub consumed_seq: u64,
+    pub recovered: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EffectWalRecord {
@@ -737,6 +869,12 @@ pub struct EffectWalRecord {
     pub target_metadata: Option<EffectWalTargetMetadata>,
     pub original: Option<EffectWalOriginal>,
     pub diagnostic: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_provenance: Option<EffectExecutionProvenance>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replay_binding: Option<EffectReplayCommitBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replay_completion: Option<EffectReplayCompletion>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -748,6 +886,7 @@ pub enum EffectWalStage {
     Commit,
     RollbackComplete,
     RecoveredRollback,
+    ReplayConsumed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -800,6 +939,125 @@ pub enum EffectWalRecoveryReason {
     WalParseFailed,
     RollbackFailed,
 }
+
+/// One committed effect whose bound replay reservation has no durable
+/// `replay_consumed` marker yet.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+#[non_exhaustive]
+pub struct PendingEffectReplayCommit {
+    pub tx_id: String,
+    pub effect_id: StableId,
+    pub provenance: EffectExecutionProvenance,
+    pub replay_binding: EffectReplayCommitBinding,
+}
+
+/// Result of appending the effect-WAL half of replay completion.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+#[non_exhaustive]
+pub struct EffectReplayCompletionResult {
+    pub wal_path: PathBuf,
+    pub tx_id: String,
+    pub completion: EffectReplayCompletion,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum EffectReplayReconciliationError {
+    InvalidRelativePath {
+        field: &'static str,
+        path: String,
+    },
+    LockScopeMismatch {
+        expected: PathBuf,
+        actual: PathBuf,
+    },
+    WalRead {
+        path: PathBuf,
+        source: String,
+    },
+    WalParse {
+        path: PathBuf,
+        line: usize,
+        source: String,
+    },
+    WalRepair {
+        path: PathBuf,
+        source: String,
+    },
+    InvalidProvenance {
+        tx_id: String,
+        source: String,
+    },
+    InvalidReplayBinding {
+        tx_id: String,
+        reason: String,
+    },
+    ConflictingTransaction {
+        tx_id: String,
+        reason: String,
+    },
+    WalAppend {
+        path: PathBuf,
+        source: String,
+    },
+}
+
+impl fmt::Display for EffectReplayReconciliationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidRelativePath { field, path } => {
+                write!(formatter, "invalid {field} relative path {path}")
+            }
+            Self::LockScopeMismatch { expected, actual } => write!(
+                formatter,
+                "effect lock scope mismatch: expected {}, actual {}",
+                expected.display(),
+                actual.display()
+            ),
+            Self::WalRead { path, source } => {
+                write!(
+                    formatter,
+                    "read effect WAL {} failed: {source}",
+                    path.display()
+                )
+            }
+            Self::WalParse { path, line, source } => write!(
+                formatter,
+                "parse effect WAL {} line {line} failed: {source}",
+                path.display()
+            ),
+            Self::WalRepair { path, source } => write!(
+                formatter,
+                "repair truncated effect WAL tail {} failed: {source}",
+                path.display()
+            ),
+            Self::InvalidProvenance { tx_id, source } => {
+                write!(
+                    formatter,
+                    "transaction {tx_id} has invalid provenance: {source}"
+                )
+            }
+            Self::InvalidReplayBinding { tx_id, reason } => {
+                write!(
+                    formatter,
+                    "transaction {tx_id} has invalid replay binding: {reason}"
+                )
+            }
+            Self::ConflictingTransaction { tx_id, reason } => {
+                write!(formatter, "transaction {tx_id} is inconsistent: {reason}")
+            }
+            Self::WalAppend { path, source } => write!(
+                formatter,
+                "append replay completion to effect WAL {} failed: {source}",
+                path.display()
+            ),
+        }
+    }
+}
+
+impl std::error::Error for EffectReplayReconciliationError {}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -1063,6 +1321,7 @@ pub enum EffectWalCompactionReason {
     NoWalFile,
     NoClosedRecords,
     ClosedRecordsDropped,
+    ProvenanceRecordsRetained,
     StoreLockFailed,
     WalReadFailed,
     WalParseFailed,
@@ -1395,11 +1654,93 @@ pub fn apply_file_effect_transaction_with_wal_with_durability(
     tx_id: impl Into<String>,
     durability: WalDurability,
 ) -> EffectApplicationResult {
-    let root = root.as_ref();
     let tx_id = tx_id.into();
+    apply_file_effect_transaction_with_wal_inner(
+        root.as_ref(),
+        effect,
+        payloads,
+        wal_relative_path,
+        &tx_id,
+        durability,
+        None,
+    )
+}
+
+/// Commit one provenance-bound file effect while the caller retains the exact
+/// canonical effect lock. Provenance and replay binding are durably embedded in
+/// the `begin` record before any project write. Durability is intentionally
+/// fixed to [`WalDurability::SyncOnAppend`] for this authority boundary.
+#[allow(clippy::too_many_arguments)]
+#[must_use]
+pub fn apply_file_effect_transaction_with_provenance_under_lock(
+    root: impl AsRef<Path>,
+    effect_lock: &EffectStoreLock,
+    expected_lock_relative_path: &str,
+    effect: &ToolEffectContractDocument,
+    payloads: &[EffectApplicationPayload],
+    wal_relative_path: &str,
+    tx_id: impl Into<String>,
+    provenance: EffectExecutionProvenance,
+    replay_binding: EffectReplayCommitBinding,
+) -> EffectApplicationResult {
+    let root = root.as_ref();
+    let effect_id = effect.tool_effect_contract.id.clone();
+    let mut diagnostics = Vec::new();
+    if let Err(error) = validate_effect_lock_scope(root, effect_lock, expected_lock_relative_path) {
+        diagnostics.push(error.to_string());
+        return blocked_effect_application_result(
+            effect_id,
+            vec![EffectApplicationReason::StoreLockFailed],
+            diagnostics,
+            0,
+            0,
+        );
+    }
+    if let Err(error) = provenance.verify() {
+        diagnostics.push(error.to_string());
+        return blocked_effect_application_result(
+            effect_id,
+            vec![EffectApplicationReason::ExecutionProvenanceInvalid],
+            diagnostics,
+            0,
+            0,
+        );
+    }
+    if let Err(reason) = validate_effect_replay_binding(&replay_binding) {
+        diagnostics.push(reason);
+        return blocked_effect_application_result(
+            effect_id,
+            vec![EffectApplicationReason::ExecutionProvenanceInvalid],
+            diagnostics,
+            0,
+            0,
+        );
+    }
+    let tx_id = tx_id.into();
+    apply_file_effect_transaction_with_wal_inner(
+        root,
+        effect,
+        payloads,
+        wal_relative_path,
+        &tx_id,
+        WalDurability::SyncOnAppend,
+        Some((provenance, replay_binding)),
+    )
+}
+
+#[instrument(skip_all, fields(effect_id = %effect.tool_effect_contract.id.0, tx_id = tracing::field::Empty), level = "info")]
+fn apply_file_effect_transaction_with_wal_inner(
+    root: &Path,
+    effect: &ToolEffectContractDocument,
+    payloads: &[EffectApplicationPayload],
+    wal_relative_path: &str,
+    tx_id: &str,
+    durability: WalDurability,
+    prepared_authority: Option<(EffectExecutionProvenance, EffectReplayCommitBinding)>,
+) -> EffectApplicationResult {
     // Record the resolved tx_id in the parent span so callers filtering by
     // transaction id can find this operation in the trace.
-    tracing::Span::current().record("tx_id", tx_id.as_str());
+    tracing::Span::current().record("tx_id", tx_id);
     let effect_contract = &effect.tool_effect_contract;
     let validation = validate_tool_effect(effect);
     let validation_error_count = validation
@@ -1458,14 +1799,18 @@ pub fn apply_file_effect_transaction_with_wal_with_durability(
         );
     }
     let originals = capture_originals(&writes);
-    if append_effect_wal_record(
-        root,
-        wal_relative_path,
-        EffectWalRecord::begin(&tx_id, effect_contract.id.clone()),
-        durability,
-    )
-    .is_err()
-    {
+    let begin_record = prepared_authority.map_or_else(
+        || EffectWalRecord::begin(tx_id, effect_contract.id.clone()),
+        |(provenance, replay_binding)| {
+            EffectWalRecord::begin_with_authority(
+                tx_id,
+                effect_contract.id.clone(),
+                provenance,
+                replay_binding,
+            )
+        },
+    );
+    if append_effect_wal_record(root, wal_relative_path, begin_record, durability).is_err() {
         reasons.push(EffectApplicationReason::WalAppendFailed);
         diagnostics.push("failed to append WAL begin record".to_string());
         return blocked_effect_application_result(
@@ -1482,7 +1827,7 @@ pub fn apply_file_effect_transaction_with_wal_with_durability(
         if append_effect_wal_record(
             root,
             wal_relative_path,
-            EffectWalRecord::before_image(&tx_id, effect_contract.id.clone(), write, original),
+            EffectWalRecord::before_image(tx_id, effect_contract.id.clone(), write, original),
             durability,
         )
         .is_err()
@@ -1516,7 +1861,7 @@ pub fn apply_file_effect_transaction_with_wal_with_durability(
             return rollback_wal_transaction_result(RollbackWalTransaction {
                 root,
                 wal_relative_path,
-                tx_id: &tx_id,
+                tx_id,
                 effect_id: effect_contract.id.clone(),
                 originals: &originals,
                 applied_refs,
@@ -1530,7 +1875,7 @@ pub fn apply_file_effect_transaction_with_wal_with_durability(
         if let Err(error) = append_effect_wal_record(
             root,
             wal_relative_path,
-            EffectWalRecord::write_applied(&tx_id, effect, write),
+            EffectWalRecord::write_applied(tx_id, effect, write),
             durability,
         ) {
             reasons.push(EffectApplicationReason::WalAppendFailed);
@@ -1541,7 +1886,7 @@ pub fn apply_file_effect_transaction_with_wal_with_durability(
             return rollback_wal_transaction_result(RollbackWalTransaction {
                 root,
                 wal_relative_path,
-                tx_id: &tx_id,
+                tx_id,
                 effect_id: effect_contract.id.clone(),
                 originals: &originals,
                 applied_refs,
@@ -1557,7 +1902,7 @@ pub fn apply_file_effect_transaction_with_wal_with_durability(
     if append_effect_wal_record(
         root,
         wal_relative_path,
-        EffectWalRecord::stage(&tx_id, effect_contract.id.clone(), EffectWalStage::Commit),
+        EffectWalRecord::stage(tx_id, effect_contract.id.clone(), EffectWalStage::Commit),
         durability,
     )
     .is_err()
@@ -1567,7 +1912,7 @@ pub fn apply_file_effect_transaction_with_wal_with_durability(
         return rollback_wal_transaction_result(RollbackWalTransaction {
             root,
             wal_relative_path,
-            tx_id: &tx_id,
+            tx_id,
             effect_id: effect_contract.id.clone(),
             originals: &originals,
             applied_refs,
@@ -1590,6 +1935,159 @@ pub fn apply_file_effect_transaction_with_wal_with_durability(
         validation_error_count,
         validation_warning_count,
     }
+}
+
+/// Repair only a missing newline after a complete final record or an
+/// incomplete final JSON record while the exact effect lock is retained.
+/// Interior corruption is never rewritten.
+///
+/// # Errors
+///
+/// Returns [`EffectReplayReconciliationError`] for lock/path/read/repair
+/// failure.
+pub fn repair_effect_wal_tail_under_lock(
+    root: impl AsRef<Path>,
+    effect_lock: &EffectStoreLock,
+    expected_lock_relative_path: &str,
+    wal_relative_path: &str,
+) -> Result<bool, EffectReplayReconciliationError> {
+    let root = root.as_ref();
+    validate_effect_lock_scope(root, effect_lock, expected_lock_relative_path)?;
+    let wal_path =
+        resolve_reconciliation_relative_path(root, "wal_relative_path", wal_relative_path)?;
+    if !wal_path.exists() {
+        return Ok(false);
+    }
+    repair_effect_wal_tail_file(&wal_path)
+}
+
+/// Inspect committed provenance-bound effect transactions that still require
+/// replay completion. The exact effect lock must already be held. Any malformed
+/// integrated transaction fails the whole inspection closed.
+///
+/// # Errors
+///
+/// Returns [`EffectReplayReconciliationError`] for lock-scope mismatch, WAL
+/// read/parse failure, corrupt provenance, or an inconsistent transaction.
+pub fn pending_effect_replay_commits_under_lock(
+    root: impl AsRef<Path>,
+    effect_lock: &EffectStoreLock,
+    expected_lock_relative_path: &str,
+    wal_relative_path: &str,
+) -> Result<Vec<PendingEffectReplayCommit>, EffectReplayReconciliationError> {
+    let root = root.as_ref();
+    validate_effect_lock_scope(root, effect_lock, expected_lock_relative_path)?;
+    let wal_path =
+        resolve_reconciliation_relative_path(root, "wal_relative_path", wal_relative_path)?;
+    if !wal_path.exists() {
+        return Ok(Vec::new());
+    }
+    let _ = repair_effect_wal_tail_file(&wal_path)?;
+    let records = read_effect_wal_records_strict(&wal_path)?;
+    project_pending_effect_replay_commits(&records)
+}
+
+/// Append the durable effect-WAL acknowledgement for a consumed replay
+/// reservation while retaining the exact effect lock.
+///
+/// # Errors
+///
+/// Returns [`EffectReplayReconciliationError`] for a mismatched lock/binding or
+/// durable WAL append failure.
+#[allow(clippy::too_many_arguments)]
+pub fn append_effect_replay_completion_under_lock(
+    root: impl AsRef<Path>,
+    effect_lock: &EffectStoreLock,
+    expected_lock_relative_path: &str,
+    wal_relative_path: &str,
+    tx_id: &str,
+    effect_id: &StableId,
+    replay_binding: &EffectReplayCommitBinding,
+    replay_result: &replay_wal::ReplayConsumeResult,
+    recovered: bool,
+) -> Result<EffectReplayCompletionResult, EffectReplayReconciliationError> {
+    let root = root.as_ref();
+    validate_effect_lock_scope(root, effect_lock, expected_lock_relative_path)?;
+    if tx_id.trim().is_empty() {
+        return Err(EffectReplayReconciliationError::ConflictingTransaction {
+            tx_id: tx_id.to_owned(),
+            reason: "transaction id must not be blank".to_owned(),
+        });
+    }
+    validate_effect_replay_binding(replay_binding).map_err(|reason| {
+        EffectReplayReconciliationError::InvalidReplayBinding {
+            tx_id: tx_id.to_owned(),
+            reason,
+        }
+    })?;
+    let consumed_revision = replay_binding
+        .reservation_revision
+        .checked_add(1)
+        .ok_or_else(|| EffectReplayReconciliationError::InvalidReplayBinding {
+            tx_id: tx_id.to_owned(),
+            reason: "reservation revision overflow".to_owned(),
+        })?;
+    let reservation = &replay_result.reservation;
+    if reservation.key_hash != replay_binding.key_hash
+        || reservation.intent_digest != replay_binding.intent_digest
+        || reservation.commit_digest != replay_binding.commit_digest
+        || reservation.state != replay_wal::ReplayReservationState::Consumed
+        || reservation.revision != consumed_revision
+    {
+        return Err(EffectReplayReconciliationError::InvalidReplayBinding {
+            tx_id: tx_id.to_owned(),
+            reason: "consume result does not match the effect-WAL replay binding".to_owned(),
+        });
+    }
+    let completion = EffectReplayCompletion {
+        key_hash: replay_binding.key_hash.clone(),
+        reservation_revision: replay_binding.reservation_revision,
+        consumed_revision,
+        consumed_seq: replay_result.seq,
+        recovered,
+    };
+    let wal_path =
+        resolve_reconciliation_relative_path(root, "wal_relative_path", wal_relative_path)?;
+    if !wal_path.exists() {
+        return Err(EffectReplayReconciliationError::ConflictingTransaction {
+            tx_id: tx_id.to_owned(),
+            reason: "effect WAL is missing after replay consume".to_owned(),
+        });
+    }
+    let _ = repair_effect_wal_tail_file(&wal_path)?;
+    let records = read_effect_wal_records_strict(&wal_path)?;
+    let pending = project_pending_effect_replay_commits(&records)?;
+    let exact_commit = pending.iter().any(|candidate| {
+        candidate.tx_id == tx_id
+            && candidate.effect_id == *effect_id
+            && candidate.replay_binding == *replay_binding
+    });
+    if !exact_commit {
+        return Err(EffectReplayReconciliationError::ConflictingTransaction {
+            tx_id: tx_id.to_owned(),
+            reason: "no exact committed effect is pending replay completion".to_owned(),
+        });
+    }
+    append_effect_wal_record(
+        root,
+        wal_relative_path,
+        EffectWalRecord::replay_consumed(
+            tx_id,
+            effect_id.clone(),
+            replay_binding.clone(),
+            completion.clone(),
+        ),
+        WalDurability::SyncOnAppend,
+    )
+    .map_err(|error| EffectReplayReconciliationError::WalAppend {
+        path: wal_path.clone(),
+        source: error.to_string(),
+    })?;
+    Ok(EffectReplayCompletionResult {
+        wal_path,
+        tx_id: tx_id.to_owned(),
+        completion,
+    })
 }
 
 pub fn recover_effect_wal_with_lock(
@@ -2176,9 +2674,13 @@ pub fn compact_effect_wal(
         }
     };
     let incomplete_transactions = incomplete_wal_transactions(&records);
+    let provenance_transactions = provenance_bound_transaction_ids(&records);
     let retained: Vec<_> = records
         .iter()
-        .filter(|record| incomplete_transactions.contains(&record.tx_id))
+        .filter(|record| {
+            incomplete_transactions.contains(&record.tx_id)
+                || provenance_transactions.contains(&record.tx_id)
+        })
         .cloned()
         .collect();
     let dropped_records = records.len().saturating_sub(retained.len());
@@ -2188,7 +2690,14 @@ pub fn compact_effect_wal(
             retained_records: records.len(),
             dropped_records: 0,
             incomplete_transactions,
-            reasons: vec![EffectWalCompactionReason::NoClosedRecords],
+            reasons: if provenance_transactions.is_empty() {
+                vec![EffectWalCompactionReason::NoClosedRecords]
+            } else {
+                vec![
+                    EffectWalCompactionReason::NoClosedRecords,
+                    EffectWalCompactionReason::ProvenanceRecordsRetained,
+                ]
+            },
             diagnostics: Vec::new(),
         };
     }
@@ -2261,7 +2770,10 @@ pub fn compact_effect_wal(
         };
     }
 
-    let reasons = vec![EffectWalCompactionReason::ClosedRecordsDropped];
+    let mut reasons = vec![EffectWalCompactionReason::ClosedRecordsDropped];
+    if !provenance_transactions.is_empty() {
+        reasons.push(EffectWalCompactionReason::ProvenanceRecordsRetained);
+    }
     EffectWalCompactionResult {
         status: EffectWalCompactionStatus::Compacted,
         retained_records: retained.len(),
@@ -3871,6 +4383,290 @@ fn transaction_nonce() -> String {
     format!("{}-{nanos}", std::process::id())
 }
 
+fn validate_effect_lock_scope(
+    root: &Path,
+    effect_lock: &EffectStoreLock,
+    expected_lock_relative_path: &str,
+) -> Result<(), EffectReplayReconciliationError> {
+    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let expected = resolve_reconciliation_relative_path(
+        &canonical_root,
+        "expected_lock_relative_path",
+        expected_lock_relative_path,
+    )?;
+    let expected = expected.canonicalize().unwrap_or(expected);
+    let actual_path = effect_lock.path().to_path_buf();
+    let actual = actual_path.canonicalize().unwrap_or(actual_path);
+    if expected != actual || !actual.starts_with(&canonical_root) {
+        return Err(EffectReplayReconciliationError::LockScopeMismatch { expected, actual });
+    }
+    Ok(())
+}
+
+fn resolve_reconciliation_relative_path(
+    root: &Path,
+    field: &'static str,
+    relative: &str,
+) -> Result<PathBuf, EffectReplayReconciliationError> {
+    resolve_safe_repo_relative(root, relative).map_err(|_| {
+        EffectReplayReconciliationError::InvalidRelativePath {
+            field,
+            path: relative.to_owned(),
+        }
+    })
+}
+
+fn validate_effect_replay_binding(binding: &EffectReplayCommitBinding) -> Result<(), String> {
+    if !is_lower_sha256_token(&binding.key_hash) {
+        return Err("key_hash must be a lowercase sha256 token".to_owned());
+    }
+    if !is_lower_sha256_token(&binding.intent_digest) {
+        return Err("intent_digest must be a lowercase sha256 token".to_owned());
+    }
+    if !is_lower_sha256_token(&binding.commit_digest) {
+        return Err("commit_digest must be a lowercase sha256 token".to_owned());
+    }
+    if binding.reservation_revision == 0 {
+        return Err("reservation_revision must be greater than zero".to_owned());
+    }
+    Ok(())
+}
+
+fn is_lower_sha256_token(value: &str) -> bool {
+    value.strip_prefix("sha256:").is_some_and(|hex| {
+        hex.len() == 64
+            && hex
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    })
+}
+
+fn repair_effect_wal_tail_file(wal_path: &Path) -> Result<bool, EffectReplayReconciliationError> {
+    let bytes = fs::read(wal_path).map_err(|source| EffectReplayReconciliationError::WalRead {
+        path: wal_path.to_path_buf(),
+        source: source.to_string(),
+    })?;
+    if bytes.is_empty() || bytes.ends_with(b"\n") {
+        return Ok(false);
+    }
+    let tail_start = bytes
+        .iter()
+        .rposition(|byte| *byte == b'\n')
+        .map_or(0, |index| index + 1);
+    let complete_final_record = std::str::from_utf8(&bytes[tail_start..])
+        .ok()
+        .and_then(|tail| serde_json::from_str::<EffectWalRecord>(tail).ok())
+        .is_some();
+    if complete_final_record {
+        let mut file = OpenOptions::new()
+            .append(true)
+            .open(wal_path)
+            .map_err(|source| EffectReplayReconciliationError::WalRepair {
+                path: wal_path.to_path_buf(),
+                source: source.to_string(),
+            })?;
+        file.write_all(b"\n")
+            .and_then(|()| file.sync_all())
+            .map_err(|source| EffectReplayReconciliationError::WalRepair {
+                path: wal_path.to_path_buf(),
+                source: source.to_string(),
+            })?;
+    } else {
+        let file = OpenOptions::new()
+            .write(true)
+            .open(wal_path)
+            .map_err(|source| EffectReplayReconciliationError::WalRepair {
+                path: wal_path.to_path_buf(),
+                source: source.to_string(),
+            })?;
+        file.set_len(u64::try_from(tail_start).unwrap_or(u64::MAX))
+            .and_then(|()| file.sync_all())
+            .map_err(|source| EffectReplayReconciliationError::WalRepair {
+                path: wal_path.to_path_buf(),
+                source: source.to_string(),
+            })?;
+    }
+    Ok(true)
+}
+
+fn read_effect_wal_records_strict(
+    wal_path: &Path,
+) -> Result<Vec<EffectWalRecord>, EffectReplayReconciliationError> {
+    let content = fs::read_to_string(wal_path).map_err(|source| {
+        EffectReplayReconciliationError::WalRead {
+            path: wal_path.to_path_buf(),
+            source: source.to_string(),
+        }
+    })?;
+    if !content.is_empty() && !content.ends_with('\n') {
+        return Err(EffectReplayReconciliationError::WalParse {
+            path: wal_path.to_path_buf(),
+            line: content.lines().count().max(1),
+            source: "effect WAL has a non-durable partial final line".to_owned(),
+        });
+    }
+    content
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| !line.trim().is_empty())
+        .map(|(index, line)| {
+            serde_json::from_str::<EffectWalRecord>(line).map_err(|source| {
+                EffectReplayReconciliationError::WalParse {
+                    path: wal_path.to_path_buf(),
+                    line: index + 1,
+                    source: source.to_string(),
+                }
+            })
+        })
+        .collect()
+}
+
+#[derive(Debug)]
+struct EffectReplayProjection {
+    effect_id: StableId,
+    provenance: EffectExecutionProvenance,
+    replay_binding: EffectReplayCommitBinding,
+    committed: bool,
+    rolled_back: bool,
+    completed: bool,
+}
+
+fn project_pending_effect_replay_commits(
+    records: &[EffectWalRecord],
+) -> Result<Vec<PendingEffectReplayCommit>, EffectReplayReconciliationError> {
+    let mut transactions = BTreeMap::<String, EffectReplayProjection>::new();
+    for record in records {
+        if record.stage == EffectWalStage::Begin {
+            match (&record.execution_provenance, &record.replay_binding) {
+                (None, None) => continue,
+                (Some(provenance), Some(binding)) => {
+                    provenance.verify().map_err(|source| {
+                        EffectReplayReconciliationError::InvalidProvenance {
+                            tx_id: record.tx_id.clone(),
+                            source: source.to_string(),
+                        }
+                    })?;
+                    validate_effect_replay_binding(binding).map_err(|reason| {
+                        EffectReplayReconciliationError::InvalidReplayBinding {
+                            tx_id: record.tx_id.clone(),
+                            reason,
+                        }
+                    })?;
+                    if transactions
+                        .insert(
+                            record.tx_id.clone(),
+                            EffectReplayProjection {
+                                effect_id: record.effect_id.clone(),
+                                provenance: provenance.clone(),
+                                replay_binding: binding.clone(),
+                                committed: false,
+                                rolled_back: false,
+                                completed: false,
+                            },
+                        )
+                        .is_some()
+                    {
+                        return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                            tx_id: record.tx_id.clone(),
+                            reason: "multiple provenance-bound begin records".to_owned(),
+                        });
+                    }
+                }
+                _ => {
+                    return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: record.tx_id.clone(),
+                        reason: "begin must carry provenance and replay binding together"
+                            .to_owned(),
+                    });
+                }
+            }
+            continue;
+        }
+
+        let Some(transaction) = transactions.get_mut(&record.tx_id) else {
+            if record.stage == EffectWalStage::ReplayConsumed {
+                return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                    tx_id: record.tx_id.clone(),
+                    reason: "replay completion has no provenance-bound begin".to_owned(),
+                });
+            }
+            continue;
+        };
+        if record.effect_id != transaction.effect_id {
+            return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                tx_id: record.tx_id.clone(),
+                reason: "effect id changed within transaction".to_owned(),
+            });
+        }
+        match record.stage {
+            EffectWalStage::Commit => {
+                if transaction.committed || transaction.rolled_back {
+                    return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: record.tx_id.clone(),
+                        reason: "duplicate or post-rollback commit".to_owned(),
+                    });
+                }
+                transaction.committed = true;
+            }
+            EffectWalStage::RollbackComplete | EffectWalStage::RecoveredRollback => {
+                if transaction.committed || transaction.completed {
+                    return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: record.tx_id.clone(),
+                        reason: "rollback appears after commit or replay completion".to_owned(),
+                    });
+                }
+                transaction.rolled_back = true;
+            }
+            EffectWalStage::ReplayConsumed => {
+                if !transaction.committed || transaction.completed {
+                    return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: record.tx_id.clone(),
+                        reason: "replay completion requires one prior commit".to_owned(),
+                    });
+                }
+                let binding = record.replay_binding.as_ref().ok_or_else(|| {
+                    EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: record.tx_id.clone(),
+                        reason: "replay completion is missing its binding".to_owned(),
+                    }
+                })?;
+                let completion = record.replay_completion.as_ref().ok_or_else(|| {
+                    EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: record.tx_id.clone(),
+                        reason: "replay completion evidence is missing".to_owned(),
+                    }
+                })?;
+                if binding != &transaction.replay_binding
+                    || completion.key_hash != binding.key_hash
+                    || completion.reservation_revision != binding.reservation_revision
+                    || completion.consumed_revision
+                        != binding.reservation_revision.saturating_add(1)
+                {
+                    return Err(EffectReplayReconciliationError::ConflictingTransaction {
+                        tx_id: record.tx_id.clone(),
+                        reason: "replay completion does not match the begin binding".to_owned(),
+                    });
+                }
+                transaction.completed = true;
+            }
+            EffectWalStage::Begin | EffectWalStage::BeforeImage | EffectWalStage::WriteApplied => {}
+        }
+    }
+
+    Ok(transactions
+        .into_iter()
+        .filter(|(_, transaction)| {
+            transaction.committed && !transaction.rolled_back && !transaction.completed
+        })
+        .map(|(tx_id, transaction)| PendingEffectReplayCommit {
+            tx_id,
+            effect_id: transaction.effect_id,
+            provenance: transaction.provenance,
+            replay_binding: transaction.replay_binding,
+        })
+        .collect())
+}
+
 impl EffectWalRecord {
     fn begin(tx_id: &str, effect_id: StableId) -> Self {
         Self {
@@ -3883,7 +4679,22 @@ impl EffectWalRecord {
             target_metadata: None,
             original: None,
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         }
+    }
+
+    fn begin_with_authority(
+        tx_id: &str,
+        effect_id: StableId,
+        execution_provenance: EffectExecutionProvenance,
+        replay_binding: EffectReplayCommitBinding,
+    ) -> Self {
+        let mut record = Self::begin(tx_id, effect_id);
+        record.execution_provenance = Some(execution_provenance);
+        record.replay_binding = Some(replay_binding);
+        record
     }
 
     fn before_image(
@@ -3906,6 +4717,9 @@ impl EffectWalRecord {
                 content_hash: sha256_content_hash(&original.content),
             }),
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         }
     }
 
@@ -3938,6 +4752,9 @@ impl EffectWalRecord {
             }),
             original: None,
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
         }
     }
 
@@ -3952,6 +4769,31 @@ impl EffectWalRecord {
             target_metadata: None,
             original: None,
             diagnostic: None,
+            execution_provenance: None,
+            replay_binding: None,
+            replay_completion: None,
+        }
+    }
+
+    fn replay_consumed(
+        tx_id: &str,
+        effect_id: StableId,
+        replay_binding: EffectReplayCommitBinding,
+        replay_completion: EffectReplayCompletion,
+    ) -> Self {
+        Self {
+            schema_version: "0.1".to_owned(),
+            tx_id: tx_id.to_owned(),
+            stage: EffectWalStage::ReplayConsumed,
+            effect_id,
+            target_ref: None,
+            physical_target_ref: None,
+            target_metadata: None,
+            original: None,
+            diagnostic: None,
+            execution_provenance: None,
+            replay_binding: Some(replay_binding),
+            replay_completion: Some(replay_completion),
         }
     }
 }
@@ -3995,6 +4837,17 @@ fn incomplete_wal_transactions(records: &[EffectWalRecord]) -> Vec<String> {
     begun
         .into_iter()
         .filter(|tx_id| !closed.contains(tx_id))
+        .collect()
+}
+
+fn provenance_bound_transaction_ids(records: &[EffectWalRecord]) -> HashSet<String> {
+    records
+        .iter()
+        .filter(|record| {
+            record.stage == EffectWalStage::Begin
+                && (record.execution_provenance.is_some() || record.replay_binding.is_some())
+        })
+        .map(|record| record.tx_id.clone())
         .collect()
 }
 

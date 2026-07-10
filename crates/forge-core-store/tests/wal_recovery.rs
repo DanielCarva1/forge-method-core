@@ -62,6 +62,9 @@ fn record(
             content_hash: sha256_content_hash(content),
         }),
         diagnostic: None,
+        execution_provenance: None,
+        replay_binding: None,
+        replay_completion: None,
     }
 }
 

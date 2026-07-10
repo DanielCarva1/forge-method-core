@@ -44,7 +44,7 @@ decision:
       public_api_policy: "opaque non-serializable authority capability plus redacted audit projections"
     - name: "forge-core-store"
       crate_type: "library"
-      responsibility: "File-backed repository state, ledger, artifacts, requests, evidence, leases, and future storage traits for DB/daemon projections."
+      responsibility: "File-backed repository state, ledger, artifacts, requests, evidence, leases, provenance-bearing effect WAL, replay recovery primitives, and future storage traits for DB/daemon projections."
       depends_on:
         - "forge-core-contracts"
         - "forge-core-validate"
@@ -52,10 +52,10 @@ decision:
         - "LLM provider SDKs"
         - "MCP transport"
         - "Codex-specific paths"
-      public_api_policy: "storage traits plus file-store implementation"
+      public_api_policy: "storage traits plus file-store implementation; opaque kernel provenance is persisted and digest-verified without moving policy authority into the store"
     - name: "forge-core-kernel"
       crate_type: "library"
-      responsibility: "Guide/gate/doctor/oracle operation engine, Funnel Autonomy, state-machine routing, policy decisions, recovery, and OperationContract generation."
+      responsibility: "Guide/gate/doctor/oracle operation engine, Funnel Autonomy, state-machine routing, policy decisions, prepared Execution Admission, provenance-bound commit/recovery, and OperationContract generation."
       depends_on:
         - "forge-core-authority"
         - "forge-core-contracts"

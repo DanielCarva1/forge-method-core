@@ -1,11 +1,12 @@
 schema_version: "0.1"
 spec: "prepared_execution_transaction_v0"
-status: "p4b2b_implemented_dormant"
+status: "p4b2c_implemented_dormant"
 purpose: >-
   Carry one opaque verified execution request through kernel-derived project,
-  effect, replay, claim, gate, and commit authority; revalidate it at the late
-  pre-WAL boundary; and evaluate Execution Admission without yet committing an
-  effect or enabling public MCP mutation.
+  effect, replay, claim, gate, and commit authority; evaluate Admission at both
+  the late-preparation and immediate-commit boundaries; persist complete
+  redacted provenance; commit exactly one effect; and reconcile the durable
+  effect-commit/replay-consume crash window without enabling public MCP mutation.
 
 rust_interface:
   module: "forge_core_kernel crate-root re-exports over the private prepared_execution module"
@@ -13,7 +14,8 @@ rust_interface:
   prepared_type: "PreparedExecutionTransaction"
   late_evaluation: "PreparedExecutionTransaction::evaluate_late"
   admitted_typestate: "LateAdmittedExecutionTransaction"
-  public_effect_commit_method: null
+  effect_commit: "LateAdmittedExecutionTransaction::commit"
+  recovery: "reconcile_prepared_execution_commits"
 
 trusted_environment:
   type: "TrustedExecutionEnvironment"
@@ -69,39 +71,75 @@ late_boundary:
   decision: "evaluate_execution_admission"
   admitted_result: >-
     A non-cloneable, non-deserializable LateAdmittedExecutionTransaction retains
-    the verified authority, commit descriptor, exact admission document,
-    decision, final preflight, effect lock, and replay lock. It exposes no
-    effect-commit method in P4b.2b.
+    verified authority, the exact Admission input and decision, all prepared
+    material, and both locks. Only this type can enter the P4b.2c commit method.
 
-fail_closed_evidence:
-  - "valid complete snapshot reaches admitted typestate with no project write and no effect-WAL file"
-  - "effect and replay locks remain held by admitted typestate and release on drop"
-  - "signed request mutation fails before lock acquisition or replay reservation"
-  - "cross-project audience mismatch fails before replay reservation"
-  - "claim snapshot revision drift returns a typed blocked Admission decision"
-  - "filesystem drift between initial and late preflight returns an operational error"
-  - "snapshot-source failure releases locks without effect-WAL mutation"
-  - "Debug output for material, prepared, and admitted typestates never reveals the raw nonce"
-  - "compile-fail tests reject cloning/deserialization of prepared authority typestates"
+immediate_commit_boundary:
+  sequence:
+    - "repeat exact effect preflight and require equality with the late-admitted preflight"
+    - "capture a new bounded assurance/claim/gate/state/time snapshot"
+    - "rebuild and evaluate Execution Admission; a new policy block writes no effect WAL"
+    - "build complete typed provenance for authorization, both Admissions, all three preflights, descriptor, digest, and replay reservation"
+    - "replace raw nonce fields in persisted Admission projections with the verified nonce fingerprint"
+    - "canonicalize and hash the provenance document"
+    - "append provenance plus pseudonymous replay binding in the effect-WAL begin record before any project write"
+    - "commit exactly one effect with synchronous effect-WAL durability"
+    - "consume replay while both locks remain held"
+    - "release replay lock but retain effect lock, then append replay_consumed completion evidence"
+  result_states:
+    committed: "effect Commit, replay Consume, and effect-WAL replay_consumed marker are durable"
+    effect_committed_replay_pending: "effect is durable; caller must run reconciliation and must not retry as a new execution"
+    effect_committed_completion_pending: "effect and replay are durable; reconciliation must append the missing completion marker"
+    not_committed: "effect application blocked or rolled back; replay remains permanently observed/reserved"
+
+crash_reconciliation:
+  lock_order: "acquire canonical effect lock, then replay lock per candidate"
+  sequence:
+    - "recover and roll back any effect transaction without a durable effect Commit"
+    - "repair only an incomplete final effect-WAL JSON record under the retained effect lock"
+    - "strictly parse effect WAL and verify canonical provenance digests"
+    - "select provenance-bound effect Commits without replay_consumed evidence"
+    - "validate stored root, audience, descriptor, tx id, and replay reservation against the trusted environment"
+    - "consume replay by pseudonymous key hash without persisting or requiring the raw nonce"
+    - "treat an exact already-consumed replay transition as idempotent"
+    - "append replay_consumed evidence under the retained effect lock"
+  compaction_rule: >-
+    Provenance-bound transactions are retained by effect-WAL compaction. A
+    future governed archival/export boundary may supersede indefinite retention;
+    ordinary closed-record compaction may not erase recovery or audit evidence.
+
+executable_evidence:
+  - "valid commit writes one target, complete provenance Begin, effect Commit, replay Consume, and replay_consumed marker"
+  - "raw nonce is absent from persisted effect WAL"
+  - "claim revision drift at the immediate commit call blocks before the first effect-WAL record"
+  - "filesystem drift after late Admission fails before the first effect-WAL record"
+  - "simulated crash after effect Commit and before replay Consume is reconciled without rolling back the committed effect"
+  - "a torn replay_consumed tail is repaired and exact already-consumed replay reconciliation is idempotent"
+  - "tampered provenance digest fails closed"
+  - "effect-WAL compaction retains complete provenance-bound transactions"
+  - "prepared and admitted typestates remain non-cloneable and non-deserializable"
 
 intentional_limits:
-  - "preparation writes one replay reserve record but never consumes it; a failed or dropped attempt remains permanently seen"
-  - "no effect-WAL record, project write, metadata record, evidence record, or replay consume occurs"
-  - "claim and gate authority is retained as an exact typed revision snapshot, not as an operating-system lock against a same-user bypass writer"
+  - "effect and replay WALs are not physically atomic; typed pending receipts plus deterministic recovery close the crash window"
+  - "a failed or dropped pre-commit attempt leaves its replay nonce permanently seen"
+  - "claim and gate authority is an exact typed revision snapshot, not an operating-system lock against a same-user bypass writer"
   - "same-user raw filesystem access remains outside the cooperative governance boundary"
-  - "the admitted typestate is not wired to MCP, CLI, or the existing execute_operation path"
+  - "the P4b.2c path is not wired to MCP, CLI, or the legacy execute_operation entrypoint"
+  - "public MCP mutation remains disabled"
   - "operation-wide atomicity and saga semantics remain unsupported"
+  - "whole replay manifest/WAL pair deletion or rollback detection still requires an externally protected epoch/head"
 
 next_boundary:
-  id: "P4b.2c-provenance-commit-and-recovery"
+  id: "P4b.3-explicit-mutation-enablement-policy"
   required:
-    - "persist principal, intent, replay, claim, gate, admission, preflight, and commit-descriptor provenance"
-    - "consume LateAdmittedExecutionTransaction directly into one effect commit without releasing authority"
-    - "reconcile crashes after effect commit and before replay consume"
-    - "revalidate any mutable authority not protected by a retained lock at the immediate commit call"
-    - "keep public MCP mutation disabled until an explicit deployment-policy decision"
+    - "define read-only-default and explicit trusted-single-effect deployment modes"
+    - "wire trusted material and bounded snapshot loading into the in-process MCP executor"
+    - "run P4b.2c reconciliation before accepting any mutation"
+    - "admit only the narrow single-effect capability; fail closed for operation-wide or saga requests"
+    - "require explicit operator-owned audience, registry, root, allowlist, and enablement policy"
 
 references:
+  - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/execution-authority-handoff-v0.yaml"
   - "contracts/spec/execution-admission-v0.yaml"
   - "contracts/spec/replay-protection-wal-v0.yaml"

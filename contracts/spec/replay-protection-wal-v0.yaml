@@ -1,16 +1,18 @@
 schema_version: "0.1"
 spec: "replay_protection_wal_v0"
-status: "p4b1b_rust_substrate"
+status: "p4b2c_integrated_dormant"
 purpose: >-
-  Provide a durable, bounded, single-use nonce reservation substrate for a
-  future Execution Assurance Kernel without claiming that MCP or CLI mutation
-  is already connected to it.
+  Provide a durable, bounded, single-use nonce reservation and recovery
+  substrate integrated with the dormant P4b.2c single-effect kernel boundary
+  without claiming that MCP or CLI mutation is enabled.
 
 interface:
   rust_module: "forge_core_store::replay_wal"
   initialization: "initialize_replay_wal"
   reserve: "reserve_replay_nonce"
   guarded_consume: "acquire_replay_commit_guard then ReplayCommitGuard::consume"
+  owned_guarded_consume: "OwnedReplayCommitGuard::consume_retaining_effect_lock"
+  effect_commit_recovery: "consume_replay_key_hash_under_effect_lock"
   administrative_consume: "consume_replay_nonce_non_boundary"
   recovery: "recover_replay_wal"
 
@@ -93,21 +95,23 @@ lock_order:
   required: "effect-store lock before replay WAL lock"
   enforcement: >-
     ReplayCommitGuard borrows the caller's EffectStoreLock while owning the
-    replay lock. P4b.2b adds an owned variant so both locks remain live inside
-    the opaque prepared kernel transaction.
+    replay lock. The owned variant keeps both locks inside the opaque prepared
+    transaction; after consume it can release replay while retaining effect
+    authority for the durable replay_consumed effect-WAL marker.
   scope_limit: >-
     The store validates the caller-declared effect-lock path against the held
     lock but cannot know whether that path is the canonical lock for the
     intended effect. P4b.2b now derives the path and canonical commit
     descriptor inside the dormant kernel path rather than adapter input.
-  lifecycle_limit: >-
-    The store guard alone cannot prove that an effect commit happened before
-    consume or prevent a caller from dropping the guard. P4b.2b adds the opaque
-    prepared/admitted lifecycle but deliberately exposes no commit or consume;
-    P4b.2c must bind both to a durable receipt or reconciliation record.
+  lifecycle_binding: >-
+    P4b.2c consumes only the opaque admitted typestate, embeds the exact replay
+    binding in the provenance-bearing effect Begin, commits one effect, consumes
+    replay, and appends typed completion evidence. Pending receipts forbid
+    silently treating an already committed effect as safe to retry.
   limitation: >-
-    This guard is a substrate, not cross-WAL atomicity. A crash after the effect
-    commit and before replay consume still needs kernel recovery reconciliation.
+    The two WALs are not physically atomic. P4b.2c provides deterministic,
+    idempotent kernel recovery for a crash after effect Commit and before replay
+    Consume or its effect-WAL completion marker.
 
 current_boundary:
   enforced_now:
@@ -117,9 +121,11 @@ current_boundary:
     - "borrowed and owned effect-lock-first lifetime guards"
     - "owned effect-lock-first replay guard retained by the dormant P4b.2b prepared kernel transaction"
     - "P4b.2b kernel-owned reserve binds the signed intent to a canonical commit descriptor before late Admission"
+    - "P4b.2c consumes replay after one provenance-bound effect Commit while retaining effect authority"
+    - "P4b.2c recovery consumes by persisted pseudonymous key hash without raw nonce material"
+    - "exact already-consumed recovery is idempotent and completion is acknowledged in the effect WAL"
   not_yet_claimed:
     - "live MCP or CLI mutation reserves or consumes this WAL"
-    - "P4a Execution Admission runs immediately before the first effect-WAL record"
     - "effect-WAL commit and replay consume are one atomic transaction"
     - "whole-pair deletion or rollback detection"
     - "compaction, rotation, or online migration"
@@ -128,5 +134,6 @@ references:
   - "contracts/spec/execution-admission-v0.yaml"
   - "contracts/spec/execution-authority-handoff-v0.yaml"
   - "contracts/spec/prepared-execution-transaction-v0.yaml"
+  - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/execution-trust-boundary-v0.yaml"
   - "contracts/plan/agent-native-guidance-plan.yaml"

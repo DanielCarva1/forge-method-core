@@ -28,10 +28,10 @@
 //! - `wal_orchestration` — `execute_operation`, the single public mutation
 //!   entrypoint, plus `prepare_effect_transaction` and the execution-result
 //!   types.
-//! - `prepared_execution` — the dormant P4b.2b authority path: canonical
-//!   commit descriptor, retained effect/replay locks, double file preflight,
-//!   trusted late snapshot, and pre-WAL Execution Admission typestate. It has
-//!   no effect-commit method yet.
+//! - `prepared_execution` ? the dormant P4b.2b/P4b.2c authority path:
+//!   canonical commit descriptor, retained effect/replay locks, repeated file
+//!   preflight and Admission, provenance-bound one-effect commit, replay
+//!   completion receipt, and crash-window reconciliation.
 //! - [`gate`] — the `OperationGate` trait and `GateRejection` type: mutation
 //!   preconditions the kernel runs before any WAL append. V2.C builds the seam
 //!   (the trait + typestate context); V3.A fills it with real gates.

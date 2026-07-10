@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "execution_admission_v0"
-status: "p4b2b_dormant_late_boundary"
+status: "p4b2c_dormant_commit_recovery_boundary"
 purpose: >-
   Bind an evidence-backed Assurance Case and a commit-time runtime snapshot to
   one exact mutation intent before the Execution Assurance Kernel may admit it.
@@ -88,18 +88,21 @@ current_boundary:
     - "P4b.2b retains an owned effect-lock-first replay guard and compares initial versus late file-effect preflight"
     - "P4b.2b rebuilds principal, replay, contract, freshness, and commit observations around a limited fresh assurance/claim/gate snapshot"
     - "P4b.2b evaluates Execution Admission into an opaque admitted typestate before any effect-WAL record or project write"
+    - "P4b.2c repeats effect preflight and Execution Admission from a new bounded mutable-authority snapshot at the immediate commit call"
+    - "P4b.2c persists complete canonical redacted authority, Admission, preflight, descriptor, and replay provenance before the first project write"
+    - "P4b.2c consumes the admitted typestate into exactly one effect Commit, replay Consume, and effect-WAL replay_consumed marker"
+    - "P4b.2c returns typed pending receipts and deterministically reconciles both effect-Commit/replay-Consume crash windows"
     - "replay manifest/WAL half-pairs and corrupt authority state fail closed"
     - "effect-lock-first ReplayCommitGuard retains the future kernel lock order through consume or drop"
-    - "MCP stdio mutation stays fail-closed until the late kernel path consumes trusted identity and guarded replay state"
+    - "MCP stdio mutation stays fail-closed pending explicit deployment policy, trusted material/snapshot wiring, and startup reconciliation"
     - "read-only MCP child processes use a pinned binary, repo-scoped cwd, minimal environment, and null stdin"
   not_yet_claimed:
     - "live MCP mutation using the opaque verified-authorization result"
     - "live MCP or CLI mutation reserving and consuming the replay WAL"
-    - "live kernel effect commit immediately consuming the dormant pre-WAL admitted typestate"
-    - "atomic effect-WAL commit plus replay consume and crash reconciliation"
+    - "effect WAL and replay WAL are one physically atomic transaction"
     - "whole replay manifest/WAL pair deletion or rollback detection"
     - "replay WAL compaction or rotation"
-    - "Execution Principal propagation into claims, traces, WAL, and evidence"
+    - "Execution Principal propagation beyond commit provenance into claims, traces, and general evidence"
     - "operation-wide WAL across multiple effects"
 
 references:
@@ -119,5 +122,6 @@ references:
 local_specs:
   - "contracts/spec/execution-authority-handoff-v0.yaml"
   - "contracts/spec/prepared-execution-transaction-v0.yaml"
+  - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/replay-protection-wal-v0.yaml"
   - "contracts/spec/execution-trust-boundary-v0.yaml"

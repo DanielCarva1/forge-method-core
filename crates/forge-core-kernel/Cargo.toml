@@ -19,6 +19,7 @@ forge-core-store = { path = "../forge-core-store" }
 forge-core-trace = { path = "../forge-core-trace" }
 forge-core-validate = { path = "../forge-core-validate" }
 serde.workspace = true
+serde_json.workspace = true
 serde_json_canonicalizer.workspace = true
 tracing.workspace = true
 

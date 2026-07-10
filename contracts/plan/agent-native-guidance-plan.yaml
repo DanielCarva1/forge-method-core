@@ -179,19 +179,38 @@ phases:
           exact typed snapshots, not operating-system locks against a same-user
           bypass. MCP and CLI mutation remain unchanged and public MCP mutation
           remains fail-closed.
+      - id: "P4b.2c-provenance-commit-and-recovery"
+        delivers:
+          - "complete canonical redacted provenance for verified authorization, late and commit-time Admission, three effect preflights, commit descriptor, and replay reservation"
+          - "immediate-commit mutable-authority revalidation before the first effect-WAL record"
+          - "direct linear consumption of LateAdmittedExecutionTransaction into one synchronous effect-WAL commit"
+          - "effect-WAL replay binding plus durable replay_consumed completion evidence"
+          - "typed pending receipts that forbid treating an already-committed effect as safe to retry"
+          - "deterministic idempotent reconciliation for crashes after effect Commit and before replay completion"
+          - "strict provenance verification and compaction retention for integrated audit/recovery evidence"
+        boundary: >-
+          This path is internal and dormant. Effect and replay WALs are not one
+          physical atomic file; typed pending receipts and deterministic
+          reconciliation close the crash window. Claim/gate revisions remain
+          cooperative snapshots, whole replay-pair rollback detection remains
+          external, operation-wide/saga semantics remain unsupported, and MCP
+          and CLI mutation remain unchanged and fail-closed.
     checkpoint_sequence:
       rule: >-
         P4b.2a, P4b.2b, and P4b.2c each land as a separate validated commit so
         source users can fast-forward pull a usable checkpoint without
         implicitly enabling the next authority boundary.
     next_slice:
-      id: "P4b.2c-provenance-commit-and-recovery"
+      id: "P4b.3-explicit-mutation-enablement-policy"
       scope:
-        - "persist principal, intent, replay, claim, gate, admission, preflight, and commit-descriptor provenance"
-        - "consume the admitted typestate directly into one effect commit"
-        - "reconcile crashes between effect commit and replay consume"
-        - "require an explicit policy decision before public MCP mutation enablement"
-    following_slices: []
+        - "define read-only-default and explicit trusted-single-effect deployment modes"
+        - "wire trusted contract/payload material and bounded snapshot loading into the in-process MCP executor"
+        - "run P4b.2c reconciliation before accepting mutation"
+        - "require explicit operator-owned root, audience, registry, allowlist, and enablement policy"
+        - "keep operation-wide WAL and saga requests fail-closed"
+    following_slices:
+      - "operation-wide transaction or complete typed saga semantics"
+      - "externally protected replay epoch/head for whole-pair rollback detection"
     release_blockers:
       - "operation-wide transaction or explicit saga semantics"
       - "trusted MCP caller identity carried into the kernel without a forgeable subprocess handoff"
@@ -246,12 +265,14 @@ first_executable_slice:
     - "P4b.1b bounded durable replay WAL and effect-lock-first commit guard Rust substrate"
     - "P4b.2a host-neutral opaque execution authorization and typed in-process MCP executor seam"
     - "P4b.2b opaque prepared transaction, double effect preflight, owned replay guard, and dormant late Admission typestate"
+    - "P4b.2c complete redacted provenance, immediate commit Admission, one-effect commit, replay completion receipt, and deterministic crash reconciliation"
   next_action: >-
-    Implement P4b.2c by persisting complete authority/admission provenance,
-    consuming the admitted typestate directly into one effect commit, and
-    reconciling the effect-commit/replay-consume crash window while public MCP
-    mutation stays blocked. Keep operation-wide transaction or complete saga
-    semantics and enforced-deployment isolation as explicit release boundaries.
+    Implement P4b.3 as a separate checkpoint by defining explicit deployment
+    policy, wiring trusted material/snapshot sources into the in-process MCP
+    executor, and requiring startup reconciliation before narrowly enabling the
+    single-effect path. Keep read-only as the default and keep operation-wide
+    transaction, complete saga semantics, whole-pair rollback detection, and
+    enforced-deployment isolation as explicit release boundaries.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"
