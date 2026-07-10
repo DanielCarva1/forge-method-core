@@ -79,8 +79,11 @@ current_boundary:
     - "typed pure decision and content-addressed binding"
     - "P4a executable acceptance corpus"
     - "P3 resume token now shares the same canonical token function"
+    - "P4b.1a strict operator-owned principal registry and trusted identity derivation primitive"
+    - "MCP stdio mutation stays fail-closed until replay and late kernel admission consume that identity"
+    - "read-only MCP child processes use a pinned binary, repo-scoped cwd, minimal environment, and null stdin"
   not_yet_claimed:
-    - "MCP authorized-principal registry wiring"
+    - "live MCP mutation using the authorized-principal result"
     - "durable nonce reservation and consume-on-commit"
     - "kernel pre-WAL ExecutionAdmission gate"
     - "Execution Principal propagation into claims, traces, WAL, and evidence"

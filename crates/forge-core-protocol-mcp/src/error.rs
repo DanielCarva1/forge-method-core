@@ -72,6 +72,8 @@ impl std::error::Error for McpAdapterError {}
 /// domain-level). Domain-level tool-call failures are [`McpAdapterError`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServerRunError {
+    /// The configured capability surface violates the process-security policy.
+    Config(String),
     /// The `rmcp` transport returned an IO or protocol error.
     Transport(String),
     /// The tokio runtime could not be built or driven.
@@ -81,6 +83,7 @@ pub enum ServerRunError {
 impl fmt::Display for ServerRunError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Config(m) => write!(f, "MCP server config error: {m}"),
             Self::Transport(m) => write!(f, "MCP transport error: {m}"),
             Self::Runtime(m) => write!(f, "tokio runtime error: {m}"),
         }

@@ -526,9 +526,50 @@ single-use replay, claim/gate revision, and commit-guarantee observations. Any
 deterministic issue blocks admission and is returned for agent self-correction.
 The executable corpus lives under `docs/fixtures/execution-admission-v0/`.
 
-This is intentionally **not yet** a CLI or MCP mutation-enforcement claim. P4b
-must make the Adapter produce trusted identity/replay observations and make the
-kernel evaluate the verdict immediately before its WAL boundary.
+This pure decision is intentionally **not yet** the kernel mutation gate. P4b.1
+now makes the MCP Adapter derive a trusted principal from an operator registry;
+durable replay state and late kernel evaluation are separate checkpoints below.
+
+### Prepare a trusted MCP principal registry (P4b.1a)
+
+The built-in MCP surface remains read-only. P4b.1a adds the strict
+operator-owned registry and authorization primitive without prematurely
+enabling stdio mutation. An operator can preload and validate a registry while
+serving the default read-only surface:
+
+```bash
+forge-core mcp serve \
+  --principal-registry /operator-controlled/forge-principals.yaml \
+  --root <project>
+```
+
+Start from
+[`contracts/examples/mcp-principal-registry.yaml`](contracts/examples/mcp-principal-registry.yaml).
+Its published test credential is revoked on purpose: replace the public key,
+credential/principal/agent ids, audience, tool grants, and authority grants,
+then activate only the authority the operator intends. Keep the live registry
+outside agent-writable project state (or protect it with equivalent OS
+permissions); never store a private key in it.
+
+The future mutating `tools/call` contract carries `_meta.attestation` fields
+`credential_id`, `audience`, `execution_intent_digest`, `nonce`, `ts`,
+`signature`, and `public_key_hex`. Forge selects the authoritative public key
+from the registry, checks credential status, exact audience and tool grant,
+applies a 300-second age / 30-second future-skew window, and verifies the
+canonical call signature against that selected key. A caller-selected key and
+`AttestationPolicy::NeverRequired` cannot bypass mutation authorization.
+
+Loading any allowlist containing `policy: mutate` still fails closed, even with
+a valid registry. This checkpoint proves identity derivation only; it does not
+yet claim durable nonce consumption, a constrained principal handoff,
+propagation into claims/WAL/evidence, or the P4a verdict immediately before the
+first effect-WAL record.
+
+Read-only tool subprocesses no longer resolve `forge-core` through `PATH` or
+inherit the host's full environment. The server pins its current executable,
+uses the canonical repo root as cwd and `--root`, clears the environment before
+copying a small OS/runtime allowlist, and disconnects child stdin from the MCP
+protocol stream.
 
 ### Route work through the dual-lane autonomy router
 
@@ -708,9 +749,11 @@ gates.
 
 **Not yet (roadmap)**
 
-- **MCP server** — `forge-core mcp serve` is implemented (stdio JSON-RPC,
-  tool-call attestation, fail-closed allowlist). Roadmap: snapshotting /
-  hardening and a richer tool surface. The CLI remains the intended agent
+- **MCP server** — `forge-core mcp serve` is implemented for read-only stdio
+  JSON-RPC with a fail-closed allowlist and optional signature-only
+  attestation. P4b.1a adds an operator principal registry, but mutating stdio
+  tools remain blocked until durable replay, constrained principal handoff,
+  and late kernel Execution Admission land. The CLI remains the intended agent
   boundary by design.
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL

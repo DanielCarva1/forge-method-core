@@ -24,10 +24,11 @@
 //!
 //! `policy` is `read-only` (default) or `mutate`. The shared Command Surface is
 //! the authority floor: a command whose `CommandAuthority` may mutate cannot be
-//! admitted with `read-only` policy, because that would bypass the
-//! `MutateGate` and Tool-Call Attestation. Unknown names and unsafe policies
-//! are reported as typed `Diagnostic`s without short-circuiting, so the
-//! operator sees every issue at once (the project convention).
+//! admitted with `read-only` policy. Mutating entries are representable for
+//! future hardened transports, but MCP stdio startup currently rejects any
+//! such surface. Unknown names and unsafe policies are reported as typed
+//! `Diagnostic`s without short-circuiting, so the operator sees every issue at
+//! once (the project convention).
 
 use std::fmt;
 
@@ -41,17 +42,17 @@ use serde::{Deserialize, Serialize};
 /// `OperationContract`) or mutate (gated by the `MutateGate` + Tool-Call
 /// Attestation, ADR-0006 Decisions 2 & 4).
 ///
-/// This is the policy classification that drives the `MutateGate`. The Command
-/// Surface is still the authority floor: explicit YAML can make a read-only
-/// command stricter by declaring `mutate`, but it cannot make a mutating or
-/// mixed-authority command weaker by declaring `read-only`.
+/// This is the policy classification that drives transport admission. The
+/// Command Surface is still the authority floor: explicit YAML can make a
+/// read-only command stricter by declaring `mutate`, but it cannot make a
+/// mutating or mixed-authority command weaker by declaring `read-only`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AllowlistPolicy {
     /// Read-only: no store mutation. Tool-Call Attestation optional under the
     /// default policy (ADR-0006 Decision 4).
     ReadOnly,
-    /// Mutate: writes to the store. Requires an `OperationContract` AND a
-    /// valid Tool-Call Attestation.
+    /// Mutate: writes to the store. Representable in policy, but blocked on the
+    /// stdio transport until replay and late kernel admission are complete.
     Mutate,
 }
 

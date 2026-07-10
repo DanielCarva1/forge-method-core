@@ -3,11 +3,17 @@
 # Declares which `forge-core` commands an MCP server instance exposes as
 # tools (ADR-0006 Decision 3). `policy: read-only` tools need no
 # OperationContract; `policy: mutate` tools require an OperationContract
-# (--operation/--command/--effect) AND a Tool-Call Attestation at call time.
+# (--operation/--command/--effect) AND a fresh Tool-Call Attestation authorized
+# by the operator-owned principal registry at call time. Starting this mixed
+# surface will therefore also require `--principal-registry <yaml>`. P4b.1a
+# deliberately keeps all stdio mutation blocked until replay + the late kernel
+# Execution Admission handoff land; this file currently exercises fail-closed
+# startup rather than enabling a production mutation surface.
 #
 # This is an example mixed surface: read-only exploration plus explicit mutate
 # verbs. Copy and trim to lock a server down further (e.g. use the built-in
 # read-only default or drop the mutate tools for a pure read-only deployment).
+# See `mcp-principal-registry.yaml` for a deliberately revoked safe template.
 
 tools:
   - name: preview

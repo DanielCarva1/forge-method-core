@@ -21,7 +21,8 @@ use std::path::PathBuf;
 use forge_core_command_surface::{command_names, COMMAND_MCP};
 use forge_core_contracts::{CliEnvelope, ExitReason};
 use forge_core_protocol_mcp::{
-    Allowlist, AttestationPolicy, AttestationVerifier, ForgeMcpServer, McpServerConfig,
+    Allowlist, AttestationPolicy, AttestationVerifier, AuthorizedPrincipalRegistry, ForgeMcpServer,
+    McpServerConfig, DEFAULT_MAX_ATTESTATION_AGE_SECONDS, DEFAULT_MAX_FUTURE_SKEW_SECONDS,
 };
 
 use crate::cli_error::ExitError;
@@ -100,6 +101,7 @@ fn print_mcp_usage() {
     println!();
     println!("  serve runs the stdio JSON-RPC MCP server (ADR-0006). Default Allowlist");
     println!("  is read-only; --allowlist overrides with the named YAML file.");
+    println!("  Any mutating allowlist also requires --principal-registry <yaml>.");
 }
 
 fn mcp_serve_usage_line() -> &'static str {
@@ -119,6 +121,7 @@ fn mcp_serve_parse_error_with_usage(error: &ServeArgsError) -> String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ServeArgs {
     allowlist: Option<PathBuf>,
+    principal_registry: Option<PathBuf>,
     root: Option<PathBuf>,
     want_json: bool,
 }
@@ -131,6 +134,7 @@ struct ServeArgs {
 /// flag/positional is present.
 fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
     let mut allowlist = None;
+    let mut principal_registry = None;
     let mut root = None;
     let want_json = json_output_unless_text_selected(args);
 
@@ -147,6 +151,11 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
                 let p = require_value(args, i, "--root")?;
                 root = Some(PathBuf::from(p));
             }
+            "--principal-registry" => {
+                i += 1;
+                let path = require_value(args, i, "--principal-registry")?;
+                principal_registry = Some(PathBuf::from(path));
+            }
             "--json" | "--no-json" | "--text" => { /* handled by want_json */ }
             other if other.starts_with("--") => {
                 return Err(ServeArgsError::UnknownFlag(other.to_string()));
@@ -157,6 +166,7 @@ fn parse_serve_args(args: &[String]) -> Result<ServeArgs, ServeArgsError> {
     }
     Ok(ServeArgs {
         allowlist,
+        principal_registry,
         root,
         want_json,
     })
@@ -222,7 +232,7 @@ fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
             let yaml = match std::fs::read_to_string(path) {
                 Ok(t) => t,
                 Err(e) => {
-                    return emit_err(
+                    return emit_config_err(
                         SERVE_COMMAND,
                         &format!("failed to read allowlist {}: {e}", path.display()),
                         parsed.want_json,
@@ -239,7 +249,7 @@ fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
                     .iter()
                     .map(|d| format!("{}: {}", d.path, d.message))
                     .collect();
-                return emit_err(
+                return emit_config_err(
                     SERVE_COMMAND,
                     &format!("allowlist validation failed:\n{}", messages.join("\n")),
                     parsed.want_json,
@@ -250,13 +260,73 @@ fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
         None => Allowlist::default_read_only(),
     };
 
+    let principal_registry = match parsed.principal_registry.as_ref() {
+        Some(path) => {
+            let yaml = match std::fs::read_to_string(path) {
+                Ok(yaml) => yaml,
+                Err(error) => {
+                    return emit_config_err(
+                        SERVE_COMMAND,
+                        &format!(
+                            "failed to read principal registry {}: {error}",
+                            path.display()
+                        ),
+                        parsed.want_json,
+                    );
+                }
+            };
+            match AuthorizedPrincipalRegistry::from_yaml_str(&yaml) {
+                Ok(registry) => Some(registry),
+                Err(error) => {
+                    return emit_config_err(
+                        SERVE_COMMAND,
+                        &format!("principal registry {} is invalid: {error}", path.display()),
+                        parsed.want_json,
+                    );
+                }
+            }
+        }
+        None => None,
+    };
+    let requested_root = parsed.root.unwrap_or_else(|| PathBuf::from("."));
+    let root = match std::fs::canonicalize(&requested_root) {
+        Ok(root) => root,
+        Err(error) => {
+            return emit_config_err(
+                SERVE_COMMAND,
+                &format!(
+                    "failed to resolve MCP repo root {}: {error}",
+                    requested_root.display()
+                ),
+                parsed.want_json,
+            );
+        }
+    };
+    let forge_core_binary = match std::env::current_exe().and_then(std::fs::canonicalize) {
+        Ok(path) => path,
+        Err(error) => {
+            return emit_config_err(
+                SERVE_COMMAND,
+                &format!("failed to pin current forge-core executable: {error}"),
+                parsed.want_json,
+            );
+        }
+    };
     let config = McpServerConfig {
         allowlist,
         attestation: AttestationVerifier::new(AttestationPolicy::Default),
-        forge_core_binary: PathBuf::from("forge-core"),
-        root: parsed.root,
+        principal_registry,
+        max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
+        max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
+        forge_core_binary,
+        root: Some(root),
     };
-    let server = ForgeMcpServer::new(config);
+    let server = match ForgeMcpServer::try_new(config) {
+        Ok(server) => server,
+        Err(error) => {
+            return emit_config_err(SERVE_COMMAND, &error.to_string(), parsed.want_json);
+        }
+    };
 
     // `serve` runs the JSON-RPC loop on stdout. Startup diagnostics go to
     // stderr so they do not corrupt the protocol stream. A failure to start
@@ -277,6 +347,11 @@ fn json_output_unless_text_selected(args: &[String]) -> bool {
 fn emit_err(command: &str, message: &str, want_json: bool) -> Result<(), ExitError> {
     let env: CliEnvelope<()> = CliEnvelope::err(command, ExitReason::InvalidDecisionShape, message);
     crate::cli_util::emit_envelope(env, want_json)
+}
+
+fn emit_config_err(command: &str, message: &str, want_json: bool) -> Result<(), ExitError> {
+    let envelope: CliEnvelope<()> = CliEnvelope::err(command, ExitReason::EnvConfig, message);
+    crate::cli_util::emit_envelope(envelope, want_json)
 }
 
 #[cfg(test)]
@@ -353,6 +428,7 @@ mod tests {
         let args: Vec<String> = vec![];
         let parsed = parse_serve_args(&args).unwrap();
         assert!(parsed.allowlist.is_none());
+        assert!(parsed.principal_registry.is_none());
     }
 
     #[test]
@@ -362,6 +438,22 @@ mod tests {
         assert_eq!(
             parsed.allowlist.as_ref().map(|p| p.to_str().unwrap()),
             Some("/tmp/x.yaml")
+        );
+    }
+
+    #[test]
+    fn parse_serve_reads_principal_registry_flag() {
+        let parsed = parse_serve_args(&args(&[
+            "--principal-registry",
+            "/operator/forge-principals.yaml",
+        ]))
+        .expect("parse principal registry");
+        assert_eq!(
+            parsed
+                .principal_registry
+                .as_ref()
+                .map(|path| path.to_str().unwrap()),
+            Some("/operator/forge-principals.yaml")
         );
     }
 
@@ -391,6 +483,26 @@ mod tests {
             ServeArgsError::FlagAsValue {
                 flag: "--allowlist",
                 value: "--root".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_serve_rejects_principal_registry_without_value() {
+        let error = parse_serve_args(&args(&["--principal-registry"]))
+            .expect_err("principal registry path is required");
+        assert_eq!(error, ServeArgsError::MissingValue("--principal-registry"));
+    }
+
+    #[test]
+    fn parse_serve_rejects_flag_as_principal_registry_value() {
+        let error = parse_serve_args(&args(&["--principal-registry", "--root"]))
+            .expect_err("another flag cannot be a registry path");
+        assert_eq!(
+            error,
+            ServeArgsError::FlagAsValue {
+                flag: "--principal-registry",
+                value: "--root".to_owned(),
             }
         );
     }

@@ -22,17 +22,21 @@
 //!
 //! 1. **Allowlist** — tool name must be in the Allowlist, else fail-closed
 //!    (ADR-0006 Decision 3).
-//! 2. **`MutateGate`** — if the tool is a mutate tool, an `OperationContract`
-//!    must be attached, else fail-closed (Decision 2). [Wired in F08.4.]
-//! 3. **Attestation** — if the policy requires it (mutate by default),
-//!    verify the Tool-Call Attestation signature (Decision 4). [Wired in
-//!    F08.5.]
-//! 4. **Invoke** — spawn the subprocess, capture the envelope, return it.
+//! 2. **MCP stdio mutation boundary** — mutating tools remain blocked while
+//!    P4b durable replay, principal propagation, and late kernel admission are
+//!    incomplete. The principal registry is implemented and tested as a
+//!    substrate; it does not lift this process-security policy by itself.
+//! 3. **Read-only attestation policy** — optionally require/verify a
+//!    signature-only attestation for non-mutating calls.
+//! 4. **Invoke** — spawn only the admitted read-only subprocess, capture the
+//!    envelope, and return it.
 
 use std::future::Future;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
+#[cfg(test)]
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use forge_core_command_surface::{command_by_name, JsonMode};
 use rmcp::model::{
@@ -45,6 +49,12 @@ use rmcp::{ServerHandler, ServiceExt};
 use crate::allowlist::{Allowlist, AllowlistPolicy};
 use crate::attestation::{AttestationPolicy, AttestationVerifier};
 use crate::error::{McpAdapterError, ServerRunError};
+#[cfg(test)]
+use crate::principal_registry::AuthorizedPrincipal;
+use crate::principal_registry::{
+    AuthorizedPrincipalRegistry, DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
+    DEFAULT_MAX_FUTURE_SKEW_SECONDS,
+};
 
 /// Configuration for a [`ForgeMcpServer`] instance.
 ///
@@ -56,26 +66,76 @@ pub struct McpServerConfig {
     pub allowlist: Allowlist,
     /// The Tool-Call Attestation policy + verifier.
     pub attestation: AttestationVerifier,
-    /// Path to the `forge-core` binary used for subprocess tool invocation.
-    /// Defaults to `"forge-core"` (resolved from PATH at runtime). Tests
-    /// override this with an explicit path.
+    /// Operator-owned credential registry. Required whenever the Allowlist
+    /// exposes a mutating tool; caller-selected keys never populate it.
+    pub principal_registry: Option<AuthorizedPrincipalRegistry>,
+    /// Maximum accepted age for mutating attestations.
+    pub max_attestation_age_seconds: u64,
+    /// Maximum accepted future clock skew for mutating attestations.
+    pub max_future_skew_seconds: u64,
+    /// Absolute pinned path to the current `forge-core` binary used for
+    /// read-only subprocess tool invocation. PATH lookup is rejected.
     pub forge_core_binary: PathBuf,
     /// The project root forwarded as `--root <path>` to every tool that
-    /// accepts it. `None` lets each tool resolve its own root.
+    /// accepts it and uses as the subprocess cwd. A live server requires an
+    /// absolute repo-scoped path.
     pub root: Option<PathBuf>,
 }
 
 impl McpServerConfig {
     /// Build a default config: read-only Allowlist, default attestation policy
-    /// (required-for-mutate), `forge-core` resolved from PATH.
+    /// (required-for-mutate), current executable pinned, current cwd scoped.
     #[must_use]
     pub fn default_read_only() -> Self {
         Self {
             allowlist: Allowlist::default_read_only(),
             attestation: AttestationVerifier::new(AttestationPolicy::Default),
-            forge_core_binary: PathBuf::from("forge-core"),
-            root: None,
+            principal_registry: None,
+            max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
+            max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
+            forge_core_binary: std::env::current_exe()
+                .unwrap_or_else(|_| PathBuf::from("forge-core")),
+            root: std::env::current_dir().ok(),
         }
+    }
+
+    /// Validate the fail-closed stdio process-security boundary.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpAdapterError::Config`] if mutation is exposed, the binary
+    /// is not an absolute pinned path, or the repo-scoped root is absent or
+    /// relative. P4b.1 validates operator identity, but live stdio mutation
+    /// remains disabled until durable replay and kernel admission handoff land.
+    pub fn validate_process_security(&self) -> Result<(), McpAdapterError> {
+        let exposes_mutation = self.allowlist.iter().any(|tool| tool.policy.is_mutate());
+        if exposes_mutation && self.principal_registry.is_none() {
+            return Err(McpAdapterError::Config(
+                "mutating MCP allowlist requires an operator principal registry".to_owned(),
+            ));
+        }
+        if exposes_mutation {
+            return Err(McpAdapterError::Config(
+                "mutating MCP stdio remains disabled until durable replay and late kernel Execution Admission are enforced"
+                    .to_owned(),
+            ));
+        }
+        if !self.forge_core_binary.is_absolute() {
+            return Err(McpAdapterError::Config(
+                "MCP subprocess binary must be an absolute pinned path".to_owned(),
+            ));
+        }
+        let Some(root) = self.root.as_ref() else {
+            return Err(McpAdapterError::Config(
+                "MCP server requires an absolute repo-scoped root".to_owned(),
+            ));
+        };
+        if !root.is_absolute() {
+            return Err(McpAdapterError::Config(
+                "MCP server root must be absolute".to_owned(),
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -90,6 +150,17 @@ impl ForgeMcpServer {
     #[must_use]
     pub fn new(config: McpServerConfig) -> Self {
         Self { config }
+    }
+
+    /// Build a server only when its stdio capability surface is safe to expose.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`McpAdapterError::Config`] when a mutating Allowlist would
+    /// violate the current fail-closed process-security boundary.
+    pub fn try_new(config: McpServerConfig) -> Result<Self, McpAdapterError> {
+        config.validate_process_security()?;
+        Ok(Self { config })
     }
 
     /// Read-only access to the config.
@@ -114,13 +185,13 @@ impl ForgeMcpServer {
     ///
     /// The attestation rides in `_meta.attestation` of the MCP request. It is
     /// deserialized into an [`AttestationInput`]; the signed
-    /// [`CanonicalIntent`] is reconstructed from `(tool_name, arguments,
-    /// nonce, ts)` and verified against the caller-supplied public key.
+    /// [`CanonicalIntent`] is reconstructed from the request and verified
+    /// against the caller-supplied public key.
     ///
     /// Note: this verifies the *signature* (origin proof). Whether the public
-    /// key is *authorized* is a separate deploy-time concern (the set of
-    /// authorized keys is configured at the operator level); F08 keeps the
-    /// verify step self-contained.
+    /// key is *authorized* is a separate concern. This signature-only helper
+    /// is used for read-only policy; mutation goes through
+    /// `authorize_mutating_request` and the operator registry instead.
     #[must_use]
     fn check_attestation_gate(
         &self,
@@ -180,19 +251,51 @@ impl ForgeMcpServer {
         tool_name: &str,
         att: &crate::attestation::AttestationInput,
     ) -> Result<(), crate::attestation::AttestationError> {
-        let arguments = request
-            .arguments
-            .as_ref()
-            .map_or(serde_json::Value::Object(serde_json::Map::default()), |m| {
-                serde_json::Value::Object(m.clone())
-            });
-        let intent = crate::attestation::CanonicalIntent {
-            tool: tool_name.to_string(),
-            arguments,
-            nonce: att.nonce.clone(),
-            ts: att.ts,
-        };
+        let intent = canonical_intent(request, tool_name, att);
         self.config.attestation.verify(&intent, att)
+    }
+
+    #[cfg(test)]
+    fn authorize_mutating_request(
+        &self,
+        request: &CallToolRequestParams,
+        tool_name: &str,
+    ) -> Result<AuthorizedPrincipal, McpAdapterError> {
+        let attestation = match extract_attestation(request) {
+            Some(Ok(attestation)) => attestation,
+            Some(Err(error)) => {
+                return Err(McpAdapterError::DeniedByAttestation {
+                    tool: tool_name.to_owned(),
+                    reason: error.to_string(),
+                });
+            }
+            None => {
+                return Err(McpAdapterError::DeniedByAttestation {
+                    tool: tool_name.to_owned(),
+                    reason: "trusted principal attestation required for mutation".to_owned(),
+                });
+            }
+        };
+        let registry = self.config.principal_registry.as_ref().ok_or_else(|| {
+            McpAdapterError::DeniedByAttestation {
+                tool: tool_name.to_owned(),
+                reason: "operator principal registry is not configured".to_owned(),
+            }
+        })?;
+        let intent = canonical_intent(request, tool_name, &attestation);
+        registry
+            .authorize(
+                &self.config.attestation,
+                &intent,
+                &attestation,
+                current_unix_seconds(),
+                self.config.max_attestation_age_seconds,
+                self.config.max_future_skew_seconds,
+            )
+            .map_err(|error| McpAdapterError::DeniedByAttestation {
+                tool: tool_name.to_owned(),
+                reason: error.to_string(),
+            })
     }
 
     /// Invoke a tool as a subprocess and return the captured `CliEnvelope`
@@ -221,6 +324,7 @@ impl ForgeMcpServer {
         tool_name: &str,
         argv_tail: &[String],
     ) -> Result<String, McpAdapterError> {
+        self.config.validate_process_security()?;
         // 1. Allowlist (fail-closed).
         let policy =
             self.lookup_tool(tool_name)
@@ -229,25 +333,17 @@ impl ForgeMcpServer {
                     reason: "tool not in allowlist".into(),
                 })?;
 
-        // 2. MutateGate (ADR-0006 Decision 2): a mutate tool must carry an
-        //    OperationContract. The CLI signals this via `--operation <path>`
-        //    (or `--command`/`--effect` equivalents) in the argv. A mutate
-        //    call with none of these is rejected at the adapter boundary,
-        //    before the kernel is reached — fail-closed. This is the schema-
-        //    level mitigation for tool poisoning: a caller cannot mutate shared
-        //    state without declaring the authorized intent first.
-        if policy.is_mutate() && !argv_carries_contract(argv_tail) {
-            return Err(McpAdapterError::DeniedByMutateGate {
-                tool: tool_name.to_string(),
-                reason: "mutate tool requires an OperationContract \
-                         (--operation <path>, or --command/--effect)"
-                    .into(),
-            });
-        }
+        debug_assert!(!policy.is_mutate(), "validated config is read-only");
 
         // 3. Build argv: ["forge-core", <tool_name>, ...argv_tail, --json,
         //    (--root <path>)?]
         let mut cmd = Command::new(&self.config.forge_core_binary);
+        cmd.env_clear();
+        copy_minimal_process_environment(&mut cmd);
+        let root = self.config.root.as_ref().ok_or_else(|| {
+            McpAdapterError::Config("MCP server requires an absolute repo-scoped root".to_owned())
+        })?;
+        cmd.current_dir(root);
         cmd.arg(tool_name);
         for a in argv_tail {
             cmd.arg(a);
@@ -258,6 +354,7 @@ impl ForgeMcpServer {
         }
         // Capture both streams; the envelope is on stdout, diagnostics on
         // stderr. We do NOT inherit stdout — we must parse it.
+        cmd.stdin(std::process::Stdio::null());
         cmd.stdout(std::process::Stdio::piped());
         cmd.stderr(std::process::Stdio::piped());
 
@@ -305,10 +402,15 @@ impl ForgeMcpServer {
     ///
     /// # Errors
     ///
+    /// - [`ServerRunError::Config`] — the configured capability surface is
+    ///   unsafe to expose over stdio.
     /// - [`ServerRunError::Runtime`] — the tokio runtime could not be built.
     /// - [`ServerRunError::Transport`] — the stdio transport failed to
     ///   initialize or the server loop returned an error.
     pub fn run_stdio(self) -> Result<(), ServerRunError> {
+        self.config
+            .validate_process_security()
+            .map_err(|error| ServerRunError::Config(error.to_string()))?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -365,6 +467,57 @@ fn arguments_to_argv(arguments: Option<&JsonObject>) -> Vec<String> {
     out
 }
 
+fn canonical_intent(
+    request: &CallToolRequestParams,
+    tool_name: &str,
+    attestation: &crate::attestation::AttestationInput,
+) -> crate::attestation::CanonicalIntent {
+    let arguments = request.arguments.as_ref().map_or(
+        serde_json::Value::Object(serde_json::Map::default()),
+        |arguments| serde_json::Value::Object(arguments.clone()),
+    );
+    crate::attestation::CanonicalIntent {
+        tool: tool_name.to_owned(),
+        arguments,
+        credential_id: attestation.credential_id.clone(),
+        audience: attestation.audience.clone(),
+        execution_intent_digest: attestation.execution_intent_digest.clone(),
+        nonce: attestation.nonce.clone(),
+        ts: attestation.ts,
+    }
+}
+
+#[cfg(test)]
+fn current_unix_seconds() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| {
+            i64::try_from(duration.as_secs()).unwrap_or(i64::MAX)
+        })
+}
+
+fn copy_minimal_process_environment(command: &mut Command) {
+    // Enough for Rust/Windows runtime basics and deterministic locale/temp
+    // behavior, but intentionally excludes PATH and every provider credential.
+    const SAFE_KEYS: &[&str] = &[
+        "COMSPEC",
+        "HOME",
+        "LANG",
+        "LC_ALL",
+        "SYSTEMROOT",
+        "TEMP",
+        "TMP",
+        "TMPDIR",
+        "USERPROFILE",
+        "WINDIR",
+    ];
+    for key in SAFE_KEYS {
+        if let Some(value) = std::env::var_os(key) {
+            command.env(key, value);
+        }
+    }
+}
+
 /// Extract the Tool-Call Attestation from the MCP request's `_meta.attestation`
 /// field (ADR-0006 Decision 4).
 ///
@@ -410,18 +563,6 @@ impl std::fmt::Display for AttestationExtractError {
 
 impl std::error::Error for AttestationExtractError {}
 
-/// Whether an argv carries an `OperationContract` signal (ADR-0006 Decision 2).
-///
-/// The forge-core CLI accepts the contract via `--operation <path>` (the
-/// canonical `OperationContract` path) or its `--command`/`--effect`
-/// equivalents. Any of these present means the caller declared an authorized
-/// intent, so the `MutateGate` passes. None present means the mutate call is
-/// unscoped and the gate rejects (fail-closed).
-fn argv_carries_contract(argv: &[String]) -> bool {
-    argv.windows(2)
-        .any(|pair| matches!(pair[0].as_str(), "--operation" | "--command" | "--effect"))
-}
-
 impl ServerHandler for ForgeMcpServer {
     fn get_info(&self) -> ServerInfo {
         // Advertise Forge as the server; capabilities limited to tools.
@@ -430,8 +571,8 @@ impl ServerHandler for ForgeMcpServer {
         info.server_info = Implementation::new("forge-core-mcp", env!("CARGO_PKG_VERSION"));
         info.instructions = Some(
             "Forge Method MCP adapter. Tools are pass-throughs over \
-             `forge-core` CLI commands; mutations require an OperationContract \
-             + Tool-Call Attestation (ADR-0006)."
+             `forge-core` CLI commands. MCP stdio mutation remains disabled \
+             until durable replay and late kernel Execution Admission are enforced."
                 .into(),
         );
         info
@@ -466,9 +607,9 @@ impl ForgeMcpServer {
     ///
     /// Enforcement order (ADR-0006):
     /// 1. Allowlist lookup (also tells us mutate-ness).
-    /// 2. Tool-Call Attestation — if the policy requires it for this tool's
-    ///    class (mutate by default) and it is missing/invalid, reject here.
-    /// 3. `invoke_tool` performs the Allowlist re-check + `MutateGate` + subprocess.
+    /// 2. Reject mutation under the active stdio process-security policy.
+    /// 3. Apply the configured signature-only policy to a read-only call.
+    /// 4. Re-check the Allowlist, then invoke the read-only command.
     #[allow(clippy::needless_pass_by_value)] // trait-adjacent; param by-value matches call_tool
     fn handle_call_tool(
         &self,
@@ -476,18 +617,24 @@ impl ForgeMcpServer {
     ) -> Result<CallToolResult, ErrorData> {
         let tool_name = request.name.as_ref().to_string();
 
-        // Determine mutate-ness from the Allowlist (None = not allowlisted;
-        // invoke_tool below will emit the precise DeniedByAllowlist).
-        let policy = self.lookup_tool(&tool_name);
-        let is_mutate = policy.is_some_and(AllowlistPolicy::is_mutate);
-
-        // Tool-Call Attestation gate (ADR-0006 Decision 4).
-        if let Some(att_err) = self.check_attestation_gate(&request, &tool_name, is_mutate) {
+        let Some(policy) = self.lookup_tool(&tool_name) else {
+            return Ok(rejection_result(&tool_name, "tool not in allowlist"));
+        };
+        let is_mutate = policy.is_mutate();
+        if is_mutate {
+            return Ok(rejection_result(
+                &tool_name,
+                "mutating MCP stdio is disabled until durable replay and late kernel Execution Admission are enforced",
+            ));
+        }
+        let argv = arguments_to_argv(request.arguments.as_ref());
+        // Optional/read-only Tool-Call Attestation gate (ADR-0006 Decision 4).
+        if let Some(att_err) = self.check_attestation_gate(&request, &tool_name, false) {
             // Gate denial surfaces as a tool-level error result.
             let (tool, reason) = match att_err {
                 crate::attestation::AttestationGateOutcome::RequiredMissing => (
                     tool_name.clone(),
-                    "attestation required for mutate tool but none in _meta".to_string(),
+                    "attestation required but none in _meta".to_string(),
                 ),
                 crate::attestation::AttestationGateOutcome::Invalid(msg) => {
                     (tool_name.clone(), format!("attestation invalid: {msg}"))
@@ -496,7 +643,6 @@ impl ForgeMcpServer {
             return Ok(rejection_result(&tool, &reason));
         }
 
-        let argv = arguments_to_argv(request.arguments.as_ref());
         match self.invoke_tool(&tool_name, &argv) {
             Ok(envelope_json) => Ok(CallToolResult::success(vec![ContentBlock::text(
                 envelope_json,
@@ -553,8 +699,9 @@ fn mcp_tool_descriptor(allowed: &crate::allowlist::AllowedTool) -> Tool {
         )
         .into(),
         AllowlistPolicy::Mutate => format!(
-            "Forge `{usage}` command (mutate). Requires an OperationContract \
-             + Tool-Call Attestation (ADR-0006); output mode: {json_mode}."
+            "Forge `{usage}` command (mutate). MCP stdio invocation is currently \
+             blocked pending durable replay and late kernel Execution Admission; \
+             output mode: {json_mode}."
         )
         .into(),
     };
@@ -592,11 +739,18 @@ mod tests {
     /// binary (a script) so `invoke_tool` can be exercised without the real
     /// CLI. The fake echoes a fixed envelope.
     fn config_with_fake_binary(fake_path: PathBuf) -> McpServerConfig {
+        let root = fake_path
+            .parent()
+            .expect("fake binary has parent")
+            .to_path_buf();
         McpServerConfig {
             allowlist: Allowlist::default_read_only(),
             attestation: AttestationVerifier::new(AttestationPolicy::Default),
+            principal_registry: None,
+            max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
+            max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
             forge_core_binary: fake_path,
-            root: None,
+            root: Some(root),
         }
     }
 
@@ -684,9 +838,7 @@ mod tests {
     }
 
     #[test]
-    fn mutate_gate_rejects_execute_operation_without_contract() {
-        // A mutate tool with no --operation/--command/--effect is rejected at
-        // the MutateGate before the subprocess is spawned (ADR-0006 Decision 2).
+    fn direct_mutating_surface_is_blocked_before_spawn() {
         let envelope = "{}";
         let bin = make_fake_forge_core(true, envelope);
         let cfg = McpServerConfig {
@@ -696,15 +848,13 @@ mod tests {
         let server = ForgeMcpServer::new(cfg);
         let err = server.invoke_tool("execute-operation", &[]).unwrap_err();
         assert!(
-            matches!(err, McpAdapterError::DeniedByMutateGate { .. }),
-            "expected MutateGate denial, got {err:?}"
+            matches!(err, McpAdapterError::Config(_)),
+            "expected process-security denial, got {err:?}"
         );
     }
 
     #[test]
-    fn mutate_gate_passes_when_contract_attached() {
-        // With --operation <path> present, the mutate gate passes and the
-        // subprocess is invoked (returns the fake envelope).
+    fn direct_mutate_invoke_rejects_without_verified_principal() {
         let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
         let bin = make_fake_forge_core(true, envelope);
         let cfg = McpServerConfig {
@@ -713,46 +863,79 @@ mod tests {
         };
         let server = ForgeMcpServer::new(cfg);
         let argv = vec!["--operation".to_string(), "/tmp/op.yaml".to_string()];
-        let out = server.invoke_tool("execute-operation", &argv);
-        assert!(out.is_ok(), "expected gate to pass: {out:?}");
+        let error = server
+            .invoke_tool("execute-operation", &argv)
+            .expect_err("direct mutation must not bypass principal authorization");
+        assert!(matches!(error, McpAdapterError::Config(_)));
     }
 
     #[test]
-    fn mutate_gate_passes_with_command_or_effect_flag() {
-        let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
-        let bin = make_fake_forge_core(true, envelope);
-        let cfg = McpServerConfig {
-            allowlist: Allowlist::default_with_mutate(),
-            ..config_with_fake_binary(bin)
-        };
-        let server = ForgeMcpServer::new(cfg);
-        // --command is also a valid contract signal.
-        let argv = vec!["--command".to_string(), "/tmp/cmd.yaml".to_string()];
-        assert!(server.invoke_tool("execute-operation", &argv).is_ok());
-        // --effect too.
-        let argv = vec!["--effect".to_string(), "/tmp/effect.yaml".to_string()];
-        assert!(server.invoke_tool("execute-operation", &argv).is_ok());
-    }
+    fn read_only_server_requires_pinned_binary_and_root() {
+        let mut config = McpServerConfig::default_read_only();
+        config.forge_core_binary = PathBuf::from("forge-core");
+        let relative_binary =
+            ForgeMcpServer::try_new(config).expect_err("relative binary path must fail closed");
+        assert!(relative_binary.to_string().contains("absolute pinned path"));
 
-    #[test]
-    fn argv_carries_contract_detection() {
-        assert!(!argv_carries_contract(&[]));
-        assert!(!argv_carries_contract(&["--json".into()]));
-        assert!(argv_carries_contract(&["--operation".into(), "/x".into()]));
-        assert!(argv_carries_contract(&["--command".into(), "/x".into()]));
-        assert!(argv_carries_contract(&["--effect".into(), "/x".into()]));
+        let mut config = McpServerConfig::default_read_only();
+        config.root = None;
+        let missing_root =
+            ForgeMcpServer::try_new(config).expect_err("missing MCP root must fail closed");
+        assert!(missing_root.to_string().contains("repo-scoped root"));
     }
 
     // --- F08.5 attestation gate tests --------------------------------------
 
     fn mutate_config_with_fake_binary(bin: PathBuf) -> McpServerConfig {
+        let root = bin.parent().expect("fake binary has parent").to_path_buf();
         McpServerConfig {
             allowlist: Allowlist::default_with_mutate(),
             attestation: crate::attestation::AttestationVerifier::new(
                 crate::attestation::AttestationPolicy::Default,
             ),
+            principal_registry: None,
+            max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
+            max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
             forge_core_binary: bin,
-            root: None,
+            root: Some(root),
+        }
+    }
+
+    fn registered_mutate_config(
+        bin: PathBuf,
+        signing_key: &ed25519_dalek::SigningKey,
+    ) -> McpServerConfig {
+        let registry = AuthorizedPrincipalRegistry::from_document(
+            crate::principal_registry::PrincipalRegistryDocument {
+                schema_version: crate::principal_registry::PRINCIPAL_REGISTRY_SCHEMA_VERSION
+                    .to_owned(),
+                principal_registry: crate::principal_registry::PrincipalRegistryContract {
+                    audience: "forge-core:mcp:stdio:test".to_owned(),
+                    principals: vec![crate::principal_registry::PrincipalRegistryEntry {
+                        credential_id: "key.codex-main.test".to_owned(),
+                        principal_id: forge_core_contracts::PrincipalId(
+                            "principal.codex-main".to_owned(),
+                        ),
+                        agent_id: forge_core_contracts::StableId("codex-main".to_owned()),
+                        role: forge_core_contracts::operation::CallerRole::Driver,
+                        public_key_hex: crate::attestation::hex_encode(
+                            &signing_key.verifying_key().to_bytes(),
+                        ),
+                        allowed_tools: vec![forge_core_contracts::StableId(
+                            "execute-operation".to_owned(),
+                        )],
+                        authority_grants: vec![forge_core_contracts::StableId(
+                            "operation.execute".to_owned(),
+                        )],
+                        status: crate::principal_registry::PrincipalCredentialStatus::Active,
+                    }],
+                },
+            },
+        )
+        .expect("test principal registry");
+        McpServerConfig {
+            principal_registry: Some(registry),
+            ..mutate_config_with_fake_binary(bin)
         }
     }
 
@@ -760,13 +943,17 @@ mod tests {
     /// hardened `RequireAll` policy: attestation is required for ALL tools,
     /// read-only included.
     fn require_all_config_with_fake_binary(bin: PathBuf) -> McpServerConfig {
+        let root = bin.parent().expect("fake binary has parent").to_path_buf();
         McpServerConfig {
             allowlist: Allowlist::default_read_only(),
             attestation: crate::attestation::AttestationVerifier::new(
                 crate::attestation::AttestationPolicy::RequireAll,
             ),
+            principal_registry: None,
+            max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
+            max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
             forge_core_binary: bin,
-            root: None,
+            root: Some(root),
         }
     }
 
@@ -786,6 +973,9 @@ mod tests {
         let intent = crate::attestation::CanonicalIntent {
             tool: tool.into(),
             arguments,
+            credential_id: None,
+            audience: None,
+            execution_intent_digest: None,
             nonce: nonce.into(),
             ts,
         };
@@ -798,10 +988,41 @@ mod tests {
         let sig = sk.sign(&canon);
         let pk = sk.verifying_key();
         crate::attestation::AttestationInput {
+            credential_id: intent.credential_id.clone(),
+            audience: intent.audience.clone(),
+            execution_intent_digest: intent.execution_intent_digest.clone(),
             nonce: nonce.into(),
             ts,
             signature: crate::attestation::hex_encode(&sig.to_bytes()),
             public_key_hex: crate::attestation::hex_encode(&pk.to_bytes()),
+        }
+    }
+
+    fn sign_registered_mutation(
+        signing_key: &ed25519_dalek::SigningKey,
+        arguments: serde_json::Value,
+        nonce: &str,
+        ts: i64,
+    ) -> crate::attestation::AttestationInput {
+        use ed25519_dalek::Signer;
+        let intent = crate::attestation::CanonicalIntent {
+            tool: "execute-operation".to_owned(),
+            arguments,
+            credential_id: Some("key.codex-main.test".to_owned()),
+            audience: Some("forge-core:mcp:stdio:test".to_owned()),
+            execution_intent_digest: Some(format!("sha256:{}", "b".repeat(64))),
+            nonce: nonce.to_owned(),
+            ts,
+        };
+        let signature = signing_key.sign(&intent.canonical_bytes().expect("canonical intent"));
+        crate::attestation::AttestationInput {
+            credential_id: intent.credential_id,
+            audience: intent.audience,
+            execution_intent_digest: intent.execution_intent_digest,
+            nonce: intent.nonce,
+            ts: intent.ts,
+            signature: crate::attestation::hex_encode(&signature.to_bytes()),
+            public_key_hex: crate::attestation::hex_encode(&signing_key.verifying_key().to_bytes()),
         }
     }
 
@@ -822,61 +1043,112 @@ mod tests {
     }
 
     #[test]
-    fn attestation_gate_rejects_mutate_without_attestation() {
+    fn stdio_handler_rejects_mutation_before_attestation_or_spawn() {
         let envelope = "{}";
         let bin = make_fake_forge_core(true, envelope);
         let server = ForgeMcpServer::new(mutate_config_with_fake_binary(bin));
-        // execute-operation is mutate; Default policy requires attestation.
-        // No _meta.attestation present → rejection at the attestation gate,
-        // BEFORE the MutateGate/subprocess is reached.
-        let req = CallToolRequestParams::new("execute-operation");
+        // P4b.1 can derive identity, but the stdio mutation surface remains
+        // disabled until replay + late kernel admission are integrated.
+        let mut req = CallToolRequestParams::new("execute-operation");
+        let mut arguments = JsonObject::new();
+        arguments.insert("--operation".into(), serde_json::json!("/tmp/op.yaml"));
+        req.arguments = Some(arguments);
         let res = server.handle_call_tool(req).unwrap();
         assert!(res.is_error.unwrap_or(false));
-        assert!(content_text(&res).contains("attestation required"));
+        assert!(content_text(&res).contains("mutating MCP stdio is disabled"));
     }
 
     #[test]
-    fn attestation_gate_passes_mutate_with_valid_attestation_and_contract() {
+    fn registry_derives_principal_from_valid_mutating_attestation() {
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&[11; 32]);
         let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
         let bin = make_fake_forge_core(true, envelope);
-        let server = ForgeMcpServer::new(mutate_config_with_fake_binary(bin));
-        // Mutate tool WITH contract AND valid attestation → gate passes,
-        // subprocess invoked, envelope returned.
+        let server = ForgeMcpServer::new(registered_mutate_config(bin, &signing_key));
         let mut args = JsonObject::new();
         args.insert("--operation".into(), serde_json::json!("/tmp/op.yaml"));
-        let att = sign_test_attestation(
-            "execute-operation",
+        let att = sign_registered_mutation(
+            &signing_key,
             serde_json::json!({ "--operation": "/tmp/op.yaml" }),
-            "n-1",
-            1_700_000_000,
+            "nonce-registered-0001",
+            current_unix_seconds(),
         );
         let req = request_with_attestation("execute-operation", args, att);
-        let res = server.handle_call_tool(req).unwrap();
-        assert!(
-            !res.is_error.unwrap_or(true),
-            "expected success, got: {}",
-            content_text(&res)
+        let principal = server
+            .authorize_mutating_request(&req, "execute-operation")
+            .expect("registry-authorized principal");
+        assert_eq!(principal.principal_id.0, "principal.codex-main");
+        assert_eq!(principal.agent_id.0, "codex-main");
+
+        let result = server.handle_call_tool(req).expect("tool result");
+        assert!(result.is_error.unwrap_or(false));
+        assert!(content_text(&result).contains("mutating MCP stdio is disabled"));
+    }
+
+    #[test]
+    fn caller_selected_key_cannot_authorize_mutation() {
+        let registered_key = ed25519_dalek::SigningKey::from_bytes(&[11; 32]);
+        let attacker_key = ed25519_dalek::SigningKey::from_bytes(&[12; 32]);
+        let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
+        let bin = make_fake_forge_core(true, envelope);
+        let server = ForgeMcpServer::new(registered_mutate_config(bin, &registered_key));
+        let mut args = JsonObject::new();
+        args.insert("--operation".into(), serde_json::json!("/tmp/op.yaml"));
+        let attestation = sign_registered_mutation(
+            &attacker_key,
+            serde_json::json!({ "--operation": "/tmp/op.yaml" }),
+            "nonce-attacker-key-0001",
+            current_unix_seconds(),
         );
+
+        let request = request_with_attestation("execute-operation", args, attestation);
+        let error = server
+            .authorize_mutating_request(&request, "execute-operation")
+            .expect_err("caller-selected key must fail registry authorization");
+        assert!(error
+            .to_string()
+            .contains("caller key does not match credential"));
+    }
+
+    #[test]
+    fn mutating_server_startup_requires_principal_registry() {
+        let bin = make_fake_forge_core(true, "{}");
+        let rejection = ForgeMcpServer::try_new(mutate_config_with_fake_binary(bin))
+            .expect_err("mutating surface without registry must fail startup");
+
+        assert!(matches!(rejection, McpAdapterError::Config(_)));
+    }
+
+    #[test]
+    fn mutating_server_startup_remains_disabled_with_registry() {
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&[11; 32]);
+        let bin = make_fake_forge_core(true, "{}");
+        let rejection = ForgeMcpServer::try_new(registered_mutate_config(bin, &signing_key))
+            .expect_err("P4b.1 identity alone must not enable stdio mutation");
+
+        assert!(matches!(rejection, McpAdapterError::Config(_)));
+        assert!(rejection.to_string().contains("durable replay"));
     }
 
     #[test]
     fn attestation_gate_rejects_mutate_with_tampered_attestation() {
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&[11; 32]);
         let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
         let bin = make_fake_forge_core(true, envelope);
-        let server = ForgeMcpServer::new(mutate_config_with_fake_binary(bin));
+        let server = ForgeMcpServer::new(registered_mutate_config(bin, &signing_key));
         // Sign over one intent but call with different arguments → tampered.
         let mut args = JsonObject::new();
         args.insert("--operation".into(), serde_json::json!("/tmp/actual.yaml"));
-        let att = sign_test_attestation(
-            "execute-operation",
+        let att = sign_registered_mutation(
+            &signing_key,
             serde_json::json!({ "--operation": "/tmp/DIFFERENT.yaml" }),
-            "n-1",
-            1_700_000_000,
+            "nonce-registered-0002",
+            current_unix_seconds(),
         );
         let req = request_with_attestation("execute-operation", args, att);
-        let res = server.handle_call_tool(req).unwrap();
-        assert!(res.is_error.unwrap_or(false));
-        assert!(content_text(&res).contains("attestation invalid"));
+        let error = server
+            .authorize_mutating_request(&req, "execute-operation")
+            .expect_err("tampered intent must fail");
+        assert!(error.to_string().contains("attestation signature invalid"));
     }
 
     #[test]
@@ -894,11 +1166,7 @@ mod tests {
     }
 
     #[test]
-    fn attestation_gate_never_required_allows_mutate_without_attestation() {
-        // NeverRequired policy: even mutate does not require attestation
-        // (verify-only-when-present). Missing is allowed. NOTE: the MutateGate
-        // still independently requires an OperationContract — attestation and
-        // the contract are separate gates (ADR-0006 Decisions 2 & 4).
+    fn never_required_cannot_bypass_mutation_identity() {
         let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
         let bin = make_fake_forge_core(true, envelope);
         let cfg = McpServerConfig {
@@ -909,18 +1177,13 @@ mod tests {
             ..mutate_config_with_fake_binary(bin)
         };
         let server = ForgeMcpServer::new(cfg);
-        // Mutate + contract, no attestation → attestation gate passes
-        // (NeverRequired), MutateGate passes (contract present).
         let mut args = JsonObject::new();
         args.insert("--operation".into(), serde_json::json!("/tmp/op.yaml"));
         let mut req = CallToolRequestParams::new("execute-operation");
         req.arguments = Some(args);
         let res = server.handle_call_tool(req).unwrap();
-        assert!(
-            !res.is_error.unwrap_or(true),
-            "expected success, got: {}",
-            content_text(&res)
-        );
+        assert!(res.is_error.unwrap_or(false));
+        assert!(content_text(&res).contains("mutating MCP stdio is disabled"));
     }
 
     // --- security-gap: RequireAll at the gate (no integration test) ---------
@@ -995,21 +1258,18 @@ mod tests {
 
     #[test]
     fn malformed_meta_attestation_is_rejected() {
-        // Default policy, mutate tool (so attestation is REQUIRED). Put
+        // RequireAll policy, read-only tool (so attestation is REQUIRED). Put
         // _meta.attestation as a plain string (not a valid AttestationInput
         // object) → extract_attestation's `Some(Err(msg))` arm (server.rs
         // ~L149/L377) must reject. This exercises the present-but-unparseable
         // path: a malformed attestation is never silently ignored.
         let envelope = r#"{"ok":true,"exit_reason":"ok"}"#;
         let bin = make_fake_forge_core(true, envelope);
-        let server = ForgeMcpServer::new(mutate_config_with_fake_binary(bin));
+        let server = ForgeMcpServer::new(require_all_config_with_fake_binary(bin));
         let mut meta_map = JsonObject::new();
         // A bare string is not a deserializable AttestationInput.
         meta_map.insert("attestation".into(), serde_json::json!("not valid json"));
-        let mut req = CallToolRequestParams::new("execute-operation");
-        let mut args = JsonObject::new();
-        args.insert("--operation".into(), serde_json::json!("/tmp/op.yaml"));
-        req.arguments = Some(args);
+        let mut req = CallToolRequestParams::new("preview");
         req.meta = Some(rmcp::model::Meta(meta_map));
         let res = server.handle_call_tool(req).unwrap();
         assert!(
@@ -1017,7 +1277,7 @@ mod tests {
             "malformed _meta.attestation must be rejected, got: {}",
             content_text(&res)
         );
-        assert!(content_text(&res).contains("attestation invalid"));
+        assert!(content_text(&res).contains("attestation present but malformed"));
     }
 
     #[test]

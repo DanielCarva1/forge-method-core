@@ -9,30 +9,36 @@
 //! canonical = serde_json_canonicalizer::canon({
 //!     "tool": <tool_name>,
 //!     "arguments": <arguments_object>,
+//!     "credential_id": <operator_credential_id>,
+//!     "audience": <forge_resource_audience>,
+//!     "execution_intent_digest": <optional_sha256_binding>,
 //!     "nonce": <opaque>,
 //!     "ts": <unix_seconds>
 //! })
 //! sig = ed25519.sign(caller_private_key, canonical)
 //! ```
 //!
-//! The verifier re-canonicalizes the intent and checks the signature against a
-//! configured authorized public key. The signature proves possession of the
-//! private key (origin) and binds to the intent (non-replayable for another
-//! tool/args). `ed25519-dalek` is used directly — it is already pinned in the
-//! workspace (`Cargo.toml` `[workspace.dependencies]`), reusing the same
-//! crypto surface as the rest of Forge (R5).
+//! The low-level verifier re-canonicalizes the intent and proves key
+//! possession plus intent integrity. It does **not** authorize a
+//! caller-supplied key or make a nonce single-use. Mutating MCP calls must use
+//! the operator-owned [`crate::principal_registry`] binding and, at the kernel
+//! boundary, durable replay reservation. `ed25519-dalek` is used directly —
+//! it is already pinned in the workspace (`Cargo.toml`
+//! `[workspace.dependencies]`), reusing the same crypto surface as the rest of
+//! Forge (R5).
 //!
-//! # F08.2 scope
+//! # Scope
 //!
-//! Types + canonicalization + verify primitive. The policy enforcement
-//! (required-for-mutate, optional-for-readonly default; ADR-0006 Decision 4)
-//! is wired into the server's `MutateGate` in F08.3/F08.5.
+//! Types, canonicalization, signature verification, and freshness primitives.
+//! The server combines them with the principal registry for mutation;
+//! signature-only verification remains available for legacy/read-only calls.
 
 use std::fmt;
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 /// The canonicalized intent that a Tool-Call Attestation signs. Serialized
 /// with `serde_json_canonicalizer` so the signature is reproducible across
@@ -44,13 +50,25 @@ pub struct CanonicalIntent {
     pub tool: String,
     /// The MCP arguments object (the exact `arguments` field of `tools/call`).
     pub arguments: Value,
-    /// Caller-supplied opaque nonce; the verifier does not interpret it, only
-    /// includes it in the signed canonical form (replay binding within a
-    /// caller-defined window). Future hardening may track nonces for replay
-    /// prevention; F08 leaves that to the caller policy.
+    /// Operator-issued credential identifier. Optional only for legacy
+    /// signature-only/read-only attestations; mutating calls require it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_id: Option<String>,
+    /// Intended Forge resource audience. Optional only for legacy
+    /// signature-only/read-only attestations; mutating calls require it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audience: Option<String>,
+    /// P4a execution-intent digest when this call authorizes an execution.
+    /// It is signed now so P4b.2 can bind the verified caller to the kernel
+    /// admission document without changing the attestation shape again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_intent_digest: Option<String>,
+    /// Caller-supplied opaque nonce. The verifier only binds it into the
+    /// signature; durable single-use enforcement is a separate store/kernel
+    /// responsibility.
     pub nonce: String,
-    /// Caller-supplied unix timestamp (seconds). Included in the signed form so
-    /// the signature is time-bound; freshness windows are caller policy.
+    /// Caller-supplied unix timestamp (seconds). Included in the signed form;
+    /// mutating authorization applies a configured freshness window.
     pub ts: i64,
 }
 
@@ -68,21 +86,40 @@ impl CanonicalIntent {
             .map_err(|e| AttestationError::Canonicalize(e.to_string()))?;
         Ok(canon)
     }
+
+    /// Return the SHA-256 content address used by the durable replay store.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AttestationError::Canonicalize`] if canonicalization fails.
+    pub fn digest(&self) -> Result<String, AttestationError> {
+        let digest = Sha256::digest(self.canonical_bytes()?);
+        Ok(format!("sha256:{digest:x}"))
+    }
 }
 
 /// The attestation material carried in the MCP `_meta.attestation` field. The
 /// signature is over `CanonicalIntent::canonical_bytes()`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttestationInput {
+    /// Operator-issued credential identifier. Required for mutation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential_id: Option<String>,
+    /// Resource audience. Required for mutation and signed into the intent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audience: Option<String>,
+    /// Optional P4a execution-intent digest, signed into the MCP call.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_intent_digest: Option<String>,
     /// The caller's nonce (must match the signed canonical form).
     pub nonce: String,
     /// The caller's unix timestamp (must match the signed canonical form).
     pub ts: i64,
     /// hex-encoded detached ed25519 signature.
     pub signature: String,
-    /// hex-encoded caller public key (ed25519 `VerifyingKey`, 32 bytes).
-    /// Alternatively the authorized key could be looked up by a caller id;
-    /// F08 keeps it inline for a self-contained proof.
+    /// Hex-encoded caller public key (ed25519 `VerifyingKey`, 32 bytes).
+    /// For mutation this is only a claimed key: it must exactly match the key
+    /// selected from the operator-owned credential registry.
     pub public_key_hex: String,
 }
 
@@ -95,8 +132,9 @@ pub enum AttestationPolicy {
     Default,
     /// Hardened: attestation required for ALL tools (read-only included).
     RequireAll,
-    /// Permissive: attestation never required (verify-only-when-present). Use
-    /// only in trusted local setups; never the default.
+    /// Permissive for read-only tools: attestation is never required and is
+    /// verified only when present. It never bypasses registry authorization
+    /// for mutation.
     NeverRequired,
 }
 
@@ -121,6 +159,10 @@ pub enum AttestationError {
     KeyDecode(String),
     /// Canonicalization of the intent failed.
     Canonicalize(String),
+    /// The attestation timestamp is older than the configured window.
+    Expired,
+    /// The attestation timestamp is beyond the configured future skew.
+    FromFuture,
     /// The signature did not verify against the public key for this intent.
     Invalid,
 }
@@ -131,6 +173,8 @@ impl fmt::Display for AttestationError {
             Self::SignatureDecode(m) => write!(f, "signature decode failed: {m}"),
             Self::KeyDecode(m) => write!(f, "public key decode failed: {m}"),
             Self::Canonicalize(m) => write!(f, "canonicalization failed: {m}"),
+            Self::Expired => f.write_str("attestation expired"),
+            Self::FromFuture => f.write_str("attestation timestamp is in the future"),
             Self::Invalid => f.write_str("attestation signature invalid"),
         }
     }
@@ -194,25 +238,34 @@ impl AttestationVerifier {
         intent: &CanonicalIntent,
         attestation: &AttestationInput,
     ) -> Result<(), AttestationError> {
-        // Cross-check: the attestation's nonce/ts must match the signed intent.
-        if intent.nonce != attestation.nonce || intent.ts != attestation.ts {
+        self.verify_with_public_key(intent, attestation, &attestation.public_key_hex)
+    }
+
+    /// Verify against an operator-selected public key rather than trusting the
+    /// key carried by the caller. This is the primitive mutation authorization
+    /// must use after credential-registry lookup.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AttestationError`] for field mismatch, malformed material,
+    /// canonicalization failure, or an invalid signature.
+    pub fn verify_with_public_key(
+        &self,
+        intent: &CanonicalIntent,
+        attestation: &AttestationInput,
+        authorized_public_key_hex: &str,
+    ) -> Result<(), AttestationError> {
+        if intent.nonce != attestation.nonce
+            || intent.ts != attestation.ts
+            || intent.credential_id != attestation.credential_id
+            || intent.audience != attestation.audience
+            || intent.execution_intent_digest != attestation.execution_intent_digest
+        {
             return Err(AttestationError::Invalid);
         }
 
         let canon = intent.canonical_bytes()?;
-
-        let mut pk_bytes = [0u8; 32];
-        let pk_decoded = hex_decode(&attestation.public_key_hex)
-            .map_err(|e| AttestationError::KeyDecode(e.to_string()))?;
-        if pk_decoded.len() != 32 {
-            return Err(AttestationError::KeyDecode(format!(
-                "expected 32 bytes, got {}",
-                pk_decoded.len()
-            )));
-        }
-        pk_bytes.copy_from_slice(&pk_decoded);
-        let verifying_key = VerifyingKey::from_bytes(&pk_bytes)
-            .map_err(|e| AttestationError::KeyDecode(e.to_string()))?;
+        let verifying_key = decode_verifying_key(authorized_public_key_hex)?;
 
         let mut sig_bytes = [0u8; 64];
         let sig_decoded = hex_decode(&attestation.signature)
@@ -230,6 +283,45 @@ impl AttestationVerifier {
             .verify(&canon, &signature)
             .map_err(|_| AttestationError::Invalid)
     }
+
+    /// Enforce the configured caller timestamp window.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AttestationError::Expired`] or
+    /// [`AttestationError::FromFuture`] when the timestamp is outside the
+    /// injected window.
+    pub fn verify_freshness(
+        &self,
+        attestation: &AttestationInput,
+        now_unix: i64,
+        max_age_seconds: u64,
+        max_future_skew_seconds: u64,
+    ) -> Result<(), AttestationError> {
+        let max_age = i64::try_from(max_age_seconds).unwrap_or(i64::MAX);
+        let max_future = i64::try_from(max_future_skew_seconds).unwrap_or(i64::MAX);
+        if attestation.ts > now_unix.saturating_add(max_future) {
+            return Err(AttestationError::FromFuture);
+        }
+        if now_unix.saturating_sub(attestation.ts) > max_age {
+            return Err(AttestationError::Expired);
+        }
+        Ok(())
+    }
+}
+
+pub(crate) fn decode_verifying_key(value: &str) -> Result<VerifyingKey, AttestationError> {
+    let decoded =
+        hex_decode(value).map_err(|error| AttestationError::KeyDecode(error.to_string()))?;
+    if decoded.len() != 32 {
+        return Err(AttestationError::KeyDecode(format!(
+            "expected 32 bytes, got {}",
+            decoded.len()
+        )));
+    }
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(&decoded);
+    VerifyingKey::from_bytes(&bytes).map_err(|error| AttestationError::KeyDecode(error.to_string()))
 }
 
 /// Failures decoding a hex string into bytes.
@@ -330,6 +422,9 @@ mod tests {
         let sig = signing_key.sign(&canon);
         let pk = signing_key.verifying_key();
         AttestationInput {
+            credential_id: intent.credential_id.clone(),
+            audience: intent.audience.clone(),
+            execution_intent_digest: intent.execution_intent_digest.clone(),
             nonce: intent.nonce.clone(),
             ts: intent.ts,
             signature: hex_encode(&sig.to_bytes()),
@@ -343,6 +438,9 @@ mod tests {
         let intent = CanonicalIntent {
             tool: "preview".into(),
             arguments: serde_json::json!({"--root": "/tmp/x"}),
+            credential_id: None,
+            audience: None,
+            execution_intent_digest: None,
             nonce: "n-1".into(),
             ts: 1_700_000_000,
         };
@@ -357,6 +455,9 @@ mod tests {
         let intent = CanonicalIntent {
             tool: "preview".into(),
             arguments: serde_json::json!({"--root": "/tmp/x"}),
+            credential_id: None,
+            audience: None,
+            execution_intent_digest: None,
             nonce: "n-1".into(),
             ts: 1_700_000_000,
         };
@@ -379,6 +480,9 @@ mod tests {
         let intent = CanonicalIntent {
             tool: "preview".into(),
             arguments: serde_json::json!({}),
+            credential_id: None,
+            audience: None,
+            execution_intent_digest: None,
             nonce: "n-1".into(),
             ts: 1_700_000_000,
         };
@@ -408,10 +512,16 @@ mod tests {
         let intent = CanonicalIntent {
             tool: "preview".into(),
             arguments: serde_json::json!({}),
+            credential_id: None,
+            audience: None,
+            execution_intent_digest: None,
             nonce: "n".into(),
             ts: 1,
         };
         let att = AttestationInput {
+            credential_id: None,
+            audience: None,
+            execution_intent_digest: None,
             nonce: "n".into(),
             ts: 1,
             signature: "zz".into(), // not hex
@@ -438,6 +548,9 @@ mod tests {
         let intent = CanonicalIntent {
             tool: "preview".into(),
             arguments: serde_json::json!({"--root": "/tmp/x"}),
+            credential_id: None,
+            audience: None,
+            execution_intent_digest: None,
             nonce: "n-requireall".into(),
             ts: 1_700_000_000,
         };
@@ -464,6 +577,9 @@ mod tests {
         let intent = CanonicalIntent {
             tool: "preview".into(),
             arguments: serde_json::json!({"--root": "/tmp/any"}),
+            credential_id: None,
+            audience: None,
+            execution_intent_digest: None,
             nonce: "n-any-key".into(),
             ts: 1_700_000_000,
         };
@@ -512,6 +628,9 @@ mod tests {
             let intent = CanonicalIntent {
                 tool: tool.clone(),
                 arguments: serde_json::json!({}),
+                credential_id: None,
+                audience: None,
+                execution_intent_digest: None,
                 nonce: nonce.clone(),
                 ts,
             };
@@ -588,6 +707,9 @@ mod tests {
         let intent = CanonicalIntent {
             tool: "execute-operation".to_string(),
             arguments: serde_json::json!({"--operation": "/tmp/op.yaml", "--root": "."}),
+            credential_id: None,
+            audience: None,
+            execution_intent_digest: None,
             nonce: "kat-nonce-001".to_string(),
             ts: 1_700_000_000,
         };
@@ -616,6 +738,9 @@ mod tests {
 
         // The verifier must accept the pinned attestation against the pinned key.
         let att = AttestationInput {
+            credential_id: intent.credential_id.clone(),
+            audience: intent.audience.clone(),
+            execution_intent_digest: intent.execution_intent_digest.clone(),
             nonce: intent.nonce.clone(),
             ts: intent.ts,
             signature: pinned_sig_hex.clone(),
@@ -626,5 +751,58 @@ mod tests {
             verifier.verify(&intent, &att).is_ok(),
             "pinned KAT attestation must verify"
         );
+    }
+
+    #[test]
+    fn registry_attestation_kat_pins_authority_fields() {
+        let mut seed = [0u8; 32];
+        for (index, byte) in seed.iter_mut().enumerate() {
+            let index = u8::try_from(index).expect("index < 32");
+            *byte = index.wrapping_mul(7).wrapping_add(1);
+        }
+        let signing_key = SigningKey::from_bytes(&seed);
+        let intent = CanonicalIntent {
+            tool: "execute-operation".to_owned(),
+            arguments: serde_json::json!({
+                "--operation": "contracts/op.yaml",
+                "--root": ".",
+            }),
+            credential_id: Some("key.codex-main.2026-01".to_owned()),
+            audience: Some("forge-core:mcp:stdio:test-project".to_owned()),
+            execution_intent_digest: Some(format!("sha256:{}", "a".repeat(64))),
+            nonce: "kat-registry-nonce-001".to_owned(),
+            ts: 1_800_000_000,
+        };
+        let canonical = intent.canonical_bytes().expect("canonical registry intent");
+        assert_eq!(
+            String::from_utf8(canonical.clone()).expect("canonical JSON is UTF-8"),
+            concat!(
+                r#"{"arguments":{"--operation":"contracts/op.yaml","--root":"."},"audience":"forge-core:mcp:stdio:test-project","credential_id":"key.codex-main.2026-01","execution_intent_digest":"sha256:"#,
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                r#"","nonce":"kat-registry-nonce-001","tool":"execute-operation","ts":1800000000}"#,
+            )
+        );
+
+        let signature = signing_key.sign(&canonical);
+        assert_eq!(
+            hex_encode(&signature.to_bytes()),
+            "069f0619e3fefa9b46c448e4954ee918a66661a61dfa7a8455ccffdb884b88e5cc12b0b43c8a627189513467385eecc70fdf07a5d4f0c01230d9bb25f2b38805"
+        );
+        let attestation = AttestationInput {
+            credential_id: intent.credential_id.clone(),
+            audience: intent.audience.clone(),
+            execution_intent_digest: intent.execution_intent_digest.clone(),
+            nonce: intent.nonce.clone(),
+            ts: intent.ts,
+            signature: hex_encode(&signature.to_bytes()),
+            public_key_hex: hex_encode(&signing_key.verifying_key().to_bytes()),
+        };
+        assert!(AttestationVerifier::new(AttestationPolicy::Default)
+            .verify_with_public_key(
+                &intent,
+                &attestation,
+                "e4030998cfd5ad1723c169f956aa0b9eb8619b5992bd612c2af428ebc79f8df0",
+            )
+            .is_ok());
     }
 }

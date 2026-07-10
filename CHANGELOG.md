@@ -19,10 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **P4a Execution Admission policy decision point.** `forge-core-decisions::execution_admission` now evaluates a pure, deterministic, fail-closed commit-time snapshot spanning the Assurance Case, content-addressed Operation/Command/Effect contracts, trusted principal observations, replay reservation, claim and gate revisions, and commit guarantees.
 - A typed P4a specification and executable scenario matrix cover the narrow admitted single-effect WAL path plus untrusted principals, replay, stale snapshots, missing gate evidence, contract tampering, duplicate bindings, unsafe commands, and insufficient commit scope.
+- **P4b.1a trusted-principal substrate.** Mutating MCP attestations can now be resolved through a strict operator-owned YAML registry that binds credential, principal, agent, role, audience, exact tools, authority grants, revocation status, and the authoritative ed25519 key. Freshness, canonical execution-intent digest, `operation.execute`, and registry-key verification fail closed; deterministic authority-field KATs and adversarial caller-selected-key tests pin the boundary.
+- A deliberately revoked principal-registry example documents safe operator setup without publishing a usable credential.
 
 ### Changed
 - The P3 conversational resume token now uses the shared canonical Assurance Case token implementation consumed by execution admission.
-- P4a deliberately exposes a read-only policy boundary only; trusted MCP identity, durable nonce reservation, kernel pre-WAL enforcement, principal propagation, and operation-wide atomicity remain subsequent P4 checkpoints.
+- MCP stdio remains read-only by policy: any allowlist containing a mutating tool now fails startup even when the new registry is present. This prevents identity from being discarded into a replayable subprocess path while durable replay, constrained handoff, kernel pre-WAL enforcement, principal propagation, and operation-wide atomicity remain subsequent checkpoints.
+- Read-only MCP subprocesses now pin the current executable instead of resolving `forge-core` through `PATH`, run in the canonical repo root, clear the inherited environment before copying a minimal OS/runtime allowlist, and receive null stdin so the JSON-RPC stream cannot leak into child commands.
 
 ---
 

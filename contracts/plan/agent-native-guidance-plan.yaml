@@ -126,11 +126,23 @@ phases:
           - "typed principal, replay, claim, gate, and commit observations"
           - "executable accepted/blocked scenario matrix"
         boundary: "No MCP or kernel enforcement is claimed by P4a."
+      - id: "P4b.1a-trusted-principal-registry-substrate"
+        delivers:
+          - "strict operator-owned YAML registry for credential, principal, agent, role, audience, tool, grant, key, and revocation bindings"
+          - "canonical authority-field signature KAT plus freshness, exact tool, operation.execute grant, and caller-selected-key rejection"
+          - "read-only MCP startup can preload the registry while mutating stdio allowlists remain fail-closed"
+          - "read-only child processes pin the current binary, canonical repo cwd, minimal environment, and null stdin"
+        boundary: "The principal is not yet propagated to the kernel; live MCP stdio mutation remains disabled."
     next_slice:
-      id: "P4b-trusted-adapter-and-kernel-gate"
+      id: "P4b.1b-durable-replay-substrate"
       scope:
-        - "derive Execution Principal from an authorized MCP registry or resource-server result"
         - "reserve and consume nonces durably"
+        - "make missing/rolled-back replay state fail closed and bound recovery cost"
+        - "keep replay state outside caller-controlled project artifacts"
+    following_slice:
+      id: "P4b.2-trusted-adapter-and-kernel-gate"
+      scope:
+        - "carry the typed Execution Principal and replay guard without a caller-forgeable subprocess handoff"
         - "evaluate Execution Admission immediately before the kernel WAL boundary"
         - "propagate principal and admission decision through claims, traces, WAL, and evidence"
     release_blockers:
@@ -183,12 +195,13 @@ first_executable_slice:
     - "typed conversational golden path from an empty consumer through replacement-agent resume"
     - "P4a pure Execution Admission PDP with content-addressed authority bindings"
     - "P4a scenario corpus for principal, replay, snapshot, evidence, tampering, and commit failures"
+    - "P4b.1a operator-owned MCP principal registry and fail-closed stdio mutation boundary"
   next_action: >-
-    Implement P4b by deriving trusted Execution Principal and durable replay
-    observations in the MCP Adapter, then require the P4a verdict immediately
-    before the kernel WAL boundary. Propagate that principal and decision into
-    claims, traces, WAL, and evidence. Keep operation-wide transaction or
-    complete saga semantics as the following release blocker.
+    Land the durable replay WAL as a separate safe substrate, then implement a
+    non-forgeable typed principal/replay handoff that retains authority through
+    the late kernel Execution Admission boundary. Propagate that principal and
+    decision into claims, traces, WAL, and evidence. Keep operation-wide
+    transaction or complete saga semantics as the following release blocker.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

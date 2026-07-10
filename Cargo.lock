@@ -985,6 +985,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_json_canonicalizer",
+ "sha2",
  "tokio",
  "tracing",
  "yaml_serde",

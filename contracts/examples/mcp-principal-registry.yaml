@@ -1,0 +1,22 @@
+# mcp-principal-registry.yaml — operator-owned identity policy for MCP mutation.
+#
+# Keep the live registry outside any project path the governed agent can write,
+# or protect it with equivalent OS permissions. The public key below is the
+# published RFC 8032 test key and is deliberately REVOKED; replace it with a
+# freshly generated agent credential and change status to active only when the
+# listed authority is intentional. Never copy a private key into this file.
+
+schema_version: "0.1"
+principal_registry:
+  audience: "forge-core:mcp:stdio:replace-with-project-id"
+  principals:
+    - credential_id: "key.replace-me.2026-01"
+      principal_id: "principal.replace-me"
+      agent_id: "replace-me"
+      role: "driver"
+      public_key_hex: "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+      allowed_tools:
+        - "execute-operation"
+      authority_grants:
+        - "operation.execute"
+      status: "revoked"
