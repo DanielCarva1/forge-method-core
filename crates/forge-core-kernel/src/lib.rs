@@ -28,6 +28,10 @@
 //! - `wal_orchestration` — `execute_operation`, the single public mutation
 //!   entrypoint, plus `prepare_effect_transaction` and the execution-result
 //!   types.
+//! - `prepared_execution` — the dormant P4b.2b authority path: canonical
+//!   commit descriptor, retained effect/replay locks, double file preflight,
+//!   trusted late snapshot, and pre-WAL Execution Admission typestate. It has
+//!   no effect-commit method yet.
 //! - [`gate`] — the `OperationGate` trait and `GateRejection` type: mutation
 //!   preconditions the kernel runs before any WAL append. V2.C builds the seam
 //!   (the trait + typestate context); V3.A fills it with real gates.
@@ -76,6 +80,7 @@ use tracing::instrument;
 mod evidence;
 pub mod gate;
 mod planning;
+mod prepared_execution;
 mod staging;
 mod wal_orchestration;
 
@@ -89,6 +94,7 @@ pub use builtin_gates::*;
 pub use evidence::*;
 pub use gate::*;
 pub use planning::*;
+pub use prepared_execution::*;
 pub use staging::*;
 pub use wal_orchestration::*;
 

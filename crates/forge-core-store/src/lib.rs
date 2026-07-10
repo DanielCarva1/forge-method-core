@@ -698,6 +698,31 @@ pub enum EffectApplicationReason {
     Applied,
 }
 
+/// Read-only effect preflight captured while the caller retains the exact
+/// effect-store lock. It proves that contract validation, read freshness,
+/// payload hashes, target scope, and write revalidation all completed before
+/// any effect-WAL record was appended.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(deny_unknown_fields)]
+#[non_exhaustive]
+pub struct EffectPreflightResult {
+    pub status: EffectPreflightStatus,
+    pub effect_id: StableId,
+    pub metadata_records: Vec<EffectTargetMetadataRecord>,
+    pub reasons: Vec<EffectApplicationReason>,
+    pub diagnostics: Vec<String>,
+    pub validation_error_count: usize,
+    pub validation_warning_count: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum EffectPreflightStatus {
+    Ready,
+    Blocked,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EffectWalRecord {
@@ -1088,6 +1113,89 @@ pub fn try_acquire_effect_store_lock(
     lock_relative_path: &str,
 ) -> Result<EffectStoreLock, EffectStoreLockError> {
     acquire_effect_store_lock_inner(root.as_ref(), lock_relative_path, true)
+}
+
+/// Validate and revalidate one file-backed effect while retaining the exact
+/// caller-supplied effect-store lock. This function never appends to the WAL
+/// and never applies a write.
+///
+/// # Failure reporting
+///
+/// This API returns a typed blocked result; lock-scope,
+/// contract, freshness, payload, and path failures are accumulated in
+/// `reasons` and `diagnostics` for agent self-correction.
+#[must_use]
+pub fn preflight_file_effect_transaction_under_lock(
+    root: impl AsRef<Path>,
+    effect_lock: &EffectStoreLock,
+    expected_lock_relative_path: &str,
+    effect: &ToolEffectContractDocument,
+    payloads: &[EffectApplicationPayload],
+) -> EffectPreflightResult {
+    let root = root.as_ref();
+    let effect_contract = &effect.tool_effect_contract;
+    let validation = validate_tool_effect(effect);
+    let validation_error_count = validation
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
+        .count();
+    let validation_warning_count = validation
+        .diagnostics()
+        .iter()
+        .filter(|diagnostic| diagnostic.severity == DiagnosticSeverity::Warning)
+        .count();
+    let mut reasons = Vec::new();
+    let mut diagnostics = Vec::new();
+
+    let expected_lock = resolve_safe_repo_relative(root, expected_lock_relative_path);
+    let lock_matches = expected_lock.is_ok_and(|expected| {
+        let expected = expected.canonicalize().unwrap_or(expected);
+        let actual = effect_lock
+            .path()
+            .canonicalize()
+            .unwrap_or_else(|_| effect_lock.path().to_path_buf());
+        expected == actual
+    });
+    if !lock_matches {
+        reasons.push(EffectApplicationReason::StoreLockFailed);
+        diagnostics.push(format!(
+            "effect preflight lock scope mismatch: expected {expected_lock_relative_path}, actual {}",
+            effect_lock.path().display()
+        ));
+    }
+    if validation_error_count > 0 {
+        reasons.push(EffectApplicationReason::EffectValidationErrors);
+    }
+    validate_file_backed_reads(root, effect, &mut reasons, &mut diagnostics);
+    let prepared = prepare_file_writes(root, effect, payloads, &mut reasons, &mut diagnostics);
+    let mut metadata_records = Vec::new();
+    if reasons.is_empty() {
+        if let Some(mut writes) = prepared {
+            if revalidate_prepared_writes(root, &mut writes, &mut reasons, &mut diagnostics) {
+                metadata_records = effect_target_metadata_records(effect, &writes);
+            }
+        } else {
+            reasons.push(EffectApplicationReason::InternalInvariant);
+            diagnostics.push(
+                "internal invariant: preflight writes missing despite empty reasons".to_owned(),
+            );
+        }
+    }
+
+    EffectPreflightResult {
+        status: if reasons.is_empty() {
+            EffectPreflightStatus::Ready
+        } else {
+            EffectPreflightStatus::Blocked
+        },
+        effect_id: effect_contract.id.clone(),
+        metadata_records,
+        reasons,
+        diagnostics,
+        validation_error_count,
+        validation_warning_count,
+    }
 }
 
 pub fn apply_file_effect_transaction(

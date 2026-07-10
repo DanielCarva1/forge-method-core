@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "execution_trust_boundary_v0"
-status: "p4b2a_cooperative_boundary"
+status: "p4b2b_cooperative_boundary"
 purpose: >-
   Separate the guarantees Forge can provide inside a trusted local process
   from the stronger isolation required to resist an agent that already has raw
@@ -14,6 +14,7 @@ current_mode:
     - "An operator-owned registry can derive trusted principal identity without accepting a caller-selected key."
     - "Verified execute authority is an opaque, non-deserializable in-memory capability owned by a host-neutral crate."
     - "A typed injected executor can receive the verified MCP call in-process without caller-selected root, durability, limits, transaction identity, or commit time."
+    - "A dormant kernel path derives canonical commit authority, reserves replay, retains effect and replay locks, revalidates file preflight, and evaluates late Admission without effect writes."
     - "The Rust store exposes durable replay primitives for a future in-process mutation boundary."
   does_not_guarantee:
     - "confinement of a same-user agent that can invoke another mutating CLI or store path directly"
@@ -28,7 +29,7 @@ planned_trusted_process_mode:
   id: "trusted_in_process_mutation"
   sequence:
     - "P4b.2a completed: opaque verified authorization and a typed in-process executor seam are implemented and tested; public MCP mutation stays blocked."
-    - "P4b.2b: retain project/effect/replay guards and evaluate a prepared transaction at the late pre-WAL boundary; keep public MCP mutation blocked."
+    - "P4b.2b completed: a prepared transaction retains typed project/effect/replay/claim/gate authority and evaluates late Admission before any effect-WAL record; public MCP mutation stays blocked."
     - "P4b.2c: persist principal and admission provenance, commit one effect, reconcile recovery, and prove an internal end-to-end path before any enablement decision."
   achievable_guarantee: >-
     A request entering the trusted Forge process cannot substitute its own
@@ -60,4 +61,5 @@ references:
   - "contracts/policies/mcp-local-process-security-boundary.yaml"
   - "contracts/spec/execution-admission-v0.yaml"
   - "contracts/spec/execution-authority-handoff-v0.yaml"
+  - "contracts/spec/prepared-execution-transaction-v0.yaml"
   - "contracts/spec/replay-protection-wal-v0.yaml"

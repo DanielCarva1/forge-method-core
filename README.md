@@ -646,10 +646,43 @@ This seam is intentionally dormant. The public MCP handler and server startup
 still reject every mutating allowlist, even when both a registry and executor
 are configured; read-only tools retain the pinned subprocess path. Internal
 tests prove a valid proof reaches the injected executor exactly once without
-spawning a CLI child. P4b.2b must next derive and retain replay/effect/claim/gate
-authority in a prepared kernel transaction and run Execution Admission at the
-late pre-WAL boundary. See
+spawning a CLI child. P4b.2b now consumes this handoff in a dormant prepared
+kernel transaction; the public surface remains unchanged. See
 [`contracts/spec/execution-authority-handoff-v0.yaml`](contracts/spec/execution-authority-handoff-v0.yaml).
+
+### Prepare and admit one execution before the effect WAL (P4b.2b)
+
+`forge-core-kernel` now exposes an internal Rust-only preparation path that
+consumes `VerifiedExecutionCall` without making authority serializable. A
+`TrustedExecutionEnvironment` canonicalizes an existing project and
+`.forge-method` state root and pins the exact operator audience. The kernel,
+not the adapter, derives a canonical commit descriptor covering the project,
+audience, Operation/Command/Effect tokens, payload paths and hashes, effect
+lock/WAL paths, transaction id, and synchronous durability.
+
+Preparation acquires the fixed effect-store lock, runs a read-only file-effect
+preflight, durably reserves the nonce, then converts the effect lock and replay
+reservation into an owned effect-lock-first replay guard. At the late boundary
+it repeats the preflight byte-for-byte, captures only the mutable Assurance
+Case/claim/gate/state-version/time snapshot, reconstructs all principal,
+replay, contract, freshness, and commit observations inside the kernel, and
+runs `evaluate_execution_admission`.
+
+An admitted result becomes a non-cloneable, non-deserializable
+`LateAdmittedExecutionTransaction` that still owns both locks and the exact
+Admission document. It deliberately has **no commit method in P4b.2b**. Tests
+prove valid admission, signed-request tamper rejection, audience separation,
+claim revision blocking, filesystem drift rejection, snapshot failure, and
+lock retention while creating neither a project write nor an effect-WAL file.
+Preparation does record one replay reservation; failed/dropped attempts remain
+seen rather than making replay authority erasable.
+
+P4b.2c must consume this typestate directly into one effect commit, persist
+complete authority/admission provenance, and reconcile crashes between effect
+commit and replay consume. Claim/gate revisions are exact typed snapshots, not
+an OS sandbox against a same-user bypass writer. Public MCP mutation remains
+disabled. See
+[`contracts/spec/prepared-execution-transaction-v0.yaml`](contracts/spec/prepared-execution-transaction-v0.yaml).
 
 ### Route work through the dual-lane autonomy router
 
@@ -820,9 +853,10 @@ gates.
 - Self-hardening batch landed: TTL-overflow safety, RFC-3339 calendar
   validation, lockfile stale-owner reclaim, WAL fsync hardening, path-safety,
   symlink escape checks, and TOCTOU revalidation.
-- P4b.1a trusted-principal derivation, P4b.1b bounded durable replay, and the
-  P4b.2a opaque in-process authority handoff are available as Rust substrates
-  while the public MCP mutation surface remains fail-closed.
+- P4b.1a trusted-principal derivation, P4b.1b bounded durable replay, P4b.2a
+  opaque in-process authority handoff, and P4b.2b dormant prepared late
+  Admission are available as Rust substrates while public MCP mutation remains
+  fail-closed.
 - Dual-lane autonomy router exposed as `forge-core autonomy route` for fast vs
   rigorous lane selection.
 - Seven evolve-phase governance contracts: `autonomy_policy`,
@@ -837,10 +871,11 @@ gates.
   attestation. P4b.1a adds an operator principal registry, but mutating stdio
   tools remain blocked. P4b.1b adds durable replay primitives, but they are not
   connected to MCP or CLI mutation. P4b.2a adds the opaque typed in-process
-  authority handoff without enabling it publicly. P4b.2b/P4b.2c must still
-  deliver replay-bound prepared late kernel Execution Admission, persisted
-  provenance, and crash reconciliation before any explicit enablement decision.
-  The CLI remains the intended agent boundary by design.
+  authority handoff and P4b.2b adds a dormant replay-bound prepared late
+  Admission typestate without any effect-commit method. P4b.2c must still
+  persist provenance, commit one effect without dropping authority, and
+  reconcile crashes before any explicit enablement decision. The CLI remains
+  the intended agent boundary by design.
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is

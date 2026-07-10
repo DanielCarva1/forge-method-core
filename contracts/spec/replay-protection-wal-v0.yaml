@@ -93,18 +93,18 @@ lock_order:
   required: "effect-store lock before replay WAL lock"
   enforcement: >-
     ReplayCommitGuard borrows the caller's EffectStoreLock while owning the
-    replay lock, so both locks remain live while the future kernel retains the
-    guard between replay validation and consume.
+    replay lock. P4b.2b adds an owned variant so both locks remain live inside
+    the opaque prepared kernel transaction.
   scope_limit: >-
     The store validates the caller-declared effect-lock path against the held
     lock but cannot know whether that path is the canonical lock for the
-    intended effect. P4b.2 must derive the path and commit descriptor inside
-    the kernel and must not accept either from adapter input.
+    intended effect. P4b.2b now derives the path and canonical commit
+    descriptor inside the dormant kernel path rather than adapter input.
   lifecycle_limit: >-
     The store guard alone cannot prove that an effect commit happened before
-    consume or prevent a caller from dropping the guard. P4b.2 must add an
-    opaque prepared-transaction lifecycle and bind consume to its durable
-    commit receipt or reconciliation record.
+    consume or prevent a caller from dropping the guard. P4b.2b adds the opaque
+    prepared/admitted lifecycle but deliberately exposes no commit or consume;
+    P4b.2c must bind both to a durable receipt or reconciliation record.
   limitation: >-
     This guard is a substrate, not cross-WAL atomicity. A crash after the effect
     commit and before replay consume still needs kernel recovery reconciliation.
@@ -114,7 +114,9 @@ current_boundary:
     - "Rust API for durable reserve, recovery, guarded validation, and consume"
     - "manifest/WAL half-pair and corruption detection"
     - "bounded replay cost and append capacity"
-    - "effect-lock-first lifetime guard for future kernel integration"
+    - "borrowed and owned effect-lock-first lifetime guards"
+    - "owned effect-lock-first replay guard retained by the dormant P4b.2b prepared kernel transaction"
+    - "P4b.2b kernel-owned reserve binds the signed intent to a canonical commit descriptor before late Admission"
   not_yet_claimed:
     - "live MCP or CLI mutation reserves or consumes this WAL"
     - "P4a Execution Admission runs immediately before the first effect-WAL record"
@@ -125,5 +127,6 @@ current_boundary:
 references:
   - "contracts/spec/execution-admission-v0.yaml"
   - "contracts/spec/execution-authority-handoff-v0.yaml"
+  - "contracts/spec/prepared-execution-transaction-v0.yaml"
   - "contracts/spec/execution-trust-boundary-v0.yaml"
   - "contracts/plan/agent-native-guidance-plan.yaml"

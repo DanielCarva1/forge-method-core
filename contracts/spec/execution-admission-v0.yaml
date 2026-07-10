@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "execution_admission_v0"
-status: "p4b2a_dormant_handoff"
+status: "p4b2b_dormant_late_boundary"
 purpose: >-
   Bind an evidence-backed Assurance Case and a commit-time runtime snapshot to
   one exact mutation intent before the Execution Assurance Kernel may admit it.
@@ -84,6 +84,10 @@ current_boundary:
     - "P4b.2a host-neutral opaque VerifiedExecutionAuthorization with no caller deserialization, cloning, or authority-field construction"
     - "P4b.2a typed in-process MCP executor seam rejects caller-selected root, durability, payload scope/limits, transaction identity, and commit time"
     - "private seam tests preserve verified authority through one in-memory dispatch and prove no mutation subprocess is spawned"
+    - "P4b.2b kernel derives canonical project/audience/contract/payload/lock/WAL/transaction/durability commit authority"
+    - "P4b.2b retains an owned effect-lock-first replay guard and compares initial versus late file-effect preflight"
+    - "P4b.2b rebuilds principal, replay, contract, freshness, and commit observations around a limited fresh assurance/claim/gate snapshot"
+    - "P4b.2b evaluates Execution Admission into an opaque admitted typestate before any effect-WAL record or project write"
     - "replay manifest/WAL half-pairs and corrupt authority state fail closed"
     - "effect-lock-first ReplayCommitGuard retains the future kernel lock order through consume or drop"
     - "MCP stdio mutation stays fail-closed until the late kernel path consumes trusted identity and guarded replay state"
@@ -91,7 +95,7 @@ current_boundary:
   not_yet_claimed:
     - "live MCP mutation using the opaque verified-authorization result"
     - "live MCP or CLI mutation reserving and consuming the replay WAL"
-    - "kernel pre-WAL ExecutionAdmission gate"
+    - "live kernel effect commit immediately consuming the dormant pre-WAL admitted typestate"
     - "atomic effect-WAL commit plus replay consume and crash reconciliation"
     - "whole replay manifest/WAL pair deletion or rollback detection"
     - "replay WAL compaction or rotation"
@@ -114,5 +118,6 @@ references:
 
 local_specs:
   - "contracts/spec/execution-authority-handoff-v0.yaml"
+  - "contracts/spec/prepared-execution-transaction-v0.yaml"
   - "contracts/spec/replay-protection-wal-v0.yaml"
   - "contracts/spec/execution-trust-boundary-v0.yaml"

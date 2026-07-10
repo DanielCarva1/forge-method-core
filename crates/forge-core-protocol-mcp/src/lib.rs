@@ -24,8 +24,8 @@
 //! - **[`mutation_executor`]** provides the typed in-process handoff for a
 //!   verified `execute-operation` call. It structurally excludes
 //!   caller-selected root, durability, payload-scope, and transaction-id
-//!   controls. MCP stdio mutation remains blocked until the replay/kernel
-//!   boundary consumes this seam.
+//!   controls. P4b.2b consumes the seam only in a dormant pre-commit kernel
+//!   path; MCP stdio mutation remains blocked.
 //! - **[`error`]** — hand-rolled error enums (project convention: no
 //!   `anyhow`/`thiserror`, no `Result<_, String>`).
 //!

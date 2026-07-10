@@ -220,6 +220,13 @@ struct PreparedConsume {
     reservation: ReplayReservation,
 }
 
+struct ReplayGuardState {
+    _replay_lock: ReplayWalLock,
+    wal_path: PathBuf,
+    reserved: ReplayReservation,
+    prepared: PreparedConsume,
+}
+
 /// Replay authority guard intended to be held across execution admission and
 /// effect commit.
 ///
@@ -233,10 +240,7 @@ struct PreparedConsume {
 /// must derive that scope and enforce the transaction lifecycle.
 pub struct ReplayCommitGuard<'a> {
     effect_lock: &'a crate::EffectStoreLock,
-    _replay_lock: ReplayWalLock,
-    wal_path: PathBuf,
-    reserved: ReplayReservation,
-    prepared: PreparedConsume,
+    state: ReplayGuardState,
 }
 
 impl fmt::Debug for ReplayCommitGuard<'_> {
@@ -244,9 +248,9 @@ impl fmt::Debug for ReplayCommitGuard<'_> {
         formatter
             .debug_struct("ReplayCommitGuard")
             .field("effect_lock_path", &self.effect_lock.path())
-            .field("wal_path", &self.wal_path)
-            .field("reserved", &self.reserved)
-            .field("consume_seq", &self.prepared.seq)
+            .field("wal_path", &self.state.wal_path)
+            .field("reserved", &self.state.reserved)
+            .field("consume_seq", &self.state.prepared.seq)
             .finish_non_exhaustive()
     }
 }
@@ -259,7 +263,7 @@ impl ReplayCommitGuard<'_> {
 
     #[must_use]
     pub fn reservation(&self) -> &ReplayReservation {
-        &self.reserved
+        &self.state.reserved
     }
 
     /// Durably consume the guarded replay reservation after the effect commit.
@@ -269,13 +273,66 @@ impl ReplayCommitGuard<'_> {
     /// Returns [`ReplayWalError`] if the prepared consume frame cannot be
     /// appended and synced. Both locks remain held until this call returns.
     pub fn consume(self) -> Result<ReplayConsumeResult, ReplayWalError> {
-        append_and_sync(&self.wal_path, &self.prepared.bytes)?;
+        append_and_sync(&self.state.wal_path, &self.state.prepared.bytes)?;
         Ok(ReplayConsumeResult {
-            wal_path: self.wal_path.clone(),
-            seq: self.prepared.seq,
-            bytes_appended: u64::try_from(self.prepared.bytes.len()).unwrap_or(u64::MAX),
+            wal_path: self.state.wal_path.clone(),
+            seq: self.state.prepared.seq,
+            bytes_appended: u64::try_from(self.state.prepared.bytes.len()).unwrap_or(u64::MAX),
             appended: true,
-            reservation: self.prepared.reservation.clone(),
+            reservation: self.state.prepared.reservation.clone(),
+        })
+    }
+}
+
+/// Owned replay authority guard for an opaque prepared kernel transaction.
+///
+/// Unlike [`ReplayCommitGuard`], this type consumes and owns the effect lock,
+/// so it can safely cross function boundaries without a self-referential
+/// borrow. Field order is intentional: replay state drops before the effect
+/// lock, releasing locks in reverse acquisition order.
+pub struct OwnedReplayCommitGuard {
+    state: ReplayGuardState,
+    effect_lock: crate::EffectStoreLock,
+}
+
+impl fmt::Debug for OwnedReplayCommitGuard {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("OwnedReplayCommitGuard")
+            .field("effect_lock_path", &self.effect_lock.path())
+            .field("wal_path", &self.state.wal_path)
+            .field("reserved", &self.state.reserved)
+            .field("consume_seq", &self.state.prepared.seq)
+            .finish_non_exhaustive()
+    }
+}
+
+impl OwnedReplayCommitGuard {
+    #[must_use]
+    pub fn effect_lock(&self) -> &crate::EffectStoreLock {
+        &self.effect_lock
+    }
+
+    #[must_use]
+    pub fn reservation(&self) -> &ReplayReservation {
+        &self.state.reserved
+    }
+
+    /// Durably consume the guarded replay reservation after a future effect
+    /// commit. P4b.2b retains this transition but does not call it.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ReplayWalError`] when the prepared consume frame cannot be
+    /// appended and synced.
+    pub fn consume(self) -> Result<ReplayConsumeResult, ReplayWalError> {
+        append_and_sync(&self.state.wal_path, &self.state.prepared.bytes)?;
+        Ok(ReplayConsumeResult {
+            wal_path: self.state.wal_path.clone(),
+            seq: self.state.prepared.seq,
+            bytes_appended: u64::try_from(self.state.prepared.bytes.len()).unwrap_or(u64::MAX),
+            appended: true,
+            reservation: self.state.prepared.reservation.clone(),
         })
     }
 }
@@ -811,6 +868,66 @@ pub fn acquire_replay_commit_guard<'a>(
     commit_digest: &str,
     expected_revision: u64,
 ) -> Result<ReplayCommitGuard<'a>, ReplayWalError> {
+    let state = prepare_replay_guard_state(
+        state_root.as_ref(),
+        effect_lock,
+        expected_effect_lock_relative_path,
+        principal_id,
+        audience,
+        nonce,
+        intent_digest,
+        commit_digest,
+        expected_revision,
+    )?;
+    Ok(ReplayCommitGuard { effect_lock, state })
+}
+
+/// Acquire replay authority while consuming ownership of the already-held
+/// effect lock. This is the guard shape used by the kernel's opaque prepared
+/// transaction.
+///
+/// # Errors
+///
+/// Returns [`ReplayWalError`] under the same fail-closed conditions as
+/// [`acquire_replay_commit_guard`].
+#[allow(clippy::too_many_arguments)]
+pub fn acquire_owned_replay_commit_guard(
+    state_root: impl AsRef<Path>,
+    effect_lock: crate::EffectStoreLock,
+    expected_effect_lock_relative_path: &str,
+    principal_id: &PrincipalId,
+    audience: &str,
+    nonce: &str,
+    intent_digest: &str,
+    commit_digest: &str,
+    expected_revision: u64,
+) -> Result<OwnedReplayCommitGuard, ReplayWalError> {
+    let state = prepare_replay_guard_state(
+        state_root.as_ref(),
+        &effect_lock,
+        expected_effect_lock_relative_path,
+        principal_id,
+        audience,
+        nonce,
+        intent_digest,
+        commit_digest,
+        expected_revision,
+    )?;
+    Ok(OwnedReplayCommitGuard { state, effect_lock })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn prepare_replay_guard_state(
+    state_root: &Path,
+    effect_lock: &crate::EffectStoreLock,
+    expected_effect_lock_relative_path: &str,
+    principal_id: &PrincipalId,
+    audience: &str,
+    nonce: &str,
+    intent_digest: &str,
+    commit_digest: &str,
+    expected_revision: u64,
+) -> Result<ReplayGuardState, ReplayWalError> {
     validate_sha256_digest(intent_digest)?;
     validate_commit_digest(commit_digest)?;
     if expected_revision == 0 {
@@ -820,11 +937,11 @@ pub fn acquire_replay_commit_guard<'a>(
         });
     }
     let key_hash = replay_nonce_key_hash(principal_id, audience, nonce)?;
-    let state_root = trusted_state_root(state_root.as_ref())?;
+    let state_root = trusted_state_root(state_root)?;
     validate_effect_lock_scope(&state_root, effect_lock, expected_effect_lock_relative_path)?;
 
-    // Lock ordering is load-bearing: the EffectStoreLock borrow already exists
-    // before replay acquisition and remains retained by ReplayCommitGuard.
+    // Lock ordering is load-bearing: the EffectStoreLock already exists before
+    // replay acquisition and is retained by the borrowed or owned public guard.
     let replay_lock = acquire_replay_lock(&state_root)?;
     ensure_replay_initialized_under_lock(&state_root, false)?;
     let wal_path = replay_wal_path(&state_root);
@@ -882,8 +999,7 @@ pub fn acquire_replay_commit_guard<'a>(
         consumed_seq: Some(seq),
     };
 
-    Ok(ReplayCommitGuard {
-        effect_lock,
+    Ok(ReplayGuardState {
         _replay_lock: replay_lock,
         wal_path,
         reserved: existing.clone(),

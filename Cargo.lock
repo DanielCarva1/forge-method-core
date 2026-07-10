@@ -961,12 +961,16 @@ dependencies = [
 name = "forge-core-kernel"
 version = "0.4.0"
 dependencies = [
+ "ed25519-dalek",
+ "forge-core-authority",
  "forge-core-contracts",
  "forge-core-decisions",
  "forge-core-store",
  "forge-core-trace",
  "forge-core-validate",
  "serde",
+ "serde_json",
+ "serde_json_canonicalizer",
  "sha2",
  "tracing",
  "yaml_serde",

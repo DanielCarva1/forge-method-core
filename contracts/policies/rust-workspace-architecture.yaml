@@ -57,6 +57,7 @@ decision:
       crate_type: "library"
       responsibility: "Guide/gate/doctor/oracle operation engine, Funnel Autonomy, state-machine routing, policy decisions, recovery, and OperationContract generation."
       depends_on:
+        - "forge-core-authority"
         - "forge-core-contracts"
         - "forge-core-validate"
         - "forge-core-store"
@@ -143,6 +144,8 @@ rules:
     rule: "Store persists and retrieves state/evidence but does not decide workflow authority."
   - id: "verified_authority_is_host_neutral_and_opaque"
     rule: "Verified execution authority lives outside protocol adapters, has private fields and no caller deserialization path, and crosses mutation boundaries only in-process."
+  - id: "late_admission_precedes_effect_wal"
+    rule: "The kernel must retain derived project/effect/replay authority, revalidate mutable snapshots, and evaluate Execution Admission before the first effect-WAL record."
   - id: "adapters_are_replaceable"
     rule: "Codex, Cursor, opencode, Claude, VS Code, and pi.dev integration must live outside runtime semantics."
   - id: "daemon_is_not_v1_requirement"

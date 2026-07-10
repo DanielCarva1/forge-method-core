@@ -85,15 +85,16 @@ executable_evidence:
   - "startup and public-handler tests keep mutating MCP stdio disabled even with a registry and executor"
 
 next_boundary:
-  id: "P4b.2b-prepared-transaction-and-late-admission"
+  id: "P4b.2c-provenance-commit-and-recovery"
   required:
-    - "trusted kernel derives project, effect-lock, replay, and commit-descriptor authority"
-    - "opaque authorization survives through prepared transaction state"
-    - "Execution Admission runs immediately before the first effect-WAL record"
+    - "persist complete execution and admission provenance"
+    - "consume the P4b.2b admitted typestate directly into one effect commit"
+    - "reconcile crashes between effect commit and replay consume"
     - "public MCP mutation remains blocked"
 
 references:
   - "contracts/spec/execution-admission-v0.yaml"
+  - "contracts/spec/prepared-execution-transaction-v0.yaml"
   - "contracts/spec/execution-trust-boundary-v0.yaml"
   - "contracts/spec/replay-protection-wal-v0.yaml"
   - "contracts/plan/agent-native-guidance-plan.yaml"

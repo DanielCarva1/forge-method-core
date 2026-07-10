@@ -19,7 +19,7 @@ Workspace members: **20**
 | `forge-core-eventlog` | `crates/forge-core-eventlog` | lib | forge-core-store |
 | `forge-core-governance` | `crates/forge-core-governance` | lib | forge-core-contracts, forge-core-eventlog, forge-core-store |
 | `forge-core-graph` | `crates/forge-core-graph` | lib, test | forge-core-contracts, forge-core-validate |
-| `forge-core-kernel` | `crates/forge-core-kernel` | lib, test | forge-core-contracts, forge-core-decisions, forge-core-store, forge-core-trace, forge-core-validate |
+| `forge-core-kernel` | `crates/forge-core-kernel` | lib, test | forge-core-authority, forge-core-contracts, forge-core-decisions, forge-core-store, forge-core-trace, forge-core-validate |
 | `forge-core-memory` | `crates/forge-core-memory` | lib, test | forge-core-contracts, forge-core-eventlog, forge-core-store |
 | `forge-core-protocol-mcp` | `crates/forge-core-protocol-mcp` | lib | forge-core-authority, forge-core-command-surface, forge-core-contracts, forge-core-validate |
 | `forge-core-research` | `crates/forge-core-research` | lib | forge-core-contracts, forge-core-eventlog, forge-core-store, forge-core-validate |

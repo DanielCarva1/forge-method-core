@@ -12,14 +12,18 @@ edition.workspace = true
 dangerous-bypass = []
 
 [dependencies]
+forge-core-authority = { path = "../forge-core-authority" }
 forge-core-contracts = { path = "../forge-core-contracts" }
 forge-core-decisions = { path = "../forge-core-decisions" }
 forge-core-store = { path = "../forge-core-store" }
 forge-core-trace = { path = "../forge-core-trace" }
 forge-core-validate = { path = "../forge-core-validate" }
 serde.workspace = true
+serde_json_canonicalizer.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+ed25519-dalek.workspace = true
+serde_json.workspace = true
 yaml_serde.workspace = true
 sha2.workspace = true

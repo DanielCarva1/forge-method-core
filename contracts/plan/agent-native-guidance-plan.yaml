@@ -163,25 +163,35 @@ phases:
           Public MCP stdio mutation remains fail-closed until replay reservation,
           prepared late admission, provenance, recovery, and an explicit
           enablement decision land.
+      - id: "P4b.2b-prepared-transaction-and-late-admission"
+        delivers:
+          - "canonical trusted environment binding for project root, Forge state root, and exact audience"
+          - "kernel-derived commit descriptor binding contracts, payloads, lock/WAL scope, transaction id, and synchronous durability"
+          - "read-only initial and late file-effect preflight under a retained exact effect lock"
+          - "kernel-owned durable replay reservation plus owned effect-lock-first replay guard"
+          - "limited trusted snapshot source for assurance, claims, gates, state version, and time"
+          - "kernel-derived principal/replay/contract/freshness/commit observations and late Execution Admission"
+          - "opaque admitted typestate with no effect commit method and executable zero-effect-WAL evidence"
+        boundary: >-
+          This path is internal and dormant. Preparation records a replay
+          reservation but does not write the project, effect WAL, metadata, or
+          evidence and does not consume replay. Claim/gate revisions are held as
+          exact typed snapshots, not operating-system locks against a same-user
+          bypass. MCP and CLI mutation remain unchanged and public MCP mutation
+          remains fail-closed.
     checkpoint_sequence:
       rule: >-
         P4b.2a, P4b.2b, and P4b.2c each land as a separate validated commit so
         source users can fast-forward pull a usable checkpoint without
         implicitly enabling the next authority boundary.
     next_slice:
-      id: "P4b.2b-prepared-transaction-and-late-admission"
+      id: "P4b.2c-provenance-commit-and-recovery"
       scope:
-        - "retain project, effect, replay, claim, and gate authority through the commit boundary"
-        - "prepare and revalidate the transaction before the first effect-WAL record"
-        - "evaluate Execution Admission at that late boundary"
-        - "keep public MCP mutation blocked"
-    following_slices:
-      - id: "P4b.2c-provenance-commit-and-recovery"
-        scope:
-          - "persist principal, intent, replay, claim, gate, and admission provenance in WAL and evidence"
-          - "commit one effect through the internal in-process path"
-          - "reconcile crashes between effect commit and replay consume"
-          - "require an explicit policy decision before public MCP mutation enablement"
+        - "persist principal, intent, replay, claim, gate, admission, preflight, and commit-descriptor provenance"
+        - "consume the admitted typestate directly into one effect commit"
+        - "reconcile crashes between effect commit and replay consume"
+        - "require an explicit policy decision before public MCP mutation enablement"
+    following_slices: []
     release_blockers:
       - "operation-wide transaction or explicit saga semantics"
       - "trusted MCP caller identity carried into the kernel without a forgeable subprocess handoff"
@@ -235,12 +245,13 @@ first_executable_slice:
     - "P4b.1a operator-owned MCP principal registry and fail-closed stdio mutation boundary"
     - "P4b.1b bounded durable replay WAL and effect-lock-first commit guard Rust substrate"
     - "P4b.2a host-neutral opaque execution authorization and typed in-process MCP executor seam"
+    - "P4b.2b opaque prepared transaction, double effect preflight, owned replay guard, and dormant late Admission typestate"
   next_action: >-
-    Build the prepared transaction and late Execution Admission boundary in
-    P4b.2b while public MCP mutation stays blocked. Then add provenance,
-    one-effect commit, and crash reconciliation in P4b.2c. Keep operation-wide
-    transaction or complete saga semantics and enforced-deployment isolation
-    as explicit release boundaries.
+    Implement P4b.2c by persisting complete authority/admission provenance,
+    consuming the admitted typestate directly into one effect commit, and
+    reconciling the effect-commit/replay-consume crash window while public MCP
+    mutation stays blocked. Keep operation-wide transaction or complete saga
+    semantics and enforced-deployment isolation as explicit release boundaries.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

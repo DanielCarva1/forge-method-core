@@ -1,0 +1,109 @@
+schema_version: "0.1"
+spec: "prepared_execution_transaction_v0"
+status: "p4b2b_implemented_dormant"
+purpose: >-
+  Carry one opaque verified execution request through kernel-derived project,
+  effect, replay, claim, gate, and commit authority; revalidate it at the late
+  pre-WAL boundary; and evaluate Execution Admission without yet committing an
+  effect or enabling public MCP mutation.
+
+rust_interface:
+  module: "forge_core_kernel crate-root re-exports over the private prepared_execution module"
+  prepare: "prepare_execution_transaction"
+  prepared_type: "PreparedExecutionTransaction"
+  late_evaluation: "PreparedExecutionTransaction::evaluate_late"
+  admitted_typestate: "LateAdmittedExecutionTransaction"
+  public_effect_commit_method: null
+
+trusted_environment:
+  type: "TrustedExecutionEnvironment"
+  derives:
+    - "canonical existing project root"
+    - "canonical existing .forge-method state root contained by the project"
+    - "operator-configured exact resource audience"
+  fixed_kernel_controls:
+    effect_lock: ".forge-method/locks/effects.lock"
+    effect_wal: ".forge-method/wal/effects.ndjson"
+    durability: "sync_on_append"
+    transaction_id: "derived from signed request id, effect id, and intent digest"
+  caller_cannot_select:
+    - "root or state root"
+    - "audience after environment construction"
+    - "effect/replay lock path"
+    - "effect WAL path"
+    - "durability"
+    - "transaction id"
+    - "recorded-at time"
+
+prepare_sequence:
+  - "consume the linear VerifiedExecutionCall into opaque authorization plus structured request"
+  - "reject unintegrated risk-audit or citation requirements rather than silently ignoring them"
+  - "recompute the ExecutionAdmissionRequest digest and compare it with signed verified authority"
+  - "verify principal, agent, role, nonce, issued-at, operation, command, effect, and payload bindings"
+  - "derive a canonical commit descriptor binding project root, audience, all contract refs/tokens, payload paths/hashes/lengths, lock, WAL, tx id, and durability"
+  - "acquire the exact effect-store lock"
+  - "run a read-only file-effect preflight under that retained lock"
+  - "durably reserve the nonce while the effect lock is already held"
+  - "convert effect lock plus replay reservation into OwnedReplayCommitGuard, retaining effect-lock then replay-lock order"
+
+late_boundary:
+  revalidation:
+    - "repeat exact file-effect preflight under the retained effect lock"
+    - "require byte-equivalent typed preflight observations; any drift fails closed"
+  trusted_snapshot_source_may_supply_only:
+    - "Assurance Case"
+    - "complete claim snapshot plus revisions"
+    - "complete gate snapshot plus revisions and observed state version"
+    - "current project state version"
+    - "current unix time"
+  snapshot_source_execution_rule: >-
+    Capture is a bounded trusted local read while effect and replay locks are
+    held. It must not call a model, network, subprocess, or mutation path.
+  kernel_derives_and_overwrites:
+    - "registry-authorized principal observation"
+    - "exact audience and grants"
+    - "fresh reserved replay observation and revision"
+    - "operation, command, and effect documents"
+    - "single-effect WAL commit guarantees"
+    - "attestation freshness windows retained by verified authorization"
+  decision: "evaluate_execution_admission"
+  admitted_result: >-
+    A non-cloneable, non-deserializable LateAdmittedExecutionTransaction retains
+    the verified authority, commit descriptor, exact admission document,
+    decision, final preflight, effect lock, and replay lock. It exposes no
+    effect-commit method in P4b.2b.
+
+fail_closed_evidence:
+  - "valid complete snapshot reaches admitted typestate with no project write and no effect-WAL file"
+  - "effect and replay locks remain held by admitted typestate and release on drop"
+  - "signed request mutation fails before lock acquisition or replay reservation"
+  - "cross-project audience mismatch fails before replay reservation"
+  - "claim snapshot revision drift returns a typed blocked Admission decision"
+  - "filesystem drift between initial and late preflight returns an operational error"
+  - "snapshot-source failure releases locks without effect-WAL mutation"
+  - "Debug output for material, prepared, and admitted typestates never reveals the raw nonce"
+  - "compile-fail tests reject cloning/deserialization of prepared authority typestates"
+
+intentional_limits:
+  - "preparation writes one replay reserve record but never consumes it; a failed or dropped attempt remains permanently seen"
+  - "no effect-WAL record, project write, metadata record, evidence record, or replay consume occurs"
+  - "claim and gate authority is retained as an exact typed revision snapshot, not as an operating-system lock against a same-user bypass writer"
+  - "same-user raw filesystem access remains outside the cooperative governance boundary"
+  - "the admitted typestate is not wired to MCP, CLI, or the existing execute_operation path"
+  - "operation-wide atomicity and saga semantics remain unsupported"
+
+next_boundary:
+  id: "P4b.2c-provenance-commit-and-recovery"
+  required:
+    - "persist principal, intent, replay, claim, gate, admission, preflight, and commit-descriptor provenance"
+    - "consume LateAdmittedExecutionTransaction directly into one effect commit without releasing authority"
+    - "reconcile crashes after effect commit and before replay consume"
+    - "revalidate any mutable authority not protected by a retained lock at the immediate commit call"
+    - "keep public MCP mutation disabled until an explicit deployment-policy decision"
+
+references:
+  - "contracts/spec/execution-authority-handoff-v0.yaml"
+  - "contracts/spec/execution-admission-v0.yaml"
+  - "contracts/spec/replay-protection-wal-v0.yaml"
+  - "contracts/spec/execution-trust-boundary-v0.yaml"
+  - "contracts/plan/agent-native-guidance-plan.yaml"

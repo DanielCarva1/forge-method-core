@@ -165,6 +165,8 @@ pub struct VerifiedExecutionAuthorization {
     execution_intent_digest: String,
     nonce: String,
     issued_at_unix: i64,
+    max_attestation_age_seconds: u64,
+    max_future_skew_seconds: u64,
     attestation_digest: String,
     signature_fingerprint: String,
 }
@@ -177,6 +179,11 @@ impl fmt::Debug for VerifiedExecutionAuthorization {
             .field("execution_intent_digest", &self.execution_intent_digest)
             .field("nonce", &"<redacted>")
             .field("issued_at_unix", &self.issued_at_unix)
+            .field(
+                "max_attestation_age_seconds",
+                &self.max_attestation_age_seconds,
+            )
+            .field("max_future_skew_seconds", &self.max_future_skew_seconds)
             .field("attestation_digest", &self.attestation_digest)
             .field("signature_fingerprint", &self.signature_fingerprint)
             .finish()
@@ -184,11 +191,14 @@ impl fmt::Debug for VerifiedExecutionAuthorization {
 }
 
 impl VerifiedExecutionAuthorization {
+    #[allow(clippy::too_many_arguments)] // all fields are immutable verified authority bindings
     fn new(
         principal: AuthorizedPrincipal,
         execution_intent_digest: String,
         nonce: String,
         issued_at_unix: i64,
+        max_attestation_age_seconds: u64,
+        max_future_skew_seconds: u64,
         attestation_digest: String,
         signature_fingerprint: String,
     ) -> Self {
@@ -197,6 +207,8 @@ impl VerifiedExecutionAuthorization {
             execution_intent_digest,
             nonce,
             issued_at_unix,
+            max_attestation_age_seconds,
+            max_future_skew_seconds,
             attestation_digest,
             signature_fingerprint,
         }
@@ -225,6 +237,16 @@ impl VerifiedExecutionAuthorization {
     }
 
     #[must_use]
+    pub const fn max_attestation_age_seconds(&self) -> u64 {
+        self.max_attestation_age_seconds
+    }
+
+    #[must_use]
+    pub const fn max_future_skew_seconds(&self) -> u64 {
+        self.max_future_skew_seconds
+    }
+
+    #[must_use]
     pub fn attestation_digest(&self) -> &str {
         &self.attestation_digest
     }
@@ -241,6 +263,8 @@ impl VerifiedExecutionAuthorization {
             execution_intent_digest: self.execution_intent_digest.clone(),
             nonce_fingerprint: nonce_fingerprint(&self.nonce),
             issued_at_unix: self.issued_at_unix,
+            max_attestation_age_seconds: self.max_attestation_age_seconds,
+            max_future_skew_seconds: self.max_future_skew_seconds,
             attestation_digest: self.attestation_digest.clone(),
             signature_fingerprint: self.signature_fingerprint.clone(),
         }
@@ -258,6 +282,8 @@ pub struct VerifiedExecutionAuthorizationAudit {
     pub execution_intent_digest: String,
     pub nonce_fingerprint: String,
     pub issued_at_unix: i64,
+    pub max_attestation_age_seconds: u64,
+    pub max_future_skew_seconds: u64,
     pub attestation_digest: String,
     pub signature_fingerprint: String,
 }
@@ -522,6 +548,8 @@ impl AuthorizedPrincipalRegistry {
             execution_intent_digest,
             attestation.nonce.clone(),
             attestation.ts,
+            max_age_seconds,
+            max_future_skew_seconds,
             attestation_digest,
             signature_fingerprint,
         ))
@@ -924,6 +952,14 @@ mod tests {
         );
         assert_eq!(first.nonce(), "nonce-registry-test-0001");
         assert_eq!(first.issued_at_unix(), NOW - 5);
+        assert_eq!(
+            first.max_attestation_age_seconds(),
+            DEFAULT_MAX_ATTESTATION_AGE_SECONDS
+        );
+        assert_eq!(
+            first.max_future_skew_seconds(),
+            DEFAULT_MAX_FUTURE_SKEW_SECONDS
+        );
         assert!(first.attestation_digest().starts_with("sha256:"));
         assert!(first.signature_fingerprint().starts_with("sha256:"));
 

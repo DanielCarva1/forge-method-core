@@ -14,17 +14,18 @@
 //! - **honest** — removing the adapter leaves the CLI unchanged.
 //!
 //! Mutation is deliberately different: verified authority is non-serializable
-//! and may cross only the typed, in-process executor seam. P4b.2a implements
-//! and tests that dormant seam but keeps the public stdio mutation path blocked.
+//! and may cross only the typed, in-process executor seam. P4b.2b carries it
+//! through dormant replay-bound late Admission but still exposes no public
+//! stdio mutation path.
 //!
 //! # Enforcement order (per `tools/call`)
 //!
 //! 1. **Allowlist** — tool name must be in the Allowlist, else fail-closed
 //!    (ADR-0006 Decision 3).
 //! 2. **MCP stdio mutation boundary** — mutating tools remain blocked while
-//!    replay reservation, prepared late admission, provenance, and recovery
-//!    are incomplete. Opaque authorization and a typed executor seam do not
-//!    lift this process-security policy by themselves.
+//!    provenance, effect commit, replay reconciliation, and explicit
+//!    enablement are incomplete. Opaque authorization and dormant late
+//!    Admission do not lift this process-security policy by themselves.
 //! 3. **Read-only attestation policy** — optionally require/verify a
 //!    signature-only attestation for non-mutating calls.
 //! 4. **Invoke** — spawn only the admitted read-only subprocess, capture the
@@ -72,8 +73,8 @@ pub struct McpServerConfig {
     /// exposes a mutating tool; caller-selected keys never populate it.
     pub principal_registry: Option<AuthorizedPrincipalRegistry>,
     /// Trusted in-process executor for verified mutation calls. The public
-    /// stdio surface remains disabled even when this is configured; P4b.2a
-    /// only establishes the non-subprocess handoff seam.
+    /// stdio surface remains disabled even when this is configured; P4b.2b is
+    /// still a dormant pre-commit kernel path.
     pub mutation_executor: Option<Arc<dyn McpMutationExecutor>>,
     /// Maximum accepted age for mutating attestations.
     pub max_attestation_age_seconds: u64,
@@ -112,9 +113,9 @@ impl McpServerConfig {
     ///
     /// Returns [`McpAdapterError::Config`] if mutation is exposed, the binary
     /// is not an absolute pinned path, or the repo-scoped root is absent or
-    /// relative. P4b.2a validates opaque identity and the in-process executor
-    /// shape, but live stdio mutation remains disabled until replay and late
-    /// kernel admission are integrated.
+    /// relative. P4b.2b validates the dormant replay-bound late-admission path,
+    /// but live stdio mutation remains disabled until provenance, commit, and
+    /// crash reconciliation are integrated.
     pub fn validate_process_security(&self) -> Result<(), McpAdapterError> {
         let exposes_mutation = self.allowlist.iter().any(|tool| tool.policy.is_mutate());
         if exposes_mutation && self.principal_registry.is_none() {
@@ -130,7 +131,7 @@ impl McpServerConfig {
         }
         if exposes_mutation {
             return Err(McpAdapterError::Config(
-                "mutating MCP stdio remains disabled after P4b.2a until replay reservation and late kernel Execution Admission are enforced"
+                "mutating MCP stdio remains disabled after P4b.2b until provenance, effect commit, replay reconciliation, and explicit enablement are enforced"
                     .to_owned(),
             ));
         }
@@ -621,8 +622,8 @@ impl ServerHandler for ForgeMcpServer {
         info.instructions = Some(
             "Forge Method MCP adapter. Read-only tools are pass-throughs over \
              `forge-core` CLI commands. MCP stdio mutation remains disabled \
-             after P4b.2a until replay reservation and late kernel Execution \
-             Admission are enforced."
+             after P4b.2b until provenance, effect commit, replay \
+             reconciliation, and explicit enablement are enforced."
                 .into(),
         );
         info
@@ -674,7 +675,7 @@ impl ForgeMcpServer {
         if is_mutate {
             return Ok(rejection_result(
                 &tool_name,
-                "mutating MCP stdio is disabled after P4b.2a until replay reservation and late kernel Execution Admission are enforced",
+                "mutating MCP stdio is disabled after P4b.2b until provenance, effect commit, replay reconciliation, and explicit enablement are enforced",
             ));
         }
         let argv = arguments_to_argv(request.arguments.as_ref());
@@ -752,7 +753,7 @@ fn mcp_tool_descriptor(allowed: &crate::allowlist::AllowedTool) -> Tool {
         .into(),
         AllowlistPolicy::Mutate => format!(
             "Forge `{usage}` command (mutate). MCP stdio invocation is currently \
-             blocked after P4b.2a pending replay reservation and late kernel Execution Admission; \
+             blocked after P4b.2b pending provenance, effect commit, replay reconciliation, and explicit enablement; \
              output mode: {json_mode}."
         )
         .into(),
@@ -1195,8 +1196,8 @@ mod tests {
         let envelope = "{}";
         let bin = make_fake_forge_core(true, envelope);
         let server = ForgeMcpServer::new(mutate_config_with_fake_binary(bin));
-        // P4b.2a can retain opaque authority in-process, but the stdio mutation
-        // surface remains disabled until replay + late admission are integrated.
+        // P4b.2b can retain replay-bound late Admission internally, but the
+        // stdio surface remains disabled until commit/recovery are integrated.
         let mut req = CallToolRequestParams::new("execute-operation");
         let mut arguments = JsonObject::new();
         arguments.insert("--operation".into(), serde_json::json!("/tmp/op.yaml"));
@@ -1355,8 +1356,8 @@ mod tests {
             .expect_err("P4b.2a seam must not enable public stdio mutation");
 
         assert!(matches!(rejection, McpAdapterError::Config(_)));
-        assert!(rejection.to_string().contains("disabled after P4b.2a"));
-        assert!(rejection.to_string().contains("late kernel"));
+        assert!(rejection.to_string().contains("disabled after P4b.2b"));
+        assert!(rejection.to_string().contains("replay reconciliation"));
     }
 
     #[test]
