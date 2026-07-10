@@ -1,0 +1,18 @@
+[package]
+name = "forge-core-authority"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+forge-core-command-surface = { path = "../forge-core-command-surface" }
+forge-core-contracts = { path = "../forge-core-contracts" }
+ed25519-dalek.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_json_canonicalizer.workspace = true
+sha2.workspace = true
+yaml_serde.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+rand = "0.8"

@@ -1,0 +1,99 @@
+schema_version: "0.1"
+spec: "execution_authority_handoff_v0"
+status: "p4b2a_implemented_dormant"
+purpose: >-
+  Preserve verified execution authority as a non-forgeable in-memory capability
+  from operator-owned credential verification to a typed host executor without
+  serializing authority into MCP arguments, environment variables, files, or a
+  child process.
+
+authority_crate:
+  name: "forge-core-authority"
+  host_neutral: true
+  transport_dependencies: []
+  owns:
+    - "canonical detached-attestation verification"
+    - "strict operator-owned principal-registry validation"
+    - "registry-backed execution authorization"
+    - "opaque verified execution capability and redacted audit projection"
+    - "host-neutral structured execution request, linear call, executor trait, and result"
+  compatibility_projection:
+    crate: "forge-core-protocol-mcp"
+    modules:
+      - "attestation"
+      - "principal_registry"
+
+opaque_capability:
+  rust_type: "forge_core_authority::VerifiedExecutionAuthorization"
+  construction: >-
+    Only AuthorizedPrincipalRegistry::authorize_execution may construct it,
+    after exact execute-operation tool, credential status, registry key,
+    audience, freshness, authority grant, signature, and execution-intent
+    digest checks pass.
+  properties:
+    - "private fields"
+    - "no public constructor"
+    - "not Clone"
+    - "not Serialize"
+    - "not Deserialize"
+    - "redacted Debug"
+  raw_secret_policy:
+    - "raw nonce and raw signature never appear in Debug or the audit DTO"
+    - "audit output carries only domain-separated fingerprints and trusted identifiers"
+
+adapter_handoff:
+  trait: "forge_core_authority::ExecutionExecutor"
+  call_type: "forge_core_authority::VerifiedExecutionCall"
+  request_type: "forge_core_authority::ExecutionRequest"
+  mcp_compatibility_aliases:
+    - "McpMutationExecutor"
+    - "VerifiedMcpExecutionCall"
+    - "McpExecutionRequest"
+  execution_rule: "implementations must call the trusted kernel in-process"
+  allowed_request_fields:
+    - "operation contract ref"
+    - "command contract refs"
+    - "at most one effect contract ref"
+    - "payload target/path bindings"
+    - "risk-audit rules ref"
+    - "require-citation flag"
+  caller_authority_controls_rejected:
+    - "project root"
+    - "durability or no-sync selection"
+    - "payload scope escape"
+    - "payload-size ceiling"
+    - "transaction id or prefix"
+    - "recorded-at or commit timestamp"
+    - "output-mode flags"
+    - "unknown arguments"
+
+public_surface:
+  mcp_stdio_mutation: "disabled_fail_closed"
+  read_only_subprocesses: "unchanged"
+  reason: >-
+    P4b.2a proves only an opaque capability and dormant in-process handoff.
+    Replay reservation, prepared late kernel admission, provenance persistence,
+    effect/replay crash reconciliation, and an explicit enablement decision are
+    still required.
+
+executable_evidence:
+  - "compile-fail tests reject deserialization and cloning of the authority capability"
+  - "compile-fail tests reject deserialization and cloning of the host-neutral verified execution call"
+  - "registry tests cover revoked, unregistered, wrong-audience, stale, and non-execution authorization"
+  - "argument tests reject every caller-controlled authority knob"
+  - "a private dispatch test delivers one verified call to an injected executor exactly once and proves no CLI child was spawned"
+  - "startup and public-handler tests keep mutating MCP stdio disabled even with a registry and executor"
+
+next_boundary:
+  id: "P4b.2b-prepared-transaction-and-late-admission"
+  required:
+    - "trusted kernel derives project, effect-lock, replay, and commit-descriptor authority"
+    - "opaque authorization survives through prepared transaction state"
+    - "Execution Admission runs immediately before the first effect-WAL record"
+    - "public MCP mutation remains blocked"
+
+references:
+  - "contracts/spec/execution-admission-v0.yaml"
+  - "contracts/spec/execution-trust-boundary-v0.yaml"
+  - "contracts/spec/replay-protection-wal-v0.yaml"
+  - "contracts/plan/agent-native-guidance-plan.yaml"

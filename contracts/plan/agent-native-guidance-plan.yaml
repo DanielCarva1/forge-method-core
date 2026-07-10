@@ -40,6 +40,8 @@ delivery_strategy:
       scope: "P4a deterministic fail-closed Execution Admission policy decision point and executable acceptance corpus"
     - commit: "fc6aabd"
       scope: "P4b.1a operator-owned principal registry, trusted identity derivation, and hardened read-only MCP subprocess boundary"
+    - commit: "8bc03eb"
+      scope: "P4b.1b bounded durable replay WAL and effect-lock-first commit guard substrate"
   preserve:
     - "Command Surface"
     - "typed contracts"
@@ -150,23 +152,30 @@ phases:
           the explicit initializer and needs an externally protected epoch/head
           or initialization policy. Runtime reserve never recreates a missing
           pair.
+      - id: "P4b.2a-opaque-authority-and-in-process-seam"
+        delivers:
+          - "host-neutral forge-core-authority crate for attestation, principal registry, and execution authorization"
+          - "opaque non-cloneable and non-deserializable VerifiedExecutionAuthorization with redacted audit projection"
+          - "typed VerifiedMcpExecutionCall and injected in-process executor with no mutation subprocess fallback"
+          - "structural rejection of caller-selected root, durability, payload scope/limits, transaction identity, commit time, and unknown arguments"
+        boundary: >-
+          The seam is dormant and exercised only by direct internal tests.
+          Public MCP stdio mutation remains fail-closed until replay reservation,
+          prepared late admission, provenance, recovery, and an explicit
+          enablement decision land.
     checkpoint_sequence:
       rule: >-
         P4b.2a, P4b.2b, and P4b.2c each land as a separate validated commit so
         source users can fast-forward pull a usable checkpoint without
         implicitly enabling the next authority boundary.
     next_slice:
-      id: "P4b.2a-opaque-authority-and-in-process-seam"
+      id: "P4b.2b-prepared-transaction-and-late-admission"
       scope:
-        - "seal verified execution authorization behind private fields and no caller deserialization"
-        - "introduce an adapter-neutral in-process mutation executor seam"
+        - "retain project, effect, replay, claim, and gate authority through the commit boundary"
+        - "prepare and revalidate the transaction before the first effect-WAL record"
+        - "evaluate Execution Admission at that late boundary"
         - "keep public MCP mutation blocked"
     following_slices:
-      - id: "P4b.2b-prepared-transaction-and-late-admission"
-        scope:
-          - "retain project, effect, replay, claim, and gate authority through the commit boundary"
-          - "prepare and revalidate the transaction before the first effect-WAL record"
-          - "evaluate Execution Admission at that late boundary and keep public MCP mutation blocked"
       - id: "P4b.2c-provenance-commit-and-recovery"
         scope:
           - "persist principal, intent, replay, claim, gate, and admission provenance in WAL and evidence"
@@ -225,13 +234,13 @@ first_executable_slice:
     - "P4a scenario corpus for principal, replay, snapshot, evidence, tampering, and commit failures"
     - "P4b.1a operator-owned MCP principal registry and fail-closed stdio mutation boundary"
     - "P4b.1b bounded durable replay WAL and effect-lock-first commit guard Rust substrate"
+    - "P4b.2a host-neutral opaque execution authorization and typed in-process MCP executor seam"
   next_action: >-
-    Seal verified authorization and introduce an adapter-neutral in-process
-    executor seam in P4b.2a while public MCP mutation stays blocked. Then build
-    the prepared late-admission transaction in P4b.2b and provenance, commit,
-    and crash reconciliation in P4b.2c. Keep operation-wide transaction or
-    complete saga semantics and enforced-deployment isolation as explicit
-    release boundaries.
+    Build the prepared transaction and late Execution Admission boundary in
+    P4b.2b while public MCP mutation stays blocked. Then add provenance,
+    one-effect commit, and crash reconciliation in P4b.2c. Keep operation-wide
+    transaction or complete saga semantics and enforced-deployment isolation
+    as explicit release boundaries.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

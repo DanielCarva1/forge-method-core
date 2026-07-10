@@ -3,29 +3,28 @@
 //!
 //! # Architecture
 //!
-//! Each MCP tool is a pass-through over a `forge-core` CLI command. Because
-//! the CLI command handlers emit their `CliEnvelope` directly to stdout
-//! (e.g. `memory_cmd.rs` `emit()`), the adapter invokes commands as
-//! **subprocesses** (`forge-core <command> <args> --json`) and captures the
-//! JSON envelope from the child's stdout. This is:
+//! Read-only MCP tools are pass-throughs over `forge-core` CLI commands. The
+//! adapter invokes those commands as pinned **subprocesses**
+//! (`forge-core <command> <args> --json`) and captures the JSON envelope from
+//! the child's stdout. This is:
 //!
 //! - **thread-safe** — each tool call is an isolated process, so concurrent
 //!   `tools/call` requests do not share global stdout state;
 //! - **isolated** — a panicking command handler cannot poison the MCP server;
-//! - **honest** — it literally is an adapter over the CLI (the deletion test:
-//!   remove the adapter, the CLI still works unchanged).
+//! - **honest** — removing the adapter leaves the CLI unchanged.
 //!
-//! The `forge-core` binary is guaranteed present because the MCP server itself
-//! runs as `forge-core mcp serve`.
+//! Mutation is deliberately different: verified authority is non-serializable
+//! and may cross only the typed, in-process executor seam. P4b.2a implements
+//! and tests that dormant seam but keeps the public stdio mutation path blocked.
 //!
 //! # Enforcement order (per `tools/call`)
 //!
 //! 1. **Allowlist** — tool name must be in the Allowlist, else fail-closed
 //!    (ADR-0006 Decision 3).
 //! 2. **MCP stdio mutation boundary** — mutating tools remain blocked while
-//!    P4b durable replay, principal propagation, and late kernel admission are
-//!    incomplete. The principal registry is implemented and tested as a
-//!    substrate; it does not lift this process-security policy by itself.
+//!    replay reservation, prepared late admission, provenance, and recovery
+//!    are incomplete. Opaque authorization and a typed executor seam do not
+//!    lift this process-security policy by themselves.
 //! 3. **Read-only attestation policy** — optionally require/verify a
 //!    signature-only attestation for non-mutating calls.
 //! 4. **Invoke** — spawn only the admitted read-only subprocess, capture the
@@ -35,7 +34,6 @@ use std::future::Future;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
-#[cfg(test)]
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use forge_core_command_surface::{command_by_name, JsonMode};
@@ -50,10 +48,14 @@ use crate::allowlist::{Allowlist, AllowlistPolicy};
 use crate::attestation::{AttestationPolicy, AttestationVerifier};
 use crate::error::{McpAdapterError, ServerRunError};
 #[cfg(test)]
-use crate::principal_registry::AuthorizedPrincipal;
+use crate::mutation_executor::VerifiedMcpExecutionCall;
+use crate::mutation_executor::{
+    verified_call_from_arguments, McpMutationExecutionResult, McpMutationExecutor,
+    MCP_EXECUTE_OPERATION_TOOL,
+};
 use crate::principal_registry::{
-    AuthorizedPrincipalRegistry, DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
-    DEFAULT_MAX_FUTURE_SKEW_SECONDS,
+    AuthorizedPrincipalRegistry, VerifiedExecutionAuthorization,
+    DEFAULT_MAX_ATTESTATION_AGE_SECONDS, DEFAULT_MAX_FUTURE_SKEW_SECONDS,
 };
 
 /// Configuration for a [`ForgeMcpServer`] instance.
@@ -69,6 +71,10 @@ pub struct McpServerConfig {
     /// Operator-owned credential registry. Required whenever the Allowlist
     /// exposes a mutating tool; caller-selected keys never populate it.
     pub principal_registry: Option<AuthorizedPrincipalRegistry>,
+    /// Trusted in-process executor for verified mutation calls. The public
+    /// stdio surface remains disabled even when this is configured; P4b.2a
+    /// only establishes the non-subprocess handoff seam.
+    pub mutation_executor: Option<Arc<dyn McpMutationExecutor>>,
     /// Maximum accepted age for mutating attestations.
     pub max_attestation_age_seconds: u64,
     /// Maximum accepted future clock skew for mutating attestations.
@@ -91,6 +97,7 @@ impl McpServerConfig {
             allowlist: Allowlist::default_read_only(),
             attestation: AttestationVerifier::new(AttestationPolicy::Default),
             principal_registry: None,
+            mutation_executor: None,
             max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
             max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
             forge_core_binary: std::env::current_exe()
@@ -105,8 +112,9 @@ impl McpServerConfig {
     ///
     /// Returns [`McpAdapterError::Config`] if mutation is exposed, the binary
     /// is not an absolute pinned path, or the repo-scoped root is absent or
-    /// relative. P4b.1 validates operator identity, but live stdio mutation
-    /// remains disabled until durable replay and kernel admission handoff land.
+    /// relative. P4b.2a validates opaque identity and the in-process executor
+    /// shape, but live stdio mutation remains disabled until replay and late
+    /// kernel admission are integrated.
     pub fn validate_process_security(&self) -> Result<(), McpAdapterError> {
         let exposes_mutation = self.allowlist.iter().any(|tool| tool.policy.is_mutate());
         if exposes_mutation && self.principal_registry.is_none() {
@@ -114,9 +122,15 @@ impl McpServerConfig {
                 "mutating MCP allowlist requires an operator principal registry".to_owned(),
             ));
         }
+        if exposes_mutation && self.mutation_executor.is_none() {
+            return Err(McpAdapterError::Config(
+                "mutating MCP stdio remains disabled: no trusted in-process mutation executor is configured"
+                    .to_owned(),
+            ));
+        }
         if exposes_mutation {
             return Err(McpAdapterError::Config(
-                "mutating MCP stdio remains disabled until durable replay and late kernel Execution Admission are enforced"
+                "mutating MCP stdio remains disabled after P4b.2a until replay reservation and late kernel Execution Admission are enforced"
                     .to_owned(),
             ));
         }
@@ -255,12 +269,11 @@ impl ForgeMcpServer {
         self.config.attestation.verify(&intent, att)
     }
 
-    #[cfg(test)]
     fn authorize_mutating_request(
         &self,
         request: &CallToolRequestParams,
         tool_name: &str,
-    ) -> Result<AuthorizedPrincipal, McpAdapterError> {
+    ) -> Result<VerifiedExecutionAuthorization, McpAdapterError> {
         let attestation = match extract_attestation(request) {
             Some(Ok(attestation)) => attestation,
             Some(Err(error)) => {
@@ -284,7 +297,7 @@ impl ForgeMcpServer {
         })?;
         let intent = canonical_intent(request, tool_name, &attestation);
         registry
-            .authorize(
+            .authorize_execution(
                 &self.config.attestation,
                 &intent,
                 &attestation,
@@ -296,6 +309,43 @@ impl ForgeMcpServer {
                 tool: tool_name.to_owned(),
                 reason: error.to_string(),
             })
+    }
+
+    /// Dormant P4b.2a dispatch seam. The public [`ServerHandler`] path never
+    /// calls this while stdio mutation is disabled. Tests exercise it directly
+    /// to prove that verified authority stays in memory and reaches only the
+    /// injected executor, never the read-only subprocess path.
+    #[allow(dead_code)]
+    fn dispatch_mutation_in_process(
+        &self,
+        request: &CallToolRequestParams,
+        tool_name: &str,
+    ) -> Result<McpMutationExecutionResult, McpAdapterError> {
+        let policy =
+            self.lookup_tool(tool_name)
+                .ok_or_else(|| McpAdapterError::DeniedByAllowlist {
+                    tool: tool_name.to_owned(),
+                    reason: "tool not in allowlist".to_owned(),
+                })?;
+        if !policy.is_mutate() || tool_name != MCP_EXECUTE_OPERATION_TOOL {
+            return Err(McpAdapterError::DeniedByMutateGate {
+                tool: tool_name.to_owned(),
+                reason:
+                    "typed in-process execution supports only the mutating execute-operation tool"
+                        .to_owned(),
+            });
+        }
+        let authorization = self.authorize_mutating_request(request, tool_name)?;
+        let call = verified_call_from_arguments(authorization, request.arguments.as_ref())
+            .map_err(|error| McpAdapterError::ArgumentMapping(error.to_string()))?;
+        let executor = self.config.mutation_executor.as_ref().ok_or_else(|| {
+            McpAdapterError::Config(
+                "trusted in-process mutation executor is not configured".to_owned(),
+            )
+        })?;
+        executor
+            .execute(call)
+            .map_err(|error| McpAdapterError::MutationExecution(error.to_string()))
     }
 
     /// Invoke a tool as a subprocess and return the captured `CliEnvelope`
@@ -487,7 +537,6 @@ fn canonical_intent(
     }
 }
 
-#[cfg(test)]
 fn current_unix_seconds() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -570,9 +619,10 @@ impl ServerHandler for ForgeMcpServer {
         let mut info = ServerInfo::new(capabilities);
         info.server_info = Implementation::new("forge-core-mcp", env!("CARGO_PKG_VERSION"));
         info.instructions = Some(
-            "Forge Method MCP adapter. Tools are pass-throughs over \
+            "Forge Method MCP adapter. Read-only tools are pass-throughs over \
              `forge-core` CLI commands. MCP stdio mutation remains disabled \
-             until durable replay and late kernel Execution Admission are enforced."
+             after P4b.2a until replay reservation and late kernel Execution \
+             Admission are enforced."
                 .into(),
         );
         info
@@ -624,7 +674,7 @@ impl ForgeMcpServer {
         if is_mutate {
             return Ok(rejection_result(
                 &tool_name,
-                "mutating MCP stdio is disabled until durable replay and late kernel Execution Admission are enforced",
+                "mutating MCP stdio is disabled after P4b.2a until replay reservation and late kernel Execution Admission are enforced",
             ));
         }
         let argv = arguments_to_argv(request.arguments.as_ref());
@@ -674,7 +724,9 @@ impl ForgeMcpServer {
                 format!("argument mapping failed: {m}"),
                 None,
             )),
-            Err(McpAdapterError::Config(m)) => Err(ErrorData::internal_error(m, None)),
+            Err(McpAdapterError::MutationExecution(m) | McpAdapterError::Config(m)) => {
+                Err(ErrorData::internal_error(m, None))
+            }
         }
     }
 }
@@ -700,7 +752,7 @@ fn mcp_tool_descriptor(allowed: &crate::allowlist::AllowedTool) -> Tool {
         .into(),
         AllowlistPolicy::Mutate => format!(
             "Forge `{usage}` command (mutate). MCP stdio invocation is currently \
-             blocked pending durable replay and late kernel Execution Admission; \
+             blocked after P4b.2a pending replay reservation and late kernel Execution Admission; \
              output mode: {json_mode}."
         )
         .into(),
@@ -735,6 +787,36 @@ fn extract_exit_reason(envelope_json: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct RecordedMutationCall {
+        principal_id: String,
+        operation_contract_ref: PathBuf,
+        execution_intent_digest: String,
+    }
+
+    #[derive(Debug)]
+    struct RecordingMutationExecutor {
+        calls: Arc<std::sync::Mutex<Vec<RecordedMutationCall>>>,
+    }
+
+    impl McpMutationExecutor for RecordingMutationExecutor {
+        fn execute(
+            &self,
+            call: VerifiedMcpExecutionCall,
+        ) -> Result<McpMutationExecutionResult, crate::McpMutationExecutionError> {
+            let recorded = RecordedMutationCall {
+                principal_id: call.authorization().principal().principal_id().0.clone(),
+                operation_contract_ref: call.request().operation_contract_ref().to_path_buf(),
+                execution_intent_digest: call.authorization().execution_intent_digest().to_owned(),
+            };
+            self.calls.lock().expect("recording lock").push(recorded);
+            Ok(McpMutationExecutionResult::new(
+                crate::McpMutationExecutionStatus::Applied,
+                serde_json::json!({"source": "in-process-test-executor"}),
+            ))
+        }
+    }
+
     /// A tiny helper: build a config that points at a fake "forge-core"
     /// binary (a script) so `invoke_tool` can be exercised without the real
     /// CLI. The fake echoes a fixed envelope.
@@ -747,6 +829,7 @@ mod tests {
             allowlist: Allowlist::default_read_only(),
             attestation: AttestationVerifier::new(AttestationPolicy::Default),
             principal_registry: None,
+            mutation_executor: None,
             max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
             max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
             forge_core_binary: fake_path,
@@ -805,6 +888,58 @@ mod tests {
         let mut f = std::fs::File::create(&path).unwrap();
         f.write_all(body.as_bytes()).unwrap();
         path
+    }
+
+    #[cfg(unix)]
+    fn make_spawn_marker_forge_core() -> (PathBuf, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!(
+            "forge-p4b2a-spawn-marker-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("time after epoch")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).expect("marker directory");
+        let marker = dir.join("subprocess-spawned.marker");
+        let binary = dir.join("forge-core");
+        std::fs::write(
+            &binary,
+            format!(
+                "#!/bin/sh\nprintf spawned > \"{}\"\necho '{{}}'\n",
+                marker.display()
+            ),
+        )
+        .expect("marker fake binary");
+        let mut permissions = std::fs::metadata(&binary).expect("metadata").permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&binary, permissions).expect("permissions");
+        (binary, marker)
+    }
+
+    #[cfg(windows)]
+    fn make_spawn_marker_forge_core() -> (PathBuf, PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "forge-p4b2a-spawn-marker-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("time after epoch")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).expect("marker directory");
+        let marker = dir.join("subprocess-spawned.marker");
+        let binary = dir.join("forge-core.bat");
+        std::fs::write(
+            &binary,
+            format!(
+                "@echo off\r\necho spawned>\"{}\"\r\necho {{}}\r\n",
+                marker.display()
+            ),
+        )
+        .expect("marker fake binary");
+        (binary, marker)
     }
 
     #[test]
@@ -894,6 +1029,7 @@ mod tests {
                 crate::attestation::AttestationPolicy::Default,
             ),
             principal_registry: None,
+            mutation_executor: None,
             max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
             max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
             forge_core_binary: bin,
@@ -939,6 +1075,17 @@ mod tests {
         }
     }
 
+    fn registered_mutate_config_with_executor(
+        bin: PathBuf,
+        signing_key: &ed25519_dalek::SigningKey,
+        executor: Arc<dyn McpMutationExecutor>,
+    ) -> McpServerConfig {
+        McpServerConfig {
+            mutation_executor: Some(executor),
+            ..registered_mutate_config(bin, signing_key)
+        }
+    }
+
     /// Like `config_with_fake_binary` (read-only allowlist) but with the
     /// hardened `RequireAll` policy: attestation is required for ALL tools,
     /// read-only included.
@@ -950,6 +1097,7 @@ mod tests {
                 crate::attestation::AttestationPolicy::RequireAll,
             ),
             principal_registry: None,
+            mutation_executor: None,
             max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
             max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
             forge_core_binary: bin,
@@ -1047,8 +1195,8 @@ mod tests {
         let envelope = "{}";
         let bin = make_fake_forge_core(true, envelope);
         let server = ForgeMcpServer::new(mutate_config_with_fake_binary(bin));
-        // P4b.1 can derive identity, but the stdio mutation surface remains
-        // disabled until replay + late kernel admission are integrated.
+        // P4b.2a can retain opaque authority in-process, but the stdio mutation
+        // surface remains disabled until replay + late admission are integrated.
         let mut req = CallToolRequestParams::new("execute-operation");
         let mut arguments = JsonObject::new();
         arguments.insert("--operation".into(), serde_json::json!("/tmp/op.yaml"));
@@ -1073,15 +1221,80 @@ mod tests {
             current_unix_seconds(),
         );
         let req = request_with_attestation("execute-operation", args, att);
-        let principal = server
+        let authorization = server
             .authorize_mutating_request(&req, "execute-operation")
-            .expect("registry-authorized principal");
-        assert_eq!(principal.principal_id.0, "principal.codex-main");
-        assert_eq!(principal.agent_id.0, "codex-main");
+            .expect("registry-authorized execution");
+        assert_eq!(
+            authorization.principal().principal_id().0,
+            "principal.codex-main"
+        );
+        assert_eq!(authorization.principal().agent_id().0, "codex-main");
 
         let result = server.handle_call_tool(req).expect("tool result");
         assert!(result.is_error.unwrap_or(false));
         assert!(content_text(&result).contains("mutating MCP stdio is disabled"));
+    }
+
+    #[test]
+    fn verified_call_reaches_in_process_executor_once_without_subprocess_spawn() {
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&[11; 32]);
+        let (binary, spawn_marker) = make_spawn_marker_forge_core();
+        let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let executor = Arc::new(RecordingMutationExecutor {
+            calls: Arc::clone(&calls),
+        });
+        let config = registered_mutate_config_with_executor(binary, &signing_key, executor);
+        let server = ForgeMcpServer::new(config);
+
+        let mut arguments = JsonObject::new();
+        arguments.insert("--operation".into(), serde_json::json!("contracts/op.yaml"));
+        arguments.insert(
+            "--effect".into(),
+            serde_json::json!("contracts/effect.yaml"),
+        );
+        let attestation = sign_registered_mutation(
+            &signing_key,
+            serde_json::Value::Object(arguments.clone()),
+            "nonce-in-process-0001",
+            current_unix_seconds(),
+        );
+        let request =
+            request_with_attestation(MCP_EXECUTE_OPERATION_TOOL, arguments.clone(), attestation);
+
+        let result = server
+            .dispatch_mutation_in_process(&request, MCP_EXECUTE_OPERATION_TOOL)
+            .expect("private in-process dispatch");
+        assert_eq!(result.status(), crate::McpMutationExecutionStatus::Applied);
+        assert_eq!(result.payload()["source"], "in-process-test-executor");
+        assert!(!spawn_marker.exists(), "mutation must not spawn CLI child");
+
+        let recorded = calls.lock().expect("recorded calls");
+        assert_eq!(recorded.len(), 1);
+        assert_eq!(recorded[0].principal_id, "principal.codex-main");
+        assert_eq!(
+            recorded[0].operation_contract_ref,
+            PathBuf::from("contracts/op.yaml")
+        );
+        assert_eq!(
+            recorded[0].execution_intent_digest,
+            format!("sha256:{}", "b".repeat(64))
+        );
+        drop(recorded);
+
+        let public_result = server
+            .handle_call_tool(request)
+            .expect("public handler rejection");
+        assert!(public_result.is_error.unwrap_or(false));
+        assert!(content_text(&public_result).contains("mutating MCP stdio is disabled"));
+        assert_eq!(calls.lock().expect("recorded calls").len(), 1);
+        assert!(
+            !spawn_marker.exists(),
+            "public rejection must not spawn child"
+        );
+
+        if let Some(directory) = spawn_marker.parent() {
+            std::fs::remove_dir_all(directory).expect("clean marker directory");
+        }
     }
 
     #[test]
@@ -1119,14 +1332,31 @@ mod tests {
     }
 
     #[test]
-    fn mutating_server_startup_remains_disabled_with_registry() {
+    fn mutating_server_startup_requires_in_process_executor_after_registry() {
         let signing_key = ed25519_dalek::SigningKey::from_bytes(&[11; 32]);
         let bin = make_fake_forge_core(true, "{}");
         let rejection = ForgeMcpServer::try_new(registered_mutate_config(bin, &signing_key))
-            .expect_err("P4b.1 identity alone must not enable stdio mutation");
+            .expect_err("registry without trusted executor must fail startup");
 
         assert!(matches!(rejection, McpAdapterError::Config(_)));
-        assert!(rejection.to_string().contains("durable replay"));
+        assert!(rejection
+            .to_string()
+            .contains("in-process mutation executor"));
+    }
+
+    #[test]
+    fn mutating_server_startup_remains_disabled_with_registry_and_executor() {
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&[11; 32]);
+        let bin = make_fake_forge_core(true, "{}");
+        let calls = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let executor = Arc::new(RecordingMutationExecutor { calls });
+        let config = registered_mutate_config_with_executor(bin, &signing_key, executor);
+        let rejection = ForgeMcpServer::try_new(config)
+            .expect_err("P4b.2a seam must not enable public stdio mutation");
+
+        assert!(matches!(rejection, McpAdapterError::Config(_)));
+        assert!(rejection.to_string().contains("disabled after P4b.2a"));
+        assert!(rejection.to_string().contains("late kernel"));
     }
 
     #[test]

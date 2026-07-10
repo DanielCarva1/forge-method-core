@@ -527,9 +527,10 @@ deterministic issue blocks admission and is returned for agent self-correction.
 The executable corpus lives under `docs/fixtures/execution-admission-v0/`.
 
 This pure decision is intentionally **not yet** the kernel mutation gate. P4b.1a
-makes the MCP Adapter derive a trusted principal from an operator registry and
-P4b.1b provides a durable replay substrate in Rust. Neither is wired into a
-live mutation path; late kernel evaluation remains a separate checkpoint.
+made trusted identity derivable from an operator registry, P4b.1b added durable
+replay primitives, and P4b.2a now preserves verified authority through a typed
+in-process handoff. Public mutation and late kernel evaluation remain separate
+checkpoints.
 
 ### Prepare a trusted MCP principal registry (P4b.1a)
 
@@ -561,10 +562,10 @@ canonical call signature against that selected key. A caller-selected key and
 `AttestationPolicy::NeverRequired` cannot bypass mutation authorization.
 
 Loading any allowlist containing `policy: mutate` still fails closed, even with
-a valid registry. This checkpoint proves identity derivation only; it does not
-yet claim durable nonce consumption, a constrained principal handoff,
-propagation into claims/WAL/evidence, or the P4a verdict immediately before the
-first effect-WAL record.
+a valid registry. P4b.2a now provides the constrained authority handoff, but it
+does not yet claim durable nonce consumption, propagation into
+claims/WAL/evidence, or the P4a verdict immediately before the first effect-WAL
+record.
 
 Read-only tool subprocesses no longer resolve `forge-core` through `PATH` or
 inherit the host's full environment. The server pins its current executable,
@@ -572,9 +573,9 @@ uses the canonical repo root as cwd and `--root`, clears the environment before
 copying a small OS/runtime allowlist, and disconnects child stdin from the MCP
 protocol stream.
 
-**Migration note for Rust and custom MCP consumers.** P4b.1a added fields to
+**Migration note for Rust and custom MCP consumers.** P4b.1a and P4b.2a added fields to
 `McpServerConfig`, so Rust consumers that construct it with a struct literal
-must add the principal registry, freshness-window, pinned-binary, and root
+must add the principal registry, `mutation_executor`, freshness-window, pinned-binary, and root
 fields (prefer `McpServerConfig::default_read_only()` when possible). The new
 attestation fields are optional on the legacy read-only wire shape and are
 omitted when `None`. Any custom allowlist containing `policy: mutate` must
@@ -621,6 +622,34 @@ or consumes this WAL, and MCP stdio mutation remains disabled. See
 and
 [`contracts/spec/execution-trust-boundary-v0.yaml`](contracts/spec/execution-trust-boundary-v0.yaml)
 for the exact guarantees and remaining boundaries.
+
+### Preserve verified authority in-process (P4b.2a)
+
+`forge-core-authority` now owns detached attestation verification, the
+operator principal registry, and the opaque
+`VerifiedExecutionAuthorization` capability without depending on MCP or a host
+transport. The proof has private fields, no public constructor, and no
+`Clone`, `Serialize`, or `Deserialize` implementation. Its audit projection is
+redacted: raw nonce and signature material never leave the authority boundary.
+
+The MCP Adapter keeps its previous attestation and registry module paths as
+compatibility re-exports. The authority crate exposes the adapter-neutral
+`ExecutionExecutor`, which accepts one non-cloneable `VerifiedExecutionCall`
+in-process; MCP re-exports compatibility names such as `McpMutationExecutor`
+and `VerifiedMcpExecutionCall`. Its structured request admits only the
+operation, command/effect refs, payload bindings, risk-audit rules, and citation
+requirement. Caller-selected root, sync behavior, payload escape/size limits,
+transaction identity, commit timestamp, output flags, and unknown arguments
+are rejected before the executor.
+
+This seam is intentionally dormant. The public MCP handler and server startup
+still reject every mutating allowlist, even when both a registry and executor
+are configured; read-only tools retain the pinned subprocess path. Internal
+tests prove a valid proof reaches the injected executor exactly once without
+spawning a CLI child. P4b.2b must next derive and retain replay/effect/claim/gate
+authority in a prepared kernel transaction and run Execution Admission at the
+late pre-WAL boundary. See
+[`contracts/spec/execution-authority-handoff-v0.yaml`](contracts/spec/execution-authority-handoff-v0.yaml).
 
 ### Route work through the dual-lane autonomy router
 
@@ -791,9 +820,9 @@ gates.
 - Self-hardening batch landed: TTL-overflow safety, RFC-3339 calendar
   validation, lockfile stale-owner reclaim, WAL fsync hardening, path-safety,
   symlink escape checks, and TOCTOU revalidation.
-- P4b.1a trusted-principal derivation and P4b.1b bounded durable replay are
-  available as Rust substrates while the public MCP mutation surface remains
-  fail-closed.
+- P4b.1a trusted-principal derivation, P4b.1b bounded durable replay, and the
+  P4b.2a opaque in-process authority handoff are available as Rust substrates
+  while the public MCP mutation surface remains fail-closed.
 - Dual-lane autonomy router exposed as `forge-core autonomy route` for fast vs
   rigorous lane selection.
 - Seven evolve-phase governance contracts: `autonomy_policy`,
@@ -807,10 +836,11 @@ gates.
   JSON-RPC with a fail-closed allowlist and optional signature-only
   attestation. P4b.1a adds an operator principal registry, but mutating stdio
   tools remain blocked. P4b.1b adds durable replay primitives, but they are not
-  connected to MCP or CLI mutation. P4b.2 must still deliver an opaque
-  in-process principal/replay handoff, prepared late kernel Execution Admission,
-  persisted provenance, and crash reconciliation before any explicit
-  enablement decision. The CLI remains the intended agent boundary by design.
+  connected to MCP or CLI mutation. P4b.2a adds the opaque typed in-process
+  authority handoff without enabling it publicly. P4b.2b/P4b.2c must still
+  deliver replay-bound prepared late kernel Execution Admission, persisted
+  provenance, and crash reconciliation before any explicit enablement decision.
+  The CLI remains the intended agent boundary by design.
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is

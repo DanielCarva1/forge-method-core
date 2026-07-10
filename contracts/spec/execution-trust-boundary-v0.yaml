@@ -1,6 +1,6 @@
 schema_version: "0.1"
 spec: "execution_trust_boundary_v0"
-status: "p4b1b_cooperative_boundary"
+status: "p4b2a_cooperative_boundary"
 purpose: >-
   Separate the guarantees Forge can provide inside a trusted local process
   from the stronger isolation required to resist an agent that already has raw
@@ -12,20 +12,22 @@ current_mode:
     - "MCP stdio mutation is disabled fail-closed."
     - "Read-only MCP children use a pinned binary, canonical repo cwd, minimal environment, and null stdin."
     - "An operator-owned registry can derive trusted principal identity without accepting a caller-selected key."
+    - "Verified execute authority is an opaque, non-deserializable in-memory capability owned by a host-neutral crate."
+    - "A typed injected executor can receive the verified MCP call in-process without caller-selected root, durability, limits, transaction identity, or commit time."
     - "The Rust store exposes durable replay primitives for a future in-process mutation boundary."
   does_not_guarantee:
     - "confinement of a same-user agent that can invoke another mutating CLI or store path directly"
     - "protection from deletion or rollback by an agent with write access to the authority root"
     - "an end-to-end boundary spanning identity, replay, claims, gates, admission, effect commit, and evidence"
   required_description: >-
-    Until P4b.2 integration and an explicit enablement decision land, describe
+    Until the remaining P4b.2 integration and an explicit enablement decision land, describe
     Forge as cooperative governance with a fail-closed MCP mutation surface,
     not as a security sandbox or complete local privilege boundary.
 
 planned_trusted_process_mode:
   id: "trusted_in_process_mutation"
   sequence:
-    - "P4b.2a: introduce opaque verified authorization and an adapter-neutral in-process executor seam; keep public MCP mutation blocked."
+    - "P4b.2a completed: opaque verified authorization and a typed in-process executor seam are implemented and tested; public MCP mutation stays blocked."
     - "P4b.2b: retain project/effect/replay guards and evaluate a prepared transaction at the late pre-WAL boundary; keep public MCP mutation blocked."
     - "P4b.2c: persist principal and admission provenance, commit one effect, reconcile recovery, and prove an internal end-to-end path before any enablement decision."
   achievable_guarantee: >-
@@ -57,4 +59,5 @@ enablement_rule: >-
 references:
   - "contracts/policies/mcp-local-process-security-boundary.yaml"
   - "contracts/spec/execution-admission-v0.yaml"
+  - "contracts/spec/execution-authority-handoff-v0.yaml"
   - "contracts/spec/replay-protection-wal-v0.yaml"

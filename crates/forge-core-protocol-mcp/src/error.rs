@@ -32,6 +32,9 @@ pub enum McpAdapterError {
     /// Argument mapping failed (could not serialize/deserialize the MCP
     /// arguments into a CLI argv).
     ArgumentMapping(String),
+    /// A trusted in-process mutation executor rejected or failed a verified
+    /// call. The public stdio path does not produce this in P4b.2a.
+    MutationExecution(String),
     /// Configuration error (e.g. allowlist file unreadable, attestation key
     /// unparsable).
     Config(String),
@@ -61,6 +64,7 @@ impl fmt::Display for McpAdapterError {
                 )
             }
             Self::ArgumentMapping(m) => write!(f, "argument mapping failed: {m}"),
+            Self::MutationExecution(m) => write!(f, "in-process mutation execution failed: {m}"),
             Self::Config(m) => write!(f, "MCP adapter config error: {m}"),
         }
     }

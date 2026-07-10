@@ -316,6 +316,7 @@ fn run_serve(parsed: ServeArgs) -> Result<(), ExitError> {
         allowlist,
         attestation: AttestationVerifier::new(AttestationPolicy::Default),
         principal_registry,
+        mutation_executor: None,
         max_attestation_age_seconds: DEFAULT_MAX_ATTESTATION_AGE_SECONDS,
         max_future_skew_seconds: DEFAULT_MAX_FUTURE_SKEW_SECONDS,
         forge_core_binary,

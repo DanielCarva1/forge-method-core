@@ -124,5 +124,6 @@ current_boundary:
 
 references:
   - "contracts/spec/execution-admission-v0.yaml"
+  - "contracts/spec/execution-authority-handoff-v0.yaml"
   - "contracts/spec/execution-trust-boundary-v0.yaml"
   - "contracts/plan/agent-native-guidance-plan.yaml"

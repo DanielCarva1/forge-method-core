@@ -785,6 +785,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "forge-core-authority"
+version = "0.4.0"
+dependencies = [
+ "ed25519-dalek",
+ "forge-core-command-surface",
+ "forge-core-contracts",
+ "proptest",
+ "rand 0.8.6",
+ "serde",
+ "serde_json",
+ "serde_json_canonicalizer",
+ "sha2",
+ "yaml_serde",
+]
+
+[[package]]
 name = "forge-core-cli"
 version = "0.4.0"
 dependencies = [
@@ -976,16 +992,14 @@ name = "forge-core-protocol-mcp"
 version = "0.4.0"
 dependencies = [
  "ed25519-dalek",
+ "forge-core-authority",
  "forge-core-command-surface",
  "forge-core-contracts",
  "forge-core-validate",
- "proptest",
  "rand 0.8.6",
  "rmcp",
  "serde",
  "serde_json",
- "serde_json_canonicalizer",
- "sha2",
  "tokio",
  "tracing",
  "yaml_serde",

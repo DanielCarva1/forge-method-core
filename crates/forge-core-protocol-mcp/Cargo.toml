@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+forge-core-authority = { path = "../forge-core-authority" }
 forge-core-command-surface = { path = "../forge-core-command-surface" }
 forge-core-contracts = { path = "../forge-core-contracts" }
 forge-core-validate = { path = "../forge-core-validate" }
@@ -15,16 +16,13 @@ tokio = { workspace = true, features = ["rt", "io-util", "macros"] }
 rmcp = { workspace = true, features = ["transport-io"] }
 serde.workspace = true
 serde_json.workspace = true
-serde_json_canonicalizer.workspace = true
-ed25519-dalek.workspace = true
-sha2.workspace = true
 # Project-standard YAML crate (AGENTS.md: yaml_serde is the project standard;
 # serde_yaml/serde_yml are dev-only bench crates, NOT used in production).
 yaml_serde.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-proptest.workspace = true
+ed25519-dalek.workspace = true
 # For attestation sign/verify round-trip tests only. ed25519-dalek 2.x
 # re-exports `rand_core` traits; `rand` provides `OsRng`. Dev-only — not part
 # of the production build.
