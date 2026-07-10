@@ -66,6 +66,7 @@ const FORGE_STATE_DIR: &str = ".forge-method";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrustedExecutionEnvironment {
     project_root: PathBuf,
+    effect_store_root: PathBuf,
     state_root: PathBuf,
     required_audience: String,
 }
@@ -129,8 +130,22 @@ impl TrustedExecutionEnvironment {
                 source: "Forge state root is not a directory".to_owned(),
             });
         }
+        if state_root.file_name() != Some(std::ffi::OsStr::new(FORGE_STATE_DIR)) {
+            return Err(PrepareExecutionError::StateRootUnavailable {
+                path: state_root,
+                source: "Forge state root must be the .forge-method directory".to_owned(),
+            });
+        }
+        let effect_store_root = state_root
+            .parent()
+            .ok_or_else(|| PrepareExecutionError::StateRootUnavailable {
+                path: state_root.clone(),
+                source: "Forge state root has no effect-store parent".to_owned(),
+            })?
+            .to_path_buf();
         Ok(Self {
             project_root,
+            effect_store_root,
             state_root,
             required_audience,
         })
@@ -144,6 +159,14 @@ impl TrustedExecutionEnvironment {
     #[must_use]
     pub fn state_root(&self) -> &Path {
         &self.state_root
+    }
+
+    /// Root whose `.forge-method` child owns effect locks, WAL, metadata, and
+    /// state-backed effect targets. For embedded state this is the project;
+    /// for Project Link sidecars it is the resolved sidecar root.
+    #[must_use]
+    pub fn effect_store_root(&self) -> &Path {
+        &self.effect_store_root
     }
 
     #[must_use]
@@ -519,7 +542,7 @@ impl PreparedExecutionTransaction {
         source: &dyn LateExecutionSnapshotSource,
     ) -> Result<LateAdmissionOutcome, LateAdmissionError> {
         let final_preflight = preflight_file_effect_transaction_under_lock(
-            self.environment.project_root(),
+            self.environment.effect_store_root(),
             self.replay_guard.effect_lock(),
             PREPARED_EFFECT_LOCK_RELATIVE_PATH,
             &self.effect,
@@ -694,7 +717,7 @@ impl LateAdmittedExecutionTransaction {
         source: &dyn LateExecutionSnapshotSource,
     ) -> Result<ExecutionCommitOutcome, ExecutionCommitError> {
         let commit_preflight = preflight_file_effect_transaction_under_lock(
-            self.prepared.environment.project_root(),
+            self.prepared.environment.effect_store_root(),
             self.prepared.replay_guard.effect_lock(),
             PREPARED_EFFECT_LOCK_RELATIVE_PATH,
             &self.prepared.effect,
@@ -765,7 +788,7 @@ impl LateAdmittedExecutionTransaction {
             replay_reservation.revision,
         );
         let application = apply_file_effect_transaction_with_provenance_under_lock(
-            self.prepared.environment.project_root(),
+            self.prepared.environment.effect_store_root(),
             self.prepared.replay_guard.effect_lock(),
             PREPARED_EFFECT_LOCK_RELATIVE_PATH,
             &self.prepared.effect,
@@ -805,7 +828,7 @@ impl LateAdmittedExecutionTransaction {
         };
         let replay = consumed.result().clone();
         let completion = append_effect_replay_completion_under_lock(
-            self.prepared.environment.project_root(),
+            self.prepared.environment.effect_store_root(),
             consumed.effect_lock(),
             PREPARED_EFFECT_LOCK_RELATIVE_PATH,
             PREPARED_EFFECT_WAL_RELATIVE_PATH,
@@ -1313,11 +1336,11 @@ pub fn prepare_execution_transaction(
     let commit_digest = sha256_content_hash(&canonical);
 
     let effect_lock = acquire_effect_store_lock(
-        environment.project_root(),
+        environment.effect_store_root(),
         PREPARED_EFFECT_LOCK_RELATIVE_PATH,
     )?;
     let initial_preflight = preflight_file_effect_transaction_under_lock(
-        environment.project_root(),
+        environment.effect_store_root(),
         &effect_lock,
         PREPARED_EFFECT_LOCK_RELATIVE_PATH,
         &effect,
@@ -1381,19 +1404,19 @@ pub fn reconcile_prepared_execution_commits(
     environment: &TrustedExecutionEnvironment,
 ) -> Result<ExecutionReplayReconciliationResult, ExecutionReplayReconciliationError> {
     let effect_lock = acquire_effect_store_lock(
-        environment.project_root(),
+        environment.effect_store_root(),
         PREPARED_EFFECT_LOCK_RELATIVE_PATH,
     )
     .map_err(|error| ExecutionReplayReconciliationError::EffectLock(error.to_string()))?;
     repair_effect_wal_tail_under_lock(
-        environment.project_root(),
+        environment.effect_store_root(),
         &effect_lock,
         PREPARED_EFFECT_LOCK_RELATIVE_PATH,
         PREPARED_EFFECT_WAL_RELATIVE_PATH,
     )
     .map_err(ExecutionReplayReconciliationError::EffectWal)?;
     let effect_recovery = recover_effect_wal(
-        environment.project_root(),
+        environment.effect_store_root(),
         PREPARED_EFFECT_WAL_RELATIVE_PATH,
     );
     if effect_recovery.status == EffectWalRecoveryStatus::RecoveryFailed {
@@ -1403,7 +1426,7 @@ pub fn reconcile_prepared_execution_commits(
     }
     let recovered_effect_transactions = effect_recovery.recovered_transactions;
     let pending = pending_effect_replay_commits_under_lock(
-        environment.project_root(),
+        environment.effect_store_root(),
         &effect_lock,
         PREPARED_EFFECT_LOCK_RELATIVE_PATH,
         PREPARED_EFFECT_WAL_RELATIVE_PATH,
@@ -1441,7 +1464,7 @@ pub fn reconcile_prepared_execution_commits(
             source,
         })?;
         let completion = append_effect_replay_completion_under_lock(
-            environment.project_root(),
+            environment.effect_store_root(),
             &effect_lock,
             PREPARED_EFFECT_LOCK_RELATIVE_PATH,
             PREPARED_EFFECT_WAL_RELATIVE_PATH,

@@ -308,6 +308,75 @@ fn credential_lifecycle_keeps_private_key_out_of_output_and_project() {
         .verify(&intent, &attestation)
         .expect("generated signature verifies");
 
+    let allowlist_path = parent.join("operator/allowlist.yaml");
+    fs::copy(
+        repo_root().join("contracts/examples/mcp-trusted-single-effect-allowlist.yaml"),
+        &allowlist_path,
+    )
+    .expect("allowlist");
+    let policy_path = parent.join("operator/deployment-policy.yaml");
+    fs::write(
+        &policy_path,
+        r#"schema_version: "0.1"
+mcp_deployment_policy:
+  id: "trusted-test"
+  mode: "trusted_single_effect"
+  required_audience: "forge-core:mcp:test"
+  mutating_tools: ["execute-operation"]
+  startup_reconciliation: "required_before_listen"
+  material_loading: "canonical_project_bound"
+  snapshot_loading: "bounded_local_read_only"
+  effect_scope: "single_effect"
+  public_mutation: "explicit_opt_in"
+  root_binding: "canonical_configured_root"
+  state_root_binding: "project_link_resolved"
+  required_commit_protocol: "execution_provenance_commit_v0@0.1"
+  same_user_boundary_acknowledged: true
+"#,
+    )
+    .expect("policy");
+    let client_config = parent.join("operator/client-config.json");
+    let readiness = || {
+        bin()
+            .args(["mcp", "readiness", "--root"])
+            .arg(&project)
+            .args(["--allowlist"])
+            .arg(&allowlist_path)
+            .args(["--principal-registry"])
+            .arg(&registry_path)
+            .args(["--deployment-policy"])
+            .arg(&policy_path)
+            .args([
+                "--snapshot",
+                "runtime/mcp-execution-snapshot.yaml",
+                "--secret-dir",
+            ])
+            .arg(&secret_dir)
+            .args(["--credential-id", "key.agent.1", "--client-config-output"])
+            .arg(&client_config)
+            .arg("--json")
+            .output()
+            .expect("readiness")
+    };
+    let first_readiness = readiness();
+    assert!(
+        first_readiness.status.success(),
+        "readiness failed: {}",
+        String::from_utf8_lossy(&first_readiness.stdout)
+    );
+    let readiness_json: Value =
+        serde_json::from_slice(&first_readiness.stdout).expect("readiness JSON");
+    assert_eq!(readiness_json["data"]["verdict"], "ready");
+    assert!(client_config.exists());
+    let second_readiness = readiness();
+    assert!(second_readiness.status.success());
+    let second_json: Value =
+        serde_json::from_slice(&second_readiness.stdout).expect("replacement readiness JSON");
+    assert_eq!(
+        readiness_json["data"]["checks"],
+        second_json["data"]["checks"]
+    );
+
     let rotate = bin()
         .args(["mcp", "credential", "rotate", "--root"])
         .arg(&project)

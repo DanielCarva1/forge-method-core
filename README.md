@@ -526,34 +526,57 @@ single-use replay, claim/gate revision, and commit-guarantee observations. Any
 deterministic issue blocks admission and is returned for agent self-correction.
 The executable corpus lives under `docs/fixtures/execution-admission-v0/`.
 
-This pure decision is intentionally **not yet** the kernel mutation gate. P4b.1a
-made trusted identity derivable from an operator registry, P4b.1b added durable
-replay primitives, and P4b.2a now preserves verified authority through a typed
-in-process handoff. Public mutation and late kernel evaluation remain separate
-checkpoints.
+P4b now consumes this decision in the explicit trusted single-effect MCP path:
+the kernel repeats mutable-authority Admission under retained locks immediately
+before the effect WAL begins. Read-only remains the default, and broader
+operation-wide/saga mutation is not claimed.
 
-### Prepare a trusted MCP principal registry (P4b.1a)
+### Operate trusted MCP without hand-editing authority (P4b.4)
 
-The built-in MCP surface remains read-only. P4b.1a adds the strict
-operator-owned registry and authorization primitive without prematurely
-enabling stdio mutation. An operator can preload and validate a registry while
-serving the default read-only surface:
+The built-in MCP surface remains read-only unless the operator explicitly
+enables the exact trusted single-effect posture. The normal path is agent
+operated; the human does not author a key, registry entry, snapshot, signature,
+or client configuration.
 
 ```bash
-forge-core mcp serve \
-  --principal-registry /operator-controlled/forge-principals.yaml \
-  --root <project>
+forge-core mcp credential provision \
+  --root <project> \
+  --registry <absolute-operator-dir>/principal-registry.yaml \
+  --secret-dir <absolute-operator-dir>/secrets \
+  --credential-id key.agent.1 --principal-id principal.agent \
+  --agent-id agent --role driver --audience forge-core:mcp:local
+
+forge-core mcp snapshot \
+  --root <project> --operation <operation-ref> --assurance <assurance-ref> \
+  --principal-registry <absolute-operator-dir>/principal-registry.yaml \
+  --credential-id key.agent.1 --nonce <fresh-nonce>
+
+forge-core mcp credential sign \
+  --root <project> \
+  --registry <absolute-operator-dir>/principal-registry.yaml \
+  --secret-dir <absolute-operator-dir>/secrets \
+  --credential-id key.agent.1 \
+  --snapshot runtime/mcp-execution-snapshot.yaml \
+  --arguments-json <exact-tools-call-arguments.json>
+
+forge-core mcp readiness \
+  --root <project> \
+  --allowlist <trusted-allowlist.yaml> \
+  --principal-registry <absolute-operator-dir>/principal-registry.yaml \
+  --deployment-policy <trusted-policy.yaml> \
+  --snapshot runtime/mcp-execution-snapshot.yaml \
+  --secret-dir <absolute-operator-dir>/secrets \
+  --credential-id key.agent.1 \
+  --client-config-output <absolute-operator-dir>/client-config.json
 ```
 
-Start from
-[`contracts/examples/mcp-principal-registry.yaml`](contracts/examples/mcp-principal-registry.yaml).
-Its published test credential is revoked on purpose: replace the public key,
-credential/principal/agent ids, audience, tool grants, and authority grants,
-then activate only the authority the operator intends. Keep the live registry
-outside agent-writable project state (or protect it with equivalent OS
-permissions); never store a private key in it.
+`mcp readiness` fails closed unless the Project Link, exact allowlist, active
+credential, operator key, audience, fresh content-bound snapshot, replay WAL,
+and startup reconciliation agree. Its generated JSON pins the current binary
+and every trusted server argument. A replacement agent resumes by rerunning the
+same readiness command from durable paths, not chat history.
 
-The future mutating `tools/call` contract carries `_meta.attestation` fields
+The mutating `tools/call` carries `_meta.attestation` fields
 `credential_id`, `audience`, `execution_intent_digest`, `nonce`, `ts`,
 `signature`, and `public_key_hex`. Forge selects the authoritative public key
 from the registry, checks credential status, exact audience and tool grant,
@@ -561,11 +584,11 @@ applies a 300-second age / 30-second future-skew window, and verifies the
 canonical call signature against that selected key. A caller-selected key and
 `AttestationPolicy::NeverRequired` cannot bypass mutation authorization.
 
-Loading any allowlist containing `policy: mutate` still fails closed, even with
-a valid registry. P4b.2a now provides the constrained authority handoff, but it
-does not yet claim durable nonce consumption, propagation into
-claims/WAL/evidence, or the P4a verdict immediately before the first effect-WAL
-record.
+The official `rmcp` end-to-end test builds this setup, initializes from the
+generated client configuration, lists the exact `execute-operation` tool,
+transports the attestation over stdio, and applies one governed sidecar effect.
+It also proves that effect/replay WALs stay in the Project Link state root and
+that no consumer-local `.forge-method` is created.
 
 Read-only tool subprocesses no longer resolve `forge-core` through `PATH` or
 inherit the host's full environment. The server pins its current executable,
@@ -573,14 +596,13 @@ uses the canonical repo root as cwd and `--root`, clears the environment before
 copying a small OS/runtime allowlist, and disconnects child stdin from the MCP
 protocol stream.
 
-**Migration note for Rust and custom MCP consumers.** P4b.1a and P4b.2a added fields to
-`McpServerConfig`, so Rust consumers that construct it with a struct literal
-must add the principal registry, `mutation_executor`, freshness-window, pinned-binary, and root
-fields (prefer `McpServerConfig::default_read_only()` when possible). The new
-attestation fields are optional on the legacy read-only wire shape and are
-omitted when `None`. Any custom allowlist containing `policy: mutate` must
-remove those entries before starting `mcp serve`: loading a principal registry
-does **not** enable mutation.
+**Migration note for Rust and custom MCP consumers.** Rust consumers that
+construct `McpServerConfig` with a struct literal must provide the principal
+registry, mutation executor, reconciled deployment, freshness windows, pinned
+binary, and root (prefer `McpServerConfig::default_read_only()` when possible).
+Attestation fields remain optional on legacy read-only calls. Loading a
+registry alone never enables mutation; the exact policy, snapshot, allowlist,
+reconciliation proof, executor, and explicit opt-in must all agree.
 
 ### Reserve replay nonces in Rust (P4b.1b)
 
@@ -907,7 +929,7 @@ gates.
   `telemetry`.
 - GitHub Actions CI is present for fmt, clippy, tests, and validation.
 
-**Not yet (roadmap)**
+**Operational MCP proof complete**
 
 - **MCP operational UX** — `forge-core mcp serve` supports read-only stdio by
   default and explicit reconciled single-effect mutation through P4b.3c.
@@ -915,9 +937,14 @@ gates.
   and P4b.4b adds `forge-core mcp snapshot` to derive and atomically refresh it
   from authoritative project/sidecar state without manual YAML. P4b.4c adds
   operator-owned credential provision/rotation/revocation and in-process
-  signing without emitting private keys. The remaining slice must provide
-  conversational readiness diagnostics and prove a real MCP client end to end.
-  Operation-wide and saga semantics remain intentionally absent.
+  signing without emitting private keys. P4b.4d adds `forge-core mcp readiness`,
+  generates the exact stdio client configuration, survives replacement-agent
+  reruns, and is proven through the official `rmcp` client from initialization
+  and `tools/list` through a signed applied sidecar mutation. Operation-wide,
+  saga, externally anchored replay rollback detection, and hostile-user
+  isolation remain intentionally absent.
+
+**Not yet (roadmap)**
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL
   with torn-tail auto-repair. The ephemeral `claims-active/*.yaml` cache is

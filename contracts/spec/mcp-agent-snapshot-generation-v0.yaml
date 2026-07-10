@@ -46,12 +46,13 @@ failure_policy:
   - "revoked, unknown, or underprivileged credentials fail closed"
 
 next_boundary:
-  id: "P4b.4d-real-client-readiness-proof"
+  id: "P4b.5-external-replay-and-principal-propagation"
   goal: >-
-    Provision, rotate, revoke, and configure host credentials without exposing
-    private keys to project content or weakening registry authority.
+    Externally anchor replay rollback detection and propagate verified
+    principal identity through runtime evidence.
 
 references:
   - "contracts/spec/execution-authority-snapshot-binding-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
   - "contracts/spec/claims-integrity-spine-spec.yaml"
+  - "contracts/spec/mcp-real-client-readiness-v0.yaml"

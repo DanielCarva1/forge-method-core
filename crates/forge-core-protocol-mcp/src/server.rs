@@ -39,7 +39,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use forge_core_command_surface::{command_by_name, JsonMode};
 use rmcp::model::{
     CallToolRequestParams, CallToolResult, ContentBlock, ErrorData, Implementation, JsonObject,
-    ListToolsResult, ServerCapabilities, ServerInfo, Tool,
+    ListToolsResult, Meta, ServerCapabilities, ServerInfo, Tool,
 };
 use rmcp::service::{MaybeSendFuture, RequestContext, RoleServer};
 use rmcp::{ServerHandler, ServiceExt};
@@ -683,9 +683,18 @@ impl ServerHandler for ForgeMcpServer {
 
     fn call_tool(
         &self,
-        request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
+        mut request: CallToolRequestParams,
+        context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<CallToolResult, ErrorData>> + MaybeSendFuture + '_ {
+        // rmcp lifts protocol `_meta` out of typed request params and into the
+        // RequestContext before dispatch. Restore it at this adapter boundary
+        // so wire attestations and direct in-process calls share one verifier.
+        if !context.meta.0.is_empty() {
+            let request_meta = request.meta.get_or_insert_with(Meta::new);
+            for (key, value) in context.meta.0 {
+                request_meta.0.entry(key).or_insert(value);
+            }
+        }
         std::future::ready(self.handle_call_tool(request))
     }
 }

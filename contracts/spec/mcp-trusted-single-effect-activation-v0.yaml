@@ -69,13 +69,14 @@ unsupported:
   - "hostile-user isolation inside the acknowledged same-user boundary"
 
 next_boundary:
-  id: "P4b.4d-real-client-readiness-proof"
+  id: "P4b.5-external-replay-and-principal-propagation"
   goal: >-
-    Remove remaining credential/key ceremony from the normal agent experience
-    before proving the complete flow through a real MCP client.
+    Externally anchor replay rollback detection and propagate verified
+    principal identity through claims, traces, WAL, and evidence.
 
 references:
   - "contracts/spec/mcp-deployment-policy-v0.yaml"
   - "contracts/spec/mcp-trusted-material-loading-v0.yaml"
   - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/execution-trust-boundary-v0.yaml"
+  - "contracts/spec/mcp-real-client-readiness-v0.yaml"

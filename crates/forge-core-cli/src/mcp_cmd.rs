@@ -1,9 +1,12 @@
 //! `forge-core mcp` â€” CLI surface for the MCP adapter (F08.6, ADR-0006).
 //!
-//! One subcommand today:
+//! Agent-facing subcommands:
 //! - `serve` â€” run the stdio JSON-RPC MCP server over stdin/stdout, exposing
 //!   the Allowlisted `forge-core` commands as MCP tools. Compatible with MCP
 //!   clients like Claude Desktop.
+//! - `snapshot` â€” derive the content-bound Admission snapshot.
+//! - `credential` â€” manage and use operator-owned signing authority.
+//! - `readiness` â€” verify deployment inputs and generate client config.
 //!
 //! `serve` is a long-running process: it speaks JSON-RPC on stdout and emits
 //! diagnostics to stderr. It does NOT emit a `CliEnvelope` on stdout (that
@@ -46,6 +49,7 @@ pub fn run_mcp_command(args: &[String]) -> Result<(), ExitError> {
         Ok(McpArgs::Serve(parsed)) => run_serve(parsed),
         Ok(McpArgs::Snapshot(args)) => crate::mcp_snapshot_cmd::run_snapshot_command(&args),
         Ok(McpArgs::Credential(args)) => crate::mcp_credential_cmd::run_credential_command(&args),
+        Ok(McpArgs::Readiness(args)) => crate::mcp_readiness_cmd::run_readiness_command(&args),
         Ok(McpArgs::Help) => {
             print_mcp_usage();
             Ok(())
@@ -55,7 +59,9 @@ pub fn run_mcp_command(args: &[String]) -> Result<(), ExitError> {
             want_json,
         }) => emit_err(
             MCP_COMMAND,
-            &mcp_message_with_usage(&format!("unknown subcommand '{subcommand}'. Try: serve")),
+            &mcp_message_with_usage(&format!(
+                "unknown subcommand '{subcommand}'. Try: serve, snapshot, credential, or readiness"
+            )),
             want_json,
         ),
         Err(McpArgsError::Serve { error, want_json }) => emit_err(
@@ -71,6 +77,7 @@ enum McpArgs {
     Serve(ServeArgs),
     Snapshot(Vec<String>),
     Credential(Vec<String>),
+    Readiness(Vec<String>),
     Help,
 }
 
@@ -98,6 +105,7 @@ fn parse_mcp_args(args: &[String]) -> Result<McpArgs, McpArgsError> {
             }),
         "snapshot" => Ok(McpArgs::Snapshot(args[2..].to_vec())),
         "credential" => Ok(McpArgs::Credential(args[2..].to_vec())),
+        "readiness" => Ok(McpArgs::Readiness(args[2..].to_vec())),
         "--help" | "-h" | "help" => Ok(McpArgs::Help),
         other => Err(McpArgsError::UnknownSubcommand {
             subcommand: other.to_string(),
@@ -116,6 +124,7 @@ fn print_mcp_usage() {
     println!("  --snapshot (state-root relative), and the explicit enable flag.");
     println!("  snapshot generates a content-bound Admission snapshot from authoritative state.");
     println!("  credential provisions, rotates, revokes, and signs with operator-owned keys.");
+    println!("  readiness validates deployment and emits client configuration.");
 }
 
 fn mcp_serve_usage_line() -> &'static str {

@@ -48,7 +48,7 @@ sct.workspace = true
 sigstore-tsa.workspace = true
 rustls-pki-types.workspace = true
 x509-parser.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
@@ -56,3 +56,4 @@ tracing-subscriber.workspace = true
 rcgen.workspace = true
 proptest.workspace = true
 assert_cmd.workspace = true
+rmcp = { workspace = true, features = ["client", "transport-child-process"] }

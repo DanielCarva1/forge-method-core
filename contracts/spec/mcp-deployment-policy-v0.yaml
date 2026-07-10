@@ -43,8 +43,9 @@ checkpoint_boundary:
     through a separate explicit opt-in and reconciled deployment proof.
   not_implemented:
     - "operation-wide transaction or saga semantics"
-    - "agent-operated credential/snapshot setup without manual YAML ceremony"
-  next: "P4b.4d conversational readiness and real-client proof"
+    - "externally anchored whole-pair replay rollback detection"
+    - "hostile-user isolation beyond the acknowledged same-user boundary"
+  next: "P4b.5 external replay anchoring and complete principal propagation"
 
 references:
   - "contracts/examples/mcp-deployment-policy.yaml"
@@ -52,3 +53,4 @@ references:
   - "contracts/spec/execution-trust-boundary-v0.yaml"
   - "contracts/spec/mcp-trusted-material-loading-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
+  - "contracts/spec/mcp-real-client-readiness-v0.yaml"

@@ -268,19 +268,35 @@ phases:
           The operator directory inherits host OS account isolation; Forge does
           not claim hostile same-user isolation. Real-client integration and
           conversational readiness remain the final P4b.4 checkpoint.
-    next_slice:
-      id: "P4b.4d-real-client-readiness-proof"
+      - id: "P4b.4d-real-client-readiness-proof"
+        delivers:
+          - "forge-core mcp readiness with conversational checks, next actions, and durable replacement-agent resume guidance"
+          - "generated standard MCP stdio client configuration bound to the exact executable, root, allowlist, registry, policy, and snapshot"
+          - "official rmcp client proof for initialize, tools/list, signed execute-operation, and applied sidecar effect"
+          - "wire _meta attestation restoration from rmcp RequestContext into the typed verifier boundary"
+          - "Project Link sidecar effect lock, WAL, replay, metadata, and target confinement with no consumer-local .forge-method"
+        boundary: >-
+          P4b.4 is complete. Mutation remains exact single-effect, explicit
+          opt-in, same-user trusted, and locally replay-protected; externally
+          anchored whole-pair rollback detection, complete Execution Principal
+          propagation, and operation-wide/saga semantics remain separate work.
+    current_program:
+      id: "P4b.4-agent-operated-trusted-mcp"
+      status: "completed"
       scope:
-        - "prove the complete flow through a real MCP client and replacement-agent resume"
-        - "surface activation/reconciliation/readiness diagnostics conversationally"
-        - "preserve every P4b.3c authority, replay, gate, and single-effect limit"
+        - "agent-operated snapshot, credential, readiness, generated client, and replacement-agent flow"
+        - "real official-client applied mutation evidence"
+        - "preserved P4b.3c authority, replay, gate, sidecar, and single-effect limits"
+    next_slice:
+      id: "P4b.5-external-replay-and-principal-propagation"
+      status: "not_started"
+      scope:
+        - "externally protect replay epoch/head against whole-pair rollback"
+        - "propagate Execution Principal through claims, traces, WAL, and evidence"
     following_slices:
       - "operation-wide transaction or complete typed saga semantics"
       - "externally protected replay epoch/head for whole-pair rollback detection"
     release_blockers:
-      - "agent-operated Admission snapshot generation without human YAML editing"
-      - "secure host credential provisioning and lifecycle"
-      - "real MCP client end-to-end deployment evidence"
       - "externally protected replay epoch/head or enforced deployment isolation"
       - "Execution Principal propagated through claims, traces, WAL, and evidence"
     exit:
@@ -337,11 +353,11 @@ first_executable_slice:
     - "P4b.4a canonical signed-intent binding for the complete mutable authority snapshot, revalidated before replay and under commit locks"
     - "P4b.4b agent-facing atomic Admission snapshot generation from Project Link and authoritative claim/gate state"
     - "P4b.4c operator-owned credential provision, rotation, revocation, and exact-intent signing without private-key disclosure"
+    - "P4b.4d conversational readiness, generated client configuration, replacement-agent resume, and official rmcp applied sidecar mutation proof"
   next_action: >-
-    Implement P4b.4d as the final P4b.4 checkpoint: expose one conversational
-    readiness report, generate host client configuration, and prove snapshot,
-    signing, stdio initialization, tools/list, and one governed call through a
-    real MCP client plus replacement-agent resume.
+    P4b.4 is complete. The next separately scoped hardening program is P4b.5:
+    externally anchored replay rollback detection plus complete Execution
+    Principal propagation. Operation-wide/saga semantics remain a later slice.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

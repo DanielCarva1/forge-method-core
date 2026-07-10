@@ -55,6 +55,7 @@ pub mod isolation;
 pub mod m1_cmd;
 pub mod mcp_cmd;
 pub(crate) mod mcp_credential_cmd;
+pub(crate) mod mcp_readiness_cmd;
 pub(crate) mod mcp_snapshot_cmd;
 pub mod memory_cmd;
 pub mod preflight_cmd;

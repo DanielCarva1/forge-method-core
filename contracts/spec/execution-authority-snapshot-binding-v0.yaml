@@ -42,12 +42,13 @@ security_properties:
   - "revision equality alone is no longer treated as a content binding"
 
 next_boundary:
-  id: "P4b.4d-real-client-readiness-proof"
+  id: "P4b.5-external-replay-and-principal-propagation"
   goal: >-
-    Provision, rotate, and revoke host credentials while keeping private keys
-    outside project-controlled authority.
+    Externally anchor replay rollback detection and propagate verified
+    principal identity through runtime evidence.
 
 references:
   - "contracts/spec/execution-admission-v0.yaml"
   - "contracts/spec/mcp-trusted-material-loading-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
+  - "contracts/spec/mcp-real-client-readiness-v0.yaml"

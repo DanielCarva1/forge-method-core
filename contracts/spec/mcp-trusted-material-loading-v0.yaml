@@ -71,13 +71,14 @@ capability_boundary:
   public_mcp_mutation: "explicit_reconciled_single_effect_opt_in_only"
 
 next_boundary:
-  id: "P4b.4d-real-client-readiness-proof"
+  id: "P4b.5-external-replay-and-principal-propagation"
   requires:
-    - "secure credential lifecycle and host integration"
-    - "real MCP client end-to-end deployment evidence"
+    - "externally protected replay epoch/head"
+    - "verified principal identity in claims, traces, WAL, and evidence"
 
 references:
   - "contracts/spec/mcp-deployment-policy-v0.yaml"
   - "contracts/spec/execution-provenance-commit-v0.yaml"
   - "contracts/spec/prepared-execution-transaction-v0.yaml"
   - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
+  - "contracts/spec/mcp-real-client-readiness-v0.yaml"

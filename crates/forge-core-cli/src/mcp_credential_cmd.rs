@@ -351,7 +351,7 @@ fn write_secret_new(path: &Path, bytes: &[u8; 32]) -> Result<(), ExitError> {
         .map_err(|error| ExitError::env_config(format!("cannot persist private key: {error}")))
 }
 
-fn read_signing_key(path: &Path) -> Result<SigningKey, ExitError> {
+pub(crate) fn read_signing_key(path: &Path) -> Result<SigningKey, ExitError> {
     let mut bytes = [0_u8; 32];
     let mut file = File::open(path)
         .map_err(|error| ExitError::env_config(format!("cannot open private key: {error}")))?;
@@ -383,7 +383,7 @@ fn read_state_relative(state_root: &Path, reference: &Path) -> Result<String, Ex
         .map_err(|error| ExitError::env_config(format!("cannot read snapshot: {error}")))
 }
 
-fn ensure_operator_owned_location(
+pub(crate) fn ensure_operator_owned_location(
     path: &Path,
     project: &Path,
     state: &Path,
@@ -397,7 +397,7 @@ fn ensure_operator_owned_location(
     Ok(())
 }
 
-fn secret_path(secret_dir: &Path, credential_id: &str) -> PathBuf {
+pub(crate) fn secret_path(secret_dir: &Path, credential_id: &str) -> PathBuf {
     secret_dir.join(format!("{}.ed25519", hex(Sha256::digest(credential_id))))
 }
 
@@ -464,7 +464,7 @@ fn parse_role(value: &str) -> Result<CallerRole, ExitError> {
     }
 }
 
-fn absolute_path(path: PathBuf) -> Result<PathBuf, ExitError> {
+pub(crate) fn absolute_path(path: PathBuf) -> Result<PathBuf, ExitError> {
     if path.is_absolute() {
         Ok(path)
     } else {
