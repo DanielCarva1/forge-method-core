@@ -53,6 +53,7 @@ pub mod error;
 pub mod mutation_executor;
 pub mod principal_registry;
 pub mod server;
+pub mod snapshot_builder;
 pub mod trusted_loader;
 pub mod trusted_runtime;
 
@@ -87,6 +88,10 @@ pub use principal_registry::{
     DEFAULT_MAX_FUTURE_SKEW_SECONDS, PRINCIPAL_REGISTRY_SCHEMA_VERSION,
 };
 pub use server::{ForgeMcpServer, McpServerConfig};
+pub use snapshot_builder::{
+    build_trusted_execution_snapshot, TrustedSnapshotBuildError, TrustedSnapshotBuildInput,
+    TrustedSnapshotBuildOutput, TrustedSnapshotPrincipal,
+};
 pub use trusted_loader::{
     DormantTrustedMcpExecutor, LoadedMcpExecutionMaterial, LoadedMcpMaterialAudit,
     LocalMcpSnapshotSource, McpLocalExecutionSnapshot, McpLocalExecutionSnapshotDocument,

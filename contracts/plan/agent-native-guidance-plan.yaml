@@ -246,10 +246,20 @@ phases:
         boundary: >-
           This hardens generated and manual snapshots but does not yet create,
           refresh, or sign them for the agent.
+      - id: "P4b.4b-agent-operated-snapshot-generation"
+        delivers:
+          - "forge-core mcp snapshot agent-facing command with stable envelope output"
+          - "Project Link sidecar resolution and authoritative claim-WAL projection"
+          - "content-derived gate revisions and automatic operation/assurance/effect bindings"
+          - "atomic state-root-confined snapshot refresh plus exact intent digest output"
+          - "active registry credential selection without exposing private key material"
+        boundary: >-
+          Snapshot creation no longer requires human YAML editing. Signing-key
+          provisioning/rotation/revocation and host client configuration remain
+          the next explicit authority boundary.
     next_slice:
-      id: "P4b.4b-agent-operated-snapshot-generation"
+      id: "P4b.4c-secure-credential-lifecycle"
       scope:
-        - "generate and refresh signed Admission snapshots through an agent-facing command/API rather than manual YAML"
         - "add secure credential provisioning, rotation, revocation, and client configuration guidance"
         - "prove the complete flow through a real MCP client and replacement-agent resume"
         - "surface activation/reconciliation/readiness diagnostics conversationally"
@@ -315,12 +325,12 @@ first_executable_slice:
     - "P4b.3b canonical bounded typed material, signed-payload, risk-audit, and local snapshot loaders wired to an always-dormant executor"
     - "P4b.3c explicit reconciled single-effect MCP activation with sidecar state, kernel risk/citation gates, provenance commit, and replay completion"
     - "P4b.4a canonical signed-intent binding for the complete mutable authority snapshot, revalidated before replay and under commit locks"
+    - "P4b.4b agent-facing atomic Admission snapshot generation from Project Link and authoritative claim/gate state"
   next_action: >-
-    Implement P4b.4b as the next pullable checkpoint: generate and refresh the
-    content-bound Admission snapshot from authoritative project/sidecar state
-    through an agent-facing command without human YAML editing. Credential
-    lifecycle, real-client proof, and conversational readiness follow without
-    weakening P4b.3c/P4b.4a.
+    Implement P4b.4c as the next pullable checkpoint: provision, rotate, and
+    revoke operator-owned credentials without exposing private keys or letting
+    project content select authority. Then wire client configuration,
+    conversational readiness, and real MCP-client proof.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

@@ -1,0 +1,57 @@
+schema_version: "0.1"
+spec: "mcp_agent_snapshot_generation_v0"
+status: "p4b4b_implemented"
+purpose: >-
+  Let the host agent generate and refresh the exact Admission snapshot needed
+  by trusted MCP execution without asking the human to edit YAML.
+
+command:
+  name: "forge-core mcp snapshot"
+  required_inputs:
+    - "canonical project root"
+    - "operation and Assurance Case project-relative references"
+    - "zero or more command contract references"
+    - "operator-owned principal registry path and active credential id"
+    - "fresh nonce"
+  default_output: "runtime/mcp-execution-snapshot.yaml under the Project Link state root"
+  returns:
+    - "state-relative snapshot_ref"
+    - "execution_intent_digest for the detached attestation"
+    - "authority_snapshot_token"
+    - "credential/audience and claim/gate count audit fields"
+
+authority_derivation:
+  claims: "solely from forge_core_store::derive_state over the sidecar claim WAL"
+  required_claim_identity: >-
+    The project claim reference selects only the expected claim id; the claim
+    document and revision come from the WAL projection.
+  gates: "complete union of operation gate refs with content-derived revisions"
+  contracts: "canonical project-confined bounded typed reads"
+  identity: "active registry entry authorized for execute-operation and operation.execute"
+
+write_boundary:
+  behavior: "same-directory atomic replacement"
+  confinement: "safe relative path whose canonical parent remains under state_root"
+  forbidden:
+    - "absolute output"
+    - "parent traversal"
+    - "symlink escape"
+    - "project-local private key material"
+
+failure_policy:
+  - "state-version mismatch fails before output"
+  - "missing required WAL claim fails before output"
+  - "claim projection diagnostics or corruption fail closed"
+  - "duplicate command refs and non-single-effect operations fail closed"
+  - "revoked, unknown, or underprivileged credentials fail closed"
+
+next_boundary:
+  id: "P4b.4c-secure-credential-lifecycle"
+  goal: >-
+    Provision, rotate, revoke, and configure host credentials without exposing
+    private keys to project content or weakening registry authority.
+
+references:
+  - "contracts/spec/execution-authority-snapshot-binding-v0.yaml"
+  - "contracts/spec/mcp-trusted-single-effect-activation-v0.yaml"
+  - "contracts/spec/claims-integrity-spine-spec.yaml"

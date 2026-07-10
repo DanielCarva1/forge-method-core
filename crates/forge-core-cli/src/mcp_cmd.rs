@@ -44,6 +44,7 @@ const SERVE_COMMAND: &str = "mcp serve";
 pub fn run_mcp_command(args: &[String]) -> Result<(), ExitError> {
     match parse_mcp_args(args) {
         Ok(McpArgs::Serve(parsed)) => run_serve(parsed),
+        Ok(McpArgs::Snapshot(args)) => crate::mcp_snapshot_cmd::run_snapshot_command(&args),
         Ok(McpArgs::Help) => {
             print_mcp_usage();
             Ok(())
@@ -67,6 +68,7 @@ pub fn run_mcp_command(args: &[String]) -> Result<(), ExitError> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum McpArgs {
     Serve(ServeArgs),
+    Snapshot(Vec<String>),
     Help,
 }
 
@@ -92,6 +94,7 @@ fn parse_mcp_args(args: &[String]) -> Result<McpArgs, McpArgsError> {
                 error,
                 want_json: json_output_unless_text_selected(&args[2..]),
             }),
+        "snapshot" => Ok(McpArgs::Snapshot(args[2..].to_vec())),
         "--help" | "-h" | "help" => Ok(McpArgs::Help),
         other => Err(McpArgsError::UnknownSubcommand {
             subcommand: other.to_string(),
@@ -108,6 +111,7 @@ fn print_mcp_usage() {
     println!("  Any mutating allowlist also requires --principal-registry <yaml>.");
     println!("  Trusted single-effect mutation additionally requires --deployment-policy,");
     println!("  --snapshot (state-root relative), and the explicit enable flag.");
+    println!("  snapshot generates a content-bound Admission snapshot from authoritative state.");
 }
 
 fn mcp_serve_usage_line() -> &'static str {
@@ -543,6 +547,13 @@ mod tests {
     fn parse_mcp_args_short_circuits_help() {
         let parsed = parse_mcp_args(&args(&["mcp", "--help"])).expect("parse help");
         assert_eq!(parsed, McpArgs::Help);
+    }
+
+    #[test]
+    fn parse_mcp_args_routes_snapshot_to_agent_facing_generator() {
+        let parsed = parse_mcp_args(&args(&["mcp", "snapshot", "--root", "/proj"]))
+            .expect("parse mcp snapshot");
+        assert_eq!(parsed, McpArgs::Snapshot(args(&["--root", "/proj"])));
     }
 
     #[test]

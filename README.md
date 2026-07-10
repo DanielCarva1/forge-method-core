@@ -911,10 +911,11 @@ gates.
 
 - **MCP operational UX** — `forge-core mcp serve` supports read-only stdio by
   default and explicit reconciled single-effect mutation through P4b.3c.
-  P4b.4a now binds the complete mutable authority snapshot into the signed
-  intent and revalidates it under lock. The remaining P4b.4 slices must
-  generate/refresh that snapshot without manual YAML, manage credentials,
-  provide readiness diagnostics, and prove a real MCP client end to end.
+  P4b.4a binds the complete mutable authority snapshot into the signed intent,
+  and P4b.4b adds `forge-core mcp snapshot` to derive and atomically refresh it
+  from authoritative project/sidecar state without manual YAML. The remaining
+  slices must manage credentials, provide readiness diagnostics, and prove a
+  real MCP client end to end.
   Operation-wide and saga semantics remain intentionally absent.
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL

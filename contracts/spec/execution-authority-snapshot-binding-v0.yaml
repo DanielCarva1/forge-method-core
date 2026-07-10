@@ -42,10 +42,10 @@ security_properties:
   - "revision equality alone is no longer treated as a content binding"
 
 next_boundary:
-  id: "P4b.4b-agent-operated-snapshot-generation"
+  id: "P4b.4c-secure-credential-lifecycle"
   goal: >-
-    Derive and refresh this content-bound snapshot from authoritative
-    project/sidecar state through an agent-facing command without human YAML.
+    Provision, rotate, and revoke host credentials while keeping private keys
+    outside project-controlled authority.
 
 references:
   - "contracts/spec/execution-admission-v0.yaml"

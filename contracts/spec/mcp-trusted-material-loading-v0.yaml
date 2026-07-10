@@ -71,9 +71,8 @@ capability_boundary:
   public_mcp_mutation: "explicit_reconciled_single_effect_opt_in_only"
 
 next_boundary:
-  id: "P4b.4b-agent-operated-snapshot-generation"
+  id: "P4b.4c-secure-credential-lifecycle"
   requires:
-    - "agent-generated and refreshed admission snapshots without human YAML editing"
     - "secure credential lifecycle and host integration"
     - "real MCP client end-to-end deployment evidence"
 

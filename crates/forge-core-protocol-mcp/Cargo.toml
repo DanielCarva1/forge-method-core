@@ -20,6 +20,8 @@ tokio = { workspace = true, features = ["rt", "io-util", "macros"] }
 rmcp = { workspace = true, features = ["transport-io"] }
 serde.workspace = true
 serde_json.workspace = true
+serde_json_canonicalizer.workspace = true
+sha2.workspace = true
 # Project-standard YAML crate (AGENTS.md: yaml_serde is the project standard;
 # serde_yaml/serde_yml are dev-only bench crates, NOT used in production).
 yaml_serde.workspace = true

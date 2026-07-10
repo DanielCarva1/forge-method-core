@@ -69,11 +69,10 @@ unsupported:
   - "hostile-user isolation inside the acknowledged same-user boundary"
 
 next_boundary:
-  id: "P4b.4b-agent-operated-snapshot-generation"
+  id: "P4b.4c-secure-credential-lifecycle"
   goal: >-
-    Remove remaining manual YAML/key ceremony from the normal agent experience
-    and prove the complete flow through a real MCP client without weakening any
-    authority or recovery boundary.
+    Remove remaining credential/key ceremony from the normal agent experience
+    before proving the complete flow through a real MCP client.
 
 references:
   - "contracts/spec/mcp-deployment-policy-v0.yaml"

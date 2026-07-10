@@ -97,12 +97,12 @@ impl TrustedMcpLoaderLimits {
 }
 
 #[derive(Debug, Clone)]
-struct ConfinedProjectReader {
-    canonical_root: PathBuf,
+pub(crate) struct ConfinedProjectReader {
+    pub(crate) canonical_root: PathBuf,
 }
 
 impl ConfinedProjectReader {
-    fn new(project_root: &Path) -> Result<Self, TrustedMcpLoadError> {
+    pub(crate) fn new(project_root: &Path) -> Result<Self, TrustedMcpLoadError> {
         let canonical_root =
             project_root
                 .canonicalize()
@@ -185,7 +185,7 @@ impl ConfinedProjectReader {
         })
     }
 
-    fn parse_yaml<T: DeserializeOwned>(
+    pub(crate) fn parse_yaml<T: DeserializeOwned>(
         &self,
         reference: &Path,
         limit: u64,
