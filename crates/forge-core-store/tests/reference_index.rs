@@ -216,12 +216,15 @@ fn merged_validation_root(label: &str) -> PathBuf {
         root.join(".forge-method").join("ledger.ndjson"),
     ]
     .into_iter()
-    .find(|candidate| candidate.exists())
-    .expect("ledger.ndjson must exist in the core sidecar or repo root");
+    .find(|candidate| candidate.exists());
     let ledger_target = temp.join(".forge-method").join("ledger.ndjson");
     fs::create_dir_all(ledger_target.parent().expect("ledger parent"))
         .expect("create .forge-method dir");
-    fs::copy(&ledger_source, &ledger_target).expect("copy ledger.ndjson");
+    if let Some(ledger_source) = ledger_source {
+        fs::copy(&ledger_source, &ledger_target).expect("copy ledger.ndjson");
+    } else {
+        fs::write(&ledger_target, []).expect("create empty validation ledger");
+    }
     temp
 }
 

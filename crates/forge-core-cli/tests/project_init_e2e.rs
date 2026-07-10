@@ -188,8 +188,11 @@ fn project_init_creates_project_link_and_sibling_sidecar_only() {
             .ends_with(Path::new("forge-darkest-roguelite").join(".forge-method"))
     );
     assert_eq!(
-        Path::new(resolve_json["data"]["state_root"].as_str().unwrap()),
-        state_root
+        fs::canonicalize(Path::new(
+            resolve_json["data"]["state_root"].as_str().unwrap()
+        ))
+        .expect("canonical resolved state root"),
+        fs::canonicalize(&state_root).expect("canonical expected state root")
     );
 }
 

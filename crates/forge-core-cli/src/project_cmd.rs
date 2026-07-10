@@ -659,12 +659,37 @@ fn path_starts_with_for_policy(path: &Path, base: &Path) -> bool {
 }
 
 fn comparable_path_components(path: &Path) -> Vec<String> {
-    let normalized = normalize_path(path.to_path_buf());
+    let normalized = canonicalize_existing_ancestor(path);
     let display = display_path(&normalized);
     PathBuf::from(display)
         .components()
         .map(|component| comparable_component(component.as_os_str().to_string_lossy().as_ref()))
         .collect()
+}
+
+/// Canonicalize the deepest existing ancestor and then restore any missing
+/// suffix. This keeps policy comparisons stable when a path is about to be
+/// created and Windows supplies one operand through an 8.3 short-name alias.
+fn canonicalize_existing_ancestor(path: &Path) -> PathBuf {
+    let normalized = normalize_path(path.to_path_buf());
+    let mut existing = normalized.as_path();
+    let mut missing = Vec::new();
+
+    while !existing.exists() {
+        let (Some(parent), Some(name)) = (existing.parent(), existing.file_name()) else {
+            return normalized;
+        };
+        missing.push(name.to_os_string());
+        existing = parent;
+    }
+
+    let Ok(mut canonical) = existing.canonicalize() else {
+        return normalized;
+    };
+    for component in missing.iter().rev() {
+        canonical.push(component);
+    }
+    normalize_path(canonical)
 }
 
 #[cfg(windows)]
