@@ -83,7 +83,7 @@ executable_evidence:
   - "startup tests reject missing registry, executor, activation, audience, root, or exact-tool binding"
 
 next_boundary:
-  id: "P4b.4c-secure-credential-lifecycle"
+  id: "P4b.4d-real-client-readiness-proof"
   required:
     - "secure credential lifecycle and real MCP client proof"
 

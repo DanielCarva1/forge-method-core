@@ -42,7 +42,7 @@ security_properties:
   - "revision equality alone is no longer treated as a content binding"
 
 next_boundary:
-  id: "P4b.4c-secure-credential-lifecycle"
+  id: "P4b.4d-real-client-readiness-proof"
   goal: >-
     Provision, rotate, and revoke host credentials while keeping private keys
     outside project-controlled authority.

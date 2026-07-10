@@ -69,7 +69,7 @@ unsupported:
   - "hostile-user isolation inside the acknowledged same-user boundary"
 
 next_boundary:
-  id: "P4b.4c-secure-credential-lifecycle"
+  id: "P4b.4d-real-client-readiness-proof"
   goal: >-
     Remove remaining credential/key ceremony from the normal agent experience
     before proving the complete flow through a real MCP client.

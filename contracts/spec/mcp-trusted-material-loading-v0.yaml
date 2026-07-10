@@ -71,7 +71,7 @@ capability_boundary:
   public_mcp_mutation: "explicit_reconciled_single_effect_opt_in_only"
 
 next_boundary:
-  id: "P4b.4c-secure-credential-lifecycle"
+  id: "P4b.4d-real-client-readiness-proof"
   requires:
     - "secure credential lifecycle and host integration"
     - "real MCP client end-to-end deployment evidence"

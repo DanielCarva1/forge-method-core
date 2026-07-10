@@ -130,7 +130,7 @@ intentional_limits:
   - "whole replay manifest/WAL pair deletion or rollback detection still requires an externally protected epoch/head"
 
 next_boundary:
-  id: "P4b.4c-secure-credential-lifecycle"
+  id: "P4b.4d-real-client-readiness-proof"
   required:
     - "agent-operated credential setup without weakening the narrow capability"
     - "real MCP client end-to-end deployment evidence"

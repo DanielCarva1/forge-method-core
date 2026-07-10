@@ -1,6 +1,10 @@
 use assert_cmd::Command;
 use forge_core_contracts::{AssuranceCaseDocument, OperationContractDocument};
 use forge_core_protocol_mcp::McpLocalExecutionSnapshotDocument;
+use forge_core_protocol_mcp::{
+    AttestationInput, AttestationPolicy, AttestationVerifier, CanonicalIntent,
+    PrincipalCredentialStatus, PrincipalRegistryDocument,
+};
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -191,4 +195,171 @@ fn snapshot_output_escape_fails_closed() {
         .expect("escaped snapshot");
     assert!(!output.status.success());
     assert!(!parent.join("runtime/escape.yaml").exists());
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // one linear lifecycle keeps authority transitions auditable
+fn credential_lifecycle_keeps_private_key_out_of_output_and_project() {
+    let parent = fresh_parent("credential-lifecycle");
+    let (project, state_root) = prepare_project(&parent);
+    let registry_path = parent.join("operator/registry.yaml");
+    let secret_dir = parent.join("operator/secrets");
+    let provision = bin()
+        .args(["mcp", "credential", "provision", "--root"])
+        .arg(&project)
+        .args(["--registry"])
+        .arg(&registry_path)
+        .args(["--secret-dir"])
+        .arg(&secret_dir)
+        .args([
+            "--credential-id",
+            "key.agent.1",
+            "--principal-id",
+            "principal.agent",
+            "--agent-id",
+            "agent",
+            "--role",
+            "driver",
+            "--audience",
+            "forge-core:mcp:test",
+            "--json",
+        ])
+        .output()
+        .expect("provision credential");
+    assert!(
+        provision.status.success(),
+        "provision failed: {}",
+        String::from_utf8_lossy(&provision.stdout)
+    );
+    let provision_text = String::from_utf8(provision.stdout).expect("UTF-8 envelope");
+    assert!(!provision_text.contains("private_key"));
+    assert!(!provision_text.contains("secret_key"));
+    assert!(!project.join("operator").exists());
+    let secrets = fs::read_dir(&secret_dir)
+        .expect("secret dir")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("secret entries");
+    assert_eq!(secrets.len(), 1);
+    assert_eq!(secrets[0].metadata().expect("secret metadata").len(), 32);
+
+    let snapshot = bin()
+        .args(["mcp", "snapshot", "--root"])
+        .arg(&project)
+        .args([
+            "--operation",
+            "operation.yaml",
+            "--assurance",
+            "contracts/assurance/case.yaml",
+            "--principal-registry",
+        ])
+        .arg(&registry_path)
+        .args([
+            "--credential-id",
+            "key.agent.1",
+            "--nonce",
+            "0123456789abcdef",
+            "--json",
+        ])
+        .output()
+        .expect("snapshot with provisioned credential");
+    assert!(snapshot.status.success());
+    let arguments_path = parent.join("arguments.json");
+    fs::write(
+        &arguments_path,
+        r#"{"--operation":"operation.yaml","--effect":"contracts/effects/file-delete-restore-inverse-effect.yaml"}"#,
+    )
+    .expect("arguments JSON");
+    let signed = bin()
+        .args(["mcp", "credential", "sign", "--root"])
+        .arg(&project)
+        .args(["--registry"])
+        .arg(&registry_path)
+        .args(["--secret-dir"])
+        .arg(&secret_dir)
+        .args(["--credential-id", "key.agent.1", "--snapshot"])
+        .arg("runtime/mcp-execution-snapshot.yaml")
+        .args(["--arguments-json"])
+        .arg(&arguments_path)
+        .arg("--json")
+        .output()
+        .expect("sign intent");
+    assert!(
+        signed.status.success(),
+        "sign failed: {}",
+        String::from_utf8_lossy(&signed.stdout)
+    );
+    let signed_json: Value = serde_json::from_slice(&signed.stdout).expect("signed envelope");
+    let attestation: AttestationInput =
+        serde_json::from_value(signed_json["data"]["mcp_meta"]["attestation"].clone())
+            .expect("attestation");
+    let arguments: Value =
+        serde_json::from_str(&fs::read_to_string(&arguments_path).expect("arguments"))
+            .expect("arguments value");
+    let intent = CanonicalIntent {
+        tool: "execute-operation".to_owned(),
+        arguments,
+        credential_id: attestation.credential_id.clone(),
+        audience: attestation.audience.clone(),
+        execution_intent_digest: attestation.execution_intent_digest.clone(),
+        nonce: attestation.nonce.clone(),
+        ts: attestation.ts,
+    };
+    AttestationVerifier::new(AttestationPolicy::Default)
+        .verify(&intent, &attestation)
+        .expect("generated signature verifies");
+
+    let rotate = bin()
+        .args(["mcp", "credential", "rotate", "--root"])
+        .arg(&project)
+        .args(["--registry"])
+        .arg(&registry_path)
+        .args(["--secret-dir"])
+        .arg(&secret_dir)
+        .args([
+            "--credential-id",
+            "key.agent.2",
+            "--replaces",
+            "key.agent.1",
+            "--principal-id",
+            "principal.agent",
+            "--agent-id",
+            "agent",
+            "--role",
+            "driver",
+            "--audience",
+            "forge-core:mcp:test",
+            "--json",
+        ])
+        .output()
+        .expect("rotate credential");
+    assert!(rotate.status.success());
+    let registry: PrincipalRegistryDocument =
+        yaml_serde::from_str(&fs::read_to_string(&registry_path).expect("registry"))
+            .expect("typed registry");
+    assert_eq!(registry.principal_registry.principals.len(), 2);
+    assert_eq!(
+        registry.principal_registry.principals[0].status,
+        PrincipalCredentialStatus::Revoked
+    );
+    assert_eq!(
+        registry.principal_registry.principals[1].status,
+        PrincipalCredentialStatus::Active
+    );
+    assert_eq!(fs::read_dir(&secret_dir).expect("secrets").count(), 1);
+
+    let revoke = bin()
+        .args(["mcp", "credential", "revoke", "--root"])
+        .arg(&project)
+        .args(["--registry"])
+        .arg(&registry_path)
+        .args(["--secret-dir"])
+        .arg(&secret_dir)
+        .args(["--credential-id", "key.agent.2", "--json"])
+        .output()
+        .expect("revoke credential");
+    assert!(revoke.status.success());
+    assert_eq!(fs::read_dir(secret_dir).expect("secret dir").count(), 0);
+    assert!(state_root
+        .join("runtime/mcp-execution-snapshot.yaml")
+        .exists());
 }

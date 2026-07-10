@@ -44,7 +44,7 @@ checkpoint_boundary:
   not_implemented:
     - "operation-wide transaction or saga semantics"
     - "agent-operated credential/snapshot setup without manual YAML ceremony"
-  next: "P4b.4c secure credential lifecycle, then conversational readiness and real-client proof"
+  next: "P4b.4d conversational readiness and real-client proof"
 
 references:
   - "contracts/examples/mcp-deployment-policy.yaml"

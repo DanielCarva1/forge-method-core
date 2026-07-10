@@ -686,6 +686,7 @@ pub const COMMAND_MCP: CommandSpec = CommandSpec {
     usage_lines: &[
         "       forge-core mcp serve [--allowlist <yaml>] [--principal-registry <yaml>] [--deployment-policy <yaml>] [--snapshot <state-relative-yaml>] [--enable-trusted-single-effect] [--root <path>] [--json|--no-json]",
         "       forge-core mcp snapshot --root <path> --operation <ref> --assurance <ref> [--command <ref>] --principal-registry <yaml> --credential-id <id> --nonce <value> [--output <state-relative-yaml>] [--now-unix <i64>] [--json|--no-json]",
+        "       forge-core mcp credential <provision|rotate|revoke|sign> [operator-owned options] [--json|--no-json]",
     ],
     authority: CommandAuthority::AdapterProtocol,
     json_mode: JsonMode::ProtocolStream,

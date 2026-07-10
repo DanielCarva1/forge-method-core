@@ -913,9 +913,10 @@ gates.
   default and explicit reconciled single-effect mutation through P4b.3c.
   P4b.4a binds the complete mutable authority snapshot into the signed intent,
   and P4b.4b adds `forge-core mcp snapshot` to derive and atomically refresh it
-  from authoritative project/sidecar state without manual YAML. The remaining
-  slices must manage credentials, provide readiness diagnostics, and prove a
-  real MCP client end to end.
+  from authoritative project/sidecar state without manual YAML. P4b.4c adds
+  operator-owned credential provision/rotation/revocation and in-process
+  signing without emitting private keys. The remaining slice must provide
+  conversational readiness diagnostics and prove a real MCP client end to end.
   Operation-wide and saga semantics remain intentionally absent.
 - **State derivation layer** — `forge_core_store::derive_state` is now the
   sole authority constructor for claim state, replaying the append-only WAL

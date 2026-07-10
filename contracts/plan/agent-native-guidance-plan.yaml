@@ -257,10 +257,20 @@ phases:
           Snapshot creation no longer requires human YAML editing. Signing-key
           provisioning/rotation/revocation and host client configuration remain
           the next explicit authority boundary.
+      - id: "P4b.4c-secure-credential-lifecycle"
+        delivers:
+          - "OS-random ed25519 provisioning into an explicit operator-owned secret directory"
+          - "atomic registry updates with active exact-tool and operation.execute authority"
+          - "rotation and revocation commit authority loss before old-secret deletion"
+          - "in-process signature over exact MCP arguments and generated Admission digest"
+          - "no private key bytes in stdout, project root, Forge state, registry, or snapshot"
+        boundary: >-
+          The operator directory inherits host OS account isolation; Forge does
+          not claim hostile same-user isolation. Real-client integration and
+          conversational readiness remain the final P4b.4 checkpoint.
     next_slice:
-      id: "P4b.4c-secure-credential-lifecycle"
+      id: "P4b.4d-real-client-readiness-proof"
       scope:
-        - "add secure credential provisioning, rotation, revocation, and client configuration guidance"
         - "prove the complete flow through a real MCP client and replacement-agent resume"
         - "surface activation/reconciliation/readiness diagnostics conversationally"
         - "preserve every P4b.3c authority, replay, gate, and single-effect limit"
@@ -326,11 +336,12 @@ first_executable_slice:
     - "P4b.3c explicit reconciled single-effect MCP activation with sidecar state, kernel risk/citation gates, provenance commit, and replay completion"
     - "P4b.4a canonical signed-intent binding for the complete mutable authority snapshot, revalidated before replay and under commit locks"
     - "P4b.4b agent-facing atomic Admission snapshot generation from Project Link and authoritative claim/gate state"
+    - "P4b.4c operator-owned credential provision, rotation, revocation, and exact-intent signing without private-key disclosure"
   next_action: >-
-    Implement P4b.4c as the next pullable checkpoint: provision, rotate, and
-    revoke operator-owned credentials without exposing private keys or letting
-    project content select authority. Then wire client configuration,
-    conversational readiness, and real MCP-client proof.
+    Implement P4b.4d as the final P4b.4 checkpoint: expose one conversational
+    readiness report, generate host client configuration, and prove snapshot,
+    signing, stdio initialization, tools/list, and one governed call through a
+    real MCP client plus replacement-agent resume.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"

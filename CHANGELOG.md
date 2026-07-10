@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Project initialization now provisions the replay manifest/WAL pair as part of the explicit sidecar bootstrap. Runtime activation and request processing never recreate missing replay authority.
 - **P4b.4a signed mutable-authority snapshot binding.** Execution Admission requests now carry a canonical SHA-256 token over the complete claim snapshot, gate snapshot, current state version, and trusted observation time. The MCP loader checks this token before replay reservation, while late and immediate-commit Admission recompute it from freshly captured material under retained locks. Snapshot edits and TOCTOU drift therefore fail closed before any effect-WAL record or project write.
 - **P4b.4b agent-operated snapshot generation.** `forge-core mcp snapshot` now derives a complete content-bound Admission snapshot from project contracts, the Project Link sidecar, the authoritative claim WAL, required gate documents, and an active registry credential. It writes atomically to a state-root-confined path and returns the exact execution-intent digest for attestation; duplicate refs, state drift, missing claims, corrupt authority, revoked credentials, and output escapes fail closed.
+- **P4b.4c secure credential lifecycle.** `forge-core mcp credential` provisions OS-random ed25519 credentials, atomically updates an operator-owned registry, rotates by revoking the old authority before deleting its secret, revokes before secret deletion, and signs exact MCP arguments plus the generated Admission digest in process. Private key bytes are never emitted and registry/secret locations under project or Forge state roots are rejected.
 
 ### Changed
 - The P3 conversational resume token now uses the shared canonical Assurance Case token implementation consumed by execution admission.
@@ -51,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **P4b.3c Rust migration:** trusted policy documents add required `state_root_binding`; read-only uses `disabled` and trusted mode uses `project_link_resolved`. `TrustedExecutionEnvironment::from_project_and_state_roots` supports canonical external sidecars. Field-evidence registry structures now reject unknown YAML fields.
 - **P4b.4a source migration:** `ExecutionAdmissionRequest` adds `authority_snapshot_token`. Older serialized requests deserialize the field as empty for diagnostics but cannot enter trusted execution; hosts must regenerate and re-attest the request. Rust struct literals must initialize the new field, normally through `authority_snapshot_token`.
 - **P4b.4b CLI migration:** trusted snapshot YAML no longer needs to be authored by hand. Hosts should call `forge-core mcp snapshot` and use its state-relative `snapshot_ref` plus returned `execution_intent_digest` for the attestation step.
+- **P4b.4c operator migration:** replace hand-built registry keys and external signing scripts with `mcp credential provision|rotate|revoke|sign`. Existing registry files remain readable; private keys are deliberately not imported from project content.
 
 ---
 

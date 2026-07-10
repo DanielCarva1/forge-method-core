@@ -45,6 +45,7 @@ pub fn run_mcp_command(args: &[String]) -> Result<(), ExitError> {
     match parse_mcp_args(args) {
         Ok(McpArgs::Serve(parsed)) => run_serve(parsed),
         Ok(McpArgs::Snapshot(args)) => crate::mcp_snapshot_cmd::run_snapshot_command(&args),
+        Ok(McpArgs::Credential(args)) => crate::mcp_credential_cmd::run_credential_command(&args),
         Ok(McpArgs::Help) => {
             print_mcp_usage();
             Ok(())
@@ -69,6 +70,7 @@ pub fn run_mcp_command(args: &[String]) -> Result<(), ExitError> {
 enum McpArgs {
     Serve(ServeArgs),
     Snapshot(Vec<String>),
+    Credential(Vec<String>),
     Help,
 }
 
@@ -95,6 +97,7 @@ fn parse_mcp_args(args: &[String]) -> Result<McpArgs, McpArgsError> {
                 want_json: json_output_unless_text_selected(&args[2..]),
             }),
         "snapshot" => Ok(McpArgs::Snapshot(args[2..].to_vec())),
+        "credential" => Ok(McpArgs::Credential(args[2..].to_vec())),
         "--help" | "-h" | "help" => Ok(McpArgs::Help),
         other => Err(McpArgsError::UnknownSubcommand {
             subcommand: other.to_string(),
@@ -112,6 +115,7 @@ fn print_mcp_usage() {
     println!("  Trusted single-effect mutation additionally requires --deployment-policy,");
     println!("  --snapshot (state-root relative), and the explicit enable flag.");
     println!("  snapshot generates a content-bound Admission snapshot from authoritative state.");
+    println!("  credential provisions, rotates, revokes, and signs with operator-owned keys.");
 }
 
 fn mcp_serve_usage_line() -> &'static str {

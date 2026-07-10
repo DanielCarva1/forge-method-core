@@ -823,6 +823,7 @@ dependencies = [
  "forge-core-store",
  "forge-core-trace",
  "forge-core-validate",
+ "getrandom 0.3.4",
  "p256",
  "proptest",
  "rasn",

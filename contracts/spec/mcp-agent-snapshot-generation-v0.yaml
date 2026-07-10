@@ -46,7 +46,7 @@ failure_policy:
   - "revoked, unknown, or underprivileged credentials fail closed"
 
 next_boundary:
-  id: "P4b.4c-secure-credential-lifecycle"
+  id: "P4b.4d-real-client-readiness-proof"
   goal: >-
     Provision, rotate, revoke, and configure host credentials without exposing
     private keys to project content or weakening registry authority.
