@@ -231,10 +231,12 @@ jobs:
       - name: Generate CycloneDX SBOM
         continue-on-error: true
         run: |
-          cargo cyclonedx --format json --override-filename forge-core-${{ steps.tag.outputs.name }}
-          # cargo-cyclonedx 0.5.x writes <override-filename>.cdx.json in the
-          # workspace root; surface it in release-assets.
-          mv forge-core-${{ steps.tag.outputs.name }}.cdx.json release-assets/forge-core-${{ steps.tag.outputs.name }}.cdx.json
+          # cargo-cyclonedx emits one BOM beside every workspace member's
+          # Cargo.toml. `--override-filename` is a stem and the selected format
+          # extension is appended, so use the CLI package BOM: it describes
+          # the actual released binary and its complete dependency graph.
+          cargo cyclonedx --format json --override-filename forge-core-${{ steps.tag.outputs.name }}.cdx
+          cp crates/forge-core-cli/forge-core-${{ steps.tag.outputs.name }}.cdx.json release-assets/forge-core-${{ steps.tag.outputs.name }}.cdx.json
 
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
