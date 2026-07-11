@@ -352,11 +352,11 @@ phases:
         - "commit all local file-backed effects in one operation-wide WAL transaction"
         - "preserve authority, replay, provenance, and recovery across the complete effect set"
     next_slice:
-      id: "P5-workflow-migration"
+      id: "P5a-workflow-migration-foundation"
       status: "pending"
       scope:
-        - "migrate a small high-leverage workflow set into executable policies, obligations, playbooks, and evaluators"
-        - "measure compatibility and deletion behavior before retiring legacy workflow fields"
+        - "inventory/classify the complete catalog and create a typed migration manifest"
+        - "select the high-leverage golden-path set and establish shadow parity plus deletion baselines"
     following_slices:
       - "P6 domain-pack ecosystem"
     release_blockers: []
@@ -372,6 +372,94 @@ phases:
       - "Preserve legacy workflows as compatibility playbooks during migration."
       - "Measure deletion behavior before retiring workflow fields."
       - "Do not claim the full catalog is executable until its predicates and evidence rules are evaluated by runtime."
+    delivery_cadence:
+      slice_size: "medium_to_large"
+      push_rule: >-
+        Use local commits for safe internal checkpoints, but push only one
+        coherent, usable slice at a time so the full CI cost is paid for a
+        meaningful product increment rather than each implementation step.
+      release_rule: >-
+        Every pushed slice must preserve a usable master, backward compatibility
+        or an explicit migration path, generated documentation, full validation,
+        and an agent-operable result that downstream users can pull immediately.
+      exception: "security or data-integrity hotfixes may ship independently"
+    slices:
+      - id: "P5a-workflow-migration-foundation"
+        size: "large"
+        outcome: >-
+          Forge can inventory and classify the complete workflow catalog,
+          identify which legacy fields encode authority, advice, evidence, or
+          presentation, and create a deterministic migration manifest without
+          changing current user-visible behavior.
+        delivers:
+          - "typed migration manifest linking legacy workflows to policies, obligations, claims, playbooks, evaluators, and compatibility projections"
+          - "catalog inventory and classifier with explicit unmapped/ambiguous states"
+          - "selection of the representative golden-path workflow set using leverage, risk, and coverage criteria"
+          - "shadow-mode parity harness comparing legacy eligibility/guidance with the future executable projection"
+          - "migration telemetry and deletion-test baseline before any legacy authority is retired"
+        exit:
+          - "every catalog workflow is classified or explicitly marked unresolved"
+          - "the golden-path migration set and its coverage rationale are durable"
+          - "shadow evaluation causes no mutation and reports deterministic parity evidence"
+          - "existing guide/MCP/CLI consumers remain byte- or semantically compatible"
+        publication: "one pullable foundation checkpoint after full workspace gates"
+      - id: "P5b-executable-workflow-governance-kernel"
+        size: "large"
+        depends_on: ["P5a-workflow-migration-foundation"]
+        outcome: >-
+          Workflow authority moves from step ordering into executable policies,
+          obligations, claims, evidence rules, and evaluators while playbooks
+          remain non-authoritative strategies available to capable agents.
+        delivers:
+          - "closed typed contracts and semantic validation for workflow policy, obligation/evidence mapping, evaluator binding, and advisory playbook projection"
+          - "deterministic runtime evaluation of eligibility, blocking gaps, completion evidence, and next-best actions"
+          - "explicit Decision Request and Capability Gap production instead of guessed workflow progression"
+          - "legacy workflow compatibility Adapter backed by the executable governance result"
+          - "adversarial tests for missing evidence, contradictory predicates, invented completion, cyclic dependencies, and playbook-as-authority attempts"
+        exit:
+          - "the kernel, not catalog step position, decides whether governed progression is allowed"
+          - "playbook deletion or replacement cannot bypass obligations or fabricate readiness"
+          - "legacy projections are derived from the new result for migrated fixtures"
+          - "no model-specific script or word-for-word dialogue enters core authority"
+        publication: "one pullable executable-kernel checkpoint after full workspace gates"
+      - id: "P5c-golden-path-workflow-migration"
+        size: "large"
+        depends_on: ["P5b-executable-workflow-governance-kernel"]
+        outcome: >-
+          The representative agent-native golden path runs end to end through
+          executable governance while the human remains in chat and a replacement
+          agent can resume without knowing or selecting a workflow.
+        delivers:
+          - "migration of the selected high-leverage discovery, planning, build, verification, correction, and readiness behaviors"
+          - "agent-facing guidance generated from obligations, gaps, evidence, decisions, and evaluator results"
+          - "representative vertical-slice requirement that prevents artifact-only progress from appearing ready"
+          - "shadow comparison, compatibility projection, replacement-agent resume, and real consumer E2E proof"
+          - "failure corpus covering ignorant human, ignorant agent, unsupported capability, false progress, stale evidence, and authorized waiver"
+        exit:
+          - "the human edits no Forge artifact and selects no workflow"
+          - "critical unknowns and missing competence block readiness with actionable next steps"
+          - "a fresh agent resumes the same governed state and next action"
+          - "legacy and migrated paths have measured, reviewed behavioral differences"
+        publication: "one pullable golden-path migration checkpoint after full workspace gates"
+      - id: "P5d-catalog-rollout-and-legacy-retirement"
+        size: "medium_to_large"
+        depends_on: ["P5c-golden-path-workflow-migration"]
+        outcome: >-
+          The remaining catalog has a governed incremental rollout path and
+          legacy workflow authority is retired only where executable coverage,
+          compatibility evidence, and deletion tests prove it is safe.
+        delivers:
+          - "batch migration tooling and coverage report for the remaining catalog"
+          - "explicit unresolved-workflow quarantine instead of optimistic automatic conversion"
+          - "versioned compatibility and deprecation policy with consumer migration diagnostics"
+          - "deletion tests proving retired fields no longer influence authority or readiness"
+          - "final P5 scorecard separating executable, compatibility-only, quarantined, and retired workflows"
+        exit:
+          - "no workflow is presented as executable without runtime-evaluated predicates and evidence rules"
+          - "retirement requires observed compatibility and successful deletion behavior"
+          - "unknown or ambiguous workflows remain visible and non-authoritative"
+          - "P5 completion status is evidence-backed rather than catalog-count theater"
+        publication: "one pullable P5 completion checkpoint after full workspace gates"
 
   - id: "P6-domain-pack-ecosystem"
     status: "pending"
@@ -381,6 +469,90 @@ phases:
       - "domain obligations, hazards, lifecycle models, playbooks, evaluators, and fixtures"
       - "capability requirements and Adapter declarations"
       - "promotion path from local learning to reviewed reusable pack"
+    delivery_cadence:
+      slice_size: "medium_to_large"
+      push_rule: >-
+        Keep implementation checkpoints local and push only complete ecosystem
+        capabilities with focused evidence plus full workspace CI.
+      compatibility_rule: >-
+        Core remains domain-agnostic; installing, removing, upgrading, or
+        rejecting a pack must not silently rewrite core semantics or existing
+        project authority.
+    slices:
+      - id: "P6a-domain-pack-contract-and-composition"
+        size: "large"
+        depends_on: ["P5d-catalog-rollout-and-legacy-retirement"]
+        outcome: >-
+          A closed, versioned Domain Pack contract can contribute governed
+          knowledge without gaining implicit core or mutation authority.
+        delivers:
+          - "manifest identity, semantic version, schema compatibility, provenance, license/source metadata, dependencies, conflicts, and replacement declarations"
+          - "typed contributions for obligations, hazards, lifecycle models, policies, playbooks, evaluators, fixtures, capability requirements, and Adapter declarations"
+          - "deterministic composition order and namespacing across core plus multiple packs"
+          - "fail-closed duplicate, conflict, incompatible-version, dangling-reference, and cyclic-dependency validation"
+          - "content-addressed pack identity and auditable composed-project projection"
+        exit:
+          - "pack content cannot shadow core or another pack without an explicit compatible replacement rule"
+          - "composition is deterministic and independent of filesystem discovery order"
+          - "unknown fields, references, capabilities, and evaluator kinds fail closed"
+          - "removing a pack produces explicit missing-domain gaps rather than fabricated readiness"
+        publication: "one pullable pack-contract/composition checkpoint after full workspace gates"
+      - id: "P6b-pack-lifecycle-resolution-and-trust"
+        size: "large"
+        depends_on: ["P6a-domain-pack-contract-and-composition"]
+        outcome: >-
+          Agents can inspect, install, validate, activate, upgrade, roll back,
+          and remove packs through a governed lifecycle with supply-chain and
+          compatibility protections.
+        delivers:
+          - "deterministic dependency resolver and lock state for exact pack versions/content identities"
+          - "staged install/upgrade/remove transaction with preflight, rollback, and project compatibility report"
+          - "provenance and trust policy separating local, reviewed, and explicitly untrusted sources"
+          - "evaluator/Adapter capability sandbox declarations and denial of undeclared execution authority"
+          - "adversarial pack corpus for poisoning, namespace capture, dependency confusion, authority escalation, incompatible upgrade, and rollback"
+        exit:
+          - "pack lifecycle failure cannot leave a partially activated project domain model"
+          - "untrusted pack knowledge cannot authorize mutation or suppress universal assurance obligations"
+          - "upgrade and rollback preserve reproducible lock state and explain every semantic change"
+          - "agents receive actionable capability gaps instead of attempting unavailable evaluators or Adapters"
+        publication: "one pullable governed lifecycle checkpoint after full workspace gates"
+      - id: "P6c-learning-promotion-and-reviewed-registry"
+        size: "medium_to_large"
+        depends_on: ["P6b-pack-lifecycle-resolution-and-trust"]
+        outcome: >-
+          Useful local learning can become reusable domain knowledge only through
+          evidence-backed promotion, review, versioning, and conflict analysis.
+        delivers:
+          - "local candidate capture that never becomes authority merely because an agent learned or proposed it"
+          - "promotion stages for candidate, trial, validated, reviewed, deprecated, revoked, and superseded pack content"
+          - "evidence, evaluator, fixture, review, and provenance requirements for each promotion boundary"
+          - "reviewed registry/index with compatibility metadata and revocation/supersession handling"
+          - "ablation or strong-judge comparison showing promoted knowledge improves outcomes without hiding gaps"
+        exit:
+          - "chat memory and local observations cannot silently enter reusable pack authority"
+          - "promotion decisions are reproducible from durable evidence and review records"
+          - "revoked or superseded content remains auditable but cannot activate in new resolutions"
+          - "conflicting local learning produces an explicit review request"
+        publication: "one pullable learning-promotion checkpoint after full workspace gates"
+      - id: "P6d-reference-pack-and-novel-domain-proof"
+        size: "large"
+        depends_on: ["P6c-learning-promotion-and-reviewed-registry"]
+        outcome: >-
+          A real reference pack proves that Forge can guide an initially ignorant
+          human and agent through a novel domain without hard-coding that domain
+          into core or declaring readiness from document presence.
+        delivers:
+          - "one reviewed reference Domain Pack with hazards, lifecycle, obligations, playbooks, evaluators, fixtures, and capability/Adapter requirements"
+          - "one hostile or malformed comparison pack proving trust and composition rejection"
+          - "chat-only consumer journey from domain gap through pack resolution, representative execution evidence, correction, and readiness"
+          - "replacement-agent resume plus install/upgrade/rollback/remove E2E coverage"
+          - "core deletion test proving the reference domain contributes no special-case Rust logic"
+        exit:
+          - "the unpacked project exposes an explicit domain/capability gap instead of false confidence"
+          - "the reviewed pack changes governed obligations and available evidence without changing universal core rules"
+          - "representative execution, not artifact presence, is required for readiness"
+          - "P6 success is reproduced through a real host Adapter and fresh replacement agent"
+        publication: "one pullable P6 ecosystem completion checkpoint after full workspace gates"
 
 first_executable_slice:
   name: "unknown-unknowns-assurance-foundation"
@@ -421,9 +593,11 @@ first_executable_slice:
     - "P4b.6b opaque prepared-kernel operation-wide authority, complete preflight/Admission/provenance commit, typed receipts, and replay reconciliation"
     - "P4b.6c scope-specific trusted MCP operation-wide activation, complete ordered loading/snapshot/signing/readiness, and official rmcp two-effect proof"
   next_action: >-
-    P4 execution assurance hardening is complete. Next start P5 with one
-    high-leverage workflow migration that preserves legacy compatibility while
-    moving decisions into executable policies, obligations, and evaluators.
+    P4 execution assurance hardening is complete. Next execute the large P5a
+    foundation slice: inventory and classify the complete workflow catalog,
+    create the typed migration manifest, select the representative golden-path
+    set, and establish shadow-parity/deletion baselines without changing current
+    user-visible behavior.
   not_in_scope:
     - "turning the Obligation Engine into a model-driven orchestrator"
     - "rewriting existing workflows"
